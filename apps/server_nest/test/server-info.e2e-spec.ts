@@ -2,14 +2,21 @@ import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import request = require('supertest');
 import { AppModule } from '../src/app.module';
+import { PrismaService } from '../src/prisma/prisma.service';
 
 describe('server metadata endpoints', () => {
   let app: INestApplication;
+  const prismaService = {
+    $queryRaw: jest.fn().mockResolvedValue([{ health_check: 1 }])
+  };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule]
-    }).compile();
+    })
+      .overrideProvider(PrismaService)
+      .useValue(prismaService)
+      .compile();
 
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api', {
@@ -29,6 +36,8 @@ describe('server metadata endpoints', () => {
       .expect(({ body }) => {
         expect(body.status).toBe('ok');
         expect(body.service).toBe('dnd-table-server');
+        expect(body.database.status).toBe('ok');
+        expect(prismaService.$queryRaw).toHaveBeenCalled();
       });
   });
 

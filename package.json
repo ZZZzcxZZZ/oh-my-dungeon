@@ -17,9 +17,10 @@
     "check": "npm run lint:server && npm run analyze:client && npm run test",
     "bootstrap": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1",
     "doctor": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1",
-    "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f"
+    "docker:config": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docker-compose.ps1 config",
+    "docker:up": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docker-compose.ps1 up -d",
+    "docker:down": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docker-compose.ps1 down",
+    "docker:logs": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docker-compose.ps1 logs -f"
   },
   "engines": {
     "node": ">=22 <25",

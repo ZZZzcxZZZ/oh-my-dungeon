@@ -29,6 +29,10 @@
 apps/
   client_flutter/      Flutter 客户端
   server_nest/         NestJS 服务端
+packages/
+  api_contracts/       未来 OpenAPI / DTO 契约边界
+  dnd_rules/           未来共享 D&D 规则计算边界
+infra/                 未来部署、反向代理、备份恢复样例
 docs/                  产品、架构、部署、开发和 agent 执行文档
 scripts/               本地 bootstrap、检查和启动脚本
 .github/workflows/     CI 配置
@@ -54,6 +58,7 @@ npm run lint:server
 npm run analyze:client
 npm run test
 npm run check
+npm run docker:config
 ```
 
 ## 自托管部署草案
@@ -82,4 +87,5 @@ docker compose up -d
 - [本地开发环境](docs/development/local-setup.md)
 - [自托管与部署规划](docs/deployment/self-hosting.md)
 - [MVP 版本路线图](docs/roadmap/mvp-roadmap.md)
+- [v0.1 工程骨架封版清单](docs/roadmap/v0.1-release-checklist.md)
 - [Agent 执行指南](docs/agents/agent-execution-guide.md)

@@ -8,8 +8,8 @@
 
 1. `v0.1 工程骨架` 已封版并打 tag `v0.1.0`。
 2. `v0.2 账号、服务器、双模式` 已完成并打 tag `v0.2.0`。
-3. 下一步进入 `v0.3 战役与成员`。
-4. 已经提前实现的 `rooms` 和掷骰能力先视为原型资产，后续在 v0.3/v0.4 中重命名、归并或替换为正式的 Campaign/Session/Table 模型。
+3. `v0.3 战役与成员` 已完成并打 tag `v0.3.0`。
+4. 已经提前实现的 `rooms` 和掷骰能力保持冻结，待 v0.4 引入 Session 时正式替换。
 
 ## 已完成代码状态
 
@@ -68,17 +68,21 @@ v0.2 账号、服务器、双模式里程碑已封版并打 tag `v0.2.0`。已�
 - 客户端 `AuthPage` 登录/注册 UI，`AuthController` 管理会话状态。
 - 客户端 `ServerHomePage` 集成账号区，未登录显示登录/注册入口，已登录显示用户名和退出登录。
 
-### v0.3 尚未开始
+### v0.3 已完成
 
-当前 `rooms` 不是正式路线图里的 Campaign。v0.3 必须建立正式模型：
+v0.3 战役与成员里程碑已完成并打 tag `v0.3.0`。已完成内容：
 
-- Campaign。
-- CampaignMember。
-- CampaignInvite。
-- 权限 policy。
-- DM 创建战役。
-- 玩家邀请码加入。
-- Player/DM 战役列表。
+- Prisma `Campaign` / `CampaignMember` / `CampaignInvite` 数据模型。
+- `CampaignPolicy` 纯领域权限策略（owner/dm/player 分级，含 14 个单元测试）。
+- `POST /api/campaigns` 创建战役，`GET /api/campaigns` 列表，`GET /api/campaigns/:id` 详情。
+- `POST /api/campaigns/:id/invites` 生成邀请码，`GET /api/campaigns/:id/invites` 列表（仅管理者可见）。
+- `POST /api/campaigns/join` 邀请码加入战役（含过期、用量上限、幂等重复加入处理）。
+- 服务端 23 个 e2e 测试覆盖全部战役 API。
+- 客户端 `CampaignApiClient` 覆盖全部 6 个端点（13 个测试）。
+- 客户端 `CampaignController` 监听 `AuthController` 在登出时清理状态。
+- 客户端 `CampaignListPage`（创建/加入战役）与 `CampaignDetailPage`（邀请码生成与复制）。
+- `ServerHomePage` 新增战役入口区。
+- `rooms` 原型保持冻结，未在 v0.3 迁移或扩展（见上文「已提前实现的原型能力（冻结状态）」）。
 
 ### v0.4 只做了极小原型
 
@@ -195,4 +199,4 @@ docs(v0.2): update account setup guide
 
 ## 立即行动
 
-v0.2 已封版。下一步启动 v0.3 战役与成员，按 `docs/roadmap/v0.3-execution-plan.md` 推进。
+v0.3 已封版。下一步启动 v0.4 跑团桌面基础版：在 Campaign 下创建 Session，引入正式 DiceRoll 模型替换 `rooms` 原型，并提供聊天、日志和 WebSocket 实时同步。

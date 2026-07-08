@@ -36,9 +36,9 @@ docs/deployment/self-hosting.md
 ## Current Version State
 
 - `v0.1.0` is tagged and represents the engineering skeleton baseline.
-- Current active milestone is `v0.2`: accounts, server auth, and Player/DM mode integration.
-- Do not continue expanding the temporary `rooms` prototype unless the current version plan explicitly says so.
-- The `rooms` and dice prototype code must later be folded into the formal Campaign / Session / Table model.
+- `v0.2.0` is tagged and covers accounts, server auth, and Player/DM mode integration.
+- `v0.3.0` is tagged and covers the Campaign / CampaignMember / CampaignInvite model, permissions, and invite-code join flow.
+- The `rooms` and dice prototype is frozen: do not extend it. It will be replaced by the formal Session / DiceRoll model in v0.4.
 
 ## Development Rules
 
@@ -72,16 +72,4 @@ Do not use `doctor` as a substitute for reading the roadmap and validating requi
 
 ## Immediate Next Work
 
-Continue `v0.2` from:
-
-```text
-docs/roadmap/v0.2-execution-plan.md
-```
-
-Recommended next task:
-
-1. Add Prisma auth models: `User`, `ServerAdmin`, `RefreshToken`.
-2. Generate Prisma client.
-3. Add `PasswordHashService`.
-4. Add tested `AuthService` register behavior.
-5. Add `POST /api/auth/register`.
+v0.3 is sealed. Next milestone is `v0.4` 跑团桌面基础版: Session model, formal DiceRoll replacing the `rooms` prototype, ChatMessage, JournalEntry, and WebSocket realtime broadcast. Start by creating `docs/roadmap/v0.4-execution-plan.md` with version goals, acceptance criteria, task list, and data model changes before implementing.

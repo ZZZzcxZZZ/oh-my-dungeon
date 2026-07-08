@@ -4,11 +4,11 @@
 
 ## 结论
 
-项目当前不应继续按零散功能推进。后续开发必须按 `docs/roadmap/mvp-roadmap.md` 的版本闸门推进：
+项目按 `docs/roadmap/mvp-roadmap.md` 的版本闸门推进：
 
-1. 先补齐并封版 `v0.1 工程骨架`。
-2. 再进入 `v0.2 账号、服务器、双模式`。
-3. 然后进入 `v0.3 战役与成员`。
+1. `v0.1 工程骨架` 已封版并打 tag `v0.1.0`。
+2. `v0.2 账号、服务器、双模式` 已完成并打 tag `v0.2.0`。
+3. 下一步进入 `v0.3 战役与成员`。
 4. 已经提前实现的 `rooms` 和掷骰能力先视为原型资产，后续在 v0.3/v0.4 中重命名、归并或替换为正式的 Campaign/Session/Table 模型。
 
 ## 已完成代码状态
@@ -44,26 +44,27 @@
 
 ## 与路线图的差距
 
-### v0.1 尚未封版
+### v0.1 已封版
 
-虽然 v0.1 大部分已完成，但还需要一次封版整理：
+v0.1 工程骨架已封版并打 tag `v0.1.0`。工程基础、CI、Docker Compose、客户端服务器 profile 管理和 Player/DM 模式切换均已就位。`rooms` 和掷骰原型保留为资产，后续在 v0.3/v0.4 中归并到正式模型。
 
-- README 当前状态需要与实际实现同步。
-- Agent 指南里的“工程尚未初始化”描述已经过期。
-- Prisma 目前只有 schema 初始文件，房间/掷骰仍是内存数据，不能算正式业务持久化。
-- 需要确认 Docker Compose 一键启动路径是否不仅能 `config`，还能服务端连库启动。
-- 需要明确 `.github/workflows` 是否覆盖路线图要求的 lint/test/analyze/build。
+### v0.2 已完成
 
-### v0.2 尚未正式完成
+v0.2 账号、服务器、双模式里程碑已封版并打 tag `v0.2.0`。已完成内容：
 
-已经完成了“服务器列表”和“模式切换”的一部分，但 v0.2 核心缺口仍然是：
-
-- User / ServerAdmin / Auth 数据模型。
-- 注册、登录、刷新 token、当前用户 API。
-- JWT 鉴权。
-- 首次注册用户成为 Server Admin owner。
-- 客户端按 server profile 隔离 token。
-- 服务端注册开关 API。
+- Prisma `User` / `ServerAdmin` / `RefreshToken` 数据模型。
+- `PasswordHashService`（bcryptjs）。
+- `AuthService` 注册逻辑，首次注册用户成为 ServerAdmin owner，注册开关关闭时拒绝。
+- `POST /api/auth/register`。
+- `POST /api/auth/login`，支持 username 或 email，返回 access token + refresh token。
+- `GET /api/auth/me`，Bearer token 鉴权。
+- `POST /api/auth/refresh`，按 refresh token hash 校验，签发新 access token。
+- `POST /api/auth/logout`，revoke refresh token。
+- `GET /api/server-settings` / `PATCH /api/server-settings`，admin 可切换注册开关。
+- 客户端 `AuthTokenStore` 按 server profile id 隔离保存 token。
+- 客户端 `AuthApiClient` 覆盖 register/login/me/refresh/logout。
+- 客户端 `AuthPage` 登录/注册 UI，`AuthController` 管理会话状态。
+- 客户端 `ServerHomePage` 集成账号区，未登录显示登录/注册入口，已登录显示用户名和退出登录。
 
 ### v0.3 尚未开始
 
@@ -192,4 +193,4 @@ docs(v0.2): update account setup guide
 
 ## 立即行动
 
-下一步不再继续加跑团功能。先执行“封版 v0.1”，然后再启动 v0.2 账号体系计划。
+v0.2 已封版。下一步启动 v0.3 战役与成员，按 `docs/roadmap/v0.3-execution-plan.md` 推进。

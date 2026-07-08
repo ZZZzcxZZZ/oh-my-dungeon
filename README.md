@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-当前正在进行 v0.1 工程骨架封版。代码已经完成 v0.1 的主要工程基础，并提前落地了少量 room / dice 原型能力；后续会按版本闸门推进，不再继续零散扩展原型功能。
+v0.2 账号、服务器、双模式里程碑已完成并打 tag `v0.2.0`。用户可以在自托管服务器注册、登录，客户端按服务器 profile 隔离账号状态。下一步进入 v0.3 战役与成员。
 
 - Monorepo 基础结构
 - Flutter 客户端骨架
@@ -12,13 +12,17 @@
 - NestJS 服务端骨架
 - `/health`
 - `/.well-known/dnd-tool-server`
-- Prisma schema 初始文件
+- Prisma schema（User / ServerAdmin / RefreshToken / ServerSetting）
 - Docker Compose 配置
 - GitHub Actions CI 配置
 - 服务端与客户端基础测试
 - 本地开发环境脚本与 VS Code 推荐配置
 - 客户端服务器 profile 管理
 - 客户端 Player/DM 模式切换
+- 服务端 auth API：register / login / me / refresh / logout
+- 服务端 server-settings API：注册开关管理
+- 客户端按服务器隔离 token 存储
+- 客户端登录/注册 UI 与当前用户状态
 - room / dice 原型能力，后续将在 v0.3/v0.4 归并到 Campaign / Session / Table 模型
 
 当前执行状态见 [当前执行状态与版本推进计划](docs/roadmap/current-execution-status.md)。

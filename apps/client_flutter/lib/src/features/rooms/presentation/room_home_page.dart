@@ -29,6 +29,7 @@ class RoomHomePage extends StatefulWidget {
 }
 
 class _RoomHomePageState extends State<RoomHomePage> {
+  final _expressionController = TextEditingController();
   var _isLoadingRolls = true;
   var _isRolling = false;
   Object? _rollLoadError;
@@ -38,6 +39,12 @@ class _RoomHomePageState extends State<RoomHomePage> {
   void initState() {
     super.initState();
     _loadRolls();
+  }
+
+  @override
+  void dispose() {
+    _expressionController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadRolls() async {
@@ -61,11 +68,10 @@ class _RoomHomePageState extends State<RoomHomePage> {
     }
   }
 
-  Future<void> _rollD20() async {
+  Future<void> _submitRoll(DiceRoll diceRoll) async {
     if (_isRolling) return;
 
     final messenger = ScaffoldMessenger.of(context);
-    final diceRoll = widget.diceRoller.rollD20();
     setState(() {
       _isRolling = true;
     });
@@ -90,6 +96,21 @@ class _RoomHomePageState extends State<RoomHomePage> {
         _isRolling = false;
       });
       messenger.showSnackBar(SnackBar(content: Text('掷骰失败：$error')));
+    }
+  }
+
+  Future<void> _rollD20() async {
+    await _submitRoll(widget.diceRoller.rollD20());
+  }
+
+  Future<void> _rollExpression() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await _submitRoll(
+        widget.diceRoller.rollExpression(_expressionController.text),
+      );
+    } on DiceRollException catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text('掷骰表达式无效：$error')));
     }
   }
 
@@ -136,6 +157,24 @@ class _RoomHomePageState extends State<RoomHomePage> {
                   onPressed: _isRolling ? null : _rollD20,
                   icon: const Icon(Icons.casino_outlined),
                   label: const Text('掷 D20'),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _expressionController,
+                decoration: const InputDecoration(
+                  labelText: '骰子表达式',
+                  hintText: '2d6+3',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.icon(
+                  onPressed: _isRolling ? null : _rollExpression,
+                  icon: const Icon(Icons.functions),
+                  label: const Text('掷表达式'),
                 ),
               ),
               const SizedBox(height: 16),

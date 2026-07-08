@@ -82,6 +82,38 @@ void main() {
     ]);
     expect(find.text('Player: d20 = 20'), findsOneWidget);
   });
+
+  testWidgets('rolls a custom dice expression from the room detail page', (
+    tester,
+  ) async {
+    final roomClient = _FakeRoomClient();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RoomHomePage(
+          profile: profile,
+          room: room,
+          modeController: ClientModeController(),
+          roomClient: roomClient,
+          diceRoller: DiceRoller(nextInt: (_) => 0),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), '1d6+4');
+    await tester.tap(find.widgetWithText(FilledButton, '掷表达式'));
+    await tester.pumpAndSettle();
+
+    expect(roomClient.createdRolls.last, (
+      roomId: 'room-1',
+      notation: '1d6+4',
+      total: 5,
+      actorName: 'Player',
+      actorMode: ClientMode.player,
+    ));
+    expect(find.text('Player: 1d6+4 = 5'), findsOneWidget);
+  });
 }
 
 class _FakeRoomClient implements RoomClient {

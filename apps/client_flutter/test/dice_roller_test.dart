@@ -21,4 +21,23 @@ void main() {
     expect(roll.total, 20);
     expect(roll.label, 'd20 = 20');
   });
+
+  test('rolls a dice expression with modifiers', () {
+    final roller = DiceRoller(nextInt: (_) => 0);
+
+    final roll = roller.rollExpression('1d6+4');
+
+    expect(roll.notation, '1d6+4');
+    expect(roll.total, 5);
+    expect(roll.label, '1d6+4 = 5');
+  });
+
+  test('rejects a blank dice expression', () {
+    final roller = DiceRoller();
+
+    expect(
+      () => roller.rollExpression('   '),
+      throwsA(isA<DiceRollException>()),
+    );
+  });
 }

@@ -4,6 +4,9 @@ import '../../auth/data/auth_api_client.dart';
 import '../../auth/data/auth_token_store.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../auth/presentation/auth_page.dart';
+import '../../campaigns/data/campaign_api_client.dart';
+import '../../campaigns/presentation/campaign_controller.dart';
+import '../../campaigns/presentation/campaign_list_page.dart';
 import '../../client_mode/domain/client_mode.dart';
 import '../../rooms/data/room_api_client.dart';
 import '../../rooms/domain/room.dart';
@@ -17,6 +20,7 @@ class ServerHomePage extends StatefulWidget {
     required this.roomClient,
     required this.authTokenStore,
     required this.authClient,
+    required this.campaignClient,
     super.key,
   });
 
@@ -25,6 +29,7 @@ class ServerHomePage extends StatefulWidget {
   final RoomClient roomClient;
   final AuthTokenStore authTokenStore;
   final AuthClient authClient;
+  final CampaignClient campaignClient;
 
   @override
   State<ServerHomePage> createState() => _ServerHomePageState();
@@ -33,6 +38,7 @@ class ServerHomePage extends StatefulWidget {
 class _ServerHomePageState extends State<ServerHomePage> {
   late Future<List<Room>> _roomsFuture;
   late final AuthController _authController;
+  late final CampaignController _campaignController;
 
   @override
   void initState() {
@@ -44,6 +50,17 @@ class _ServerHomePageState extends State<ServerHomePage> {
       serverProfileId: widget.profile.id,
       apiBaseUrl: widget.profile.apiBaseUrl,
     )..initialize();
+    _campaignController = CampaignController(
+      apiBaseUrl: widget.profile.apiBaseUrl,
+      authController: _authController,
+      campaignClient: widget.campaignClient,
+    );
+  }
+
+  @override
+  void dispose() {
+    _campaignController.dispose();
+    super.dispose();
   }
 
   Future<List<Room>> _loadRooms() {
@@ -109,6 +126,15 @@ class _ServerHomePageState extends State<ServerHomePage> {
     await _authController.logout();
   }
 
+  Future<void> _openCampaignList() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (context) =>
+            CampaignListPage(controller: _campaignController),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -135,6 +161,10 @@ class _ServerHomePageState extends State<ServerHomePage> {
               Text('账号', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
               _buildAuthSection(context),
+              const SizedBox(height: 32),
+              Text('战役', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              _buildCampaignSection(context),
               const SizedBox(height: 32),
               Text('房间与登录入口', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
@@ -271,6 +301,55 @@ class _ServerHomePageState extends State<ServerHomePage> {
             FilledButton(
               onPressed: _openAuthPage,
               child: const Text('登录 / 注册'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCampaignSection(BuildContext context) {
+    if (!_authController.isLoggedIn) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const Icon(Icons.castle, size: 32),
+              const SizedBox(width: 16),
+              const Expanded(child: Text('登录后管理战役')),
+              FilledButton(
+                onPressed: _openAuthPage,
+                child: const Text('登录'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const Icon(Icons.castle, size: 32),
+            const SizedBox(width: 16),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('创建或加入战役'),
+                  Text(
+                    '使用邀请码加入，或创建属于你的战役。',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            FilledButton.tonal(
+              onPressed: _openCampaignList,
+              child: const Text('进入战役'),
             ),
           ],
         ),

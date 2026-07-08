@@ -26,6 +26,7 @@ class AuthController extends ChangeNotifier {
   bool get isLoading => _loading;
   bool get isLoggedIn => _user != null && _tokens != null;
   String? get error => _error;
+  String? get accessToken => _tokens?.accessToken;
 
   Future<void> initialize() async {
     _loading = true;

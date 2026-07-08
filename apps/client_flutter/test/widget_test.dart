@@ -139,6 +139,9 @@ void main() {
     expect(find.text('Local Table'), findsAtLeastNWidgets(1));
     expect(find.text('http://localhost:3000'), findsOneWidget);
     expect(find.text('当前模式：Player'), findsOneWidget);
+
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -300));
+    await tester.pumpAndSettle();
     expect(find.text('房间与登录入口'), findsOneWidget);
     expect(find.text('等待房间开放'), findsOneWidget);
     expect(find.text('创建房间'), findsNothing);
@@ -166,6 +169,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('当前模式：DM'), findsOneWidget);
+
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -300));
+    await tester.pumpAndSettle();
     expect(find.text('创建房间'), findsOneWidget);
     expect(find.text('等待房间开放'), findsNothing);
   });
@@ -191,6 +197,8 @@ void main() {
     await tester.tap(find.text('关闭'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -300));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('创建房间'));
@@ -221,7 +229,7 @@ void main() {
 
     await tester.tap(find.text('Local Table'));
     await tester.pumpAndSettle();
-    await tester.drag(find.byType(Scrollable).last, const Offset(0, -100));
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -300));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Friday One Shot'));
     await tester.pumpAndSettle();

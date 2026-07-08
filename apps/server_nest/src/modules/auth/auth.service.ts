@@ -1,17 +1,26 @@
 import {
   ConflictException,
   ForbiddenException,
-  Injectable
+  Injectable,
+  UnauthorizedException
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PasswordHashService } from './password-hash.service';
-import type { RegisterInput, RegisterResult, RegisteredUser } from './auth.types';
+import { TokenService } from './token.service';
+import type {
+  LoginInput,
+  LoginResult,
+  RegisterInput,
+  RegisterResult,
+  RegisteredUser
+} from './auth.types';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prismaService: PrismaService,
-    private readonly passwordHashService: PasswordHashService
+    private readonly passwordHashService: PasswordHashService,
+    private readonly tokenService: TokenService
   ) {}
 
   async register(input: RegisterInput): Promise<RegisterResult> {
@@ -61,6 +70,45 @@ export class AuthService {
     return {
       user: toRegisteredUser(createdUser),
       isFirstUser
+    };
+  }
+
+  async login(input: LoginInput): Promise<LoginResult> {
+    const user = await this.prismaService.user.findFirst({
+      where: {
+        OR: [{ username: input.identifier }, { email: input.identifier }]
+      }
+    });
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const passwordMatches = await this.passwordHashService.compare(
+      input.password,
+      user.passwordHash
+    );
+    if (!passwordMatches) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const accessToken = this.tokenService.signAccessToken({
+      userId: user.id,
+      username: user.username
+    });
+    const { token, tokenHash } = this.tokenService.generateRefreshToken();
+
+    await this.prismaService.refreshToken.create({
+      data: {
+        userId: user.id,
+        tokenHash,
+        expiresAt: this.tokenService.refreshExpiresAt()
+      }
+    });
+
+    return {
+      user: toRegisteredUser(user),
+      accessToken,
+      refreshToken: token
     };
   }
 }

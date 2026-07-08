@@ -1,10 +1,21 @@
-import { BadRequestException, Body, Controller, Post } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  HttpCode,
+  Post
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
-import type { RegisterResult } from './auth.types';
+import type { LoginResult, RegisterResult } from './auth.types';
 
 interface RegisterRequestBody {
   username?: unknown;
   email?: unknown;
+  password?: unknown;
+}
+
+interface LoginRequestBody {
+  identifier?: unknown;
   password?: unknown;
 }
 
@@ -27,6 +38,22 @@ export class AuthController {
     return this.authService.register({
       username: body.username,
       email: body.email,
+      password: body.password
+    });
+  }
+
+  @Post('login')
+  @HttpCode(200)
+  login(@Body() body: LoginRequestBody): Promise<LoginResult> {
+    if (!isNonEmptyString(body.identifier)) {
+      throw new BadRequestException('Identifier is required');
+    }
+    if (!isNonEmptyString(body.password)) {
+      throw new BadRequestException('Password is required');
+    }
+
+    return this.authService.login({
+      identifier: body.identifier,
       password: body.password
     });
   }

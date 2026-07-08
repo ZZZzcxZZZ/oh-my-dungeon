@@ -14,3 +14,19 @@ export interface RegisterResult {
   user: RegisteredUser;
   isFirstUser: boolean;
 }
+
+export interface LoginInput {
+  identifier: string;
+  password: string;
+}
+
+export interface AccessTokenPayload {
+  userId: string;
+  username: string;
+}
+
+export interface LoginResult {
+  user: RegisteredUser;
+  accessToken: string;
+  refreshToken: string;
+}

@@ -9,4 +9,22 @@ void main() {
     expect(find.text('连接你的跑团服务器'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, '添加服务器'), findsOneWidget);
   });
+
+  testWidgets('switches client mode from settings', (tester) async {
+    await tester.pumpWidget(const DndTableApp());
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('客户端模式'), findsOneWidget);
+    expect(find.text('Player'), findsOneWidget);
+    expect(find.text('DM'), findsOneWidget);
+
+    await tester.tap(find.text('DM'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('当前模式：DM'), findsOneWidget);
+  });
 }

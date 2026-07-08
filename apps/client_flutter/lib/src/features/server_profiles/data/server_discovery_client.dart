@@ -6,7 +6,7 @@ import '../domain/server_metadata.dart';
 
 class ServerDiscoveryClient {
   ServerDiscoveryClient({http.Client? httpClient})
-      : _httpClient = httpClient ?? http.Client();
+    : _httpClient = httpClient ?? http.Client();
 
   final http.Client _httpClient;
 

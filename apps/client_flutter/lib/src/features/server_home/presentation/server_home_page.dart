@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../client_mode/domain/client_mode.dart';
 import '../../rooms/data/room_api_client.dart';
 import '../../rooms/domain/room.dart';
+import '../../rooms/presentation/room_home_page.dart';
 import '../../server_profiles/domain/server_profile.dart';
 
 class ServerHomePage extends StatefulWidget {
@@ -160,6 +161,19 @@ class _ServerHomePageState extends State<ServerHomePage> {
                           contentPadding: EdgeInsets.zero,
                           leading: const Icon(Icons.meeting_room_outlined),
                           title: Text(room.name),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (context) {
+                                  return RoomHomePage(
+                                    profile: widget.profile,
+                                    room: room,
+                                    modeController: widget.modeController,
+                                  );
+                                },
+                              ),
+                            );
+                          },
                         ),
                     ],
                   );

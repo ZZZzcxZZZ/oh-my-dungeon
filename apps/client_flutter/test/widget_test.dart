@@ -173,6 +173,31 @@ void main() {
     expect(roomClient.createdRoomNames, ['Friday One Shot']);
     expect(find.text('Friday One Shot'), findsOneWidget);
   });
+
+  testWidgets('opens a room detail page from the room list', (tester) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+    final roomClient = _FakeRoomClient(
+      initialRooms: const [Room(id: 'room-1', name: 'Friday One Shot')],
+    );
+
+    await tester.pumpWidget(
+      DndTableApp(serverProfileStore: store, roomClient: roomClient),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Friday One Shot'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Friday One Shot'), findsAtLeastNWidgets(1));
+    expect(find.text('Local Table'), findsAtLeastNWidgets(1));
+    expect(find.text('当前模式：Player'), findsOneWidget);
+    expect(find.text('角色与跑团工具'), findsOneWidget);
+    expect(find.text('角色卡'), findsOneWidget);
+    expect(find.text('掷骰'), findsOneWidget);
+  });
 }
 
 class _FakeRoomClient implements RoomClient {

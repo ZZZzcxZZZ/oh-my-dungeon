@@ -1,0 +1,28 @@
+{
+  "name": "dnd-table-tool",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Self-hosted D&D table assistant monorepo.",
+  "scripts": {
+    "setup:server": "npm --prefix apps/server_nest install",
+    "setup:client": "cd apps/client_flutter && flutter pub get",
+    "setup": "npm run setup:server && npm run setup:client",
+    "dev:server": "npm --prefix apps/server_nest run start:dev",
+    "dev:client": "cd apps/client_flutter && flutter run",
+    "test:server": "npm --prefix apps/server_nest test",
+    "lint:server": "npm --prefix apps/server_nest run lint",
+    "test:client": "cd apps/client_flutter && flutter test",
+    "analyze:client": "cd apps/client_flutter && flutter analyze",
+    "test": "npm run test:server && npm run test:client",
+    "check": "npm run lint:server && npm run analyze:client && npm run test",
+    "bootstrap": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1",
+    "doctor": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f"
+  },
+  "engines": {
+    "node": ">=22 <25",
+    "npm": ">=10"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "editor.formatOnSave": true,
+  "dart.lineLength": 80,
+  "eslint.workingDirectories": [
+    {
+      "directory": "apps/server_nest",
+      "changeProcessCWD": true
+    }
+  ],
+  "typescript.tsdk": "apps/server_nest/node_modules/typescript/lib",
+  "files.exclude": {
+    "**/.dart_tool": true,
+    "**/build": true,
+    "**/node_modules": true,
+    "**/dist": true
+  }
+}

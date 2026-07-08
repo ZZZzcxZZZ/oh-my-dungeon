@@ -429,4 +429,142 @@ describe('campaigns endpoints', () => {
         .expect(403);
     });
   });
+
+  describe('POST /api/campaigns/join', () => {
+    const validInvite = {
+      id: 'invite-1',
+      campaignId: 'camp-1',
+      code: 'ABC123',
+      roleOnJoin: 'player',
+      expiresAt: null,
+      maxUses: 1,
+      usedCount: 0,
+      requireApproval: false,
+      createdBy: 'user-1',
+      createdAt: '2026-07-09T00:00:00.000Z'
+    };
+
+    it('joins a campaign with a valid invite code', async () => {
+      const token = await loginAsDm();
+      prismaService.campaignInvite.findUnique.mockResolvedValueOnce(validInvite);
+      prismaService.campaignMember.findFirst.mockResolvedValueOnce(null);
+      prismaService.campaignMember.create.mockResolvedValueOnce({
+        id: 'member-1',
+        campaignId: 'camp-1',
+        userId: 'user-1',
+        role: 'player',
+        displayName: 'ranger',
+        joinedAt: '2026-07-09T00:00:00.000Z'
+      });
+
+      await request(app.getHttpServer())
+        .post('/api/campaigns/join')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ code: 'ABC123' })
+        .expect(201)
+        .expect(({ body }) => {
+          expect(body.id).toBe('member-1');
+          expect(body.campaignId).toBe('camp-1');
+          expect(body.userId).toBe('user-1');
+          expect(body.role).toBe('player');
+          expect(body.displayName).toBe('ranger');
+        });
+
+      const createArgs = prismaService.campaignMember.create.mock.calls[0][0];
+      expect(createArgs.data.campaignId).toBe('camp-1');
+      expect(createArgs.data.role).toBe('player');
+      const updateArgs = prismaService.campaignInvite.update.mock.calls[0][0];
+      expect(updateArgs.data.usedCount).toEqual({ increment: 1 });
+    });
+
+    it('rejects without authentication with 401', async () => {
+      await request(app.getHttpServer())
+        .post('/api/campaigns/join')
+        .send({ code: 'ABC123' })
+        .expect(401);
+    });
+
+    it('rejects with missing code with 400', async () => {
+      const token = await loginAsDm();
+
+      await request(app.getHttpServer())
+        .post('/api/campaigns/join')
+        .set('Authorization', `Bearer ${token}`)
+        .send({})
+        .expect(400);
+    });
+
+    it('rejects with 404 when invite does not exist', async () => {
+      const token = await loginAsDm();
+      prismaService.campaignInvite.findUnique.mockResolvedValueOnce(null);
+      prismaService.campaignMember.findFirst.mockResolvedValueOnce(null);
+
+      await request(app.getHttpServer())
+        .post('/api/campaigns/join')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ code: 'NOPE' })
+        .expect(404);
+    });
+
+    it('rejects with 403 when invite has expired', async () => {
+      const token = await loginAsDm();
+      prismaService.campaignInvite.findUnique.mockResolvedValueOnce({
+        ...validInvite,
+        expiresAt: new Date('2020-01-01T00:00:00.000Z')
+      });
+      prismaService.campaignMember.findFirst.mockResolvedValueOnce(null);
+
+      await request(app.getHttpServer())
+        .post('/api/campaigns/join')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ code: 'ABC123' })
+        .expect(403);
+    });
+
+    it('rejects with 403 when invite has reached its usage limit', async () => {
+      const token = await loginAsDm();
+      prismaService.campaignInvite.findUnique.mockResolvedValueOnce({
+        ...validInvite,
+        maxUses: 1,
+        usedCount: 1
+      });
+      prismaService.campaignMember.findFirst.mockResolvedValueOnce(null);
+
+      await request(app.getHttpServer())
+        .post('/api/campaigns/join')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ code: 'ABC123' })
+        .expect(403);
+    });
+
+    it('returns the existing membership if already a member', async () => {
+      const token = await loginAsDm();
+      prismaService.campaignInvite.findUnique.mockResolvedValueOnce(validInvite);
+      prismaService.campaignMember.findFirst
+        .mockResolvedValueOnce({
+          userId: 'user-1',
+          role: 'player'
+        })
+        .mockResolvedValueOnce({
+          id: 'member-1',
+          campaignId: 'camp-1',
+          userId: 'user-1',
+          role: 'player',
+          displayName: 'ranger',
+          joinedAt: '2026-07-09T00:00:00.000Z'
+        });
+
+      await request(app.getHttpServer())
+        .post('/api/campaigns/join')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ code: 'ABC123' })
+        .expect(201)
+        .expect(({ body }) => {
+          expect(body.id).toBe('member-1');
+          expect(body.role).toBe('player');
+        });
+
+      expect(prismaService.campaignMember.create).not.toHaveBeenCalled();
+    });
+  });
 });

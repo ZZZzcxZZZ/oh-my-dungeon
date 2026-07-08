@@ -181,12 +181,13 @@ describe('auth register endpoint', () => {
   });
 });
 
-describe('auth login endpoint', () => {
+describe('auth login and current user endpoints', () => {
   let app: INestApplication;
   const prismaService = {
     user: {
       count: jest.fn(),
       findFirst: jest.fn(),
+      findUnique: jest.fn(),
       create: jest.fn()
     },
     serverAdmin: {
@@ -242,6 +243,7 @@ describe('auth login endpoint', () => {
     });
     prismaService.user.count.mockResolvedValue(0);
     prismaService.user.findFirst.mockResolvedValue(null);
+    prismaService.user.findUnique.mockResolvedValue(null);
     prismaService.user.create.mockResolvedValue({
       id: 'user-1',
       username: 'ranger',
@@ -336,5 +338,67 @@ describe('auth login endpoint', () => {
       .expect(({ body }) => {
         expect(body.message).toBe('Invalid credentials');
       });
+  });
+
+  it('returns the current user for a valid access token', async () => {
+    prismaService.user.findFirst.mockResolvedValueOnce(storedUser);
+    prismaService.user.findUnique.mockResolvedValueOnce(storedUser);
+
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ identifier: 'ranger', password: 'p@ssw0rd' })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${login.body.accessToken}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toEqual({
+          id: 'user-1',
+          username: 'ranger',
+          email: 'ranger@example.com'
+        });
+        expect(body).not.toHaveProperty('passwordHash');
+      });
+  });
+
+  it('supports the register -> login -> me flow end to end', async () => {
+    await request(app.getHttpServer())
+      .post('/api/auth/register')
+      .send({
+        username: 'ranger',
+        email: 'ranger@example.com',
+        password: 'p@ssw0rd'
+      })
+      .expect(201);
+
+    prismaService.user.findFirst.mockResolvedValueOnce(storedUser);
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ identifier: 'ranger', password: 'p@ssw0rd' })
+      .expect(200);
+
+    prismaService.user.findUnique.mockResolvedValueOnce(storedUser);
+    await request(app.getHttpServer())
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${login.body.accessToken}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.username).toBe('ranger');
+      });
+  });
+
+  it('rejects /me without a token with 401', async () => {
+    await request(app.getHttpServer())
+      .get('/api/auth/me')
+      .expect(401);
+  });
+
+  it('rejects /me with an invalid token with 401', async () => {
+    await request(app.getHttpServer())
+      .get('/api/auth/me')
+      .set('Authorization', 'Bearer not-a-real-token')
+      .expect(401);
   });
 });

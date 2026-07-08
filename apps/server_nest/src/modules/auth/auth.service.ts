@@ -111,6 +111,16 @@ export class AuthService {
       refreshToken: token
     };
   }
+
+  async getCurrentUser(userId: string): Promise<RegisteredUser> {
+    const user = await this.prismaService.user.findUnique({
+      where: { id: userId }
+    });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    return toRegisteredUser(user);
+  }
 }
 
 function toRegisteredUser(user: {

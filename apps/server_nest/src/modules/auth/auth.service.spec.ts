@@ -12,6 +12,7 @@ describe('AuthService', () => {
     user: {
       count: jest.Mock;
       findFirst: jest.Mock;
+      findUnique: jest.Mock;
       create: jest.Mock;
     };
     serverAdmin: {
@@ -40,6 +41,7 @@ describe('AuthService', () => {
       user: {
         count: jest.fn(),
         findFirst: jest.fn(),
+        findUnique: jest.fn(),
         create: jest.fn()
       },
       serverAdmin: {
@@ -314,6 +316,48 @@ describe('AuthService', () => {
 
       expect(tokenService.signAccessToken).not.toHaveBeenCalled();
       expect(prismaService.refreshToken.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getCurrentUser', () => {
+    it('returns the registered user for a valid id', async () => {
+      prismaService.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        username: 'ranger',
+        email: 'ranger@example.com'
+      });
+
+      const user = await authService.getCurrentUser('user-1');
+
+      expect(user).toEqual({
+        id: 'user-1',
+        username: 'ranger',
+        email: 'ranger@example.com'
+      });
+      expect(prismaService.user.findUnique).toHaveBeenCalledWith({
+        where: { id: 'user-1' }
+      });
+    });
+
+    it('throws 401 when the user no longer exists', async () => {
+      prismaService.user.findUnique.mockResolvedValue(null);
+
+      await expect(authService.getCurrentUser('ghost')).rejects.toThrow(
+        UnauthorizedException
+      );
+    });
+
+    it('does not expose passwordHash', async () => {
+      prismaService.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        username: 'ranger',
+        email: 'ranger@example.com',
+        passwordHash: 'hashed-secret'
+      });
+
+      const user = await authService.getCurrentUser('user-1');
+
+      expect(user).not.toHaveProperty('passwordHash');
     });
   });
 });

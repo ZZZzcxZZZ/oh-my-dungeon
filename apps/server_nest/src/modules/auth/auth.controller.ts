@@ -2,11 +2,20 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Get,
   HttpCode,
-  Post
+  Post,
+  UseGuards
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import type { LoginResult, RegisterResult } from './auth.types';
+import { CurrentUser } from './current-user.decorator';
+import { JwtAuthGuard } from './jwt-auth.guard';
+import type {
+  AccessTokenPayload,
+  LoginResult,
+  RegisterResult,
+  RegisteredUser
+} from './auth.types';
 
 interface RegisterRequestBody {
   username?: unknown;
@@ -56,6 +65,12 @@ export class AuthController {
       identifier: body.identifier,
       password: body.password
     });
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  me(@CurrentUser() user: AccessTokenPayload): Promise<RegisteredUser> {
+    return this.authService.getCurrentUser(user.userId);
   }
 }
 

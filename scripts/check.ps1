@@ -1,5 +1,19 @@
 $ErrorActionPreference = "Stop"
 
+function Get-DockerCommand {
+  $docker = Get-Command docker -ErrorAction SilentlyContinue
+  if ($docker) {
+    return $docker.Source
+  }
+
+  $defaultDockerPath = "C:\Program Files\Docker\Docker\resources\bin\docker.exe"
+  if (Test-Path -LiteralPath $defaultDockerPath) {
+    return $defaultDockerPath
+  }
+
+  return $null
+}
+
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 Push-Location $root
 try {
@@ -12,9 +26,10 @@ try {
   Write-Host "==> Server and client tests"
   npm run test
 
-  if (Get-Command docker -ErrorAction SilentlyContinue) {
+  $dockerCommand = Get-DockerCommand
+  if ($dockerCommand) {
     Write-Host "==> Docker Compose config"
-    docker compose config | Out-Null
+    & $dockerCommand compose config | Out-Null
   } else {
     Write-Warning "Docker CLI not found; skipping docker compose config. Install Docker Desktop to validate self-hosting locally."
   }

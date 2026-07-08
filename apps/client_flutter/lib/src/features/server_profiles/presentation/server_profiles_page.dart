@@ -5,7 +5,7 @@ import '../../auth/data/auth_token_store.dart';
 import '../../campaigns/data/campaign_api_client.dart';
 import '../../client_mode/domain/client_mode.dart';
 import '../../rooms/data/room_api_client.dart';
-import '../../server_home/presentation/server_home_page.dart';
+import '../../server_home/presentation/main_shell.dart';
 import '../data/server_discovery_client.dart';
 import '../data/server_profile_store.dart';
 import '../domain/server_profile.dart';
@@ -322,15 +322,15 @@ class _ServerProfilesPageState extends State<ServerProfilesPage> {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
                           builder: (context) {
-                            return ServerHomePage(
-                              profile: profile,
-                              modeController: widget.modeController,
-                              roomClient: widget.roomClient,
-                              authTokenStore: widget.authTokenStore,
-                              authClient: widget.authClient,
-                              campaignClient: widget.campaignClient,
-                            );
-                          },
+                        return MainShell(
+                          profile: profile,
+                          modeController: widget.modeController,
+                          roomClient: widget.roomClient,
+                          authTokenStore: widget.authTokenStore,
+                          authClient: widget.authClient,
+                          campaignClient: widget.campaignClient,
+                        );
+                      },
                         ),
                       );
                     },

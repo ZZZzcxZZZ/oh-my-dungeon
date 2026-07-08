@@ -117,7 +117,7 @@ void main() {
     expect(find.text('连接你的跑团服务器'), findsOneWidget);
   });
 
-  testWidgets('opens a saved server profile home page', (tester) async {
+  testWidgets('opens a saved server profile and shows campaign tab', (tester) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
     final roomClient = _FakeRoomClient(
@@ -136,19 +136,20 @@ void main() {
     await tester.tap(find.text('Local Table'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Local Table'), findsAtLeastNWidgets(1));
+    // Default tab is 战役 (campaigns). Not logged in -> login prompt.
+    expect(find.text('战役'), findsWidgets);
+    expect(find.text('登录后管理战役'), findsOneWidget);
+
+    // Settings tab shows server info and mode.
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+    expect(find.text('Local Table'), findsOneWidget);
     expect(find.text('http://localhost:3000'), findsOneWidget);
     expect(find.text('当前模式：Player'), findsOneWidget);
-
-    await tester.drag(find.byType(Scrollable).last, const Offset(0, -300));
-    await tester.pumpAndSettle();
-    expect(find.text('房间与登录入口'), findsOneWidget);
-    expect(find.text('等待房间开放'), findsOneWidget);
-    expect(find.text('创建房间'), findsNothing);
-    expect(find.text('Friday One Shot'), findsOneWidget);
+    expect(find.text('未登录'), findsOneWidget);
   });
 
-  testWidgets('shows create room entry in dm mode', (tester) async {
+  testWidgets('switches to dm mode from settings tab', (tester) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
 
@@ -158,25 +159,18 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('设置'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('DM'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('关闭'));
-    await tester.pumpAndSettle();
-
     await tester.tap(find.text('Local Table'));
     await tester.pumpAndSettle();
 
-    expect(find.text('当前模式：DM'), findsOneWidget);
-
-    await tester.drag(find.byType(Scrollable).last, const Offset(0, -300));
+    await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
-    expect(find.text('创建房间'), findsOneWidget);
-    expect(find.text('等待房间开放'), findsNothing);
+    await tester.tap(find.text('DM'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('当前模式：DM'), findsOneWidget);
   });
 
-  testWidgets('creates a room from the dm home page', (tester) async {
+  testWidgets('creates a room from the dm table tab', (tester) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
     final roomClient = _FakeRoomClient();
@@ -190,17 +184,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('设置'));
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+
+    // Switch to DM mode in settings tab first.
+    await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('DM'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('关闭'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Local Table'));
-    await tester.pumpAndSettle();
-    await tester.drag(find.byType(Scrollable).last, const Offset(0, -300));
-    await tester.pumpAndSettle();
 
+    // Then go to the table tab to create a room.
+    await tester.tap(find.text('桌面'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('创建房间'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Friday One Shot');
@@ -211,7 +206,7 @@ void main() {
     expect(find.text('Friday One Shot'), findsOneWidget);
   });
 
-  testWidgets('opens a room detail page from the room list', (tester) async {
+  testWidgets('opens a room detail page from the table tab', (tester) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
     final roomClient = _FakeRoomClient(
@@ -229,7 +224,8 @@ void main() {
 
     await tester.tap(find.text('Local Table'));
     await tester.pumpAndSettle();
-    await tester.drag(find.byType(Scrollable).last, const Offset(0, -300));
+
+    await tester.tap(find.text('桌面'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Friday One Shot'));
     await tester.pumpAndSettle();

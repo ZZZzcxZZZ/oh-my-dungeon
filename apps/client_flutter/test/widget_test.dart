@@ -96,4 +96,20 @@ void main() {
     expect(find.text('Local Table'), findsNothing);
     expect(find.text('连接你的跑团服务器'), findsOneWidget);
   });
+
+  testWidgets('opens a saved server profile home page', (tester) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+
+    await tester.pumpWidget(DndTableApp(serverProfileStore: store));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Local Table'), findsAtLeastNWidgets(1));
+    expect(find.text('http://localhost:3000'), findsOneWidget);
+    expect(find.text('当前模式：Player'), findsOneWidget);
+    expect(find.text('房间与登录入口'), findsOneWidget);
+  });
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../client_mode/domain/client_mode.dart';
+import '../../server_home/presentation/server_home_page.dart';
 import '../data/server_discovery_client.dart';
 import '../data/server_profile_store.dart';
 import '../domain/server_profile.dart';
@@ -305,6 +306,18 @@ class _ServerProfilesPageState extends State<ServerProfilesPage> {
                     leading: const Icon(Icons.dns_outlined),
                     title: Text(profile.name),
                     subtitle: Text(profile.baseUrl),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (context) {
+                            return ServerHomePage(
+                              profile: profile,
+                              modeController: widget.modeController,
+                            );
+                          },
+                        ),
+                      );
+                    },
                     trailing: _ServerProfileTrailing(
                       profile: profile,
                       isDefault: isDefault,

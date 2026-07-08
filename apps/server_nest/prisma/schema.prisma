@@ -29,8 +29,10 @@ model User {
   defaultClientMode String        @default("player")
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
-  serverAdmin       ServerAdmin?
-  refreshTokens     RefreshToken[]
+  serverAdmin         ServerAdmin?
+  refreshTokens       RefreshToken[]
+  ownedCampaigns      Campaign[]
+  campaignMemberships CampaignMember[]
 }
 
 model ServerAdmin {
@@ -49,4 +51,46 @@ model RefreshToken {
   revokedAt DateTime?
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Campaign {
+  id          String   @id @default(uuid())
+  name        String
+  description String   @default("")
+  system      String   @default("dnd5e")
+  ownerId     String
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  members     CampaignMember[]
+  invites     CampaignInvite[]
+}
+
+model CampaignMember {
+  id          String   @id @default(uuid())
+  campaignId  String
+  userId      String
+  role        String   @default("player")
+  displayName String   @default("")
+  joinedAt    DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, userId])
+}
+
+model CampaignInvite {
+  id             String   @id @default(uuid())
+  campaignId     String
+  code           String   @unique
+  roleOnJoin     String   @default("player")
+  expiresAt      DateTime?
+  maxUses        Int      @default(1)
+  usedCount      Int      @default(0)
+  requireApproval Boolean  @default(false)
+  createdBy      String
+  createdAt      DateTime @default(now())
+  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 }

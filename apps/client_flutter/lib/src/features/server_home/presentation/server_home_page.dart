@@ -169,6 +169,7 @@ class _ServerHomePageState extends State<ServerHomePage> {
                                     profile: widget.profile,
                                     room: room,
                                     modeController: widget.modeController,
+                                    roomClient: widget.roomClient,
                                   );
                                 },
                               ),

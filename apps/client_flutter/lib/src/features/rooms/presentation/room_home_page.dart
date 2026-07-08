@@ -2,21 +2,26 @@ import 'package:flutter/material.dart';
 
 import '../../client_mode/domain/client_mode.dart';
 import '../../server_profiles/domain/server_profile.dart';
+import '../data/room_api_client.dart';
 import '../domain/dice_roller.dart';
 import '../domain/room.dart';
+import '../domain/room_roll.dart';
 
 class RoomHomePage extends StatefulWidget {
   RoomHomePage({
     required this.profile,
     required this.room,
     required this.modeController,
+    RoomClient? roomClient,
     DiceRoller? diceRoller,
     super.key,
-  }) : diceRoller = diceRoller ?? DiceRoller();
+  }) : roomClient = roomClient ?? RoomApiClient(),
+       diceRoller = diceRoller ?? DiceRoller();
 
   final ServerProfile profile;
   final Room room;
   final ClientModeController modeController;
+  final RoomClient roomClient;
   final DiceRoller diceRoller;
 
   @override
@@ -24,12 +29,68 @@ class RoomHomePage extends StatefulWidget {
 }
 
 class _RoomHomePageState extends State<RoomHomePage> {
-  final List<DiceRoll> _rolls = [];
+  var _isLoadingRolls = true;
+  var _isRolling = false;
+  Object? _rollLoadError;
+  List<RoomRoll> _rolls = [];
 
-  void _rollD20() {
+  @override
+  void initState() {
+    super.initState();
+    _loadRolls();
+  }
+
+  Future<void> _loadRolls() async {
+    try {
+      final rolls = await widget.roomClient.listRolls(
+        apiBaseUrl: widget.profile.apiBaseUrl,
+        roomId: widget.room.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _rolls = rolls;
+        _rollLoadError = null;
+        _isLoadingRolls = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _rollLoadError = error;
+        _isLoadingRolls = false;
+      });
+    }
+  }
+
+  Future<void> _rollD20() async {
+    if (_isRolling) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final diceRoll = widget.diceRoller.rollD20();
     setState(() {
-      _rolls.insert(0, widget.diceRoller.rollD20());
+      _isRolling = true;
     });
+
+    try {
+      final roll = await widget.roomClient.createRoll(
+        apiBaseUrl: widget.profile.apiBaseUrl,
+        roomId: widget.room.id,
+        notation: diceRoll.notation,
+        total: diceRoll.total,
+        actorName: widget.modeController.mode.label,
+        actorMode: widget.modeController.mode,
+      );
+      if (!mounted) return;
+      setState(() {
+        _rolls = [roll, ..._rolls];
+        _isRolling = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isRolling = false;
+      });
+      messenger.showSnackBar(SnackBar(content: Text('掷骰失败：$error')));
+    }
   }
 
   @override
@@ -72,7 +133,7 @@ class _RoomHomePageState extends State<RoomHomePage> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: FilledButton.icon(
-                  onPressed: _rollD20,
+                  onPressed: _isRolling ? null : _rollD20,
                   icon: const Icon(Icons.casino_outlined),
                   label: const Text('掷 D20'),
                 ),
@@ -80,16 +141,25 @@ class _RoomHomePageState extends State<RoomHomePage> {
               const SizedBox(height: 16),
               Text('掷骰记录', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
-              if (_rolls.isEmpty)
+              if (_isLoadingRolls)
+                const LinearProgressIndicator()
+              else if (_rollLoadError != null)
+                Text('掷骰记录加载失败：$_rollLoadError')
+              else if (_rolls.isEmpty)
                 const Text('暂无掷骰记录')
               else
-                for (final roll in _rolls) Text(roll.label),
+                for (final roll in _rolls) Text(_rollLabel(roll)),
             ],
           ),
         );
       },
     );
   }
+}
+
+String _rollLabel(RoomRoll roll) {
+  final label = '${roll.notation} = ${roll.total}';
+  return roll.actorName.isEmpty ? label : '${roll.actorName}: $label';
 }
 
 class _ToolChip extends StatelessWidget {

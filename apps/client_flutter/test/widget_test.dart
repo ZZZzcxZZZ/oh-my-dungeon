@@ -1,17 +1,24 @@
 import 'package:dnd_table_client/src/app/dnd_table_app.dart';
+import 'package:dnd_table_client/src/features/server_profiles/data/server_profile_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets('shows the server profile empty state', (tester) async {
-    await tester.pumpWidget(const DndTableApp());
+    await tester.pumpWidget(
+      DndTableApp(serverProfileStore: InMemoryServerProfileStore()),
+    );
+    await tester.pumpAndSettle();
 
     expect(find.text('连接你的跑团服务器'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, '添加服务器'), findsOneWidget);
   });
 
   testWidgets('switches client mode from settings', (tester) async {
-    await tester.pumpWidget(const DndTableApp());
+    await tester.pumpWidget(
+      DndTableApp(serverProfileStore: InMemoryServerProfileStore()),
+    );
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('设置'));
     await tester.pumpAndSettle();

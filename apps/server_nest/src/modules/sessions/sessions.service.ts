@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccessTokenPayload } from '../auth/auth.types';
 import type { CampaignContext } from '../campaigns/policies/campaign.policy';
+import { SessionsGateway } from '../realtime/sessions.gateway';
 import { SessionPolicy } from './policies/session.policy';
 import type {
   ChatMessageView,
@@ -25,7 +26,8 @@ const RECENT_MESSAGE_LIMIT = 50;
 export class SessionsService {
   constructor(
     private readonly prismaService: PrismaService,
-    private readonly policy: SessionPolicy
+    private readonly policy: SessionPolicy,
+    private readonly gateway: SessionsGateway
   ) {}
 
   async createSession(
@@ -205,7 +207,14 @@ export class SessionsService {
       }
     });
 
-    return toChatMessageView(created);
+    const view = toChatMessageView(created);
+    if (visibility === 'dm') {
+      this.gateway.broadcastToSessionManagers(sessionId, 'message:new', view);
+    } else {
+      this.gateway.broadcastToSession(sessionId, 'message:new', view);
+    }
+
+    return view;
   }
 
   async listRolls(
@@ -268,7 +277,14 @@ export class SessionsService {
       return created;
     });
 
-    return toDiceRollView(roll);
+    const view = toDiceRollView(roll);
+    if (visibility === 'dm' || visibility === 'blind') {
+      this.gateway.broadcastToSessionManagers(sessionId, 'roll:new', view);
+    } else {
+      this.gateway.broadcastToSession(sessionId, 'roll:new', view);
+    }
+
+    return view;
   }
 
   async listJournal(

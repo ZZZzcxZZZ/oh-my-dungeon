@@ -4,6 +4,7 @@ import request = require('supertest');
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { PasswordHashService } from '../src/modules/auth/password-hash.service';
+import { SessionsGateway } from '../src/modules/realtime/sessions.gateway';
 
 describe('sessions endpoints', () => {
   let app: INestApplication;
@@ -87,6 +88,10 @@ describe('sessions endpoints', () => {
     hash: jest.fn().mockResolvedValue('hashed-secret'),
     compare: jest.fn()
   };
+  const sessionsGateway = {
+    broadcastToSession: jest.fn(),
+    broadcastToSessionManagers: jest.fn()
+  };
   const storedDmUser = {
     id: 'user-1',
     username: 'ranger',
@@ -103,6 +108,8 @@ describe('sessions endpoints', () => {
       .useValue(prismaService)
       .overrideProvider(PasswordHashService)
       .useValue(passwordHashService)
+      .overrideProvider(SessionsGateway)
+      .useValue(sessionsGateway)
       .compile();
 
     app = moduleRef.createNestApplication();

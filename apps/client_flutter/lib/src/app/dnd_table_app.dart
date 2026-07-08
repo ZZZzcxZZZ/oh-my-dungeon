@@ -2,15 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../features/client_mode/domain/client_mode.dart';
+import '../features/rooms/data/room_api_client.dart';
 import '../features/server_profiles/data/server_discovery_client.dart';
 import '../features/server_profiles/data/server_profile_store.dart';
 import '../features/server_profiles/presentation/server_profiles_page.dart';
 
 class DndTableApp extends StatefulWidget {
-  const DndTableApp({this.serverProfileStore, this.discoveryClient, super.key});
+  const DndTableApp({
+    this.serverProfileStore,
+    this.discoveryClient,
+    this.roomClient,
+    super.key,
+  });
 
   final ServerProfileStore? serverProfileStore;
   final ServerDiscoveryClient? discoveryClient;
+  final RoomClient? roomClient;
 
   @override
   State<DndTableApp> createState() => _DndTableAppState();
@@ -63,6 +70,7 @@ class _DndTableAppState extends State<DndTableApp> {
           return ServerProfilesPage(
             store: store,
             discoveryClient: widget.discoveryClient ?? ServerDiscoveryClient(),
+            roomClient: widget.roomClient ?? RoomApiClient(),
             modeController: _modeController,
           );
         },

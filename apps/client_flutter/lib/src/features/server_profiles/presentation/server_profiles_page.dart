@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../client_mode/domain/client_mode.dart';
+import '../../rooms/data/room_api_client.dart';
 import '../../server_home/presentation/server_home_page.dart';
 import '../data/server_discovery_client.dart';
 import '../data/server_profile_store.dart';
@@ -12,12 +13,14 @@ class ServerProfilesPage extends StatefulWidget {
   const ServerProfilesPage({
     required this.store,
     required this.discoveryClient,
+    required this.roomClient,
     required this.modeController,
     super.key,
   });
 
   final ServerProfileStore store;
   final ServerDiscoveryClient discoveryClient;
+  final RoomClient roomClient;
   final ClientModeController modeController;
 
   @override
@@ -313,6 +316,7 @@ class _ServerProfilesPageState extends State<ServerProfilesPage> {
                             return ServerHomePage(
                               profile: profile,
                               modeController: widget.modeController,
+                              roomClient: widget.roomClient,
                             );
                           },
                         ),

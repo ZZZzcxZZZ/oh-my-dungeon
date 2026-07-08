@@ -1,4 +1,6 @@
 import 'package:dnd_table_client/src/app/dnd_table_app.dart';
+import 'package:dnd_table_client/src/features/rooms/data/room_api_client.dart';
+import 'package:dnd_table_client/src/features/rooms/domain/room.dart';
 import 'package:dnd_table_client/src/features/server_profiles/data/server_profile_store.dart';
 import 'package:dnd_table_client/src/features/server_profiles/domain/server_profile.dart';
 import 'package:flutter/material.dart';
@@ -136,4 +138,46 @@ void main() {
     expect(find.text('创建房间'), findsOneWidget);
     expect(find.text('等待房间开放'), findsNothing);
   });
+
+  testWidgets('creates a room from the dm home page', (tester) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+    final roomClient = _FakeRoomClient();
+
+    await tester.pumpWidget(
+      DndTableApp(serverProfileStore: store, roomClient: roomClient),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('DM'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('创建房间'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Friday One Shot');
+    await tester.tap(find.text('创建'));
+    await tester.pumpAndSettle();
+
+    expect(roomClient.createdRoomNames, ['Friday One Shot']);
+    expect(find.text('Friday One Shot'), findsOneWidget);
+  });
+}
+
+class _FakeRoomClient implements RoomClient {
+  final List<String> createdRoomNames = [];
+
+  @override
+  Future<Room> createRoom({
+    required String apiBaseUrl,
+    required String name,
+  }) async {
+    createdRoomNames.add(name);
+    return Room(id: 'room-${createdRoomNames.length}', name: name);
+  }
 }

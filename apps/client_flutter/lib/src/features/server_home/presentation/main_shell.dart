@@ -10,6 +10,8 @@ import '../../../features/client_mode/domain/client_mode.dart';
 import '../../../features/rooms/data/room_api_client.dart';
 import '../../../features/server_profiles/domain/server_profile.dart';
 import '../../../features/sessions/data/session_api_client.dart';
+import '../../../features/sessions/data/session_socket_service.dart';
+import '../../../features/sessions/data/socket_io_session_socket_service.dart';
 import '../../../features/sessions/presentation/session_controller.dart';
 import 'settings_tab_page.dart';
 import 'table_tab_page.dart';
@@ -47,6 +49,7 @@ class _MainShellState extends State<MainShell> {
   late final AuthController _authController;
   late final CampaignController _campaignController;
   late final SessionController _sessionController;
+  late final SessionSocketService _socketService;
   int _currentIndex = 0;
 
   @override
@@ -68,10 +71,12 @@ class _MainShellState extends State<MainShell> {
       authController: _authController,
       sessionClient: widget.sessionClient,
     );
+    _socketService = SocketIoSessionSocketService();
   }
 
   @override
   void dispose() {
+    _socketService.disconnect();
     _sessionController.dispose();
     _campaignController.dispose();
     _authController.dispose();
@@ -94,6 +99,7 @@ class _MainShellState extends State<MainShell> {
             authController: _authController,
             campaignController: _campaignController,
             sessionController: _sessionController,
+            socketService: _socketService,
           ),
           SettingsTabPage(
             profile: widget.profile,

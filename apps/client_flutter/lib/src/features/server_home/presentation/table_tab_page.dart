@@ -4,6 +4,7 @@ import '../../../features/auth/presentation/auth_controller.dart';
 import '../../../features/campaigns/domain/campaign.dart';
 import '../../../features/campaigns/presentation/campaign_controller.dart';
 import '../../../features/server_profiles/domain/server_profile.dart';
+import '../../../features/sessions/data/session_socket_service.dart';
 import '../../../features/sessions/domain/session.dart';
 import '../../../features/sessions/presentation/session_controller.dart';
 import '../../../features/sessions/presentation/session_detail_page.dart';
@@ -18,6 +19,7 @@ class TableTabPage extends StatefulWidget {
     required this.authController,
     required this.campaignController,
     required this.sessionController,
+    required this.socketService,
     super.key,
   });
 
@@ -25,6 +27,7 @@ class TableTabPage extends StatefulWidget {
   final AuthController authController;
   final CampaignController campaignController;
   final SessionController sessionController;
+  final SessionSocketService socketService;
 
   @override
   State<TableTabPage> createState() => _TableTabPageState();
@@ -246,6 +249,7 @@ class _TableTabPageState extends State<TableTabPage> {
           profile: widget.profile,
           authController: widget.authController,
           sessionController: widget.sessionController,
+          socketService: widget.socketService,
         ),
       ),
     );

@@ -43,6 +43,7 @@ describe('campaigns endpoints', () => {
       create: jest.fn(),
       findUnique: jest.fn(),
       findFirst: jest.fn(),
+      findMany: jest.fn(),
       update: jest.fn()
     },
     $transaction: jest.fn(),
@@ -119,6 +120,7 @@ describe('campaigns endpoints', () => {
     prismaService.campaignInvite.create.mockResolvedValue({});
     prismaService.campaignInvite.findUnique.mockResolvedValue(null);
     prismaService.campaignInvite.findFirst.mockResolvedValue(null);
+    prismaService.campaignInvite.findMany.mockResolvedValue([]);
     prismaService.campaignInvite.update.mockResolvedValue({});
   });
 
@@ -275,6 +277,156 @@ describe('campaigns endpoints', () => {
         .get('/api/campaigns/missing')
         .set('Authorization', `Bearer ${token}`)
         .expect(404);
+    });
+  });
+
+  describe('POST /api/campaigns/:id/invites', () => {
+    const campaignWithOwner = {
+      id: 'camp-1',
+      name: 'Curse of Strahd',
+      description: '',
+      system: 'dnd5e',
+      ownerId: 'user-1',
+      status: 'active',
+      createdAt: '2026-07-09T00:00:00.000Z',
+      updatedAt: '2026-07-09T00:00:00.000Z',
+      members: [{ userId: 'user-1', role: 'owner' }]
+    };
+
+    it('creates an invite and returns it without internal fields', async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce(campaignWithOwner);
+      prismaService.campaignInvite.create.mockResolvedValueOnce({
+        id: 'invite-1',
+        campaignId: 'camp-1',
+        code: 'ABC123XYZ',
+        roleOnJoin: 'player',
+        expiresAt: null,
+        maxUses: 1,
+        usedCount: 0,
+        requireApproval: false,
+        createdBy: 'user-1',
+        createdAt: '2026-07-09T00:00:00.000Z'
+      });
+
+      await request(app.getHttpServer())
+        .post('/api/campaigns/camp-1/invites')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ roleOnJoin: 'player', maxUses: 1 })
+        .expect(201)
+        .expect(({ body }) => {
+          expect(body.id).toBe('invite-1');
+          expect(body.campaignId).toBe('camp-1');
+          expect(body.code).toBe('ABC123XYZ');
+          expect(body.roleOnJoin).toBe('player');
+          expect(body.maxUses).toBe(1);
+          expect(body.usedCount).toBe(0);
+          expect(body.requireApproval).toBe(false);
+          expect(body.expiresAt).toBeNull();
+        });
+
+      const createArgs = prismaService.campaignInvite.create.mock.calls[0][0];
+      expect(createArgs.data.campaignId).toBe('camp-1');
+      expect(createArgs.data.createdBy).toBe('user-1');
+      expect(createArgs.data.code).toEqual(expect.any(String));
+    });
+
+    it('rejects without authentication with 401', async () => {
+      await request(app.getHttpServer())
+        .post('/api/campaigns/camp-1/invites')
+        .send({ roleOnJoin: 'player' })
+        .expect(401);
+    });
+
+    it('rejects a non-manager with 403', async () => {
+      const token = await loginAsDm();
+      const campaignWithPlayerOnly = {
+        ...campaignWithOwner,
+        ownerId: 'user-2',
+        members: [{ userId: 'user-1', role: 'player' }]
+      };
+      prismaService.campaign.findUnique.mockResolvedValueOnce(campaignWithPlayerOnly);
+
+      await request(app.getHttpServer())
+        .post('/api/campaigns/camp-1/invites')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ roleOnJoin: 'player' })
+        .expect(403);
+    });
+
+    it('returns 404 when campaign does not exist', async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce(null);
+
+      await request(app.getHttpServer())
+        .post('/api/campaigns/missing/invites')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ roleOnJoin: 'player' })
+        .expect(404);
+    });
+  });
+
+  describe('GET /api/campaigns/:id/invites', () => {
+    const campaignWithOwner = {
+      id: 'camp-1',
+      name: 'Curse of Strahd',
+      description: '',
+      system: 'dnd5e',
+      ownerId: 'user-1',
+      status: 'active',
+      createdAt: '2026-07-09T00:00:00.000Z',
+      updatedAt: '2026-07-09T00:00:00.000Z',
+      members: [{ userId: 'user-1', role: 'owner' }]
+    };
+
+    it('returns invites for a manager', async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce(campaignWithOwner);
+      prismaService.campaignInvite.findMany.mockResolvedValueOnce([
+        {
+          id: 'invite-1',
+          campaignId: 'camp-1',
+          code: 'ABC123',
+          roleOnJoin: 'player',
+          expiresAt: null,
+          maxUses: 1,
+          usedCount: 0,
+          requireApproval: false,
+          createdBy: 'user-1',
+          createdAt: '2026-07-09T00:00:00.000Z'
+        }
+      ]);
+
+      await request(app.getHttpServer())
+        .get('/api/campaigns/camp-1/invites')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body).toHaveLength(1);
+          expect(body[0].id).toBe('invite-1');
+          expect(body[0].code).toBe('ABC123');
+        });
+    });
+
+    it('rejects without authentication with 401', async () => {
+      await request(app.getHttpServer())
+        .get('/api/campaigns/camp-1/invites')
+        .expect(401);
+    });
+
+    it('rejects a non-manager with 403', async () => {
+      const token = await loginAsDm();
+      const campaignWithPlayerOnly = {
+        ...campaignWithOwner,
+        ownerId: 'user-2',
+        members: [{ userId: 'user-1', role: 'player' }]
+      };
+      prismaService.campaign.findUnique.mockResolvedValueOnce(campaignWithPlayerOnly);
+
+      await request(app.getHttpServer())
+        .get('/api/campaigns/camp-1/invites')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(403);
     });
   });
 });

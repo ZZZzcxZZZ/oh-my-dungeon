@@ -9,6 +9,7 @@ import '../features/rooms/data/room_api_client.dart';
 import '../features/server_profiles/data/server_discovery_client.dart';
 import '../features/server_profiles/data/server_profile_store.dart';
 import '../features/server_profiles/presentation/server_profiles_page.dart';
+import '../features/sessions/data/session_api_client.dart';
 
 class DndTableApp extends StatefulWidget {
   const DndTableApp({
@@ -18,6 +19,7 @@ class DndTableApp extends StatefulWidget {
     this.roomClient,
     this.authClient,
     this.campaignClient,
+    this.sessionClient,
     super.key,
   });
 
@@ -27,6 +29,7 @@ class DndTableApp extends StatefulWidget {
   final RoomClient? roomClient;
   final AuthClient? authClient;
   final CampaignClient? campaignClient;
+  final SessionClient? sessionClient;
 
   @override
   State<DndTableApp> createState() => _DndTableAppState();
@@ -53,6 +56,7 @@ class _DndTableAppState extends State<DndTableApp> {
         authTokenStore: injectedTokenStore,
         authClient: widget.authClient ?? AuthApiClient(),
         campaignClient: widget.campaignClient ?? CampaignApiClient(),
+        sessionClient: widget.sessionClient ?? SessionApiClient(),
       );
     }
 
@@ -64,6 +68,7 @@ class _DndTableAppState extends State<DndTableApp> {
           injectedTokenStore ?? SharedPreferencesAuthTokenStore(preferences),
       authClient: widget.authClient ?? AuthApiClient(),
       campaignClient: widget.campaignClient ?? CampaignApiClient(),
+      sessionClient: widget.sessionClient ?? SessionApiClient(),
     );
   }
 
@@ -99,6 +104,7 @@ class _DndTableAppState extends State<DndTableApp> {
             roomClient: widget.roomClient ?? RoomApiClient(),
             authClient: deps.authClient,
             campaignClient: deps.campaignClient,
+            sessionClient: deps.sessionClient,
             modeController: _modeController,
           );
         },
@@ -113,10 +119,12 @@ class _AppDeps {
     required this.authTokenStore,
     required this.authClient,
     required this.campaignClient,
+    required this.sessionClient,
   });
 
   final ServerProfileStore serverProfileStore;
   final AuthTokenStore authTokenStore;
   final AuthClient authClient;
   final CampaignClient campaignClient;
+  final SessionClient sessionClient;
 }

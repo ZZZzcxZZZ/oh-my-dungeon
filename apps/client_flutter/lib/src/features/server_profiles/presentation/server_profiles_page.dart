@@ -6,6 +6,7 @@ import '../../campaigns/data/campaign_api_client.dart';
 import '../../client_mode/domain/client_mode.dart';
 import '../../rooms/data/room_api_client.dart';
 import '../../server_home/presentation/main_shell.dart';
+import '../../sessions/data/session_api_client.dart';
 import '../data/server_discovery_client.dart';
 import '../data/server_profile_store.dart';
 import '../domain/server_profile.dart';
@@ -20,6 +21,7 @@ class ServerProfilesPage extends StatefulWidget {
     required this.roomClient,
     required this.authClient,
     required this.campaignClient,
+    required this.sessionClient,
     required this.modeController,
     super.key,
   });
@@ -30,6 +32,7 @@ class ServerProfilesPage extends StatefulWidget {
   final RoomClient roomClient;
   final AuthClient authClient;
   final CampaignClient campaignClient;
+  final SessionClient sessionClient;
   final ClientModeController modeController;
 
   @override
@@ -329,6 +332,7 @@ class _ServerProfilesPageState extends State<ServerProfilesPage> {
                           authTokenStore: widget.authTokenStore,
                           authClient: widget.authClient,
                           campaignClient: widget.campaignClient,
+                          sessionClient: widget.sessionClient,
                         );
                       },
                         ),

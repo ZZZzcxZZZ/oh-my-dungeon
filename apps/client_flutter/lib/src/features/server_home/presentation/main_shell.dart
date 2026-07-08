@@ -9,6 +9,8 @@ import '../../../features/campaigns/presentation/campaigns_tab_page.dart';
 import '../../../features/client_mode/domain/client_mode.dart';
 import '../../../features/rooms/data/room_api_client.dart';
 import '../../../features/server_profiles/domain/server_profile.dart';
+import '../../../features/sessions/data/session_api_client.dart';
+import '../../../features/sessions/presentation/session_controller.dart';
 import 'settings_tab_page.dart';
 import 'table_tab_page.dart';
 
@@ -25,6 +27,7 @@ class MainShell extends StatefulWidget {
     required this.authTokenStore,
     required this.authClient,
     required this.campaignClient,
+    required this.sessionClient,
     super.key,
   });
 
@@ -34,6 +37,7 @@ class MainShell extends StatefulWidget {
   final AuthTokenStore authTokenStore;
   final AuthClient authClient;
   final CampaignClient campaignClient;
+  final SessionClient sessionClient;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -42,6 +46,7 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   late final AuthController _authController;
   late final CampaignController _campaignController;
+  late final SessionController _sessionController;
   int _currentIndex = 0;
 
   @override
@@ -58,10 +63,16 @@ class _MainShellState extends State<MainShell> {
       authController: _authController,
       campaignClient: widget.campaignClient,
     );
+    _sessionController = SessionController(
+      apiBaseUrl: widget.profile.apiBaseUrl,
+      authController: _authController,
+      sessionClient: widget.sessionClient,
+    );
   }
 
   @override
   void dispose() {
+    _sessionController.dispose();
     _campaignController.dispose();
     _authController.dispose();
     super.dispose();
@@ -80,9 +91,9 @@ class _MainShellState extends State<MainShell> {
           ),
           TableTabPage(
             profile: widget.profile,
-            modeController: widget.modeController,
-            roomClient: widget.roomClient,
             authController: _authController,
+            campaignController: _campaignController,
+            sessionController: _sessionController,
           ),
           SettingsTabPage(
             profile: widget.profile,

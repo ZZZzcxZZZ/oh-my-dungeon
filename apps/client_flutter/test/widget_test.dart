@@ -170,55 +170,16 @@ void main() {
     expect(find.text('当前模式：DM'), findsOneWidget);
   });
 
-  testWidgets('creates a room from the dm table tab', (tester) async {
+  testWidgets('shows login prompt on table tab when not authenticated',
+      (tester) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
-    final roomClient = _FakeRoomClient();
 
     await tester.pumpWidget(
       DndTableApp(
-      serverProfileStore: store,
-      authTokenStore: InMemoryAuthTokenStore(),
-      roomClient: roomClient,
-    ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Local Table'));
-    await tester.pumpAndSettle();
-
-    // Switch to DM mode in settings tab first.
-    await tester.tap(find.text('设置'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('DM'));
-    await tester.pumpAndSettle();
-
-    // Then go to the table tab to create a room.
-    await tester.tap(find.text('桌面'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('创建房间'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'Friday One Shot');
-    await tester.tap(find.text('创建'));
-    await tester.pumpAndSettle();
-
-    expect(roomClient.createdRoomNames, ['Friday One Shot']);
-    expect(find.text('Friday One Shot'), findsOneWidget);
-  });
-
-  testWidgets('opens a room detail page from the table tab', (tester) async {
-    final store = InMemoryServerProfileStore();
-    await store.saveProfile(profile);
-    final roomClient = _FakeRoomClient(
-      initialRooms: const [Room(id: 'room-1', name: 'Friday One Shot')],
-    );
-
-    await tester.pumpWidget(
-      DndTableApp(
-      serverProfileStore: store,
-      authTokenStore: InMemoryAuthTokenStore(),
-      roomClient: roomClient,
-    ),
+        serverProfileStore: store,
+        authTokenStore: InMemoryAuthTokenStore(),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -227,15 +188,8 @@ void main() {
 
     await tester.tap(find.text('桌面'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Friday One Shot'));
-    await tester.pumpAndSettle();
 
-    expect(find.text('Friday One Shot'), findsAtLeastNWidgets(1));
-    expect(find.text('Local Table'), findsAtLeastNWidgets(1));
-    expect(find.text('当前模式：Player'), findsOneWidget);
-    expect(find.text('角色与跑团工具'), findsOneWidget);
-    expect(find.text('角色卡'), findsOneWidget);
-    expect(find.text('掷骰'), findsOneWidget);
+    expect(find.text('登录后进入桌面'), findsOneWidget);
   });
 }
 

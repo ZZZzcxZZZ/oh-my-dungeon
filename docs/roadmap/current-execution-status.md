@@ -32,15 +32,17 @@
 - 客户端可以读取 well-known metadata。
 - 客户端支持 Player/DM 模式切换。
 
-### 已提前实现的原型能力
+### 已提前实现的原型能力（冻结状态）
 
-这些能力有价值，但版本归属超前，不能继续在现有 `rooms` 抽象上无限加功能：
+这些能力有价值，但版本归属超前，不能继续在现有 `rooms` 抽象上无限加功能。v0.3 已建立正式 Campaign 模型后，下列原型进入**冻结状态**：不再新增功能、不绑定到 Campaign，仅保留为可运行的演示资产，待 v0.4 引入 Session 与正式 DiceRoll 模型时整体替换。
 
 - 服务端 `/api/rooms` 内存房间 API。
 - 服务端 `/api/rooms/:roomId/rolls` 内存掷骰记录 API。
 - 客户端房间列表和房间详情页。
 - 客户端 D20 掷骰与骰子表达式掷骰。
 - `dart_dice_parser` 已接入客户端领域层。
+
+> 注意：`/api/rooms` 与 `/api/campaigns` 是两套独立抽象。Campaign 成员不自动获得 rooms 权限，rooms 也不读取 Campaign 数据。禁止在 rooms 原型上叠加 Campaign/Session 逻辑。
 
 ## 与路线图的差距
 
@@ -175,7 +177,7 @@ docs(v0.2): update account setup guide
 4. 邀请码生成与加入。
 5. Player/DM 战役列表。
 6. 成员管理基础版。
-7. 迁移或废弃 `rooms` 原型。
+7. ~~迁移或废弃 `rooms` 原型。~~ → 调整：`rooms` 原型在 v0.3 保持冻结（见上文「已提前实现的原型能力（冻结状态）」），不在 v0.3 迁移或删除。正式替换推迟到 v0.4，届时以 Session + DiceRoll 模型承接，并下线 `/api/rooms`。
 
 ### v0.4 跑团桌面基础版
 

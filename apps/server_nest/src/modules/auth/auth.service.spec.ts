@@ -23,6 +23,8 @@ describe('AuthService', () => {
     };
     refreshToken: {
       create: jest.Mock;
+      findUnique: jest.Mock;
+      update: jest.Mock;
     };
     $transaction: jest.Mock;
   };
@@ -34,6 +36,7 @@ describe('AuthService', () => {
     signAccessToken: jest.Mock;
     generateRefreshToken: jest.Mock;
     refreshExpiresAt: jest.Mock;
+    hashRefreshToken: jest.Mock;
   };
 
   beforeEach(() => {
@@ -51,7 +54,9 @@ describe('AuthService', () => {
         findFirst: jest.fn()
       },
       refreshToken: {
-        create: jest.fn()
+        create: jest.fn(),
+        findUnique: jest.fn(),
+        update: jest.fn()
       },
       $transaction: jest.fn()
     };
@@ -65,7 +70,8 @@ describe('AuthService', () => {
         token: 'refresh-plaintext',
         tokenHash: 'refresh-hash'
       }),
-      refreshExpiresAt: jest.fn().mockReturnValue(new Date('2026-08-08T00:00:00Z'))
+      refreshExpiresAt: jest.fn().mockReturnValue(new Date('2026-08-08T00:00:00Z')),
+      hashRefreshToken: jest.fn().mockReturnValue('refresh-hash')
     };
 
     authService = new AuthService(
@@ -358,6 +364,138 @@ describe('AuthService', () => {
       const user = await authService.getCurrentUser('user-1');
 
       expect(user).not.toHaveProperty('passwordHash');
+    });
+  });
+
+  describe('refresh', () => {
+    const buildRecord = (overrides: Record<string, unknown> = {}) => ({
+      id: 'rt-1',
+      userId: 'user-1',
+      tokenHash: 'refresh-hash',
+      expiresAt: new Date(Date.now() + 86_400_000),
+      revokedAt: null,
+      createdAt: new Date(),
+      ...overrides
+    });
+
+    beforeEach(() => {
+      tokenService.hashRefreshToken.mockReturnValue('refresh-hash');
+      tokenService.signAccessToken.mockReturnValue('new-access-token');
+      prismaService.refreshToken.findUnique.mockResolvedValue(buildRecord());
+      prismaService.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        username: 'ranger',
+        email: 'ranger@example.com'
+      });
+    });
+
+    it('returns a new access token for a valid refresh token', async () => {
+      const result = await authService.refresh('refresh-plaintext');
+
+      expect(result.accessToken).toBe('new-access-token');
+    });
+
+    it('hashes the token and looks it up by tokenHash', async () => {
+      await authService.refresh('refresh-plaintext');
+
+      expect(tokenService.hashRefreshToken).toHaveBeenCalledWith('refresh-plaintext');
+      expect(prismaService.refreshToken.findUnique).toHaveBeenCalledWith({
+        where: { tokenHash: 'refresh-hash' }
+      });
+    });
+
+    it('signs the new access token with the user payload', async () => {
+      await authService.refresh('refresh-plaintext');
+
+      expect(tokenService.signAccessToken).toHaveBeenCalledWith({
+        userId: 'user-1',
+        username: 'ranger'
+      });
+    });
+
+    it('rejects an unknown refresh token with 401', async () => {
+      prismaService.refreshToken.findUnique.mockResolvedValue(null);
+
+      await expect(
+        authService.refresh('refresh-plaintext')
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('rejects a revoked refresh token with 401', async () => {
+      prismaService.refreshToken.findUnique.mockResolvedValue(
+        buildRecord({ revokedAt: new Date() })
+      );
+
+      await expect(
+        authService.refresh('refresh-plaintext')
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('rejects an expired refresh token with 401', async () => {
+      prismaService.refreshToken.findUnique.mockResolvedValue(
+        buildRecord({ expiresAt: new Date(Date.now() - 86_400_000) })
+      );
+
+      await expect(
+        authService.refresh('refresh-plaintext')
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('rejects when the user no longer exists with 401', async () => {
+      prismaService.user.findUnique.mockResolvedValue(null);
+
+      await expect(
+        authService.refresh('refresh-plaintext')
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('does not issue a new access token when the refresh token is invalid', async () => {
+      prismaService.refreshToken.findUnique.mockResolvedValue(null);
+
+      await expect(
+        authService.refresh('refresh-plaintext')
+      ).rejects.toThrow();
+
+      expect(tokenService.signAccessToken).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('logout', () => {
+    beforeEach(() => {
+      tokenService.hashRefreshToken.mockReturnValue('refresh-hash');
+    });
+
+    it('revokes a valid refresh token by setting revokedAt', async () => {
+      prismaService.refreshToken.findUnique.mockResolvedValue({
+        id: 'rt-1',
+        revokedAt: null
+      });
+
+      await authService.logout('refresh-plaintext');
+
+      expect(prismaService.refreshToken.update).toHaveBeenCalledWith({
+        where: { id: 'rt-1' },
+        data: { revokedAt: expect.any(Date) }
+      });
+    });
+
+    it('does not call update when the refresh token does not exist', async () => {
+      prismaService.refreshToken.findUnique.mockResolvedValue(null);
+
+      await authService.logout('refresh-plaintext');
+
+      expect(prismaService.refreshToken.update).not.toHaveBeenCalled();
+    });
+
+    it('is idempotent when the token is already revoked', async () => {
+      prismaService.refreshToken.findUnique.mockResolvedValue({
+        id: 'rt-1',
+        revokedAt: new Date()
+      });
+
+      await authService.logout('refresh-plaintext');
+
+      expect(prismaService.refreshToken.update).not.toHaveBeenCalled();
     });
   });
 });

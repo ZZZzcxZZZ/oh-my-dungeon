@@ -10,6 +10,7 @@ import { TokenService } from './token.service';
 import type {
   LoginInput,
   LoginResult,
+  RefreshResult,
   RegisterInput,
   RegisterResult,
   RegisteredUser
@@ -120,6 +121,47 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
     return toRegisteredUser(user);
+  }
+
+  async refresh(refreshToken: string): Promise<RefreshResult> {
+    const tokenHash = this.tokenService.hashRefreshToken(refreshToken);
+    const record = await this.prismaService.refreshToken.findUnique({
+      where: { tokenHash }
+    });
+    if (!record || record.revokedAt !== null) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+    if (record.expiresAt < new Date()) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const user = await this.prismaService.user.findUnique({
+      where: { id: record.userId }
+    });
+    if (!user) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const accessToken = this.tokenService.signAccessToken({
+      userId: user.id,
+      username: user.username
+    });
+    return { accessToken };
+  }
+
+  async logout(refreshToken: string): Promise<void> {
+    const tokenHash = this.tokenService.hashRefreshToken(refreshToken);
+    const record = await this.prismaService.refreshToken.findUnique({
+      where: { tokenHash }
+    });
+    if (!record || record.revokedAt !== null) {
+      return;
+    }
+
+    await this.prismaService.refreshToken.update({
+      where: { id: record.id },
+      data: { revokedAt: new Date() }
+    });
   }
 }
 

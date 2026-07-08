@@ -197,7 +197,9 @@ describe('auth login and current user endpoints', () => {
       findFirst: jest.fn()
     },
     refreshToken: {
-      create: jest.fn()
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn()
     },
     $transaction: jest.fn(),
     $queryRaw: jest.fn().mockResolvedValue([{ health_check: 1 }])
@@ -251,6 +253,8 @@ describe('auth login and current user endpoints', () => {
     });
     prismaService.serverAdmin.create.mockResolvedValue({});
     prismaService.refreshToken.create.mockResolvedValue({});
+    prismaService.refreshToken.findUnique.mockResolvedValue(null);
+    prismaService.refreshToken.update.mockResolvedValue({});
     prismaService.$transaction.mockImplementation(async (cb: any) =>
       cb(prismaService)
     );
@@ -400,5 +404,101 @@ describe('auth login and current user endpoints', () => {
       .get('/api/auth/me')
       .set('Authorization', 'Bearer not-a-real-token')
       .expect(401);
+  });
+
+  it('issues a new access token via refresh', async () => {
+    prismaService.user.findFirst.mockResolvedValueOnce(storedUser);
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ identifier: 'ranger', password: 'p@ssw0rd' })
+      .expect(200);
+
+    prismaService.refreshToken.findUnique.mockResolvedValueOnce({
+      id: 'rt-1',
+      userId: 'user-1',
+      tokenHash: 'any',
+      expiresAt: new Date(Date.now() + 86_400_000),
+      revokedAt: null,
+      createdAt: new Date()
+    });
+    prismaService.user.findUnique.mockResolvedValueOnce(storedUser);
+
+    const result = await request(app.getHttpServer())
+      .post('/api/auth/refresh')
+      .send({ refreshToken: login.body.refreshToken })
+      .expect(200)
+      .then((r) => r.body);
+
+    expect(result.accessToken).toEqual(expect.any(String));
+
+    prismaService.user.findUnique.mockResolvedValueOnce(storedUser);
+    await request(app.getHttpServer())
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${result.accessToken}`)
+      .expect(200);
+  });
+
+  it('rejects refresh with an unknown refresh token with 401', async () => {
+    prismaService.refreshToken.findUnique.mockResolvedValueOnce(null);
+
+    await request(app.getHttpServer())
+      .post('/api/auth/refresh')
+      .send({ refreshToken: 'unknown-token' })
+      .expect(401);
+  });
+
+  it('rejects a missing refresh token in the body with 400', async () => {
+    await request(app.getHttpServer())
+      .post('/api/auth/refresh')
+      .send({})
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body.message).toBe('Refresh token is required');
+      });
+  });
+
+  it('revokes the refresh token on logout and blocks further refresh', async () => {
+    prismaService.user.findFirst.mockResolvedValueOnce(storedUser);
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ identifier: 'ranger', password: 'p@ssw0rd' })
+      .expect(200);
+
+    prismaService.refreshToken.findUnique.mockResolvedValueOnce({
+      id: 'rt-1',
+      revokedAt: null
+    });
+    await request(app.getHttpServer())
+      .post('/api/auth/logout')
+      .send({ refreshToken: login.body.refreshToken })
+      .expect(204);
+
+    expect(prismaService.refreshToken.update).toHaveBeenCalledWith({
+      where: { id: 'rt-1' },
+      data: { revokedAt: expect.any(Date) }
+    });
+
+    prismaService.refreshToken.findUnique.mockResolvedValueOnce({
+      id: 'rt-1',
+      userId: 'user-1',
+      tokenHash: 'any',
+      expiresAt: new Date(Date.now() + 86_400_000),
+      revokedAt: new Date(),
+      createdAt: new Date()
+    });
+    await request(app.getHttpServer())
+      .post('/api/auth/refresh')
+      .send({ refreshToken: login.body.refreshToken })
+      .expect(401);
+  });
+
+  it('rejects logout with a missing refresh token in the body with 400', async () => {
+    await request(app.getHttpServer())
+      .post('/api/auth/logout')
+      .send({})
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body.message).toBe('Refresh token is required');
+      });
   });
 });

@@ -13,6 +13,7 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import type {
   AccessTokenPayload,
   LoginResult,
+  RefreshResult,
   RegisterResult,
   RegisteredUser
 } from './auth.types';
@@ -26,6 +27,10 @@ interface RegisterRequestBody {
 interface LoginRequestBody {
   identifier?: unknown;
   password?: unknown;
+}
+
+interface RefreshRequestBody {
+  refreshToken?: unknown;
 }
 
 @Controller('auth')
@@ -71,6 +76,24 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() user: AccessTokenPayload): Promise<RegisteredUser> {
     return this.authService.getCurrentUser(user.userId);
+  }
+
+  @Post('refresh')
+  @HttpCode(200)
+  refresh(@Body() body: RefreshRequestBody): Promise<RefreshResult> {
+    if (!isNonEmptyString(body.refreshToken)) {
+      throw new BadRequestException('Refresh token is required');
+    }
+    return this.authService.refresh(body.refreshToken);
+  }
+
+  @Post('logout')
+  @HttpCode(204)
+  logout(@Body() body: RefreshRequestBody): Promise<void> {
+    if (!isNonEmptyString(body.refreshToken)) {
+      throw new BadRequestException('Refresh token is required');
+    }
+    return this.authService.logout(body.refreshToken);
   }
 }
 

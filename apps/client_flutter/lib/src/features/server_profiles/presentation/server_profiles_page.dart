@@ -5,6 +5,8 @@ import '../data/server_discovery_client.dart';
 import '../data/server_profile_store.dart';
 import '../domain/server_profile.dart';
 
+enum _ServerProfileAction { setDefault, editName, delete }
+
 class ServerProfilesPage extends StatefulWidget {
   const ServerProfilesPage({
     required this.store,
@@ -22,12 +24,27 @@ class ServerProfilesPage extends StatefulWidget {
 }
 
 class _ServerProfilesPageState extends State<ServerProfilesPage> {
-  late Future<List<ServerProfile>> _profilesFuture;
+  late Future<_ServerProfilesViewData> _profilesFuture;
 
   @override
   void initState() {
     super.initState();
-    _profilesFuture = widget.store.listProfiles();
+    _profilesFuture = _loadProfiles();
+  }
+
+  Future<_ServerProfilesViewData> _loadProfiles() async {
+    final profiles = await widget.store.listProfiles();
+    final defaultProfileId = await widget.store.getDefaultProfileId();
+    return _ServerProfilesViewData(
+      profiles: profiles,
+      defaultProfileId: defaultProfileId,
+    );
+  }
+
+  void _refreshProfiles() {
+    setState(() {
+      _profilesFuture = _loadProfiles();
+    });
   }
 
   Future<void> _showSettingsDialog() async {
@@ -122,12 +139,89 @@ class _ServerProfilesPageState extends State<ServerProfilesPage> {
         metadata: metadata,
       );
       await widget.store.saveProfile(profile);
-      setState(() {
-        _profilesFuture = widget.store.listProfiles();
-      });
+      _refreshProfiles();
       messenger.showSnackBar(SnackBar(content: Text('已连接到 ${profile.name}')));
     } catch (error) {
       messenger.showSnackBar(SnackBar(content: Text('连接失败：$error')));
+    }
+  }
+
+  Future<void> _setDefaultProfile(ServerProfile profile) async {
+    await widget.store.setDefaultProfileId(profile.id);
+    _refreshProfiles();
+  }
+
+  Future<void> _showEditProfileDialog(ServerProfile profile) async {
+    final controller = TextEditingController(text: profile.name);
+
+    final nextName = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('编辑名称'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(labelText: '服务器名称'),
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(controller.text),
+              child: const Text('保存'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (nextName == null || nextName.trim().isEmpty) return;
+
+    await widget.store.saveProfile(profile.copyWith(name: nextName.trim()));
+    _refreshProfiles();
+  }
+
+  Future<void> _showDeleteProfileDialog(ServerProfile profile) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('删除服务器'),
+          content: Text('确认删除 ${profile.name}？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton.tonal(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('确认删除'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    await widget.store.deleteProfile(profile.id);
+    _refreshProfiles();
+  }
+
+  Future<void> _handleProfileAction({
+    required ServerProfile profile,
+    required _ServerProfileAction action,
+  }) async {
+    switch (action) {
+      case _ServerProfileAction.setDefault:
+        await _setDefaultProfile(profile);
+      case _ServerProfileAction.editName:
+        await _showEditProfileDialog(profile);
+      case _ServerProfileAction.delete:
+        await _showDeleteProfileDialog(profile);
     }
   }
 
@@ -158,11 +252,11 @@ class _ServerProfilesPageState extends State<ServerProfilesPage> {
               ),
             ],
           ),
-          body: FutureBuilder<List<ServerProfile>>(
+          body: FutureBuilder<_ServerProfilesViewData>(
             future: _profilesFuture,
             builder: (context, snapshot) {
-              final profiles = snapshot.data ?? const <ServerProfile>[];
-              if (profiles.isEmpty) {
+              final data = snapshot.data ?? _ServerProfilesViewData.empty;
+              if (data.profiles.isEmpty) {
                 return Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 420),
@@ -202,15 +296,23 @@ class _ServerProfilesPageState extends State<ServerProfilesPage> {
               }
 
               return ListView.separated(
-                itemCount: profiles.length,
+                itemCount: data.profiles.length,
                 separatorBuilder: (context, index) => const Divider(height: 1),
                 itemBuilder: (context, index) {
-                  final profile = profiles[index];
+                  final profile = data.profiles[index];
+                  final isDefault = profile.id == data.defaultProfileId;
                   return ListTile(
                     leading: const Icon(Icons.dns_outlined),
                     title: Text(profile.name),
                     subtitle: Text(profile.baseUrl),
-                    trailing: Text(profile.lastKnownVersion),
+                    trailing: _ServerProfileTrailing(
+                      profile: profile,
+                      isDefault: isDefault,
+                      onSelected: (action) => _handleProfileAction(
+                        profile: profile,
+                        action: action,
+                      ),
+                    ),
                   );
                 },
               );
@@ -220,4 +322,66 @@ class _ServerProfilesPageState extends State<ServerProfilesPage> {
       },
     );
   }
+}
+
+class _ServerProfileTrailing extends StatelessWidget {
+  const _ServerProfileTrailing({
+    required this.profile,
+    required this.isDefault,
+    required this.onSelected,
+  });
+
+  final ServerProfile profile;
+  final bool isDefault;
+  final ValueChanged<_ServerProfileAction> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (isDefault) ...[
+          const Chip(label: Text('默认')),
+          const SizedBox(width: 8),
+        ],
+        Text(profile.lastKnownVersion),
+        PopupMenuButton<_ServerProfileAction>(
+          tooltip: '服务器操作',
+          onSelected: onSelected,
+          itemBuilder: (context) {
+            return [
+              if (!isDefault)
+                const PopupMenuItem(
+                  value: _ServerProfileAction.setDefault,
+                  child: Text('设为默认'),
+                ),
+              const PopupMenuItem(
+                value: _ServerProfileAction.editName,
+                child: Text('编辑名称'),
+              ),
+              const PopupMenuItem(
+                value: _ServerProfileAction.delete,
+                child: Text('删除'),
+              ),
+            ];
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _ServerProfilesViewData {
+  const _ServerProfilesViewData({
+    required this.profiles,
+    required this.defaultProfileId,
+  });
+
+  static const empty = _ServerProfilesViewData(
+    profiles: [],
+    defaultProfileId: null,
+  );
+
+  final List<ServerProfile> profiles;
+  final String? defaultProfileId;
 }

@@ -46,4 +46,33 @@ void main() {
 
     expect(await store.listProfiles(), [updatedProfile]);
   });
+
+  test('persists the default server profile id', () async {
+    SharedPreferences.setMockInitialValues({});
+    final firstStore = SharedPreferencesServerProfileStore(
+      await SharedPreferences.getInstance(),
+    );
+
+    await firstStore.saveProfile(profile);
+    await firstStore.setDefaultProfileId(profile.id);
+
+    final secondStore = SharedPreferencesServerProfileStore(
+      await SharedPreferences.getInstance(),
+    );
+    expect(await secondStore.getDefaultProfileId(), profile.id);
+  });
+
+  test('deletes profiles and clears matching default profile id', () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SharedPreferencesServerProfileStore(
+      await SharedPreferences.getInstance(),
+    );
+
+    await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
+    await store.deleteProfile(profile.id);
+
+    expect(await store.listProfiles(), isEmpty);
+    expect(await store.getDefaultProfileId(), isNull);
+  });
 }

@@ -31,6 +31,24 @@ class ServerProfile {
     );
   }
 
+  ServerProfile copyWith({
+    String? id,
+    String? name,
+    String? baseUrl,
+    String? apiBaseUrl,
+    String? websocketUrl,
+    String? lastKnownVersion,
+  }) {
+    return ServerProfile(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      baseUrl: baseUrl ?? this.baseUrl,
+      apiBaseUrl: apiBaseUrl ?? this.apiBaseUrl,
+      websocketUrl: websocketUrl ?? this.websocketUrl,
+      lastKnownVersion: lastKnownVersion ?? this.lastKnownVersion,
+    );
+  }
+
   factory ServerProfile.fromJson(Map<String, Object?> json) {
     return ServerProfile(
       id: json['id']! as String,

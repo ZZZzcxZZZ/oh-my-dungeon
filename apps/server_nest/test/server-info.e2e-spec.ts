@@ -93,4 +93,83 @@ describe('server metadata endpoints', () => {
         expect(body[0].name).toBe('Friday One Shot');
       });
   });
+
+  it('records and lists dice rolls for a room', async () => {
+    let roomId = '';
+
+    await request(app.getHttpServer())
+      .post('/api/rooms')
+      .set('x-client-mode', 'dm')
+      .send({ name: 'Roll Test Room' })
+      .expect(201)
+      .expect(({ body }) => {
+        roomId = body.id as string;
+      });
+
+    let rollId = '';
+
+    await request(app.getHttpServer())
+      .post(`/api/rooms/${roomId}/rolls`)
+      .set('x-client-mode', 'player')
+      .send({ notation: 'd20', total: 17, actorName: 'Ada' })
+      .expect(201)
+      .expect(({ body }) => {
+        rollId = body.id as string;
+        expect(body.roomId).toBe(roomId);
+        expect(body.notation).toBe('d20');
+        expect(body.total).toBe(17);
+        expect(body.actorName).toBe('Ada');
+        expect(body.actorMode).toBe('player');
+        expect(body.createdAt).toEqual(expect.any(String));
+      });
+
+    await request(app.getHttpServer())
+      .get(`/api/rooms/${roomId}/rolls`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toEqual([
+          expect.objectContaining({
+            id: rollId,
+            roomId,
+            notation: 'd20',
+            total: 17,
+            actorName: 'Ada',
+            actorMode: 'player'
+          })
+        ]);
+      });
+  });
+
+  it('rejects dice rolls for an unknown room', async () => {
+    await request(app.getHttpServer())
+      .post('/api/rooms/missing-room/rolls')
+      .set('x-client-mode', 'player')
+      .send({ notation: 'd20', total: 17, actorName: 'Ada' })
+      .expect(404)
+      .expect(({ body }) => {
+        expect(body.message).toBe('Room not found');
+      });
+  });
+
+  it('rejects invalid dice roll data', async () => {
+    let roomId = '';
+
+    await request(app.getHttpServer())
+      .post('/api/rooms')
+      .set('x-client-mode', 'dm')
+      .send({ name: 'Invalid Roll Room' })
+      .expect(201)
+      .expect(({ body }) => {
+        roomId = body.id as string;
+      });
+
+    await request(app.getHttpServer())
+      .post(`/api/rooms/${roomId}/rolls`)
+      .set('x-client-mode', 'player')
+      .send({ notation: '   ', total: 'high', actorName: 'Ada' })
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body.message).toBe('Dice roll notation and total are required');
+      });
+  });
 });

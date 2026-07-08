@@ -2,12 +2,28 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../client_mode/domain/client_mode.dart';
 import '../domain/room.dart';
+import '../domain/room_roll.dart';
 
 abstract class RoomClient {
   Future<List<Room>> listRooms({required String apiBaseUrl});
 
   Future<Room> createRoom({required String apiBaseUrl, required String name});
+
+  Future<List<RoomRoll>> listRolls({
+    required String apiBaseUrl,
+    required String roomId,
+  });
+
+  Future<RoomRoll> createRoll({
+    required String apiBaseUrl,
+    required String roomId,
+    required String notation,
+    required int total,
+    required String actorName,
+    required ClientMode actorMode,
+  });
 }
 
 class RoomApiClient implements RoomClient {
@@ -56,6 +72,68 @@ class RoomApiClient implements RoomClient {
     final decoded = jsonDecode(response.body) as Map<String, Object?>;
     return Room.fromJson(decoded);
   }
+
+  @override
+  Future<List<RoomRoll>> listRolls({
+    required String apiBaseUrl,
+    required String roomId,
+  }) async {
+    final normalizedApiBaseUrl = apiBaseUrl.replaceFirst(RegExp(r'/+$'), '');
+    final response = await _httpClient.get(
+      Uri.parse('$normalizedApiBaseUrl/rooms/$roomId/rolls'),
+    );
+
+    if (response.statusCode != 200) {
+      throw RoomApiException(
+        'Room roll list request failed with HTTP ${response.statusCode}.',
+      );
+    }
+
+    final decoded = jsonDecode(response.body) as List<Object?>;
+    return decoded
+        .map((item) => RoomRoll.fromJson(item! as Map<String, Object?>))
+        .toList(growable: false);
+  }
+
+  @override
+  Future<RoomRoll> createRoll({
+    required String apiBaseUrl,
+    required String roomId,
+    required String notation,
+    required int total,
+    required String actorName,
+    required ClientMode actorMode,
+  }) async {
+    final normalizedApiBaseUrl = apiBaseUrl.replaceFirst(RegExp(r'/+$'), '');
+    final response = await _httpClient.post(
+      Uri.parse('$normalizedApiBaseUrl/rooms/$roomId/rolls'),
+      headers: {
+        'content-type': 'application/json',
+        'x-client-mode': _clientModeHeader(actorMode),
+      },
+      body: jsonEncode({
+        'notation': notation,
+        'total': total,
+        'actorName': actorName,
+      }),
+    );
+
+    if (response.statusCode != 201) {
+      throw RoomApiException(
+        'Room roll creation failed with HTTP ${response.statusCode}.',
+      );
+    }
+
+    final decoded = jsonDecode(response.body) as Map<String, Object?>;
+    return RoomRoll.fromJson(decoded);
+  }
+}
+
+String _clientModeHeader(ClientMode mode) {
+  return switch (mode) {
+    ClientMode.player => 'player',
+    ClientMode.dungeonMaster => 'dm',
+  };
 }
 
 class RoomApiException implements Exception {

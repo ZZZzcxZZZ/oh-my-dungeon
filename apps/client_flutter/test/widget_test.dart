@@ -1,6 +1,8 @@
 import 'package:dnd_table_client/src/app/dnd_table_app.dart';
+import 'package:dnd_table_client/src/features/client_mode/domain/client_mode.dart';
 import 'package:dnd_table_client/src/features/rooms/data/room_api_client.dart';
 import 'package:dnd_table_client/src/features/rooms/domain/room.dart';
+import 'package:dnd_table_client/src/features/rooms/domain/room_roll.dart';
 import 'package:dnd_table_client/src/features/server_profiles/data/server_profile_store.dart';
 import 'package:dnd_table_client/src/features/server_profiles/domain/server_profile.dart';
 import 'package:flutter/material.dart';
@@ -205,6 +207,7 @@ class _FakeRoomClient implements RoomClient {
     : _rooms = [...initialRooms];
 
   final List<Room> _rooms;
+  final List<RoomRoll> _rolls = [];
   final List<String> createdRoomNames = [];
 
   @override
@@ -221,5 +224,40 @@ class _FakeRoomClient implements RoomClient {
     final room = Room(id: 'room-${createdRoomNames.length}', name: name);
     _rooms.add(room);
     return room;
+  }
+
+  @override
+  Future<List<RoomRoll>> listRolls({
+    required String apiBaseUrl,
+    required String roomId,
+  }) async {
+    return _rolls
+        .where((roll) => roll.roomId == roomId)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<RoomRoll> createRoll({
+    required String apiBaseUrl,
+    required String roomId,
+    required String notation,
+    required int total,
+    required String actorName,
+    required ClientMode actorMode,
+  }) async {
+    final roll = RoomRoll(
+      id: 'roll-${_rolls.length + 1}',
+      roomId: roomId,
+      notation: notation,
+      total: total,
+      actorName: actorName,
+      actorMode: switch (actorMode) {
+        ClientMode.player => 'player',
+        ClientMode.dungeonMaster => 'dm',
+      },
+      createdAt: '2026-07-09T00:00:00.000Z',
+    );
+    _rolls.add(roll);
+    return roll;
   }
 }

@@ -4,15 +4,14 @@
 
 ## 当前状态
 
-v0.2 账号、服务器、双模式里程碑已完成并打 tag `v0.2.0`。用户可以在自托管服务器注册、登录，客户端按服务器 profile 隔离账号状态。下一步进入 v0.3 战役与成员。
+v0.4 跑团桌面基础版已完成并打 tag `v0.4.0`。DM 可在 Campaign 下开启 Session，玩家进入同一会话后聊天与掷骰实时同步并落库，DM 可暗骰，Session 结束后可查看日志。客户端已重构为 Material Design 3 底部导航结构（战役 / 桌面 / 设置）。下一步进入 v0.5 角色卡。
 
 - Monorepo 基础结构
-- Flutter 客户端骨架
-- Material 3 服务端配置入口
+- Flutter 客户端骨架（Material 3 + 底部导航）
 - NestJS 服务端骨架
 - `/health`
 - `/.well-known/dnd-tool-server`
-- Prisma schema（User / ServerAdmin / RefreshToken / ServerSetting）
+- Prisma schema（User / ServerAdmin / RefreshToken / ServerSetting / Campaign / CampaignMember / CampaignInvite / Session / SessionMember / ChatMessage / DiceRoll / JournalEntry）
 - Docker Compose 配置
 - GitHub Actions CI 配置
 - 服务端与客户端基础测试
@@ -23,7 +22,11 @@ v0.2 账号、服务器、双模式里程碑已完成并打 tag `v0.2.0`。用�
 - 服务端 server-settings API：注册开关管理
 - 客户端按服务器隔离 token 存储
 - 客户端登录/注册 UI 与当前用户状态
-- room / dice 原型能力，后续将在 v0.3/v0.4 归并到 Campaign / Session / Table 模型
+- 服务端 campaign API：创建 / 列表 / 详情 / 邀请码 / 加入
+- 客户端战役列表与详情页
+- 服务端 session API：创建 / 列表 / 详情 / 开始 / 结束 / 聊天 / 掷骰 / 日志
+- WebSocket Gateway 实时广播（消息、掷骰、会话更新）
+- 客户端 Session 桌面：聊天时间线 + 掷骰输入 + 在线成员 + socket.io 实时连接
 
 当前执行状态见 [当前执行状态与版本推进计划](docs/roadmap/current-execution-status.md)。
 

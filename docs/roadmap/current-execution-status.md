@@ -9,7 +9,8 @@
 1. `v0.1 工程骨架` 已封版并打 tag `v0.1.0`。
 2. `v0.2 账号、服务器、双模式` 已完成并打 tag `v0.2.0`。
 3. `v0.3 战役与成员` 已完成并打 tag `v0.3.0`。
-4. 已经提前实现的 `rooms` 和掷骰能力保持冻结，待 v0.4 引入 Session 时正式替换。
+4. `v0.4 跑团桌面基础版` 已完成并打 tag `v0.4.0`。`rooms` 原型已被 Session + DiceRoll 正式模型替换。
+5. 下一步进入 v0.5 角色卡。
 
 ## 已完成代码状态
 
@@ -84,15 +85,26 @@ v0.3 战役与成员里程碑已完成并打 tag `v0.3.0`。已完成内容：
 - `ServerHomePage` 新增战役入口区。
 - `rooms` 原型保持冻结，未在 v0.3 迁移或扩展（见上文「已提前实现的原型能力（冻结状态）」）。
 
-### v0.4 只做了极小原型
+### v0.4 已完成
 
-掷骰表达式和房间掷骰记录属于 v0.4/v0.8 的一部分能力，但当前缺少正式前置：
+v0.4 跑团桌面基础版已完成并打 tag `v0.4.0`。已完成内容：
 
-- 没有 Session。
-- 没有 ChatMessage。
-- 没有 JournalEntry。
-- 没有 WebSocket 实时广播。
-- 没有真实权限过滤和可见性。
+- Prisma `Session` / `SessionMember` / `ChatMessage` / `DiceRoll` / `JournalEntry` 数据模型。
+- `SessionPolicy` 纯领域权限策略（owner/dm/player 分级，含单元测试）。
+- `POST /api/campaigns/:campaignId/sessions` 创建 Session（DM/owner）。
+- `GET /api/campaigns/:campaignId/sessions` 列表，`GET /api/sessions/:id` 详情（含成员与最近消息）。
+- `POST /api/sessions/:id/start` / `POST /api/sessions/:id/end` 生命周期控制。
+- `GET /api/sessions/:id/messages` / `POST /api/sessions/:id/messages` 聊天（含 dm 可见性过滤）。
+- `POST /api/sessions/:id/rolls` 掷骰（服务端解析表达式、落库、广播），`GET /api/sessions/:id/rolls`（按权限过滤）。
+- `GET /api/sessions/:id/journal` 日志，系统自动写入 session_started/session_ended/roll/roll_critical。
+- WebSocket Gateway（`/sessions` 命名空间，JWT 鉴权 + Campaign 成员校验），事件 `message:new`、`roll:new`、`session:updated`，暗骰只推给 DM/owner。
+- 客户端 UI 重构：引入 `MainShell` 底部导航（战役 / 桌面 / 设置），遵循 Material Design 3，替换 v0.2/v0.3 堆叠式 ListView。
+- 客户端 Session 领域：`SessionClient`、`SessionController`、`SessionSocketService`（含 `SocketIoSessionSocketService` 实时实现与 `NoopSessionSocketService` 测试桩）。
+- 客户端 `SessionDetailPage`：聊天时间线 + 掷骰输入 + 在线成员，时间线用 sealed class 合并消息与掷骰。
+- 客户端 `TableTabPage`：战役选择器 + 会话列表 + 进入活跃会话。
+- 服务端 25 个 sessions e2e 测试 + gateway 单元测试 + policy 单元测试。
+- 客户端 Session API client 与桌面 widget 测试。
+- `rooms` 原型已被 Session + DiceRoll 正式模型替换，`/api/rooms` 待后续版本下线。
 
 ## 后续开发规则
 
@@ -199,4 +211,4 @@ docs(v0.2): update account setup guide
 
 ## 立即行动
 
-v0.3 已封版。下一步启动 v0.4 跑团桌面基础版：在 Campaign 下创建 Session，引入正式 DiceRoll 模型替换 `rooms` 原型，并提供聊天、日志和 WebSocket 实时同步。
+v0.4 已封版。下一步启动 v0.5 角色卡：玩家可创建并维护角色卡，Session 内可加载角色卡用于检定与掷骰。开始前先创建 `docs/roadmap/v0.5-execution-plan.md`。

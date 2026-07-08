@@ -18,21 +18,9 @@
 
 ## 2. 当前阶段
 
-当前项目处于 v0.1 工程骨架封版阶段。后续开发必须先阅读 `docs/roadmap/current-execution-status.md`，再按 `docs/roadmap/mvp-roadmap.md` 的版本闸门推进。
+当前项目已完成 v0.4 跑团桌面基础版并打 tag `v0.4.0`。后续开发必须先阅读 `docs/roadmap/current-execution-status.md`，再按 `docs/roadmap/mvp-roadmap.md` 的版本闸门推进。
 
-当前已经提前实现了少量 room / dice 原型能力。除非当前版本计划明确要求，否则不要继续在这些原型上扩展业务复杂功能。v0.1 的目标是打通：
-
-- monorepo
-- Flutter 空壳 App
-- NestJS 空壳服务端
-- PostgreSQL
-- Prisma
-- Docker Compose
-- health endpoint
-- well-known server metadata
-- 客户端添加服务器并测试连接
-
-完成 v0.1 封版后，进入 v0.2 账号、服务器、双模式。不要跳过 v0.2 直接继续做 Campaign、Session、Chat、Dice realtime 或内容库。
+v0.4 已用正式 `Session` / `DiceRoll` / `ChatMessage` / `JournalEntry` 模型替换了 `rooms` 原型。`/api/rooms` 与客户端 rooms 页面保留为冻结资产，待后续版本下线，不要再在其上扩展业务功能。下一步进入 v0.5 角色卡基础版。
 
 ## 3. 实施原则
 

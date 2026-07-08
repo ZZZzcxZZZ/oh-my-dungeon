@@ -61,6 +61,17 @@ describe('server metadata endpoints', () => {
       });
   });
 
+  it('rejects room creation without a name', async () => {
+    await request(app.getHttpServer())
+      .post('/api/rooms')
+      .set('x-client-mode', 'dm')
+      .send({ name: '   ' })
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body.message).toBe('Room name is required');
+      });
+  });
+
   it('creates rooms from dm mode', async () => {
     await request(app.getHttpServer())
       .post('/api/rooms')

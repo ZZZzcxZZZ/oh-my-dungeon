@@ -111,5 +111,29 @@ void main() {
     expect(find.text('http://localhost:3000'), findsOneWidget);
     expect(find.text('当前模式：Player'), findsOneWidget);
     expect(find.text('房间与登录入口'), findsOneWidget);
+    expect(find.text('等待房间开放'), findsOneWidget);
+    expect(find.text('创建房间'), findsNothing);
+  });
+
+  testWidgets('shows create room entry in dm mode', (tester) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+
+    await tester.pumpWidget(DndTableApp(serverProfileStore: store));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('DM'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('当前模式：DM'), findsOneWidget);
+    expect(find.text('创建房间'), findsOneWidget);
+    expect(find.text('等待房间开放'), findsNothing);
   });
 }

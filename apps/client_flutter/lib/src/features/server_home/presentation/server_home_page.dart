@@ -18,6 +18,7 @@ class ServerHomePage extends StatelessWidget {
     return AnimatedBuilder(
       animation: modeController,
       builder: (context, _) {
+        final mode = modeController.mode;
         return Scaffold(
           appBar: AppBar(title: Text(profile.name)),
           body: ListView(
@@ -30,11 +31,37 @@ class ServerHomePage extends StatelessWidget {
               const SizedBox(height: 8),
               Text(profile.baseUrl),
               const SizedBox(height: 16),
-              Chip(label: Text('当前模式：${modeController.mode.label}')),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Chip(label: Text('当前模式：${mode.label}')),
+              ),
               const SizedBox(height: 32),
               Text('房间与登录入口', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
-              const Text('这里将接入账号登录、房间列表，以及 DM 创建房间流程。'),
+              Text(
+                mode == ClientMode.dungeonMaster
+                    ? 'DM 可以创建房间并邀请玩家加入。'
+                    : 'Player 可以等待 DM 邀请，或加入已经开放的房间。',
+              ),
+              const SizedBox(height: 24),
+              if (mode == ClientMode.dungeonMaster)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FilledButton.icon(
+                    onPressed: () {},
+                    icon: const Icon(Icons.add),
+                    label: const Text('创建房间'),
+                  ),
+                )
+              else
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: null,
+                    icon: Icon(Icons.meeting_room_outlined),
+                    label: Text('等待房间开放'),
+                  ),
+                ),
             ],
           ),
         );

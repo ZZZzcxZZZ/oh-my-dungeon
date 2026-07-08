@@ -12,6 +12,9 @@ describe('server metadata endpoints', () => {
     }).compile();
 
     app = moduleRef.createNestApplication();
+    app.setGlobalPrefix('api', {
+      exclude: ['health', '.well-known/dnd-tool-server']
+    });
     await app.init();
   });
 
@@ -40,6 +43,43 @@ describe('server metadata endpoints', () => {
         expect(body.websocketUrl).toBe('ws://localhost:3000/realtime');
         expect(body.registrationEnabled).toBe(true);
         expect(body.supportedSystems).toEqual(['dnd5e']);
+      });
+  });
+
+  it('lists rooms through the API namespace', async () => {
+    await request(app.getHttpServer()).get('/api/rooms').expect(200).expect([]);
+  });
+
+  it('rejects room creation from player mode', async () => {
+    await request(app.getHttpServer())
+      .post('/api/rooms')
+      .set('x-client-mode', 'player')
+      .send({ name: 'Friday One Shot' })
+      .expect(403)
+      .expect(({ body }) => {
+        expect(body.message).toBe('Only DM mode can create rooms');
+      });
+  });
+
+  it('creates rooms from dm mode', async () => {
+    await request(app.getHttpServer())
+      .post('/api/rooms')
+      .set('x-client-mode', 'dm')
+      .send({ name: 'Friday One Shot' })
+      .expect(201)
+      .expect(({ body }) => {
+        expect(body.id).toEqual(expect.any(String));
+        expect(body.name).toBe('Friday One Shot');
+        expect(body.status).toBe('open');
+        expect(body.system).toBe('dnd5e');
+      });
+
+    await request(app.getHttpServer())
+      .get('/api/rooms')
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toHaveLength(1);
+        expect(body[0].name).toBe('Friday One Shot');
       });
   });
 });

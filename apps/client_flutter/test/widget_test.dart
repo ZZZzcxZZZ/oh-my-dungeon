@@ -1,4 +1,5 @@
 import 'package:dnd_table_client/src/app/dnd_table_app.dart';
+import 'package:dnd_table_client/src/features/auth/data/auth_token_store.dart';
 import 'package:dnd_table_client/src/features/client_mode/domain/client_mode.dart';
 import 'package:dnd_table_client/src/features/rooms/data/room_api_client.dart';
 import 'package:dnd_table_client/src/features/rooms/domain/room.dart';
@@ -20,7 +21,10 @@ void main() {
 
   testWidgets('shows the server profile empty state', (tester) async {
     await tester.pumpWidget(
-      DndTableApp(serverProfileStore: InMemoryServerProfileStore()),
+      DndTableApp(
+      serverProfileStore: InMemoryServerProfileStore(),
+      authTokenStore: InMemoryAuthTokenStore(),
+    ),
     );
     await tester.pumpAndSettle();
 
@@ -30,7 +34,10 @@ void main() {
 
   testWidgets('switches client mode from settings', (tester) async {
     await tester.pumpWidget(
-      DndTableApp(serverProfileStore: InMemoryServerProfileStore()),
+      DndTableApp(
+      serverProfileStore: InMemoryServerProfileStore(),
+      authTokenStore: InMemoryAuthTokenStore(),
+    ),
     );
     await tester.pumpAndSettle();
 
@@ -53,7 +60,10 @@ void main() {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
 
-    await tester.pumpWidget(DndTableApp(serverProfileStore: store));
+    await tester.pumpWidget(DndTableApp(
+      serverProfileStore: store,
+      authTokenStore: InMemoryAuthTokenStore(),
+    ));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('服务器操作'));
@@ -68,7 +78,10 @@ void main() {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
 
-    await tester.pumpWidget(DndTableApp(serverProfileStore: store));
+    await tester.pumpWidget(DndTableApp(
+      serverProfileStore: store,
+      authTokenStore: InMemoryAuthTokenStore(),
+    ));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('服务器操作'));
@@ -87,7 +100,10 @@ void main() {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
 
-    await tester.pumpWidget(DndTableApp(serverProfileStore: store));
+    await tester.pumpWidget(DndTableApp(
+      serverProfileStore: store,
+      authTokenStore: InMemoryAuthTokenStore(),
+    ));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('服务器操作'));
@@ -109,7 +125,11 @@ void main() {
     );
 
     await tester.pumpWidget(
-      DndTableApp(serverProfileStore: store, roomClient: roomClient),
+      DndTableApp(
+      serverProfileStore: store,
+      authTokenStore: InMemoryAuthTokenStore(),
+      roomClient: roomClient,
+    ),
     );
     await tester.pumpAndSettle();
 
@@ -129,7 +149,10 @@ void main() {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
 
-    await tester.pumpWidget(DndTableApp(serverProfileStore: store));
+    await tester.pumpWidget(DndTableApp(
+      serverProfileStore: store,
+      authTokenStore: InMemoryAuthTokenStore(),
+    ));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('设置'));
@@ -153,7 +176,11 @@ void main() {
     final roomClient = _FakeRoomClient();
 
     await tester.pumpWidget(
-      DndTableApp(serverProfileStore: store, roomClient: roomClient),
+      DndTableApp(
+      serverProfileStore: store,
+      authTokenStore: InMemoryAuthTokenStore(),
+      roomClient: roomClient,
+    ),
     );
     await tester.pumpAndSettle();
 
@@ -184,11 +211,17 @@ void main() {
     );
 
     await tester.pumpWidget(
-      DndTableApp(serverProfileStore: store, roomClient: roomClient),
+      DndTableApp(
+      serverProfileStore: store,
+      authTokenStore: InMemoryAuthTokenStore(),
+      roomClient: roomClient,
+    ),
     );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -100));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Friday One Shot'));
     await tester.pumpAndSettle();

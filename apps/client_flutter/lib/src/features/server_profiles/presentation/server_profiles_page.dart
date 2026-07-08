@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../auth/data/auth_api_client.dart';
+import '../../auth/data/auth_token_store.dart';
 import '../../client_mode/domain/client_mode.dart';
 import '../../rooms/data/room_api_client.dart';
 import '../../server_home/presentation/server_home_page.dart';
@@ -12,15 +14,19 @@ enum _ServerProfileAction { setDefault, editName, delete }
 class ServerProfilesPage extends StatefulWidget {
   const ServerProfilesPage({
     required this.store,
+    required this.authTokenStore,
     required this.discoveryClient,
     required this.roomClient,
+    required this.authClient,
     required this.modeController,
     super.key,
   });
 
   final ServerProfileStore store;
+  final AuthTokenStore authTokenStore;
   final ServerDiscoveryClient discoveryClient;
   final RoomClient roomClient;
+  final AuthClient authClient;
   final ClientModeController modeController;
 
   @override
@@ -317,6 +323,8 @@ class _ServerProfilesPageState extends State<ServerProfilesPage> {
                               profile: profile,
                               modeController: widget.modeController,
                               roomClient: widget.roomClient,
+                              authTokenStore: widget.authTokenStore,
+                              authClient: widget.authClient,
                             );
                           },
                         ),

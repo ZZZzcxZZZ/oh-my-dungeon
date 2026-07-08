@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../auth/data/auth_api_client.dart';
+import '../../auth/data/auth_token_store.dart';
+import '../../auth/presentation/auth_controller.dart';
+import '../../auth/presentation/auth_page.dart';
 import '../../client_mode/domain/client_mode.dart';
 import '../../rooms/data/room_api_client.dart';
 import '../../rooms/domain/room.dart';
@@ -11,12 +15,16 @@ class ServerHomePage extends StatefulWidget {
     required this.profile,
     required this.modeController,
     required this.roomClient,
+    required this.authTokenStore,
+    required this.authClient,
     super.key,
   });
 
   final ServerProfile profile;
   final ClientModeController modeController;
   final RoomClient roomClient;
+  final AuthTokenStore authTokenStore;
+  final AuthClient authClient;
 
   @override
   State<ServerHomePage> createState() => _ServerHomePageState();
@@ -24,11 +32,18 @@ class ServerHomePage extends StatefulWidget {
 
 class _ServerHomePageState extends State<ServerHomePage> {
   late Future<List<Room>> _roomsFuture;
+  late final AuthController _authController;
 
   @override
   void initState() {
     super.initState();
     _roomsFuture = _loadRooms();
+    _authController = AuthController(
+      tokenStore: widget.authTokenStore,
+      authClient: widget.authClient,
+      serverProfileId: widget.profile.id,
+      apiBaseUrl: widget.profile.apiBaseUrl,
+    )..initialize();
   }
 
   Future<List<Room>> _loadRooms() {
@@ -82,10 +97,22 @@ class _ServerHomePageState extends State<ServerHomePage> {
     }
   }
 
+  Future<void> _openAuthPage() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (context) => AuthPage(authController: _authController),
+      ),
+    );
+  }
+
+  Future<void> _handleLogout() async {
+    await _authController.logout();
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: widget.modeController,
+      animation: Listenable.merge([widget.modeController, _authController]),
       builder: (context, _) {
         final mode = widget.modeController.mode;
         return Scaffold(
@@ -104,6 +131,10 @@ class _ServerHomePageState extends State<ServerHomePage> {
                 alignment: Alignment.centerLeft,
                 child: Chip(label: Text('当前模式：${mode.label}')),
               ),
+              const SizedBox(height: 32),
+              Text('账号', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              _buildAuthSection(context),
               const SizedBox(height: 32),
               Text('房间与登录入口', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
@@ -184,6 +215,66 @@ class _ServerHomePageState extends State<ServerHomePage> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildAuthSection(BuildContext context) {
+    if (_authController.isLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: LinearProgressIndicator(),
+      );
+    }
+
+    if (_authController.isLoggedIn) {
+      final user = _authController.user!;
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const Icon(Icons.person, size: 32),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.username,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    Text(
+                      user.email,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              FilledButton.tonal(
+                onPressed: _handleLogout,
+                child: const Text('退出登录'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const Icon(Icons.lock_outline, size: 32),
+            const SizedBox(width: 16),
+            const Expanded(child: Text('未登录')),
+            FilledButton(
+              onPressed: _openAuthPage,
+              child: const Text('登录 / 注册'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

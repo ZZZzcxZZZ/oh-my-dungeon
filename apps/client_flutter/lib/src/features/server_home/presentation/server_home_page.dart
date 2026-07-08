@@ -22,7 +22,23 @@ class ServerHomePage extends StatefulWidget {
 }
 
 class _ServerHomePageState extends State<ServerHomePage> {
-  final List<Room> _rooms = [];
+  late Future<List<Room>> _roomsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _roomsFuture = _loadRooms();
+  }
+
+  Future<List<Room>> _loadRooms() {
+    return widget.roomClient.listRooms(apiBaseUrl: widget.profile.apiBaseUrl);
+  }
+
+  void _refreshRooms() {
+    setState(() {
+      _roomsFuture = _loadRooms();
+    });
+  }
 
   Future<void> _showCreateRoomDialog() async {
     final controller = TextEditingController();
@@ -55,13 +71,11 @@ class _ServerHomePageState extends State<ServerHomePage> {
     if (roomName == null || roomName.trim().isEmpty) return;
 
     try {
-      final room = await widget.roomClient.createRoom(
+      await widget.roomClient.createRoom(
         apiBaseUrl: widget.profile.apiBaseUrl,
         name: roomName.trim(),
       );
-      setState(() {
-        _rooms.add(room);
-      });
+      _refreshRooms();
     } catch (error) {
       messenger.showSnackBar(SnackBar(content: Text('创建房间失败：$error')));
     }
@@ -116,17 +130,41 @@ class _ServerHomePageState extends State<ServerHomePage> {
                     label: const Text('等待房间开放'),
                   ),
                 ),
-              if (_rooms.isNotEmpty) ...[
-                const SizedBox(height: 32),
-                Text('房间列表', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                for (final room in _rooms)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.meeting_room_outlined),
-                    title: Text(room.name),
-                  ),
-              ],
+              const SizedBox(height: 32),
+              FutureBuilder<List<Room>>(
+                future: _roomsFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    return const LinearProgressIndicator();
+                  }
+
+                  if (snapshot.hasError) {
+                    return Text('房间列表加载失败：${snapshot.error}');
+                  }
+
+                  final rooms = snapshot.data ?? const <Room>[];
+                  if (rooms.isEmpty) {
+                    return const Text('暂无开放房间');
+                  }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '房间列表',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      for (final room in rooms)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.meeting_room_outlined),
+                          title: Text(room.name),
+                        ),
+                    ],
+                  );
+                },
+              ),
             ],
           ),
         );

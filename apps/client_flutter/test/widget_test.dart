@@ -102,8 +102,13 @@ void main() {
   testWidgets('opens a saved server profile home page', (tester) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    final roomClient = _FakeRoomClient(
+      initialRooms: const [Room(id: 'room-1', name: 'Friday One Shot')],
+    );
 
-    await tester.pumpWidget(DndTableApp(serverProfileStore: store));
+    await tester.pumpWidget(
+      DndTableApp(serverProfileStore: store, roomClient: roomClient),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Local Table'));
@@ -115,6 +120,7 @@ void main() {
     expect(find.text('房间与登录入口'), findsOneWidget);
     expect(find.text('等待房间开放'), findsOneWidget);
     expect(find.text('创建房间'), findsNothing);
+    expect(find.text('Friday One Shot'), findsOneWidget);
   });
 
   testWidgets('shows create room entry in dm mode', (tester) async {
@@ -170,7 +176,16 @@ void main() {
 }
 
 class _FakeRoomClient implements RoomClient {
+  _FakeRoomClient({List<Room> initialRooms = const []})
+    : _rooms = [...initialRooms];
+
+  final List<Room> _rooms;
   final List<String> createdRoomNames = [];
+
+  @override
+  Future<List<Room>> listRooms({required String apiBaseUrl}) async {
+    return List.unmodifiable(_rooms);
+  }
 
   @override
   Future<Room> createRoom({
@@ -178,6 +193,8 @@ class _FakeRoomClient implements RoomClient {
     required String name,
   }) async {
     createdRoomNames.add(name);
-    return Room(id: 'room-${createdRoomNames.length}', name: name);
+    final room = Room(id: 'room-${createdRoomNames.length}', name: name);
+    _rooms.add(room);
+    return room;
   }
 }

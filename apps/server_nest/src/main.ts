@@ -6,6 +6,7 @@ async function bootstrap(): Promise<void> {
   app.setGlobalPrefix('api', {
     exclude: ['health', '.well-known/dnd-tool-server']
   });
+  app.enableCors();
 
   const port = Number(process.env.PORT ?? 3000);
   await app.listen(port);

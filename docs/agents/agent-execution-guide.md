@@ -18,9 +18,9 @@
 
 ## 2. 当前阶段
 
-当前项目处于规划完成、工程尚未初始化阶段。后续开发应从 v0.1 工程骨架开始。
+当前项目处于 v0.1 工程骨架封版阶段。后续开发必须先阅读 `docs/roadmap/current-execution-status.md`，再按 `docs/roadmap/mvp-roadmap.md` 的版本闸门推进。
 
-第一阶段不应实现业务复杂功能。第一阶段目标是打通：
+当前已经提前实现了少量 room / dice 原型能力。除非当前版本计划明确要求，否则不要继续在这些原型上扩展业务复杂功能。v0.1 的目标是打通：
 
 - monorepo
 - Flutter 空壳 App
@@ -31,6 +31,8 @@
 - health endpoint
 - well-known server metadata
 - 客户端添加服务器并测试连接
+
+完成 v0.1 封版后，进入 v0.2 账号、服务器、双模式。不要跳过 v0.2 直接继续做 Campaign、Session、Chat、Dice realtime 或内容库。
 
 ## 3. 实施原则
 
@@ -246,4 +248,3 @@ v0.3 实现战役与成员。
 3. 文档更新。
 4. Docker Compose 路径可用。
 5. Flutter 至少能在一个目标平台运行。
-

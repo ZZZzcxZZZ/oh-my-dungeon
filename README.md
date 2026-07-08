@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-当前已完成 v0.1 工程骨架的第一批落地：
+当前正在进行 v0.1 工程骨架封版。代码已经完成 v0.1 的主要工程基础，并提前落地了少量 room / dice 原型能力；后续会按版本闸门推进，不再继续零散扩展原型功能。
 
 - Monorepo 基础结构
 - Flutter 客户端骨架
@@ -17,6 +17,11 @@
 - GitHub Actions CI 配置
 - 服务端与客户端基础测试
 - 本地开发环境脚本与 VS Code 推荐配置
+- 客户端服务器 profile 管理
+- 客户端 Player/DM 模式切换
+- room / dice 原型能力，后续将在 v0.3/v0.4 归并到 Campaign / Session / Table 模型
+
+当前执行状态见 [当前执行状态与版本推进计划](docs/roadmap/current-execution-status.md)。
 
 ## 目录
 

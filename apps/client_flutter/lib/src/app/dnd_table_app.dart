@@ -7,6 +7,7 @@ import '../features/campaigns/data/campaign_api_client.dart';
 import '../features/characters/data/character_api_client.dart';
 import '../features/client_mode/domain/client_mode.dart';
 import '../features/content/data/content_api_client.dart';
+import '../features/encounters/data/encounter_api_client.dart';
 import '../features/rooms/data/room_api_client.dart';
 import '../features/server_profiles/data/server_discovery_client.dart';
 import '../features/server_profiles/data/server_profile_store.dart';
@@ -23,7 +24,9 @@ class DndTableApp extends StatefulWidget {
     this.campaignClient,
     this.characterClient,
     this.contentClient,
+    this.encounterClient,
     this.sessionClient,
+    this.modeController,
     super.key,
   });
 
@@ -35,7 +38,9 @@ class DndTableApp extends StatefulWidget {
   final CampaignClient? campaignClient;
   final CharacterClient? characterClient;
   final ContentClient? contentClient;
+  final EncounterClient? encounterClient;
   final SessionClient? sessionClient;
+  final ClientModeController? modeController;
 
   @override
   State<DndTableApp> createState() => _DndTableAppState();
@@ -43,12 +48,14 @@ class DndTableApp extends StatefulWidget {
 
 class _DndTableAppState extends State<DndTableApp> {
   late final ClientModeController _modeController;
+  late final bool _ownsModeController;
   late final Future<_AppDeps> _depsFuture;
 
   @override
   void initState() {
     super.initState();
-    _modeController = ClientModeController();
+    _modeController = widget.modeController ?? ClientModeController();
+    _ownsModeController = widget.modeController == null;
     _depsFuture = _createDeps();
   }
 
@@ -64,6 +71,7 @@ class _DndTableAppState extends State<DndTableApp> {
         campaignClient: widget.campaignClient ?? CampaignApiClient(),
         characterClient: widget.characterClient ?? CharacterApiClient(),
         contentClient: widget.contentClient ?? ContentApiClient(),
+        encounterClient: widget.encounterClient ?? EncounterApiClient(),
         sessionClient: widget.sessionClient ?? SessionApiClient(),
       );
     }
@@ -78,13 +86,16 @@ class _DndTableAppState extends State<DndTableApp> {
       campaignClient: widget.campaignClient ?? CampaignApiClient(),
       characterClient: widget.characterClient ?? CharacterApiClient(),
       contentClient: widget.contentClient ?? ContentApiClient(),
+      encounterClient: widget.encounterClient ?? EncounterApiClient(),
       sessionClient: widget.sessionClient ?? SessionApiClient(),
     );
   }
 
   @override
   void dispose() {
-    _modeController.dispose();
+    if (_ownsModeController) {
+      _modeController.dispose();
+    }
     super.dispose();
   }
 
@@ -116,6 +127,7 @@ class _DndTableAppState extends State<DndTableApp> {
             campaignClient: deps.campaignClient,
             characterClient: deps.characterClient,
             contentClient: deps.contentClient,
+            encounterClient: deps.encounterClient,
             sessionClient: deps.sessionClient,
             modeController: _modeController,
           );
@@ -133,6 +145,7 @@ class _AppDeps {
     required this.campaignClient,
     required this.characterClient,
     required this.contentClient,
+    required this.encounterClient,
     required this.sessionClient,
   });
 
@@ -142,5 +155,6 @@ class _AppDeps {
   final CampaignClient campaignClient;
   final CharacterClient characterClient;
   final ContentClient contentClient;
+  final EncounterClient encounterClient;
   final SessionClient sessionClient;
 }

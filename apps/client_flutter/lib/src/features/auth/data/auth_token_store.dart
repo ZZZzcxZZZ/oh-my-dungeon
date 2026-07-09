@@ -19,10 +19,7 @@ class StoredAuthTokens {
   }
 
   Map<String, Object?> toJson() {
-    return {
-      'accessToken': accessToken,
-      'refreshToken': refreshToken,
-    };
+    return {'accessToken': accessToken, 'refreshToken': refreshToken};
   }
 
   @override
@@ -52,7 +49,10 @@ class InMemoryAuthTokenStore implements AuthTokenStore {
   }
 
   @override
-  Future<void> saveTokens(String serverProfileId, StoredAuthTokens tokens) async {
+  Future<void> saveTokens(
+    String serverProfileId,
+    StoredAuthTokens tokens,
+  ) async {
     _tokens[serverProfileId] = tokens;
   }
 
@@ -80,7 +80,10 @@ class SharedPreferencesAuthTokenStore implements AuthTokenStore {
   }
 
   @override
-  Future<void> saveTokens(String serverProfileId, StoredAuthTokens tokens) async {
+  Future<void> saveTokens(
+    String serverProfileId,
+    StoredAuthTokens tokens,
+  ) async {
     final map = await _readTokenMap();
     map[serverProfileId] = tokens.toJson();
     await _writeTokenMap(map);

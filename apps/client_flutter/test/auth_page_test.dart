@@ -123,19 +123,13 @@ void main() {
     expect(find.widgetWithText(FilledButton, '注册'), findsOneWidget);
 
     await tester.enterText(_textFieldWithLabel('用户名'), 'ranger');
-    await tester.enterText(
-      _textFieldWithLabel('邮箱'),
-      'ranger@example.com',
-    );
+    await tester.enterText(_textFieldWithLabel('邮箱'), 'ranger@example.com');
     await tester.enterText(_textFieldWithLabel('密码'), 'p@ssw0rd');
     await tester.tap(find.widgetWithText(FilledButton, '注册'));
     await tester.pumpAndSettle();
 
     expect(find.text('ranger'), findsOneWidget);
-    expect(
-      await tokenStore.getTokens('localhost'),
-      isA<StoredAuthTokens>(),
-    );
+    expect(await tokenStore.getTokens('localhost'), isA<StoredAuthTokens>());
     expect(client.registerCalls, hasLength(1));
     expect(client.loginCalls, hasLength(1));
   });
@@ -205,22 +199,15 @@ void main() {
 }
 
 class _FakeAuthClient implements AuthClient {
-  _FakeAuthClient({
-    this.loginSession,
-    this.loginError,
-    this.registerResult,
-  });
+  _FakeAuthClient({this.loginSession, this.loginError, this.registerResult});
 
   final AuthSession? loginSession;
   final AuthApiException? loginError;
   final RegisterResult? registerResult;
 
   final List<({String identifier, String password})> loginCalls = [];
-  final List<({
-    String username,
-    String email,
-    String password,
-  })> registerCalls = [];
+  final List<({String username, String email, String password})> registerCalls =
+      [];
   final List<String> logoutCalls = [];
 
   @override
@@ -230,9 +217,7 @@ class _FakeAuthClient implements AuthClient {
     required String email,
     required String password,
   }) async {
-    registerCalls.add(
-      (username: username, email: email, password: password),
-    );
+    registerCalls.add((username: username, email: email, password: password));
     return registerResult ??
         RegisterResult(
           user: AuthUser(id: 'user-1', username: username, email: email),

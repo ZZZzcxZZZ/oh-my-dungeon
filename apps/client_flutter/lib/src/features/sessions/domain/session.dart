@@ -33,11 +33,13 @@ class Session {
       endedAt: json['endedAt'] as String?,
       createdAt: json['createdAt']! as String,
       updatedAt: json['updatedAt']! as String,
-      members: (json['members'] as List<Object?>?)
+      members:
+          (json['members'] as List<Object?>?)
               ?.map((e) => SessionMember.fromJson(e as Map<String, Object?>))
               .toList() ??
           const [],
-      recentMessages: (json['recentMessages'] as List<Object?>?)
+      recentMessages:
+          (json['recentMessages'] as List<Object?>?)
               ?.map((e) => ChatMessage.fromJson(e as Map<String, Object?>))
               .toList() ??
           const [],
@@ -147,9 +149,11 @@ class DiceRoll {
       actorName: json['actorName']! as String,
       notation: json['notation']! as String,
       total: (json['total'] as num).toInt(),
-      components: (json['components'] as List<Object?>?)
-              ?.map((e) =>
-                  DiceRollComponent.fromJson(e as Map<String, Object?>))
+      components:
+          (json['components'] as List<Object?>?)
+              ?.map(
+                (e) => DiceRollComponent.fromJson(e as Map<String, Object?>),
+              )
               .toList() ??
           const [],
       visibility: json['visibility']! as String,
@@ -162,10 +166,7 @@ class DiceRoll {
 }
 
 class DiceRollComponent {
-  const DiceRollComponent({
-    required this.notation,
-    required this.results,
-  });
+  const DiceRollComponent({required this.notation, required this.results});
 
   final String notation;
   final List<int> results;

@@ -48,15 +48,15 @@ class Campaign {
 
   @override
   int get hashCode => Object.hash(
-        id,
-        name,
-        description,
-        system,
-        ownerId,
-        status,
-        createdAt,
-        updatedAt,
-      );
+    id,
+    name,
+    description,
+    system,
+    ownerId,
+    status,
+    createdAt,
+    updatedAt,
+  );
 }
 
 class CampaignInvite {
@@ -113,16 +113,16 @@ class CampaignInvite {
 
   @override
   int get hashCode => Object.hash(
-        id,
-        campaignId,
-        code,
-        roleOnJoin,
-        expiresAt,
-        maxUses,
-        usedCount,
-        requireApproval,
-        createdAt,
-      );
+    id,
+    campaignId,
+    code,
+    roleOnJoin,
+    expiresAt,
+    maxUses,
+    usedCount,
+    requireApproval,
+    createdAt,
+  );
 }
 
 class CampaignMembership {

@@ -50,9 +50,7 @@ class _CampaignDetailPageState extends State<CampaignDetailPage> {
     if (invite == null) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(
-            '创建邀请码失败：${widget.controller.detailError ?? '未知错误'}',
-          ),
+          content: Text('创建邀请码失败：${widget.controller.detailError ?? '未知错误'}'),
         ),
       );
       return;
@@ -82,9 +80,9 @@ class _CampaignDetailPageState extends State<CampaignDetailPage> {
                 child: TextButton.icon(
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: invite.code));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('已复制到剪贴板')),
-                    );
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('已复制到剪贴板')));
                   },
                   icon: const Icon(Icons.copy),
                   label: const Text('复制'),

@@ -74,6 +74,8 @@ model Campaign {
   contentPackages   CampaignContentPackage[]
   scopedContent     ContentPackage[]
   contentOverrides  ContentOverride[]
+  npcs              Npc[]
+  encounters        Encounter[]
 }
 
 model CampaignMember {
@@ -118,6 +120,7 @@ model Session {
   messages   ChatMessage[]
   rolls      DiceRoll[]
   journal    JournalEntry[]
+  encounters Encounter[]
 }
 
 model SessionMember {
@@ -245,30 +248,94 @@ model ContentOverride {
 }
 
 model Character {
-  id               String                     @id @default(uuid())
-  ownerUserId      String
-  name             String
-  avatarUrl        String?
-  system           String                     @default("dnd5e")
-  level            Int                        @default(1)
-  classSummary     String                     @default("")
-  raceSummary      String                     @default("")
-  currentHp        Int                        @default(0)
-  maxHp            Int                        @default(0)
-  armorClass       Int                        @default(10)
-  speed            Int                        @default(30)
-  initiativeBonus  Int                        @default(0)
-  abilities        Json                       @default("{\"str\":10,\"dex\":10,\"con\":10,\"int\":10,\"wis\":10,\"cha\":10}")
-  saves            Json                       @default("{}")
-  skills           Json                       @default("{}")
-  inventory        Json                       @default("[]")
-  currency         Json                       @default("{}")
-  notes            String                     @default("")
-  data             Json                       @default("{}")
-  createdAt        DateTime                   @default(now())
-  updatedAt        DateTime                   @updatedAt
-  owner            User                       @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
-  campaignBindings CharacterCampaignBinding[]
+  id                    String                     @id @default(uuid())
+  ownerUserId           String
+  name                  String
+  avatarUrl             String?
+  system                String                     @default("dnd5e")
+  level                 Int                        @default(1)
+  classSummary          String                     @default("")
+  raceSummary           String                     @default("")
+  currentHp             Int                        @default(0)
+  maxHp                 Int                        @default(0)
+  armorClass            Int                        @default(10)
+  speed                 Int                        @default(30)
+  initiativeBonus       Int                        @default(0)
+  abilities             Json                       @default("{\"str\":10,\"dex\":10,\"con\":10,\"int\":10,\"wis\":10,\"cha\":10}")
+  saves                 Json                       @default("{}")
+  skills                Json                       @default("{}")
+  inventory             Json                       @default("[]")
+  currency              Json                       @default("{}")
+  notes                 String                     @default("")
+  data                  Json                       @default("{}")
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  owner                 User                       @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  campaignBindings      CharacterCampaignBinding[]
+  encounterParticipants EncounterParticipant[]
+}
+
+model Npc {
+  id                    String                 @id @default(uuid())
+  campaignId            String
+  contentItemId         String?
+  name                  String
+  publicDescription     String                 @default("")
+  dmNotes               String                 @default("")
+  stats                 Json                   @default("{}")
+  tags                  Json                   @default("[]")
+  createdBy             String
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  campaign              Campaign               @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  encounterParticipants EncounterParticipant[]
+
+  @@index([campaignId])
+}
+
+model Encounter {
+  id                       String                 @id @default(uuid())
+  campaignId               String
+  sessionId                String?
+  name                     String
+  status                   String                 @default("draft")
+  round                    Int                    @default(0)
+  currentTurnParticipantId String?
+  createdBy                String
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+  campaign                 Campaign               @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  session                  Session?               @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  participants             EncounterParticipant[]
+
+  @@index([campaignId])
+  @@index([sessionId])
+}
+
+model EncounterParticipant {
+  id                  String     @id @default(uuid())
+  encounterId         String
+  participantType     String
+  characterId         String?
+  npcId               String?
+  displayName         String
+  initiative          Int        @default(0)
+  hpCurrent           Int        @default(0)
+  hpMax               Int        @default(0)
+  armorClass          Int        @default(10)
+  conditions          Json       @default("[]")
+  isHiddenFromPlayers Boolean    @default(false)
+  sortOrder           Int        @default(0)
+  snapshot            Json       @default("{}")
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  encounter           Encounter  @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  character           Character? @relation(fields: [characterId], references: [id], onDelete: SetNull)
+  npc                 Npc?       @relation(fields: [npcId], references: [id], onDelete: SetNull)
+
+  @@index([encounterId])
+  @@index([characterId])
+  @@index([npcId])
 }
 
 model CharacterCampaignBinding {

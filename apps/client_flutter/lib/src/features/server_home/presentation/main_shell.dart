@@ -13,6 +13,8 @@ import '../../../features/client_mode/domain/client_mode.dart';
 import '../../../features/content/data/content_api_client.dart';
 import '../../../features/content/presentation/content_controller.dart';
 import '../../../features/content/presentation/content_library_page.dart';
+import '../../../features/encounters/data/encounter_api_client.dart';
+import '../../../features/encounters/presentation/encounter_controller.dart';
 import '../../../features/rooms/data/room_api_client.dart';
 import '../../../features/server_profiles/domain/server_profile.dart';
 import '../../../features/sessions/data/session_api_client.dart';
@@ -36,6 +38,7 @@ class MainShell extends StatefulWidget {
     required this.campaignClient,
     required this.characterClient,
     required this.contentClient,
+    required this.encounterClient,
     required this.sessionClient,
     super.key,
   });
@@ -48,6 +51,7 @@ class MainShell extends StatefulWidget {
   final CampaignClient campaignClient;
   final CharacterClient characterClient;
   final ContentClient contentClient;
+  final EncounterClient encounterClient;
   final SessionClient sessionClient;
 
   @override
@@ -59,6 +63,7 @@ class _MainShellState extends State<MainShell> {
   late final CampaignController _campaignController;
   late final CharacterController _characterController;
   late final ContentController _contentController;
+  late final EncounterController _encounterController;
   late final SessionController _sessionController;
   late final SessionSocketService _socketService;
   int _currentIndex = 0;
@@ -88,6 +93,11 @@ class _MainShellState extends State<MainShell> {
       authController: _authController,
       contentClient: widget.contentClient,
     );
+    _encounterController = EncounterController(
+      apiBaseUrl: widget.profile.apiBaseUrl,
+      authController: _authController,
+      encounterClient: widget.encounterClient,
+    );
     _sessionController = SessionController(
       apiBaseUrl: widget.profile.apiBaseUrl,
       authController: _authController,
@@ -101,6 +111,7 @@ class _MainShellState extends State<MainShell> {
     widget.modeController.removeListener(_onModeChanged);
     _socketService.disconnect();
     _sessionController.dispose();
+    _encounterController.dispose();
     _contentController.dispose();
     _characterController.dispose();
     _campaignController.dispose();
@@ -140,7 +151,9 @@ class _MainShellState extends State<MainShell> {
             authController: _authController,
             campaignController: _campaignController,
             sessionController: _sessionController,
+            encounterController: _encounterController,
             socketService: _socketService,
+            modeController: widget.modeController,
           ),
           SettingsTabPage(
             profile: widget.profile,

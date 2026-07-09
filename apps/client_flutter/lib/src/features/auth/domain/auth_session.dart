@@ -18,11 +18,7 @@ class AuthUser {
   }
 
   Map<String, Object?> toJson() {
-    return {
-      'id': id,
-      'username': username,
-      'email': email,
-    };
+    return {'id': id, 'username': username, 'email': email};
   }
 
   @override

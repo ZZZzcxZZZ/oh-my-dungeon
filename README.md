@@ -4,14 +4,14 @@
 
 ## 当前状态
 
-v0.6 内容库 MVP 已完成。DM 可以导入 JSON 内容包、查看校验错误、为战役启用内容包并禁用单条内容；玩家可以在当前战役资料库中查询可用法术、装备、专长、怪物和状态。角色卡支持保存轻量 `contentRefs`，为后续自动完成和快捷动作打基础。客户端保持 Material 3 底部导航结构：战役 / 角色 / 资料库（DM 模式为内容库）/ 桌面 / 设置。
+v0.7 DM 控场基础版已完成。DM 可以创建 NPC 与遭遇、把角色或 NPC 加入先攻队列、开始遭遇、推进回合、结束遭遇、调整参战者 HP/状态并控制玩家可见性；关键战斗动作会写入 `JournalEntry`。客户端保持 Material 3 底部导航结构：战役 / 角色 / 资料库（DM 模式为内容库）/ 桌面 / 设置，桌面页在 DM 模式下提供“场次 / 控场”页签。
 
 - Monorepo 基础结构
 - Flutter 客户端骨架（Material 3 + 底部导航）
 - NestJS 服务端骨架
 - `/health`
 - `/.well-known/dnd-tool-server`
-- Prisma schema（User / ServerAdmin / RefreshToken / ServerSetting / Campaign / CampaignMember / CampaignInvite / Session / SessionMember / ChatMessage / DiceRoll / JournalEntry / Character / CharacterCampaignBinding / ContentPackage / ContentItem / CampaignContentPackage / ContentOverride）
+- Prisma schema（User / ServerAdmin / RefreshToken / ServerSetting / Campaign / CampaignMember / CampaignInvite / Session / SessionMember / ChatMessage / DiceRoll / JournalEntry / Character / CharacterCampaignBinding / ContentPackage / ContentItem / CampaignContentPackage / ContentOverride / Npc / Encounter / EncounterParticipant）
 - Docker Compose 配置
 - GitHub Actions CI 配置
 - 服务端与客户端基础测试
@@ -31,6 +31,8 @@ v0.6 内容库 MVP 已完成。DM 可以导入 JSON 内容包、查看校验错�
 - 客户端角色入口：Material 3 底部导航“角色”页、基础创建/编辑、战役绑定和 HP 快捷调整
 - 服务端内容库 API：内容包 dry-run 校验 / 导入 / 条目查询 / 战役启用内容包 / 单条内容禁用 / 战役可用内容查询
 - 客户端资料库入口：Material 3 “资料库/内容库”页、JSON 导入校验、内容包启用、战役内容查询
+- 服务端 DM 控场 API：NPC、Encounter、EncounterParticipant、开始/推进/结束遭遇、HP/状态/可见性更新与 JournalEntry 记录
+- 客户端桌面控场入口：DM 模式下提供遭遇列表、创建遭遇、当前遭遇、开始/下一回合/结束、参战者 HP 快捷调整
 
 当前执行状态见 [当前执行状态与版本推进计划](docs/roadmap/current-execution-status.md)。
 

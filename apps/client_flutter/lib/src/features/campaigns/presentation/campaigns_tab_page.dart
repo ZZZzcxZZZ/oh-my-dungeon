@@ -99,10 +99,7 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
                   color: Theme.of(context).colorScheme.primary,
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  '登录后管理战役',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
+                Text('登录后管理战役', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
                 const Text(
                   '创建属于你的战役，或使用邀请码加入朋友的团。',
@@ -138,10 +135,7 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24),
-          child: Text(
-            '暂无战役\n点击右下角创建或加入',
-            textAlign: TextAlign.center,
-          ),
+          child: Text('暂无战役\n点击右下角创建或加入', textAlign: TextAlign.center),
         ),
       );
     }
@@ -152,15 +146,16 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
       separatorBuilder: (context, index) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final campaign = campaigns[index];
-        final isOwner =
-            campaign.ownerId == widget.authController.user?.id;
+        final isOwner = campaign.ownerId == widget.authController.user?.id;
         return Card(
           child: ListTile(
             leading: const Icon(Icons.castle_outlined),
             title: Text(campaign.name),
-            subtitle: Text(campaign.description.isEmpty
-                ? campaign.system
-                : campaign.description),
+            subtitle: Text(
+              campaign.description.isEmpty
+                  ? campaign.system
+                  : campaign.description,
+            ),
             trailing: isOwner
                 ? const Chip(label: Text('主持人'))
                 : const Chip(label: Text('玩家')),
@@ -241,9 +236,7 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
     } else {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(
-            '创建失败：${widget.campaignController.error ?? '未知错误'}',
-          ),
+          content: Text('创建失败：${widget.campaignController.error ?? '未知错误'}'),
         ),
       );
     }
@@ -288,9 +281,7 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
     } else {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(
-            '加入失败：${widget.campaignController.error ?? '未知错误'}',
-          ),
+          content: Text('加入失败：${widget.campaignController.error ?? '未知错误'}'),
         ),
       );
     }

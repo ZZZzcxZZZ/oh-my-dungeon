@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../features/auth/presentation/auth_controller.dart';
 import '../../../features/campaigns/domain/campaign.dart';
 import '../../../features/campaigns/presentation/campaign_controller.dart';
+import '../../../features/client_mode/domain/client_mode.dart';
+import '../../../features/encounters/domain/encounter.dart';
+import '../../../features/encounters/presentation/encounter_controller.dart';
 import '../../../features/server_profiles/domain/server_profile.dart';
 import '../../../features/sessions/data/session_socket_service.dart';
 import '../../../features/sessions/domain/session.dart';
@@ -19,7 +22,9 @@ class TableTabPage extends StatefulWidget {
     required this.authController,
     required this.campaignController,
     required this.sessionController,
+    required this.encounterController,
     required this.socketService,
+    required this.modeController,
     super.key,
   });
 
@@ -27,13 +32,17 @@ class TableTabPage extends StatefulWidget {
   final AuthController authController;
   final CampaignController campaignController;
   final SessionController sessionController;
+  final EncounterController encounterController;
   final SessionSocketService socketService;
+  final ClientModeController modeController;
 
   @override
   State<TableTabPage> createState() => _TableTabPageState();
 }
 
 class _TableTabPageState extends State<TableTabPage> {
+  bool _requestedCampaignLoad = false;
+
   @override
   void initState() {
     super.initState();
@@ -42,6 +51,7 @@ class _TableTabPageState extends State<TableTabPage> {
 
   void _maybeLoadCampaigns() {
     if (widget.authController.isLoggedIn) {
+      _requestedCampaignLoad = true;
       widget.campaignController.loadCampaigns();
     }
   }
@@ -53,13 +63,25 @@ class _TableTabPageState extends State<TableTabPage> {
         widget.authController,
         widget.campaignController,
         widget.sessionController,
+        widget.encounterController,
+        widget.modeController,
       ]),
       builder: (context, _) {
         if (!widget.authController.isLoggedIn) {
+          _requestedCampaignLoad = false;
           return _buildLoginPrompt(context);
         }
 
         final campaigns = widget.campaignController.campaigns;
+        if (campaigns.isEmpty &&
+            !widget.campaignController.isLoading &&
+            !_requestedCampaignLoad) {
+          _requestedCampaignLoad = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            widget.campaignController.loadCampaigns();
+          });
+        }
+
         if (campaigns.isEmpty) {
           return _buildEmptyCampaigns(context);
         }
@@ -68,9 +90,11 @@ class _TableTabPageState extends State<TableTabPage> {
         final effectiveId = selectedId ?? campaigns.first.id;
         if (selectedId == null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            widget.sessionController.selectCampaign(effectiveId);
+            _selectCampaign(effectiveId);
           });
         }
+
+        final isDm = widget.modeController.mode == ClientMode.dungeonMaster;
 
         return Scaffold(
           appBar: AppBar(
@@ -98,7 +122,37 @@ class _TableTabPageState extends State<TableTabPage> {
           body: Column(
             children: [
               _buildCampaignSelector(context, campaigns, effectiveId),
-              Expanded(child: _buildSessionList(context)),
+              Expanded(
+                child: isDm
+                    ? DefaultTabController(
+                        length: 2,
+                        child: Column(
+                          children: [
+                            const TabBar(
+                              tabs: [
+                                Tab(
+                                  icon: Icon(Icons.event_note_outlined),
+                                  text: '场次',
+                                ),
+                                Tab(
+                                  icon: Icon(Icons.shield_outlined),
+                                  text: '控场',
+                                ),
+                              ],
+                            ),
+                            Expanded(
+                              child: TabBarView(
+                                children: [
+                                  _buildSessionList(context),
+                                  _buildEncounterPanel(context, effectiveId),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : _buildSessionList(context),
+              ),
             ],
           ),
         );
@@ -123,15 +177,9 @@ class _TableTabPageState extends State<TableTabPage> {
                   color: Theme.of(context).colorScheme.primary,
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  '登录后进入桌面',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
+                Text('登录后进入桌面', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
-                const Text(
-                  '登录后选择战役，开启或加入一次跑团场次。',
-                  textAlign: TextAlign.center,
-                ),
+                const Text('登录后选择战役，开启或加入一次跑团场次。', textAlign: TextAlign.center),
               ],
             ),
           ),
@@ -151,10 +199,7 @@ class _TableTabPageState extends State<TableTabPage> {
             children: [
               const Icon(Icons.castle_outlined, size: 48),
               const SizedBox(height: 12),
-              Text(
-                '还没有战役',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              Text('还没有战役', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
               const Text(
                 '先到「战役」标签创建或加入一个战役，再回到这里开局。',
@@ -183,18 +228,20 @@ class _TableTabPageState extends State<TableTabPage> {
         ),
         items: [
           for (final campaign in campaigns)
-            DropdownMenuItem(
-              value: campaign.id,
-              child: Text(campaign.name),
-            ),
+            DropdownMenuItem(value: campaign.id, child: Text(campaign.name)),
         ],
         onChanged: (value) {
           if (value != null) {
-            widget.sessionController.selectCampaign(value);
+            _selectCampaign(value);
           }
         },
       ),
     );
+  }
+
+  void _selectCampaign(String campaignId) {
+    widget.sessionController.selectCampaign(campaignId);
+    widget.encounterController.loadEncounters(campaignId);
   }
 
   Widget _buildSessionList(BuildContext context) {
@@ -255,6 +302,66 @@ class _TableTabPageState extends State<TableTabPage> {
     );
   }
 
+  Widget _buildEncounterPanel(BuildContext context, String campaignId) {
+    final controller = widget.encounterController;
+    return RefreshIndicator(
+      onRefresh: () => controller.loadEncounters(campaignId),
+      child: ListView(
+        key: const Key('encounter-control-panel'),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '遭遇控场',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              FilledButton.icon(
+                onPressed: () => _showCreateEncounterDialog(campaignId),
+                icon: const Icon(Icons.add),
+                label: const Text('新遭遇'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (controller.error != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                controller.error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+          if (controller.isLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (controller.encounters.isEmpty)
+            const _EmptyEncounterHint()
+          else
+            for (final encounter in controller.encounters) ...[
+              _EncounterListTile(
+                encounter: encounter,
+                selected: controller.activeEncounter?.id == encounter.id,
+                onTap: () => controller.loadEncounter(encounter.id),
+              ),
+              const SizedBox(height: 8),
+            ],
+          if (controller.activeEncounter != null) ...[
+            const SizedBox(height: 12),
+            _ActiveEncounterPanel(
+              encounter: controller.activeEncounter!,
+              controller: controller,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Future<void> _showCreateSessionDialog() async {
     final controller = TextEditingController();
     final messenger = ScaffoldMessenger.of(context);
@@ -275,7 +382,8 @@ class _TableTabPageState extends State<TableTabPage> {
               child: const Text('取消'),
             ),
             FilledButton(
-              onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+              onPressed: () =>
+                  Navigator.of(context).pop(controller.text.trim()),
               child: const Text('创建'),
             ),
           ],
@@ -293,12 +401,196 @@ class _TableTabPageState extends State<TableTabPage> {
     } else {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(
-            '创建失败：${widget.sessionController.error ?? '未知错误'}',
-          ),
+          content: Text('创建失败：${widget.sessionController.error ?? '未知错误'}'),
         ),
       );
     }
+  }
+
+  Future<void> _showCreateEncounterDialog(String campaignId) async {
+    final controller = TextEditingController();
+    final messenger = ScaffoldMessenger.of(context);
+
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('新遭遇'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(labelText: '遭遇名称'),
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(controller.text.trim()),
+              child: const Text('创建'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (name == null || name.isEmpty) return;
+
+    final success = await widget.encounterController.createEncounter(
+      campaignId: campaignId,
+      name: name,
+    );
+
+    if (!mounted) return;
+    messenger.showSnackBar(
+      SnackBar(content: Text(success ? '遭遇已创建' : '创建遭遇失败')),
+    );
+  }
+}
+
+class _EmptyEncounterHint extends StatelessWidget {
+  const _EmptyEncounterHint();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      child: Column(
+        children: [
+          Icon(
+            Icons.shield_outlined,
+            size: 44,
+            color: Theme.of(context).colorScheme.outline,
+          ),
+          const SizedBox(height: 12),
+          Text('暂无遭遇', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 6),
+          Text(
+            '为当前战役创建遭遇后，可以在这里管理先攻、回合和生命值。',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Theme.of(context).colorScheme.outline),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EncounterListTile extends StatelessWidget {
+  const _EncounterListTile({
+    required this.encounter,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Encounter encounter;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Card(
+      color: selected ? colorScheme.secondaryContainer : null,
+      child: ListTile(
+        leading: const Icon(Icons.shield_outlined),
+        title: Text(encounter.name),
+        subtitle: Text('Round ${encounter.round} · ${encounter.status}'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _ActiveEncounterPanel extends StatelessWidget {
+  const _ActiveEncounterPanel({
+    required this.encounter,
+    required this.controller,
+  });
+
+  final Encounter encounter;
+  final EncounterController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final participants = encounter.participants;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('当前遭遇', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            FilledButton.icon(
+              onPressed: encounter.status == 'draft'
+                  ? controller.startEncounter
+                  : null,
+              icon: const Icon(Icons.play_arrow),
+              label: const Text('开始'),
+            ),
+            FilledButton.tonalIcon(
+              onPressed: encounter.status == 'active'
+                  ? controller.advanceTurn
+                  : null,
+              icon: const Icon(Icons.skip_next),
+              label: const Text('下一回合'),
+            ),
+            OutlinedButton.icon(
+              onPressed: encounter.status == 'active'
+                  ? controller.endEncounter
+                  : null,
+              icon: const Icon(Icons.stop),
+              label: const Text('结束'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (participants.isEmpty)
+          const ListTile(
+            leading: Icon(Icons.group_outlined),
+            title: Text('还没有参战者'),
+          )
+        else
+          for (final participant in participants)
+            Card(
+              child: ListTile(
+                leading: CircleAvatar(child: Text('${participant.initiative}')),
+                title: Text(participant.displayName),
+                subtitle: Text(
+                  'HP ${participant.hpCurrent}/${participant.hpMax} · AC ${participant.armorClass}',
+                ),
+                trailing: Wrap(
+                  spacing: 4,
+                  children: [
+                    IconButton(
+                      tooltip: '减少 HP',
+                      onPressed: () => controller.adjustParticipantHp(
+                        encounterId: encounter.id,
+                        participantId: participant.id,
+                        delta: -1,
+                      ),
+                      icon: const Icon(Icons.remove),
+                    ),
+                    IconButton(
+                      tooltip: '增加 HP',
+                      onPressed: () => controller.adjustParticipantHp(
+                        encounterId: encounter.id,
+                        participantId: participant.id,
+                        delta: 1,
+                      ),
+                      icon: const Icon(Icons.add),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+      ],
+    );
   }
 }
 
@@ -323,10 +615,7 @@ class _SessionCard extends StatelessWidget {
         leading: const Icon(Icons.table_restaurant_outlined),
         title: Text(session.name),
         subtitle: Text(session.createdAt.split('T').first),
-        trailing: Chip(
-          label: Text(label),
-          backgroundColor: color,
-        ),
+        trailing: Chip(label: Text(label), backgroundColor: color),
         onTap: onTap,
       ),
     );

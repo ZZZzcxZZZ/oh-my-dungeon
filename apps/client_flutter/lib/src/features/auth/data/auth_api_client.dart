@@ -75,10 +75,7 @@ class AuthApiClient implements AuthClient {
     final response = await _httpClient.post(
       Uri.parse('${_normalize(apiBaseUrl)}/auth/login'),
       headers: {'content-type': 'application/json'},
-      body: jsonEncode({
-        'identifier': identifier,
-        'password': password,
-      }),
+      body: jsonEncode({'identifier': identifier, 'password': password}),
     );
 
     if (response.statusCode != 200) {
@@ -104,9 +101,7 @@ class AuthApiClient implements AuthClient {
       throw _toException(response);
     }
 
-    return AuthUser.fromJson(
-      jsonDecode(response.body) as Map<String, Object?>,
-    );
+    return AuthUser.fromJson(jsonDecode(response.body) as Map<String, Object?>);
   }
 
   @override

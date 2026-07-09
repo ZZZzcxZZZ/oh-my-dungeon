@@ -1,11 +1,19 @@
 import 'package:dnd_table_client/src/app/dnd_table_app.dart';
+import 'package:dnd_table_client/src/features/auth/data/auth_api_client.dart';
 import 'package:dnd_table_client/src/features/auth/data/auth_token_store.dart';
+import 'package:dnd_table_client/src/features/auth/domain/auth_session.dart';
+import 'package:dnd_table_client/src/features/campaigns/data/campaign_api_client.dart';
+import 'package:dnd_table_client/src/features/campaigns/domain/campaign.dart';
 import 'package:dnd_table_client/src/features/client_mode/domain/client_mode.dart';
+import 'package:dnd_table_client/src/features/encounters/data/encounter_api_client.dart';
+import 'package:dnd_table_client/src/features/encounters/domain/encounter.dart';
 import 'package:dnd_table_client/src/features/rooms/data/room_api_client.dart';
 import 'package:dnd_table_client/src/features/rooms/domain/room.dart';
 import 'package:dnd_table_client/src/features/rooms/domain/room_roll.dart';
 import 'package:dnd_table_client/src/features/server_profiles/data/server_profile_store.dart';
 import 'package:dnd_table_client/src/features/server_profiles/domain/server_profile.dart';
+import 'package:dnd_table_client/src/features/sessions/data/session_api_client.dart';
+import 'package:dnd_table_client/src/features/sessions/domain/session.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -248,6 +256,49 @@ void main() {
 
     expect(find.text('登录后查看资料库'), findsOneWidget);
   });
+  testWidgets('shows dm encounter control on table tab', (tester) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+    final tokenStore = InMemoryAuthTokenStore();
+    await tokenStore.saveTokens(
+      profile.id,
+      const StoredAuthTokens(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      ),
+    );
+    final modeController = ClientModeController();
+    await modeController.setMode(ClientMode.dungeonMaster);
+
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: tokenStore,
+        authClient: _FakeAuthClient(),
+        campaignClient: _FakeCampaignClient(),
+        sessionClient: _FakeSessionClient(),
+        encounterClient: _FakeEncounterClient(),
+        modeController: modeController,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.byIcon(Icons.table_restaurant_outlined),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('控场'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('encounter-control-panel')), findsOneWidget);
+    expect(find.text('Road Ambush'), findsOneWidget);
+  });
 }
 
 class _FakeRoomClient implements RoomClient {
@@ -309,3 +360,332 @@ class _FakeRoomClient implements RoomClient {
     return roll;
   }
 }
+
+class _FakeAuthClient implements AuthClient {
+  @override
+  Future<AuthSession> login({
+    required String apiBaseUrl,
+    required String identifier,
+    required String password,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> logout({
+    required String apiBaseUrl,
+    required String refreshToken,
+  }) async {}
+
+  @override
+  Future<AuthUser> me({
+    required String apiBaseUrl,
+    required String accessToken,
+  }) async {
+    return const AuthUser(
+      id: 'user-1',
+      username: 'dm',
+      email: 'dm@example.com',
+    );
+  }
+
+  @override
+  Future<String> refresh({
+    required String apiBaseUrl,
+    required String refreshToken,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<RegisterResult> register({
+    required String apiBaseUrl,
+    required String username,
+    required String email,
+    required String password,
+  }) {
+    throw UnimplementedError();
+  }
+}
+
+class _FakeCampaignClient implements CampaignClient {
+  @override
+  Future<Campaign> createCampaign({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String name,
+    String? description,
+    String? system,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Campaign> getCampaign({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+  }) async {
+    return _campaign;
+  }
+
+  @override
+  Future<List<Campaign>> listCampaigns({
+    required String apiBaseUrl,
+    required String accessToken,
+  }) async {
+    return const [_campaign];
+  }
+
+  @override
+  Future<CampaignInvite> createInvite({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    String? roleOnJoin,
+    int? maxUses,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<CampaignInvite>> listInvites({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<CampaignMembership> joinCampaign({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String code,
+  }) {
+    throw UnimplementedError();
+  }
+}
+
+class _FakeSessionClient implements SessionClient {
+  @override
+  Future<Session> createSession({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String name,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<Session>> listSessions({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<Session> getSession({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String sessionId,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Session> startSession({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String sessionId,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Session> endSession({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String sessionId,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<ChatMessage>> listMessages({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String sessionId,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ChatMessage> sendMessage({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String sessionId,
+    required String content,
+    String? kind,
+    String? visibility,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<DiceRoll>> listRolls({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String sessionId,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<DiceRoll> createRoll({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String sessionId,
+    required String notation,
+    required String actorName,
+    String? visibility,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<JournalEntry>> listJournal({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String sessionId,
+  }) {
+    throw UnimplementedError();
+  }
+}
+
+class _FakeEncounterClient implements EncounterClient {
+  @override
+  Future<List<Encounter>> listEncounters({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+  }) async {
+    return const [_encounter];
+  }
+
+  @override
+  Future<Encounter> getEncounter({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String encounterId,
+  }) async {
+    return _encounter;
+  }
+
+  @override
+  Future<Npc> createNpc({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String name,
+    Object? stats,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Encounter> createEncounter({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String name,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Encounter> startEncounter({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String encounterId,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Encounter> advanceTurn({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String encounterId,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Encounter> endEncounter({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String encounterId,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<EncounterParticipant> updateParticipant({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String encounterId,
+    required String participantId,
+    int? hpCurrent,
+    List<String>? conditions,
+  }) {
+    throw UnimplementedError();
+  }
+}
+
+const _campaign = Campaign(
+  id: 'camp-1',
+  name: 'Starter Campaign',
+  description: '',
+  system: 'dnd5e',
+  ownerId: 'user-1',
+  status: 'active',
+  createdAt: '2026-07-09T00:00:00.000Z',
+  updatedAt: '2026-07-09T00:00:00.000Z',
+);
+
+const _encounter = Encounter(
+  id: 'enc-1',
+  campaignId: 'camp-1',
+  sessionId: null,
+  name: 'Road Ambush',
+  status: 'draft',
+  round: 0,
+  currentTurnParticipantId: null,
+  createdBy: 'user-1',
+  createdAt: '2026-07-09T00:00:00.000Z',
+  updatedAt: '2026-07-09T00:00:00.000Z',
+  participants: [
+    EncounterParticipant(
+      id: 'part-1',
+      encounterId: 'enc-1',
+      participantType: 'npc',
+      characterId: null,
+      npcId: 'npc-1',
+      displayName: 'Road Bandit',
+      initiative: 12,
+      hpCurrent: 7,
+      hpMax: 7,
+      armorClass: 13,
+      conditions: [],
+      isHiddenFromPlayers: false,
+      sortOrder: 0,
+      snapshot: {},
+      createdAt: '2026-07-09T00:00:00.000Z',
+      updatedAt: '2026-07-09T00:00:00.000Z',
+    ),
+  ],
+);

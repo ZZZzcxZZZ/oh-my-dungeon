@@ -314,15 +314,9 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
                   if (isManager)
                     SegmentedButton<String>(
                       segments: const [
-                        ButtonSegment(
-                          value: 'public',
-                          label: Text('公开'),
-                        ),
+                        ButtonSegment(value: 'public', label: Text('公开')),
                         ButtonSegment(value: 'dm', label: Text('DM')),
-                        ButtonSegment(
-                          value: 'blind',
-                          label: Text('暗骰'),
-                        ),
+                        ButtonSegment(value: 'blind', label: Text('暗骰')),
                       ],
                       selected: {visibility},
                       onSelectionChanged: (selection) {
@@ -376,9 +370,11 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
                 else
                   for (final member in members)
                     ListTile(
-                      leading: Icon(member.isManager
-                          ? Icons.shield_outlined
-                          : Icons.person_outline),
+                      leading: Icon(
+                        member.isManager
+                            ? Icons.shield_outlined
+                            : Icons.person_outline,
+                      ),
                       title: Text(member.userId),
                       subtitle: Text('角色：${_roleLabel(member.role)}'),
                       dense: true,
@@ -431,9 +427,9 @@ class _MessageBubble extends StatelessWidget {
           child: Text(
             message.content,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontStyle: FontStyle.italic,
-                  color: Theme.of(context).colorScheme.outline,
-                ),
+              fontStyle: FontStyle.italic,
+              color: Theme.of(context).colorScheme.outline,
+            ),
           ),
         ),
       );
@@ -452,8 +448,8 @@ class _MessageBubble extends StatelessWidget {
           color: isDm
               ? colorScheme.tertiaryContainer
               : isMine
-                  ? colorScheme.primaryContainer
-                  : colorScheme.surfaceContainerHighest,
+              ? colorScheme.primaryContainer
+              : colorScheme.surfaceContainerHighest,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Column(
@@ -463,17 +459,17 @@ class _MessageBubble extends StatelessWidget {
                   Text(
                     message.senderId,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      color: colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 if (isDm)
                   Text(
                     'DM',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: colorScheme.onTertiaryContainer,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      color: colorScheme.onTertiaryContainer,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 Text(message.content),
               ],
@@ -516,12 +512,13 @@ class _RollCard extends StatelessWidget {
                     if (roll.components.isNotEmpty)
                       Text(
                         roll.components
-                            .map((c) =>
-                                '${c.notation}: [${c.results.join(', ')}]')
+                            .map(
+                              (c) => '${c.notation}: [${c.results.join(', ')}]',
+                            )
                             .join('  '),
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ),
                   ],
                 ),
@@ -529,8 +526,8 @@ class _RollCard extends StatelessWidget {
               Text(
                 '${roll.total}',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               if (roll.isDmOnly || roll.isBlind)
                 Padding(

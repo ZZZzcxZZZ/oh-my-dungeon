@@ -118,14 +118,11 @@ void main() {
         system: 'dnd5e',
       );
 
-      expect(
-        jsonDecode(captured!.body),
-        {
-          'name': 'Curse of Strahd',
-          'description': 'A gothic horror campaign',
-          'system': 'dnd5e',
-        },
-      );
+      expect(jsonDecode(captured!.body), {
+        'name': 'Curse of Strahd',
+        'description': 'A gothic horror campaign',
+        'system': 'dnd5e',
+      });
     });
 
     test('throws CampaignApiException on 400 missing name', () async {
@@ -237,8 +234,11 @@ void main() {
           campaignId: 'missing',
         ),
         throwsA(
-          isA<CampaignApiException>()
-              .having((e) => e.statusCode, 'statusCode', 404),
+          isA<CampaignApiException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            404,
+          ),
         ),
       );
     });
@@ -267,15 +267,12 @@ void main() {
       );
 
       expect(captured?.method, 'POST');
-      expect(
-        captured?.url.toString(),
-        '$_apiBaseUrl/campaigns/camp-1/invites',
-      );
+      expect(captured?.url.toString(), '$_apiBaseUrl/campaigns/camp-1/invites');
       expect(captured?.headers['authorization'], 'Bearer $_accessToken');
-      expect(
-        jsonDecode(captured!.body),
-        {'roleOnJoin': 'player', 'maxUses': 1},
-      );
+      expect(jsonDecode(captured!.body), {
+        'roleOnJoin': 'player',
+        'maxUses': 1,
+      });
       expect(result, _invite);
     });
   });
@@ -301,10 +298,7 @@ void main() {
       );
 
       expect(captured?.method, 'GET');
-      expect(
-        captured?.url.toString(),
-        '$_apiBaseUrl/campaigns/camp-1/invites',
-      );
+      expect(captured?.url.toString(), '$_apiBaseUrl/campaigns/camp-1/invites');
       expect(captured?.headers['authorization'], 'Bearer $_accessToken');
       expect(result, [_invite]);
     });
@@ -378,8 +372,11 @@ void main() {
           code: 'OLD',
         ),
         throwsA(
-          isA<CampaignApiException>()
-              .having((e) => e.statusCode, 'statusCode', 403),
+          isA<CampaignApiException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            403,
+          ),
         ),
       );
     });
@@ -388,10 +385,7 @@ void main() {
   test('normalizes trailing slashes in the api base url', () async {
     final client = CampaignApiClient(
       httpClient: MockClient((request) async {
-        expect(
-          request.url.toString(),
-          '$_apiBaseUrl/campaigns',
-        );
+        expect(request.url.toString(), '$_apiBaseUrl/campaigns');
         return http.Response(jsonEncode([_campaignJson]), 200);
       }),
     );

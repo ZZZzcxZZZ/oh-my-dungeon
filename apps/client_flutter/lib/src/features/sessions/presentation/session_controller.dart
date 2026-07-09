@@ -220,7 +220,10 @@ class SessionController extends ChangeNotifier {
     }
   }
 
-  Future<bool> sendMessage({required String content, String? visibility}) async {
+  Future<bool> sendMessage({
+    required String content,
+    String? visibility,
+  }) async {
     final token = accessToken;
     final session = _activeSession;
     if (token == null || session == null) return false;

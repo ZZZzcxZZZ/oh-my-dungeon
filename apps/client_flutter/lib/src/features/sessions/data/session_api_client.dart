@@ -75,7 +75,7 @@ abstract class SessionClient {
 
 class SessionApiClient implements SessionClient {
   SessionApiClient({http.Client? httpClient})
-      : _httpClient = httpClient ?? http.Client();
+    : _httpClient = httpClient ?? http.Client();
 
   final http.Client _httpClient;
 
@@ -205,7 +205,8 @@ class SessionApiClient implements SessionClient {
       throw _toException(response);
     }
     return ChatMessage.fromJson(
-        jsonDecode(response.body) as Map<String, Object?>);
+      jsonDecode(response.body) as Map<String, Object?>,
+    );
   }
 
   @override
@@ -250,8 +251,7 @@ class SessionApiClient implements SessionClient {
     if (response.statusCode != 201) {
       throw _toException(response);
     }
-    return DiceRoll.fromJson(
-        jsonDecode(response.body) as Map<String, Object?>);
+    return DiceRoll.fromJson(jsonDecode(response.body) as Map<String, Object?>);
   }
 
   @override

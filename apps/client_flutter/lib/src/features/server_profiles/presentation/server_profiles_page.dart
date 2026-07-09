@@ -6,6 +6,7 @@ import '../../campaigns/data/campaign_api_client.dart';
 import '../../characters/data/character_api_client.dart';
 import '../../client_mode/domain/client_mode.dart';
 import '../../content/data/content_api_client.dart';
+import '../../encounters/data/encounter_api_client.dart';
 import '../../rooms/data/room_api_client.dart';
 import '../../server_home/presentation/main_shell.dart';
 import '../../sessions/data/session_api_client.dart';
@@ -25,6 +26,7 @@ class ServerProfilesPage extends StatefulWidget {
     required this.campaignClient,
     required this.characterClient,
     required this.contentClient,
+    required this.encounterClient,
     required this.sessionClient,
     required this.modeController,
     super.key,
@@ -38,6 +40,7 @@ class ServerProfilesPage extends StatefulWidget {
   final CampaignClient campaignClient;
   final CharacterClient characterClient;
   final ContentClient contentClient;
+  final EncounterClient encounterClient;
   final SessionClient sessionClient;
   final ClientModeController modeController;
 
@@ -340,6 +343,7 @@ class _ServerProfilesPageState extends State<ServerProfilesPage> {
                               campaignClient: widget.campaignClient,
                               characterClient: widget.characterClient,
                               contentClient: widget.contentClient,
+                              encounterClient: widget.encounterClient,
                               sessionClient: widget.sessionClient,
                             );
                           },

@@ -134,9 +134,7 @@ class _AuthPageState extends State<AuthPage> {
 
   Widget _buildAuthForm(BuildContext context, AuthController controller) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_mode == _AuthFormMode.login ? '登录' : '注册'),
-      ),
+      appBar: AppBar(title: Text(_mode == _AuthFormMode.login ? '登录' : '注册')),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
@@ -158,9 +156,7 @@ class _AuthPageState extends State<AuthPage> {
                 if (_mode == _AuthFormMode.login) ...[
                   TextField(
                     controller: _identifierController,
-                    decoration: const InputDecoration(
-                      labelText: '用户名或邮箱',
-                    ),
+                    decoration: const InputDecoration(labelText: '用户名或邮箱'),
                     autofocus: true,
                   ),
                   const SizedBox(height: 16),

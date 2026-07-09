@@ -12,6 +12,7 @@
 4. `v0.4 跑团桌面基础版` 已完成并打 tag `v0.4.0`。`rooms` 原型已被 Session + DiceRoll 正式模型替换。
 5. `v0.5 角色卡基础版` 已完成，执行计划见 `docs/roadmap/v0.5-execution-plan.md`。
 6. `v0.6 内容库 MVP` 已完成，执行计划见 `docs/roadmap/v0.6-execution-plan.md`。
+7. `v0.7 DM 控场基础版` 已完成，执行计划见 `docs/roadmap/v0.7-execution-plan.md`。
 
 ## 已完成代码状态
 
@@ -263,6 +264,32 @@ docs(v0.2): update account setup guide
 11. 客户端新增 `ContentLibraryPage`，包含未登录提示、战役选择、类型筛选、搜索、DM JSON 导入校验和内容包启用。
 12. 角色卡支持保存轻量 `data.contentRefs`，包含法术、装备/物品、特性/专长引用 ID。
 
+### v0.7 DM 控场基础版（已完成）
+
+目标：DM 可以创建并管理遭遇，完成从 NPC、参战者到先攻回合推进的控场闭环。
+
+已完成：
+
+1. 创建 `docs/roadmap/v0.7-execution-plan.md`。
+2. Prisma 新增 `Npc` / `Encounter` / `EncounterParticipant`，并关联 Campaign、Session、Character、User。
+3. 服务端新增 `EncountersModule`：
+   - `POST /api/campaigns/:id/npcs`
+   - `GET /api/campaigns/:id/npcs`
+   - `POST /api/campaigns/:id/encounters`
+   - `GET /api/campaigns/:id/encounters`
+   - `GET /api/encounters/:id`
+   - `POST /api/encounters/:id/participants`
+   - `PATCH /api/encounters/:id/participants/:participantId`
+   - `POST /api/encounters/:id/start`
+   - `POST /api/encounters/:id/advance-turn`
+   - `POST /api/encounters/:id/end`
+4. 服务端按 CampaignMember 权限限制 DM/owner 管理操作，玩家只看到未隐藏参战者。
+5. 遭遇开始、推进回合、更新参战者、结束遭遇写入 `JournalEntry`。
+6. 客户端新增 encounter domain / API client / controller。
+7. `TableTabPage` 在 DM 模式下提供“场次 / 控场”页签，支持遭遇列表、创建遭遇、查看当前遭遇、开始/下一回合/结束和 HP 快捷调整。
+8. 修复已登录恢复后桌面页可能不补拉战役列表的问题。
+9. v0.7 封版验证：`npm run doctor` 全绿；服务端 16 套件 / 217 测试通过，客户端 101 测试通过，Flutter analyze 无问题。
+
 ## 立即行动
 
-下一步进入 v0.7 DM 控场基础版：NPC 管理、遭遇创建、遭遇参与者、先攻队列、回合推进、怪物 HP/AC、状态和玩家可见性控制。
+下一步进入 v0.8 检定请求与快捷动作：DM 发起检定请求、指定全体/单人/角色、公开或隐藏 DC、玩家一键响应、技能和豁免快捷骰、结果进入聊天与日志。

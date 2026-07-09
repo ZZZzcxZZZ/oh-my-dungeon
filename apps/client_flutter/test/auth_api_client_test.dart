@@ -39,14 +39,11 @@ void main() {
 
       expect(captured?.method, 'POST');
       expect(captured?.url.toString(), '$_apiBaseUrl/auth/register');
-      expect(
-        jsonDecode(captured!.body),
-        {
-          'username': 'ranger',
-          'email': 'ranger@example.com',
-          'password': 'p@ssw0rd',
-        },
-      );
+      expect(jsonDecode(captured!.body), {
+        'username': 'ranger',
+        'email': 'ranger@example.com',
+        'password': 'p@ssw0rd',
+      });
       expect(
         result,
         RegisterResult(
@@ -60,31 +57,34 @@ void main() {
       );
     });
 
-    test('throws AuthApiException with server message on 409 conflict', () async {
-      final client = AuthApiClient(
-        httpClient: MockClient((request) async {
-          return http.Response(
-            jsonEncode({'message': 'Username already exists'}),
-            409,
-            headers: {'content-type': 'application/json'},
-          );
-        }),
-      );
+    test(
+      'throws AuthApiException with server message on 409 conflict',
+      () async {
+        final client = AuthApiClient(
+          httpClient: MockClient((request) async {
+            return http.Response(
+              jsonEncode({'message': 'Username already exists'}),
+              409,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        );
 
-      expect(
-        () => client.register(
-          apiBaseUrl: _apiBaseUrl,
-          username: 'ranger',
-          email: 'ranger@example.com',
-          password: 'p@ssw0rd',
-        ),
-        throwsA(
-          isA<AuthApiException>()
-              .having((e) => e.message, 'message', 'Username already exists')
-              .having((e) => e.statusCode, 'statusCode', 409),
-        ),
-      );
-    });
+        expect(
+          () => client.register(
+            apiBaseUrl: _apiBaseUrl,
+            username: 'ranger',
+            email: 'ranger@example.com',
+            password: 'p@ssw0rd',
+          ),
+          throwsA(
+            isA<AuthApiException>()
+                .having((e) => e.message, 'message', 'Username already exists')
+                .having((e) => e.statusCode, 'statusCode', 409),
+          ),
+        );
+      },
+    );
 
     test('throws AuthApiException on 403 registration disabled', () async {
       final client = AuthApiClient(
@@ -104,60 +104,66 @@ void main() {
           password: 'p@ssw0rd',
         ),
         throwsA(
-          isA<AuthApiException>()
-              .having((e) => e.statusCode, 'statusCode', 403),
+          isA<AuthApiException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            403,
+          ),
         ),
       );
     });
   });
 
   group('AuthApiClient.login', () {
-    test('posts identifier and password, returns session with tokens', () async {
-      http.Request? captured;
-      final client = AuthApiClient(
-        httpClient: MockClient((request) async {
-          captured = request;
-          return http.Response(
-            jsonEncode({
-              'user': {
-                'id': 'user-1',
-                'username': 'ranger',
-                'email': 'ranger@example.com',
-              },
-              'accessToken': 'access-token',
-              'refreshToken': 'refresh-token',
-            }),
-            200,
-            headers: {'content-type': 'application/json'},
-          );
-        }),
-      );
+    test(
+      'posts identifier and password, returns session with tokens',
+      () async {
+        http.Request? captured;
+        final client = AuthApiClient(
+          httpClient: MockClient((request) async {
+            captured = request;
+            return http.Response(
+              jsonEncode({
+                'user': {
+                  'id': 'user-1',
+                  'username': 'ranger',
+                  'email': 'ranger@example.com',
+                },
+                'accessToken': 'access-token',
+                'refreshToken': 'refresh-token',
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        );
 
-      final session = await client.login(
-        apiBaseUrl: _apiBaseUrl,
-        identifier: 'ranger',
-        password: 'p@ssw0rd',
-      );
+        final session = await client.login(
+          apiBaseUrl: _apiBaseUrl,
+          identifier: 'ranger',
+          password: 'p@ssw0rd',
+        );
 
-      expect(captured?.method, 'POST');
-      expect(captured?.url.toString(), '$_apiBaseUrl/auth/login');
-      expect(
-        jsonDecode(captured!.body),
-        {'identifier': 'ranger', 'password': 'p@ssw0rd'},
-      );
-      expect(
-        session,
-        AuthSession(
-          user: AuthUser(
-            id: 'user-1',
-            username: 'ranger',
-            email: 'ranger@example.com',
+        expect(captured?.method, 'POST');
+        expect(captured?.url.toString(), '$_apiBaseUrl/auth/login');
+        expect(jsonDecode(captured!.body), {
+          'identifier': 'ranger',
+          'password': 'p@ssw0rd',
+        });
+        expect(
+          session,
+          AuthSession(
+            user: AuthUser(
+              id: 'user-1',
+              username: 'ranger',
+              email: 'ranger@example.com',
+            ),
+            accessToken: 'access-token',
+            refreshToken: 'refresh-token',
           ),
-          accessToken: 'access-token',
-          refreshToken: 'refresh-token',
-        ),
-      );
-    });
+        );
+      },
+    );
 
     test('throws AuthApiException on 401 invalid credentials', () async {
       final client = AuthApiClient(
@@ -212,11 +218,7 @@ void main() {
       expect(captured?.headers['authorization'], 'Bearer access-token');
       expect(
         user,
-        AuthUser(
-          id: 'user-1',
-          username: 'ranger',
-          email: 'ranger@example.com',
-        ),
+        AuthUser(id: 'user-1', username: 'ranger', email: 'ranger@example.com'),
       );
     });
 
@@ -230,7 +232,11 @@ void main() {
       expect(
         () => client.me(apiBaseUrl: _apiBaseUrl, accessToken: 'bad-token'),
         throwsA(
-          isA<AuthApiException>().having((e) => e.statusCode, 'statusCode', 401),
+          isA<AuthApiException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            401,
+          ),
         ),
       );
     });
@@ -315,10 +321,7 @@ void main() {
   test('normalizes trailing slashes in the api base url', () async {
     final client = AuthApiClient(
       httpClient: MockClient((request) async {
-        expect(
-          request.url.toString(),
-          'http://localhost:3000/api/auth/login',
-        );
+        expect(request.url.toString(), 'http://localhost:3000/api/auth/login');
         return http.Response(
           jsonEncode({
             'user': {

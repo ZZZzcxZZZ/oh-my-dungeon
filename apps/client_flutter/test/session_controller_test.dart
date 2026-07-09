@@ -29,55 +29,58 @@ void main() {
     return controller;
   }
 
-  test('openSession loads the session, historical rolls, and journal', () async {
-    final authController = await buildLoggedInAuthController();
-    final sessionClient = _FakeSessionClient(
-      session: _session,
-      rolls: const [
-        DiceRoll(
-          id: 'roll-1',
-          sessionId: 'sess-1',
-          actorId: 'user-1',
-          actorName: 'ranger',
-          notation: '1d20',
-          total: 17,
-          components: [
-            DiceRollComponent(notation: '1d20', results: [17]),
-          ],
-          visibility: 'public',
-          createdAt: '2026-07-09T00:01:00.000Z',
-        ),
-      ],
-      journal: const [
-        JournalEntry(
-          id: 'journal-1',
-          sessionId: 'sess-1',
-          type: 'roll',
-          summary: 'ranger rolled 1d20 = 17',
-          refId: 'roll-1',
-          createdAt: '2026-07-09T00:01:00.000Z',
-        ),
-      ],
-    );
-    final controller = SessionController(
-      apiBaseUrl: apiBaseUrl,
-      authController: authController,
-      sessionClient: sessionClient,
-    );
+  test(
+    'openSession loads the session, historical rolls, and journal',
+    () async {
+      final authController = await buildLoggedInAuthController();
+      final sessionClient = _FakeSessionClient(
+        session: _session,
+        rolls: const [
+          DiceRoll(
+            id: 'roll-1',
+            sessionId: 'sess-1',
+            actorId: 'user-1',
+            actorName: 'ranger',
+            notation: '1d20',
+            total: 17,
+            components: [
+              DiceRollComponent(notation: '1d20', results: [17]),
+            ],
+            visibility: 'public',
+            createdAt: '2026-07-09T00:01:00.000Z',
+          ),
+        ],
+        journal: const [
+          JournalEntry(
+            id: 'journal-1',
+            sessionId: 'sess-1',
+            type: 'roll',
+            summary: 'ranger rolled 1d20 = 17',
+            refId: 'roll-1',
+            createdAt: '2026-07-09T00:01:00.000Z',
+          ),
+        ],
+      );
+      final controller = SessionController(
+        apiBaseUrl: apiBaseUrl,
+        authController: authController,
+        sessionClient: sessionClient,
+      );
 
-    await controller.openSession('sess-1');
+      await controller.openSession('sess-1');
 
-    expect(controller.activeSession?.id, 'sess-1');
-    expect(controller.messages, hasLength(1));
-    expect(controller.rolls, hasLength(1));
-    expect(controller.rolls.single.total, 17);
-    expect(controller.journal, hasLength(1));
-    expect(sessionClient.listRollCalls, ['sess-1']);
-    expect(sessionClient.listJournalCalls, ['sess-1']);
+      expect(controller.activeSession?.id, 'sess-1');
+      expect(controller.messages, hasLength(1));
+      expect(controller.rolls, hasLength(1));
+      expect(controller.rolls.single.total, 17);
+      expect(controller.journal, hasLength(1));
+      expect(sessionClient.listRollCalls, ['sess-1']);
+      expect(sessionClient.listJournalCalls, ['sess-1']);
 
-    controller.dispose();
-    authController.dispose();
-  });
+      controller.dispose();
+      authController.dispose();
+    },
+  );
 }
 
 const _session = Session(

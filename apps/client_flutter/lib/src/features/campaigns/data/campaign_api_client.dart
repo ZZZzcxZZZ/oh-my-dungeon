@@ -47,7 +47,7 @@ abstract class CampaignClient {
 
 class CampaignApiClient implements CampaignClient {
   CampaignApiClient({http.Client? httpClient})
-      : _httpClient = httpClient ?? http.Client();
+    : _httpClient = httpClient ?? http.Client();
 
   final http.Client _httpClient;
 
@@ -76,9 +76,7 @@ class CampaignApiClient implements CampaignClient {
       throw _toException(response);
     }
 
-    return Campaign.fromJson(
-      jsonDecode(response.body) as Map<String, Object?>,
-    );
+    return Campaign.fromJson(jsonDecode(response.body) as Map<String, Object?>);
   }
 
   @override
@@ -116,9 +114,7 @@ class CampaignApiClient implements CampaignClient {
       throw _toException(response);
     }
 
-    return Campaign.fromJson(
-      jsonDecode(response.body) as Map<String, Object?>,
-    );
+    return Campaign.fromJson(jsonDecode(response.body) as Map<String, Object?>);
   }
 
   @override

@@ -118,6 +118,36 @@ void main() {
     controller.dispose();
     authController.dispose();
   });
+
+  test('updates lightweight content refs on a character', () async {
+    final authController = await buildLoggedInAuthController();
+    final client = _FakeCharacterClient(characters: [_character]);
+    final controller = CharacterController(
+      apiBaseUrl: apiBaseUrl,
+      authController: authController,
+      characterClient: client,
+    );
+    await controller.loadCharacters();
+
+    final ok = await controller.updateContentRefs(
+      characterId: 'char-1',
+      spells: const ['spell-1'],
+      items: const ['item-1'],
+      features: const ['feature-1'],
+    );
+
+    expect(ok, isTrue);
+    expect(client.updateCalls.single.data, {
+      'contentRefs': {
+        'spells': ['spell-1'],
+        'items': ['item-1'],
+        'features': ['feature-1'],
+      },
+    });
+
+    controller.dispose();
+    authController.dispose();
+  });
 }
 
 const _character = CharacterSheet(
@@ -194,11 +224,13 @@ class _FakeAuthClient implements AuthClient {
 
 class _FakeCharacterClient implements CharacterClient {
   _FakeCharacterClient({required List<CharacterSheet> characters})
-      : _characters = [...characters];
+    : _characters = [...characters];
 
   final List<CharacterSheet> _characters;
-  final List<({String characterId, int? level, int? currentHp, int? maxHp})>
-      updateCalls = [];
+  final List<
+    ({String characterId, int? level, int? currentHp, int? maxHp, Object? data})
+  >
+  updateCalls = [];
   final List<(String, String)> bindCalls = [];
   final List<(String, String, int?)> hpCalls = [];
   final List<String> listCampaignCalls = [];
@@ -226,12 +258,14 @@ class _FakeCharacterClient implements CharacterClient {
     int? armorClass,
     int? speed,
     int? initiativeBonus,
+    Object? data,
   }) async {
     updateCalls.add((
       characterId: characterId,
       level: level,
       currentHp: currentHp,
       maxHp: maxHp,
+      data: data,
     ));
     final updated = _characters.single.copyWith(
       level: level,
@@ -292,6 +326,7 @@ class _FakeCharacterClient implements CharacterClient {
     int? armorClass,
     int? speed,
     int? initiativeBonus,
+    Object? data,
   }) {
     throw UnimplementedError();
   }

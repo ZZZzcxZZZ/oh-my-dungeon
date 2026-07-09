@@ -135,23 +135,23 @@ class CharacterSheet {
 
   @override
   int get hashCode => Object.hash(
-        id,
-        ownerUserId,
-        name,
-        avatarUrl,
-        system,
-        level,
-        classSummary,
-        raceSummary,
-        currentHp,
-        maxHp,
-        armorClass,
-        speed,
-        initiativeBonus,
-        notes,
-        createdAt,
-        updatedAt,
-      );
+    id,
+    ownerUserId,
+    name,
+    avatarUrl,
+    system,
+    level,
+    classSummary,
+    raceSummary,
+    currentHp,
+    maxHp,
+    armorClass,
+    speed,
+    initiativeBonus,
+    notes,
+    createdAt,
+    updatedAt,
+  );
 }
 
 class CharacterCampaignBinding {
@@ -214,15 +214,15 @@ class CharacterCampaignBinding {
 
   @override
   int get hashCode => Object.hash(
-        id,
-        campaignId,
-        characterId,
-        userId,
-        visibility,
-        status,
-        dmNotes,
-        joinedAt,
-        updatedAt,
-        character,
-      );
+    id,
+    campaignId,
+    characterId,
+    userId,
+    visibility,
+    status,
+    dmNotes,
+    joinedAt,
+    updatedAt,
+    character,
+  );
 }

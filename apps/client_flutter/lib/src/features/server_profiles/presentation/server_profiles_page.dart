@@ -5,6 +5,7 @@ import '../../auth/data/auth_token_store.dart';
 import '../../campaigns/data/campaign_api_client.dart';
 import '../../characters/data/character_api_client.dart';
 import '../../client_mode/domain/client_mode.dart';
+import '../../content/data/content_api_client.dart';
 import '../../rooms/data/room_api_client.dart';
 import '../../server_home/presentation/main_shell.dart';
 import '../../sessions/data/session_api_client.dart';
@@ -23,6 +24,7 @@ class ServerProfilesPage extends StatefulWidget {
     required this.authClient,
     required this.campaignClient,
     required this.characterClient,
+    required this.contentClient,
     required this.sessionClient,
     required this.modeController,
     super.key,
@@ -35,6 +37,7 @@ class ServerProfilesPage extends StatefulWidget {
   final AuthClient authClient;
   final CampaignClient campaignClient;
   final CharacterClient characterClient;
+  final ContentClient contentClient;
   final SessionClient sessionClient;
   final ClientModeController modeController;
 
@@ -328,17 +331,18 @@ class _ServerProfilesPageState extends State<ServerProfilesPage> {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
                           builder: (context) {
-                        return MainShell(
-                          profile: profile,
-                          modeController: widget.modeController,
-                          roomClient: widget.roomClient,
-                          authTokenStore: widget.authTokenStore,
-                          authClient: widget.authClient,
-                          campaignClient: widget.campaignClient,
-                          characterClient: widget.characterClient,
-                          sessionClient: widget.sessionClient,
-                        );
-                      },
+                            return MainShell(
+                              profile: profile,
+                              modeController: widget.modeController,
+                              roomClient: widget.roomClient,
+                              authTokenStore: widget.authTokenStore,
+                              authClient: widget.authClient,
+                              campaignClient: widget.campaignClient,
+                              characterClient: widget.characterClient,
+                              contentClient: widget.contentClient,
+                              sessionClient: widget.sessionClient,
+                            );
+                          },
                         ),
                       );
                     },

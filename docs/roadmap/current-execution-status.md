@@ -11,6 +11,7 @@
 3. `v0.3 战役与成员` 已完成并打 tag `v0.3.0`。
 4. `v0.4 跑团桌面基础版` 已完成并打 tag `v0.4.0`。`rooms` 原型已被 Session + DiceRoll 正式模型替换。
 5. `v0.5 角色卡基础版` 已完成，执行计划见 `docs/roadmap/v0.5-execution-plan.md`。
+6. `v0.6 内容库 MVP` 已完成，执行计划见 `docs/roadmap/v0.6-execution-plan.md`。
 
 ## 已完成代码状态
 
@@ -236,6 +237,32 @@ docs(v0.2): update account setup guide
 1. `GET /api/sessions/:id` 的 `recentMessages` 现在会过滤普通玩家不可见的 DM 消息。
 2. 客户端打开 Session 时会加载历史掷骰和 Journal，不再只显示最近聊天。
 
+### v0.6 内容库 MVP（已完成）
+
+目标：DM 可以管理可扩展资料，玩家可以查询当前战役可用内容并在角色卡中保存引用。
+
+已完成：
+
+1. 创建 `docs/roadmap/v0.6-execution-plan.md`。
+2. Prisma 新增 `ContentPackage` / `ContentItem` / `CampaignContentPackage` / `ContentOverride`。
+3. 服务端新增 `ContentModule`：
+   - `POST /api/content/packages/import`
+   - `GET /api/content/packages`
+   - `GET /api/content/items`
+   - `GET /api/content/items/:id`
+   - `POST /api/campaigns/:id/content/packages`
+   - `GET /api/campaigns/:id/content/available`
+   - `POST /api/campaigns/:id/content/overrides`
+4. 内容包导入支持 `dryRun` 校验，返回明确错误且不落库。
+5. 首版内容类型覆盖 `spell` / `item` / `feat` / `feature` / `monster` / `condition`。
+6. DM/owner 可以为战役启用或禁用内容包，并可以禁用单条内容。
+7. 战役成员只能查询当前战役启用且未禁用的内容。
+8. 内容包导入、战役启用内容包、禁用单条内容写入 `JournalEntry`。
+9. 客户端新增内容 domain / API client / controller。
+10. 客户端底部导航调整为：战役 / 角色 / 资料库（DM 模式显示内容库）/ 桌面 / 设置。
+11. 客户端新增 `ContentLibraryPage`，包含未登录提示、战役选择、类型筛选、搜索、DM JSON 导入校验和内容包启用。
+12. 角色卡支持保存轻量 `data.contentRefs`，包含法术、装备/物品、特性/专长引用 ID。
+
 ## 立即行动
 
-下一步进入 v0.6 内容库 MVP：内容包、法术/装备/专长等可扩展条目、JSON 导入与校验、战役启用/禁用内容。
+下一步进入 v0.7 DM 控场基础版：NPC 管理、遭遇创建、遭遇参与者、先攻队列、回合推进、怪物 HP/AC、状态和玩家可见性控制。

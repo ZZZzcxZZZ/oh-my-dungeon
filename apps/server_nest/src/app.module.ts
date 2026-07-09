@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './modules/auth/auth.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { CharactersModule } from './modules/characters/characters.module';
+import { ContentModule } from './modules/content/content.module';
 import { HealthModule } from './modules/health/health.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { RoomsModule } from './modules/rooms/rooms.module';
@@ -24,6 +25,7 @@ import { PrismaModule } from './prisma/prisma.module';
     ServerSettingsModule,
     CampaignsModule,
     CharactersModule,
+    ContentModule,
     RealtimeModule,
     SessionsModule
   ]

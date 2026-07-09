@@ -17,6 +17,7 @@ abstract class CharacterClient {
     int? armorClass,
     int? speed,
     int? initiativeBonus,
+    Object? data,
   });
 
   Future<List<CharacterSheet>> listCharacters({
@@ -38,6 +39,7 @@ abstract class CharacterClient {
     int? armorClass,
     int? speed,
     int? initiativeBonus,
+    Object? data,
   });
 
   Future<CharacterCampaignBinding> bindCharacterToCampaign({
@@ -65,7 +67,7 @@ abstract class CharacterClient {
 
 class CharacterApiClient implements CharacterClient {
   CharacterApiClient({http.Client? httpClient})
-      : _httpClient = httpClient ?? http.Client();
+    : _httpClient = httpClient ?? http.Client();
 
   final http.Client _httpClient;
 
@@ -82,6 +84,7 @@ class CharacterApiClient implements CharacterClient {
     int? armorClass,
     int? speed,
     int? initiativeBonus,
+    Object? data,
   }) async {
     final body = <String, Object?>{'name': name};
     if (level != null) body['level'] = level;
@@ -92,6 +95,7 @@ class CharacterApiClient implements CharacterClient {
     if (armorClass != null) body['armorClass'] = armorClass;
     if (speed != null) body['speed'] = speed;
     if (initiativeBonus != null) body['initiativeBonus'] = initiativeBonus;
+    if (data != null) body['data'] = data;
 
     final response = await _httpClient.post(
       Uri.parse('${_normalize(apiBaseUrl)}/characters'),
@@ -139,6 +143,7 @@ class CharacterApiClient implements CharacterClient {
     int? armorClass,
     int? speed,
     int? initiativeBonus,
+    Object? data,
   }) async {
     final body = <String, Object?>{};
     if (campaignId != null) body['campaignId'] = campaignId;
@@ -151,6 +156,7 @@ class CharacterApiClient implements CharacterClient {
     if (armorClass != null) body['armorClass'] = armorClass;
     if (speed != null) body['speed'] = speed;
     if (initiativeBonus != null) body['initiativeBonus'] = initiativeBonus;
+    if (data != null) body['data'] = data;
 
     final response = await _httpClient.patch(
       Uri.parse('${_normalize(apiBaseUrl)}/characters/$characterId'),
@@ -202,8 +208,10 @@ class CharacterApiClient implements CharacterClient {
     }
     final decoded = jsonDecode(response.body) as List<Object?>;
     return decoded
-        .map((item) =>
-            CharacterCampaignBinding.fromJson(item as Map<String, Object?>))
+        .map(
+          (item) =>
+              CharacterCampaignBinding.fromJson(item as Map<String, Object?>),
+        )
         .toList();
   }
 

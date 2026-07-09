@@ -6,6 +6,7 @@ import '../features/auth/data/auth_token_store.dart';
 import '../features/campaigns/data/campaign_api_client.dart';
 import '../features/characters/data/character_api_client.dart';
 import '../features/client_mode/domain/client_mode.dart';
+import '../features/content/data/content_api_client.dart';
 import '../features/rooms/data/room_api_client.dart';
 import '../features/server_profiles/data/server_discovery_client.dart';
 import '../features/server_profiles/data/server_profile_store.dart';
@@ -21,6 +22,7 @@ class DndTableApp extends StatefulWidget {
     this.authClient,
     this.campaignClient,
     this.characterClient,
+    this.contentClient,
     this.sessionClient,
     super.key,
   });
@@ -32,6 +34,7 @@ class DndTableApp extends StatefulWidget {
   final AuthClient? authClient;
   final CampaignClient? campaignClient;
   final CharacterClient? characterClient;
+  final ContentClient? contentClient;
   final SessionClient? sessionClient;
 
   @override
@@ -60,6 +63,7 @@ class _DndTableAppState extends State<DndTableApp> {
         authClient: widget.authClient ?? AuthApiClient(),
         campaignClient: widget.campaignClient ?? CampaignApiClient(),
         characterClient: widget.characterClient ?? CharacterApiClient(),
+        contentClient: widget.contentClient ?? ContentApiClient(),
         sessionClient: widget.sessionClient ?? SessionApiClient(),
       );
     }
@@ -73,6 +77,7 @@ class _DndTableAppState extends State<DndTableApp> {
       authClient: widget.authClient ?? AuthApiClient(),
       campaignClient: widget.campaignClient ?? CampaignApiClient(),
       characterClient: widget.characterClient ?? CharacterApiClient(),
+      contentClient: widget.contentClient ?? ContentApiClient(),
       sessionClient: widget.sessionClient ?? SessionApiClient(),
     );
   }
@@ -110,6 +115,7 @@ class _DndTableAppState extends State<DndTableApp> {
             authClient: deps.authClient,
             campaignClient: deps.campaignClient,
             characterClient: deps.characterClient,
+            contentClient: deps.contentClient,
             sessionClient: deps.sessionClient,
             modeController: _modeController,
           );
@@ -126,6 +132,7 @@ class _AppDeps {
     required this.authClient,
     required this.campaignClient,
     required this.characterClient,
+    required this.contentClient,
     required this.sessionClient,
   });
 
@@ -134,5 +141,6 @@ class _AppDeps {
   final AuthClient authClient;
   final CampaignClient campaignClient;
   final CharacterClient characterClient;
+  final ContentClient contentClient;
   final SessionClient sessionClient;
 }

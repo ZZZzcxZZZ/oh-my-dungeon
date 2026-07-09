@@ -79,10 +79,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
                   color: Theme.of(context).colorScheme.primary,
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  '登录后管理角色',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
+                Text('登录后管理角色', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
                 const Text(
                   '创建角色卡，之后可绑定到战役并用于跑团桌面。',
@@ -119,10 +116,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24),
-          child: Text(
-            '还没有角色\n点击右下角创建第一张角色卡',
-            textAlign: TextAlign.center,
-          ),
+          child: Text('还没有角色\n点击右下角创建第一张角色卡', textAlign: TextAlign.center),
         ),
       );
     }
@@ -136,6 +130,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
         return _CharacterCard(
           character: character,
           onEdit: () => _showEditDialog(character),
+          onContentRefs: () => _showContentRefsDialog(character),
           onBind: () => _showBindDialog(character),
           onHpDelta: (delta) => _adjustHp(character, delta),
         );
@@ -201,9 +196,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     );
 
     if (!mounted) return;
-    messenger.showSnackBar(
-      SnackBar(content: Text(success ? '角色已创建' : '创建失败')),
-    );
+    messenger.showSnackBar(SnackBar(content: Text(success ? '角色已创建' : '创建失败')));
   }
 
   Future<void> _showEditDialog(CharacterSheet character) async {
@@ -318,9 +311,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     );
 
     if (!mounted) return;
-    messenger.showSnackBar(
-      SnackBar(content: Text(success ? '角色已保存' : '保存失败')),
-    );
+    messenger.showSnackBar(SnackBar(content: Text(success ? '角色已保存' : '保存失败')));
   }
 
   Future<void> _showBindDialog(CharacterSheet character) async {
@@ -331,9 +322,9 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
 
     final campaigns = widget.campaignController.campaigns;
     if (campaigns.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('暂无可绑定战役')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('暂无可绑定战役')));
       return;
     }
 
@@ -387,8 +378,75 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
       campaignId: campaignId,
     );
     if (!mounted) return;
+    messenger.showSnackBar(SnackBar(content: Text(success ? '角色已绑定' : '绑定失败')));
+  }
+
+  Future<void> _showContentRefsDialog(CharacterSheet character) async {
+    final refs = _contentRefsFromCharacter(character);
+    final spellsController = TextEditingController(
+      text: refs.spells.join(', '),
+    );
+    final itemsController = TextEditingController(text: refs.items.join(', '));
+    final featuresController = TextEditingController(
+      text: refs.features.join(', '),
+    );
+    final messenger = ScaffoldMessenger.of(context);
+
+    final result = await showDialog<_ContentRefs>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('内容引用'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: spellsController,
+                decoration: const InputDecoration(labelText: '法术 ID'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: itemsController,
+                decoration: const InputDecoration(labelText: '装备/物品 ID'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: featuresController,
+                decoration: const InputDecoration(labelText: '特性/专长 ID'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(
+                _ContentRefs(
+                  spells: _splitRefs(spellsController.text),
+                  items: _splitRefs(itemsController.text),
+                  features: _splitRefs(featuresController.text),
+                ),
+              ),
+              child: const Text('保存'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == null) return;
+
+    final success = await widget.characterController.updateContentRefs(
+      characterId: character.id,
+      spells: result.spells,
+      items: result.items,
+      features: result.features,
+    );
+    if (!mounted) return;
     messenger.showSnackBar(
-      SnackBar(content: Text(success ? '角色已绑定' : '绑定失败')),
+      SnackBar(content: Text(success ? '内容引用已保存' : '保存失败')),
     );
   }
 
@@ -398,9 +456,9 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
       currentHp: character.currentHp + delta,
     );
     if (!mounted || success) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('HP 调整失败')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('HP 调整失败')));
   }
 }
 
@@ -408,12 +466,14 @@ class _CharacterCard extends StatelessWidget {
   const _CharacterCard({
     required this.character,
     required this.onEdit,
+    required this.onContentRefs,
     required this.onBind,
     required this.onHpDelta,
   });
 
   final CharacterSheet character;
   final VoidCallback onEdit;
+  final VoidCallback onContentRefs;
   final VoidCallback onBind;
   final ValueChanged<int> onHpDelta;
 
@@ -452,14 +512,17 @@ class _CharacterCard extends StatelessWidget {
                 switch (action) {
                   case _CharacterAction.edit:
                     onEdit();
+                  case _CharacterAction.contentRefs:
+                    onContentRefs();
                   case _CharacterAction.bind:
                     onBind();
                 }
               },
               itemBuilder: (context) => const [
+                PopupMenuItem(value: _CharacterAction.edit, child: Text('编辑')),
                 PopupMenuItem(
-                  value: _CharacterAction.edit,
-                  child: Text('编辑'),
+                  value: _CharacterAction.contentRefs,
+                  child: Text('内容引用'),
                 ),
                 PopupMenuItem(
                   value: _CharacterAction.bind,
@@ -474,9 +537,50 @@ class _CharacterCard extends StatelessWidget {
   }
 }
 
-enum _CharacterAction { edit, bind }
+enum _CharacterAction { edit, contentRefs, bind }
 
 String? emptyToNull(String? value) {
   if (value == null || value.isEmpty) return null;
   return value;
+}
+
+class _ContentRefs {
+  const _ContentRefs({
+    required this.spells,
+    required this.items,
+    required this.features,
+  });
+
+  final List<String> spells;
+  final List<String> items;
+  final List<String> features;
+}
+
+_ContentRefs _contentRefsFromCharacter(CharacterSheet character) {
+  final data = character.data;
+  if (data is! Map) {
+    return const _ContentRefs(spells: [], items: [], features: []);
+  }
+  final refs = data['contentRefs'];
+  if (refs is! Map) {
+    return const _ContentRefs(spells: [], items: [], features: []);
+  }
+  return _ContentRefs(
+    spells: _stringList(refs['spells']),
+    items: _stringList(refs['items']),
+    features: _stringList(refs['features']),
+  );
+}
+
+List<String> _stringList(Object? value) {
+  if (value is! List) return const [];
+  return value.whereType<String>().toList(growable: false);
+}
+
+List<String> _splitRefs(String value) {
+  return value
+      .split(',')
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toList(growable: false);
 }

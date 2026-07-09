@@ -22,9 +22,9 @@ void main() {
   testWidgets('shows the server profile empty state', (tester) async {
     await tester.pumpWidget(
       DndTableApp(
-      serverProfileStore: InMemoryServerProfileStore(),
-      authTokenStore: InMemoryAuthTokenStore(),
-    ),
+        serverProfileStore: InMemoryServerProfileStore(),
+        authTokenStore: InMemoryAuthTokenStore(),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -35,9 +35,9 @@ void main() {
   testWidgets('switches client mode from settings', (tester) async {
     await tester.pumpWidget(
       DndTableApp(
-      serverProfileStore: InMemoryServerProfileStore(),
-      authTokenStore: InMemoryAuthTokenStore(),
-    ),
+        serverProfileStore: InMemoryServerProfileStore(),
+        authTokenStore: InMemoryAuthTokenStore(),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -60,10 +60,12 @@ void main() {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
 
-    await tester.pumpWidget(DndTableApp(
-      serverProfileStore: store,
-      authTokenStore: InMemoryAuthTokenStore(),
-    ));
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: InMemoryAuthTokenStore(),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('服务器操作'));
@@ -78,10 +80,12 @@ void main() {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
 
-    await tester.pumpWidget(DndTableApp(
-      serverProfileStore: store,
-      authTokenStore: InMemoryAuthTokenStore(),
-    ));
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: InMemoryAuthTokenStore(),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('服务器操作'));
@@ -100,10 +104,12 @@ void main() {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
 
-    await tester.pumpWidget(DndTableApp(
-      serverProfileStore: store,
-      authTokenStore: InMemoryAuthTokenStore(),
-    ));
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: InMemoryAuthTokenStore(),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('服务器操作'));
@@ -117,7 +123,9 @@ void main() {
     expect(find.text('连接你的跑团服务器'), findsOneWidget);
   });
 
-  testWidgets('opens a saved server profile and shows campaign tab', (tester) async {
+  testWidgets('opens a saved server profile and shows campaign tab', (
+    tester,
+  ) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
     final roomClient = _FakeRoomClient(
@@ -126,10 +134,10 @@ void main() {
 
     await tester.pumpWidget(
       DndTableApp(
-      serverProfileStore: store,
-      authTokenStore: InMemoryAuthTokenStore(),
-      roomClient: roomClient,
-    ),
+        serverProfileStore: store,
+        authTokenStore: InMemoryAuthTokenStore(),
+        roomClient: roomClient,
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -153,10 +161,12 @@ void main() {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
 
-    await tester.pumpWidget(DndTableApp(
-      serverProfileStore: store,
-      authTokenStore: InMemoryAuthTokenStore(),
-    ));
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: InMemoryAuthTokenStore(),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Local Table'));
@@ -170,8 +180,9 @@ void main() {
     expect(find.text('当前模式：DM'), findsOneWidget);
   });
 
-  testWidgets('shows login prompt on table tab when not authenticated',
-      (tester) async {
+  testWidgets('shows login prompt on table tab when not authenticated', (
+    tester,
+  ) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
 
@@ -213,6 +224,29 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('登录后管理角色'), findsOneWidget);
+  });
+
+  testWidgets('shows a content library tab in the main shell', (tester) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: InMemoryAuthTokenStore(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('资料库'), findsOneWidget);
+
+    await tester.tap(find.text('资料库'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('登录后查看资料库'), findsOneWidget);
   });
 }
 

@@ -4,14 +4,14 @@
 
 ## 当前状态
 
-v0.5 角色卡基础版已完成。玩家可以创建、编辑、维护角色卡，进行 HP 快速调整，并把角色绑定到战役；DM/主持人可以在战役详情中查看战役角色并调整 HP，角色变更会写入 JournalEntry。客户端保持 Material 3 底部导航结构：战役 / 角色 / 桌面 / 设置。
+v0.6 内容库 MVP 已完成。DM 可以导入 JSON 内容包、查看校验错误、为战役启用内容包并禁用单条内容；玩家可以在当前战役资料库中查询可用法术、装备、专长、怪物和状态。角色卡支持保存轻量 `contentRefs`，为后续自动完成和快捷动作打基础。客户端保持 Material 3 底部导航结构：战役 / 角色 / 资料库（DM 模式为内容库）/ 桌面 / 设置。
 
 - Monorepo 基础结构
 - Flutter 客户端骨架（Material 3 + 底部导航）
 - NestJS 服务端骨架
 - `/health`
 - `/.well-known/dnd-tool-server`
-- Prisma schema（User / ServerAdmin / RefreshToken / ServerSetting / Campaign / CampaignMember / CampaignInvite / Session / SessionMember / ChatMessage / DiceRoll / JournalEntry / Character / CharacterCampaignBinding）
+- Prisma schema（User / ServerAdmin / RefreshToken / ServerSetting / Campaign / CampaignMember / CampaignInvite / Session / SessionMember / ChatMessage / DiceRoll / JournalEntry / Character / CharacterCampaignBinding / ContentPackage / ContentItem / CampaignContentPackage / ContentOverride）
 - Docker Compose 配置
 - GitHub Actions CI 配置
 - 服务端与客户端基础测试
@@ -29,6 +29,8 @@ v0.5 角色卡基础版已完成。玩家可以创建、编辑、维护角色卡
 - 客户端 Session 桌面：聊天时间线 + 掷骰输入 + 在线成员 + socket.io 实时连接
 - 服务端角色 API：创建 / 编辑 / 自有角色列表 / 角色绑定战役 / 战役角色列表 / 战役角色 HP 调整
 - 客户端角色入口：Material 3 底部导航“角色”页、基础创建/编辑、战役绑定和 HP 快捷调整
+- 服务端内容库 API：内容包 dry-run 校验 / 导入 / 条目查询 / 战役启用内容包 / 单条内容禁用 / 战役可用内容查询
+- 客户端资料库入口：Material 3 “资料库/内容库”页、JSON 导入校验、内容包启用、战役内容查询
 
 当前执行状态见 [当前执行状态与版本推进计划](docs/roadmap/current-execution-status.md)。
 

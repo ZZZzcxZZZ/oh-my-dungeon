@@ -125,18 +125,15 @@ void main() {
       expect(captured?.method, 'POST');
       expect(captured?.url.toString(), '$_apiBaseUrl/characters');
       expect(captured?.headers['authorization'], 'Bearer $_accessToken');
-      expect(
-        jsonDecode(captured!.body),
-        {
-          'name': 'Arannis',
-          'level': 3,
-          'classSummary': 'Ranger',
-          'raceSummary': 'Elf',
-          'currentHp': 24,
-          'maxHp': 24,
-          'armorClass': 15,
-        },
-      );
+      expect(jsonDecode(captured!.body), {
+        'name': 'Arannis',
+        'level': 3,
+        'classSummary': 'Ranger',
+        'raceSummary': 'Elf',
+        'currentHp': 24,
+        'maxHp': 24,
+        'armorClass': 15,
+      });
       expect(result, _character);
     });
   });
@@ -169,7 +166,10 @@ void main() {
       final client = CharacterApiClient(
         httpClient: MockClient((request) async {
           captured = request;
-          return http.Response(jsonEncode({..._characterJson, 'level': 4}), 200);
+          return http.Response(
+            jsonEncode({..._characterJson, 'level': 4}),
+            200,
+          );
         }),
       );
 
@@ -183,11 +183,41 @@ void main() {
 
       expect(captured?.method, 'PATCH');
       expect(captured?.url.toString(), '$_apiBaseUrl/characters/char-1');
-      expect(jsonDecode(captured!.body), {
-        'campaignId': 'camp-1',
-        'level': 4,
-      });
+      expect(jsonDecode(captured!.body), {'campaignId': 'camp-1', 'level': 4});
       expect(result.level, 4);
+    });
+
+    test('sends content refs in character data', () async {
+      http.Request? captured;
+      final client = CharacterApiClient(
+        httpClient: MockClient((request) async {
+          captured = request;
+          return http.Response(jsonEncode(_characterJson), 200);
+        }),
+      );
+
+      await client.updateCharacter(
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: _accessToken,
+        characterId: 'char-1',
+        data: {
+          'contentRefs': {
+            'spells': ['item-spell-1'],
+            'items': ['item-gear-1'],
+            'features': ['item-feature-1'],
+          },
+        },
+      );
+
+      expect(jsonDecode(captured!.body), {
+        'data': {
+          'contentRefs': {
+            'spells': ['item-spell-1'],
+            'items': ['item-gear-1'],
+            'features': ['item-feature-1'],
+          },
+        },
+      });
     });
   });
 

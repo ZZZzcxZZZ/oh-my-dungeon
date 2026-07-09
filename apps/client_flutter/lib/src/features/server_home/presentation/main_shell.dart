@@ -10,6 +10,9 @@ import '../../../features/characters/data/character_api_client.dart';
 import '../../../features/characters/presentation/character_controller.dart';
 import '../../../features/characters/presentation/characters_tab_page.dart';
 import '../../../features/client_mode/domain/client_mode.dart';
+import '../../../features/content/data/content_api_client.dart';
+import '../../../features/content/presentation/content_controller.dart';
+import '../../../features/content/presentation/content_library_page.dart';
 import '../../../features/rooms/data/room_api_client.dart';
 import '../../../features/server_profiles/domain/server_profile.dart';
 import '../../../features/sessions/data/session_api_client.dart';
@@ -21,9 +24,8 @@ import 'table_tab_page.dart';
 
 /// Bottom-navigation shell shown after a server profile is selected.
 ///
-/// Three tabs: 战役 (Campaigns), 桌面 (Table), 设置 (Settings).
-/// Each tab owns its own page widget; the shell preserves state via
-/// [IndexedStack] so switching tabs does not reload data.
+/// The shell preserves tab state via [IndexedStack] so switching tabs does not
+/// reload data.
 class MainShell extends StatefulWidget {
   const MainShell({
     required this.profile,
@@ -33,6 +35,7 @@ class MainShell extends StatefulWidget {
     required this.authClient,
     required this.campaignClient,
     required this.characterClient,
+    required this.contentClient,
     required this.sessionClient,
     super.key,
   });
@@ -44,6 +47,7 @@ class MainShell extends StatefulWidget {
   final AuthClient authClient;
   final CampaignClient campaignClient;
   final CharacterClient characterClient;
+  final ContentClient contentClient;
   final SessionClient sessionClient;
 
   @override
@@ -54,6 +58,7 @@ class _MainShellState extends State<MainShell> {
   late final AuthController _authController;
   late final CampaignController _campaignController;
   late final CharacterController _characterController;
+  late final ContentController _contentController;
   late final SessionController _sessionController;
   late final SessionSocketService _socketService;
   int _currentIndex = 0;
@@ -61,6 +66,7 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
+    widget.modeController.addListener(_onModeChanged);
     _authController = AuthController(
       tokenStore: widget.authTokenStore,
       authClient: widget.authClient,
@@ -77,6 +83,11 @@ class _MainShellState extends State<MainShell> {
       authController: _authController,
       characterClient: widget.characterClient,
     );
+    _contentController = ContentController(
+      apiBaseUrl: widget.profile.apiBaseUrl,
+      authController: _authController,
+      contentClient: widget.contentClient,
+    );
     _sessionController = SessionController(
       apiBaseUrl: widget.profile.apiBaseUrl,
       authController: _authController,
@@ -87,12 +98,18 @@ class _MainShellState extends State<MainShell> {
 
   @override
   void dispose() {
+    widget.modeController.removeListener(_onModeChanged);
     _socketService.disconnect();
     _sessionController.dispose();
+    _contentController.dispose();
     _characterController.dispose();
     _campaignController.dispose();
     _authController.dispose();
     super.dispose();
+  }
+
+  void _onModeChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -111,6 +128,12 @@ class _MainShellState extends State<MainShell> {
             authController: _authController,
             characterController: _characterController,
             campaignController: _campaignController,
+          ),
+          ContentLibraryPage(
+            authController: _authController,
+            campaignController: _campaignController,
+            contentController: _contentController,
+            modeController: widget.modeController,
           ),
           TableTabPage(
             profile: widget.profile,
@@ -131,23 +154,30 @@ class _MainShellState extends State<MainShell> {
         onDestinationSelected: (index) {
           setState(() => _currentIndex = index);
         },
-        destinations: const [
-          NavigationDestination(
+        destinations: [
+          const NavigationDestination(
             icon: Icon(Icons.castle_outlined),
             selectedIcon: Icon(Icons.castle),
             label: '战役',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.badge_outlined),
             selectedIcon: Icon(Icons.badge),
             label: '角色',
           ),
           NavigationDestination(
+            icon: const Icon(Icons.menu_book_outlined),
+            selectedIcon: const Icon(Icons.menu_book),
+            label: widget.modeController.mode == ClientMode.dungeonMaster
+                ? '内容库'
+                : '资料库',
+          ),
+          const NavigationDestination(
             icon: Icon(Icons.table_restaurant_outlined),
             selectedIcon: Icon(Icons.table_restaurant),
             label: '桌面',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.settings_outlined),
             selectedIcon: Icon(Icons.settings),
             label: '设置',

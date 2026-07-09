@@ -18,9 +18,9 @@
 
 ## 2. 当前阶段
 
-当前项目已完成 v0.5 角色卡基础版。后续开发必须先阅读 `docs/roadmap/current-execution-status.md`，再按 `docs/roadmap/mvp-roadmap.md` 的版本闸门推进。
+当前项目已完成 v0.6 内容库 MVP。后续开发必须先阅读 `docs/roadmap/current-execution-status.md`，再按 `docs/roadmap/mvp-roadmap.md` 的版本闸门推进。
 
-v0.4 已用正式 `Session` / `DiceRoll` / `ChatMessage` / `JournalEntry` 模型替换了 `rooms` 原型。`/api/rooms` 与客户端 rooms 页面保留为冻结资产，待后续版本下线，不要再在其上扩展业务功能。v0.5 已新增 `Character` / `CharacterCampaignBinding`，并完成角色创建、编辑、战役绑定、DM 战役角色视图、HP 快捷调整和角色变更 JournalEntry。下一步进入 v0.6 内容库 MVP。
+v0.4 已用正式 `Session` / `DiceRoll` / `ChatMessage` / `JournalEntry` 模型替换了 `rooms` 原型。`/api/rooms` 与客户端 rooms 页面保留为冻结资产，待后续版本下线，不要再在其上扩展业务功能。v0.5 已新增 `Character` / `CharacterCampaignBinding`，并完成角色创建、编辑、战役绑定、DM 战役角色视图、HP 快捷调整和角色变更 JournalEntry。v0.6 已新增内容库模型与资料库入口，完成 JSON 内容包 dry-run 校验、导入、战役启用/禁用和玩家可用内容查询。下一步进入 v0.7 DM 控场基础版。
 
 ## 3. 实施原则
 

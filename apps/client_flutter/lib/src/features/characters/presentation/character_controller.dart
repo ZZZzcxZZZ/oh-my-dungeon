@@ -69,6 +69,7 @@ class CharacterController extends ChangeNotifier {
     int? maxHp,
     int? armorClass,
     int? speed,
+    Object? data,
   }) async {
     final token = accessToken;
     if (token == null) return false;
@@ -86,6 +87,7 @@ class CharacterController extends ChangeNotifier {
         maxHp: maxHp,
         armorClass: armorClass,
         speed: speed,
+        data: data,
       );
       _characters = [..._characters, character];
       notifyListeners();
@@ -108,6 +110,7 @@ class CharacterController extends ChangeNotifier {
     int? maxHp,
     int? armorClass,
     int? speed,
+    Object? data,
   }) async {
     final token = accessToken;
     if (token == null) return false;
@@ -127,6 +130,7 @@ class CharacterController extends ChangeNotifier {
         maxHp: maxHp,
         armorClass: armorClass,
         speed: speed,
+        data: data,
       );
       _replaceCharacter(character);
       notifyListeners();
@@ -160,6 +164,20 @@ class CharacterController extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  Future<bool> updateContentRefs({
+    required String characterId,
+    List<String> spells = const [],
+    List<String> items = const [],
+    List<String> features = const [],
+  }) {
+    return updateCharacter(
+      characterId: characterId,
+      data: {
+        'contentRefs': {'spells': spells, 'items': items, 'features': features},
+      },
+    );
   }
 
   Future<bool> adjustCampaignCharacterHp({

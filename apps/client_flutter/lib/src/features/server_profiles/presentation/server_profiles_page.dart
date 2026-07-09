@@ -4,6 +4,7 @@ import '../../auth/data/auth_api_client.dart';
 import '../../auth/data/auth_token_store.dart';
 import '../../campaigns/data/campaign_api_client.dart';
 import '../../characters/data/character_api_client.dart';
+import '../../check_requests/data/check_request_api_client.dart';
 import '../../client_mode/domain/client_mode.dart';
 import '../../content/data/content_api_client.dart';
 import '../../encounters/data/encounter_api_client.dart';
@@ -25,6 +26,7 @@ class ServerProfilesPage extends StatefulWidget {
     required this.authClient,
     required this.campaignClient,
     required this.characterClient,
+    required this.checkRequestClient,
     required this.contentClient,
     required this.encounterClient,
     required this.sessionClient,
@@ -39,6 +41,7 @@ class ServerProfilesPage extends StatefulWidget {
   final AuthClient authClient;
   final CampaignClient campaignClient;
   final CharacterClient characterClient;
+  final CheckRequestClient checkRequestClient;
   final ContentClient contentClient;
   final EncounterClient encounterClient;
   final SessionClient sessionClient;
@@ -342,6 +345,7 @@ class _ServerProfilesPageState extends State<ServerProfilesPage> {
                               authClient: widget.authClient,
                               campaignClient: widget.campaignClient,
                               characterClient: widget.characterClient,
+                              checkRequestClient: widget.checkRequestClient,
                               contentClient: widget.contentClient,
                               encounterClient: widget.encounterClient,
                               sessionClient: widget.sessionClient,

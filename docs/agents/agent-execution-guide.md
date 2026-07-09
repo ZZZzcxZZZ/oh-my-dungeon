@@ -18,9 +18,9 @@
 
 ## 2. 当前阶段
 
-当前项目已完成 v0.7 DM 控场基础版。后续开发必须先阅读 `docs/roadmap/current-execution-status.md`，再按 `docs/roadmap/mvp-roadmap.md` 的版本闸门推进。
+当前项目已完成 v0.8 检定请求与快捷动作。后续开发必须先阅读 `docs/roadmap/current-execution-status.md`，再按 `docs/roadmap/mvp-roadmap.md` 的版本闸门推进。
 
-v0.4 已用正式 `Session` / `DiceRoll` / `ChatMessage` / `JournalEntry` 模型替换了 `rooms` 原型。`/api/rooms` 与客户端 rooms 页面保留为冻结资产，待后续版本下线，不要再在其上扩展业务功能。v0.5 已新增 `Character` / `CharacterCampaignBinding`，并完成角色创建、编辑、战役绑定、DM 战役角色视图、HP 快捷调整和角色变更 JournalEntry。v0.6 已新增内容库模型与资料库入口，完成 JSON 内容包 dry-run 校验、导入、战役启用/禁用和玩家可用内容查询。v0.7 已新增 NPC、Encounter、EncounterParticipant 与 DM 桌面控场入口，完成遭遇创建、参战者管理、开始/推进/结束、HP 快捷调整和 JournalEntry 记录。下一步进入 v0.8 检定请求与快捷动作。
+v0.4 已用正式 `Session` / `DiceRoll` / `ChatMessage` / `JournalEntry` 模型替换了 `rooms` 原型。`/api/rooms` 与客户端 rooms 页面保留为冻结资产，待后续版本下线，不要再在其上扩展业务功能。v0.5 已新增 `Character` / `CharacterCampaignBinding`，并完成角色创建、编辑、战役绑定、DM 战役角色视图、HP 快捷调整和角色变更 JournalEntry。v0.6 已新增内容库模型与资料库入口，完成 JSON 内容包 dry-run 校验、导入、战役启用/禁用和玩家可用内容查询。v0.7 已新增 NPC、Encounter、EncounterParticipant 与 DM 桌面控场入口，完成遭遇创建、参战者管理、开始/推进/结束、HP 快捷调整和 JournalEntry 记录。v0.8 已新增 CheckRequest / CheckResponse 与场次检定请求入口，完成 DM 发起、玩家响应、目标过滤、关闭请求，以及结果写入 ChatMessage / DiceRoll / JournalEntry。下一步进入 v1.0 自托管公测版。
 
 ## 3. 实施原则
 

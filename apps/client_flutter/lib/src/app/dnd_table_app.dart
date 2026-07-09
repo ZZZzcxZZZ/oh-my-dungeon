@@ -5,6 +5,7 @@ import '../features/auth/data/auth_api_client.dart';
 import '../features/auth/data/auth_token_store.dart';
 import '../features/campaigns/data/campaign_api_client.dart';
 import '../features/characters/data/character_api_client.dart';
+import '../features/check_requests/data/check_request_api_client.dart';
 import '../features/client_mode/domain/client_mode.dart';
 import '../features/content/data/content_api_client.dart';
 import '../features/encounters/data/encounter_api_client.dart';
@@ -23,6 +24,7 @@ class DndTableApp extends StatefulWidget {
     this.authClient,
     this.campaignClient,
     this.characterClient,
+    this.checkRequestClient,
     this.contentClient,
     this.encounterClient,
     this.sessionClient,
@@ -37,6 +39,7 @@ class DndTableApp extends StatefulWidget {
   final AuthClient? authClient;
   final CampaignClient? campaignClient;
   final CharacterClient? characterClient;
+  final CheckRequestClient? checkRequestClient;
   final ContentClient? contentClient;
   final EncounterClient? encounterClient;
   final SessionClient? sessionClient;
@@ -70,6 +73,8 @@ class _DndTableAppState extends State<DndTableApp> {
         authClient: widget.authClient ?? AuthApiClient(),
         campaignClient: widget.campaignClient ?? CampaignApiClient(),
         characterClient: widget.characterClient ?? CharacterApiClient(),
+        checkRequestClient:
+            widget.checkRequestClient ?? CheckRequestApiClient(),
         contentClient: widget.contentClient ?? ContentApiClient(),
         encounterClient: widget.encounterClient ?? EncounterApiClient(),
         sessionClient: widget.sessionClient ?? SessionApiClient(),
@@ -85,6 +90,7 @@ class _DndTableAppState extends State<DndTableApp> {
       authClient: widget.authClient ?? AuthApiClient(),
       campaignClient: widget.campaignClient ?? CampaignApiClient(),
       characterClient: widget.characterClient ?? CharacterApiClient(),
+      checkRequestClient: widget.checkRequestClient ?? CheckRequestApiClient(),
       contentClient: widget.contentClient ?? ContentApiClient(),
       encounterClient: widget.encounterClient ?? EncounterApiClient(),
       sessionClient: widget.sessionClient ?? SessionApiClient(),
@@ -126,6 +132,7 @@ class _DndTableAppState extends State<DndTableApp> {
             authClient: deps.authClient,
             campaignClient: deps.campaignClient,
             characterClient: deps.characterClient,
+            checkRequestClient: deps.checkRequestClient,
             contentClient: deps.contentClient,
             encounterClient: deps.encounterClient,
             sessionClient: deps.sessionClient,
@@ -144,6 +151,7 @@ class _AppDeps {
     required this.authClient,
     required this.campaignClient,
     required this.characterClient,
+    required this.checkRequestClient,
     required this.contentClient,
     required this.encounterClient,
     required this.sessionClient,
@@ -154,6 +162,7 @@ class _AppDeps {
   final AuthClient authClient;
   final CampaignClient campaignClient;
   final CharacterClient characterClient;
+  final CheckRequestClient checkRequestClient;
   final ContentClient contentClient;
   final EncounterClient encounterClient;
   final SessionClient sessionClient;

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../features/auth/presentation/auth_controller.dart';
 import '../../../features/campaigns/domain/campaign.dart';
 import '../../../features/campaigns/presentation/campaign_controller.dart';
+import '../../../features/check_requests/presentation/check_request_controller.dart';
 import '../../../features/client_mode/domain/client_mode.dart';
 import '../../../features/encounters/domain/encounter.dart';
 import '../../../features/encounters/presentation/encounter_controller.dart';
@@ -22,6 +23,7 @@ class TableTabPage extends StatefulWidget {
     required this.authController,
     required this.campaignController,
     required this.sessionController,
+    required this.checkRequestController,
     required this.encounterController,
     required this.socketService,
     required this.modeController,
@@ -32,6 +34,7 @@ class TableTabPage extends StatefulWidget {
   final AuthController authController;
   final CampaignController campaignController;
   final SessionController sessionController;
+  final CheckRequestController checkRequestController;
   final EncounterController encounterController;
   final SessionSocketService socketService;
   final ClientModeController modeController;
@@ -296,6 +299,7 @@ class _TableTabPageState extends State<TableTabPage> {
           profile: widget.profile,
           authController: widget.authController,
           sessionController: widget.sessionController,
+          checkRequestController: widget.checkRequestController,
           socketService: widget.socketService,
         ),
       ),

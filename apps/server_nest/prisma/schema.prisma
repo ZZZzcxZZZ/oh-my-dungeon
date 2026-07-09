@@ -36,6 +36,8 @@ model User {
   characters          Character[]
   characterBindings   CharacterCampaignBinding[]
   contentPackages     ContentPackage[]
+  checkRequests       CheckRequest[]
+  checkResponses      CheckResponse[]
 }
 
 model ServerAdmin {
@@ -121,6 +123,7 @@ model Session {
   rolls      DiceRoll[]
   journal    JournalEntry[]
   encounters Encounter[]
+  checks     CheckRequest[]
 }
 
 model SessionMember {
@@ -273,6 +276,51 @@ model Character {
   owner                 User                       @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
   campaignBindings      CharacterCampaignBinding[]
   encounterParticipants EncounterParticipant[]
+  checkResponses        CheckResponse[]
+}
+
+model CheckRequest {
+  id                 String          @id @default(uuid())
+  sessionId          String
+  requestedBy        String
+  label              String
+  checkType          String          @default("skill")
+  ability            String?
+  skill              String?
+  dc                 Int?
+  dcVisibility       String          @default("public")
+  targetMode         String          @default("all")
+  targetUserIds      Json            @default("[]")
+  targetCharacterIds Json            @default("[]")
+  status             String          @default("open")
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  session            Session         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  requester          User            @relation(fields: [requestedBy], references: [id], onDelete: Cascade)
+  responses          CheckResponse[]
+
+  @@index([sessionId])
+  @@index([requestedBy])
+}
+
+model CheckResponse {
+  id          String       @id @default(uuid())
+  requestId   String
+  responderId String
+  characterId String?
+  notation    String
+  total       Int
+  components  Json
+  result      String       @default("unknown")
+  createdAt   DateTime     @default(now())
+  request     CheckRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  responder   User         @relation(fields: [responderId], references: [id], onDelete: Cascade)
+  character   Character?   @relation(fields: [characterId], references: [id], onDelete: SetNull)
+
+  @@unique([requestId, responderId])
+  @@index([requestId])
+  @@index([responderId])
+  @@index([characterId])
 }
 
 model Npc {

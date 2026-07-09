@@ -4,14 +4,14 @@
 
 ## 当前状态
 
-v0.7 DM 控场基础版已完成。DM 可以创建 NPC 与遭遇、把角色或 NPC 加入先攻队列、开始遭遇、推进回合、结束遭遇、调整参战者 HP/状态并控制玩家可见性；关键战斗动作会写入 `JournalEntry`。客户端保持 Material 3 底部导航结构：战役 / 角色 / 资料库（DM 模式为内容库）/ 桌面 / 设置，桌面页在 DM 模式下提供“场次 / 控场”页签。
+v0.8 检定请求与快捷动作已完成。DM 可以在场次中发起检定请求，玩家可以一键响应并由服务端掷骰，结果进入聊天、骰子历史和 `JournalEntry`；v0.7 的 DM 控场基础也已完成。客户端保持 Material 3 底部导航结构：战役 / 角色 / 资料库（DM 模式为内容库）/ 桌面 / 设置，桌面页在 DM 模式下提供“场次 / 控场”页签，场次详情页提供检定请求区域。
 
 - Monorepo 基础结构
 - Flutter 客户端骨架（Material 3 + 底部导航）
 - NestJS 服务端骨架
 - `/health`
 - `/.well-known/dnd-tool-server`
-- Prisma schema（User / ServerAdmin / RefreshToken / ServerSetting / Campaign / CampaignMember / CampaignInvite / Session / SessionMember / ChatMessage / DiceRoll / JournalEntry / Character / CharacterCampaignBinding / ContentPackage / ContentItem / CampaignContentPackage / ContentOverride / Npc / Encounter / EncounterParticipant）
+- Prisma schema（User / ServerAdmin / RefreshToken / ServerSetting / Campaign / CampaignMember / CampaignInvite / Session / SessionMember / ChatMessage / DiceRoll / JournalEntry / Character / CharacterCampaignBinding / ContentPackage / ContentItem / CampaignContentPackage / ContentOverride / Npc / Encounter / EncounterParticipant / CheckRequest / CheckResponse）
 - Docker Compose 配置
 - GitHub Actions CI 配置
 - 服务端与客户端基础测试
@@ -33,6 +33,8 @@ v0.7 DM 控场基础版已完成。DM 可以创建 NPC 与遭遇、把角色或 
 - 客户端资料库入口：Material 3 “资料库/内容库”页、JSON 导入校验、内容包启用、战役内容查询
 - 服务端 DM 控场 API：NPC、Encounter、EncounterParticipant、开始/推进/结束遭遇、HP/状态/可见性更新与 JournalEntry 记录
 - 客户端桌面控场入口：DM 模式下提供遭遇列表、创建遭遇、当前遭遇、开始/下一回合/结束、参战者 HP 快捷调整
+- 服务端检定请求 API：DM 发起检定请求、玩家响应、重复响应保护、目标可见性过滤、关闭请求、结果写入 ChatMessage / DiceRoll / JournalEntry
+- 客户端场次检定入口：Session 详情页显示检定请求、DM 发起、玩家输入修正值响应、DM 查看提交数并关闭请求
 
 当前执行状态见 [当前执行状态与版本推进计划](docs/roadmap/current-execution-status.md)。
 

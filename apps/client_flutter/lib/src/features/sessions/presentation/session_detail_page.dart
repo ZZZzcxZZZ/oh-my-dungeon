@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../features/auth/presentation/auth_controller.dart';
+import '../../../features/check_requests/domain/check_request.dart';
+import '../../../features/check_requests/presentation/check_request_controller.dart';
 import '../../../features/server_profiles/domain/server_profile.dart';
 import '../data/session_socket_service.dart';
 import '../domain/session.dart';
@@ -17,6 +19,7 @@ class SessionDetailPage extends StatefulWidget {
     required this.profile,
     required this.authController,
     required this.sessionController,
+    required this.checkRequestController,
     this.socketService,
     super.key,
   });
@@ -24,6 +27,7 @@ class SessionDetailPage extends StatefulWidget {
   final ServerProfile profile;
   final AuthController authController;
   final SessionController sessionController;
+  final CheckRequestController checkRequestController;
   final SessionSocketService? socketService;
 
   @override
@@ -38,6 +42,7 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
 
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
+  bool _requestedCheckLoad = false;
 
   @override
   void initState() {
@@ -100,6 +105,7 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
       animation: Listenable.merge([
         widget.authController,
         widget.sessionController,
+        widget.checkRequestController,
       ]),
       builder: (context, _) {
         final session = widget.sessionController.activeSession;
@@ -119,6 +125,12 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
             ),
           );
         }
+        if (!_requestedCheckLoad) {
+          _requestedCheckLoad = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            widget.checkRequestController.loadCheckRequests(session.id);
+          });
+        }
 
         return Scaffold(
           appBar: AppBar(
@@ -136,12 +148,88 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
           ),
           body: Column(
             children: [
+              _buildCheckRequestStrip(context, session),
               Expanded(child: _buildTimeline(context)),
               _buildInputBar(context),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildCheckRequestStrip(BuildContext context, Session session) {
+    final controller = widget.checkRequestController;
+    final requests = controller.requests;
+    final isManager = widget.sessionController.isManager;
+    if (!isManager && requests.isEmpty && !controller.isLoading) {
+      return const SizedBox.shrink();
+    }
+
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.fact_check_outlined, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '检定请求',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                if (controller.isLoading)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                if (isManager) ...[
+                  const SizedBox(width: 8),
+                  FilledButton.tonalIcon(
+                    onPressed: () => _showCreateCheckRequestDialog(session.id),
+                    icon: const Icon(Icons.add),
+                    label: const Text('发起'),
+                  ),
+                ],
+              ],
+            ),
+            if (controller.error != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                controller.error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            if (requests.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 112,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: requests.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    return _CheckRequestCard(
+                      request: requests[index],
+                      isManager: isManager,
+                      currentUserId: widget.authController.user?.id,
+                      onRespond: _showRespondToCheckDialog,
+                      onClose: controller.closeCheckRequest,
+                    );
+                  },
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
@@ -351,6 +439,119 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
     );
   }
 
+  Future<void> _showCreateCheckRequestDialog(String sessionId) async {
+    final labelController = TextEditingController(text: 'Perception');
+    final dcController = TextEditingController(text: '15');
+    String dcVisibility = 'public';
+
+    final result = await showDialog<Map<String, Object?>>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('发起检定'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: labelController,
+                    decoration: const InputDecoration(labelText: '名称'),
+                    autofocus: true,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: dcController,
+                    decoration: const InputDecoration(labelText: 'DC'),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 12),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'public', label: Text('公开 DC')),
+                      ButtonSegment(value: 'hidden', label: Text('隐藏 DC')),
+                    ],
+                    selected: {dcVisibility},
+                    onSelectionChanged: (selection) {
+                      setDialogState(() => dcVisibility = selection.single);
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop({
+                    'label': labelController.text.trim(),
+                    'dc': int.tryParse(dcController.text.trim()),
+                    'dcVisibility': dcVisibility,
+                  }),
+                  child: const Text('发起'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == null) return;
+    final label = result['label'] as String?;
+    if (label == null || label.isEmpty) return;
+
+    await widget.checkRequestController.createCheckRequest(
+      sessionId: sessionId,
+      label: label,
+      checkType: 'skill',
+      skill: label.toLowerCase(),
+      dc: result['dc'] as int?,
+      dcVisibility: result['dcVisibility'] as String?,
+      targetMode: 'all',
+    );
+  }
+
+  Future<void> _showRespondToCheckDialog(CheckRequest request) async {
+    final modifierController = TextEditingController(text: '0');
+    final actorName = widget.authController.user?.username ?? '玩家';
+
+    final modifier = await showDialog<int>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('响应 ${request.label}'),
+          content: TextField(
+            controller: modifierController,
+            decoration: const InputDecoration(labelText: '修正值'),
+            keyboardType: TextInputType.number,
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(
+                context,
+              ).pop(int.tryParse(modifierController.text.trim()) ?? 0),
+              child: const Text('掷骰'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (modifier == null) return;
+    await widget.checkRequestController.respondToCheckRequest(
+      requestId: request.id,
+      actorName: actorName,
+      modifier: modifier,
+    );
+  }
+
   void _showMembersSheet(BuildContext context, Session session) {
     final members = session.members;
     showModalBottomSheet<void>(
@@ -394,6 +595,86 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
       'player' => '玩家',
       _ => role,
     };
+  }
+}
+
+class _CheckRequestCard extends StatelessWidget {
+  const _CheckRequestCard({
+    required this.request,
+    required this.isManager,
+    required this.currentUserId,
+    required this.onRespond,
+    required this.onClose,
+  });
+
+  final CheckRequest request;
+  final bool isManager;
+  final String? currentUserId;
+  final ValueChanged<CheckRequest> onRespond;
+  final ValueChanged<String> onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final myResponse = request.responses
+        .where((response) => response.responderId == currentUserId)
+        .firstOrNull;
+    final isOpen = request.status == 'open';
+
+    return SizedBox(
+      width: 260,
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      request.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
+                  Chip(
+                    label: Text(isOpen ? '进行中' : '已关闭'),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+              Text(
+                request.dc == null ? 'DC 隐藏' : 'DC ${request.dc}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const Spacer(),
+              if (isManager)
+                Row(
+                  children: [
+                    Expanded(child: Text('已提交 ${request.responses.length}')),
+                    TextButton(
+                      onPressed: isOpen ? () => onClose(request.id) : null,
+                      child: const Text('关闭'),
+                    ),
+                  ],
+                )
+              else if (myResponse != null)
+                Text('结果 ${myResponse.total} · ${myResponse.result}')
+              else
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton(
+                    onPressed: isOpen ? () => onRespond(request) : null,
+                    child: const Text('响应'),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

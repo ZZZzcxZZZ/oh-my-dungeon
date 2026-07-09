@@ -9,6 +9,8 @@ import '../../../features/campaigns/presentation/campaigns_tab_page.dart';
 import '../../../features/characters/data/character_api_client.dart';
 import '../../../features/characters/presentation/character_controller.dart';
 import '../../../features/characters/presentation/characters_tab_page.dart';
+import '../../../features/check_requests/data/check_request_api_client.dart';
+import '../../../features/check_requests/presentation/check_request_controller.dart';
 import '../../../features/client_mode/domain/client_mode.dart';
 import '../../../features/content/data/content_api_client.dart';
 import '../../../features/content/presentation/content_controller.dart';
@@ -37,6 +39,7 @@ class MainShell extends StatefulWidget {
     required this.authClient,
     required this.campaignClient,
     required this.characterClient,
+    required this.checkRequestClient,
     required this.contentClient,
     required this.encounterClient,
     required this.sessionClient,
@@ -50,6 +53,7 @@ class MainShell extends StatefulWidget {
   final AuthClient authClient;
   final CampaignClient campaignClient;
   final CharacterClient characterClient;
+  final CheckRequestClient checkRequestClient;
   final ContentClient contentClient;
   final EncounterClient encounterClient;
   final SessionClient sessionClient;
@@ -62,6 +66,7 @@ class _MainShellState extends State<MainShell> {
   late final AuthController _authController;
   late final CampaignController _campaignController;
   late final CharacterController _characterController;
+  late final CheckRequestController _checkRequestController;
   late final ContentController _contentController;
   late final EncounterController _encounterController;
   late final SessionController _sessionController;
@@ -88,6 +93,11 @@ class _MainShellState extends State<MainShell> {
       authController: _authController,
       characterClient: widget.characterClient,
     );
+    _checkRequestController = CheckRequestController(
+      apiBaseUrl: widget.profile.apiBaseUrl,
+      authController: _authController,
+      checkRequestClient: widget.checkRequestClient,
+    );
     _contentController = ContentController(
       apiBaseUrl: widget.profile.apiBaseUrl,
       authController: _authController,
@@ -113,6 +123,7 @@ class _MainShellState extends State<MainShell> {
     _sessionController.dispose();
     _encounterController.dispose();
     _contentController.dispose();
+    _checkRequestController.dispose();
     _characterController.dispose();
     _campaignController.dispose();
     _authController.dispose();
@@ -151,6 +162,7 @@ class _MainShellState extends State<MainShell> {
             authController: _authController,
             campaignController: _campaignController,
             sessionController: _sessionController,
+            checkRequestController: _checkRequestController,
             encounterController: _encounterController,
             socketService: _socketService,
             modeController: widget.modeController,

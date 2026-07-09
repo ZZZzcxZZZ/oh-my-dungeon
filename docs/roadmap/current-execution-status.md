@@ -13,6 +13,7 @@
 5. `v0.5 角色卡基础版` 已完成，执行计划见 `docs/roadmap/v0.5-execution-plan.md`。
 6. `v0.6 内容库 MVP` 已完成，执行计划见 `docs/roadmap/v0.6-execution-plan.md`。
 7. `v0.7 DM 控场基础版` 已完成，执行计划见 `docs/roadmap/v0.7-execution-plan.md`。
+8. `v0.8 检定请求与快捷动作` 已完成，执行计划见 `docs/roadmap/v0.8-execution-plan.md`。
 
 ## 已完成代码状态
 
@@ -290,6 +291,26 @@ docs(v0.2): update account setup guide
 8. 修复已登录恢复后桌面页可能不补拉战役列表的问题。
 9. v0.7 封版验证：`npm run doctor` 全绿；服务端 16 套件 / 217 测试通过，客户端 101 测试通过，Flutter analyze 无问题。
 
+### v0.8 检定请求与快捷动作（已完成）
+
+目标：让跑团桌面具备“DM 发起检定，玩家一键响应，结果进入聊天与日志”的基础闭环。
+
+已完成：
+
+1. 创建 `docs/roadmap/v0.8-execution-plan.md`。
+2. Prisma 新增 `CheckRequest` / `CheckResponse`，并关联 Session、User、Character。
+3. 服务端新增 `CheckRequestsModule`：
+   - `POST /api/sessions/:id/check-requests`
+   - `GET /api/sessions/:id/check-requests`
+   - `POST /api/check-requests/:id/responses`
+   - `POST /api/check-requests/:id/close`
+4. DM/owner 可以发起全员、指定用户或指定角色的检定请求，DC 支持公开或隐藏。
+5. 玩家只能看到并响应面向自己的请求，且同一请求只能响应一次。
+6. 玩家响应时服务端掷 `1d20+modifier`，结果写入 `CheckResponse`、`DiceRoll`、`ChatMessage` 和 `JournalEntry`。
+7. 客户端新增 check_requests domain / API client / controller。
+8. `SessionDetailPage` 新增检定请求区域，支持 DM 发起/关闭请求和玩家输入修正值响应。
+9. v0.8 封版验证：`npm run doctor` 全绿；服务端 17 套件 / 223 测试通过，客户端 106 测试通过，Flutter analyze 无问题。
+
 ## 立即行动
 
-下一步进入 v0.8 检定请求与快捷动作：DM 发起检定请求、指定全体/单人/角色、公开或隐藏 DC、玩家一键响应、技能和豁免快捷骰、结果进入聊天与日志。
+下一步进入 v1.0 自托管公测版：备份恢复文档、部署文档完善、基础 Server Admin 设置、内容包导入导出稳定、日志检索和多端稳定性检查。

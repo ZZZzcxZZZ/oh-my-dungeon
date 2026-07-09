@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './modules/auth/auth.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { CharactersModule } from './modules/characters/characters.module';
+import { CheckRequestsModule } from './modules/check-requests/check-requests.module';
 import { ContentModule } from './modules/content/content.module';
 import { EncountersModule } from './modules/encounters/encounters.module';
 import { HealthModule } from './modules/health/health.module';
@@ -26,6 +27,7 @@ import { PrismaModule } from './prisma/prisma.module';
     ServerSettingsModule,
     CampaignsModule,
     CharactersModule,
+    CheckRequestsModule,
     ContentModule,
     EncountersModule,
     RealtimeModule,

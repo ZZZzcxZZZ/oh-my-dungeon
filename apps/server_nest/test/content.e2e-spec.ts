@@ -239,6 +239,33 @@ describe("content endpoints", () => {
     expect(createArgs.data.items.create[0].slug).toBe("fire-bolt");
   });
 
+  it("exports a user-owned content package", async () => {
+    const token = await login();
+    prismaService.contentPackage.findUnique.mockResolvedValueOnce({
+      ...packageRow,
+      items: [itemRow],
+    });
+
+    await request(app.getHttpServer())
+      .get("/api/content/packages/pkg-1/export")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({
+          name: "Basic Spells",
+          version: "1.0.0",
+          schemaVersion: 1,
+          locale: "zh-CN",
+        });
+        expect(body.items).toHaveLength(1);
+        expect(body.items[0]).toMatchObject({
+          type: "spell",
+          slug: "fire-bolt",
+          name: "Fire Bolt",
+        });
+      });
+  });
+
   it("allows a campaign manager to enable a package for a campaign", async () => {
     const token = await login();
     prismaService.campaign.findUnique.mockResolvedValueOnce(campaign);

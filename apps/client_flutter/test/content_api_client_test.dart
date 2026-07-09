@@ -96,6 +96,35 @@ void main() {
     expect(result.package?.items?.single.name, 'Fire Bolt');
   });
 
+  test('exports a package as json', () async {
+    http.Request? captured;
+    final exported = {
+      'name': 'Basic Spells',
+      'version': '1.0.0',
+      'schemaVersion': 1,
+      'locale': 'zh-CN',
+      'items': [_itemJson],
+    };
+    final client = ContentApiClient(
+      httpClient: MockClient((request) async {
+        captured = request;
+        return http.Response(jsonEncode(exported), 200);
+      }),
+    );
+
+    final result = await client.exportPackage(
+      apiBaseUrl: _apiBaseUrl,
+      accessToken: _accessToken,
+      packageId: 'pkg-1',
+    );
+
+    expect(
+      captured?.url.toString(),
+      '$_apiBaseUrl/content/packages/pkg-1/export',
+    );
+    expect(result, exported);
+  });
+
   test('lists available campaign content with filters', () async {
     http.Request? captured;
     final client = ContentApiClient(

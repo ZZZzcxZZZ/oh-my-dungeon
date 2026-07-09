@@ -295,13 +295,20 @@ export class SessionsService {
 
   async listJournal(
     actor: AccessTokenPayload,
-    sessionId: string
+    sessionId: string,
+    query: { type?: string; q?: string } = {}
   ): Promise<JournalEntryView[]> {
     const { context } = await this.fetchSessionContext(sessionId);
     this.policy.canViewSession(actor, context);
 
     const entries = await this.prismaService.journalEntry.findMany({
-      where: { sessionId },
+      where: {
+        sessionId,
+        ...(query.type ? { type: query.type } : {}),
+        ...(query.q
+          ? { summary: { contains: query.q, mode: 'insensitive' } }
+          : {})
+      },
       orderBy: { createdAt: 'asc' }
     });
 

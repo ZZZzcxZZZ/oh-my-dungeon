@@ -17,6 +17,12 @@ abstract class ContentClient {
     required String accessToken,
   });
 
+  Future<Map<String, Object?>> exportPackage({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String packageId,
+  });
+
   Future<List<ContentItem>> listItems({
     required String apiBaseUrl,
     required String accessToken,
@@ -96,6 +102,24 @@ class ContentApiClient implements ContentClient {
     return decoded
         .map((item) => ContentPackage.fromJson(item as Map<String, Object?>))
         .toList();
+  }
+
+  @override
+  Future<Map<String, Object?>> exportPackage({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String packageId,
+  }) async {
+    final response = await _httpClient.get(
+      Uri.parse('${_normalize(apiBaseUrl)}/content/packages/$packageId/export'),
+      headers: {'authorization': 'Bearer $accessToken'},
+    );
+
+    if (response.statusCode != 200) {
+      throw _toException(response);
+    }
+
+    return jsonDecode(response.body) as Map<String, Object?>;
   }
 
   @override

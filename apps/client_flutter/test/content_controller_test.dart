@@ -227,6 +227,15 @@ class _FakeContentClient implements ContentClient {
   }
 
   @override
+  Future<Map<String, Object?>> exportPackage({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String packageId,
+  }) async {
+    return const {};
+  }
+
+  @override
   Future<List<ContentItem>> listItems({
     required String apiBaseUrl,
     required String accessToken,

@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   UseGuards
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -141,9 +142,11 @@ export class SessionsController {
   @Get('sessions/:id/journal')
   listJournal(
     @CurrentUser() user: AccessTokenPayload,
-    @Param('id') id: string
+    @Param('id') id: string,
+    @Query('type') type?: string,
+    @Query('q') q?: string
   ): Promise<JournalEntryView[]> {
-    return this.sessionsService.listJournal(user, id);
+    return this.sessionsService.listJournal(user, id, { type, q });
   }
 }
 

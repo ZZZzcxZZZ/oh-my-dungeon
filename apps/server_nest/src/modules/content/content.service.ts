@@ -101,6 +101,42 @@ export class ContentService {
     return packages.map(toPackageView);
   }
 
+  async exportPackage(
+    actor: AccessTokenPayload,
+    packageId: string,
+  ): Promise<ContentPackageImport> {
+    const contentPackage = await this.prismaService.contentPackage.findUnique({
+      where: { id: packageId },
+      include: { items: true },
+    });
+    if (!contentPackage) {
+      throw new NotFoundException("Content package not found");
+    }
+    if (
+      contentPackage.ownerUserId !== actor.userId &&
+      contentPackage.createdBy !== actor.userId
+    ) {
+      throw new ForbiddenException("Content package is not visible");
+    }
+
+    return {
+      name: contentPackage.name,
+      version: contentPackage.version,
+      schemaVersion: contentPackage.schemaVersion,
+      locale: contentPackage.locale,
+      items: (contentPackage.items ?? []).map((item: any) => ({
+        type: item.type,
+        slug: item.slug,
+        name: item.name,
+        description: item.description,
+        structured: item.structured,
+        tags: Array.isArray(item.tags) ? item.tags : [],
+        sourceLabel: item.sourceLabel,
+        schemaVersion: item.schemaVersion,
+      })),
+    };
+  }
+
   async listItems(
     actor: AccessTokenPayload,
     query: { type?: string; q?: string; packageId?: string },

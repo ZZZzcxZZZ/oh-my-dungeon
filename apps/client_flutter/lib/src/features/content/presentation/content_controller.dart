@@ -177,6 +177,25 @@ class ContentController extends ChangeNotifier {
     }
   }
 
+  Future<String?> exportPackageJson(String packageId) async {
+    final token = accessToken;
+    if (token == null) return null;
+
+    _error = null;
+    try {
+      final exported = await contentClient.exportPackage(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        packageId: packageId,
+      );
+      return const JsonEncoder.withIndent('  ').convert(exported);
+    } on ContentApiException catch (e) {
+      _error = e.message;
+      notifyListeners();
+      return null;
+    }
+  }
+
   @override
   void dispose() {
     authController.removeListener(_onAuthChanged);

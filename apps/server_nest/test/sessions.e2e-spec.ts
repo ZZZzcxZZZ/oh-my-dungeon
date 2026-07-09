@@ -849,10 +849,30 @@ describe('sessions endpoints', () => {
           expect(body[0].type).toBe('session_started');
           expect(body[1].type).toBe('roll');
           expect(body[1].refId).toBe('roll-1');
-        });
-    });
+          });
+      });
 
-    it('rejects without authentication with 401', async () => {
+      it('filters journal entries by type and keyword', async () => {
+        const token = await loginAsDm();
+        prismaService.session.findUnique.mockResolvedValueOnce(sessionRow);
+        prismaService.journalEntry.findMany.mockResolvedValueOnce([]);
+
+        await request(app.getHttpServer())
+          .get('/api/sessions/sess-1/journal?type=roll&q=perception')
+          .set('Authorization', `Bearer ${token}`)
+          .expect(200);
+
+        expect(prismaService.journalEntry.findMany).toHaveBeenCalledWith({
+          where: {
+            sessionId: 'sess-1',
+            type: 'roll',
+            summary: { contains: 'perception', mode: 'insensitive' }
+          },
+          orderBy: { createdAt: 'asc' }
+        });
+      });
+
+      it('rejects without authentication with 401', async () => {
       await request(app.getHttpServer())
         .get('/api/sessions/sess-1/journal')
         .expect(401);

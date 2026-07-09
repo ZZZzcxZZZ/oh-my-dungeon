@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../auth/presentation/auth_controller.dart';
 import '../../campaigns/presentation/campaign_controller.dart';
@@ -143,6 +144,18 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
     await _loadAvailableItems();
   }
 
+  Future<void> _copyPackageJson(String packageId) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final json = await widget.contentController.exportPackageJson(packageId);
+    if (!mounted) return;
+    if (json == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('导出失败')));
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: json));
+    messenger.showSnackBar(const SnackBar(content: Text('内容包 JSON 已复制')));
+  }
+
   @override
   void dispose() {
     widget.authController.removeListener(_refresh);
@@ -236,9 +249,20 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
                   leading: const Icon(Icons.inventory_2_outlined),
                   title: Text(contentPackage.name),
                   subtitle: Text(contentPackage.version),
-                  trailing: FilledButton.tonal(
-                    onPressed: () => _enableSelectedPackage(contentPackage.id),
-                    child: const Text('启用'),
+                  trailing: Wrap(
+                    spacing: 8,
+                    children: [
+                      IconButton(
+                        tooltip: '复制 JSON',
+                        onPressed: () => _copyPackageJson(contentPackage.id),
+                        icon: const Icon(Icons.copy_outlined),
+                      ),
+                      FilledButton.tonal(
+                        onPressed: () =>
+                            _enableSelectedPackage(contentPackage.id),
+                        child: const Text('启用'),
+                      ),
+                    ],
                   ),
                 ),
           ],

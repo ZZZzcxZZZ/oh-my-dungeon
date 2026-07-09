@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-v0.8 检定请求与快捷动作已完成。DM 可以在场次中发起检定请求，玩家可以一键响应并由服务端掷骰，结果进入聊天、骰子历史和 `JournalEntry`；v0.7 的 DM 控场基础也已完成。客户端保持 Material 3 底部导航结构：战役 / 角色 / 资料库（DM 模式为内容库）/ 桌面 / 设置，桌面页在 DM 模式下提供“场次 / 控场”页签，场次详情页提供检定请求区域。
+v1.0 自托管公测版已完成。项目已经具备可自托管的跑团 MVP：服务器 profile、账号、战役、场次、聊天、掷骰、角色卡、内容库、DM 控场、检定请求、日志、内容包导入导出、部署与备份恢复文档。客户端保持 Material 3 底部导航结构：战役 / 角色 / 资料库（DM 模式为内容库）/ 桌面 / 设置。
 
 - Monorepo 基础结构
 - Flutter 客户端骨架（Material 3 + 底部导航）
@@ -35,6 +35,9 @@ v0.8 检定请求与快捷动作已完成。DM 可以在场次中发起检定请
 - 客户端桌面控场入口：DM 模式下提供遭遇列表、创建遭遇、当前遭遇、开始/下一回合/结束、参战者 HP 快捷调整
 - 服务端检定请求 API：DM 发起检定请求、玩家响应、重复响应保护、目标可见性过滤、关闭请求、结果写入 ChatMessage / DiceRoll / JournalEntry
 - 客户端场次检定入口：Session 详情页显示检定请求、DM 发起、玩家输入修正值响应、DM 查看提交数并关闭请求
+- 内容包导出 API 与客户端复制 JSON 入口
+- Session Journal 支持按类型和关键词检索
+- 自托管部署、升级、备份与恢复文档
 
 当前执行状态见 [当前执行状态与版本推进计划](docs/roadmap/current-execution-status.md)。
 
@@ -101,6 +104,7 @@ docker compose up -d
 - [工程规范](docs/engineering/engineering-standards.md)
 - [本地开发环境](docs/development/local-setup.md)
 - [自托管与部署规划](docs/deployment/self-hosting.md)
+- [备份与恢复](docs/deployment/backup-restore.md)
 - [MVP 版本路线图](docs/roadmap/mvp-roadmap.md)
 - [v0.1 工程骨架封版清单](docs/roadmap/v0.1-release-checklist.md)
 - [Agent 执行指南](docs/agents/agent-execution-guide.md)

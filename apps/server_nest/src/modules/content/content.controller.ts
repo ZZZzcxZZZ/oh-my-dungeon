@@ -15,6 +15,7 @@ import { ContentService } from "./content.service";
 import type {
   CampaignContentPackageView,
   ContentItemView,
+  ContentPackageImport,
   ContentOverrideView,
   ContentPackageView,
   ImportContentPackageResult,
@@ -58,6 +59,14 @@ export class ContentController {
     @CurrentUser() user: AccessTokenPayload,
   ): Promise<ContentPackageView[]> {
     return this.contentService.listPackages(user);
+  }
+
+  @Get("content/packages/:id/export")
+  exportPackage(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param("id") id: string,
+  ): Promise<ContentPackageImport> {
+    return this.contentService.exportPackage(user, id);
   }
 
   @Get("content/items")

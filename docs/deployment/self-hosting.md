@@ -73,24 +73,26 @@ MAX_UPLOAD_SIZE_MB=20
 
 ## 5. 一键部署流程
 
-首版目标：
+v1.0 推荐流程：
 
 ```bash
-git clone <repo>
+git clone https://github.com/<your-org>/dnd-table-tool.git
 cd dnd-table-tool
 cp .env.example .env
 docker compose up -d
+curl http://localhost:3000/health
 ```
 
-后续提供脚本：
+如果需要修改端口、域名或数据库密码，先编辑 `.env`，再执行 `docker compose up -d`。
 
-```text
-scripts/install.sh
-scripts/update.sh
-scripts/backup.sh
-scripts/restore.sh
-scripts/install.ps1
-scripts/update.ps1
+常用维护命令：
+
+```bash
+docker compose ps
+docker compose logs -f server
+docker compose config
+docker compose pull
+docker compose up -d --build
 ```
 
 ## 6. 服务器发现
@@ -135,6 +137,8 @@ perServerRecentCampaigns
 
 ## 8. 备份
 
+详见 [备份与恢复](backup-restore.md)。
+
 最小备份对象：
 
 ```text
@@ -168,7 +172,15 @@ uploads 目录
 - content package schemaVersion。
 - Flutter 客户端兼容范围。
 
-服务端启动时检查：
+推荐升级流程：
+
+1. 先按 `backup-restore.md` 做备份。
+2. 拉取新 tag 或新镜像。
+3. 执行 `docker compose up -d --build`。
+4. 检查 `/health`。
+5. 用客户端登录并检查战役、场次、角色、内容库和日志。
+
+服务端启动时应检查：
 
 - 必要环境变量。
 - 数据库连接。
@@ -176,7 +188,20 @@ uploads 目录
 - 上传目录权限。
 - 基础内容包版本。
 
-## 10. 开源项目文件
+## 10. 反向代理提示
+
+生产环境建议把 NestJS server 放在 Caddy、Nginx 或同类反向代理后面。
+
+需要转发：
+
+- HTTP API：`/api/*`
+- 服务器发现：`/.well-known/dnd-tool-server`
+- 健康检查：`/health`
+- WebSocket：`/sessions`
+
+反向代理必须保留 WebSocket upgrade headers。公开域名应与 `.env` 中的 `PUBLIC_BASE_URL` 保持一致。
+
+## 11. 开源项目文件
 
 仓库根目录应包含：
 
@@ -200,11 +225,10 @@ docker-compose.yml
 - 版本升级。
 - 客户端添加服务器。
 
-## 11. 许可证建议
+## 12. 许可证建议
 
 如果希望改动回流，建议 AGPL-3.0。
 
 如果希望传播和二次使用门槛更低，建议 MIT。
 
 正式开源前需要确认许可证。该决策会影响社区贡献、商用集成和托管服务形态。
-

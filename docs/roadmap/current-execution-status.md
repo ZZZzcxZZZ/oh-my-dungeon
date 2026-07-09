@@ -14,6 +14,7 @@
 6. `v0.6 内容库 MVP` 已完成，执行计划见 `docs/roadmap/v0.6-execution-plan.md`。
 7. `v0.7 DM 控场基础版` 已完成，执行计划见 `docs/roadmap/v0.7-execution-plan.md`。
 8. `v0.8 检定请求与快捷动作` 已完成，执行计划见 `docs/roadmap/v0.8-execution-plan.md`。
+9. `v1.0 自托管公测版` 已完成，执行计划见 `docs/roadmap/v1.0-execution-plan.md`。MVP 已完成。
 
 ## 已完成代码状态
 
@@ -311,6 +312,20 @@ docs(v0.2): update account setup guide
 8. `SessionDetailPage` 新增检定请求区域，支持 DM 发起/关闭请求和玩家输入修正值响应。
 9. v0.8 封版验证：`npm run doctor` 全绿；服务端 17 套件 / 223 测试通过，客户端 106 测试通过，Flutter analyze 无问题。
 
+### v1.0 自托管公测版（已完成）
+
+目标：让一个朋友团可以长期自托管使用。
+
+已完成：
+
+1. 创建 `docs/roadmap/v1.0-execution-plan.md`。
+2. 新增 `docs/deployment/backup-restore.md`，覆盖 PostgreSQL、`.env`、uploads 的备份恢复流程。
+3. 更新 `docs/deployment/self-hosting.md`，补充 Docker Compose 部署、维护、升级和反向代理提示。
+4. 服务端内容库新增 `GET /api/content/packages/:id/export`，可导出可迁移 JSON 内容包。
+5. 客户端 `ContentApiClient` 支持内容包导出，内容库页面提供复制 JSON 入口。
+6. `GET /api/sessions/:id/journal` 支持 `type` 与 `q` 查询参数，用于基础日志检索。
+7. v1.0 封版验证：`npm run doctor` 全绿；服务端 17 套件 / 225 测试通过，客户端 107 测试通过，Flutter analyze 无问题。
+
 ## 立即行动
 
-下一步进入 v1.0 自托管公测版：备份恢复文档、部署文档完善、基础 Server Admin 设置、内容包导入导出稳定、日志检索和多端稳定性检查。
+MVP 已完成。下一阶段建议进入 v1.1 稳定化：修复 UI 文案细节、补充真实设备试用反馈、完善 Server Admin UI、增加端到端浏览器/桌面冒烟测试，并准备正式开源仓库元文件（LICENSE、CONTRIBUTING、SECURITY、CHANGELOG）。

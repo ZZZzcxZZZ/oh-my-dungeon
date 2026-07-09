@@ -191,6 +191,29 @@ void main() {
 
     expect(find.text('登录后进入桌面'), findsOneWidget);
   });
+
+  testWidgets('shows a characters tab in the main shell', (tester) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: InMemoryAuthTokenStore(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('角色'), findsWidgets);
+
+    await tester.tap(find.text('角色').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('登录后管理角色'), findsOneWidget);
+  });
 }
 
 class _FakeRoomClient implements RoomClient {

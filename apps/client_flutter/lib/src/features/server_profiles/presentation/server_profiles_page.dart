@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../auth/data/auth_api_client.dart';
 import '../../auth/data/auth_token_store.dart';
 import '../../campaigns/data/campaign_api_client.dart';
+import '../../characters/data/character_api_client.dart';
 import '../../client_mode/domain/client_mode.dart';
 import '../../rooms/data/room_api_client.dart';
 import '../../server_home/presentation/main_shell.dart';
@@ -21,6 +22,7 @@ class ServerProfilesPage extends StatefulWidget {
     required this.roomClient,
     required this.authClient,
     required this.campaignClient,
+    required this.characterClient,
     required this.sessionClient,
     required this.modeController,
     super.key,
@@ -32,6 +34,7 @@ class ServerProfilesPage extends StatefulWidget {
   final RoomClient roomClient;
   final AuthClient authClient;
   final CampaignClient campaignClient;
+  final CharacterClient characterClient;
   final SessionClient sessionClient;
   final ClientModeController modeController;
 
@@ -332,6 +335,7 @@ class _ServerProfilesPageState extends State<ServerProfilesPage> {
                           authTokenStore: widget.authTokenStore,
                           authClient: widget.authClient,
                           campaignClient: widget.campaignClient,
+                          characterClient: widget.characterClient,
                           sessionClient: widget.sessionClient,
                         );
                       },

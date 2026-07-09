@@ -391,6 +391,47 @@ describe('sessions endpoints', () => {
         .set('Authorization', `Bearer ${token}`)
         .expect(404);
     });
+
+    it('filters dm-visibility recent messages for non-managers', async () => {
+      const token = await loginAsDm();
+      prismaService.session.findUnique.mockResolvedValueOnce({
+        ...sessionRow,
+        campaign: {
+          ...campaignWithOwner,
+          ownerId: 'user-2',
+          members: [{ userId: 'user-1', role: 'player' }]
+        }
+      });
+      prismaService.chatMessage.findMany.mockResolvedValueOnce([
+        {
+          id: 'msg-2',
+          sessionId: 'sess-1',
+          senderId: 'user-2',
+          kind: 'text',
+          visibility: 'dm',
+          content: 'dm note',
+          createdAt: '2026-07-09T00:01:00.000Z'
+        },
+        {
+          id: 'msg-1',
+          sessionId: 'sess-1',
+          senderId: 'user-2',
+          kind: 'text',
+          visibility: 'public',
+          content: 'public note',
+          createdAt: '2026-07-09T00:00:00.000Z'
+        }
+      ]);
+
+      await request(app.getHttpServer())
+        .get('/api/sessions/sess-1')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body.recentMessages).toHaveLength(1);
+          expect(body.recentMessages[0].visibility).toBe('public');
+        });
+    });
   });
 
   describe('POST /api/sessions/:id/start', () => {

@@ -88,18 +88,24 @@ export class SessionsService {
   ): Promise<SessionView> {
     const { context, session } = await this.fetchSessionContext(sessionId);
     this.policy.canViewSession(actor, context);
+    const canViewDM = this.canViewDMContent(actor, context);
 
     const recentMessages = await this.prismaService.chatMessage.findMany({
-      where: { sessionId },
+      where: canViewDM
+        ? { sessionId }
+        : { sessionId, visibility: { not: 'dm' } },
       orderBy: { createdAt: 'desc' },
       take: RECENT_MESSAGE_LIMIT
     });
+    const visibleRecentMessages = canViewDM
+      ? recentMessages
+      : recentMessages.filter((message: any) => message.visibility !== 'dm');
 
     const view = toSessionView(session);
     view.members = (session.members ?? []).map((member: any) =>
       toSessionMemberView(member)
     );
-    view.recentMessages = recentMessages
+    view.recentMessages = visibleRecentMessages
       .map((message: any) => toChatMessageView(message))
       .reverse();
     return view;

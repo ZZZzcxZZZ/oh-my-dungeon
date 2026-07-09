@@ -10,7 +10,7 @@
 2. `v0.2 账号、服务器、双模式` 已完成并打 tag `v0.2.0`。
 3. `v0.3 战役与成员` 已完成并打 tag `v0.3.0`。
 4. `v0.4 跑团桌面基础版` 已完成并打 tag `v0.4.0`。`rooms` 原型已被 Session + DiceRoll 正式模型替换。
-5. 下一步进入 v0.5 角色卡。
+5. `v0.5 角色卡基础版` 已完成，执行计划见 `docs/roadmap/v0.5-execution-plan.md`。
 
 ## 已完成代码状态
 
@@ -209,6 +209,33 @@ docs(v0.2): update account setup guide
 6. 客户端 table 页面。
 7. 掷骰结果实时广播和持久化。
 
+### v0.5 角色卡基础版（已完成）
+
+目标：玩家可创建并维护角色卡，把角色绑定到战役；DM 可查看战役内角色。
+
+已完成：
+
+1. 创建 `docs/roadmap/v0.5-execution-plan.md`。
+2. Prisma 新增 `Character` / `CharacterCampaignBinding`。
+3. 服务端新增 `CharactersModule`：
+   - `POST /api/characters`
+   - `GET /api/characters`
+   - `GET /api/characters/:id`
+   - `PATCH /api/characters/:id`
+   - `POST /api/characters/:id/campaign-bindings`
+   - `GET /api/campaigns/:id/characters`
+   - `POST /api/campaigns/:campaignId/characters/:characterId/hp`
+4. 客户端新增角色 domain / API client / controller。
+5. 客户端底部导航调整为：战役 / 角色 / 桌面 / 设置。
+6. 客户端新增 `CharactersTabPage`，包含未登录提示、角色列表、基础创建/编辑、战役绑定和 HP 快捷调整。
+7. `CampaignDetailPage` 显示战役角色，DM/主持人可调整角色 HP。
+8. 角色更新与 HP 调整写入 `JournalEntry`。
+
+顺手修复：
+
+1. `GET /api/sessions/:id` 的 `recentMessages` 现在会过滤普通玩家不可见的 DM 消息。
+2. 客户端打开 Session 时会加载历史掷骰和 Journal，不再只显示最近聊天。
+
 ## 立即行动
 
-v0.4 已封版。下一步启动 v0.5 角色卡：玩家可创建并维护角色卡，Session 内可加载角色卡用于检定与掷骰。开始前先创建 `docs/roadmap/v0.5-execution-plan.md`。
+下一步进入 v0.6 内容库 MVP：内容包、法术/装备/专长等可扩展条目、JSON 导入与校验、战役启用/禁用内容。

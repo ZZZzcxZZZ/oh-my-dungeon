@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../auth/presentation/auth_controller.dart';
+import '../../characters/presentation/character_controller.dart';
 import '../../server_profiles/domain/server_profile.dart';
 import '../domain/campaign.dart';
 import 'campaign_controller.dart';
@@ -15,12 +16,14 @@ class CampaignsTabPage extends StatefulWidget {
     required this.profile,
     required this.authController,
     required this.campaignController,
+    required this.characterController,
     super.key,
   });
 
   final ServerProfile profile;
   final AuthController authController;
   final CampaignController campaignController;
+  final CharacterController characterController;
 
   @override
   State<CampaignsTabPage> createState() => _CampaignsTabPageState();
@@ -166,6 +169,7 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
                 MaterialPageRoute<void>(
                   builder: (context) => CampaignDetailPage(
                     controller: widget.campaignController,
+                    characterController: widget.characterController,
                     campaignId: campaign.id,
                   ),
                 ),

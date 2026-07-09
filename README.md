@@ -4,14 +4,14 @@
 
 ## 当前状态
 
-v0.4 跑团桌面基础版已完成并打 tag `v0.4.0`。DM 可在 Campaign 下开启 Session，玩家进入同一会话后聊天与掷骰实时同步并落库，DM 可暗骰，Session 结束后可查看日志。客户端已重构为 Material Design 3 底部导航结构（战役 / 桌面 / 设置）。下一步进入 v0.5 角色卡。
+v0.5 角色卡基础版已完成。玩家可以创建、编辑、维护角色卡，进行 HP 快速调整，并把角色绑定到战役；DM/主持人可以在战役详情中查看战役角色并调整 HP，角色变更会写入 JournalEntry。客户端保持 Material 3 底部导航结构：战役 / 角色 / 桌面 / 设置。
 
 - Monorepo 基础结构
 - Flutter 客户端骨架（Material 3 + 底部导航）
 - NestJS 服务端骨架
 - `/health`
 - `/.well-known/dnd-tool-server`
-- Prisma schema（User / ServerAdmin / RefreshToken / ServerSetting / Campaign / CampaignMember / CampaignInvite / Session / SessionMember / ChatMessage / DiceRoll / JournalEntry）
+- Prisma schema（User / ServerAdmin / RefreshToken / ServerSetting / Campaign / CampaignMember / CampaignInvite / Session / SessionMember / ChatMessage / DiceRoll / JournalEntry / Character / CharacterCampaignBinding）
 - Docker Compose 配置
 - GitHub Actions CI 配置
 - 服务端与客户端基础测试
@@ -27,6 +27,8 @@ v0.4 跑团桌面基础版已完成并打 tag `v0.4.0`。DM 可在 Campaign 下�
 - 服务端 session API：创建 / 列表 / 详情 / 开始 / 结束 / 聊天 / 掷骰 / 日志
 - WebSocket Gateway 实时广播（消息、掷骰、会话更新）
 - 客户端 Session 桌面：聊天时间线 + 掷骰输入 + 在线成员 + socket.io 实时连接
+- 服务端角色 API：创建 / 编辑 / 自有角色列表 / 角色绑定战役 / 战役角色列表 / 战役角色 HP 调整
+- 客户端角色入口：Material 3 底部导航“角色”页、基础创建/编辑、战役绑定和 HP 快捷调整
 
 当前执行状态见 [当前执行状态与版本推进计划](docs/roadmap/current-execution-status.md)。
 

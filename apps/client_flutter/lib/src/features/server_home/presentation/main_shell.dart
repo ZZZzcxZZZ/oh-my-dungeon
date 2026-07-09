@@ -6,6 +6,9 @@ import '../../../features/auth/presentation/auth_controller.dart';
 import '../../../features/campaigns/data/campaign_api_client.dart';
 import '../../../features/campaigns/presentation/campaign_controller.dart';
 import '../../../features/campaigns/presentation/campaigns_tab_page.dart';
+import '../../../features/characters/data/character_api_client.dart';
+import '../../../features/characters/presentation/character_controller.dart';
+import '../../../features/characters/presentation/characters_tab_page.dart';
 import '../../../features/client_mode/domain/client_mode.dart';
 import '../../../features/rooms/data/room_api_client.dart';
 import '../../../features/server_profiles/domain/server_profile.dart';
@@ -29,6 +32,7 @@ class MainShell extends StatefulWidget {
     required this.authTokenStore,
     required this.authClient,
     required this.campaignClient,
+    required this.characterClient,
     required this.sessionClient,
     super.key,
   });
@@ -39,6 +43,7 @@ class MainShell extends StatefulWidget {
   final AuthTokenStore authTokenStore;
   final AuthClient authClient;
   final CampaignClient campaignClient;
+  final CharacterClient characterClient;
   final SessionClient sessionClient;
 
   @override
@@ -48,6 +53,7 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   late final AuthController _authController;
   late final CampaignController _campaignController;
+  late final CharacterController _characterController;
   late final SessionController _sessionController;
   late final SessionSocketService _socketService;
   int _currentIndex = 0;
@@ -66,6 +72,11 @@ class _MainShellState extends State<MainShell> {
       authController: _authController,
       campaignClient: widget.campaignClient,
     );
+    _characterController = CharacterController(
+      apiBaseUrl: widget.profile.apiBaseUrl,
+      authController: _authController,
+      characterClient: widget.characterClient,
+    );
     _sessionController = SessionController(
       apiBaseUrl: widget.profile.apiBaseUrl,
       authController: _authController,
@@ -78,6 +89,7 @@ class _MainShellState extends State<MainShell> {
   void dispose() {
     _socketService.disconnect();
     _sessionController.dispose();
+    _characterController.dispose();
     _campaignController.dispose();
     _authController.dispose();
     super.dispose();
@@ -92,6 +104,12 @@ class _MainShellState extends State<MainShell> {
           CampaignsTabPage(
             profile: widget.profile,
             authController: _authController,
+            campaignController: _campaignController,
+            characterController: _characterController,
+          ),
+          CharactersTabPage(
+            authController: _authController,
+            characterController: _characterController,
             campaignController: _campaignController,
           ),
           TableTabPage(
@@ -118,6 +136,11 @@ class _MainShellState extends State<MainShell> {
             icon: Icon(Icons.castle_outlined),
             selectedIcon: Icon(Icons.castle),
             label: '战役',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.badge_outlined),
+            selectedIcon: Icon(Icons.badge),
+            label: '角色',
           ),
           NavigationDestination(
             icon: Icon(Icons.table_restaurant_outlined),

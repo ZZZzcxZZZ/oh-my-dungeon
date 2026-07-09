@@ -145,8 +145,20 @@ class SessionController extends ChangeNotifier {
         accessToken: token,
         sessionId: sessionId,
       );
+      final rolls = await sessionClient.listRolls(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        sessionId: sessionId,
+      );
+      final journal = await sessionClient.listJournal(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        sessionId: sessionId,
+      );
       _activeSession = session;
       _messages = session.recentMessages;
+      _rolls = rolls;
+      _journal = journal;
     } on SessionApiException catch (e) {
       _detailError = e.message;
     } catch (_) {

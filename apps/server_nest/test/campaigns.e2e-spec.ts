@@ -1,79 +1,89 @@
-import { Test } from '@nestjs/testing';
-import type { INestApplication } from '@nestjs/common';
-import request = require('supertest');
-import { AppModule } from '../src/app.module';
-import { PrismaService } from '../src/prisma/prisma.service';
-import { PasswordHashService } from '../src/modules/auth/password-hash.service';
+import { Test } from "@nestjs/testing";
+import type { INestApplication } from "@nestjs/common";
+import request = require("supertest");
+import { AppModule } from "../src/app.module";
+import { PrismaService } from "../src/prisma/prisma.service";
+import { PasswordHashService } from "../src/modules/auth/password-hash.service";
+import { CampaignsGateway } from "../src/modules/realtime/campaigns.gateway";
 
-describe('campaigns endpoints', () => {
+describe("campaigns endpoints", () => {
   let app: INestApplication;
   const prismaService = {
     user: {
       count: jest.fn(),
       findFirst: jest.fn(),
       findUnique: jest.fn(),
-      create: jest.fn()
+      create: jest.fn(),
     },
     serverAdmin: {
       create: jest.fn(),
-      findUnique: jest.fn()
+      findUnique: jest.fn(),
     },
     serverSetting: {
       findFirst: jest.fn(),
       create: jest.fn(),
-      update: jest.fn()
+      update: jest.fn(),
     },
     refreshToken: {
       create: jest.fn(),
       findUnique: jest.fn(),
-      update: jest.fn()
+      update: jest.fn(),
     },
     campaign: {
       create: jest.fn(),
       findUnique: jest.fn(),
-      findMany: jest.fn()
+      findMany: jest.fn(),
     },
     campaignMember: {
       create: jest.fn(),
       findUnique: jest.fn(),
       findFirst: jest.fn(),
-      findMany: jest.fn()
+      findMany: jest.fn(),
     },
     campaignInvite: {
       create: jest.fn(),
       findUnique: jest.fn(),
       findFirst: jest.fn(),
       findMany: jest.fn(),
-      update: jest.fn()
+      update: jest.fn(),
+    },
+    campaignChatMessage: {
+      create: jest.fn(),
+      findMany: jest.fn(),
     },
     $transaction: jest.fn(),
-    $queryRaw: jest.fn().mockResolvedValue([{ health_check: 1 }])
+    $queryRaw: jest.fn().mockResolvedValue([{ health_check: 1 }]),
   };
   const passwordHashService = {
-    hash: jest.fn().mockResolvedValue('hashed-secret'),
-    compare: jest.fn()
+    hash: jest.fn().mockResolvedValue("hashed-secret"),
+    compare: jest.fn(),
+  };
+  const campaignsGateway = {
+    broadcastToCampaign: jest.fn(),
   };
   const storedDmUser = {
-    id: 'user-1',
-    username: 'ranger',
-    email: 'ranger@example.com',
-    passwordHash: 'hashed-secret'
+    id: "user-1",
+    username: "ranger",
+    email: "ranger@example.com",
+    passwordHash: "hashed-secret",
   };
 
   beforeAll(async () => {
-    process.env.JWT_SECRET = 'test-secret';
+    process.env.JWT_SECRET = "test-secret";
     const moduleRef = await Test.createTestingModule({
-      imports: [AppModule]
+      imports: [AppModule],
     })
       .overrideProvider(PrismaService)
       .useValue(prismaService)
       .overrideProvider(PasswordHashService)
       .useValue(passwordHashService)
+      .overrideProvider(CampaignsGateway)
+      .useValue(campaignsGateway)
       .compile();
 
     app = moduleRef.createNestApplication();
-    app.setGlobalPrefix('api', {
-      exclude: ['health', '.well-known/dnd-tool-server']
+    app.setGlobalPrefix("api", {
+      exclude: ["health", ".well-known/dnd-tool-server"],
     });
     await app.init();
   });
@@ -86,7 +96,7 @@ describe('campaigns endpoints', () => {
     jest.clearAllMocks();
     prismaService.$queryRaw.mockResolvedValue([{ health_check: 1 }]);
     prismaService.serverSetting.findFirst.mockResolvedValue({
-      registrationEnabled: true
+      registrationEnabled: true,
     });
     prismaService.user.count.mockResolvedValue(1);
     prismaService.user.findFirst.mockResolvedValue(null);
@@ -97,19 +107,19 @@ describe('campaigns endpoints', () => {
     prismaService.refreshToken.findUnique.mockResolvedValue(null);
     prismaService.refreshToken.update.mockResolvedValue({});
     prismaService.$transaction.mockImplementation(async (cb: any) =>
-      cb(prismaService)
+      cb(prismaService),
     );
-    passwordHashService.hash.mockResolvedValue('hashed-secret');
+    passwordHashService.hash.mockResolvedValue("hashed-secret");
     passwordHashService.compare.mockResolvedValue(true);
     prismaService.campaign.create.mockResolvedValue({
-      id: 'camp-1',
-      name: 'Curse of Strahd',
-      description: '',
-      system: 'dnd5e',
-      ownerId: 'user-1',
-      status: 'active',
-      createdAt: '2026-07-09T00:00:00.000Z',
-      updatedAt: '2026-07-09T00:00:00.000Z'
+      id: "camp-1",
+      name: "Curse of Strahd",
+      description: "",
+      system: "dnd5e",
+      ownerId: "user-1",
+      status: "active",
+      createdAt: "2026-07-09T00:00:00.000Z",
+      updatedAt: "2026-07-09T00:00:00.000Z",
     });
     prismaService.campaign.findUnique.mockResolvedValue(null);
     prismaService.campaign.findMany.mockResolvedValue([]);
@@ -122,203 +132,289 @@ describe('campaigns endpoints', () => {
     prismaService.campaignInvite.findFirst.mockResolvedValue(null);
     prismaService.campaignInvite.findMany.mockResolvedValue([]);
     prismaService.campaignInvite.update.mockResolvedValue({});
+    prismaService.campaignChatMessage.create.mockResolvedValue({});
+    prismaService.campaignChatMessage.findMany.mockResolvedValue([]);
   });
 
   async function loginAsDm(): Promise<string> {
     prismaService.user.findFirst.mockResolvedValueOnce(storedDmUser);
     const login = await request(app.getHttpServer())
-      .post('/api/auth/login')
-      .send({ identifier: 'ranger', password: 'p@ssw0rd' })
+      .post("/api/auth/login")
+      .send({ identifier: "ranger", password: "p@ssw0rd" })
       .expect(200);
     return login.body.accessToken;
   }
 
-  describe('POST /api/campaigns', () => {
-    it('creates a campaign and returns it without internal fields', async () => {
+  describe("POST /api/campaigns", () => {
+    it("creates a campaign and returns it without internal fields", async () => {
       const token = await loginAsDm();
 
       await request(app.getHttpServer())
-        .post('/api/campaigns')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ name: 'Curse of Strahd' })
+        .post("/api/campaigns")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ name: "Curse of Strahd" })
         .expect(201)
         .expect(({ body }) => {
-          expect(body.id).toBe('camp-1');
-          expect(body.name).toBe('Curse of Strahd');
-          expect(body.ownerId).toBe('user-1');
+          expect(body.id).toBe("camp-1");
+          expect(body.name).toBe("Curse of Strahd");
+          expect(body.ownerId).toBe("user-1");
         });
 
       const createArgs = prismaService.campaign.create.mock.calls[0][0];
-      expect(createArgs.data.ownerId).toBe('user-1');
-      expect(createArgs.data.name).toBe('Curse of Strahd');
+      expect(createArgs.data.ownerId).toBe("user-1");
+      expect(createArgs.data.name).toBe("Curse of Strahd");
     });
 
-    it('makes the creator an owner member', async () => {
+    it("makes the creator an owner member", async () => {
       const token = await loginAsDm();
 
       await request(app.getHttpServer())
-        .post('/api/campaigns')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ name: 'Curse of Strahd' })
+        .post("/api/campaigns")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ name: "Curse of Strahd" })
         .expect(201);
 
       const memberArgs = prismaService.campaignMember.create.mock.calls[0][0];
-      expect(memberArgs.data.userId).toBe('user-1');
-      expect(memberArgs.data.role).toBe('owner');
+      expect(memberArgs.data.userId).toBe("user-1");
+      expect(memberArgs.data.role).toBe("owner");
     });
 
-    it('rejects without authentication with 401', async () => {
+    it("rejects without authentication with 401", async () => {
       await request(app.getHttpServer())
-        .post('/api/campaigns')
-        .send({ name: 'Curse of Strahd' })
+        .post("/api/campaigns")
+        .send({ name: "Curse of Strahd" })
         .expect(401);
     });
 
-    it('rejects with missing name with 400', async () => {
+    it("rejects with missing name with 400", async () => {
       const token = await loginAsDm();
 
       await request(app.getHttpServer())
-        .post('/api/campaigns')
-        .set('Authorization', `Bearer ${token}`)
+        .post("/api/campaigns")
+        .set("Authorization", `Bearer ${token}`)
         .send({})
         .expect(400);
     });
   });
 
-  describe('GET /api/campaigns', () => {
-    it('returns campaigns the user is a member of', async () => {
+  describe("GET /api/campaigns", () => {
+    it("returns campaigns the user is a member of", async () => {
       const token = await loginAsDm();
       prismaService.campaignMember.findMany.mockResolvedValueOnce([
         {
-          campaignId: 'camp-1',
+          campaignId: "camp-1",
           campaign: {
-            id: 'camp-1',
-            name: 'Curse of Strahd',
-            description: '',
-            system: 'dnd5e',
-            ownerId: 'user-1',
-            status: 'active',
-            createdAt: '2026-07-09T00:00:00.000Z',
-            updatedAt: '2026-07-09T00:00:00.000Z'
-          }
-        }
+            id: "camp-1",
+            name: "Curse of Strahd",
+            description: "",
+            system: "dnd5e",
+            ownerId: "user-1",
+            status: "active",
+            createdAt: "2026-07-09T00:00:00.000Z",
+            updatedAt: "2026-07-09T00:00:00.000Z",
+            members: [
+              {
+                userId: "user-1",
+                role: "owner",
+                displayName: "ranger",
+              },
+            ],
+            chatMessages: [],
+          },
+        },
       ]);
 
       await request(app.getHttpServer())
-        .get('/api/campaigns')
-        .set('Authorization', `Bearer ${token}`)
+        .get("/api/campaigns")
+        .set("Authorization", `Bearer ${token}`)
         .expect(200)
         .expect(({ body }) => {
           expect(body).toHaveLength(1);
-          expect(body[0].id).toBe('camp-1');
-          expect(body[0].name).toBe('Curse of Strahd');
+          expect(body[0].id).toBe("camp-1");
+          expect(body[0].name).toBe("Curse of Strahd");
+          expect(body[0].lastMessage).toBeNull();
+          expect(body[0].memberPreview).toEqual([
+            {
+              userId: "user-1",
+              displayName: "ranger",
+              role: "owner",
+            },
+          ]);
         });
     });
 
-    it('rejects without authentication with 401', async () => {
+    it("returns lastMessage and memberPreview when populated", async () => {
+      const token = await loginAsDm();
+      prismaService.campaignMember.findMany.mockResolvedValueOnce([
+        {
+          campaignId: "camp-1",
+          campaign: {
+            id: "camp-1",
+            name: "Curse of Strahd",
+            description: "",
+            system: "dnd5e",
+            ownerId: "user-1",
+            status: "active",
+            createdAt: "2026-07-09T00:00:00.000Z",
+            updatedAt: "2026-07-09T00:00:00.000Z",
+            members: [
+              {
+                userId: "user-1",
+                role: "owner",
+                displayName: "ranger",
+              },
+              {
+                userId: "user-2",
+                role: "player",
+                displayName: "bard",
+              },
+            ],
+            chatMessages: [
+              {
+                id: "msg-1",
+                campaignId: "camp-1",
+                senderId: "user-2",
+                characterId: null,
+                displayName: "bard",
+                avatarUrl: null,
+                kind: "say",
+                content: "Hello world",
+                createdAt: "2026-07-12T00:00:00.000Z",
+              },
+            ],
+          },
+        },
+      ]);
+
       await request(app.getHttpServer())
-        .get('/api/campaigns')
-        .expect(401);
+        .get("/api/campaigns")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body[0].lastMessage).toEqual({
+            id: "msg-1",
+            campaignId: "camp-1",
+            senderId: "user-2",
+            characterId: null,
+            displayName: "bard",
+            avatarUrl: null,
+            kind: "say",
+            content: "Hello world",
+            createdAt: "2026-07-12T00:00:00.000Z",
+          });
+          expect(body[0].memberPreview).toHaveLength(2);
+          expect(body[0].memberPreview[0]).toEqual({
+            userId: "user-1",
+            displayName: "ranger",
+            role: "owner",
+          });
+        });
+    });
+
+    it("rejects without authentication with 401", async () => {
+      await request(app.getHttpServer()).get("/api/campaigns").expect(401);
     });
   });
 
-  describe('GET /api/campaigns/:id', () => {
-    it('returns the campaign for a member', async () => {
+  describe("GET /api/campaigns/:id", () => {
+    it("returns the campaign for a member", async () => {
       const token = await loginAsDm();
       const campaign = {
-        id: 'camp-1',
-        name: 'Curse of Strahd',
-        description: '',
-        system: 'dnd5e',
-        ownerId: 'user-1',
-        status: 'active',
-        createdAt: '2026-07-09T00:00:00.000Z',
-        updatedAt: '2026-07-09T00:00:00.000Z',
-        members: [{ userId: 'user-1', role: 'owner' }]
+        id: "camp-1",
+        name: "Curse of Strahd",
+        description: "",
+        system: "dnd5e",
+        ownerId: "user-1",
+        status: "active",
+        createdAt: "2026-07-09T00:00:00.000Z",
+        updatedAt: "2026-07-09T00:00:00.000Z",
+        members: [{ userId: "user-1", role: "owner" }],
       };
       prismaService.campaign.findUnique.mockResolvedValueOnce(campaign);
 
       await request(app.getHttpServer())
-        .get('/api/campaigns/camp-1')
-        .set('Authorization', `Bearer ${token}`)
+        .get("/api/campaigns/camp-1")
+        .set("Authorization", `Bearer ${token}`)
         .expect(200)
         .expect(({ body }) => {
-          expect(body.id).toBe('camp-1');
-          expect(body.name).toBe('Curse of Strahd');
+          expect(body.id).toBe("camp-1");
+          expect(body.name).toBe("Curse of Strahd");
         });
     });
 
-    it('rejects non-members with 403', async () => {
+    it("rejects non-members with 403", async () => {
       const token = await loginAsDm();
       const campaign = {
-        id: 'camp-1',
-        name: 'Curse of Strahd',
-        description: '',
-        system: 'dnd5e',
-        ownerId: 'user-2',
-        status: 'active',
-        createdAt: '2026-07-09T00:00:00.000Z',
-        updatedAt: '2026-07-09T00:00:00.000Z',
-        members: [{ userId: 'user-2', role: 'owner' }]
+        id: "camp-1",
+        name: "Curse of Strahd",
+        description: "",
+        system: "dnd5e",
+        ownerId: "user-2",
+        status: "active",
+        createdAt: "2026-07-09T00:00:00.000Z",
+        updatedAt: "2026-07-09T00:00:00.000Z",
+        members: [{ userId: "user-2", role: "owner" }],
       };
       prismaService.campaign.findUnique.mockResolvedValueOnce(campaign);
 
       await request(app.getHttpServer())
-        .get('/api/campaigns/camp-1')
-        .set('Authorization', `Bearer ${token}`)
+        .get("/api/campaigns/camp-1")
+        .set("Authorization", `Bearer ${token}`)
         .expect(403);
     });
 
-    it('returns 404 when campaign does not exist', async () => {
+    it("returns 404 when campaign does not exist", async () => {
       const token = await loginAsDm();
       prismaService.campaign.findUnique.mockResolvedValueOnce(null);
 
       await request(app.getHttpServer())
-        .get('/api/campaigns/missing')
-        .set('Authorization', `Bearer ${token}`)
+        .get("/api/campaigns/missing")
+        .set("Authorization", `Bearer ${token}`)
         .expect(404);
     });
   });
 
-  describe('POST /api/campaigns/:id/invites', () => {
+  describe("POST /api/campaigns/:id/invites", () => {
     const campaignWithOwner = {
-      id: 'camp-1',
-      name: 'Curse of Strahd',
-      description: '',
-      system: 'dnd5e',
-      ownerId: 'user-1',
-      status: 'active',
-      createdAt: '2026-07-09T00:00:00.000Z',
-      updatedAt: '2026-07-09T00:00:00.000Z',
-      members: [{ userId: 'user-1', role: 'owner' }]
+      id: "camp-1",
+      name: "Curse of Strahd",
+      description: "",
+      system: "dnd5e",
+      ownerId: "user-1",
+      status: "active",
+      createdAt: "2026-07-09T00:00:00.000Z",
+      updatedAt: "2026-07-09T00:00:00.000Z",
+      members: [{ userId: "user-1", role: "owner" }],
     };
 
-    it('creates an invite and returns it without internal fields', async () => {
+    it("creates an invite and returns it without internal fields", async () => {
       const token = await loginAsDm();
-      prismaService.campaign.findUnique.mockResolvedValueOnce(campaignWithOwner);
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwner,
+      );
       prismaService.campaignInvite.create.mockResolvedValueOnce({
-        id: 'invite-1',
-        campaignId: 'camp-1',
-        code: 'ABC123XYZ',
-        roleOnJoin: 'player',
+        id: "invite-1",
+        campaignId: "camp-1",
+        code: "ABC123XYZ",
+        roleOnJoin: "player",
         expiresAt: null,
         maxUses: 1,
         usedCount: 0,
         requireApproval: false,
-        createdBy: 'user-1',
-        createdAt: '2026-07-09T00:00:00.000Z'
+        createdBy: "user-1",
+        createdAt: "2026-07-09T00:00:00.000Z",
       });
 
       await request(app.getHttpServer())
-        .post('/api/campaigns/camp-1/invites')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ roleOnJoin: 'player', maxUses: 1 })
+        .post("/api/campaigns/camp-1/invites")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ roleOnJoin: "player", maxUses: 1 })
         .expect(201)
         .expect(({ body }) => {
-          expect(body.id).toBe('invite-1');
-          expect(body.campaignId).toBe('camp-1');
-          expect(body.code).toBe('ABC123XYZ');
-          expect(body.roleOnJoin).toBe('player');
+          expect(body.id).toBe("invite-1");
+          expect(body.campaignId).toBe("camp-1");
+          expect(body.code).toBe("ABC123XYZ");
+          expect(body.roleOnJoin).toBe("player");
           expect(body.maxUses).toBe(1);
           expect(body.usedCount).toBe(0);
           expect(body.requireApproval).toBe(false);
@@ -326,242 +422,376 @@ describe('campaigns endpoints', () => {
         });
 
       const createArgs = prismaService.campaignInvite.create.mock.calls[0][0];
-      expect(createArgs.data.campaignId).toBe('camp-1');
-      expect(createArgs.data.createdBy).toBe('user-1');
+      expect(createArgs.data.campaignId).toBe("camp-1");
+      expect(createArgs.data.createdBy).toBe("user-1");
       expect(createArgs.data.code).toEqual(expect.any(String));
     });
 
-    it('rejects without authentication with 401', async () => {
+    it("rejects without authentication with 401", async () => {
       await request(app.getHttpServer())
-        .post('/api/campaigns/camp-1/invites')
-        .send({ roleOnJoin: 'player' })
+        .post("/api/campaigns/camp-1/invites")
+        .send({ roleOnJoin: "player" })
         .expect(401);
     });
 
-    it('rejects a non-manager with 403', async () => {
+    it("rejects a non-manager with 403", async () => {
       const token = await loginAsDm();
       const campaignWithPlayerOnly = {
         ...campaignWithOwner,
-        ownerId: 'user-2',
-        members: [{ userId: 'user-1', role: 'player' }]
+        ownerId: "user-2",
+        members: [{ userId: "user-1", role: "player" }],
       };
-      prismaService.campaign.findUnique.mockResolvedValueOnce(campaignWithPlayerOnly);
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithPlayerOnly,
+      );
 
       await request(app.getHttpServer())
-        .post('/api/campaigns/camp-1/invites')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ roleOnJoin: 'player' })
+        .post("/api/campaigns/camp-1/invites")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ roleOnJoin: "player" })
         .expect(403);
     });
 
-    it('returns 404 when campaign does not exist', async () => {
+    it("returns 404 when campaign does not exist", async () => {
       const token = await loginAsDm();
       prismaService.campaign.findUnique.mockResolvedValueOnce(null);
 
       await request(app.getHttpServer())
-        .post('/api/campaigns/missing/invites')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ roleOnJoin: 'player' })
+        .post("/api/campaigns/missing/invites")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ roleOnJoin: "player" })
         .expect(404);
     });
   });
 
-  describe('GET /api/campaigns/:id/invites', () => {
+  describe("GET /api/campaigns/:id/invites", () => {
     const campaignWithOwner = {
-      id: 'camp-1',
-      name: 'Curse of Strahd',
-      description: '',
-      system: 'dnd5e',
-      ownerId: 'user-1',
-      status: 'active',
-      createdAt: '2026-07-09T00:00:00.000Z',
-      updatedAt: '2026-07-09T00:00:00.000Z',
-      members: [{ userId: 'user-1', role: 'owner' }]
+      id: "camp-1",
+      name: "Curse of Strahd",
+      description: "",
+      system: "dnd5e",
+      ownerId: "user-1",
+      status: "active",
+      createdAt: "2026-07-09T00:00:00.000Z",
+      updatedAt: "2026-07-09T00:00:00.000Z",
+      members: [{ userId: "user-1", role: "owner" }],
     };
 
-    it('returns invites for a manager', async () => {
+    it("returns invites for a manager", async () => {
       const token = await loginAsDm();
-      prismaService.campaign.findUnique.mockResolvedValueOnce(campaignWithOwner);
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwner,
+      );
       prismaService.campaignInvite.findMany.mockResolvedValueOnce([
         {
-          id: 'invite-1',
-          campaignId: 'camp-1',
-          code: 'ABC123',
-          roleOnJoin: 'player',
+          id: "invite-1",
+          campaignId: "camp-1",
+          code: "ABC123",
+          roleOnJoin: "player",
           expiresAt: null,
           maxUses: 1,
           usedCount: 0,
           requireApproval: false,
-          createdBy: 'user-1',
-          createdAt: '2026-07-09T00:00:00.000Z'
-        }
+          createdBy: "user-1",
+          createdAt: "2026-07-09T00:00:00.000Z",
+        },
       ]);
 
       await request(app.getHttpServer())
-        .get('/api/campaigns/camp-1/invites')
-        .set('Authorization', `Bearer ${token}`)
+        .get("/api/campaigns/camp-1/invites")
+        .set("Authorization", `Bearer ${token}`)
         .expect(200)
         .expect(({ body }) => {
           expect(body).toHaveLength(1);
-          expect(body[0].id).toBe('invite-1');
-          expect(body[0].code).toBe('ABC123');
+          expect(body[0].id).toBe("invite-1");
+          expect(body[0].code).toBe("ABC123");
         });
     });
 
-    it('rejects without authentication with 401', async () => {
+    it("rejects without authentication with 401", async () => {
       await request(app.getHttpServer())
-        .get('/api/campaigns/camp-1/invites')
+        .get("/api/campaigns/camp-1/invites")
         .expect(401);
     });
 
-    it('rejects a non-manager with 403', async () => {
+    it("rejects a non-manager with 403", async () => {
       const token = await loginAsDm();
       const campaignWithPlayerOnly = {
         ...campaignWithOwner,
-        ownerId: 'user-2',
-        members: [{ userId: 'user-1', role: 'player' }]
+        ownerId: "user-2",
+        members: [{ userId: "user-1", role: "player" }],
       };
-      prismaService.campaign.findUnique.mockResolvedValueOnce(campaignWithPlayerOnly);
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithPlayerOnly,
+      );
 
       await request(app.getHttpServer())
-        .get('/api/campaigns/camp-1/invites')
-        .set('Authorization', `Bearer ${token}`)
+        .get("/api/campaigns/camp-1/invites")
+        .set("Authorization", `Bearer ${token}`)
         .expect(403);
     });
   });
 
-  describe('POST /api/campaigns/join', () => {
+  describe("campaign chat messages", () => {
+    const campaignWithOwner = {
+      id: "camp-1",
+      name: "Curse of Strahd",
+      description: "",
+      system: "dnd5e",
+      ownerId: "user-1",
+      status: "active",
+      createdAt: "2026-07-09T00:00:00.000Z",
+      updatedAt: "2026-07-09T00:00:00.000Z",
+      members: [{ userId: "user-1", role: "owner" }],
+    };
+
+    it("lists messages directly under a campaign without a session", async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwner,
+      );
+      prismaService.campaignChatMessage.findMany.mockResolvedValueOnce([
+        {
+          id: "msg-1",
+          campaignId: "camp-1",
+          senderId: "user-1",
+          characterId: "char-1",
+          displayName: "Arannis",
+          avatarUrl: null,
+          kind: "say",
+          content: "今晚从酒馆开始",
+          createdAt: "2026-07-09T00:00:00.000Z",
+        },
+      ]);
+
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/messages")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body).toHaveLength(1);
+          expect(body[0]).toMatchObject({
+            id: "msg-1",
+            campaignId: "camp-1",
+            senderId: "user-1",
+            characterId: "char-1",
+            displayName: "Arannis",
+            avatarUrl: null,
+            kind: "say",
+            content: "今晚从酒馆开始",
+            createdAt: "2026-07-09T00:00:00.000Z",
+          });
+        });
+    });
+
+    it("creates action messages directly under a campaign", async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwner,
+      );
+      prismaService.campaignChatMessage.create.mockResolvedValueOnce({
+        id: "msg-2",
+        campaignId: "camp-1",
+        senderId: "user-1",
+        characterId: "char-1",
+        displayName: "Arannis",
+        avatarUrl: null,
+        kind: "action",
+        content: "推开吱呀作响的木门",
+        createdAt: "2026-07-09T00:00:00.000Z",
+      });
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/messages")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          kind: "action",
+          content: "推开吱呀作响的木门",
+          characterId: "char-1",
+          displayName: "Arannis",
+          avatarUrl: null,
+        })
+        .expect(201)
+        .expect(({ body }) => {
+          expect(body.id).toBe("msg-2");
+          expect(body.kind).toBe("action");
+          expect(body.displayName).toBe("Arannis");
+        });
+
+      const createArgs =
+        prismaService.campaignChatMessage.create.mock.calls[0][0];
+      expect(createArgs.data).toMatchObject({
+        campaignId: "camp-1",
+        senderId: "user-1",
+        characterId: "char-1",
+        displayName: "Arannis",
+        avatarUrl: null,
+        kind: "action",
+        content: "推开吱呀作响的木门",
+      });
+      expect(campaignsGateway.broadcastToCampaign).toHaveBeenCalledWith(
+        "camp-1",
+        "campaign:message:new",
+        expect.objectContaining({
+          id: "msg-2",
+          campaignId: "camp-1",
+          kind: "action",
+          displayName: "Arannis",
+        }),
+      );
+    });
+
+    it("rejects campaign chat access for non-members", async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce({
+        ...campaignWithOwner,
+        ownerId: "user-2",
+        members: [{ userId: "user-2", role: "owner" }],
+      });
+
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/messages")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(403);
+    });
+  });
+
+  describe("POST /api/campaigns/join", () => {
     const validInvite = {
-      id: 'invite-1',
-      campaignId: 'camp-1',
-      code: 'ABC123',
-      roleOnJoin: 'player',
+      id: "invite-1",
+      campaignId: "camp-1",
+      code: "ABC123",
+      roleOnJoin: "player",
       expiresAt: null,
       maxUses: 1,
       usedCount: 0,
       requireApproval: false,
-      createdBy: 'user-1',
-      createdAt: '2026-07-09T00:00:00.000Z'
+      createdBy: "user-1",
+      createdAt: "2026-07-09T00:00:00.000Z",
     };
 
-    it('joins a campaign with a valid invite code', async () => {
+    it("joins a campaign with a valid invite code", async () => {
       const token = await loginAsDm();
-      prismaService.campaignInvite.findUnique.mockResolvedValueOnce(validInvite);
+      prismaService.campaignInvite.findUnique.mockResolvedValueOnce(
+        validInvite,
+      );
       prismaService.campaignMember.findFirst.mockResolvedValueOnce(null);
       prismaService.campaignMember.create.mockResolvedValueOnce({
-        id: 'member-1',
-        campaignId: 'camp-1',
-        userId: 'user-1',
-        role: 'player',
-        displayName: 'ranger',
-        joinedAt: '2026-07-09T00:00:00.000Z'
+        id: "member-1",
+        campaignId: "camp-1",
+        userId: "user-1",
+        role: "player",
+        displayName: "ranger",
+        joinedAt: "2026-07-09T00:00:00.000Z",
       });
 
       await request(app.getHttpServer())
-        .post('/api/campaigns/join')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ code: 'ABC123' })
+        .post("/api/campaigns/join")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ code: "ABC123" })
         .expect(201)
         .expect(({ body }) => {
-          expect(body.id).toBe('member-1');
-          expect(body.campaignId).toBe('camp-1');
-          expect(body.userId).toBe('user-1');
-          expect(body.role).toBe('player');
-          expect(body.displayName).toBe('ranger');
+          expect(body.id).toBe("member-1");
+          expect(body.campaignId).toBe("camp-1");
+          expect(body.userId).toBe("user-1");
+          expect(body.role).toBe("player");
+          expect(body.displayName).toBe("ranger");
         });
 
       const createArgs = prismaService.campaignMember.create.mock.calls[0][0];
-      expect(createArgs.data.campaignId).toBe('camp-1');
-      expect(createArgs.data.role).toBe('player');
+      expect(createArgs.data.campaignId).toBe("camp-1");
+      expect(createArgs.data.role).toBe("player");
       const updateArgs = prismaService.campaignInvite.update.mock.calls[0][0];
       expect(updateArgs.data.usedCount).toEqual({ increment: 1 });
     });
 
-    it('rejects without authentication with 401', async () => {
+    it("rejects without authentication with 401", async () => {
       await request(app.getHttpServer())
-        .post('/api/campaigns/join')
-        .send({ code: 'ABC123' })
+        .post("/api/campaigns/join")
+        .send({ code: "ABC123" })
         .expect(401);
     });
 
-    it('rejects with missing code with 400', async () => {
+    it("rejects with missing code with 400", async () => {
       const token = await loginAsDm();
 
       await request(app.getHttpServer())
-        .post('/api/campaigns/join')
-        .set('Authorization', `Bearer ${token}`)
+        .post("/api/campaigns/join")
+        .set("Authorization", `Bearer ${token}`)
         .send({})
         .expect(400);
     });
 
-    it('rejects with 404 when invite does not exist', async () => {
+    it("rejects with 404 when invite does not exist", async () => {
       const token = await loginAsDm();
       prismaService.campaignInvite.findUnique.mockResolvedValueOnce(null);
       prismaService.campaignMember.findFirst.mockResolvedValueOnce(null);
 
       await request(app.getHttpServer())
-        .post('/api/campaigns/join')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ code: 'NOPE' })
+        .post("/api/campaigns/join")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ code: "NOPE" })
         .expect(404);
     });
 
-    it('rejects with 403 when invite has expired', async () => {
+    it("rejects with 403 when invite has expired", async () => {
       const token = await loginAsDm();
       prismaService.campaignInvite.findUnique.mockResolvedValueOnce({
         ...validInvite,
-        expiresAt: new Date('2020-01-01T00:00:00.000Z')
+        expiresAt: new Date("2020-01-01T00:00:00.000Z"),
       });
       prismaService.campaignMember.findFirst.mockResolvedValueOnce(null);
 
       await request(app.getHttpServer())
-        .post('/api/campaigns/join')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ code: 'ABC123' })
+        .post("/api/campaigns/join")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ code: "ABC123" })
         .expect(403);
     });
 
-    it('rejects with 403 when invite has reached its usage limit', async () => {
+    it("rejects with 403 when invite has reached its usage limit", async () => {
       const token = await loginAsDm();
       prismaService.campaignInvite.findUnique.mockResolvedValueOnce({
         ...validInvite,
         maxUses: 1,
-        usedCount: 1
+        usedCount: 1,
       });
       prismaService.campaignMember.findFirst.mockResolvedValueOnce(null);
 
       await request(app.getHttpServer())
-        .post('/api/campaigns/join')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ code: 'ABC123' })
+        .post("/api/campaigns/join")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ code: "ABC123" })
         .expect(403);
     });
 
-    it('returns the existing membership if already a member', async () => {
+    it("returns the existing membership if already a member", async () => {
       const token = await loginAsDm();
-      prismaService.campaignInvite.findUnique.mockResolvedValueOnce(validInvite);
+      prismaService.campaignInvite.findUnique.mockResolvedValueOnce(
+        validInvite,
+      );
       prismaService.campaignMember.findFirst
         .mockResolvedValueOnce({
-          userId: 'user-1',
-          role: 'player'
+          userId: "user-1",
+          role: "player",
         })
         .mockResolvedValueOnce({
-          id: 'member-1',
-          campaignId: 'camp-1',
-          userId: 'user-1',
-          role: 'player',
-          displayName: 'ranger',
-          joinedAt: '2026-07-09T00:00:00.000Z'
+          id: "member-1",
+          campaignId: "camp-1",
+          userId: "user-1",
+          role: "player",
+          displayName: "ranger",
+          joinedAt: "2026-07-09T00:00:00.000Z",
         });
 
       await request(app.getHttpServer())
-        .post('/api/campaigns/join')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ code: 'ABC123' })
+        .post("/api/campaigns/join")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ code: "ABC123" })
         .expect(201)
         .expect(({ body }) => {
-          expect(body.id).toBe('member-1');
-          expect(body.role).toBe('player');
+          expect(body.id).toBe("member-1");
+          expect(body.role).toBe("player");
         });
 
       expect(prismaService.campaignMember.create).not.toHaveBeenCalled();

@@ -3,17 +3,25 @@ import 'package:dnd_table_client/src/features/auth/data/auth_api_client.dart';
 import 'package:dnd_table_client/src/features/auth/data/auth_token_store.dart';
 import 'package:dnd_table_client/src/features/auth/domain/auth_session.dart';
 import 'package:dnd_table_client/src/features/campaigns/data/campaign_api_client.dart';
+import 'package:dnd_table_client/src/features/campaigns/data/campaign_socket_service.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign.dart';
+import 'package:dnd_table_client/src/features/app_preferences/data/app_preferences_store.dart';
+import 'package:dnd_table_client/src/features/app_preferences/domain/app_preferences.dart';
+import 'package:dnd_table_client/src/features/app_preferences/presentation/app_preferences_controller.dart';
+import 'package:dnd_table_client/src/features/characters/data/character_api_client.dart';
+import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/client_mode/domain/client_mode.dart';
+import 'package:dnd_table_client/src/features/content/data/content_api_client.dart';
+import 'package:dnd_table_client/src/features/content/domain/content.dart';
 import 'package:dnd_table_client/src/features/encounters/data/encounter_api_client.dart';
 import 'package:dnd_table_client/src/features/encounters/domain/encounter.dart';
 import 'package:dnd_table_client/src/features/rooms/data/room_api_client.dart';
+import 'package:dnd_table_client/src/features/rooms/domain/dice_roller.dart'
+    show DiceRoller;
 import 'package:dnd_table_client/src/features/rooms/domain/room.dart';
 import 'package:dnd_table_client/src/features/rooms/domain/room_roll.dart';
 import 'package:dnd_table_client/src/features/server_profiles/data/server_profile_store.dart';
 import 'package:dnd_table_client/src/features/server_profiles/domain/server_profile.dart';
-import 'package:dnd_table_client/src/features/sessions/data/session_api_client.dart';
-import 'package:dnd_table_client/src/features/sessions/domain/session.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -38,6 +46,24 @@ void main() {
 
     expect(find.text('连接你的跑团服务器'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, '添加服务器'), findsOneWidget);
+  });
+
+  testWidgets('shows a recoverable startup error instead of a blank page', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: InMemoryServerProfileStore(),
+        authTokenStore: InMemoryAuthTokenStore(),
+        appPreferencesController: AppPreferencesController(
+          store: _ThrowingAppPreferencesStore(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('启动失败'), findsOneWidget);
+    expect(find.textContaining('本地预览数据'), findsOneWidget);
   });
 
   testWidgets('switches client mode from settings', (tester) async {
@@ -131,7 +157,7 @@ void main() {
     expect(find.text('连接你的跑团服务器'), findsOneWidget);
   });
 
-  testWidgets('opens a saved server profile and shows campaign tab', (
+  testWidgets('opens a saved server profile and shows dashboard tab', (
     tester,
   ) async {
     final store = InMemoryServerProfileStore();
@@ -152,9 +178,10 @@ void main() {
     await tester.tap(find.text('Local Table'));
     await tester.pumpAndSettle();
 
-    // Default tab is 战役 (campaigns). Not logged in -> login prompt.
-    expect(find.text('战役'), findsWidgets);
-    expect(find.text('登录后管理战役'), findsOneWidget);
+    // Default tab is 首页, giving the app a product-level entry point.
+    expect(find.text('首页'), findsWidgets);
+    expect(find.text('跑团总览'), findsOneWidget);
+    expect(find.text('登录后同步战役、角色和跑团状态'), findsOneWidget);
 
     // Settings tab shows server info and mode.
     await tester.tap(find.text('设置'));
@@ -188,7 +215,116 @@ void main() {
     expect(find.text('当前模式：DM'), findsOneWidget);
   });
 
-  testWidgets('shows login prompt on table tab when not authenticated', (
+  testWidgets('settings tab exposes local app preferences', (tester) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: InMemoryAuthTokenStore(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('外观'), findsOneWidget);
+    expect(find.text('Material 3 主题色'), findsOneWidget);
+    expect(find.text('主题风格'), findsOneWidget);
+    expect(find.text('高对比 Material 3'), findsOneWidget);
+    expect(find.text('默认骰子'), findsOneWidget);
+    expect(find.text('列表密度'), findsOneWidget);
+    expect(find.text('掷骰确认'), findsOneWidget);
+    expect(find.text('规则与角色创建'), findsOneWidget);
+    expect(find.text('默认规则集'), findsOneWidget);
+    expect(find.text('默认创建方式'), findsOneWidget);
+    expect(find.text('显示 Legacy 内容'), findsOneWidget);
+    expect(find.text('角色卡'), findsOneWidget);
+    expect(find.text('默认角色卡标签'), findsOneWidget);
+    expect(find.text('显示字段来源'), findsOneWidget);
+    expect(find.text('显示负重'), findsOneWidget);
+    expect(find.text('角色状态写入日志'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('默认角色卡标签'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('总览'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('状态'), findsOneWidget);
+  });
+
+  testWidgets('settings tab toggles character runtime log preference', (
+    tester,
+  ) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+    final preferencesController = AppPreferencesController(
+      store: InMemoryAppPreferencesStore(),
+    );
+    await preferencesController.initialize();
+
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: InMemoryAuthTokenStore(),
+        appPreferencesController: preferencesController,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('角色状态写入日志'));
+    await tester.pumpAndSettle();
+    expect(
+      preferencesController.preferences.logCharacterRuntimeChanges,
+      isTrue,
+    );
+
+    await tester.tap(find.widgetWithText(SwitchListTile, '角色状态写入日志'));
+    await tester.pumpAndSettle();
+
+    expect(
+      preferencesController.preferences.logCharacterRuntimeChanges,
+      isFalse,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    preferencesController.dispose();
+  });
+
+  testWidgets('uses a navigation rail on wide screens', (tester) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: InMemoryAuthTokenStore(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byType(NavigationBar), findsNothing);
+  });
+
+  testWidgets('folds table into campaign tools instead of a top-level tab', (
     tester,
   ) async {
     final store = InMemoryServerProfileStore();
@@ -205,10 +341,8 @@ void main() {
     await tester.tap(find.text('Local Table'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('桌面'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('登录后进入桌面'), findsOneWidget);
+    expect(find.widgetWithText(NavigationDestination, '桌面'), findsNothing);
+    expect(find.text('战役'), findsWidgets);
   });
 
   testWidgets('shows a characters tab in the main shell', (tester) async {
@@ -234,6 +368,684 @@ void main() {
     expect(find.text('登录后管理角色'), findsOneWidget);
   });
 
+  testWidgets('characters tab uses compact list preference', (tester) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+    final tokenStore = InMemoryAuthTokenStore();
+    await tokenStore.saveTokens(
+      profile.id,
+      const StoredAuthTokens(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      ),
+    );
+    final preferencesController = AppPreferencesController(
+      store: InMemoryAppPreferencesStore(),
+    );
+    await preferencesController.initialize();
+    await preferencesController.setCompactLists(true);
+
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: tokenStore,
+        authClient: _FakeAuthClient(),
+        campaignClient: _FakeCampaignClient(),
+        characterClient: _FakeCharacterClient(),
+        contentClient: _FakeContentClient(
+          items: const [_fighterContent, _aasimarContent, _acolyteContent],
+        ),
+        appPreferencesController: preferencesController,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('角色').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('紧凑角色列表'), findsOneWidget);
+    expect(find.text('Arannis'), findsOneWidget);
+    expect(find.text('HP 24/24 · AC 15 · 先攻 +2'), findsOneWidget);
+
+    preferencesController.dispose();
+  });
+
+  testWidgets('characters tab opens the preferred creation flow', (
+    tester,
+  ) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+    final tokenStore = InMemoryAuthTokenStore();
+    await tokenStore.saveTokens(
+      profile.id,
+      const StoredAuthTokens(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      ),
+    );
+    final preferencesController = AppPreferencesController(
+      store: InMemoryAppPreferencesStore(),
+    );
+    await preferencesController.initialize();
+    await preferencesController.setDefaultCreationMethod('standard');
+
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: tokenStore,
+        authClient: _FakeAuthClient(),
+        campaignClient: _FakeCampaignClient(),
+        characterClient: _FakeCharacterClient(),
+        contentClient: _FakeContentClient(
+          items: const [_fighterContent, _aasimarContent, _acolyteContent],
+        ),
+        appPreferencesController: preferencesController,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('角色').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FloatingActionButton, '新角色'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('标准创建角色'), findsOneWidget);
+    expect(find.text('选择创建方式'), findsNothing);
+    expect(find.text('战士 / Fighter'), findsOneWidget);
+    expect(find.text('阿斯莫 / Aasimar'), findsOneWidget);
+    expect(find.text('侍僧 / Acolyte'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    preferencesController.dispose();
+  });
+
+  testWidgets('campaigns tab uses compact list preference', (tester) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+    final tokenStore = InMemoryAuthTokenStore();
+    await tokenStore.saveTokens(
+      profile.id,
+      const StoredAuthTokens(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      ),
+    );
+    final preferencesController = AppPreferencesController(
+      store: InMemoryAppPreferencesStore(),
+    );
+    await preferencesController.initialize();
+    await preferencesController.setCompactLists(true);
+
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: tokenStore,
+        authClient: _FakeAuthClient(),
+        campaignClient: _FakeCampaignClient(),
+        appPreferencesController: preferencesController,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('战役'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Starter Campaign'), findsOneWidget);
+    expect(find.text('主持人'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    preferencesController.dispose();
+  });
+
+  testWidgets('campaigns list shows character avatar and status summary', (
+    tester,
+  ) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+    final tokenStore = InMemoryAuthTokenStore();
+    await tokenStore.saveTokens(
+      profile.id,
+      const StoredAuthTokens(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      ),
+    );
+
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: tokenStore,
+        authClient: _FakeAuthClient(),
+        campaignClient: _FakeCampaignClient(),
+        characterClient: _FakeCharacterClient(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('战役'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CircleAvatar), findsWidgets);
+    expect(find.text('A'), findsOneWidget);
+    // 战役名和角色首字母头像应可见。
+    expect(find.text('Starter Campaign'), findsOneWidget);
+  });
+
+  testWidgets('campaign actions match player and dm modes', (tester) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+    final tokenStore = InMemoryAuthTokenStore();
+    await tokenStore.saveTokens(
+      profile.id,
+      const StoredAuthTokens(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      ),
+    );
+    final modeController = ClientModeController();
+
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: tokenStore,
+        authClient: _FakeAuthClient(),
+        campaignClient: _FakeCampaignClient(),
+        characterClient: _FakeCharacterClient(),
+        modeController: modeController,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('战役'));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('使用邀请码加入战役'), findsOneWidget);
+    expect(find.widgetWithText(FloatingActionButton, '加入战役'), findsNothing);
+    expect(find.widgetWithText(FloatingActionButton, '创建战役'), findsNothing);
+
+    await modeController.setMode(ClientMode.dungeonMaster);
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(FloatingActionButton, '创建战役'), findsOneWidget);
+    expect(find.widgetWithText(FloatingActionButton, '加入战役'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    modeController.dispose();
+  });
+
+  testWidgets('campaigns open a qq-style chat room with say and action input', (
+    tester,
+  ) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+    final tokenStore = InMemoryAuthTokenStore();
+    await tokenStore.saveTokens(
+      profile.id,
+      const StoredAuthTokens(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      ),
+    );
+
+    final campaignClient = _FakeCampaignClient(
+      initialMessages: const [
+        CampaignChatMessage(
+          id: 'msg-0',
+          campaignId: 'camp-1',
+          senderId: 'user-1',
+          characterId: 'char-1',
+          displayName: 'Arannis',
+          avatarUrl: null,
+          kind: 'say',
+          content: '酒馆里已经坐满了冒险者',
+          createdAt: '2026-07-09T00:00:00.000Z',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: tokenStore,
+        authClient: _FakeAuthClient(),
+        campaignClient: campaignClient,
+        campaignSocketService: NoopCampaignSocketService(),
+        characterClient: _FakeCharacterClient(),
+        contentClient: _FakeContentClient(),
+        diceRoller: DiceRoller(nextInt: (_) => 19),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('战役'));
+    await tester.pumpAndSettle();
+
+    // Group-chat-style list: last message summary + character status.
+    expect(find.textContaining('Arannis: 酒馆里已经坐满了冒险者'), findsOneWidget);
+    expect(find.text('主持人'), findsOneWidget);
+
+    await tester.tap(find.text('Starter Campaign'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Starter Campaign'), findsOneWidget);
+    expect(find.text('酒馆里已经坐满了冒险者'), findsOneWidget);
+    expect(find.text('Arannis · HP 24/24 · AC 15'), findsNWidgets(2));
+    expect(find.text('说'), findsOneWidget);
+    expect(find.text('做'), findsOneWidget);
+    expect(find.byKey(const Key('campaign-say-tab')), findsOneWidget);
+    expect(find.byKey(const Key('campaign-act-tab')), findsOneWidget);
+    expect(find.byTooltip('更多跑团功能'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('成员'));
+    await tester.pumpAndSettle();
+    expect(find.text('战役成员'), findsOneWidget);
+    expect(find.text('Arannis'), findsWidgets);
+    expect(find.text('Ranger · Elf'), findsOneWidget);
+    expect(find.text('HP 24/24 · AC 15'), findsOneWidget);
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('campaign-chat-input')),
+      '今晚从酒馆开始',
+    );
+    await tester.tap(find.text('发送'));
+    await tester.pumpAndSettle();
+    expect(find.text('今晚从酒馆开始'), findsOneWidget);
+    expect(find.text('Arannis · HP 24/24 · AC 15'), findsWidgets);
+
+    await tester.tap(find.text('做'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('campaign-chat-input')),
+      '推开吱呀作响的木门',
+    );
+    await tester.tap(find.text('发送'));
+    await tester.pumpAndSettle();
+
+    final actionText = tester.widget<Text>(find.text('推开吱呀作响的木门'));
+    expect(actionText.style?.fontStyle, FontStyle.italic);
+    expect(campaignClient.sentMessages.last.kind, 'action');
+    expect(campaignClient.sentMessages.last.characterId, 'char-1');
+    expect(campaignClient.sentMessages.last.displayName, 'Arannis');
+
+    await tester.tap(find.byTooltip('更多跑团功能'));
+    await tester.pumpAndSettle();
+    expect(find.text('桌面工具'), findsOneWidget);
+    expect(find.text('DM 控场'), findsNothing);
+    expect(find.text('检定请求'), findsOneWidget);
+    expect(find.text('掷骰'), findsOneWidget);
+    expect(find.text('角色卡'), findsOneWidget);
+    expect(find.text('资料库'), findsOneWidget);
+
+    await tester.tap(find.text('掷骰'));
+    await tester.pumpAndSettle();
+    expect(find.text('快速掷骰'), findsOneWidget);
+    await tester.tap(find.text('d20'));
+    await tester.pumpAndSettle();
+    expect(find.text('d20 = 20'), findsOneWidget);
+    expect(campaignClient.sentMessages.last.kind, 'roll');
+    expect(campaignClient.sentMessages.last.content, 'd20 = 20');
+
+    await tester.tap(find.byTooltip('更多跑团功能'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('资料库'));
+    await tester.pumpAndSettle();
+    expect(find.text('战役资料库'), findsOneWidget);
+    expect(find.text('Fire Bolt'), findsOneWidget);
+    expect(find.text('法术 · SRD'), findsOneWidget);
+    await tester.tap(find.text('Fire Bolt'));
+    await tester.pumpAndSettle();
+    expect(find.text('A mote of fire.'), findsOneWidget);
+    await tester.tap(find.widgetWithIcon(IconButton, Icons.close).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('更多跑团功能'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('角色卡'));
+    await tester.pumpAndSettle();
+    expect(find.text('Elf / Ranger / Lv.3'), findsOneWidget);
+    expect(find.text('属性'), findsWidgets);
+  });
+
+  testWidgets('campaign chat shows character conditions beside the name', (
+    tester,
+  ) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+    final tokenStore = InMemoryAuthTokenStore();
+    await tokenStore.saveTokens(
+      profile.id,
+      const StoredAuthTokens(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      ),
+    );
+    final conditionedCharacter = _character.copyWith(
+      data: const {
+        'runtime': {
+          'conditions': ['中毒', '倒地'],
+        },
+      },
+    );
+
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: tokenStore,
+        authClient: _FakeAuthClient(),
+        campaignClient: _FakeCampaignClient(
+          initialMessages: const [
+            CampaignChatMessage(
+              id: 'msg-conditions',
+              campaignId: 'camp-1',
+              senderId: 'user-1',
+              characterId: 'char-1',
+              displayName: 'Arannis',
+              avatarUrl: null,
+              kind: 'say',
+              content: 'I need help.',
+              createdAt: '2026-07-09T00:00:00.000Z',
+            ),
+          ],
+        ),
+        campaignSocketService: NoopCampaignSocketService(),
+        characterClient: _FakeCharacterClient(character: conditionedCharacter),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('战役'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Starter Campaign'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Arannis · HP 24/24 · AC 15 · 中毒, 倒地'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('campaign chat exposes table tools instead of session tab', (
+    tester,
+  ) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+    final tokenStore = InMemoryAuthTokenStore();
+    await tokenStore.saveTokens(
+      profile.id,
+      const StoredAuthTokens(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      ),
+    );
+    final preferencesController = AppPreferencesController(
+      store: InMemoryAppPreferencesStore(),
+    );
+    await preferencesController.initialize();
+    await preferencesController.setCompactLists(true);
+
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: tokenStore,
+        authClient: _FakeAuthClient(),
+        campaignClient: _FakeCampaignClient(),
+        campaignSocketService: NoopCampaignSocketService(),
+        characterClient: _FakeCharacterClient(),
+        contentClient: _FakeContentClient(),
+        appPreferencesController: preferencesController,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(NavigationDestination, '桌面'), findsNothing);
+
+    await tester.tap(find.text('战役'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Starter Campaign'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('更多跑团功能'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('桌面工具'), findsOneWidget);
+    expect(find.text('检定、日志和战役现场工具'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    preferencesController.dispose();
+  });
+
+  testWidgets('content library uses compact list preference', (tester) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+    final tokenStore = InMemoryAuthTokenStore();
+    await tokenStore.saveTokens(
+      profile.id,
+      const StoredAuthTokens(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      ),
+    );
+    final preferencesController = AppPreferencesController(
+      store: InMemoryAppPreferencesStore(),
+    );
+    await preferencesController.initialize();
+    await preferencesController.setCompactLists(true);
+
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: tokenStore,
+        authClient: _FakeAuthClient(),
+        campaignClient: _FakeCampaignClient(),
+        contentClient: _FakeContentClient(),
+        appPreferencesController: preferencesController,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('资料库'));
+    await tester.pumpAndSettle();
+    await tester.pumpAndSettle();
+
+    expect(find.text('紧凑资料列表'), findsOneWidget);
+    expect(find.text('Fire Bolt'), findsOneWidget);
+    expect(find.text('法术 · SRD'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    preferencesController.dispose();
+  });
+
+  testWidgets('dm can create a content item with a form instead of json', (
+    tester,
+  ) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+    final tokenStore = InMemoryAuthTokenStore();
+    await tokenStore.saveTokens(
+      profile.id,
+      const StoredAuthTokens(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      ),
+    );
+    final modeController = ClientModeController();
+    await modeController.setMode(ClientMode.dungeonMaster);
+    final contentClient = _FakeContentClient();
+
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: tokenStore,
+        authClient: _FakeAuthClient(),
+        campaignClient: _FakeCampaignClient(),
+        contentClient: contentClient,
+        modeController: modeController,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('内容库'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('新增资料'));
+    await tester.pumpAndSettle();
+    expect(find.text('新增资料'), findsOneWidget);
+    expect(find.text('法术'), findsWidgets);
+
+    final typeDropdown = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(DropdownMenu<String>),
+    );
+    await tester.tap(typeDropdown);
+    await tester.pumpAndSettle();
+    expect(find.text('物品'), findsWidgets);
+    expect(find.text('装备'), findsWidgets);
+    expect(find.text('种族'), findsWidgets);
+    expect(find.text('职业'), findsWidgets);
+    expect(find.text('背景'), findsWidgets);
+    expect(find.text('专长'), findsWidgets);
+    await tester.tap(find.text('法术').last);
+    await tester.pumpAndSettle();
+    expect(find.text('法术字段'), findsOneWidget);
+    expect(find.text('环阶'), findsOneWidget);
+    expect(find.text('学派'), findsOneWidget);
+    expect(find.text('施法时间'), findsOneWidget);
+    expect(find.text('仪式'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('content-item-name')),
+      'Magic Missile',
+    );
+    await tester.enterText(find.byKey(const Key('content-spell-level')), '1');
+    await tester.enterText(
+      find.byKey(const Key('content-spell-school')),
+      'evocation',
+    );
+    await tester.enterText(
+      find.byKey(const Key('content-spell-casting-time')),
+      '1 action',
+    );
+    await tester.tap(find.widgetWithText(FilterChip, '仪式'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('content-item-description')),
+      'A simple force spell.',
+    );
+    await tester.enterText(
+      find.byKey(const Key('content-item-source')),
+      'Homebrew',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.pumpAndSettle();
+
+    expect(contentClient.importedPackages, hasLength(1));
+    final imported = contentClient.importedPackages.single;
+    expect(imported['name'], '自定义资料');
+    final items = imported['items']! as List<Object?>;
+    final item = items.single! as Map<String, Object?>;
+    expect(item['type'], 'spell');
+    expect(item['name'], 'Magic Missile');
+    expect(item['description'], 'A simple force spell.');
+    expect(item['sourceLabel'], 'Homebrew');
+    expect(item['structured'], {
+      'level': 1,
+      'school': 'evocation',
+      'castingTime': '1 action',
+      'ritual': true,
+    });
+    expect(item['tags'], ['ritual']);
+  });
+
+  testWidgets('dm can preview and import a private content draft', (
+    tester,
+  ) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+    final tokenStore = InMemoryAuthTokenStore();
+    await tokenStore.saveTokens(
+      profile.id,
+      const StoredAuthTokens(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      ),
+    );
+    final modeController = ClientModeController();
+    await modeController.setMode(ClientMode.dungeonMaster);
+    final contentClient = _FakeContentClient();
+
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: tokenStore,
+        authClient: _FakeAuthClient(),
+        campaignClient: _FakeCampaignClient(),
+        contentClient: contentClient,
+        modeController: modeController,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('内容库'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('导入私有草稿'));
+    await tester.pumpAndSettle();
+    expect(find.text('导入私有草稿'), findsOneWidget);
+    expect(find.textContaining('不会提交到开源仓库'), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('private-draft-json')), '''{
+  "name": "Private PHB 2024 Index Draft",
+  "version": "0.1.0-private",
+  "schemaVersion": 1,
+  "locale": "zh-CN",
+  "items": [
+    {"type": "spell", "slug": "magic-missile", "name": "Magic Missile", "description": "", "sourceLabel": "Private PHB 2024 PDF Index"},
+    {"type": "class", "slug": "fighter", "name": "Fighter", "description": "", "sourceLabel": "Private PHB 2024 PDF Index"}
+  ]
+}''');
+
+    await tester.tap(find.text('预览'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 个条目 · class: 1, spell: 1'), findsOneWidget);
+    expect(contentClient.importCalls.single.dryRun, isTrue);
+
+    await tester.tap(find.text('导入到我的服务器'));
+    await tester.pumpAndSettle();
+
+    expect(contentClient.importedPackages, hasLength(1));
+    expect(contentClient.importCalls.last.dryRun, isFalse);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    modeController.dispose();
+  });
+
   testWidgets('shows a content library tab in the main shell', (tester) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
@@ -256,7 +1068,9 @@ void main() {
 
     expect(find.text('登录后查看资料库'), findsOneWidget);
   });
-  testWidgets('shows dm encounter control on table tab', (tester) async {
+  testWidgets('shows dm encounter control from campaign chat tools', (
+    tester,
+  ) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
     final tokenStore = InMemoryAuthTokenStore();
@@ -276,7 +1090,9 @@ void main() {
         authTokenStore: tokenStore,
         authClient: _FakeAuthClient(),
         campaignClient: _FakeCampaignClient(),
-        sessionClient: _FakeSessionClient(),
+        campaignSocketService: NoopCampaignSocketService(),
+        characterClient: _FakeCharacterClient(),
+        contentClient: _FakeContentClient(),
         encounterClient: _FakeEncounterClient(),
         modeController: modeController,
       ),
@@ -286,19 +1102,66 @@ void main() {
     await tester.tap(find.text('Local Table'));
     await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.descendant(
-        of: find.byType(NavigationBar),
-        matching: find.byIcon(Icons.table_restaurant_outlined),
+    await tester.tap(find.text('战役'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Starter Campaign'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('更多跑团功能'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('DM 控场'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('遭遇控场'), findsOneWidget);
+    expect(find.text('成员状态'), findsOneWidget);
+  });
+
+  testWidgets('player campaign chat hides dm-only table tools', (tester) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+    final tokenStore = InMemoryAuthTokenStore();
+    await tokenStore.saveTokens(
+      profile.id,
+      const StoredAuthTokens(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      ),
+    );
+
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: tokenStore,
+        authClient: _FakeAuthClient(),
+        campaignClient: _FakeCampaignClient(),
+        campaignSocketService: NoopCampaignSocketService(),
+        characterClient: _FakeCharacterClient(),
+        contentClient: _FakeContentClient(),
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('控场'));
+
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('战役'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Starter Campaign'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('更多跑团功能'));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('encounter-control-panel')), findsOneWidget);
-    expect(find.text('Road Ambush'), findsOneWidget);
+    expect(find.text('DM 控场'), findsNothing);
+    expect(find.text('检定请求'), findsOneWidget);
   });
+}
+
+class _ThrowingAppPreferencesStore implements AppPreferencesStore {
+  @override
+  Future<AppPreferences> load() async {
+    throw StateError('corrupt local preview data');
+  }
+
+  @override
+  Future<void> save(AppPreferences preferences) async {}
 }
 
 class _FakeRoomClient implements RoomClient {
@@ -409,6 +1272,12 @@ class _FakeAuthClient implements AuthClient {
 }
 
 class _FakeCampaignClient implements CampaignClient {
+  _FakeCampaignClient({List<CampaignChatMessage> initialMessages = const []})
+    : _messages = [...initialMessages];
+
+  final List<CampaignChatMessage> _messages;
+  final List<_SentCampaignMessage> sentMessages = [];
+
   @override
   Future<Campaign> createCampaign({
     required String apiBaseUrl,
@@ -434,7 +1303,11 @@ class _FakeCampaignClient implements CampaignClient {
     required String apiBaseUrl,
     required String accessToken,
   }) async {
-    return const [_campaign];
+    if (_messages.isEmpty) {
+      return const [_campaign];
+    }
+    // 模拟服务端 listCampaigns 返回最近一条消息。
+    return [_campaign.copyWith(lastMessage: _messages.last)];
   }
 
   @override
@@ -465,102 +1338,279 @@ class _FakeCampaignClient implements CampaignClient {
   }) {
     throw UnimplementedError();
   }
-}
 
-class _FakeSessionClient implements SessionClient {
   @override
-  Future<Session> createSession({
+  Future<List<CampaignChatMessage>> listMessages({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
+  }) async {
+    return _messages
+        .where((message) => message.campaignId == campaignId)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<CampaignChatMessage> sendMessage({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String kind,
+    required String content,
+    String? characterId,
+    String? displayName,
+    String? avatarUrl,
+  }) async {
+    sentMessages.add(
+      _SentCampaignMessage(
+        kind: kind,
+        content: content,
+        characterId: characterId,
+        displayName: displayName,
+      ),
+    );
+    final message = CampaignChatMessage(
+      id: 'msg-${_messages.length + 1}',
+      campaignId: campaignId,
+      senderId: 'user-1',
+      characterId: characterId,
+      displayName: displayName ?? 'dm',
+      avatarUrl: avatarUrl,
+      kind: kind,
+      content: content,
+      createdAt: '2026-07-09T00:00:00.000Z',
+    );
+    _messages.add(message);
+    return message;
+  }
+}
+
+class _SentCampaignMessage {
+  const _SentCampaignMessage({
+    required this.kind,
+    required this.content,
+    required this.characterId,
+    required this.displayName,
+  });
+
+  final String kind;
+  final String content;
+  final String? characterId;
+  final String? displayName;
+}
+
+class _FakeCharacterClient implements CharacterClient {
+  _FakeCharacterClient({CharacterSheet character = _character})
+    : _characterSheet = character;
+
+  final CharacterSheet _characterSheet;
+
+  @override
+  Future<List<CharacterSheet>> listCharacters({
+    required String apiBaseUrl,
+    required String accessToken,
+  }) async {
+    return [_characterSheet];
+  }
+
+  @override
+  Future<CharacterSheet> createCharacter({
+    required String apiBaseUrl,
+    required String accessToken,
     required String name,
+    int? level,
+    String? classSummary,
+    String? raceSummary,
+    int? currentHp,
+    int? maxHp,
+    int? armorClass,
+    int? speed,
+    int? initiativeBonus,
+    Object? abilities,
+    Object? saves,
+    Object? skills,
+    Object? inventory,
+    Object? currency,
+    String? notes,
+    Object? data,
   }) {
     throw UnimplementedError();
   }
 
   @override
-  Future<List<Session>> listSessions({
+  Future<CharacterSheet> updateCharacter({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String characterId,
+    String? campaignId,
+    String? name,
+    int? level,
+    String? classSummary,
+    String? raceSummary,
+    int? currentHp,
+    int? maxHp,
+    int? armorClass,
+    int? speed,
+    int? initiativeBonus,
+    Object? abilities,
+    Object? saves,
+    Object? skills,
+    Object? inventory,
+    Object? currency,
+    String? notes,
+    Object? data,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<CharacterCampaignBinding> bindCharacterToCampaign({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String characterId,
+    required String campaignId,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<CharacterCampaignBinding>> listCampaignCharacters({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
+  }) async {
+    return [
+      CharacterCampaignBinding(
+        id: 'bind-1',
+        campaignId: campaignId,
+        characterId: _characterSheet.id,
+        userId: 'user-1',
+        visibility: 'party',
+        status: 'active',
+        dmNotes: '',
+        joinedAt: '2026-07-09T00:00:00.000Z',
+        updatedAt: '2026-07-09T00:00:00.000Z',
+        character: _characterSheet,
+      ),
+    ];
+  }
+
+  @override
+  Future<CharacterSheet> adjustCampaignCharacterHp({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String characterId,
+    int? delta,
+    int? currentHp,
+  }) {
+    throw UnimplementedError();
+  }
+}
+
+class _FakeContentClient implements ContentClient {
+  _FakeContentClient({this.items = const [_contentItem]});
+
+  final List<ContentItem> items;
+  final List<Map<String, Object?>> importedPackages = [];
+  final List<({bool dryRun, Map<String, Object?> package})> importCalls = [];
+
+  @override
+  Future<ImportContentPackageResult> importPackage({
+    required String apiBaseUrl,
+    required String accessToken,
+    required Object package,
+    bool dryRun = false,
+  }) async {
+    final packageMap = Map<String, Object?>.from(
+      package as Map<dynamic, dynamic>,
+    );
+    importCalls.add((dryRun: dryRun, package: packageMap));
+    if (!dryRun) {
+      importedPackages.add(packageMap);
+    }
+    return ImportContentPackageResult(
+      valid: true,
+      errors: const [],
+      package: ContentPackage(
+        id: 'pkg-${importedPackages.length}',
+        scope: 'user',
+        ownerUserId: 'user-1',
+        campaignId: null,
+        name: packageMap['name']! as String,
+        version: packageMap['version']! as String,
+        schemaVersion: packageMap['schemaVersion']! as int,
+        locale: packageMap['locale']! as String,
+        status: 'active',
+        createdBy: 'user-1',
+        createdAt: '2026-07-09T00:00:00.000Z',
+        updatedAt: '2026-07-09T00:00:00.000Z',
+      ),
+    );
+  }
+
+  @override
+  Future<List<ContentPackage>> listPackages({
+    required String apiBaseUrl,
+    required String accessToken,
   }) async {
     return const [];
   }
 
   @override
-  Future<Session> getSession({
+  Future<Map<String, Object?>> exportPackage({
     required String apiBaseUrl,
     required String accessToken,
-    required String sessionId,
+    required String packageId,
   }) {
     throw UnimplementedError();
   }
 
   @override
-  Future<Session> startSession({
+  Future<List<ContentItem>> listItems({
     required String apiBaseUrl,
     required String accessToken,
-    required String sessionId,
-  }) {
-    throw UnimplementedError();
+    String? type,
+    String? query,
+    String? packageId,
+  }) async {
+    return items
+        .where((item) => type == null || item.type == type)
+        .where(
+          (item) =>
+              query == null ||
+              item.name.toLowerCase().contains(query.toLowerCase()),
+        )
+        .toList(growable: false);
   }
 
   @override
-  Future<Session> endSession({
+  Future<List<ContentItem>> listAvailableCampaignItems({
     required String apiBaseUrl,
     required String accessToken,
-    required String sessionId,
-  }) {
-    throw UnimplementedError();
+    required String campaignId,
+    String? type,
+    String? query,
+  }) async {
+    return const [_contentItem];
   }
 
   @override
-  Future<List<ChatMessage>> listMessages({
+  Future<void> setCampaignPackage({
     required String apiBaseUrl,
     required String accessToken,
-    required String sessionId,
-  }) {
-    throw UnimplementedError();
-  }
+    required String campaignId,
+    required String packageId,
+    required bool enabled,
+  }) async {}
 
   @override
-  Future<ChatMessage> sendMessage({
+  Future<void> disableCampaignItem({
     required String apiBaseUrl,
     required String accessToken,
-    required String sessionId,
-    required String content,
-    String? kind,
-    String? visibility,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<List<DiceRoll>> listRolls({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String sessionId,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<DiceRoll> createRoll({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String sessionId,
-    required String notation,
-    required String actorName,
-    String? visibility,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<List<JournalEntry>> listJournal({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String sessionId,
+    required String campaignId,
+    required String itemId,
+    String? reason,
   }) {
     throw UnimplementedError();
   }
@@ -653,6 +1703,93 @@ const _campaign = Campaign(
   system: 'dnd5e',
   ownerId: 'user-1',
   status: 'active',
+  createdAt: '2026-07-09T00:00:00.000Z',
+  updatedAt: '2026-07-09T00:00:00.000Z',
+);
+
+const _character = CharacterSheet(
+  id: 'char-1',
+  ownerUserId: 'user-1',
+  name: 'Arannis',
+  avatarUrl: null,
+  system: 'dnd5e',
+  level: 3,
+  classSummary: 'Ranger',
+  raceSummary: 'Elf',
+  currentHp: 24,
+  maxHp: 24,
+  armorClass: 15,
+  speed: 30,
+  initiativeBonus: 2,
+  abilities: {'str': 10, 'dex': 14, 'con': 12, 'int': 10, 'wis': 14, 'cha': 8},
+  saves: {'dex': true, 'wis': true},
+  skills: {'察觉': true, '隐匿': true},
+  inventory: [
+    {'name': '长弓', 'quantity': 1},
+  ],
+  currency: {'gp': 10},
+  notes: '',
+  data: {},
+  createdAt: '2026-07-09T00:00:00.000Z',
+  updatedAt: '2026-07-09T00:00:00.000Z',
+);
+
+const _contentItem = ContentItem(
+  id: 'item-1',
+  packageId: 'pkg-1',
+  type: 'spell',
+  slug: 'fire-bolt',
+  name: 'Fire Bolt',
+  description: 'A mote of fire.',
+  structured: {'level': 0},
+  tags: ['cantrip'],
+  sourceLabel: 'SRD',
+  schemaVersion: 1,
+  createdAt: '2026-07-09T00:00:00.000Z',
+  updatedAt: '2026-07-09T00:00:00.000Z',
+);
+
+const _fighterContent = ContentItem(
+  id: 'content-class-fighter',
+  packageId: 'pkg-phb',
+  type: 'class',
+  slug: 'class-fighter',
+  name: '战士 / Fighter',
+  description: '',
+  structured: {'page': 60},
+  tags: ['private-phb-2024-index', 'class'],
+  sourceLabel: 'Private PHB 2024 PDF Index',
+  schemaVersion: 1,
+  createdAt: '2026-07-09T00:00:00.000Z',
+  updatedAt: '2026-07-09T00:00:00.000Z',
+);
+
+const _aasimarContent = ContentItem(
+  id: 'content-species-aasimar',
+  packageId: 'pkg-phb',
+  type: 'species',
+  slug: 'species-aasimar',
+  name: '阿斯莫 / Aasimar',
+  description: '',
+  structured: {'page': 113},
+  tags: ['private-phb-2024-index', 'species'],
+  sourceLabel: 'Private PHB 2024 PDF Index',
+  schemaVersion: 1,
+  createdAt: '2026-07-09T00:00:00.000Z',
+  updatedAt: '2026-07-09T00:00:00.000Z',
+);
+
+const _acolyteContent = ContentItem(
+  id: 'content-background-acolyte',
+  packageId: 'pkg-phb',
+  type: 'background',
+  slug: 'background-acolyte',
+  name: '侍僧 / Acolyte',
+  description: '',
+  structured: {'page': 111},
+  tags: ['private-phb-2024-index', 'background'],
+  sourceLabel: 'Private PHB 2024 PDF Index',
+  schemaVersion: 1,
   createdAt: '2026-07-09T00:00:00.000Z',
   updatedAt: '2026-07-09T00:00:00.000Z',
 );

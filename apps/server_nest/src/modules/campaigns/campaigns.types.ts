@@ -7,6 +7,34 @@ export interface CampaignView {
   status: string;
   createdAt: string;
   updatedAt: string;
+  lastMessage: CampaignChatMessageView | null;
+  memberPreview: CampaignMemberPreview[];
+}
+
+export interface CampaignMemberPreview {
+  userId: string;
+  displayName: string;
+  role: string;
+}
+
+export interface CampaignChatMessageView {
+  id: string;
+  campaignId: string;
+  senderId: string;
+  characterId: string | null;
+  displayName: string;
+  avatarUrl: string | null;
+  kind: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface CreateCampaignChatMessageInput {
+  kind?: string;
+  content: string;
+  characterId?: string | null;
+  displayName?: string;
+  avatarUrl?: string | null;
 }
 
 export interface CreateCampaignInput {

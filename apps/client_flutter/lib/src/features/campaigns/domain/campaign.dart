@@ -8,6 +8,8 @@ class Campaign {
     required this.status,
     required this.createdAt,
     required this.updatedAt,
+    this.lastMessage,
+    this.memberPreview = const [],
   });
 
   final String id;
@@ -18,8 +20,12 @@ class Campaign {
   final String status;
   final String createdAt;
   final String updatedAt;
+  final CampaignChatMessage? lastMessage;
+  final List<CampaignMemberPreview> memberPreview;
 
   factory Campaign.fromJson(Map<String, Object?> json) {
+    final lastMessageJson = json['lastMessage'];
+    final memberPreviewJson = json['memberPreview'];
     return Campaign(
       id: json['id']! as String,
       name: json['name']! as String,
@@ -29,6 +35,33 @@ class Campaign {
       status: json['status']! as String,
       createdAt: json['createdAt']! as String,
       updatedAt: json['updatedAt']! as String,
+      lastMessage: lastMessageJson is Map<String, Object?>
+          ? CampaignChatMessage.fromJson(lastMessageJson)
+          : null,
+      memberPreview: memberPreviewJson is List
+          ? memberPreviewJson
+              .whereType<Map<String, Object?>>()
+              .map(CampaignMemberPreview.fromJson)
+              .toList(growable: false)
+          : const [],
+    );
+  }
+
+  Campaign copyWith({
+    CampaignChatMessage? lastMessage,
+    List<CampaignMemberPreview>? memberPreview,
+  }) {
+    return Campaign(
+      id: id,
+      name: name,
+      description: description,
+      system: system,
+      ownerId: ownerId,
+      status: status,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      lastMessage: lastMessage ?? this.lastMessage,
+      memberPreview: memberPreview ?? this.memberPreview,
     );
   }
 
@@ -43,19 +76,130 @@ class Campaign {
             ownerId == other.ownerId &&
             status == other.status &&
             createdAt == other.createdAt &&
-            updatedAt == other.updatedAt;
+            updatedAt == other.updatedAt &&
+            lastMessage == other.lastMessage &&
+            _listEquals(memberPreview, other.memberPreview);
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        id,
+        name,
+        description,
+        system,
+        ownerId,
+        status,
+        createdAt,
+        updatedAt,
+        lastMessage,
+        Object.hashAll(memberPreview),
+      );
+}
+
+class CampaignMemberPreview {
+  const CampaignMemberPreview({
+    required this.userId,
+    required this.displayName,
+    required this.role,
+  });
+
+  final String userId;
+  final String displayName;
+  final String role;
+
+  factory CampaignMemberPreview.fromJson(Map<String, Object?> json) {
+    return CampaignMemberPreview(
+      userId: json['userId']! as String,
+      displayName: json['displayName']! as String,
+      role: json['role']! as String,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is CampaignMemberPreview &&
+            userId == other.userId &&
+            displayName == other.displayName &&
+            role == other.role;
+  }
+
+  @override
+  int get hashCode => Object.hash(userId, displayName, role);
+}
+
+bool _listEquals<T>(List<T> a, List<T> b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
+class CampaignChatMessage {
+  const CampaignChatMessage({
+    required this.id,
+    required this.campaignId,
+    required this.senderId,
+    required this.characterId,
+    required this.displayName,
+    required this.avatarUrl,
+    required this.kind,
+    required this.content,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String campaignId;
+  final String senderId;
+  final String? characterId;
+  final String displayName;
+  final String? avatarUrl;
+  final String kind;
+  final String content;
+  final String createdAt;
+
+  factory CampaignChatMessage.fromJson(Map<String, Object?> json) {
+    return CampaignChatMessage(
+      id: json['id']! as String,
+      campaignId: json['campaignId']! as String,
+      senderId: json['senderId']! as String,
+      characterId: json['characterId'] as String?,
+      displayName: json['displayName']! as String,
+      avatarUrl: json['avatarUrl'] as String?,
+      kind: json['kind']! as String,
+      content: json['content']! as String,
+      createdAt: json['createdAt']! as String,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is CampaignChatMessage &&
+            id == other.id &&
+            campaignId == other.campaignId &&
+            senderId == other.senderId &&
+            characterId == other.characterId &&
+            displayName == other.displayName &&
+            avatarUrl == other.avatarUrl &&
+            kind == other.kind &&
+            content == other.content &&
+            createdAt == other.createdAt;
   }
 
   @override
   int get hashCode => Object.hash(
     id,
-    name,
-    description,
-    system,
-    ownerId,
-    status,
+    campaignId,
+    senderId,
+    characterId,
+    displayName,
+    avatarUrl,
+    kind,
+    content,
     createdAt,
-    updatedAt,
   );
 }
 

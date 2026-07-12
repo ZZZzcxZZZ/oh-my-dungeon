@@ -1,0 +1,557 @@
+{
+  "name": "SRD 5.1 基础资料",
+  "version": "5.1.0",
+  "schemaVersion": 1,
+  "locale": "zh-CN",
+  "items": [
+    {
+      "type": "species",
+      "slug": "human",
+      "name": "人类 / Human",
+      "description": "广泛、雄心勃勃且适应力强。人类是各种世界中最常见的族群之一。",
+      "structured": { "size": "Medium", "speed": 30, "abilityScoreHint": "全部属性 +1" },
+      "tags": ["core", "srd"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "species",
+      "slug": "elf",
+      "name": "精灵 / Elf",
+      "description": "优雅、长寿且与魔法亲和的族群，擅长剑术与弓术。",
+      "structured": { "size": "Medium", "speed": 30, "abilityScoreHint": "敏捷 +2", "traits": ["黑暗视觉", "锐利感官", "精灵之魂", " trance"] },
+      "tags": ["core", "srd"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "species",
+      "slug": "dwarf",
+      "name": "矮人 / Dwarf",
+      "description": "结实、坚韧且精通工艺的族群，来自山脉与地底厅堂。",
+      "structured": { "size": "Medium", "speed": 25, "abilityScoreHint": "体质 +2", "traits": ["黑暗视觉", "矮人韧性", "矮人战斗训练", "石匠技艺"] },
+      "tags": ["core", "srd"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "species",
+      "slug": "halfling",
+      "name": "半身人 / Halfling",
+      "description": "身材矮小、性格开朗且运气极佳的族群。",
+      "structured": { "size": "Small", "speed": 25, "abilityScoreHint": "敏捷 +2", "traits": ["幸运", "英勇", "半身人灵巧"] },
+      "tags": ["core", "srd"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "species",
+      "slug": "dragonborn",
+      "name": "龙裔 / Dragonborn",
+      "description": "拥有龙族血脉的骄傲战士，能吐出毁灭性的龙息。",
+      "structured": { "size": "Medium", "speed": 30, "abilityScoreHint": "力量 +2、魅力 +1", "traits": ["龙息武器", "伤害抗性"] },
+      "tags": ["core", "srd"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "species",
+      "slug": "gnome",
+      "name": "侏儒 / Gnome",
+      "description": "好奇、机敏且充满创造力的矮小族群。",
+      "structured": { "size": "Small", "speed": 25, "abilityScoreHint": "智力 +2", "traits": ["黑暗视觉", "侏儒狡黠"] },
+      "tags": ["core", "srd"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "species",
+      "slug": "half-elf",
+      "name": "半精灵 / Half-Elf",
+      "description": "人类与精灵的混血后代，融合了两个世界的特长。",
+      "structured": { "size": "Medium", "speed": 30, "abilityScoreHint": "魅力 +2、其余两项各 +1", "traits": ["黑暗视觉", "精灵血脉"] },
+      "tags": ["core", "srd"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "species",
+      "slug": "half-orc",
+      "name": "半兽人 / Half-Orc",
+      "description": "人类与兽人的混血，强壮且在狂暴中无比凶猛。",
+      "structured": { "size": "Medium", "speed": 30, "abilityScoreHint": "力量 +2、体质 +1", "traits": ["黑暗视觉", "凶猛攻击", "不屈耐力"] },
+      "tags": ["core", "srd"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "species",
+      "slug": "tiefling",
+      "name": "提夫林 / Tiefling",
+      "description": "拥有邪魔血脉的族群，以智识与魅力克服偏见。",
+      "structured": { "size": "Medium", "speed": 30, "abilityScoreHint": "智力 +1、魅力 +2", "traits": ["黑暗视觉", "地狱抗性", "地狱审判"] },
+      "tags": ["core", "srd"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "class",
+      "slug": "fighter",
+      "name": "战士 / Fighter",
+      "description": "精通各类武器与战斗技巧的职业，在战线上无与伦比。",
+      "structured": { "hitDie": "d10", "primaryAbility": "力量或敏捷", "armorProficiency": ["轻甲", "中甲", "重甲", "盾牌"], "weaponProficiency": ["简易武器", "军用武器"] },
+      "tags": ["core", "srd", "martial"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "class",
+      "slug": "wizard",
+      "name": "法师 / Wizard",
+      "description": "通过研习学习魔法的施法者，能驾驭最强大的法术。",
+      "structured": { "hitDie": "d6", "primaryAbility": "智力", "spellcastingAbility": "智力", "armorProficiency": [], "weaponProficiency": ["匕首", "飞镖", "投石索", "轻弩", "重弩"] },
+      "tags": ["core", "srd", "caster"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "class",
+      "slug": "rogue",
+      "name": "游荡者 / Rogue",
+      "description": "依赖潜行、巧劲与偷袭的灵活职业。",
+      "structured": { "hitDie": "d8", "primaryAbility": "敏捷", "armorProficiency": ["轻甲"], "weaponProficiency": ["简易武器", "手弩", "长剑", "短剑", "短弓"] },
+      "tags": ["core", "srd", "martial"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "class",
+      "slug": "cleric",
+      "name": "牧师 / Cleric",
+      "description": "神力的代言人，既能治疗盟友也能惩戒敌人。",
+      "structured": { "hitDie": "d8", "primaryAbility": "感知", "spellcastingAbility": "感知", "armorProficiency": ["轻甲", "中甲", "盾牌"], "weaponProficiency": ["简易武器"] },
+      "tags": ["core", "srd", "caster"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "class",
+      "slug": "barbarian",
+      "name": "野蛮人 / Barbarian",
+      "description": "以原始狂暴驱动战斗的凶猛战士。",
+      "structured": { "hitDie": "d12", "primaryAbility": "力量", "armorProficiency": ["轻甲", "中甲", "盾牌"], "weaponProficiency": ["简易武器", "军用武器"] },
+      "tags": ["core", "srd", "martial"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "class",
+      "slug": "bard",
+      "name": "吟游诗人 / Bard",
+      "description": "用音乐与言辞编织魔法的全能施法者。",
+      "structured": { "hitDie": "d8", "primaryAbility": "魅力", "spellcastingAbility": "魅力", "armorProficiency": ["轻甲"], "weaponProficiency": ["简易武器", "手弩", "长剑", "短剑", "短弓"] },
+      "tags": ["core", "srd", "caster"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "class",
+      "slug": "druid",
+      "name": "德鲁伊 / Druid",
+      "description": "与自然共鸣的施法者，能化身野兽。",
+      "structured": { "hitDie": "d8", "primaryAbility": "感知", "spellcastingAbility": "感知", "armorProficiency": ["轻甲", "中甲（非金属）", "盾牌（非金属）"], "weaponProficiency": ["木棒", "匕首", "飞镖", "投石索", "长矛", "手镰", "短弓", "战斧"] },
+      "tags": ["core", "srd", "caster"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "class",
+      "slug": "monk",
+      "name": "武僧 / Monk",
+      "description": "将身体修炼为武器的武道大师。",
+      "structured": { "hitDie": "d8", "primaryAbility": "敏捷与感知", "armorProficiency": [], "weaponProficiency": ["简易武器", "短剑"] },
+      "tags": ["core", "srd", "martial"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "class",
+      "slug": "paladin",
+      "name": "圣武士 / Paladin",
+      "description": "立下神圣誓言的战士，结合武技与神力。",
+      "structured": { "hitDie": "d10", "primaryAbility": "力量与魅力", "spellcastingAbility": "魅力", "armorProficiency": ["轻甲", "中甲", "重甲", "盾牌"], "weaponProficiency": ["简易武器", "军用武器"] },
+      "tags": ["core", "srd", "martial"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "class",
+      "slug": "ranger",
+      "name": "游侠 / Ranger",
+      "description": "荒野中的猎手，精通追踪与远程战斗。",
+      "structured": { "hitDie": "d10", "primaryAbility": "敏捷与感知", "spellcastingAbility": "感知", "armorProficiency": ["轻甲", "中甲", "盾牌"], "weaponProficiency": ["简易武器", "军用武器"] },
+      "tags": ["core", "srd", "martial"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "class",
+      "slug": "sorcerer",
+      "name": "术士 / Sorcerer",
+      "description": "天生拥有魔力的施法者，血脉中流淌着原始力量。",
+      "structured": { "hitDie": "d6", "primaryAbility": "魅力", "spellcastingAbility": "魅力", "armorProficiency": [], "weaponProficiency": ["匕首", "飞镖", "投石索", "轻弩", "重弩"] },
+      "tags": ["core", "srd", "caster"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "class",
+      "slug": "warlock",
+      "name": "邪术师 / Warlock",
+      "description": "与异界存在立约的施法者，以力量换取秘密。",
+      "structured": { "hitDie": "d8", "primaryAbility": "魅力", "spellcastingAbility": "魅力", "armorProficiency": ["轻甲"], "weaponProficiency": ["简易武器"] },
+      "tags": ["core", "srd", "caster"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "background",
+      "slug": "acolyte",
+      "name": "侍僧 / Acolyte",
+      "description": "在神殿中服务过的角色，熟悉宗教仪轨与圣典。",
+      "structured": { "abilityScoreHint": "任意两项各 +1", "recommendedFeat": "", "skills": ["洞悉", "宗教"] },
+      "tags": ["core", "srd"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "background",
+      "slug": "criminal",
+      "name": "罪犯 / Criminal",
+      "description": "有过违法过往的角色，精通地下世界的门道。",
+      "structured": { "abilityScoreHint": "任意两项各 +1", "recommendedFeat": "", "skills": ["欺瞒", "隐匿"] },
+      "tags": ["core", "srd"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "background",
+      "slug": "folk-hero",
+      "name": "平民英雄 / Folk Hero",
+      "description": "出身卑微却为乡里挺身而出的角色。",
+      "structured": { "abilityScoreHint": "任意两项各 +1", "recommendedFeat": "", "skills": ["驯兽", "求生"] },
+      "tags": ["core", "srd"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "background",
+      "slug": "sage",
+      "name": "贤者 / Sage",
+      "description": "研习学问与古老知识的角色。",
+      "structured": { "abilityScoreHint": "任意两项各 +1", "recommendedFeat": "", "skills": ["奥秘", "历史"] },
+      "tags": ["core", "srd"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "background",
+      "slug": "soldier",
+      "name": "士兵 / Soldier",
+      "description": "受过军事训练的角色，擅长战斗与纪律。",
+      "structured": { "abilityScoreHint": "任意两项各 +1", "recommendedFeat": "", "skills": ["运动", "威吓"] },
+      "tags": ["core", "srd"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "feat",
+      "slug": "grappler",
+      "name": "擒抱手 / Grappler",
+      "description": "你擅长擒抱敌人并将其压制。",
+      "structured": { "category": "combat", "prerequisite": "力量 13 或更高" },
+      "tags": ["core", "srd"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "feat",
+      "slug": "great-weapon-master",
+      "name": "巨武器大师 / Great Weapon Master",
+      "description": "你擅长使用重型武器造成毁灭性打击。",
+      "structured": { "category": "combat", "prerequisite": "" },
+      "tags": ["core", "srd"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "feat",
+      "slug": "sharpshooter",
+      "name": "神射手 / Sharpshooter",
+      "description": "你精通远程武器，能精准命中远处的目标。",
+      "structured": { "category": "combat", "prerequisite": "" },
+      "tags": ["core", "srd"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "feat",
+      "slug": "spell-sniper",
+      "name": "法术狙击手 / Spell Sniper",
+      "description": "你擅长在远距离施放需要攻击检定的法术。",
+      "structured": { "category": "spellcasting", "prerequisite": "能施放至少一个法术" },
+      "tags": ["core", "srd"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "feat",
+      "slug": "tavern-brawler",
+      "name": "酒馆斗殴者 / Tavern Brawler",
+      "description": "你擅长即兴使用各种物品作为武器。",
+      "structured": { "category": "combat", "prerequisite": "" },
+      "tags": ["core", "srd"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "equipment",
+      "slug": "longsword",
+      "name": "长剑 / Longsword",
+      "description": " versatile 军用武器，可单手或双手挥砍。",
+      "structured": { "category": "weapon", "weaponType": "martial melee", "damage": "1d8 slashing", "versatileDamage": "1d10 slashing", "weight": 3, "price": "15 gp", "properties": ["versatile"] },
+      "tags": ["core", "srd", "weapon"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "equipment",
+      "slug": "shortsword",
+      "name": "短剑 / Shortsword",
+      "description": "轻巧灵便的军用武器，适合副手或体型较小的使用者。",
+      "structured": { "category": "weapon", "weaponType": "martial melee", "damage": "1d6 piercing", "weight": 2, "price": "10 gp", "properties": ["finesse", "light"] },
+      "tags": ["core", "srd", "weapon"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "equipment",
+      "slug": "dagger",
+      "name": "匕首 / Dagger",
+      "description": "小巧的简易武器，可近战也可投掷。",
+      "structured": { "category": "weapon", "weaponType": "simple melee", "damage": "1d4 piercing", "weight": 1, "price": "2 gp", "range": "20/60", "properties": ["finesse", "light", "thrown", "range"] },
+      "tags": ["core", "srd", "weapon"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "equipment",
+      "slug": "shortbow",
+      "name": "短弓 / Shortbow",
+      "description": "简易远程武器，适合轻型射击。",
+      "structured": { "category": "weapon", "weaponType": "simple ranged", "damage": "1d6 piercing", "weight": 2, "price": "25 gp", "range": "80/320", "properties": ["ammunition", "two-handed", "range"] },
+      "tags": ["core", "srd", "weapon"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "equipment",
+      "slug": "longbow",
+      "name": "长弓 / Longbow",
+      "description": "军用远程武器，射程远、威力强。",
+      "structured": { "category": "weapon", "weaponType": "martial ranged", "damage": "1d8 piercing", "weight": 2, "price": "50 gp", "range": "150/600", "properties": ["ammunition", "heavy", "two-handed", "range"] },
+      "tags": ["core", "srd", "weapon"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "equipment",
+      "slug": "leather-armor",
+      "name": "皮甲 / Leather Armor",
+      "description": "轻便的轻甲，适合潜行的角色。",
+      "structured": { "category": "armor", "armorType": "light", "ac": 11, "weight": 10, "price": "10 gp" },
+      "tags": ["core", "srd", "armor"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "equipment",
+      "slug": "chain-mail",
+      "name": "链甲 / Chain Mail",
+      "description": "重型重甲，提供优秀防护但需要高力量。",
+      "structured": { "category": "armor", "armorType": "heavy", "ac": 16, "weight": 55, "price": "75 gp", "strengthRequirement": 13, "stealthDisadvantage": true },
+      "tags": ["core", "srd", "armor"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "equipment",
+      "slug": "shield",
+      "name": "盾牌 / Shield",
+      "description": "可持于副手的防护装备，提升 AC。",
+      "structured": { "category": "armor", "armorType": "shield", "acBonus": 2, "weight": 6, "price": "10 gp" },
+      "tags": ["core", "srd", "armor"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "item",
+      "slug": "backpack",
+      "name": "背包 / Backpack",
+      "description": "用于携带装备的通用背包。",
+      "structured": { "category": "gear", "weight": 5, "price": "2 gp" },
+      "tags": ["core", "srd", "gear"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "item",
+      "slug": "thieves-tools",
+      "name": "盗贼工具 / Thieves' Tools",
+      "description": "用于撬锁与解除陷阱的工具套装。",
+      "structured": { "category": "tool", "weight": 1, "price": "25 gp" },
+      "tags": ["core", "srd", "tool"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "spell",
+      "slug": "fire-bolt",
+      "name": "火焰箭 / Fire Bolt",
+      "description": "向一个生物或物品射出一团火焰法弹。",
+      "structured": { "level": 0, "school": "Evocation", "castingTime": "1 action", "range": "120 feet", "components": "V, S", "duration": "Instantaneous", "ritual": false },
+      "tags": ["cantrip", "srd", "evocation"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "spell",
+      "slug": "ray-of-frost",
+      "name": "冷冻射线 / Ray of Frost",
+      "description": "射出一道寒冷能量束，造成伤害并降低目标速度。",
+      "structured": { "level": 0, "school": "Evocation", "castingTime": "1 action", "range": "60 feet", "components": "V, S", "duration": "Instantaneous", "ritual": false },
+      "tags": ["cantrip", "srd", "evocation"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "spell",
+      "slug": "mage-hand",
+      "name": "法师之手 / Mage Hand",
+      "description": "创造出一只幽灵般的巨手，可按意志移动并操作物体。",
+      "structured": { "level": 0, "school": "Conjuration", "castingTime": "1 action", "range": "30 feet", "components": "V, S", "duration": "1 minute", "ritual": false },
+      "tags": ["cantrip", "srd", "conjuration"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "spell",
+      "slug": "prestidigitation",
+      "name": "戏法 / Prestidigitation",
+      "description": "施展一个微小、简单的魔法效果。",
+      "structured": { "level": 0, "school": "Transmutation", "castingTime": "1 action", "range": "10 feet", "components": "V, S", "duration": "1 hour", "ritual": false },
+      "tags": ["cantrip", "srd", "transmutation"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "spell",
+      "slug": "magic-missile",
+      "name": "魔法飞弹 / Magic Missile",
+      "description": "射出三道自动命中的力场法弹，每道造成 1d4+1 力场伤害。",
+      "structured": { "level": 1, "school": "Evocation", "castingTime": "1 action", "range": "120 feet", "components": "V, S", "duration": "Instantaneous", "ritual": false },
+      "tags": ["level-1", "srd", "evocation"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "spell",
+      "slug": "shield",
+      "name": "护盾术 / Shield",
+      "description": "以反应动作创造一道力场屏障，获得 +5 AC 并免疫魔法飞弹。",
+      "structured": { "level": 1, "school": "Abjuration", "castingTime": "1 reaction", "range": "Self", "components": "V, S", "duration": "1 round", "ritual": false },
+      "tags": ["level-1", "srd", "abjuration"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "spell",
+      "slug": "cure-wounds",
+      "name": "治疗伤势 / Cure Wounds",
+      "description": "触碰一个生物，恢复 1d8+施法属性调整值的生命值。",
+      "structured": { "level": 1, "school": "Evocation", "castingTime": "1 action", "range": "Touch", "components": "V, S", "duration": "Instantaneous", "ritual": false },
+      "tags": ["level-1", "srd", "evocation"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "spell",
+      "slug": "healing-word",
+      "name": "治愈之言 / Healing Word",
+      "description": "以附赠动作使一个生物恢复 1d4+施法属性调整值的生命值。",
+      "structured": { "level": 1, "school": "Evocation", "castingTime": "1 bonus action", "range": "60 feet", "components": "V", "duration": "Instantaneous", "ritual": false },
+      "tags": ["level-1", "srd", "evocation"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "spell",
+      "slug": "sleep",
+      "name": "睡眠术 / Sleep",
+      "description": "向区域内生物倾注催眠魔法，使其陷入魔法沉睡。",
+      "structured": { "level": 1, "school": "Enchantment", "castingTime": "1 action", "range": "90 feet", "components": "V, S, M", "duration": "1 minute", "ritual": false },
+      "tags": ["level-1", "srd", "enchantment"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "spell",
+      "slug": "detect-magic",
+      "name": "侦测魔法 / Detect Magic",
+      "description": "感知 30 尺内的魔法光环，可辨识其学派。",
+      "structured": { "level": 1, "school": "Divination", "castingTime": "1 action", "range": "Self", "components": "V, S", "duration": "10 minutes", "ritual": true },
+      "tags": ["level-1", "srd", "divination", "ritual"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "spell",
+      "slug": "misty-step",
+      "name": "迷踪步 / Misty Step",
+      "description": "以附赠动作短暂化为银雾，瞬移到 30 尺内未占据空间。",
+      "structured": { "level": 2, "school": "Conjuration", "castingTime": "1 bonus action", "range": "Self", "components": "V", "duration": "Instantaneous", "ritual": false },
+      "tags": ["level-2", "srd", "conjuration"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "spell",
+      "slug": "hold-person",
+      "name": "定身术 / Hold Person",
+      "description": "使一个类人生物陷入定身状态，需进行感知豁免。",
+      "structured": { "level": 2, "school": "Enchantment", "castingTime": "1 action", "range": "60 feet", "components": "V, S, M", "duration": "1 minute", "ritual": false },
+      "tags": ["level-2", "srd", "enchantment"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "spell",
+      "slug": "invisibility",
+      "name": "隐形术 / Invisibility",
+      "description": "使一个生物隐形，持续至其攻击或施法。",
+      "structured": { "level": 2, "school": "Illusion", "castingTime": "1 action", "range": "Touch", "components": "V, S, M", "duration": "1 hour", "ritual": false },
+      "tags": ["level-2", "srd", "illusion"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "spell",
+      "slug": "fireball",
+      "name": "火球术 / Fireball",
+      "description": "射出一颗飞向指定点的火珠，爆发出 20 尺半径的火焰，造成 8d6 火焰伤害。",
+      "structured": { "level": 3, "school": "Evocation", "castingTime": "1 action", "range": "150 feet", "components": "V, S, M", "duration": "Instantaneous", "ritual": false },
+      "tags": ["level-3", "srd", "evocation"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "spell",
+      "slug": "lightning-bolt",
+      "name": "闪电束 / Lightning Bolt",
+      "description": "释放一道 100 尺长的闪电，造成 8d6 闪电伤害。",
+      "structured": { "level": 3, "school": "Evocation", "castingTime": "1 action", "range": "Self (100-foot line)", "components": "V, S, M", "duration": "Instantaneous", "ritual": false },
+      "tags": ["level-3", "srd", "evocation"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "spell",
+      "slug": "counterspell",
+      "name": "反制法术 / Counterspell",
+      "description": "以反应动作打断一个 3 环或更低法术。",
+      "structured": { "level": 3, "school": "Abjuration", "castingTime": "1 reaction", "range": "60 feet", "components": "S", "duration": "Instantaneous", "ritual": false },
+      "tags": ["level-3", "srd", "abjuration"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "spell",
+      "slug": "revivify",
+      "name": "复生术 / Revivify",
+      "description": "使一名在一小时内死亡的生物复活。",
+      "structured": { "level": 3, "school": "Necromancy", "castingTime": "1 action", "range": "Touch", "components": "V, S, M", "duration": "Instantaneous", "ritual": false },
+      "tags": ["level-3", "srd", "necromancy"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "spell",
+      "slug": "polymorph",
+      "name": "变形术 / Polymorph",
+      "description": "将一个生物变形为挑战等级不高于其等级的野兽。",
+      "structured": { "level": 4, "school": "Transmutation", "castingTime": "1 action", "range": "60 feet", "components": "V, S, M", "duration": "1 hour", "ritual": false },
+      "tags": ["level-4", "srd", "transmutation"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "spell",
+      "slug": "greater-invisibility",
+      "name": "高级隐形术 / Greater Invisibility",
+      "description": "使一个生物隐形，即使其攻击或施法也不显形。",
+      "structured": { "level": 4, "school": "Illusion", "castingTime": "1 action", "range": "Touch", "components": "V, S", "duration": "1 minute", "ritual": false },
+      "tags": ["level-4", "srd", "illusion"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "type": "spell",
+      "slug": "wall-of-force",
+      "name": "力场之墙 / Wall of Force",
+      "description": "创造一面不可破坏的隐形力场墙。",
+      "structured": { "level": 5, "school": "Evocation", "castingTime": "1 action", "range": "120 feet", "components": "V, S, M", "duration": "10 minutes", "ritual": false },
+      "tags": ["level-5", "srd", "evocation"],
+      "sourceLabel": "SRD 5.1 (CC BY 4.0)"
+    }
+  ]
+}

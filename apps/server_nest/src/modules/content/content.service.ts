@@ -92,7 +92,11 @@ export class ContentService {
   async listPackages(actor: AccessTokenPayload): Promise<ContentPackageView[]> {
     const packages = await this.prismaService.contentPackage.findMany({
       where: {
-        OR: [{ ownerUserId: actor.userId }, { createdBy: actor.userId }],
+        OR: [
+          { ownerUserId: actor.userId },
+          { createdBy: actor.userId },
+          { scope: "system" },
+        ],
         status: { not: "archived" },
       },
       orderBy: { updatedAt: "desc" },
@@ -113,6 +117,7 @@ export class ContentService {
       throw new NotFoundException("Content package not found");
     }
     if (
+      contentPackage.scope !== "system" &&
       contentPackage.ownerUserId !== actor.userId &&
       contentPackage.createdBy !== actor.userId
     ) {
@@ -143,7 +148,11 @@ export class ContentService {
   ): Promise<ContentItemView[]> {
     const packages = await this.prismaService.contentPackage.findMany({
       where: {
-        OR: [{ ownerUserId: actor.userId }, { createdBy: actor.userId }],
+        OR: [
+          { ownerUserId: actor.userId },
+          { createdBy: actor.userId },
+          { scope: "system" },
+        ],
         status: "active",
       },
       select: { id: true },
@@ -184,6 +193,7 @@ export class ContentService {
       throw new NotFoundException("Content item not found");
     }
     if (
+      item.package.scope !== "system" &&
       item.package.ownerUserId !== actor.userId &&
       item.package.createdBy !== actor.userId
     ) {

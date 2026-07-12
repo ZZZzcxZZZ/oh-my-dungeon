@@ -352,4 +352,70 @@ describe("content endpoints", () => {
       "content_item_disabled",
     );
   });
+
+  it("includes system packages visible to all users in listPackages", async () => {
+    const token = await login();
+    const systemPackage = {
+      ...packageRow,
+      id: "pkg-srd",
+      scope: "system",
+      ownerUserId: null,
+      createdBy: "system",
+      name: "SRD 5.1 基础资料",
+    };
+    prismaService.contentPackage.findMany.mockResolvedValueOnce([
+      systemPackage,
+    ]);
+
+    await request(app.getHttpServer())
+      .get("/api/content/packages")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toHaveLength(1);
+        expect(body[0].scope).toBe("system");
+        expect(body[0].name).toBe("SRD 5.1 基础资料");
+      });
+
+    const findManyArgs =
+      prismaService.contentPackage.findMany.mock.calls[0][0];
+    expect(findManyArgs.where.OR).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ scope: "system" }),
+      ]),
+    );
+  });
+
+  it("includes system package items in listItems", async () => {
+    const token = await login();
+    const systemPackage = {
+      id: "pkg-srd",
+      scope: "system",
+      ownerUserId: null,
+      status: "active",
+    };
+    prismaService.contentPackage.findMany.mockResolvedValueOnce([
+      systemPackage,
+    ]);
+    prismaService.contentItem.findMany.mockResolvedValueOnce([
+      { ...itemRow, id: "item-srd", packageId: "pkg-srd", name: "Magic Missile" },
+    ]);
+
+    await request(app.getHttpServer())
+      .get("/api/content/items?type=spell")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toHaveLength(1);
+        expect(body[0].name).toBe("Magic Missile");
+      });
+
+    const findManyArgs =
+      prismaService.contentPackage.findMany.mock.calls[0][0];
+    expect(findManyArgs.where.OR).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ scope: "system" }),
+      ]),
+    );
+  });
 });

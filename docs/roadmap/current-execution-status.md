@@ -1,331 +1,85 @@
 # 当前执行状态与版本推进计划
 
-更新时间：2026-07-09
-
-## 结论
-
-项目按 `docs/roadmap/mvp-roadmap.md` 的版本闸门推进：
-
-1. `v0.1 工程骨架` 已封版并打 tag `v0.1.0`。
-2. `v0.2 账号、服务器、双模式` 已完成并打 tag `v0.2.0`。
-3. `v0.3 战役与成员` 已完成并打 tag `v0.3.0`。
-4. `v0.4 跑团桌面基础版` 已完成并打 tag `v0.4.0`。`rooms` 原型已被 Session + DiceRoll 正式模型替换。
-5. `v0.5 角色卡基础版` 已完成，执行计划见 `docs/roadmap/v0.5-execution-plan.md`。
-6. `v0.6 内容库 MVP` 已完成，执行计划见 `docs/roadmap/v0.6-execution-plan.md`。
-7. `v0.7 DM 控场基础版` 已完成，执行计划见 `docs/roadmap/v0.7-execution-plan.md`。
-8. `v0.8 检定请求与快捷动作` 已完成，执行计划见 `docs/roadmap/v0.8-execution-plan.md`。
-9. `v1.0 自托管公测版` 已完成，执行计划见 `docs/roadmap/v1.0-execution-plan.md`。MVP 已完成。
-
-## 已完成代码状态
-
-### 工程基础
-
-- Monorepo 根结构已建立。
-- Flutter 客户端已初始化，使用 Material 3。
-- NestJS 服务端已初始化。
-- PostgreSQL + Prisma 配置已存在。
-- Docker Compose 与 `.env.example` 已存在。
-- `/health` 已实现。
-- `/.well-known/dnd-tool-server` 已实现。
-- 根目录脚本已提供 bootstrap、check、dev server/client 等入口。
-- CI 目录已存在。
-
-### 客户端服务器配置
-
-- 客户端可以保存服务器 profile。
-- 客户端可以添加、编辑、删除服务器。
-- 客户端可以读取 well-known metadata。
-- 客户端支持 Player/DM 模式切换。
-
-### 已提前实现的原型能力（冻结状态）
-
-这些能力有价值，但版本归属超前，不能继续在现有 `rooms` 抽象上无限加功能。v0.3 已建立正式 Campaign 模型后，下列原型进入**冻结状态**：不再新增功能、不绑定到 Campaign，仅保留为可运行的演示资产，待 v0.4 引入 Session 与正式 DiceRoll 模型时整体替换。
-
-- 服务端 `/api/rooms` 内存房间 API。
-- 服务端 `/api/rooms/:roomId/rolls` 内存掷骰记录 API。
-- 客户端房间列表和房间详情页。
-- 客户端 D20 掷骰与骰子表达式掷骰。
-- `dart_dice_parser` 已接入客户端领域层。
-
-> 注意：`/api/rooms` 与 `/api/campaigns` 是两套独立抽象。Campaign 成员不自动获得 rooms 权限，rooms 也不读取 Campaign 数据。禁止在 rooms 原型上叠加 Campaign/Session 逻辑。
-
-## 与路线图的差距
-
-### v0.1 已封版
-
-v0.1 工程骨架已封版并打 tag `v0.1.0`。工程基础、CI、Docker Compose、客户端服务器 profile 管理和 Player/DM 模式切换均已就位。`rooms` 和掷骰原型保留为资产，后续在 v0.3/v0.4 中归并到正式模型。
-
-### v0.2 已完成
-
-v0.2 账号、服务器、双模式里程碑已封版并打 tag `v0.2.0`。已完成内容：
-
-- Prisma `User` / `ServerAdmin` / `RefreshToken` 数据模型。
-- `PasswordHashService`（bcryptjs）。
-- `AuthService` 注册逻辑，首次注册用户成为 ServerAdmin owner，注册开关关闭时拒绝。
-- `POST /api/auth/register`。
-- `POST /api/auth/login`，支持 username 或 email，返回 access token + refresh token。
-- `GET /api/auth/me`，Bearer token 鉴权。
-- `POST /api/auth/refresh`，按 refresh token hash 校验，签发新 access token。
-- `POST /api/auth/logout`，revoke refresh token。
-- `GET /api/server-settings` / `PATCH /api/server-settings`，admin 可切换注册开关。
-- 客户端 `AuthTokenStore` 按 server profile id 隔离保存 token。
-- 客户端 `AuthApiClient` 覆盖 register/login/me/refresh/logout。
-- 客户端 `AuthPage` 登录/注册 UI，`AuthController` 管理会话状态。
-- 客户端 `ServerHomePage` 集成账号区，未登录显示登录/注册入口，已登录显示用户名和退出登录。
-
-### v0.3 已完成
-
-v0.3 战役与成员里程碑已完成并打 tag `v0.3.0`。已完成内容：
-
-- Prisma `Campaign` / `CampaignMember` / `CampaignInvite` 数据模型。
-- `CampaignPolicy` 纯领域权限策略（owner/dm/player 分级，含 14 个单元测试）。
-- `POST /api/campaigns` 创建战役，`GET /api/campaigns` 列表，`GET /api/campaigns/:id` 详情。
-- `POST /api/campaigns/:id/invites` 生成邀请码，`GET /api/campaigns/:id/invites` 列表（仅管理者可见）。
-- `POST /api/campaigns/join` 邀请码加入战役（含过期、用量上限、幂等重复加入处理）。
-- 服务端 23 个 e2e 测试覆盖全部战役 API。
-- 客户端 `CampaignApiClient` 覆盖全部 6 个端点（13 个测试）。
-- 客户端 `CampaignController` 监听 `AuthController` 在登出时清理状态。
-- 客户端 `CampaignListPage`（创建/加入战役）与 `CampaignDetailPage`（邀请码生成与复制）。
-- `ServerHomePage` 新增战役入口区。
-- `rooms` 原型保持冻结，未在 v0.3 迁移或扩展（见上文「已提前实现的原型能力（冻结状态）」）。
-
-### v0.4 已完成
-
-v0.4 跑团桌面基础版已完成并打 tag `v0.4.0`。已完成内容：
-
-- Prisma `Session` / `SessionMember` / `ChatMessage` / `DiceRoll` / `JournalEntry` 数据模型。
-- `SessionPolicy` 纯领域权限策略（owner/dm/player 分级，含单元测试）。
-- `POST /api/campaigns/:campaignId/sessions` 创建 Session（DM/owner）。
-- `GET /api/campaigns/:campaignId/sessions` 列表，`GET /api/sessions/:id` 详情（含成员与最近消息）。
-- `POST /api/sessions/:id/start` / `POST /api/sessions/:id/end` 生命周期控制。
-- `GET /api/sessions/:id/messages` / `POST /api/sessions/:id/messages` 聊天（含 dm 可见性过滤）。
-- `POST /api/sessions/:id/rolls` 掷骰（服务端解析表达式、落库、广播），`GET /api/sessions/:id/rolls`（按权限过滤）。
-- `GET /api/sessions/:id/journal` 日志，系统自动写入 session_started/session_ended/roll/roll_critical。
-- WebSocket Gateway（`/sessions` 命名空间，JWT 鉴权 + Campaign 成员校验），事件 `message:new`、`roll:new`、`session:updated`，暗骰只推给 DM/owner。
-- 客户端 UI 重构：引入 `MainShell` 底部导航（战役 / 桌面 / 设置），遵循 Material Design 3，替换 v0.2/v0.3 堆叠式 ListView。
-- 客户端 Session 领域：`SessionClient`、`SessionController`、`SessionSocketService`（含 `SocketIoSessionSocketService` 实时实现与 `NoopSessionSocketService` 测试桩）。
-- 客户端 `SessionDetailPage`：聊天时间线 + 掷骰输入 + 在线成员，时间线用 sealed class 合并消息与掷骰。
-- 客户端 `TableTabPage`：战役选择器 + 会话列表 + 进入活跃会话。
-- 服务端 25 个 sessions e2e 测试 + gateway 单元测试 + policy 单元测试。
-- 客户端 Session API client 与桌面 widget 测试。
-- `rooms` 原型已被 Session + DiceRoll 正式模型替换，`/api/rooms` 待后续版本下线。
-
-## 后续开发规则
-
-### 版本闸门
-
-每个版本开始前必须创建或更新一个版本执行计划，包含：
-
-- 版本目标。
-- 验收标准。
-- 任务列表。
-- 数据模型变更。
-- API 契约。
-- Flutter 页面/状态流。
-- 测试策略。
-- 不做事项。
-
-每个版本结束前必须满足：
-
-- 路线图验收标准逐项满足。
-- 文档同步更新。
-- 目标测试通过。
-- 版本闸门检查通过。
-- 必要时打 tag，例如 `v0.1.0`。
-
-### 提交粒度
-
-仍然允许小步提交，但提交必须服务于当前版本计划。提交信息建议带版本前缀：
-
-```text
-feat(v0.2): add user auth schema
-feat(v0.2): add register endpoint
-feat(v0.2): persist server token per profile
-docs(v0.2): update account setup guide
-```
-
-### 验证策略
-
-全量 `npm run doctor` 不是日常每个小改动的默认动作。后续采用分层验证：
-
-- 单个领域逻辑改动：运行对应单元测试。
-- 单个 Flutter 页面改动：运行对应 widget test + 必要时 `flutter analyze`。
-- 单个服务端 API 改动：运行对应 e2e 或 service test + 必要时 server lint。
-- 跨端契约改动：运行服务端相关测试 + 客户端 API 测试。
-- 版本闸门、合并前、依赖升级、Docker/CI/脚本改动：运行 `npm run doctor`。
-
-`doctor` 只证明当前工作区健康，不证明需求设计正确。版本计划和验收清单必须先行。
-
-## 下一版本执行顺序
-
-### 封版 v0.1
-
-目标：让工程骨架真实可复现，文档与代码一致。
-
-任务：
-
-1. 更新 README 当前状态。
-2. 更新 Agent 执行指南当前阶段。
-3. 检查 CI workflow 是否覆盖 server lint/test、Flutter analyze/test、Docker config/build。
-4. 检查 Docker Compose 一键启动路径。
-5. 记录 v0.1 缺口和不进入 v0.1 的超前原型。
-6. 通过 v0.1 验收后打 `v0.1.0` tag。
-
-### v0.2 账号、服务器、双模式
-
-目标：完成账号体系和服务器隔离，模式切换从本地偏好升级为登录后的用户偏好。
-
-任务组：
-
-1. 服务端 auth 数据模型：User、ServerAdmin、RefreshToken 或 Session。
-2. 服务端 auth API：register、login、refresh、logout、me。
-3. Server settings API：注册开关、服务器名称等。
-4. 客户端 auth 存储：按 server profile 隔离 token。
-5. 客户端登录/注册 UI。
-6. 客户端当前用户状态与退出登录。
-7. v0.2 文档与验收。
-
-### v0.3 战役与成员
-
-目标：替代当前 `rooms` 原型，用正式 Campaign 模型承载跑团组织。
-
-任务组：
-
-1. Campaign / CampaignMember / CampaignInvite Prisma 模型。
-2. Campaign 权限 policy。
-3. DM 创建战役。
-4. 邀请码生成与加入。
-5. Player/DM 战役列表。
-6. 成员管理基础版。
-7. ~~迁移或废弃 `rooms` 原型。~~ → 调整：`rooms` 原型在 v0.3 保持冻结（见上文「已提前实现的原型能力（冻结状态）」），不在 v0.3 迁移或删除。正式替换推迟到 v0.4，届时以 Session + DiceRoll 模型承接，并下线 `/api/rooms`。
-
-### v0.4 跑团桌面基础版
-
-目标：在 Campaign 下创建 Session，并提供聊天、公开骰、日志和实时同步。
-
-任务组：
-
-1. Session 模型和 API。
-2. DiceRoll 正式模型，替换当前 room roll。
-3. JournalEntry。
-4. ChatMessage。
-5. WebSocket gateway。
-6. 客户端 table 页面。
-7. 掷骰结果实时广播和持久化。
-
-### v0.5 角色卡基础版（已完成）
-
-目标：玩家可创建并维护角色卡，把角色绑定到战役；DM 可查看战役内角色。
-
-已完成：
-
-1. 创建 `docs/roadmap/v0.5-execution-plan.md`。
-2. Prisma 新增 `Character` / `CharacterCampaignBinding`。
-3. 服务端新增 `CharactersModule`：
-   - `POST /api/characters`
-   - `GET /api/characters`
-   - `GET /api/characters/:id`
-   - `PATCH /api/characters/:id`
-   - `POST /api/characters/:id/campaign-bindings`
-   - `GET /api/campaigns/:id/characters`
-   - `POST /api/campaigns/:campaignId/characters/:characterId/hp`
-4. 客户端新增角色 domain / API client / controller。
-5. 客户端底部导航调整为：战役 / 角色 / 桌面 / 设置。
-6. 客户端新增 `CharactersTabPage`，包含未登录提示、角色列表、基础创建/编辑、战役绑定和 HP 快捷调整。
-7. `CampaignDetailPage` 显示战役角色，DM/主持人可调整角色 HP。
-8. 角色更新与 HP 调整写入 `JournalEntry`。
-
-顺手修复：
-
-1. `GET /api/sessions/:id` 的 `recentMessages` 现在会过滤普通玩家不可见的 DM 消息。
-2. 客户端打开 Session 时会加载历史掷骰和 Journal，不再只显示最近聊天。
-
-### v0.6 内容库 MVP（已完成）
-
-目标：DM 可以管理可扩展资料，玩家可以查询当前战役可用内容并在角色卡中保存引用。
-
-已完成：
-
-1. 创建 `docs/roadmap/v0.6-execution-plan.md`。
-2. Prisma 新增 `ContentPackage` / `ContentItem` / `CampaignContentPackage` / `ContentOverride`。
-3. 服务端新增 `ContentModule`：
-   - `POST /api/content/packages/import`
-   - `GET /api/content/packages`
-   - `GET /api/content/items`
-   - `GET /api/content/items/:id`
-   - `POST /api/campaigns/:id/content/packages`
-   - `GET /api/campaigns/:id/content/available`
-   - `POST /api/campaigns/:id/content/overrides`
-4. 内容包导入支持 `dryRun` 校验，返回明确错误且不落库。
-5. 首版内容类型覆盖 `spell` / `item` / `feat` / `feature` / `monster` / `condition`。
-6. DM/owner 可以为战役启用或禁用内容包，并可以禁用单条内容。
-7. 战役成员只能查询当前战役启用且未禁用的内容。
-8. 内容包导入、战役启用内容包、禁用单条内容写入 `JournalEntry`。
-9. 客户端新增内容 domain / API client / controller。
-10. 客户端底部导航调整为：战役 / 角色 / 资料库（DM 模式显示内容库）/ 桌面 / 设置。
-11. 客户端新增 `ContentLibraryPage`，包含未登录提示、战役选择、类型筛选、搜索、DM JSON 导入校验和内容包启用。
-12. 角色卡支持保存轻量 `data.contentRefs`，包含法术、装备/物品、特性/专长引用 ID。
-
-### v0.7 DM 控场基础版（已完成）
-
-目标：DM 可以创建并管理遭遇，完成从 NPC、参战者到先攻回合推进的控场闭环。
-
-已完成：
-
-1. 创建 `docs/roadmap/v0.7-execution-plan.md`。
-2. Prisma 新增 `Npc` / `Encounter` / `EncounterParticipant`，并关联 Campaign、Session、Character、User。
-3. 服务端新增 `EncountersModule`：
-   - `POST /api/campaigns/:id/npcs`
-   - `GET /api/campaigns/:id/npcs`
-   - `POST /api/campaigns/:id/encounters`
-   - `GET /api/campaigns/:id/encounters`
-   - `GET /api/encounters/:id`
-   - `POST /api/encounters/:id/participants`
-   - `PATCH /api/encounters/:id/participants/:participantId`
-   - `POST /api/encounters/:id/start`
-   - `POST /api/encounters/:id/advance-turn`
-   - `POST /api/encounters/:id/end`
-4. 服务端按 CampaignMember 权限限制 DM/owner 管理操作，玩家只看到未隐藏参战者。
-5. 遭遇开始、推进回合、更新参战者、结束遭遇写入 `JournalEntry`。
-6. 客户端新增 encounter domain / API client / controller。
-7. `TableTabPage` 在 DM 模式下提供“场次 / 控场”页签，支持遭遇列表、创建遭遇、查看当前遭遇、开始/下一回合/结束和 HP 快捷调整。
-8. 修复已登录恢复后桌面页可能不补拉战役列表的问题。
-9. v0.7 封版验证：`npm run doctor` 全绿；服务端 16 套件 / 217 测试通过，客户端 101 测试通过，Flutter analyze 无问题。
-
-### v0.8 检定请求与快捷动作（已完成）
-
-目标：让跑团桌面具备“DM 发起检定，玩家一键响应，结果进入聊天与日志”的基础闭环。
-
-已完成：
-
-1. 创建 `docs/roadmap/v0.8-execution-plan.md`。
-2. Prisma 新增 `CheckRequest` / `CheckResponse`，并关联 Session、User、Character。
-3. 服务端新增 `CheckRequestsModule`：
-   - `POST /api/sessions/:id/check-requests`
-   - `GET /api/sessions/:id/check-requests`
-   - `POST /api/check-requests/:id/responses`
-   - `POST /api/check-requests/:id/close`
-4. DM/owner 可以发起全员、指定用户或指定角色的检定请求，DC 支持公开或隐藏。
-5. 玩家只能看到并响应面向自己的请求，且同一请求只能响应一次。
-6. 玩家响应时服务端掷 `1d20+modifier`，结果写入 `CheckResponse`、`DiceRoll`、`ChatMessage` 和 `JournalEntry`。
-7. 客户端新增 check_requests domain / API client / controller。
-8. `SessionDetailPage` 新增检定请求区域，支持 DM 发起/关闭请求和玩家输入修正值响应。
-9. v0.8 封版验证：`npm run doctor` 全绿；服务端 17 套件 / 223 测试通过，客户端 106 测试通过，Flutter analyze 无问题。
-
-### v1.0 自托管公测版（已完成）
-
-目标：让一个朋友团可以长期自托管使用。
-
-已完成：
-
-1. 创建 `docs/roadmap/v1.0-execution-plan.md`。
-2. 新增 `docs/deployment/backup-restore.md`，覆盖 PostgreSQL、`.env`、uploads 的备份恢复流程。
-3. 更新 `docs/deployment/self-hosting.md`，补充 Docker Compose 部署、维护、升级和反向代理提示。
-4. 服务端内容库新增 `GET /api/content/packages/:id/export`，可导出可迁移 JSON 内容包。
-5. 客户端 `ContentApiClient` 支持内容包导出，内容库页面提供复制 JSON 入口。
-6. `GET /api/sessions/:id/journal` 支持 `type` 与 `q` 查询参数，用于基础日志检索。
-7. v1.0 封版验证：`npm run doctor` 全绿；服务端 17 套件 / 225 测试通过，客户端 107 测试通过，Flutter analyze 无问题。
-
-## 立即行动
-
-MVP 已完成。下一阶段建议进入 v1.1 稳定化：修复 UI 文案细节、补充真实设备试用反馈、完善 Server Admin UI、增加端到端浏览器/桌面冒烟测试，并准备正式开源仓库元文件（LICENSE、CONTRIBUTING、SECURITY、CHANGELOG）。
+更新时间：2026-07-12
+
+## 版本结论
+
+项目当前统一为 `0.1` 开发线，尚未达到可用 MVP。此前文档中出现的 `v0.2`、`v0.4`、`v0.8`、`v1.x`、`v2.x` 只作为内部迭代记录保留，不代表对外版本，也不代表功能已经封版。
+
+后续开发不再新增旧式小版本号。所有计划、测试和文档都归入 `0.1`，可使用 `0.1-chat-01`、`0.1-content-02` 这类内部任务名。
+
+## 0.1 产品主线
+
+`0.1` 的目标是把已有原型收束成能开团使用的开源工具：
+
+- 战役是主入口，像 QQ 群聊一样陈列在客户端中。
+- 点击战役直接进入聊天室，不要求先创建场次、开始场次或进入另一层桌面。
+- 玩家以绑定角色的头像、名字和简要状态发言。
+- 输入区分为「说」和「做」两种模式：说话以聊天气泡显示，动作用斜体事件显示。
+- 掷骰、角色卡、资料库、检定请求、跑团日志和 DM 控场都从战役聊天室的 `+` 入口打开。
+- 资料库必须提供 GUI 新增、导入、启用和查询能力；JSON 只保留为高级入口。
+- 开源仓库只能内置可再分发内容。商业 PDF 只允许通过本地私有导入流程进入用户自己的服务器。
+
+## 已有可复用能力
+
+这些能力已经存在于代码中，但都视为 `0.1` 内部能力，而不是已发布版本：
+
+- Monorepo、Flutter 客户端、NestJS 服务端、PostgreSQL、Prisma、Docker Compose 和 CI。
+- 服务器 profile 管理、服务器发现、Player/DM 模式切换。
+- 账号系统：注册、登录、刷新、退出、当前用户、注册开关。
+- 战役系统：创建战役、邀请码、加入战役、成员权限。
+- Session / 聊天 / 掷骰 / 日志模型和实时广播能力。
+- 角色卡：创建、编辑、角色绑定战役、战役角色状态查看和 HP 调整。
+- 内容库：内容包校验、导入、导出、条目查询、战役启用内容包、战役可用资料查询。
+- DM 控场：NPC、遭遇、参战者、先攻推进、HP 和状态更新。
+- 检定请求：DM 发起、玩家响应、结果写入聊天和日志。
+- 设置中心：主题、密度、规则集、角色卡偏好和跑团日志偏好。
+
+## 当前 0.1 已推进
+
+- 客户端导航已收束为「首页 / 战役 / 角色 / 资料库 / 设置」。
+- 顶层「桌面」入口不再作为独立大页面暴露。
+- 战役列表以聊天室入口为核心。
+- 战役聊天室已有角色身份条、成员列表、说/做输入、加号工具菜单、掷骰、角色卡和资料库入口。
+- 战役页动作已按模式收束：Player 模式不再把“加入战役”放在底部主按钮，邀请码加入移动到顶部小入口；DM 模式才显示“创建战役”主按钮。
+- 战役列表已开始按群聊入口呈现绑定角色：条目前方显示角色头像 / 首字母，副标题显示 `角色名 · HP 当前/最大 · AC` 状态摘要，点击条目直接进入战役聊天室。
+- 战役聊天室 `+` 菜单已按模式收束：Player 不显示 DM 控场入口，DM 模式显示遭遇和成员状态入口。
+- 聊天消息头已开始按绑定角色显示简要状态，例如 `角色名 · HP 当前/最大 · AC`；若角色有状态条件，会继续显示 `中毒, 倒地` 这类摘要。后续继续扩展私聊可见性和系统事件。
+- 加号菜单已补入「桌面工具」和「DM 控场」入口，后续在这里继续接入检定、日志、遭遇和地图。
+- 资料库 GUI 已新增「导入私有草稿」入口，可粘贴 `*.content.private.json`，先预览条目数量/类型并 dry-run 校验，再导入到当前连接的自托管服务器。
+- 资料库 GUI 的「新增资料」已加入第一版类型字段模板：法术、装备 / 物品、种族、职业、背景、专长都会显示对应结构化字段，并写入 `structured` / `tags`。
+- 设置里的「默认创建方式」已接入角色创建入口：从角色页新建角色时会按偏好直接进入快速创建或标准创建，保留无偏好时的创建方式选择页。
+- 标准创建已开始使用资料库内容：角色页登录后加载全局资料库条目，新建角色时会优先用 `class` / `species` / `background` 条目生成职业、物种和背景选项；也可以从 `spell`、`equipment`、`item` 条目多选初始法术和装备，并写入角色 `data.contentRefs` 与初始 inventory；职业步骤已支持 1-20 级等级选择，并预览 HP、熟练加值、法术位和职业资源；属性步骤已支持 6 项能力值编辑，熟练步骤已支持技能熟练选择，职业资源会按职业 / 等级写入角色数据，并会重新计算 HP、AC 和先攻；没有资料库内容时保留内置兜底选项。
+- 角色状态页已支持职业资源运行时追踪：目前内置战士第二气息 / 动作如潮、野蛮人狂暴，旧角色若缺少 `data.classResources` 会按职业和等级自动推导；消耗 / 恢复会写入 `data.runtime.classResourcesUsed`。
+- 已从用户本地《玩家手册 2024》PDF 生成私有索引草稿：
+  - 路径：`private-imports/phb-2024-index-draft.content.private.json`
+  - 该目录已被 `.gitignore` 忽略。
+  - 草稿只保存目录索引和页码，不提交商业正文。
+
+## 当前缺口
+
+- 战役列表还需要进一步像群聊列表：最近消息、未读、成员头像叠放；绑定角色头像和状态摘要已有第一版。
+- 聊天消息还需要系统事件、私聊 / DM 可见性和更完整的骰点卡片；角色 HP/AC/状态条件旁显已有第一版。
+- 标准创建已有流程骨架、完成度、默认入口偏好和资料库驱动的职业 / 等级 / 种族 / 背景 / 属性 / 熟练 / 职业资源 / 法术 / 装备选项；后续还需要把法术准备和装备购买做成真正分步向导。
+- 「桌面工具」目前是入口壳，检定请求、日志和地图需要继续接入战役上下文。
+- 「DM 控场」目前是入口壳，遭遇面板需要从旧桌面页迁入战役工具。
+- 资料库 GUI 已有新增入口和字段模板，但还缺编辑、复制条目、批量导入确认向导和更完整的字段校验。
+- 私有 PHB 2024 草稿已覆盖职业、种族、专长和法术目录；装备目前只有章节 / 表格节点，仍需表格解析。
+- 不能把 PHB 2024 商业正文提交进仓库。若需要完整正文，只能保存在用户本地或用户自托管服务器中。
+
+## 0.1 下一步顺序
+
+1. 完成战役聊天室信息架构：群聊式列表、最近消息、角色状态摘要。
+2. 把检定请求和日志从旧 Session 详情迁入战役 `+` 工具。
+3. 把遭遇控场从旧桌面页迁入「DM 控场」底部页。
+4. 推进标准创建向导：法术准备和装备购买。
+5. 增强资料库 GUI：编辑条目、复制条目、批量确认私有草稿导入。
+6. 为私有 PHB 2024 导入器补装备表格解析和 GUI 确认流程。
+7. 清理旧 `rooms` 和旧顶层 `TableTabPage` 的用户入口；代码可暂留为迁移素材，但不再作为主流程。
+
+## 验证规则
+
+- 客户端页面改动：先写 widget test，看到失败，再实现，再运行目标测试。
+- 客户端收口：运行 `flutter analyze`、`flutter test`、`flutter build web --release`。
+- 服务端 API 改动：运行对应 service / e2e 测试和 `npm run lint:server`。
+- 跨端契约或版本闸门：运行 `npm run doctor`。

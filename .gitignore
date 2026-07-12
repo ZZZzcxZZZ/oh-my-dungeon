@@ -7,6 +7,9 @@ Thumbs.db
 node_modules/
 dist/
 coverage/
+.logs/
+__pycache__/
+*.pyc
 
 .dart_tool/
 .flutter-plugins
@@ -18,5 +21,12 @@ build/
 !.vscode/settings.json
 !.vscode/extensions.json
 
+# IDE-local metadata (TRAE)
+.trae/
+
 postgres-data/
 uploads/
+
+# Local/private content imports. Do not commit copyrighted rulebook extracts.
+private-imports/
+*.content.private.json

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../../features/app_preferences/presentation/app_preferences_controller.dart';
 import '../../../features/auth/presentation/auth_controller.dart';
 import '../../../features/campaigns/domain/campaign.dart';
 import '../../../features/campaigns/presentation/campaign_controller.dart';
+import '../../../features/characters/presentation/character_controller.dart';
 import '../../../features/check_requests/presentation/check_request_controller.dart';
 import '../../../features/client_mode/domain/client_mode.dart';
 import '../../../features/encounters/domain/encounter.dart';
@@ -24,6 +26,8 @@ class TableTabPage extends StatefulWidget {
     required this.campaignController,
     required this.sessionController,
     required this.checkRequestController,
+    required this.characterController,
+    required this.appPreferencesController,
     required this.encounterController,
     required this.socketService,
     required this.modeController,
@@ -35,6 +39,8 @@ class TableTabPage extends StatefulWidget {
   final CampaignController campaignController;
   final SessionController sessionController;
   final CheckRequestController checkRequestController;
+  final CharacterController characterController;
+  final AppPreferencesController appPreferencesController;
   final EncounterController encounterController;
   final SessionSocketService socketService;
   final ClientModeController modeController;
@@ -68,6 +74,7 @@ class _TableTabPageState extends State<TableTabPage> {
         widget.sessionController,
         widget.encounterController,
         widget.modeController,
+        widget.appPreferencesController,
       ]),
       builder: (context, _) {
         if (!widget.authController.isLoggedIn) {
@@ -262,6 +269,7 @@ class _TableTabPageState extends State<TableTabPage> {
     }
 
     final sessions = widget.sessionController.sessions;
+    final compact = widget.appPreferencesController.preferences.compactLists;
     if (sessions.isEmpty) {
       return Center(
         child: Padding(
@@ -276,13 +284,16 @@ class _TableTabPageState extends State<TableTabPage> {
     }
 
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+      padding: compact
+          ? const EdgeInsets.fromLTRB(12, 6, 12, 80)
+          : const EdgeInsets.fromLTRB(16, 8, 16, 96),
       itemCount: sessions.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 8),
+      separatorBuilder: (context, index) => SizedBox(height: compact ? 4 : 8),
       itemBuilder: (context, index) {
         final session = sessions[index];
         return _SessionCard(
           session: session,
+          compact: compact,
           onTap: () => _openSession(session),
         );
       },
@@ -300,6 +311,8 @@ class _TableTabPageState extends State<TableTabPage> {
           authController: widget.authController,
           sessionController: widget.sessionController,
           checkRequestController: widget.checkRequestController,
+          characterController: widget.characterController,
+          appPreferencesController: widget.appPreferencesController,
           socketService: widget.socketService,
         ),
       ),
@@ -599,9 +612,14 @@ class _ActiveEncounterPanel extends StatelessWidget {
 }
 
 class _SessionCard extends StatelessWidget {
-  const _SessionCard({required this.session, required this.onTap});
+  const _SessionCard({
+    required this.session,
+    required this.compact,
+    required this.onTap,
+  });
 
   final Session session;
+  final bool compact;
   final VoidCallback onTap;
 
   @override
@@ -616,9 +634,19 @@ class _SessionCard extends StatelessWidget {
 
     return Card(
       child: ListTile(
+        dense: compact,
+        visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
         leading: const Icon(Icons.table_restaurant_outlined),
         title: Text(session.name),
-        subtitle: Text(session.createdAt.split('T').first),
+        subtitle: compact
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('紧凑场次列表'),
+                  Text('${session.createdAt.split('T').first} · $label'),
+                ],
+              )
+            : Text(session.createdAt.split('T').first),
         trailing: Chip(label: Text(label), backgroundColor: color),
         onTap: onTap,
       ),

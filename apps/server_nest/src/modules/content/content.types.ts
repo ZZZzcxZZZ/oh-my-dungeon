@@ -1,5 +1,14 @@
 export type ContentItemType =
-  "spell" | "item" | "feat" | "feature" | "monster" | "condition";
+  | "spell"
+  | "item"
+  | "equipment"
+  | "species"
+  | "class"
+  | "background"
+  | "feat"
+  | "feature"
+  | "monster"
+  | "condition";
 
 export interface ContentPackageImportItem {
   type: ContentItemType | string;

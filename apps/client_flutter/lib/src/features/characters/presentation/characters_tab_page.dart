@@ -1,38 +1,69 @@
 import 'package:flutter/material.dart';
 
+import '../../app_preferences/presentation/app_preferences_controller.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../campaigns/presentation/campaign_controller.dart';
+import '../../content/presentation/content_controller.dart';
 import '../domain/character.dart';
+import '../domain/dnd5e_rules.dart';
+import 'character_detail_page.dart';
 import 'character_controller.dart';
+import 'character_editor_page.dart';
 
 class CharactersTabPage extends StatefulWidget {
   const CharactersTabPage({
     required this.authController,
     required this.characterController,
     required this.campaignController,
+    required this.contentController,
+    required this.appPreferencesController,
     super.key,
   });
 
   final AuthController authController;
   final CharacterController characterController;
   final CampaignController campaignController;
+  final ContentController contentController;
+  final AppPreferencesController appPreferencesController;
 
   @override
   State<CharactersTabPage> createState() => _CharactersTabPageState();
 }
 
 class _CharactersTabPageState extends State<CharactersTabPage> {
+  String? _loadedForToken;
+
   @override
   void initState() {
     super.initState();
+    widget.authController.addListener(_onAuthChanged);
     _maybeLoad();
   }
 
   void _maybeLoad() {
-    if (widget.authController.isLoggedIn) {
+    final token = widget.authController.accessToken;
+    if (widget.authController.isLoggedIn &&
+        token != null &&
+        token != _loadedForToken) {
+      _loadedForToken = token;
       widget.characterController.loadCharacters();
       widget.campaignController.loadCampaigns();
+      widget.contentController.loadItems();
     }
+  }
+
+  void _onAuthChanged() {
+    if (!widget.authController.isLoggedIn) {
+      _loadedForToken = null;
+      return;
+    }
+    _maybeLoad();
+  }
+
+  @override
+  void dispose() {
+    widget.authController.removeListener(_onAuthChanged);
+    super.dispose();
   }
 
   @override
@@ -42,6 +73,8 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
         widget.authController,
         widget.characterController,
         widget.campaignController,
+        widget.contentController,
+        widget.appPreferencesController,
       ]),
       builder: (context, _) {
         if (!widget.authController.isLoggedIn) {
@@ -52,7 +85,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
           appBar: AppBar(title: const Text('角色')),
           floatingActionButton: FloatingActionButton.extended(
             heroTag: 'create_character',
-            onPressed: _showCreateDialog,
+            onPressed: _openCreatePage,
             icon: const Icon(Icons.person_add_alt_1),
             label: const Text('新角色'),
           ),
@@ -112,6 +145,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     }
 
     final characters = widget.characterController.characters;
+    final compact = widget.appPreferencesController.preferences.compactLists;
     if (characters.isEmpty) {
       return const Center(
         child: Padding(
@@ -122,14 +156,18 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     }
 
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+      padding: compact
+          ? const EdgeInsets.fromLTRB(12, 8, 12, 80)
+          : const EdgeInsets.fromLTRB(16, 16, 16, 96),
       itemCount: characters.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 8),
+      separatorBuilder: (context, index) => SizedBox(height: compact ? 4 : 8),
       itemBuilder: (context, index) {
         final character = characters[index];
         return _CharacterCard(
           character: character,
-          onEdit: () => _showEditDialog(character),
+          compact: compact,
+          onOpen: () => _openDetailPage(character),
+          onEdit: () => _openEditPage(character),
           onContentRefs: () => _showContentRefsDialog(character),
           onBind: () => _showBindDialog(character),
           onHpDelta: (delta) => _adjustHp(character, delta),
@@ -138,180 +176,151 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     );
   }
 
-  Future<void> _showCreateDialog() async {
-    final nameController = TextEditingController();
-    final classController = TextEditingController();
-    final raceController = TextEditingController();
+  Future<void> _openCreatePage() async {
     final messenger = ScaffoldMessenger.of(context);
-
-    final result = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('新角色'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: '名称'),
-                autofocus: true,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: classController,
-                decoration: const InputDecoration(labelText: '职业'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: raceController,
-                decoration: const InputDecoration(labelText: '种族'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop({
-                'name': nameController.text.trim(),
-                'classSummary': classController.text.trim(),
-                'raceSummary': raceController.text.trim(),
-              }),
-              child: const Text('创建'),
-            ),
-          ],
-        );
-      },
+    widget.characterController.takeLastCreatedCharacter();
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) => CharacterEditorPage(
+          defaultCreationMethod:
+              widget.appPreferencesController.preferences.defaultCreationMethod,
+          contentItems: widget.contentController.items,
+          onSubmit: (draft) async {
+            final success = await widget.characterController.createCharacter(
+              name: draft.name,
+              level: draft.level,
+              classSummary: emptyToNull(draft.classSummary),
+              raceSummary: emptyToNull(draft.raceSummary),
+              currentHp: draft.currentHp,
+              maxHp: draft.maxHp,
+              armorClass: draft.armorClass,
+              speed: draft.speed,
+              initiativeBonus: draft.initiativeBonus,
+              abilities: draft.abilities,
+              saves: draft.saves,
+              skills: draft.skills,
+              inventory: draft.inventory,
+              currency: draft.currency,
+              notes: draft.notes,
+              data: draft.data,
+            );
+            if (mounted) {
+              messenger.showSnackBar(
+                SnackBar(content: Text(success ? '角色已创建' : '创建失败')),
+              );
+            }
+            return success;
+          },
+        ),
+      ),
     );
-
-    if (result == null || result['name']!.isEmpty) return;
-
-    final success = await widget.characterController.createCharacter(
-      name: result['name']!,
-      classSummary: emptyToNull(result['classSummary']),
-      raceSummary: emptyToNull(result['raceSummary']),
-    );
-
     if (!mounted) return;
-    messenger.showSnackBar(SnackBar(content: Text(success ? '角色已创建' : '创建失败')));
+    final createdCharacter = widget.characterController
+        .takeLastCreatedCharacter();
+    if (createdCharacter != null) {
+      await _openDetailPage(createdCharacter);
+    }
   }
 
-  Future<void> _showEditDialog(CharacterSheet character) async {
-    final nameController = TextEditingController(text: character.name);
-    final classController = TextEditingController(text: character.classSummary);
-    final raceController = TextEditingController(text: character.raceSummary);
-    final levelController = TextEditingController(text: '${character.level}');
-    final hpController = TextEditingController(text: '${character.currentHp}');
-    final maxHpController = TextEditingController(text: '${character.maxHp}');
-    final acController = TextEditingController(text: '${character.armorClass}');
+  Future<void> _openDetailPage(CharacterSheet character) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) => CharacterDetailPage(
+          character: character,
+          initialTab:
+              widget.appPreferencesController.preferences.defaultCharacterTab,
+          onUpdateRuntime:
+              ({
+                int? currentHp,
+                int? temporaryHp,
+                bool? inspiration,
+                List<String>? conditions,
+                int? deathSaveSuccesses,
+                int? deathSaveFailures,
+                Map<String, int>? spellSlotsUsed,
+                Map<String, int>? classResourcesUsed,
+              }) async {
+                if (currentHp != null) {
+                  await widget.characterController.updateCharacter(
+                    characterId: character.id,
+                    currentHp: currentHp,
+                  );
+                }
+                if (temporaryHp != null ||
+                    inspiration != null ||
+                    conditions != null ||
+                    deathSaveSuccesses != null ||
+                    deathSaveFailures != null ||
+                    spellSlotsUsed != null ||
+                    classResourcesUsed != null) {
+                  await widget.characterController.updateRuntimeState(
+                    characterId: character.id,
+                    temporaryHp: temporaryHp,
+                    inspiration: inspiration,
+                    conditions: conditions,
+                    deathSaveSuccesses: deathSaveSuccesses,
+                    deathSaveFailures: deathSaveFailures,
+                    spellSlotsUsed: spellSlotsUsed,
+                    classResourcesUsed: classResourcesUsed,
+                  );
+                }
+              },
+          onUpdateInventory:
+              ({
+                List<Map<String, Object>>? inventory,
+                Map<String, int>? currency,
+              }) {
+                return widget.characterController.updateInventoryAndCurrency(
+                  characterId: character.id,
+                  inventory: inventory,
+                  currency: currency,
+                );
+              },
+          onEdit: () {
+            Navigator.of(context).pop();
+            _openEditPage(character);
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openEditPage(CharacterSheet character) async {
     final messenger = ScaffoldMessenger.of(context);
-
-    final result = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('编辑角色'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(labelText: '名称'),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: levelController,
-                        decoration: const InputDecoration(labelText: '等级'),
-                        keyboardType: TextInputType.number,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: acController,
-                        decoration: const InputDecoration(labelText: 'AC'),
-                        keyboardType: TextInputType.number,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: hpController,
-                        decoration: const InputDecoration(labelText: 'HP'),
-                        keyboardType: TextInputType.number,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: maxHpController,
-                        decoration: const InputDecoration(labelText: 'HP 上限'),
-                        keyboardType: TextInputType.number,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: classController,
-                  decoration: const InputDecoration(labelText: '职业'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: raceController,
-                  decoration: const InputDecoration(labelText: '种族'),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop({
-                'name': nameController.text.trim(),
-                'classSummary': classController.text.trim(),
-                'raceSummary': raceController.text.trim(),
-                'level': levelController.text.trim(),
-                'currentHp': hpController.text.trim(),
-                'maxHp': maxHpController.text.trim(),
-                'armorClass': acController.text.trim(),
-              }),
-              child: const Text('保存'),
-            ),
-          ],
-        );
-      },
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) => CharacterEditorPage(
+          initialCharacter: character,
+          onSubmit: (draft) async {
+            final success = await widget.characterController.updateCharacter(
+              characterId: character.id,
+              name: draft.name,
+              level: draft.level,
+              classSummary: emptyToNull(draft.classSummary),
+              raceSummary: emptyToNull(draft.raceSummary),
+              currentHp: draft.currentHp,
+              maxHp: draft.maxHp,
+              armorClass: draft.armorClass,
+              speed: draft.speed,
+              initiativeBonus: draft.initiativeBonus,
+              abilities: draft.abilities,
+              saves: draft.saves,
+              skills: draft.skills,
+              inventory: draft.inventory,
+              currency: draft.currency,
+              notes: draft.notes,
+              data: draft.data,
+            );
+            if (mounted) {
+              messenger.showSnackBar(
+                SnackBar(content: Text(success ? '角色已保存' : '保存失败')),
+              );
+            }
+            return success;
+          },
+        ),
+      ),
     );
-
-    if (result == null || result['name']!.isEmpty) return;
-
-    final success = await widget.characterController.updateCharacter(
-      characterId: character.id,
-      name: result['name'],
-      classSummary: emptyToNull(result['classSummary']),
-      raceSummary: emptyToNull(result['raceSummary']),
-      level: int.tryParse(result['level'] ?? ''),
-      currentHp: int.tryParse(result['currentHp'] ?? ''),
-      maxHp: int.tryParse(result['maxHp'] ?? ''),
-      armorClass: int.tryParse(result['armorClass'] ?? ''),
-    );
-
-    if (!mounted) return;
-    messenger.showSnackBar(SnackBar(content: Text(success ? '角色已保存' : '保存失败')));
   }
 
   Future<void> _showBindDialog(CharacterSheet character) async {
@@ -465,6 +474,8 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
 class _CharacterCard extends StatelessWidget {
   const _CharacterCard({
     required this.character,
+    required this.compact,
+    required this.onOpen,
     required this.onEdit,
     required this.onContentRefs,
     required this.onBind,
@@ -472,6 +483,8 @@ class _CharacterCard extends StatelessWidget {
   });
 
   final CharacterSheet character;
+  final bool compact;
+  final VoidCallback onOpen;
   final VoidCallback onEdit;
   final VoidCallback onContentRefs;
   final VoidCallback onBind;
@@ -485,26 +498,71 @@ class _CharacterCard extends StatelessWidget {
       'Lv.${character.level}',
     ].join(' / ');
 
-    return Card(
+    return Card.outlined(
       child: ListTile(
-        leading: const CircleAvatar(child: Icon(Icons.person_outline)),
+        onTap: onOpen,
+        dense: compact,
+        visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+        leading: CircleAvatar(
+          child: Text(character.name.characters.first.toUpperCase()),
+        ),
         title: Text(character.name),
-        subtitle: Text(subtitle),
+        subtitle: compact
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('紧凑角色列表'),
+                  Text(subtitle),
+                  Text(
+                    'HP ${character.currentHp}/${character.maxHp} · AC ${character.armorClass} · 先攻 ${Dnd5eRules.formatModifier(character.initiativeBonus)}',
+                  ),
+                ],
+              )
+            : Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(subtitle),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        Chip(
+                          label: Text(
+                            'HP ${character.currentHp}/${character.maxHp}',
+                          ),
+                        ),
+                        Chip(label: Text('AC ${character.armorClass}')),
+                        Chip(
+                          label: Text(
+                            '先攻 ${Dnd5eRules.formatModifier(character.initiativeBonus)}',
+                          ),
+                        ),
+                        Chip(
+                          label: Text(
+                            '熟练 +${Dnd5eRules.proficiencyBonus(character.level)}',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
         trailing: Wrap(
-          spacing: 4,
+          spacing: 2,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Chip(label: Text('HP ${character.currentHp}/${character.maxHp}')),
-            Chip(label: Text('AC ${character.armorClass}')),
             IconButton(
               tooltip: 'HP -1',
               onPressed: () => onHpDelta(-1),
-              icon: const Icon(Icons.remove),
+              icon: const Icon(Icons.remove_circle_outline),
             ),
             IconButton(
               tooltip: 'HP +1',
               onPressed: () => onHpDelta(1),
-              icon: const Icon(Icons.add),
+              icon: const Icon(Icons.add_circle_outline),
             ),
             PopupMenuButton<_CharacterAction>(
               tooltip: '角色操作',

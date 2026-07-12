@@ -222,6 +222,7 @@ class SessionController extends ChangeNotifier {
 
   Future<bool> sendMessage({
     required String content,
+    String? kind,
     String? visibility,
   }) async {
     final token = accessToken;
@@ -239,6 +240,7 @@ class SessionController extends ChangeNotifier {
         accessToken: token,
         sessionId: session.id,
         content: content.trim(),
+        kind: kind,
         visibility: visibility,
       );
       _messages = [..._messages, message];

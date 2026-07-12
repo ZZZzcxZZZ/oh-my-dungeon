@@ -70,6 +70,7 @@ model Campaign {
   owner             User                       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   members           CampaignMember[]
   invites           CampaignInvite[]
+  chatMessages      CampaignChatMessage[]
   sessions          Session[]
   characterBindings CharacterCampaignBinding[]
   journal           JournalEntry[]
@@ -78,6 +79,23 @@ model Campaign {
   contentOverrides  ContentOverride[]
   npcs              Npc[]
   encounters        Encounter[]
+}
+
+model CampaignChatMessage {
+  id          String   @id @default(uuid())
+  campaignId  String
+  senderId    String
+  characterId String?
+  displayName String   @default("")
+  avatarUrl   String?
+  kind        String   @default("say")
+  content     String
+  createdAt   DateTime @default(now())
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, createdAt])
+  @@index([senderId])
+  @@index([characterId])
 }
 
 model CampaignMember {

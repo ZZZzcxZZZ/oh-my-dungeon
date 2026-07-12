@@ -73,6 +73,30 @@ final _membership = CampaignMembership(
   joinedAt: '2026-07-09T00:00:00.000Z',
 );
 
+final _campaignChatMessageJson = {
+  'id': 'msg-1',
+  'campaignId': 'camp-1',
+  'senderId': 'user-1',
+  'characterId': 'char-1',
+  'displayName': 'Arannis',
+  'avatarUrl': null,
+  'kind': 'action',
+  'content': '推开吱呀作响的木门',
+  'createdAt': '2026-07-09T00:00:00.000Z',
+};
+
+final _campaignChatMessage = CampaignChatMessage(
+  id: 'msg-1',
+  campaignId: 'camp-1',
+  senderId: 'user-1',
+  characterId: 'char-1',
+  displayName: 'Arannis',
+  avatarUrl: null,
+  kind: 'action',
+  content: '推开吱呀作响的木门',
+  createdAt: '2026-07-09T00:00:00.000Z',
+);
+
 void main() {
   group('CampaignApiClient.createCampaign', () {
     test('posts name and returns the created campaign', () async {
@@ -379,6 +403,76 @@ void main() {
           ),
         ),
       );
+    });
+  });
+
+  group('CampaignApiClient campaign chat messages', () {
+    test('lists campaign messages without a session', () async {
+      http.Request? captured;
+      final client = CampaignApiClient(
+        httpClient: MockClient((request) async {
+          captured = request;
+          return http.Response(
+            jsonEncode([_campaignChatMessageJson]),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+
+      final result = await client.listMessages(
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: _accessToken,
+        campaignId: 'camp-1',
+      );
+
+      expect(captured?.method, 'GET');
+      expect(
+        captured?.url.toString(),
+        '$_apiBaseUrl/campaigns/camp-1/messages',
+      );
+      expect(captured?.headers['authorization'], 'Bearer $_accessToken');
+      expect(result, [_campaignChatMessage]);
+    });
+
+    test('sends action messages with character summary', () async {
+      http.Request? captured;
+      final client = CampaignApiClient(
+        httpClient: MockClient((request) async {
+          captured = request;
+          return http.Response(
+            jsonEncode(_campaignChatMessageJson),
+            201,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+
+      final result = await client.sendMessage(
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: _accessToken,
+        campaignId: 'camp-1',
+        kind: 'action',
+        content: '推开吱呀作响的木门',
+        characterId: 'char-1',
+        displayName: 'Arannis',
+        avatarUrl: null,
+      );
+
+      expect(captured?.method, 'POST');
+      expect(
+        captured?.url.toString(),
+        '$_apiBaseUrl/campaigns/camp-1/messages',
+      );
+      expect(captured?.headers['authorization'], 'Bearer $_accessToken');
+      expect(jsonDecode(captured!.body), {
+        'kind': 'action',
+        'content': '推开吱呀作响的木门',
+        'characterId': 'char-1',
+        'displayName': 'Arannis',
+        'avatarUrl': null,
+      });
+      expect(result, _campaignChatMessage);
     });
   });
 

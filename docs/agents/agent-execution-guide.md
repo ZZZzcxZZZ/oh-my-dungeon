@@ -10,17 +10,20 @@
 4. `docs/architecture/domain-model.md`
 5. `docs/architecture/api-realtime-boundary.md`
 6. `docs/engineering/engineering-standards.md`
-7. `docs/roadmap/mvp-roadmap.md`
+7. `docs/roadmap/current-execution-status.md`
+8. `docs/roadmap/v0.1-unified-mvp-plan.md`
+9. `docs/content/private-phb-import-policy.md`
+10. `docs/content/phb-2024-private-import-notes.md`
 
 如果任务涉及部署，还必须阅读：
 
-8. `docs/deployment/self-hosting.md`
+11. `docs/deployment/self-hosting.md`
 
 ## 2. 当前阶段
 
-当前项目已完成 v1.0 自托管公测版，MVP 已完成。后续开发必须先阅读 `docs/roadmap/current-execution-status.md`，再按新的稳定化计划推进。
+当前项目统一回到 `0.1` 开发线，尚未达到用户认可的可用 MVP。此前 `v0.2`、`v0.8`、`v1.0`、`v2.x` 均视为内部迭代日志，不代表对外版本或完成状态。后续开发必须围绕 `docs/roadmap/v0.1-unified-mvp-plan.md` 推进。
 
-v0.4 已用正式 `Session` / `DiceRoll` / `ChatMessage` / `JournalEntry` 模型替换了 `rooms` 原型。`/api/rooms` 与客户端 rooms 页面保留为冻结资产，待后续版本下线，不要再在其上扩展业务功能。v0.5 已新增 `Character` / `CharacterCampaignBinding`，并完成角色创建、编辑、战役绑定、DM 战役角色视图、HP 快捷调整和角色变更 JournalEntry。v0.6 已新增内容库模型与资料库入口，完成 JSON 内容包 dry-run 校验、导入、战役启用/禁用和玩家可用内容查询。v0.7 已新增 NPC、Encounter、EncounterParticipant 与 DM 桌面控场入口，完成遭遇创建、参战者管理、开始/推进/结束、HP 快捷调整和 JournalEntry 记录。v0.8 已新增 CheckRequest / CheckResponse 与场次检定请求入口，完成 DM 发起、玩家响应、目标过滤、关闭请求，以及结果写入 ChatMessage / DiceRoll / JournalEntry。v1.0 已补齐内容包导出、Journal 检索、自托管部署与备份恢复文档。下一步进入 v1.1 稳定化。
+当前首要方向是：战役像 QQ 群聊一样成为主入口；用户点击战役即可聊天、说话、做动作、掷骰和打开更多跑团工具；角色卡、DM 控场、检定请求和资料库都应从战役聊天室上下文进入。`Session` / `DiceRoll` / `ChatMessage` / `JournalEntry` 等既有模型可以复用，但不能继续把“先新建场次、再开始”作为默认体验。`/api/rooms` 与客户端 rooms 页面仍是冻结资产，不再扩展。
 
 ## 3. 实施原则
 
@@ -49,7 +52,7 @@ v0.4 已用正式 `Session` / `DiceRoll` / `ChatMessage` / `JournalEntry` 模型
 
 ### 3.3 不提前实现非 MVP 功能
 
-不要在 v0.1-v0.3 中实现：
+不要在当前 `0.1` MVP 中实现：
 
 - 地图战棋。
 - AI。

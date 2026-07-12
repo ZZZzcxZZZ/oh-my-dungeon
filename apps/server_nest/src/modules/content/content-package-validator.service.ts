@@ -7,6 +7,10 @@ import type {
 const SUPPORTED_TYPES = new Set([
   "spell",
   "item",
+  "equipment",
+  "species",
+  "class",
+  "background",
   "feat",
   "feature",
   "monster",

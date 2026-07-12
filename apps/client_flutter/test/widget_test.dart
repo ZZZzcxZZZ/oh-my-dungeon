@@ -67,24 +67,31 @@ void main() {
   });
 
   testWidgets('switches client mode from settings', (tester) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
+
     await tester.pumpWidget(
       DndTableApp(
-        serverProfileStore: InMemoryServerProfileStore(),
+        serverProfileStore: store,
         authTokenStore: InMemoryAuthTokenStore(),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('设置'));
+    // 有默认 profile 时直接进入主界面（底部导航）。
+    expect(find.text('首页'), findsWidgets);
+
+    await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
 
     expect(find.text('客户端模式'), findsOneWidget);
     expect(find.text('Player'), findsOneWidget);
     expect(find.text('DM'), findsOneWidget);
 
-    await tester.tap(find.text('DM'));
+    await tester.ensureVisible(find.text('客户端模式'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('关闭'));
+    await tester.tap(find.text('DM'), warnIfMissed: false);
     await tester.pumpAndSettle();
 
     expect(find.text('当前模式：DM'), findsOneWidget);
@@ -209,7 +216,9 @@ void main() {
 
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('DM'));
+    await tester.ensureVisible(find.text('客户端模式'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('DM'), warnIfMissed: false);
     await tester.pumpAndSettle();
 
     expect(find.text('当前模式：DM'), findsOneWidget);

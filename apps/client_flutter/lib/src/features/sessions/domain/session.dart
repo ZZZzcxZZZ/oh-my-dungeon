@@ -115,6 +115,7 @@ class ChatMessage {
 
   bool get isRoll => kind == 'roll';
   bool get isSystem => kind == 'system';
+  bool get isCharacterRuntime => kind == 'character_runtime';
   bool get isDmOnly => visibility == 'dm';
 }
 

@@ -1,3 +1,5 @@
+import 'dnd5e_rules.dart';
+
 class CharacterSheet {
   const CharacterSheet({
     required this.id,
@@ -47,6 +49,71 @@ class CharacterSheet {
   final String createdAt;
   final String updatedAt;
 
+  Map<String, Object?> get abilityMap => _asMap(abilities);
+  Map<String, Object?> get saveMap => _asMap(saves);
+  Map<String, Object?> get skillMap => _asMap(skills);
+  Map<String, Object?> get currencyMap => _asMap(currency);
+  List<Object?> get inventoryList => _asList(inventory);
+  Map<String, Object?> get dataMap => _asMap(data);
+  Map<String, Object?> get runtimeMap => _asMap(dataMap['runtime']);
+  int get temporaryHp => _intValue(runtimeMap['temporaryHp']);
+  bool get inspiration => runtimeMap['inspiration'] == true;
+  List<String> get conditions => _asList(
+    runtimeMap['conditions'],
+  ).whereType<String>().toList(growable: false);
+  int get deathSaveSuccesses {
+    return _intValue(_asMap(runtimeMap['deathSaves'])['successes']);
+  }
+
+  int get deathSaveFailures {
+    return _intValue(_asMap(runtimeMap['deathSaves'])['failures']);
+  }
+
+  Map<String, int> get spellSlotsUsed {
+    return {
+      for (final entry in _asMap(runtimeMap['spellSlotsUsed']).entries)
+        entry.key: _intValue(entry.value),
+    };
+  }
+
+  Map<String, int> get classResourcesUsed {
+    return {
+      for (final entry in _asMap(runtimeMap['classResourcesUsed']).entries)
+        entry.key: _intValue(entry.value),
+    };
+  }
+
+  List<CharacterClassResource> get classResources {
+    final explicitResources = _asList(dataMap['classResources'])
+        .map((item) => _asMap(item))
+        .where((item) => item['id'] != null && item['name'] != null)
+        .map(
+          (item) => CharacterClassResource(
+            id: '${item['id']}',
+            name: '${item['name']}',
+            maximum: _intValue(item['maximum']),
+          ),
+        )
+        .where((item) => item.maximum > 0)
+        .toList(growable: false);
+    if (explicitResources.isNotEmpty) return explicitResources;
+    return Dnd5eRules.classResources(classSummary: classSummary, level: level)
+        .map(
+          (item) => CharacterClassResource(
+            id: item.id,
+            name: item.name,
+            maximum: item.maximum,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  List<String> get spellRefs {
+    return _asList(
+      _asMap(dataMap['contentRefs'])['spells'],
+    ).map((item) => '$item').where((item) => item.trim().isNotEmpty).toList();
+  }
+
   factory CharacterSheet.fromJson(Map<String, Object?> json) {
     return CharacterSheet(
       id: json['id']! as String,
@@ -84,6 +151,13 @@ class CharacterSheet {
     int? armorClass,
     int? speed,
     int? initiativeBonus,
+    Object? abilities,
+    Object? saves,
+    Object? skills,
+    Object? inventory,
+    Object? currency,
+    String? notes,
+    Object? data,
   }) {
     return CharacterSheet(
       id: id,
@@ -99,13 +173,13 @@ class CharacterSheet {
       armorClass: armorClass ?? this.armorClass,
       speed: speed ?? this.speed,
       initiativeBonus: initiativeBonus ?? this.initiativeBonus,
-      abilities: abilities,
-      saves: saves,
-      skills: skills,
-      inventory: inventory,
-      currency: currency,
-      notes: notes,
-      data: data,
+      abilities: abilities ?? this.abilities,
+      saves: saves ?? this.saves,
+      skills: skills ?? this.skills,
+      inventory: inventory ?? this.inventory,
+      currency: currency ?? this.currency,
+      notes: notes ?? this.notes,
+      data: data ?? this.data,
       createdAt: createdAt,
       updatedAt: updatedAt,
     );
@@ -152,6 +226,37 @@ class CharacterSheet {
     createdAt,
     updatedAt,
   );
+}
+
+class CharacterClassResource {
+  const CharacterClassResource({
+    required this.id,
+    required this.name,
+    required this.maximum,
+  });
+
+  final String id;
+  final String name;
+  final int maximum;
+}
+
+Map<String, Object?> _asMap(Object? value) {
+  if (value is Map<String, Object?>) return value;
+  if (value is Map) {
+    return value.map((key, item) => MapEntry('$key', item));
+  }
+  return {};
+}
+
+List<Object?> _asList(Object? value) {
+  if (value is List<Object?>) return value;
+  if (value is List) return List<Object?>.from(value);
+  return [];
+}
+
+int _intValue(Object? value) {
+  if (value is num) return value.toInt();
+  return 0;
 }
 
 class CharacterCampaignBinding {

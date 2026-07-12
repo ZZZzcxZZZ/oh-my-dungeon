@@ -100,6 +100,24 @@ void main() {
     controller.dispose();
     authController.dispose();
   });
+
+  test('loads global content items for character creation', () async {
+    final authController = await buildLoggedInAuthController();
+    final client = _FakeContentClient(items: [_item]);
+    final controller = ContentController(
+      apiBaseUrl: apiBaseUrl,
+      authController: authController,
+      contentClient: client,
+    );
+
+    await controller.loadItems(type: 'class', query: 'fighter');
+
+    expect(controller.items, [_item]);
+    expect(client.itemCalls.single, ('class', 'fighter'));
+
+    controller.dispose();
+    authController.dispose();
+  });
 }
 
 const _item = ContentItem(
@@ -188,12 +206,15 @@ class _FakeContentClient implements ContentClient {
       package: null,
     ),
     this.availableItems = const [],
+    this.items = const [],
   });
 
   final ImportContentPackageResult importResult;
   final List<ContentItem> availableItems;
+  final List<ContentItem> items;
   final List<({bool dryRun, Object package})> importCalls = [];
   final List<(String, String?, String?)> availableCalls = [];
+  final List<(String?, String?)> itemCalls = [];
 
   @override
   Future<ImportContentPackageResult> importPackage({
@@ -243,7 +264,8 @@ class _FakeContentClient implements ContentClient {
     String? query,
     String? packageId,
   }) async {
-    return const [];
+    itemCalls.add((type, query));
+    return items;
   }
 
   @override

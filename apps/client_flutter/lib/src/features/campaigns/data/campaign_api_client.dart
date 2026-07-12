@@ -43,6 +43,23 @@ abstract class CampaignClient {
     required String accessToken,
     required String code,
   });
+
+  Future<List<CampaignChatMessage>> listMessages({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+  });
+
+  Future<CampaignChatMessage> sendMessage({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String kind,
+    required String content,
+    String? characterId,
+    String? displayName,
+    String? avatarUrl,
+  });
 }
 
 class CampaignApiClient implements CampaignClient {
@@ -188,6 +205,64 @@ class CampaignApiClient implements CampaignClient {
     }
 
     return CampaignMembership.fromJson(
+      jsonDecode(response.body) as Map<String, Object?>,
+    );
+  }
+
+  @override
+  Future<List<CampaignChatMessage>> listMessages({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+  }) async {
+    final response = await _httpClient.get(
+      Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/messages'),
+      headers: {'authorization': 'Bearer $accessToken'},
+    );
+
+    if (response.statusCode != 200) {
+      throw _toException(response);
+    }
+
+    final decoded = jsonDecode(response.body) as List<Object?>;
+    return decoded
+        .map(
+          (item) => CampaignChatMessage.fromJson(item as Map<String, Object?>),
+        )
+        .toList();
+  }
+
+  @override
+  Future<CampaignChatMessage> sendMessage({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String kind,
+    required String content,
+    String? characterId,
+    String? displayName,
+    String? avatarUrl,
+  }) async {
+    final response = await _httpClient.post(
+      Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/messages'),
+      headers: {
+        'content-type': 'application/json',
+        'authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'kind': kind,
+        'content': content,
+        'characterId': characterId,
+        'displayName': displayName,
+        'avatarUrl': avatarUrl,
+      }),
+    );
+
+    if (response.statusCode != 201) {
+      throw _toException(response);
+    }
+
+    return CampaignChatMessage.fromJson(
       jsonDecode(response.body) as Map<String, Object?>,
     );
   }

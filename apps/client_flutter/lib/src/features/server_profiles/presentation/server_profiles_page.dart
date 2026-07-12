@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 
+import '../../app_preferences/presentation/app_preferences_controller.dart';
 import '../../auth/data/auth_api_client.dart';
 import '../../auth/data/auth_token_store.dart';
 import '../../campaigns/data/campaign_api_client.dart';
+import '../../campaigns/data/campaign_socket_service.dart';
 import '../../characters/data/character_api_client.dart';
 import '../../check_requests/data/check_request_api_client.dart';
 import '../../client_mode/domain/client_mode.dart';
 import '../../content/data/content_api_client.dart';
 import '../../encounters/data/encounter_api_client.dart';
 import '../../rooms/data/room_api_client.dart';
-import '../../server_home/presentation/main_shell.dart';
+import '../../rooms/domain/dice_roller.dart';
 import '../../sessions/data/session_api_client.dart';
 import '../data/server_discovery_client.dart';
 import '../data/server_profile_store.dart';
@@ -25,12 +27,16 @@ class ServerProfilesPage extends StatefulWidget {
     required this.roomClient,
     required this.authClient,
     required this.campaignClient,
+    this.campaignSocketService,
     required this.characterClient,
     required this.checkRequestClient,
     required this.contentClient,
     required this.encounterClient,
     required this.sessionClient,
     required this.modeController,
+    required this.appPreferencesController,
+    this.diceRoller,
+    this.onProfileActivated,
     super.key,
   });
 
@@ -40,12 +46,16 @@ class ServerProfilesPage extends StatefulWidget {
   final RoomClient roomClient;
   final AuthClient authClient;
   final CampaignClient campaignClient;
+  final CampaignSocketService? campaignSocketService;
   final CharacterClient characterClient;
   final CheckRequestClient checkRequestClient;
   final ContentClient contentClient;
   final EncounterClient encounterClient;
   final SessionClient sessionClient;
   final ClientModeController modeController;
+  final AppPreferencesController appPreferencesController;
+  final DiceRoller? diceRoller;
+  final ValueChanged<ServerProfile>? onProfileActivated;
 
   @override
   State<ServerProfilesPage> createState() => _ServerProfilesPageState();
@@ -333,26 +343,9 @@ class _ServerProfilesPageState extends State<ServerProfilesPage> {
                     leading: const Icon(Icons.dns_outlined),
                     title: Text(profile.name),
                     subtitle: Text(profile.baseUrl),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (context) {
-                            return MainShell(
-                              profile: profile,
-                              modeController: widget.modeController,
-                              roomClient: widget.roomClient,
-                              authTokenStore: widget.authTokenStore,
-                              authClient: widget.authClient,
-                              campaignClient: widget.campaignClient,
-                              characterClient: widget.characterClient,
-                              checkRequestClient: widget.checkRequestClient,
-                              contentClient: widget.contentClient,
-                              encounterClient: widget.encounterClient,
-                              sessionClient: widget.sessionClient,
-                            );
-                          },
-                        ),
-                      );
+                    onTap: () async {
+                      await widget.store.setDefaultProfileId(profile.id);
+                      widget.onProfileActivated?.call(profile);
                     },
                     trailing: _ServerProfileTrailing(
                       profile: profile,

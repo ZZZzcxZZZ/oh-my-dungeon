@@ -1,49 +1,103 @@
 import 'package:flutter/material.dart';
 
+import '../../app_preferences/presentation/app_preferences_controller.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../auth/presentation/auth_page.dart';
 import '../../client_mode/domain/client_mode.dart';
+import '../../server_profiles/data/server_profile_store.dart';
 import '../../server_profiles/domain/server_profile.dart';
 
 /// Top-level "设置" tab.
 ///
 /// Shows server info, account state (login entry or logged-in user with
 /// logout), and the Player/DM mode switch.
-class SettingsTabPage extends StatelessWidget {
+class SettingsTabPage extends StatefulWidget {
   const SettingsTabPage({
     required this.profile,
     required this.modeController,
     required this.authController,
+    required this.appPreferencesController,
+    this.serverProfileStore,
+    this.onSwitchServer,
     super.key,
   });
 
   final ServerProfile profile;
   final ClientModeController modeController;
   final AuthController authController;
+  final AppPreferencesController appPreferencesController;
+  final ServerProfileStore? serverProfileStore;
+  final VoidCallback? onSwitchServer;
+
+  @override
+  State<SettingsTabPage> createState() => _SettingsTabPageState();
+}
+
+class _SettingsTabPageState extends State<SettingsTabPage> {
+  List<ServerProfile> _allProfiles = const [];
+  bool _loadingProfiles = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfiles();
+  }
+
+  Future<void> _loadProfiles() async {
+    final store = widget.serverProfileStore;
+    if (store == null) return;
+    setState(() => _loadingProfiles = true);
+    final profiles = await store.listProfiles();
+    if (!mounted) return;
+    setState(() {
+      _allProfiles = profiles;
+      _loadingProfiles = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: Listenable.merge([modeController, authController]),
+      animation: Listenable.merge([
+        widget.modeController,
+        widget.authController,
+      ]),
       builder: (context, _) {
-        return Scaffold(
-          appBar: AppBar(title: const Text('设置')),
-          body: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _buildServerSection(context),
-              const SizedBox(height: 24),
-              _buildAccountSection(context),
-              const SizedBox(height: 24),
-              _buildModeSection(context),
-            ],
-          ),
+        return AnimatedBuilder(
+          animation: widget.appPreferencesController,
+          builder: (context, _) {
+            return Scaffold(
+              appBar: AppBar(title: const Text('设置')),
+              body: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildServerSection(context),
+                    const SizedBox(height: 24),
+                    _buildAccountSection(context),
+                    const SizedBox(height: 24),
+                    _buildModeSection(context),
+                    const SizedBox(height: 24),
+                    _buildAppearanceSection(context),
+                    const SizedBox(height: 24),
+                    _buildRulesSection(context),
+                    const SizedBox(height: 24),
+                    _buildCharacterSheetSection(context),
+                    const SizedBox(height: 24),
+                    _buildGameplaySection(context),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
   }
 
   Widget _buildServerSection(BuildContext context) {
+    final store = widget.serverProfileStore;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -54,14 +108,50 @@ class SettingsTabPage extends StatelessWidget {
             children: [
               ListTile(
                 leading: const Icon(Icons.dns_outlined),
-                title: Text(profile.name),
-                subtitle: Text(profile.baseUrl),
+                title: Text(widget.profile.name),
+                subtitle: Text(widget.profile.baseUrl),
               ),
               ListTile(
                 leading: const Icon(Icons.tag),
-                title: Text('版本 ${profile.lastKnownVersion}'),
+                title: Text('版本 ${widget.profile.lastKnownVersion}'),
                 dense: true,
               ),
+              if (store != null) ...[
+                const Divider(height: 1),
+                if (_loadingProfiles)
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  )
+                else if (_allProfiles.length <= 1)
+                  ListTile(
+                    leading: const Icon(Icons.add),
+                    title: const Text('添加其他服务器'),
+                    subtitle: const Text('在服务器选择页管理多个服务器'),
+                    onTap: widget.onSwitchServer,
+                  )
+                else
+                  ListTile(
+                    leading: const Icon(Icons.swap_horiz),
+                    title: const Text('切换服务器'),
+                    subtitle: Text(
+                      '当前 ${widget.profile.name}，共 ${_allProfiles.length} 个',
+                    ),
+                    onTap: widget.onSwitchServer,
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.list_alt),
+                  title: const Text('服务器列表'),
+                  subtitle: const Text('返回服务器选择页管理'),
+                  onTap: widget.onSwitchServer,
+                ),
+              ],
             ],
           ),
         ),
@@ -70,7 +160,7 @@ class SettingsTabPage extends StatelessWidget {
   }
 
   Widget _buildAccountSection(BuildContext context) {
-    if (authController.isLoading) {
+    if (widget.authController.isLoading) {
       return const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -81,7 +171,7 @@ class SettingsTabPage extends StatelessWidget {
       );
     }
 
-    if (!authController.isLoggedIn) {
+    if (!widget.authController.isLoggedIn) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -102,7 +192,7 @@ class SettingsTabPage extends StatelessWidget {
       );
     }
 
-    final user = authController.user!;
+    final user = widget.authController.user!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -119,7 +209,7 @@ class SettingsTabPage extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: FilledButton.tonalIcon(
-                  onPressed: () => authController.logout(),
+                  onPressed: () => widget.authController.logout(),
                   icon: const Icon(Icons.logout),
                   label: const Text('退出登录'),
                 ),
@@ -132,7 +222,7 @@ class SettingsTabPage extends StatelessWidget {
   }
 
   Widget _buildModeSection(BuildContext context) {
-    final mode = modeController.mode;
+    final mode = widget.modeController.mode;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -159,7 +249,7 @@ class SettingsTabPage extends StatelessWidget {
                   ],
                   selected: {mode},
                   onSelectionChanged: (selection) =>
-                      modeController.setMode(selection.single),
+                      widget.modeController.setMode(selection.single),
                 ),
                 const SizedBox(height: 12),
                 Text('当前模式：${mode.label}'),
@@ -171,10 +261,297 @@ class SettingsTabPage extends StatelessWidget {
     );
   }
 
+  Widget _buildAppearanceSection(BuildContext context) {
+    final preferences = widget.appPreferencesController.preferences;
+    final colors = {
+      'Material 紫': const Color(0xff6750a4),
+      'Material 蓝': const Color(0xff0061a4),
+      'Material 绿': const Color(0xff386a20),
+      'Material 青': const Color(0xff006a60),
+      'Material 橙': const Color(0xff8f4c00),
+      '中性色': const Color(0xff5f5e62),
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('外观', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Card.outlined(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SegmentedButton<ThemeMode>(
+                  segments: const [
+                    ButtonSegment(
+                      value: ThemeMode.system,
+                      icon: Icon(Icons.brightness_auto_outlined),
+                      label: Text('系统'),
+                    ),
+                    ButtonSegment(
+                      value: ThemeMode.light,
+                      icon: Icon(Icons.light_mode_outlined),
+                      label: Text('浅色'),
+                    ),
+                    ButtonSegment(
+                      value: ThemeMode.dark,
+                      icon: Icon(Icons.dark_mode_outlined),
+                      label: Text('深色'),
+                    ),
+                  ],
+                  selected: {preferences.themeMode},
+                  onSelectionChanged: (selection) {
+                    widget.appPreferencesController.setThemeMode(selection.single);
+                  },
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  initialValue: preferences.dynamicSchemeVariant,
+                  decoration: const InputDecoration(
+                    labelText: '主题风格',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.palette_outlined),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'tonalSpot',
+                      child: Text('标准 Material'),
+                    ),
+                    DropdownMenuItem(value: 'fidelity', child: Text('忠实取色')),
+                    DropdownMenuItem(value: 'expressive', child: Text('表现力')),
+                    DropdownMenuItem(value: 'vibrant', child: Text('鲜明')),
+                    DropdownMenuItem(value: 'neutral', child: Text('中性')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      widget.appPreferencesController.setDynamicSchemeVariant(value);
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Material 3 主题色',
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '使用 seed color 生成 Material 3 tonal palette，颜色角色由 ColorScheme 统一分配。',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final entry in colors.entries)
+                      ChoiceChip(
+                        label: Text(entry.key),
+                        selected:
+                            preferences.seedColorValue ==
+                            entry.value.toARGB32(),
+                        avatar: CircleAvatar(backgroundColor: entry.value),
+                        onSelected: (_) {
+                          widget.appPreferencesController.setSeedColor(entry.value);
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.contrast_outlined),
+                  title: const Text('高对比 Material 3'),
+                  subtitle: const Text('提高前景与容器色差，适合长时间跑团和投屏。'),
+                  value: preferences.highContrastTheme,
+                  onChanged: widget.appPreferencesController.setHighContrastTheme,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRulesSection(BuildContext context) {
+    final preferences = widget.appPreferencesController.preferences;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('规则与角色创建', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Card.outlined(
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.auto_stories_outlined),
+                title: const Text('默认规则集'),
+                subtitle: const Text('决定新角色创建时优先使用的规则来源'),
+                trailing: DropdownButton<String>(
+                  value: preferences.ruleset,
+                  items: const [
+                    DropdownMenuItem(value: 'dnd2024', child: Text('D&D 2024')),
+                    DropdownMenuItem(value: 'dnd2014', child: Text('D&D 2014')),
+                    DropdownMenuItem(value: 'mixed', child: Text('混合')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      widget.appPreferencesController.setRuleset(value);
+                    }
+                  },
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.route_outlined),
+                title: const Text('默认创建方式'),
+                subtitle: const Text('新建角色时默认推荐的创建路径'),
+                trailing: SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'quick', label: Text('快速')),
+                    ButtonSegment(value: 'standard', label: Text('标准')),
+                  ],
+                  selected: {preferences.defaultCreationMethod},
+                  onSelectionChanged: (selection) {
+                    widget.appPreferencesController.setDefaultCreationMethod(
+                      selection.single,
+                    );
+                  },
+                ),
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.history_edu_outlined),
+                title: const Text('显示 Legacy 内容'),
+                subtitle: const Text('允许在资料库和角色创建中显示旧版内容提示'),
+                value: preferences.showLegacyContent,
+                onChanged: widget.appPreferencesController.setShowLegacyContent,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCharacterSheetSection(BuildContext context) {
+    final preferences = widget.appPreferencesController.preferences;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('角色卡', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Card.outlined(
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.tab_outlined),
+                title: const Text('默认角色卡标签'),
+                subtitle: const Text('打开角色详情时优先关注的页面'),
+                trailing: DropdownButton<String>(
+                  value: preferences.defaultCharacterTab,
+                  items: const [
+                    DropdownMenuItem(value: 'overview', child: Text('总览')),
+                    DropdownMenuItem(value: 'actions', child: Text('动作')),
+                    DropdownMenuItem(value: 'spells', child: Text('法术')),
+                    DropdownMenuItem(value: 'equipment', child: Text('装备')),
+                    DropdownMenuItem(value: 'status', child: Text('状态')),
+                    DropdownMenuItem(value: 'features', child: Text('特性')),
+                    DropdownMenuItem(value: 'details', child: Text('详情')),
+                    DropdownMenuItem(value: 'notes', child: Text('笔记')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      widget.appPreferencesController.setDefaultCharacterTab(value);
+                    }
+                  },
+                ),
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.account_tree_outlined),
+                title: const Text('显示字段来源'),
+                subtitle: const Text('显示属性、熟练、特性来自职业、起源或手动覆盖'),
+                value: preferences.showCharacterSources,
+                onChanged: widget.appPreferencesController.setShowCharacterSources,
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.inventory_2_outlined),
+                title: const Text('显示负重'),
+                subtitle: const Text('在装备页显示重量和负重相关信息'),
+                value: preferences.showEncumbrance,
+                onChanged: widget.appPreferencesController.setShowEncumbrance,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGameplaySection(BuildContext context) {
+    final preferences = widget.appPreferencesController.preferences;
+    final diceController = TextEditingController(text: preferences.defaultDice);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('跑团偏好', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Card.outlined(
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.casino_outlined),
+                title: const Text('默认骰子'),
+                subtitle: TextField(
+                  controller: diceController,
+                  decoration: const InputDecoration(
+                    hintText: '1d20',
+                    isDense: true,
+                  ),
+                  onSubmitted: widget.appPreferencesController.setDefaultDice,
+                ),
+                trailing: FilledButton.tonal(
+                  onPressed: () {
+                    widget.appPreferencesController.setDefaultDice(
+                      diceController.text,
+                    );
+                  },
+                  child: const Text('保存'),
+                ),
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.view_agenda_outlined),
+                title: const Text('列表密度'),
+                subtitle: const Text('在角色、资料和战役列表中优先显示更多内容'),
+                value: preferences.compactLists,
+                onChanged: widget.appPreferencesController.setCompactLists,
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.fact_check_outlined),
+                title: const Text('掷骰确认'),
+                subtitle: const Text('掷出默认骰子前先确认，避免误触'),
+                value: preferences.confirmBeforeRoll,
+                onChanged: widget.appPreferencesController.setConfirmBeforeRoll,
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.receipt_long_outlined),
+                title: const Text('角色状态写入日志'),
+                subtitle: const Text('在线跑团时把 HP、休息和状态变化记录到当前场次日志'),
+                value: preferences.logCharacterRuntimeChanges,
+                onChanged:
+                    widget.appPreferencesController.setLogCharacterRuntimeChanges,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _openAuthPage(BuildContext context) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (context) => AuthPage(authController: authController),
+        builder: (context) => AuthPage(authController: widget.authController),
       ),
     );
   }

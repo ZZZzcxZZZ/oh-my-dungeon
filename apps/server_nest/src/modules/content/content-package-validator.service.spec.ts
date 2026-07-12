@@ -49,15 +49,37 @@ describe("ContentPackageValidatorService", () => {
       version: "1.0.0",
       items: [
         {
-          type: "class",
-          slug: "fighter",
-          name: "Fighter",
+          type: "vehicle",
+          slug: "spelljammer",
+          name: "Spelljammer",
         },
       ],
     });
 
     expect(result.valid).toBe(false);
     expect(result.errors).toContain("items[0].type is not supported");
+  });
+
+  it("accepts the core expandable player-facing content types", () => {
+    const result = validator.validate({
+      name: "Core Player Options",
+      version: "1.0.0",
+      items: [
+        { type: "spell", slug: "shield", name: "Shield" },
+        { type: "item", slug: "longsword", name: "Longsword" },
+        { type: "equipment", slug: "rope", name: "Rope" },
+        { type: "species", slug: "human", name: "Human" },
+        { type: "class", slug: "fighter", name: "Fighter" },
+        { type: "background", slug: "acolyte", name: "Acolyte" },
+        { type: "feat", slug: "alert", name: "Alert" },
+        { type: "feature", slug: "second-wind", name: "Second Wind" },
+        { type: "monster", slug: "goblin", name: "Goblin" },
+        { type: "condition", slug: "prone", name: "Prone" },
+      ],
+    });
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
   });
 
   it("reports duplicated type and slug in one package", () => {

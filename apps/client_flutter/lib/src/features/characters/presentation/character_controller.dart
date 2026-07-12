@@ -19,11 +19,13 @@ class CharacterController extends ChangeNotifier {
 
   List<CharacterSheet> _characters = [];
   List<CharacterCampaignBinding> _campaignCharacters = [];
+  CharacterSheet? _lastCreatedCharacter;
   bool _loading = false;
   String? _error;
 
   List<CharacterSheet> get characters => _characters;
   List<CharacterCampaignBinding> get campaignCharacters => _campaignCharacters;
+  CharacterSheet? get lastCreatedCharacter => _lastCreatedCharacter;
   bool get isLoading => _loading;
   String? get error => _error;
   String? get accessToken => authController.accessToken;
@@ -32,9 +34,16 @@ class CharacterController extends ChangeNotifier {
     if (!authController.isLoggedIn) {
       _characters = [];
       _campaignCharacters = [];
+      _lastCreatedCharacter = null;
       _error = null;
       notifyListeners();
     }
+  }
+
+  CharacterSheet? takeLastCreatedCharacter() {
+    final character = _lastCreatedCharacter;
+    _lastCreatedCharacter = null;
+    return character;
   }
 
   Future<void> loadCharacters() async {
@@ -69,6 +78,13 @@ class CharacterController extends ChangeNotifier {
     int? maxHp,
     int? armorClass,
     int? speed,
+    int? initiativeBonus,
+    Object? abilities,
+    Object? saves,
+    Object? skills,
+    Object? inventory,
+    Object? currency,
+    String? notes,
     Object? data,
   }) async {
     final token = accessToken;
@@ -87,9 +103,17 @@ class CharacterController extends ChangeNotifier {
         maxHp: maxHp,
         armorClass: armorClass,
         speed: speed,
+        initiativeBonus: initiativeBonus,
+        abilities: abilities,
+        saves: saves,
+        skills: skills,
+        inventory: inventory,
+        currency: currency,
+        notes: notes,
         data: data,
       );
       _characters = [..._characters, character];
+      _lastCreatedCharacter = character;
       notifyListeners();
       return true;
     } on CharacterApiException catch (e) {
@@ -110,6 +134,13 @@ class CharacterController extends ChangeNotifier {
     int? maxHp,
     int? armorClass,
     int? speed,
+    int? initiativeBonus,
+    Object? abilities,
+    Object? saves,
+    Object? skills,
+    Object? inventory,
+    Object? currency,
+    String? notes,
     Object? data,
   }) async {
     final token = accessToken;
@@ -130,6 +161,13 @@ class CharacterController extends ChangeNotifier {
         maxHp: maxHp,
         armorClass: armorClass,
         speed: speed,
+        initiativeBonus: initiativeBonus,
+        abilities: abilities,
+        saves: saves,
+        skills: skills,
+        inventory: inventory,
+        currency: currency,
+        notes: notes,
         data: data,
       );
       _replaceCharacter(character);
@@ -177,6 +215,56 @@ class CharacterController extends ChangeNotifier {
       data: {
         'contentRefs': {'spells': spells, 'items': items, 'features': features},
       },
+    );
+  }
+
+  Future<bool> updateRuntimeState({
+    required String characterId,
+    int? temporaryHp,
+    bool? inspiration,
+    List<String>? conditions,
+    int? deathSaveSuccesses,
+    int? deathSaveFailures,
+    Map<String, int>? spellSlotsUsed,
+    Map<String, int>? classResourcesUsed,
+  }) {
+    final character = _characters
+        .where((item) => item.id == characterId)
+        .firstOrNull;
+    final data = <String, Object?>{if (character != null) ...character.dataMap};
+    final currentRuntime = character?.runtimeMap ?? const <String, Object?>{};
+    final currentDeathSaves = _asMap(currentRuntime['deathSaves']);
+    final deathSaves = <String, Object?>{...currentDeathSaves};
+    if (deathSaveSuccesses != null) {
+      deathSaves['successes'] = deathSaveSuccesses;
+    }
+    if (deathSaveFailures != null) {
+      deathSaves['failures'] = deathSaveFailures;
+    }
+    final runtime = <String, Object?>{
+      ...currentRuntime,
+      'deathSaves': deathSaves,
+    };
+    if (temporaryHp != null) runtime['temporaryHp'] = temporaryHp;
+    if (inspiration != null) runtime['inspiration'] = inspiration;
+    if (conditions != null) runtime['conditions'] = conditions;
+    if (spellSlotsUsed != null) runtime['spellSlotsUsed'] = spellSlotsUsed;
+    if (classResourcesUsed != null) {
+      runtime['classResourcesUsed'] = classResourcesUsed;
+    }
+    data['runtime'] = runtime;
+    return updateCharacter(characterId: characterId, data: data);
+  }
+
+  Future<bool> updateInventoryAndCurrency({
+    required String characterId,
+    List<Map<String, Object>>? inventory,
+    Map<String, int>? currency,
+  }) {
+    return updateCharacter(
+      characterId: characterId,
+      inventory: inventory,
+      currency: currency,
     );
   }
 
@@ -250,4 +338,12 @@ class CharacterController extends ChangeNotifier {
     authController.removeListener(_onAuthChanged);
     super.dispose();
   }
+}
+
+Map<String, Object?> _asMap(Object? value) {
+  if (value is Map<String, Object?>) return value;
+  if (value is Map) {
+    return value.map((key, item) => MapEntry('$key', item));
+  }
+  return {};
 }

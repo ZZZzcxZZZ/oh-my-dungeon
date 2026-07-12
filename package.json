@@ -9,6 +9,7 @@
     "setup": "npm run setup:server && npm run setup:client",
     "dev:server": "npm --prefix apps/server_nest run start:dev",
     "dev:client": "cd apps/client_flutter && flutter run",
+    "preview:client": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/preview-client.ps1 -Port 5173 -ReplaceExisting",
     "test:server": "npm --prefix apps/server_nest test",
     "lint:server": "npm --prefix apps/server_nest run lint",
     "test:client": "cd apps/client_flutter && flutter test",

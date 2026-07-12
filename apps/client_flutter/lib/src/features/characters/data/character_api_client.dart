@@ -17,6 +17,12 @@ abstract class CharacterClient {
     int? armorClass,
     int? speed,
     int? initiativeBonus,
+    Object? abilities,
+    Object? saves,
+    Object? skills,
+    Object? inventory,
+    Object? currency,
+    String? notes,
     Object? data,
   });
 
@@ -39,6 +45,12 @@ abstract class CharacterClient {
     int? armorClass,
     int? speed,
     int? initiativeBonus,
+    Object? abilities,
+    Object? saves,
+    Object? skills,
+    Object? inventory,
+    Object? currency,
+    String? notes,
     Object? data,
   });
 
@@ -84,6 +96,12 @@ class CharacterApiClient implements CharacterClient {
     int? armorClass,
     int? speed,
     int? initiativeBonus,
+    Object? abilities,
+    Object? saves,
+    Object? skills,
+    Object? inventory,
+    Object? currency,
+    String? notes,
     Object? data,
   }) async {
     final body = <String, Object?>{'name': name};
@@ -95,6 +113,12 @@ class CharacterApiClient implements CharacterClient {
     if (armorClass != null) body['armorClass'] = armorClass;
     if (speed != null) body['speed'] = speed;
     if (initiativeBonus != null) body['initiativeBonus'] = initiativeBonus;
+    if (abilities != null) body['abilities'] = abilities;
+    if (saves != null) body['saves'] = saves;
+    if (skills != null) body['skills'] = skills;
+    if (inventory != null) body['inventory'] = inventory;
+    if (currency != null) body['currency'] = currency;
+    if (notes != null) body['notes'] = notes;
     if (data != null) body['data'] = data;
 
     final response = await _httpClient.post(
@@ -143,6 +167,12 @@ class CharacterApiClient implements CharacterClient {
     int? armorClass,
     int? speed,
     int? initiativeBonus,
+    Object? abilities,
+    Object? saves,
+    Object? skills,
+    Object? inventory,
+    Object? currency,
+    String? notes,
     Object? data,
   }) async {
     final body = <String, Object?>{};
@@ -156,6 +186,12 @@ class CharacterApiClient implements CharacterClient {
     if (armorClass != null) body['armorClass'] = armorClass;
     if (speed != null) body['speed'] = speed;
     if (initiativeBonus != null) body['initiativeBonus'] = initiativeBonus;
+    if (abilities != null) body['abilities'] = abilities;
+    if (saves != null) body['saves'] = saves;
+    if (skills != null) body['skills'] = skills;
+    if (inventory != null) body['inventory'] = inventory;
+    if (currency != null) body['currency'] = currency;
+    if (notes != null) body['notes'] = notes;
     if (data != null) body['data'] = data;
 
     final response = await _httpClient.patch(

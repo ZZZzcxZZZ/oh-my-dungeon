@@ -136,6 +136,42 @@ void main() {
       });
       expect(result, _character);
     });
+
+    test('posts full sheet fields when creating a character', () async {
+      http.Request? captured;
+      final client = CharacterApiClient(
+        httpClient: MockClient((request) async {
+          captured = request;
+          return http.Response(jsonEncode(_characterJson), 201);
+        }),
+      );
+
+      await client.createCharacter(
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: _accessToken,
+        name: 'Arannis',
+        abilities: const {'str': 10, 'dex': 14},
+        saves: const {'dex': true},
+        skills: const {'察觉': true},
+        inventory: const [
+          {'name': '长弓', 'quantity': 1},
+        ],
+        currency: const {'gp': 10, 'sp': 5},
+        notes: '来自旧林地的游侠。',
+      );
+
+      expect(jsonDecode(captured!.body), {
+        'name': 'Arannis',
+        'abilities': {'str': 10, 'dex': 14},
+        'saves': {'dex': true},
+        'skills': {'察觉': true},
+        'inventory': [
+          {'name': '长弓', 'quantity': 1},
+        ],
+        'currency': {'gp': 10, 'sp': 5},
+        'notes': '来自旧林地的游侠。',
+      });
+    });
   });
 
   group('CharacterApiClient.listCharacters', () {
@@ -217,6 +253,41 @@ void main() {
             'features': ['item-feature-1'],
           },
         },
+      });
+    });
+
+    test('patches full sheet fields when editing a character', () async {
+      http.Request? captured;
+      final client = CharacterApiClient(
+        httpClient: MockClient((request) async {
+          captured = request;
+          return http.Response(jsonEncode(_characterJson), 200);
+        }),
+      );
+
+      await client.updateCharacter(
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: _accessToken,
+        characterId: 'char-1',
+        abilities: const {'wis': 16},
+        saves: const {'wis': true},
+        skills: const {'察觉': true, '隐匿': true},
+        inventory: const [
+          {'name': '治疗药水', 'quantity': 2},
+        ],
+        currency: const {'gp': 35},
+        notes: '偏好远程侦察。',
+      );
+
+      expect(jsonDecode(captured!.body), {
+        'abilities': {'wis': 16},
+        'saves': {'wis': true},
+        'skills': {'察觉': true, '隐匿': true},
+        'inventory': [
+          {'name': '治疗药水', 'quantity': 2},
+        ],
+        'currency': {'gp': 35},
+        'notes': '偏好远程侦察。',
       });
     });
   });

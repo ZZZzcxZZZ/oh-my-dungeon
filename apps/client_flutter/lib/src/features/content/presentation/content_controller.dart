@@ -20,12 +20,14 @@ class ContentController extends ChangeNotifier {
   final ContentClient contentClient;
 
   List<ContentPackage> _packages = [];
+  List<ContentItem> _items = [];
   List<ContentItem> _availableItems = [];
   List<String> _importErrors = [];
   bool _loading = false;
   String? _error;
 
   List<ContentPackage> get packages => _packages;
+  List<ContentItem> get items => _items;
   List<ContentItem> get availableItems => _availableItems;
   List<String> get importErrors => _importErrors;
   bool get isLoading => _loading;
@@ -35,6 +37,7 @@ class ContentController extends ChangeNotifier {
   void _onAuthChanged() {
     if (!authController.isLoggedIn) {
       _packages = [];
+      _items = [];
       _availableItems = [];
       _importErrors = [];
       _error = null;
@@ -71,6 +74,72 @@ class ContentController extends ChangeNotifier {
 
   Future<bool> importJson(String jsonText) async {
     return _sendImportJson(jsonText, dryRun: false);
+  }
+
+  Future<bool> importSingleItem({
+    required String packageName,
+    required String type,
+    required String name,
+    required String description,
+    required String sourceLabel,
+    Map<String, Object?> structured = const {},
+    List<String> tags = const [],
+  }) async {
+    final token = accessToken;
+    if (token == null) return false;
+
+    final package = <String, Object?>{
+      'name': packageName.trim().isEmpty ? '自定义资料' : packageName.trim(),
+      'version': '1.0.0',
+      'schemaVersion': 1,
+      'locale': 'zh-CN',
+      'items': [
+        {
+          'type': type,
+          'slug': _slugify(name),
+          'name': name.trim(),
+          'description': description.trim(),
+          'structured': structured,
+          'tags': tags,
+          'sourceLabel': sourceLabel.trim().isEmpty
+              ? 'Homebrew'
+              : sourceLabel.trim(),
+        },
+      ],
+    };
+
+    _loading = true;
+    _error = null;
+    _importErrors = [];
+    notifyListeners();
+
+    try {
+      final result = await contentClient.importPackage(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        package: package,
+      );
+      _importErrors = result.errors;
+      if (!result.valid) {
+        _loading = false;
+        notifyListeners();
+        return false;
+      }
+      if (result.package != null) {
+        _packages = [..._packages, result.package!];
+      }
+      _loading = false;
+      notifyListeners();
+      return true;
+    } on ContentApiException catch (e) {
+      _error = e.message;
+    } catch (_) {
+      _error = '导入资料失败';
+    }
+
+    _loading = false;
+    notifyListeners();
+    return false;
   }
 
   Future<bool> _sendImportJson(String jsonText, {required bool dryRun}) async {
@@ -119,6 +188,31 @@ class ContentController extends ChangeNotifier {
     _loading = false;
     notifyListeners();
     return false;
+  }
+
+  Future<void> loadItems({String? type, String? query}) async {
+    final token = accessToken;
+    if (token == null) return;
+
+    _loading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      _items = await contentClient.listItems(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        type: type,
+        query: query,
+      );
+    } on ContentApiException catch (e) {
+      _error = e.message;
+    } catch (_) {
+      _error = '加载资料库失败';
+    }
+
+    _loading = false;
+    notifyListeners();
   }
 
   Future<void> loadAvailableCampaignItems({
@@ -201,4 +295,13 @@ class ContentController extends ChangeNotifier {
     authController.removeListener(_onAuthChanged);
     super.dispose();
   }
+}
+
+String _slugify(String value) {
+  final slug = value
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
+  return slug.isEmpty ? 'custom-item' : slug;
 }

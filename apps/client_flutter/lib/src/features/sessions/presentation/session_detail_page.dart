@@ -2,9 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../features/app_preferences/presentation/app_preferences_controller.dart';
 import '../../../features/auth/presentation/auth_controller.dart';
+import '../../../features/characters/domain/character.dart';
+import '../../../features/characters/domain/dnd5e_rules.dart';
+import '../../../features/characters/presentation/character_controller.dart';
+import '../../../features/characters/presentation/character_detail_page.dart';
 import '../../../features/check_requests/domain/check_request.dart';
 import '../../../features/check_requests/presentation/check_request_controller.dart';
+import '../../../features/rooms/domain/dice_roller.dart' hide DiceRoll;
 import '../../../features/server_profiles/domain/server_profile.dart';
 import '../data/session_socket_service.dart';
 import '../domain/session.dart';
@@ -20,7 +26,10 @@ class SessionDetailPage extends StatefulWidget {
     required this.authController,
     required this.sessionController,
     required this.checkRequestController,
+    required this.characterController,
+    required this.appPreferencesController,
     this.socketService,
+    this.diceRoller,
     super.key,
   });
 
@@ -28,7 +37,10 @@ class SessionDetailPage extends StatefulWidget {
   final AuthController authController;
   final SessionController sessionController;
   final CheckRequestController checkRequestController;
+  final CharacterController characterController;
+  final AppPreferencesController appPreferencesController;
   final SessionSocketService? socketService;
+  final DiceRoller? diceRoller;
 
   @override
   State<SessionDetailPage> createState() => _SessionDetailPageState();
@@ -106,6 +118,8 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
         widget.authController,
         widget.sessionController,
         widget.checkRequestController,
+        widget.characterController,
+        widget.appPreferencesController,
       ]),
       builder: (context, _) {
         final session = widget.sessionController.activeSession;
@@ -323,6 +337,11 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
               tooltip: '掷骰',
               onPressed: isSending ? null : _showRollSheet,
             ),
+            IconButton(
+              icon: const Icon(Icons.badge_outlined),
+              tooltip: '角色卡',
+              onPressed: isSending ? null : _showCharacterSheetPicker,
+            ),
             Expanded(
               child: TextField(
                 controller: _messageController,
@@ -365,7 +384,9 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
   }
 
   Future<void> _showRollSheet() async {
-    final notationController = TextEditingController(text: '1d20');
+    final notationController = TextEditingController(
+      text: widget.appPreferencesController.preferences.defaultDice,
+    );
     String visibility = 'public';
     final isManager = widget.sessionController.isManager;
     final actorName = widget.authController.user?.username ?? '玩家';
@@ -432,10 +453,288 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
     if (result == null) return;
     final notation = result['notation'];
     if (notation == null || notation.isEmpty) return;
+    if (!mounted) return;
+    if (widget.appPreferencesController.preferences.confirmBeforeRoll) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('确认掷骰'),
+            content: Text('掷出 $notation？'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('确认'),
+              ),
+            ],
+          );
+        },
+      );
+      if (confirmed != true) return;
+    }
+    if (!mounted) return;
     await widget.sessionController.createRoll(
       notation: notation,
       actorName: result['actorName'] ?? '玩家',
       visibility: isManager ? result['visibility'] : null,
+    );
+  }
+
+  Future<void> _showCharacterSheetPicker() async {
+    final selected = await showModalBottomSheet<CharacterSheet>(
+      context: context,
+      builder: (context) {
+        final characters = widget.characterController.characters;
+        if (characters.isEmpty) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.badge_outlined, size: 44),
+                  const SizedBox(height: 12),
+                  Text('暂无角色卡', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '先到「角色」页创建角色，再回到场次里直接从角色卡掷骰。',
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return SafeArea(
+          child: ListView.separated(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            itemCount: characters.length + 1,
+            separatorBuilder: (context, index) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+                  child: Text(
+                    '选择角色卡',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                );
+              }
+              final character = characters[index - 1];
+              final subtitle = [
+                if (character.raceSummary.isNotEmpty) character.raceSummary,
+                if (character.classSummary.isNotEmpty) character.classSummary,
+                'Lv.${character.level}',
+              ].join(' / ');
+              return ListTile(
+                leading: CircleAvatar(
+                  child: Text(character.name.characters.first),
+                ),
+                title: Text(character.name),
+                subtitle: Text(subtitle),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).pop(character),
+              );
+            },
+          ),
+        );
+      },
+    );
+
+    if (!mounted || selected == null) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) => CharacterDetailPage(
+          character: selected,
+          initialTab:
+              widget.appPreferencesController.preferences.defaultCharacterTab,
+          diceRoller: widget.diceRoller,
+          onUpdateRuntime:
+              ({
+                int? currentHp,
+                int? temporaryHp,
+                bool? inspiration,
+                List<String>? conditions,
+                int? deathSaveSuccesses,
+                int? deathSaveFailures,
+                Map<String, int>? spellSlotsUsed,
+                Map<String, int>? classResourcesUsed,
+              }) {
+                return _updateCharacterRuntime(
+                  selected,
+                  currentHp: currentHp,
+                  temporaryHp: temporaryHp,
+                  inspiration: inspiration,
+                  conditions: conditions,
+                  deathSaveSuccesses: deathSaveSuccesses,
+                  deathSaveFailures: deathSaveFailures,
+                  spellSlotsUsed: spellSlotsUsed,
+                  classResourcesUsed: classResourcesUsed,
+                );
+              },
+          onRoll: (event) {
+            unawaited(_sendCharacterRoll(event));
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _updateCharacterRuntime(
+    CharacterSheet selected, {
+    int? currentHp,
+    int? temporaryHp,
+    bool? inspiration,
+    List<String>? conditions,
+    int? deathSaveSuccesses,
+    int? deathSaveFailures,
+    Map<String, int>? spellSlotsUsed,
+    Map<String, int>? classResourcesUsed,
+  }) async {
+    final before = _currentCharacterSnapshot(selected);
+    var success = true;
+
+    if (currentHp != null) {
+      success = await widget.characterController.updateCharacter(
+        characterId: selected.id,
+        currentHp: currentHp,
+      );
+    }
+
+    final hasRuntimeUpdate =
+        temporaryHp != null ||
+        inspiration != null ||
+        conditions != null ||
+        deathSaveSuccesses != null ||
+        deathSaveFailures != null ||
+        spellSlotsUsed != null ||
+        classResourcesUsed != null;
+    if (hasRuntimeUpdate) {
+      final runtimeSuccess = await widget.characterController
+          .updateRuntimeState(
+            characterId: selected.id,
+            temporaryHp: temporaryHp,
+            inspiration: inspiration,
+            conditions: conditions,
+            deathSaveSuccesses: deathSaveSuccesses,
+            deathSaveFailures: deathSaveFailures,
+            spellSlotsUsed: spellSlotsUsed,
+            classResourcesUsed: classResourcesUsed,
+          );
+      success = success && runtimeSuccess;
+    }
+
+    if (!success ||
+        !widget
+            .appPreferencesController
+            .preferences
+            .logCharacterRuntimeChanges) {
+      return;
+    }
+
+    final summaries = _characterRuntimeSummaries(
+      before,
+      currentHp: currentHp,
+      temporaryHp: temporaryHp,
+      inspiration: inspiration,
+      conditions: conditions,
+      deathSaveSuccesses: deathSaveSuccesses,
+      deathSaveFailures: deathSaveFailures,
+      spellSlotsUsed: spellSlotsUsed,
+    );
+    if (summaries.isEmpty) return;
+
+    await widget.sessionController.sendMessage(
+      content: summaries.join('\n'),
+      kind: 'character_runtime',
+    );
+  }
+
+  CharacterSheet _currentCharacterSnapshot(CharacterSheet fallback) {
+    return widget.characterController.characters
+            .where((character) => character.id == fallback.id)
+            .firstOrNull ??
+        fallback;
+  }
+
+  List<String> _characterRuntimeSummaries(
+    CharacterSheet before, {
+    int? currentHp,
+    int? temporaryHp,
+    bool? inspiration,
+    List<String>? conditions,
+    int? deathSaveSuccesses,
+    int? deathSaveFailures,
+    Map<String, int>? spellSlotsUsed,
+  }) {
+    final summaries = <String>[];
+    final name = before.name;
+    if (currentHp != null && currentHp != before.currentHp) {
+      summaries.add(
+        '$name 当前 HP ${before.currentHp}/${before.maxHp} -> '
+        '$currentHp/${before.maxHp}',
+      );
+    }
+    if (temporaryHp != null && temporaryHp != before.temporaryHp) {
+      summaries.add('$name 临时 HP ${before.temporaryHp} -> $temporaryHp');
+    }
+    if (inspiration != null && inspiration != before.inspiration) {
+      summaries.add(inspiration ? '$name 获得灵感' : '$name 消耗灵感');
+    }
+    if (conditions != null) {
+      final beforeConditions = before.conditions.toSet();
+      final afterConditions = conditions.toSet();
+      final added = afterConditions.difference(beforeConditions).toList();
+      final removed = beforeConditions.difference(afterConditions).toList();
+      if (added.isNotEmpty) {
+        summaries.add('$name 获得状态：${added.join('、')}');
+      }
+      if (removed.isNotEmpty) {
+        summaries.add('$name 移除状态：${removed.join('、')}');
+      }
+    }
+    final nextDeathSaveSuccesses = deathSaveSuccesses;
+    final nextDeathSaveFailures = deathSaveFailures;
+    if ((nextDeathSaveSuccesses != null &&
+            nextDeathSaveSuccesses != before.deathSaveSuccesses) ||
+        (nextDeathSaveFailures != null &&
+            nextDeathSaveFailures != before.deathSaveFailures)) {
+      summaries.add(
+        '$name 死亡豁免 ${before.deathSaveSuccesses}/'
+        '${before.deathSaveFailures} -> '
+        '${nextDeathSaveSuccesses ?? before.deathSaveSuccesses}/'
+        '${nextDeathSaveFailures ?? before.deathSaveFailures}',
+      );
+    }
+    if (spellSlotsUsed != null) {
+      final maximums = Dnd5eRules.spellSlotMaximums(
+        classSummary: before.classSummary,
+        level: before.level,
+      );
+      for (final entry in spellSlotsUsed.entries) {
+        final beforeUsed = before.spellSlotsUsed[entry.key] ?? 0;
+        if (entry.value == beforeUsed) continue;
+        final label = Dnd5eRules.spellLevelLabel(entry.key);
+        final maximum = maximums[entry.key];
+        final suffix = maximum == null ? '' : '/$maximum';
+        summaries.add(
+          '$name $label法术位 $beforeUsed$suffix -> ${entry.value}$suffix',
+        );
+      }
+    }
+    return summaries;
+  }
+
+  Future<void> _sendCharacterRoll(CharacterRollEvent event) async {
+    await widget.sessionController.sendMessage(
+      content: event.summary,
+      kind: 'roll',
     );
   }
 
@@ -717,7 +1016,64 @@ class _MessageBubble extends StatelessWidget {
     }
 
     final colorScheme = Theme.of(context).colorScheme;
+    if (message.isCharacterRuntime) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.82,
+            ),
+            child: Card.outlined(
+              color: colorScheme.tertiaryContainer,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.monitor_heart_outlined,
+                      size: 18,
+                      color: colorScheme.onTertiaryContainer,
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '角色状态',
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: colorScheme.onTertiaryContainer,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                          Text(
+                            message.content,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: colorScheme.onTertiaryContainer,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     final isDm = message.isDmOnly;
+    final isRoll = message.isRoll;
 
     return Align(
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
@@ -726,7 +1082,9 @@ class _MessageBubble extends StatelessWidget {
           maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
         child: Card(
-          color: isDm
+          color: isRoll
+              ? colorScheme.secondaryContainer
+              : isDm
               ? colorScheme.tertiaryContainer
               : isMine
               ? colorScheme.primaryContainer
@@ -752,6 +1110,27 @@ class _MessageBubble extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                if (isRoll) ...[
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.casino_outlined,
+                        size: 16,
+                        color: colorScheme.onSecondaryContainer,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '角色卡掷骰',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSecondaryContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                ],
                 Text(message.content),
               ],
             ),

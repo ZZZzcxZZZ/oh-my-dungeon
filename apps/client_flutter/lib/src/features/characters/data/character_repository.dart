@@ -8,3 +8,19 @@ abstract interface class CharacterRepository {
   Future<void> archive(String id);
   Future<void> delete(String id);
 }
+
+/// No-op [CharacterRepository] used as a fallback when no database is
+/// available (e.g. tests that inject in-memory stores).
+class EmptyCharacterRepository implements CharacterRepository {
+  @override
+  Stream<List<CharacterSheet>> watchOwnedCharacters() =>
+      Stream.value(const []);
+  @override
+  Future<CharacterSheet?> getById(String id) async => null;
+  @override
+  Future<void> save(CharacterSheet character) async {}
+  @override
+  Future<void> archive(String id) async {}
+  @override
+  Future<void> delete(String id) async {}
+}

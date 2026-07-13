@@ -626,7 +626,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(
-      find.byKey(const Key('character-name-field')),
+      find.byKey(const Key('character-name')),
       'Mira',
     );
     await tester.enterText(
@@ -683,7 +683,7 @@ void main() {
     expect(find.text('快速创建'), findsWidgets);
     expect(find.text('标准创建'), findsWidgets);
     expect(find.text('导入或复制'), findsOneWidget);
-    expect(find.byKey(const Key('character-name-field')), findsNothing);
+    expect(find.byKey(const Key('character-name')), findsNothing);
   });
 
   testWidgets('new character editor can start from preferred quick build', (

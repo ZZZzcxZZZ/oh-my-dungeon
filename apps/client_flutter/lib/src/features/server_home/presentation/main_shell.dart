@@ -12,6 +12,8 @@ import '../../../features/campaigns/data/socket_io_campaign_socket_service.dart'
 import '../../../features/campaigns/presentation/campaign_controller.dart';
 import '../../../features/campaigns/presentation/campaigns_tab_page.dart';
 import '../../../features/characters/data/character_api_client.dart';
+import '../../../features/characters/data/character_repository.dart';
+import '../../../features/characters/data/local/drift_character_repository.dart';
 import '../../../features/characters/presentation/character_controller.dart';
 import '../../../features/characters/presentation/characters_tab_page.dart';
 import '../../../features/check_requests/data/check_request_api_client.dart';
@@ -89,6 +91,7 @@ class _MainShellState extends State<MainShell> {
   late final AuthController _authController;
   late final CampaignController _campaignController;
   late final CharacterController _characterController;
+  late final CharacterRepository _characterRepository;
   late final ContentController _contentController;
   late final ContentRepository _contentRepository;
   late final ContentPackageImporter _contentImporter;
@@ -118,10 +121,11 @@ class _MainShellState extends State<MainShell> {
       campaignClient: widget.campaignClient,
       campaignSocketService: _campaignSocketService,
     );
+    _characterRepository = widget.database != null
+        ? DriftCharacterRepository(widget.database!)
+        : EmptyCharacterRepository();
     _characterController = CharacterController(
-      apiBaseUrl: profile?.apiBaseUrl ?? '',
-      authController: _authController,
-      characterClient: widget.characterClient,
+      repository: _characterRepository,
     );
     _contentController = ContentController(
       apiBaseUrl: profile?.apiBaseUrl ?? '',
@@ -195,8 +199,7 @@ class _MainShellState extends State<MainShell> {
         diceRoller: widget.diceRoller,
       ),
       CharactersTabPage(
-        authController: _authController,
-        characterController: _characterController,
+        controller: _characterController,
         campaignController: _campaignController,
         contentController: _contentController,
         appPreferencesController: widget.appPreferencesController,

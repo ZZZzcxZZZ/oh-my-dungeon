@@ -143,7 +143,7 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
               child: Column(
                 children: [
                   TextField(
-                    key: const Key('character-name-field'),
+                    key: const Key('character-name'),
                     controller: _nameController,
                     decoration: const InputDecoration(
                       labelText: '名称',

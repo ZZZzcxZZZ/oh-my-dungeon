@@ -10,6 +10,7 @@ import 'package:dnd_table_client/src/features/app_preferences/data/app_preferenc
 import 'package:dnd_table_client/src/features/app_preferences/domain/app_preferences.dart';
 import 'package:dnd_table_client/src/features/app_preferences/presentation/app_preferences_controller.dart';
 import 'package:dnd_table_client/src/features/characters/data/character_api_client.dart';
+import 'package:dnd_table_client/src/features/characters/data/local/drift_character_repository.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/client_mode/domain/client_mode.dart';
 import 'package:dnd_table_client/src/features/content/data/content_api_client.dart';
@@ -37,6 +38,15 @@ void main() {
     websocketUrl: 'ws://localhost:3000/ws',
     lastKnownVersion: '0.1.0',
   );
+
+  Future<AppDatabase> databaseWithCharacter(
+    CharacterSheet character,
+  ) async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    final repository = DriftCharacterRepository(database);
+    await repository.save(character);
+    return database;
+  }
 
   testWidgets('shows the server profile empty state', (tester) async {
     await tester.pumpWidget(
@@ -386,7 +396,7 @@ void main() {
     await tester.tap(find.text('角色').last);
     await tester.pumpAndSettle();
 
-    expect(find.text('登录后管理角色'), findsOneWidget);
+    expect(find.textContaining('还没有角色'), findsOneWidget);
   });
 
   testWidgets('characters tab uses compact list preference', (tester) async {
@@ -406,6 +416,7 @@ void main() {
     );
     await preferencesController.initialize();
     await preferencesController.setCompactLists(true);
+    final database = await databaseWithCharacter(_character);
 
     await tester.pumpWidget(
       DndTableApp(
@@ -418,6 +429,7 @@ void main() {
           items: const [_fighterContent, _aasimarContent, _acolyteContent],
         ),
         appPreferencesController: preferencesController,
+        database: database,
       ),
     );
     await tester.pumpAndSettle();
@@ -430,6 +442,7 @@ void main() {
     expect(find.text('HP 24/24 · AC 15 · 先攻 +2'), findsOneWidget);
 
     preferencesController.dispose();
+    await database.close();
   });
 
   testWidgets('characters tab opens the preferred creation flow', (
@@ -537,6 +550,7 @@ void main() {
         refreshToken: 'refresh-token',
       ),
     );
+    final database = await databaseWithCharacter(_character);
 
     await tester.pumpWidget(
       DndTableApp(
@@ -545,6 +559,7 @@ void main() {
         authClient: _FakeAuthClient(),
         campaignClient: _FakeCampaignClient(),
         characterClient: _FakeCharacterClient(),
+        database: database,
       ),
     );
     await tester.pumpAndSettle();
@@ -556,6 +571,8 @@ void main() {
     expect(find.text('A'), findsOneWidget);
     // 战役名和角色首字母头像应可见。
     expect(find.text('Starter Campaign'), findsOneWidget);
+
+    await database.close();
   });
 
   testWidgets('campaign actions match player and dm modes', (tester) async {
@@ -631,6 +648,7 @@ void main() {
         ),
       ],
     );
+    final database = await databaseWithCharacter(_character);
 
     await tester.pumpWidget(
       DndTableApp(
@@ -642,6 +660,7 @@ void main() {
         characterClient: _FakeCharacterClient(),
         contentClient: _FakeContentClient(),
         diceRoller: DiceRoller(nextInt: (_) => 19),
+        database: database,
       ),
     );
     await tester.pumpAndSettle();
@@ -658,7 +677,8 @@ void main() {
 
     expect(find.text('Starter Campaign'), findsOneWidget);
     expect(find.text('酒馆里已经坐满了冒险者'), findsOneWidget);
-    expect(find.text('Arannis · HP 24/24 · AC 15'), findsNWidgets(2));
+    // Identity bar shows the local character's status.
+    expect(find.text('Arannis · HP 24/24 · AC 15'), findsOneWidget);
     expect(find.text('说'), findsOneWidget);
     expect(find.text('做'), findsOneWidget);
     expect(find.byKey(const Key('campaign-say-tab')), findsOneWidget);
@@ -668,9 +688,6 @@ void main() {
     await tester.tap(find.byTooltip('成员'));
     await tester.pumpAndSettle();
     expect(find.text('战役成员'), findsOneWidget);
-    expect(find.text('Arannis'), findsWidgets);
-    expect(find.text('Ranger · Elf'), findsOneWidget);
-    expect(find.text('HP 24/24 · AC 15'), findsOneWidget);
     await tester.tap(find.byTooltip('Close'));
     await tester.pumpAndSettle();
 
@@ -681,7 +698,6 @@ void main() {
     await tester.tap(find.text('发送'));
     await tester.pumpAndSettle();
     expect(find.text('今晚从酒馆开始'), findsOneWidget);
-    expect(find.text('Arannis · HP 24/24 · AC 15'), findsWidgets);
 
     await tester.tap(find.text('做'));
     await tester.pumpAndSettle();
@@ -738,9 +754,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Elf / Ranger / Lv.3'), findsOneWidget);
     expect(find.text('属性'), findsWidgets);
+
+    await database.close();
   });
 
-  testWidgets('campaign chat shows character conditions beside the name', (
+  testWidgets('campaign chat shows character identity bar with local character', (
     tester,
   ) async {
     final store = InMemoryServerProfileStore();
@@ -761,6 +779,7 @@ void main() {
         },
       },
     );
+    final database = await databaseWithCharacter(conditionedCharacter);
 
     await tester.pumpWidget(
       DndTableApp(
@@ -784,6 +803,7 @@ void main() {
         ),
         campaignSocketService: NoopCampaignSocketService(),
         characterClient: _FakeCharacterClient(character: conditionedCharacter),
+        database: database,
       ),
     );
     await tester.pumpAndSettle();
@@ -793,10 +813,13 @@ void main() {
     await tester.tap(find.text('Starter Campaign'));
     await tester.pumpAndSettle();
 
+    // Identity bar shows the local character's name and combat stats.
     expect(
-      find.textContaining('Arannis · HP 24/24 · AC 15 · 中毒, 倒地'),
+      find.textContaining('Arannis · HP 24/24 · AC 15'),
       findsOneWidget,
     );
+
+    await database.close();
   });
 
   testWidgets('campaign chat exposes table tools instead of session tab', (

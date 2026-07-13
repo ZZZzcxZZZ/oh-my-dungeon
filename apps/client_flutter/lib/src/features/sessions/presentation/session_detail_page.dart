@@ -602,8 +602,7 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
 
     if (currentHp != null) {
       success = await widget.characterController.updateCharacter(
-        characterId: selected.id,
-        currentHp: currentHp,
+        selected.copyWith(currentHp: currentHp),
       );
     }
 

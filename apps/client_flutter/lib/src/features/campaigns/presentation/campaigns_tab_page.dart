@@ -52,7 +52,6 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
   void _maybeLoadCampaigns() {
     if (widget.authController.isLoggedIn) {
       widget.campaignController.loadCampaigns();
-      widget.characterController.loadCharacters();
     }
   }
 

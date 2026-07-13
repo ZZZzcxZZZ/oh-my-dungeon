@@ -126,7 +126,7 @@ git commit -m "feat(0.1): persist characters and content snapshots locally"
 - 修改：`apps/client_flutter/lib/src/features/characters/presentation/character_detail_page.dart`
 - 创建：`apps/client_flutter/test/character_offline_test.dart`
 
-- [ ] **步骤 1：写未登录创建失败测试**
+- [x] **步骤 1：写未登录创建失败测试**
 
 ```dart
 Widget buildOfflineCharacterApp(CharacterRepository repository) {
@@ -150,7 +150,7 @@ testWidgets('creates and edits a character without an auth session', (tester) as
 });
 ```
 
-- [ ] **步骤 2：运行并确认登录门禁失败**
+- [x] **步骤 2：运行并确认登录门禁失败**
 
 ```powershell
 cd apps/client_flutter
@@ -159,7 +159,7 @@ flutter test test/character_offline_test.dart
 
 预期：FAIL，当前 Controller 因 Access Token 为空返回 false。
 
-- [ ] **步骤 3：改造 Controller 构造与命令**
+- [x] **步骤 3：改造 Controller 构造与命令**
 
 ```dart
 class CharacterController extends ChangeNotifier {
@@ -179,7 +179,7 @@ class CharacterController extends ChangeNotifier {
 
 移除个人角色列表、创建、编辑和运行时状态对 `AuthController`、`apiBaseUrl` 和 `CharacterClient` 的依赖。战役发布动作留在第四份计划的独立 `CampaignActorController`。
 
-- [ ] **步骤 4：验证所有角色测试**
+- [x] **步骤 4：验证所有角色测试**
 
 ```powershell
 cd apps/client_flutter
@@ -189,7 +189,7 @@ flutter analyze
 
 预期：未登录创建、现有角色卡、运行时资源和编辑测试全部通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/features/characters/presentation apps/client_flutter/test/character_offline_test.dart apps/client_flutter/test/character_pages_test.dart apps/client_flutter/test/character_controller_test.dart

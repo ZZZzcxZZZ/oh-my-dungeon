@@ -1,3 +1,5 @@
+import 'character.dart';
+
 class CharacterEditDraft {
   const CharacterEditDraft({
     required this.name,
@@ -34,4 +36,31 @@ class CharacterEditDraft {
   final Map<String, int> currency;
   final String notes;
   final Map<String, Object?> data;
+
+  static int _idCounter = 0;
+
+  CharacterSheet toLocalCharacter() {
+    final id = 'character-${_idCounter + 1}';
+    _idCounter += 1;
+    return CharacterSheet.local(
+      id: id,
+      name: name,
+      level: level,
+      classSummary: classSummary,
+      raceSummary: raceSummary,
+      notes: notes,
+    ).copyWith(
+      currentHp: currentHp,
+      maxHp: maxHp,
+      armorClass: armorClass,
+      speed: speed,
+      initiativeBonus: initiativeBonus,
+      abilities: abilities,
+      saves: saves,
+      skills: skills,
+      inventory: inventory,
+      currency: currency,
+      data: data,
+    );
+  }
 }

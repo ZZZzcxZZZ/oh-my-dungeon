@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../app_preferences/presentation/app_preferences_controller.dart';
-import '../../auth/presentation/auth_controller.dart';
 import '../../campaigns/presentation/campaign_controller.dart';
 import '../../content/presentation/content_controller.dart';
 import '../domain/character.dart';
@@ -12,75 +11,33 @@ import 'character_editor_page.dart';
 
 class CharactersTabPage extends StatefulWidget {
   const CharactersTabPage({
-    required this.authController,
-    required this.characterController,
-    required this.campaignController,
-    required this.contentController,
-    required this.appPreferencesController,
+    required this.controller,
+    this.campaignController,
+    this.contentController,
+    this.appPreferencesController,
     super.key,
   });
 
-  final AuthController authController;
-  final CharacterController characterController;
-  final CampaignController campaignController;
-  final ContentController contentController;
-  final AppPreferencesController appPreferencesController;
+  final CharacterController controller;
+  final CampaignController? campaignController;
+  final ContentController? contentController;
+  final AppPreferencesController? appPreferencesController;
 
   @override
   State<CharactersTabPage> createState() => _CharactersTabPageState();
 }
 
 class _CharactersTabPageState extends State<CharactersTabPage> {
-  String? _loadedForToken;
-
-  @override
-  void initState() {
-    super.initState();
-    widget.authController.addListener(_onAuthChanged);
-    _maybeLoad();
-  }
-
-  void _maybeLoad() {
-    final token = widget.authController.accessToken;
-    if (widget.authController.isLoggedIn &&
-        token != null &&
-        token != _loadedForToken) {
-      _loadedForToken = token;
-      widget.characterController.loadCharacters();
-      widget.campaignController.loadCampaigns();
-      widget.contentController.loadItems();
-    }
-  }
-
-  void _onAuthChanged() {
-    if (!widget.authController.isLoggedIn) {
-      _loadedForToken = null;
-      return;
-    }
-    _maybeLoad();
-  }
-
-  @override
-  void dispose() {
-    widget.authController.removeListener(_onAuthChanged);
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: Listenable.merge([
-        widget.authController,
-        widget.characterController,
+        widget.controller,
         widget.campaignController,
         widget.contentController,
         widget.appPreferencesController,
       ]),
       builder: (context, _) {
-        if (!widget.authController.isLoggedIn) {
-          return _buildLoginPrompt(context);
-        }
-
         return Scaffold(
           appBar: AppBar(title: const Text('角色')),
           floatingActionButton: FloatingActionButton.extended(
@@ -95,48 +52,17 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     );
   }
 
-  Widget _buildLoginPrompt(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('角色')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.badge_outlined,
-                  size: 56,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(height: 16),
-                Text('登录后管理角色', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                const Text(
-                  '创建角色卡，之后可绑定到战役并用于跑团桌面。',
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildCharacterList(BuildContext context) {
-    if (widget.characterController.isLoading) {
+    if (widget.controller.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (widget.characterController.error != null) {
+    if (widget.controller.error != null) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Text(
-            widget.characterController.error!,
+            widget.controller.error!,
             style: TextStyle(color: Theme.of(context).colorScheme.error),
             textAlign: TextAlign.center,
           ),
@@ -144,8 +70,9 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
       );
     }
 
-    final characters = widget.characterController.characters;
-    final compact = widget.appPreferencesController.preferences.compactLists;
+    final characters = widget.controller.characters;
+    final compact =
+        widget.appPreferencesController?.preferences.compactLists ?? false;
     if (characters.isEmpty) {
       return const Center(
         child: Padding(
@@ -178,43 +105,30 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
 
   Future<void> _openCreatePage() async {
     final messenger = ScaffoldMessenger.of(context);
-    widget.characterController.takeLastCreatedCharacter();
+    widget.controller.takeLastCreatedCharacter();
     final campaignId = await _selectCampaignContentSource();
     if (!mounted) return;
-    if (campaignId != null) {
-      await widget.contentController.loadAvailableCampaignItems(
+    if (campaignId != null && widget.contentController != null) {
+      await widget.contentController!.loadAvailableCampaignItems(
         campaignId: campaignId,
       );
+    } else if (widget.contentController != null) {
+      await widget.contentController!.loadItems();
     }
     if (!mounted) return;
     final contentItems = campaignId == null
-        ? widget.contentController.items
-        : widget.contentController.availableItems;
+        ? (widget.contentController?.items ?? const [])
+        : (widget.contentController?.availableItems ?? const []);
+    final defaultCreationMethod =
+        widget.appPreferencesController?.preferences.defaultCreationMethod ??
+        'fullSheet';
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (context) => CharacterEditorPage(
-          defaultCreationMethod:
-              widget.appPreferencesController.preferences.defaultCreationMethod,
+          defaultCreationMethod: defaultCreationMethod,
           contentItems: contentItems,
           onSubmit: (draft) async {
-            final success = await widget.characterController.createCharacter(
-              name: draft.name,
-              level: draft.level,
-              classSummary: emptyToNull(draft.classSummary),
-              raceSummary: emptyToNull(draft.raceSummary),
-              currentHp: draft.currentHp,
-              maxHp: draft.maxHp,
-              armorClass: draft.armorClass,
-              speed: draft.speed,
-              initiativeBonus: draft.initiativeBonus,
-              abilities: draft.abilities,
-              saves: draft.saves,
-              skills: draft.skills,
-              inventory: draft.inventory,
-              currency: draft.currency,
-              notes: draft.notes,
-              data: draft.data,
-            );
+            final success = await widget.controller.createCharacter(draft);
             if (mounted) {
               messenger.showSnackBar(
                 SnackBar(content: Text(success ? '角色已创建' : '创建失败')),
@@ -225,16 +139,10 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
         ),
       ),
     );
-    if (!mounted) return;
-    final createdCharacter = widget.characterController
-        .takeLastCreatedCharacter();
-    if (createdCharacter != null) {
-      await _openDetailPage(createdCharacter);
-    }
   }
 
   Future<String?> _selectCampaignContentSource() async {
-    final campaigns = widget.campaignController.campaigns;
+    final campaigns = widget.campaignController?.campaigns ?? const [];
     if (campaigns.isEmpty) return null;
     var selectedId = campaigns.first.id;
     return showDialog<String>(
@@ -275,7 +183,8 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
         builder: (context) => CharacterDetailPage(
           character: character,
           initialTab:
-              widget.appPreferencesController.preferences.defaultCharacterTab,
+              widget.appPreferencesController?.preferences.defaultCharacterTab ??
+              'overview',
           onUpdateRuntime:
               ({
                 int? currentHp,
@@ -288,9 +197,8 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
                 Map<String, int>? classResourcesUsed,
               }) async {
                 if (currentHp != null) {
-                  await widget.characterController.updateCharacter(
-                    characterId: character.id,
-                    currentHp: currentHp,
+                  await widget.controller.updateCharacter(
+                    character.copyWith(currentHp: currentHp),
                   );
                 }
                 if (temporaryHp != null ||
@@ -300,7 +208,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
                     deathSaveFailures != null ||
                     spellSlotsUsed != null ||
                     classResourcesUsed != null) {
-                  await widget.characterController.updateRuntimeState(
+                  await widget.controller.updateRuntimeState(
                     characterId: character.id,
                     temporaryHp: temporaryHp,
                     inspiration: inspiration,
@@ -317,7 +225,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
                 List<Map<String, Object>>? inventory,
                 Map<String, int>? currency,
               }) {
-                return widget.characterController.updateInventoryAndCurrency(
+                return widget.controller.updateInventoryAndCurrency(
                   characterId: character.id,
                   inventory: inventory,
                   currency: currency,
@@ -339,12 +247,11 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
         builder: (context) => CharacterEditorPage(
           initialCharacter: character,
           onSubmit: (draft) async {
-            final success = await widget.characterController.updateCharacter(
-              characterId: character.id,
+            final updated = character.copyWith(
               name: draft.name,
               level: draft.level,
-              classSummary: emptyToNull(draft.classSummary),
-              raceSummary: emptyToNull(draft.raceSummary),
+              classSummary: emptyToNull(draft.classSummary) ?? character.classSummary,
+              raceSummary: emptyToNull(draft.raceSummary) ?? character.raceSummary,
               currentHp: draft.currentHp,
               maxHp: draft.maxHp,
               armorClass: draft.armorClass,
@@ -358,6 +265,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
               notes: draft.notes,
               data: draft.data,
             );
+            final success = await widget.controller.updateCharacter(updated);
             if (mounted) {
               messenger.showSnackBar(
                 SnackBar(content: Text(success ? '角色已保存' : '保存失败')),
@@ -371,12 +279,18 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
   }
 
   Future<void> _showBindDialog(CharacterSheet character) async {
-    if (widget.campaignController.campaigns.isEmpty) {
-      await widget.campaignController.loadCampaigns();
+    if (widget.campaignController == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('暂无可绑定战役')),
+      );
+      return;
+    }
+    if (widget.campaignController!.campaigns.isEmpty) {
+      await widget.campaignController!.loadCampaigns();
     }
     if (!mounted) return;
 
-    final campaigns = widget.campaignController.campaigns;
+    final campaigns = widget.campaignController!.campaigns;
     if (campaigns.isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -429,7 +343,8 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     );
 
     if (campaignId == null) return;
-    final success = await widget.characterController.bindCharacterToCampaign(
+    // ignore: deprecated_member_use_from_same_package
+    final success = await widget.controller.bindCharacterToCampaign(
       characterId: character.id,
       campaignId: campaignId,
     );
@@ -494,7 +409,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
 
     if (result == null) return;
 
-    final success = await widget.characterController.updateContentRefs(
+    final success = await widget.controller.updateContentRefs(
       characterId: character.id,
       spells: result.spells,
       items: result.items,
@@ -507,9 +422,8 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
   }
 
   Future<void> _adjustHp(CharacterSheet character, int delta) async {
-    final success = await widget.characterController.updateCharacter(
-      characterId: character.id,
-      currentHp: character.currentHp + delta,
+    final success = await widget.controller.updateCharacter(
+      character.copyWith(currentHp: character.currentHp + delta),
     );
     if (!mounted || success) return;
     ScaffoldMessenger.of(

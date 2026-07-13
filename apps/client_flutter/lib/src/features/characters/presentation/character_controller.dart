@@ -1,44 +1,37 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
-import '../../auth/presentation/auth_controller.dart';
-import '../data/character_api_client.dart';
+import '../data/character_repository.dart';
 import '../domain/character.dart';
+import '../domain/character_edit_draft.dart';
 
 class CharacterController extends ChangeNotifier {
-  CharacterController({
-    required this.apiBaseUrl,
-    required this.authController,
-    required this.characterClient,
-  }) {
-    authController.addListener(_onAuthChanged);
+  CharacterController({required CharacterRepository repository})
+      : _repository = repository {
+    loadLocalCharacters();
   }
 
-  final String apiBaseUrl;
-  final AuthController authController;
-  final CharacterClient characterClient;
+  final CharacterRepository _repository;
+  StreamSubscription<List<CharacterSheet>>? _subscription;
 
   List<CharacterSheet> _characters = [];
-  List<CharacterCampaignBinding> _campaignCharacters = [];
+
+  @Deprecated('Campaign character bindings will move to CampaignActorController in Plan 4.')
+  final List<CharacterCampaignBinding> _campaignCharacters = [];
+
   CharacterSheet? _lastCreatedCharacter;
   bool _loading = false;
   String? _error;
 
   List<CharacterSheet> get characters => _characters;
+
+  @Deprecated('Campaign character bindings will move to CampaignActorController in Plan 4.')
   List<CharacterCampaignBinding> get campaignCharacters => _campaignCharacters;
+
   CharacterSheet? get lastCreatedCharacter => _lastCreatedCharacter;
   bool get isLoading => _loading;
   String? get error => _error;
-  String? get accessToken => authController.accessToken;
-
-  void _onAuthChanged() {
-    if (!authController.isLoggedIn) {
-      _characters = [];
-      _campaignCharacters = [];
-      _lastCreatedCharacter = null;
-      _error = null;
-      notifyListeners();
-    }
-  }
 
   CharacterSheet? takeLastCreatedCharacter() {
     final character = _lastCreatedCharacter;
@@ -46,159 +39,47 @@ class CharacterController extends ChangeNotifier {
     return character;
   }
 
-  Future<void> loadCharacters() async {
-    final token = accessToken;
-    if (token == null) return;
-
+  void loadLocalCharacters() {
     _loading = true;
     _error = null;
     notifyListeners();
-
-    try {
-      _characters = await characterClient.listCharacters(
-        apiBaseUrl: apiBaseUrl,
-        accessToken: token,
-      );
-    } on CharacterApiException catch (e) {
-      _error = e.message;
-    } catch (_) {
-      _error = '加载角色失败';
-    }
-
-    _loading = false;
-    notifyListeners();
+    _subscription ??= _repository.watchOwnedCharacters().listen(
+      (characters) {
+        _characters = characters;
+        _loading = false;
+        notifyListeners();
+      },
+      onError: (Object _) {
+        _error = '加载角色失败';
+        _loading = false;
+        notifyListeners();
+      },
+    );
   }
 
-  Future<bool> createCharacter({
-    required String name,
-    int? level,
-    String? classSummary,
-    String? raceSummary,
-    int? currentHp,
-    int? maxHp,
-    int? armorClass,
-    int? speed,
-    int? initiativeBonus,
-    Object? abilities,
-    Object? saves,
-    Object? skills,
-    Object? inventory,
-    Object? currency,
-    String? notes,
-    Object? data,
-  }) async {
-    final token = accessToken;
-    if (token == null) return false;
-
+  Future<bool> createCharacter(CharacterEditDraft draft) async {
     _error = null;
     try {
-      final character = await characterClient.createCharacter(
-        apiBaseUrl: apiBaseUrl,
-        accessToken: token,
-        name: name,
-        level: level,
-        classSummary: classSummary,
-        raceSummary: raceSummary,
-        currentHp: currentHp,
-        maxHp: maxHp,
-        armorClass: armorClass,
-        speed: speed,
-        initiativeBonus: initiativeBonus,
-        abilities: abilities,
-        saves: saves,
-        skills: skills,
-        inventory: inventory,
-        currency: currency,
-        notes: notes,
-        data: data,
-      );
-      _characters = [..._characters, character];
+      final character = draft.toLocalCharacter();
+      await _repository.save(character);
       _lastCreatedCharacter = character;
       notifyListeners();
       return true;
-    } on CharacterApiException catch (e) {
-      _error = e.message;
+    } catch (_) {
+      _error = '创建角色失败';
       notifyListeners();
       return false;
     }
   }
 
-  Future<bool> updateCharacter({
-    required String characterId,
-    String? campaignId,
-    String? name,
-    int? level,
-    String? classSummary,
-    String? raceSummary,
-    int? currentHp,
-    int? maxHp,
-    int? armorClass,
-    int? speed,
-    int? initiativeBonus,
-    Object? abilities,
-    Object? saves,
-    Object? skills,
-    Object? inventory,
-    Object? currency,
-    String? notes,
-    Object? data,
-  }) async {
-    final token = accessToken;
-    if (token == null) return false;
-
+  Future<bool> updateCharacter(CharacterSheet character) async {
     _error = null;
     try {
-      final character = await characterClient.updateCharacter(
-        apiBaseUrl: apiBaseUrl,
-        accessToken: token,
-        characterId: characterId,
-        campaignId: campaignId,
-        name: name,
-        level: level,
-        classSummary: classSummary,
-        raceSummary: raceSummary,
-        currentHp: currentHp,
-        maxHp: maxHp,
-        armorClass: armorClass,
-        speed: speed,
-        initiativeBonus: initiativeBonus,
-        abilities: abilities,
-        saves: saves,
-        skills: skills,
-        inventory: inventory,
-        currency: currency,
-        notes: notes,
-        data: data,
-      );
-      _replaceCharacter(character);
+      await _repository.save(character);
       notifyListeners();
       return true;
-    } on CharacterApiException catch (e) {
-      _error = e.message;
-      notifyListeners();
-      return false;
-    }
-  }
-
-  Future<bool> bindCharacterToCampaign({
-    required String characterId,
-    required String campaignId,
-  }) async {
-    final token = accessToken;
-    if (token == null) return false;
-
-    _error = null;
-    try {
-      await characterClient.bindCharacterToCampaign(
-        apiBaseUrl: apiBaseUrl,
-        accessToken: token,
-        characterId: characterId,
-        campaignId: campaignId,
-      );
-      notifyListeners();
-      return true;
-    } on CharacterApiException catch (e) {
-      _error = e.message;
+    } catch (_) {
+      _error = '保存角色失败';
       notifyListeners();
       return false;
     }
@@ -210,11 +91,21 @@ class CharacterController extends ChangeNotifier {
     List<String> items = const [],
     List<String> features = const [],
   }) {
+    final character = _characters
+        .where((item) => item.id == characterId)
+        .firstOrNull;
+    if (character == null) return Future.value(false);
     return updateCharacter(
-      characterId: characterId,
-      data: {
-        'contentRefs': {'spells': spells, 'items': items, 'features': features},
-      },
+      character.copyWith(
+        data: {
+          ...character.dataMap,
+          'contentRefs': {
+            'spells': spells,
+            'items': items,
+            'features': features,
+          },
+        },
+      ),
     );
   }
 
@@ -231,8 +122,9 @@ class CharacterController extends ChangeNotifier {
     final character = _characters
         .where((item) => item.id == characterId)
         .firstOrNull;
-    final data = <String, Object?>{if (character != null) ...character.dataMap};
-    final currentRuntime = character?.runtimeMap ?? const <String, Object?>{};
+    if (character == null) return Future.value(false);
+    final data = <String, Object?>{...character.dataMap};
+    final currentRuntime = <String, Object?>{...character.runtimeMap};
     final currentDeathSaves = _asMap(currentRuntime['deathSaves']);
     final deathSaves = <String, Object?>{...currentDeathSaves};
     if (deathSaveSuccesses != null) {
@@ -253,7 +145,7 @@ class CharacterController extends ChangeNotifier {
       runtime['classResourcesUsed'] = classResourcesUsed;
     }
     data['runtime'] = runtime;
-    return updateCharacter(characterId: characterId, data: data);
+    return updateCharacter(character.copyWith(data: data));
   }
 
   Future<bool> updateInventoryAndCurrency({
@@ -261,81 +153,35 @@ class CharacterController extends ChangeNotifier {
     List<Map<String, Object>>? inventory,
     Map<String, int>? currency,
   }) {
+    final character = _characters
+        .where((item) => item.id == characterId)
+        .firstOrNull;
+    if (character == null) return Future.value(false);
     return updateCharacter(
-      characterId: characterId,
-      inventory: inventory,
-      currency: currency,
+      character.copyWith(inventory: inventory, currency: currency),
     );
   }
 
+  @Deprecated('Campaign character loading will move to CampaignActorController in Plan 4.')
+  Future<void> loadCampaignCharacters(String campaignId) async {}
+
+  @Deprecated('Campaign HP adjustment will move to CampaignActorController in Plan 4.')
   Future<bool> adjustCampaignCharacterHp({
     required String campaignId,
     required String characterId,
     int? delta,
     int? currentHp,
-  }) async {
-    final token = accessToken;
-    if (token == null) return false;
+  }) async => false;
 
-    _error = null;
-    try {
-      final character = await characterClient.adjustCampaignCharacterHp(
-        apiBaseUrl: apiBaseUrl,
-        accessToken: token,
-        campaignId: campaignId,
-        characterId: characterId,
-        delta: delta,
-        currentHp: currentHp,
-      );
-      _replaceCharacter(character);
-      notifyListeners();
-      return true;
-    } on CharacterApiException catch (e) {
-      _error = e.message;
-      notifyListeners();
-      return false;
-    }
-  }
-
-  Future<void> loadCampaignCharacters(String campaignId) async {
-    final token = accessToken;
-    if (token == null) return;
-
-    _loading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      _campaignCharacters = await characterClient.listCampaignCharacters(
-        apiBaseUrl: apiBaseUrl,
-        accessToken: token,
-        campaignId: campaignId,
-      );
-    } on CharacterApiException catch (e) {
-      _error = e.message;
-    } catch (_) {
-      _error = '加载战役角色失败';
-    }
-
-    _loading = false;
-    notifyListeners();
-  }
-
-  void _replaceCharacter(CharacterSheet character) {
-    final index = _characters.indexWhere((item) => item.id == character.id);
-    if (index == -1) {
-      _characters = [..._characters, character];
-      return;
-    }
-    _characters = [
-      for (var i = 0; i < _characters.length; i++)
-        if (i == index) character else _characters[i],
-    ];
-  }
+  @Deprecated('Campaign binding will move to CampaignActorController in Plan 4.')
+  Future<bool> bindCharacterToCampaign({
+    required String characterId,
+    required String campaignId,
+  }) async => false;
 
   @override
   void dispose() {
-    authController.removeListener(_onAuthChanged);
+    _subscription?.cancel();
     super.dispose();
   }
 }

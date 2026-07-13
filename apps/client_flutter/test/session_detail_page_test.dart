@@ -4,7 +4,6 @@ import 'package:dnd_table_client/src/features/auth/domain/auth_session.dart';
 import 'package:dnd_table_client/src/features/auth/presentation/auth_controller.dart';
 import 'package:dnd_table_client/src/features/app_preferences/data/app_preferences_store.dart';
 import 'package:dnd_table_client/src/features/app_preferences/presentation/app_preferences_controller.dart';
-import 'package:dnd_table_client/src/features/characters/data/character_api_client.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_controller.dart';
 import 'package:dnd_table_client/src/features/check_requests/data/check_request_api_client.dart';
@@ -19,6 +18,8 @@ import 'package:dnd_table_client/src/features/sessions/presentation/session_cont
 import 'package:dnd_table_client/src/features/sessions/presentation/session_detail_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/character_test_support.dart';
 
 void main() {
   const apiBaseUrl = 'http://localhost:3000/api';
@@ -44,11 +45,8 @@ void main() {
     await sessionController.openSession('sess-1');
 
     final characterController = CharacterController(
-      apiBaseUrl: apiBaseUrl,
-      authController: authController,
-      characterClient: _FakeCharacterClient(),
+      repository: MemoryCharacterRepository(initial: [_character]),
     );
-    await characterController.loadCharacters();
 
     final checkRequestController = CheckRequestController(
       apiBaseUrl: apiBaseUrl,
@@ -124,23 +122,20 @@ void main() {
       await sessionController.openSession('sess-1');
 
       final characterController = CharacterController(
-        apiBaseUrl: apiBaseUrl,
-        authController: authController,
-        characterClient: _FakeCharacterClient(),
-      );
-      await characterController.loadCharacters();
+      repository: MemoryCharacterRepository(initial: [_character]),
+    );
 
-      final checkRequestController = CheckRequestController(
-        apiBaseUrl: apiBaseUrl,
-        authController: authController,
-        checkRequestClient: _FakeCheckRequestClient(),
-      );
-      final appPreferencesController = AppPreferencesController(
-        store: InMemoryAppPreferencesStore(),
-      );
-      await appPreferencesController.initialize();
-      await appPreferencesController.setDefaultDice('2d6+1');
-      await appPreferencesController.setConfirmBeforeRoll(true);
+    final checkRequestController = CheckRequestController(
+      apiBaseUrl: apiBaseUrl,
+      authController: authController,
+      checkRequestClient: _FakeCheckRequestClient(),
+    );
+    final appPreferencesController = AppPreferencesController(
+      store: InMemoryAppPreferencesStore(),
+    );
+    await appPreferencesController.initialize();
+    await appPreferencesController.setDefaultDice('2d6+1');
+    await appPreferencesController.setConfirmBeforeRoll(true);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -191,13 +186,10 @@ void main() {
       );
       await sessionController.openSession('sess-1');
 
-      final characterClient = _FakeCharacterClient();
+      final characterRepository = MemoryCharacterRepository(initial: [_character]);
       final characterController = CharacterController(
-        apiBaseUrl: apiBaseUrl,
-        authController: authController,
-        characterClient: characterClient,
+        repository: characterRepository,
       );
-      await characterController.loadCharacters();
 
       final checkRequestController = CheckRequestController(
         apiBaseUrl: apiBaseUrl,
@@ -233,7 +225,7 @@ void main() {
       await tester.tap(find.byTooltip('受到 1 点伤害'));
       await tester.pumpAndSettle();
 
-      expect(characterClient.updateCalls.single.currentHp, 23);
+      expect((await characterRepository.getById('char-1'))?.currentHp, 23);
       expect(sessionClient.sentMessages.single.kind, 'character_runtime');
       expect(
         sessionClient.sentMessages.single.content,
@@ -269,13 +261,10 @@ void main() {
       );
       await sessionController.openSession('sess-1');
 
-      final characterClient = _FakeCharacterClient();
+      final characterRepository = MemoryCharacterRepository(initial: [_character]);
       final characterController = CharacterController(
-        apiBaseUrl: apiBaseUrl,
-        authController: authController,
-        characterClient: characterClient,
+        repository: characterRepository,
       );
-      await characterController.loadCharacters();
 
       final checkRequestController = CheckRequestController(
         apiBaseUrl: apiBaseUrl,
@@ -312,7 +301,7 @@ void main() {
       await tester.tap(find.byTooltip('受到 1 点伤害'));
       await tester.pumpAndSettle();
 
-      expect(characterClient.updateCalls.single.currentHp, 23);
+      expect((await characterRepository.getById('char-1'))?.currentHp, 23);
       expect(sessionClient.sentMessages, isEmpty);
 
       await tester.pumpWidget(const SizedBox.shrink());
@@ -581,118 +570,6 @@ class _FakeSessionClient implements SessionClient {
       visibility: visibility ?? 'public',
       createdAt: '2026-07-09T00:00:40.000Z',
     );
-  }
-}
-
-class _FakeCharacterClient implements CharacterClient {
-  _FakeCharacterClient({List<CharacterSheet> characters = const [_character]})
-    : _characters = [...characters];
-
-  final List<CharacterSheet> _characters;
-  final updateCalls = <({String characterId, int? currentHp, Object? data})>[];
-
-  @override
-  Future<List<CharacterSheet>> listCharacters({
-    required String apiBaseUrl,
-    required String accessToken,
-  }) async {
-    return [..._characters];
-  }
-
-  @override
-  Future<CharacterSheet> createCharacter({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String name,
-    int? level,
-    String? classSummary,
-    String? raceSummary,
-    int? currentHp,
-    int? maxHp,
-    int? armorClass,
-    int? speed,
-    int? initiativeBonus,
-    Object? abilities,
-    Object? saves,
-    Object? skills,
-    Object? inventory,
-    Object? currency,
-    String? notes,
-    Object? data,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<CharacterSheet> updateCharacter({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String characterId,
-    String? campaignId,
-    String? name,
-    int? level,
-    String? classSummary,
-    String? raceSummary,
-    int? currentHp,
-    int? maxHp,
-    int? armorClass,
-    int? speed,
-    int? initiativeBonus,
-    Object? abilities,
-    Object? saves,
-    Object? skills,
-    Object? inventory,
-    Object? currency,
-    String? notes,
-    Object? data,
-  }) async {
-    updateCalls.add((
-      characterId: characterId,
-      currentHp: currentHp,
-      data: data,
-    ));
-    final index = _characters.indexWhere(
-      (character) => character.id == characterId,
-    );
-    final current = index == -1 ? _character : _characters[index];
-    final updated = current.copyWith(currentHp: currentHp, data: data);
-    if (index == -1) {
-      _characters.add(updated);
-    } else {
-      _characters[index] = updated;
-    }
-    return updated;
-  }
-
-  @override
-  Future<CharacterCampaignBinding> bindCharacterToCampaign({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String characterId,
-    required String campaignId,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<List<CharacterCampaignBinding>> listCampaignCharacters({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String campaignId,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<CharacterSheet> adjustCampaignCharacterHp({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String campaignId,
-    required String characterId,
-    int? delta,
-    int? currentHp,
-  }) {
-    throw UnimplementedError();
   }
 }
 

@@ -64,7 +64,6 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
     }
     _loadedForToken = token;
     widget.campaignController.loadCampaigns();
-    widget.characterController.loadCharacters();
   }
 
   @override

@@ -42,7 +42,7 @@
 - 创建：`apps/client_flutter/lib/src/features/content/domain/content_entry.dart`
 - 创建：`apps/client_flutter/test/content_package_model_test.dart`
 
-- [ ] **步骤 1：编写失败的解析测试**
+- [x] **步骤 1：编写失败的解析测试**
 
 ```dart
 test('parses a linked class feature without accepting html blocks', () {
@@ -76,7 +76,7 @@ test('parses a linked class feature without accepting html blocks', () {
 });
 ```
 
-- [ ] **步骤 2：运行并确认模型缺失**
+- [x] **步骤 2：运行并确认模型缺失**
 
 ```powershell
 cd apps/client_flutter
@@ -85,7 +85,7 @@ flutter test test/content_package_model_test.dart
 
 预期：FAIL，`ContentEntry` 和 `ContentBlock` 不存在。
 
-- [ ] **步骤 3：实现封闭内容块类型**
+- [x] **步骤 3：实现封闭内容块类型**
 
 `ContentBlock.fromJson` 只允许 `heading`、`paragraph`、`list`、`table`、`quote`、`callout`、`image`、`statBlock`、`entryLink` 和 `diceExpression`。未知类型抛出包含 JSON 路径的 `FormatException`。`ContentEntry` 必填 `id/type/slug/name/body/revision`，其余字段使用空集合或空字符串。
 
@@ -98,7 +98,7 @@ dependencies:
   file_picker: ^10.3.10
 ```
 
-- [ ] **步骤 4：验证模型测试**
+- [x] **步骤 4：验证模型测试**
 
 ```powershell
 cd apps/client_flutter
@@ -108,7 +108,7 @@ flutter analyze
 
 预期：解析成功，HTML 被拒绝，analyzer 无问题。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/pubspec.yaml apps/client_flutter/pubspec.lock apps/client_flutter/lib/src/features/content/domain apps/client_flutter/test/content_package_model_test.dart

@@ -6,6 +6,7 @@ import '../../auth/presentation/auth_controller.dart';
 import '../data/content_api_client.dart';
 import '../domain/content.dart';
 
+@Deprecated('Use ContentRepository and campaign sync')
 class ContentController extends ChangeNotifier {
   ContentController({
     required this.apiBaseUrl,

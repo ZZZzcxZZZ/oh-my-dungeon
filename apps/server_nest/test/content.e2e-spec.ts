@@ -513,4 +513,21 @@ describe("content endpoints", () => {
       ]),
     );
   });
+
+  it("returns no implicit system or SRD packages with a fresh database", async () => {
+    const token = await login();
+
+    await request(app.getHttpServer())
+      .get("/api/content/packages")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toEqual([]);
+        const offenders = (Array.isArray(body) ? body : []).filter(
+          (p: { scope?: string; name?: string }) =>
+            p.scope === "system" || /SRD/i.test(p.name ?? ""),
+        );
+        expect(offenders).toEqual([]);
+      });
+  });
 });

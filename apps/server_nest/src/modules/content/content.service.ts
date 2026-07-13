@@ -279,8 +279,16 @@ export class ContentService {
       where: { campaignId, enabled: true },
       select: { packageId: true },
     });
-    const packageIds = enables.map((item: any) => item.packageId);
-    if (packageIds.length === 0) {
+    // 系统包（内置资料）对所有战役默认可用，无需 DM 手动启用。
+    const systemPackages = await this.prismaService.contentPackage.findMany({
+      where: { scope: "system", status: "active" },
+      select: { id: true },
+    });
+    const packageIds = new Set<string>([
+      ...enables.map((item: any) => item.packageId),
+      ...systemPackages.map((pkg: any) => pkg.id),
+    ]);
+    if (packageIds.size === 0) {
       return [];
     }
 
@@ -294,7 +302,7 @@ export class ContentService {
 
     const items = await this.prismaService.contentItem.findMany({
       where: {
-        packageId: { in: packageIds },
+        packageId: { in: Array.from(packageIds) },
         ...(query.type ? { type: query.type } : {}),
         ...(query.q
           ? {

@@ -179,12 +179,23 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
   Future<void> _openCreatePage() async {
     final messenger = ScaffoldMessenger.of(context);
     widget.characterController.takeLastCreatedCharacter();
+    final campaignId = await _selectCampaignContentSource();
+    if (!mounted) return;
+    if (campaignId != null) {
+      await widget.contentController.loadAvailableCampaignItems(
+        campaignId: campaignId,
+      );
+    }
+    if (!mounted) return;
+    final contentItems = campaignId == null
+        ? widget.contentController.items
+        : widget.contentController.availableItems;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (context) => CharacterEditorPage(
           defaultCreationMethod:
               widget.appPreferencesController.preferences.defaultCreationMethod,
-          contentItems: widget.contentController.items,
+          contentItems: contentItems,
           onSubmit: (draft) async {
             final success = await widget.characterController.createCharacter(
               name: draft.name,
@@ -220,6 +231,42 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     if (createdCharacter != null) {
       await _openDetailPage(createdCharacter);
     }
+  }
+
+  Future<String?> _selectCampaignContentSource() async {
+    final campaigns = widget.campaignController.campaigns;
+    if (campaigns.isEmpty) return null;
+    var selectedId = campaigns.first.id;
+    return showDialog<String>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('选择创建资料'),
+          content: DropdownMenu<String>(
+            initialSelection: selectedId,
+            label: const Text('战役资料库'),
+            dropdownMenuEntries: [
+              for (final campaign in campaigns)
+                DropdownMenuEntry(value: campaign.id, label: campaign.name),
+            ],
+            onSelected: (value) {
+              if (value != null) setDialogState(() => selectedId = value);
+            },
+          ),
+          actions: [
+            TextButton.icon(
+              onPressed: () => Navigator.of(context).pop(''),
+              icon: const Icon(Icons.public),
+              label: const Text('使用通用资料'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(selectedId),
+              child: const Text('继续'),
+            ),
+          ],
+        ),
+      ),
+    ).then((value) => value?.isEmpty ?? true ? null : value);
   }
 
   Future<void> _openDetailPage(CharacterSheet character) async {

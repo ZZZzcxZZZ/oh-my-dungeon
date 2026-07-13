@@ -19,6 +19,7 @@ export interface ContentPackageImportItem {
   tags?: string[];
   sourceLabel?: string;
   schemaVersion?: number;
+  references?: Array<{ type: string; slug: string; relation: string; label?: string }>;
 }
 
 export interface ContentPackageImport {
@@ -47,6 +48,15 @@ export interface ContentItemView {
   schemaVersion: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CampaignContentItemDetailView extends ContentItemView {
+  isFavorite: boolean;
+  outgoingLinks: Array<{
+    relation: string;
+    label: string;
+    target: ContentItemView;
+  }>;
 }
 
 export interface ContentPackageView {

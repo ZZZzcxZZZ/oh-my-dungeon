@@ -62,6 +62,14 @@ export class ContentPackageValidatorService {
           seenKeys.add(key);
         }
       });
+      input.items.forEach((item, index) => {
+        if (!isRecord(item) || !Array.isArray(item.references)) return;
+        item.references.forEach((reference, referenceIndex) => {
+          if (!isRecord(reference) || !isNonEmptyString(reference.type) || !isNonEmptyString(reference.slug) || !isNonEmptyString(reference.relation) || !seenKeys.has(`${reference.type}:${reference.slug}`)) {
+            errors.push(`items[${index}].references[${referenceIndex}] cannot be resolved`);
+          }
+        });
+      });
     }
 
     return {

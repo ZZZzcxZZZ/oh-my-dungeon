@@ -36,6 +36,7 @@ model User {
   characters          Character[]
   characterBindings   CharacterCampaignBinding[]
   contentPackages     ContentPackage[]
+  contentFavorites    UserContentFavorite[]
   checkRequests       CheckRequest[]
   checkResponses      CheckResponse[]
 }
@@ -230,9 +231,38 @@ model ContentItem {
   package          ContentPackage    @relation(fields: [packageId], references: [id], onDelete: Cascade)
   baseOverrides    ContentOverride[] @relation("BaseContentItem")
   derivedOverrides ContentOverride[] @relation("DerivedContentItem")
+  outgoingLinks     ContentItemLink[] @relation("ContentItemLinkSource")
+  incomingLinks     ContentItemLink[] @relation("ContentItemLinkTarget")
+  favorites         UserContentFavorite[]
 
   @@unique([packageId, type, slug])
   @@index([type])
+}
+
+model ContentItemLink {
+  id           String      @id @default(uuid())
+  sourceItemId String
+  targetItemId String
+  relation     String
+  label        String      @default("")
+  sortOrder    Int         @default(0)
+  source       ContentItem @relation("ContentItemLinkSource", fields: [sourceItemId], references: [id], onDelete: Cascade)
+  target       ContentItem @relation("ContentItemLinkTarget", fields: [targetItemId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceItemId, targetItemId, relation])
+  @@index([targetItemId])
+}
+
+model UserContentFavorite {
+  id            String      @id @default(uuid())
+  userId        String
+  contentItemId String
+  createdAt     DateTime    @default(now())
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contentItem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contentItemId])
+  @@index([contentItemId])
 }
 
 model CampaignContentPackage {

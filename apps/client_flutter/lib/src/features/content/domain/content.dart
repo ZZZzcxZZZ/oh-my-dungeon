@@ -184,3 +184,30 @@ class ImportContentPackageResult {
     );
   }
 }
+
+class ContentItemLink {
+  const ContentItemLink({required this.relation, required this.label, required this.target});
+  final String relation;
+  final String label;
+  final ContentItem target;
+  factory ContentItemLink.fromJson(Map<String, Object?> json) => ContentItemLink(
+    relation: json['relation']! as String,
+    label: json['label']! as String,
+    target: ContentItem.fromJson(json['target']! as Map<String, Object?>),
+  );
+}
+
+class ContentItemDetail {
+  const ContentItemDetail({required this.item, required this.isFavorite, required this.outgoingLinks});
+  final ContentItem item;
+  final bool isFavorite;
+  final List<ContentItemLink> outgoingLinks;
+  factory ContentItemDetail.fromJson(Map<String, Object?> json) {
+    final links = json['outgoingLinks'] as List<Object?>? ?? const [];
+    return ContentItemDetail(
+      item: ContentItem.fromJson(json),
+      isFavorite: json['isFavorite'] as bool? ?? false,
+      outgoingLinks: links.map((entry) => ContentItemLink.fromJson(entry as Map<String, Object?>)).toList(),
+    );
+  }
+}

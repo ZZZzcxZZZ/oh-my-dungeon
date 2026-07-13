@@ -461,6 +461,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FloatingActionButton, '新角色'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('使用通用资料'));
+    await tester.pumpAndSettle();
 
     expect(find.text('标准创建角色'), findsOneWidget);
     expect(find.text('选择创建方式'), findsNothing);
@@ -919,7 +921,9 @@ void main() {
     await tester.tap(find.text('内容库'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('新增资料'));
+    await tester.tap(find.byTooltip('资料库操作'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('新增战役资料'));
     await tester.pumpAndSettle();
     expect(find.text('新增资料'), findsOneWidget);
     expect(find.text('法术'), findsWidgets);
@@ -986,6 +990,7 @@ void main() {
       'ritual': true,
     });
     expect(item['tags'], ['ritual']);
+    expect(contentClient.importedCampaignIds, ['camp-1']);
   });
 
   testWidgets('dm can preview and import a private content draft', (
@@ -1022,7 +1027,9 @@ void main() {
     await tester.tap(find.text('内容库'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('导入私有草稿'));
+    await tester.tap(find.byTooltip('资料库操作'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('导入私有草稿'));
     await tester.pumpAndSettle();
     expect(find.text('导入私有草稿'), findsOneWidget);
     expect(find.textContaining('不会提交到开源仓库'), findsOneWidget);
@@ -1075,6 +1082,95 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('登录后查看资料库'), findsOneWidget);
+  });
+
+  testWidgets('uses a side-by-side wiki detail pane on wide screens', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+    final tokenStore = InMemoryAuthTokenStore();
+    await tokenStore.saveTokens(
+      profile.id,
+      const StoredAuthTokens(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      ),
+    );
+
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: tokenStore,
+        authClient: _FakeAuthClient(),
+        campaignClient: _FakeCampaignClient(),
+        characterClient: _FakeCharacterClient(),
+        contentClient: _FakeContentClient(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('资料库'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('选择一个条目'), findsOneWidget);
+    await tester.tap(find.text('Fire Bolt').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('A mote of fire.'), findsOneWidget);
+  });
+
+  testWidgets('character creation can use only selected campaign content', (
+    tester,
+  ) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+    final tokenStore = InMemoryAuthTokenStore();
+    await tokenStore.saveTokens(
+      profile.id,
+      const StoredAuthTokens(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      ),
+    );
+    final preferencesController = AppPreferencesController(
+      store: InMemoryAppPreferencesStore(),
+    );
+    await preferencesController.initialize();
+    await preferencesController.setDefaultCreationMethod('standard');
+
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: tokenStore,
+        authClient: _FakeAuthClient(),
+        campaignClient: _FakeCampaignClient(),
+        characterClient: _FakeCharacterClient(),
+        contentClient: _FakeContentClient(
+          items: const [_fighterContent, _aasimarContent, _acolyteContent],
+          availableItems: const [_campaignFighterContent],
+        ),
+        appPreferencesController: preferencesController,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Local Table'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('角色').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FloatingActionButton, '新角色'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('继续'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('战役战士 / Campaign Fighter'), findsOneWidget);
+    expect(find.text('战士 / Fighter'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    preferencesController.dispose();
   });
   testWidgets('shows dm encounter control from campaign chat tools', (
     tester,
@@ -1517,9 +1613,50 @@ class _FakeCharacterClient implements CharacterClient {
 }
 
 class _FakeContentClient implements ContentClient {
-  _FakeContentClient({this.items = const [_contentItem]});
+  @override
+  Future<ContentItemDetail> getCampaignItem({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String itemId,
+  }) async => ContentItemDetail(
+    item: _contentItem,
+    isFavorite: false,
+    outgoingLinks: const [],
+  );
+  @override
+  Future<ImportContentPackageResult> importCampaignPackage({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required Object package,
+    bool dryRun = false,
+  }) {
+    importedCampaignIds.add(campaignId);
+    return importPackage(
+      apiBaseUrl: apiBaseUrl,
+      accessToken: accessToken,
+      package: package,
+      dryRun: dryRun,
+    );
+  }
+
+  @override
+  Future<void> setCampaignItemFavorite({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String itemId,
+    required bool favorite,
+  }) async {}
+  _FakeContentClient({
+    this.items = const [_contentItem],
+    this.availableItems = const [_contentItem],
+  });
 
   final List<ContentItem> items;
+  final List<ContentItem> availableItems;
+  final List<String> importedCampaignIds = [];
   final List<Map<String, Object?>> importedPackages = [];
   final List<({bool dryRun, Map<String, Object?> package})> importCalls = [];
 
@@ -1599,8 +1736,16 @@ class _FakeContentClient implements ContentClient {
     required String campaignId,
     String? type,
     String? query,
+    bool favoriteOnly = false,
   }) async {
-    return const [_contentItem];
+    return availableItems
+        .where((item) => type == null || item.type == type)
+        .where(
+          (item) =>
+              query == null ||
+              item.name.toLowerCase().contains(query.toLowerCase()),
+        )
+        .toList(growable: false);
   }
 
   @override
@@ -1770,6 +1915,21 @@ const _fighterContent = ContentItem(
   schemaVersion: 1,
   createdAt: '2026-07-09T00:00:00.000Z',
   updatedAt: '2026-07-09T00:00:00.000Z',
+);
+
+const _campaignFighterContent = ContentItem(
+  id: 'campaign-class-fighter',
+  packageId: 'campaign-package',
+  type: 'class',
+  slug: 'campaign-fighter',
+  name: '战役战士 / Campaign Fighter',
+  description: '',
+  structured: {'page': 1},
+  tags: ['class'],
+  sourceLabel: 'Campaign rules',
+  schemaVersion: 1,
+  createdAt: '2026-07-13T00:00:00.000Z',
+  updatedAt: '2026-07-13T00:00:00.000Z',
 );
 
 const _aasimarContent = ContentItem(

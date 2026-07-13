@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Delete,
   Param,
   Post,
   Query,
@@ -15,6 +16,7 @@ import { ContentService } from "./content.service";
 import type {
   CampaignContentPackageView,
   ContentItemView,
+  CampaignContentItemDetailView,
   ContentPackageImport,
   ContentOverrideView,
   ContentPackageView,
@@ -49,6 +51,20 @@ export class ContentController {
   ): Promise<ImportContentPackageResult> {
     return this.contentService.importPackage(
       user,
+      body.package,
+      body.dryRun === true,
+    );
+  }
+
+  @Post("campaigns/:id/content/packages/import")
+  importCampaignPackage(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param("id") campaignId: string,
+    @Body() body: ImportPackageBody,
+  ): Promise<ImportContentPackageResult> {
+    return this.contentService.importCampaignPackage(
+      user,
+      campaignId,
       body.package,
       body.dryRun === true,
     );
@@ -114,11 +130,40 @@ export class ContentController {
     @Param("id") id: string,
     @Query("type") type?: string,
     @Query("q") q?: string,
+    @Query("favoriteOnly") favoriteOnly?: string,
   ): Promise<ContentItemView[]> {
     return this.contentService.listAvailableCampaignItems(user, id, {
       type,
       q,
+      favoriteOnly: favoriteOnly === "true",
     });
+  }
+
+  @Post("campaigns/:id/content/items/:itemId/favorite")
+  favoriteItem(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param("id") campaignId: string,
+    @Param("itemId") itemId: string,
+  ): Promise<void> {
+    return this.contentService.setCampaignItemFavorite(user, campaignId, itemId, true);
+  }
+
+  @Get("campaigns/:id/content/items/:itemId")
+  getCampaignItem(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param("id") campaignId: string,
+    @Param("itemId") itemId: string,
+  ): Promise<CampaignContentItemDetailView> {
+    return this.contentService.getCampaignItem(user, campaignId, itemId);
+  }
+
+  @Delete("campaigns/:id/content/items/:itemId/favorite")
+  unfavoriteItem(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param("id") campaignId: string,
+    @Param("itemId") itemId: string,
+  ): Promise<void> {
+    return this.contentService.setCampaignItemFavorite(user, campaignId, itemId, false);
   }
 
   @Post("campaigns/:id/content/overrides")

@@ -10,7 +10,6 @@ import '../../campaigns/presentation/campaign_controller.dart';
 import '../../client_mode/domain/client_mode.dart';
 import '../domain/content.dart';
 import 'content_controller.dart';
-import 'widgets/content_class_feature_list.dart';
 
 class ContentLibraryPage extends StatefulWidget {
   const ContentLibraryPage({
@@ -759,15 +758,6 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
                   ),
                   // 详细内容区：基本信息 + 描述
                   ..._structuredDetailRows(displayedItem),
-                  if (displayedItem.type == 'class')
-                    ContentClassFeatureList(
-                      item: displayedItem,
-                      links: links,
-                      onLinkTap: (link) {
-                        Navigator.of(context).pop();
-                        _showItemDetail(link.target);
-                      },
-                    ),
                   if (links.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     Text('关联条目', style: theme.textTheme.titleSmall),
@@ -942,12 +932,6 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
               ],
             ),
             ..._structuredDetailRows(item),
-            if (item.type == 'class')
-              ContentClassFeatureList(
-                item: item,
-                links: links,
-                onLinkTap: (link) => _selectWideItem(link.target),
-              ),
             if (links.isNotEmpty) ...[
               const SizedBox(height: 20),
               Text('关联条目', style: theme.textTheme.titleMedium),

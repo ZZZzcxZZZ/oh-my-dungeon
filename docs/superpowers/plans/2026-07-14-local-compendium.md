@@ -303,7 +303,7 @@ git commit -m "feat(0.1): import local compendium packages transactionally"
 - 创建：`apps/client_flutter/test/content_type_registry_test.dart`
 - 创建：`apps/client_flutter/test/content_block_view_test.dart`
 
-- [ ] **步骤 1：写注册和安全渲染失败测试**
+- [x] **步骤 1：写注册和安全渲染失败测试**
 
 ```dart
 test('registers every v1 content type', () {
@@ -330,7 +330,7 @@ testWidgets('renders entry links as navigable material list tiles', (tester) asy
 });
 ```
 
-- [ ] **步骤 2：运行并确认注册器缺失**
+- [x] **步骤 2：运行并确认注册器缺失**
 
 ```powershell
 cd apps/client_flutter
@@ -339,7 +339,7 @@ flutter test test/content_type_registry_test.dart test/content_block_view_test.d
 
 预期：FAIL，注册器和块视图不存在。
 
-- [ ] **步骤 3：实现定义接口和默认类型**
+- [x] **步骤 3：实现定义接口和默认类型**
 
 ```dart
 abstract interface class ContentTypeDefinition {
@@ -354,7 +354,7 @@ abstract interface class ContentTypeDefinition {
 
 默认注册器为每个 v1 类型提供定义。职业元数据显示生命骰、主要属性和熟练，法术元数据显示环阶、学派、施法时间、距离、成分和持续时间。未知类型使用 `custom` 定义，不抛出 UI 异常。
 
-- [ ] **步骤 4：验证所有块和职业等级分组**
+- [x] **步骤 4：验证所有块和职业等级分组**
 
 ```powershell
 cd apps/client_flutter
@@ -364,7 +364,7 @@ flutter analyze
 
 预期：注册、链接导航、内容块和按等级职业特性均通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/features/content/domain/content_type_definition.dart apps/client_flutter/lib/src/features/content/presentation apps/client_flutter/test/content_type_registry_test.dart apps/client_flutter/test/content_block_view_test.dart apps/client_flutter/test/content_class_feature_list_test.dart

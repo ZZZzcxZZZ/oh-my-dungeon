@@ -1,40 +1,37 @@
 import 'package:flutter/material.dart';
 
-import '../../domain/content.dart';
+import '../../domain/content_entry.dart';
 
 class ContentClassFeatureList extends StatelessWidget {
   const ContentClassFeatureList({
-    required this.item,
-    this.links = const [],
-    this.onLinkTap,
+    required this.classEntry,
+    this.featureEntries = const [],
+    this.onFeatureTap,
     super.key,
   });
 
-  final ContentItem item;
-  final List<ContentItemLink> links;
-  final ValueChanged<ContentItemLink>? onLinkTap;
+  final ContentEntry classEntry;
+  final List<ContentEntry> featureEntries;
+  final ValueChanged<ContentEntry>? onFeatureTap;
 
   @override
   Widget build(BuildContext context) {
-    final structured = item.structured;
-    if (structured is! Map || structured['levelFeatures'] is! List) {
-      return const SizedBox.shrink();
-    }
+    if (featureEntries.isEmpty) return const SizedBox.shrink();
 
-    final grouped = <int, List<Map>>{};
-    for (final raw in structured['levelFeatures'] as List) {
-      if (raw is! Map) continue;
-      final level = raw['level'] is num ? (raw['level'] as num).toInt() : 0;
-      grouped.putIfAbsent(level, () => []).add(raw);
+    final grouped = <int, List<ContentEntry>>{};
+    for (final feature in featureEntries) {
+      final level = _levelOf(feature);
+      grouped.putIfAbsent(level, () => []).add(feature);
     }
     final levels = grouped.keys.toList()..sort();
     if (levels.isEmpty) return const SizedBox.shrink();
 
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 20),
-        Text('等级特性', style: Theme.of(context).textTheme.titleMedium),
+        Text('等级特性', style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
         for (final level in levels)
           ExpansionTile(
@@ -43,16 +40,15 @@ class ContentClassFeatureList extends StatelessWidget {
               for (final feature in grouped[level]!)
                 ListTile(
                   leading: const Icon(Icons.auto_awesome_outlined),
-                  title: Text('${feature['name'] ?? '职业特性'}'),
-                  subtitle: feature['summary'] == null
-                      ? null
-                      : Text('${feature['summary']}'),
-                  trailing: _linkForFeature(feature) == null
+                  title: Text(feature.name),
+                  subtitle:
+                      feature.summary.isEmpty ? null : Text(feature.summary),
+                  trailing: onFeatureTap == null
                       ? null
                       : const Icon(Icons.chevron_right),
-                  onTap: _linkForFeature(feature) == null
+                  onTap: onFeatureTap == null
                       ? null
-                      : () => onLinkTap?.call(_linkForFeature(feature)!),
+                      : () => onFeatureTap!(feature),
                 ),
             ],
           ),
@@ -60,13 +56,9 @@ class ContentClassFeatureList extends StatelessWidget {
     );
   }
 
-  ContentItemLink? _linkForFeature(Map feature) {
-    final name = '${feature['name'] ?? ''}';
-    final slug = '${feature['slug'] ?? ''}';
-    for (final link in links) {
-      if (link.label == name || link.target.name == name) return link;
-      if (slug.isNotEmpty && link.target.slug == slug) return link;
-    }
-    return null;
+  int _levelOf(ContentEntry entry) {
+    final value = entry.structured['level'];
+    if (value is num) return value.toInt();
+    return 0;
   }
 }

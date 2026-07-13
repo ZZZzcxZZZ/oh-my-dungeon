@@ -1,13 +1,14 @@
 import 'package:drift/drift.dart';
 
 /// 服务器 Profile 本地持久化。迁自 SharedPreferences，离线主壳不再要求先添加服务器。
+@DataClassName('ServerProfileRow')
 class ServerProfiles extends Table {
   TextColumn get id => text()();
   TextColumn get name => text()();
   TextColumn get baseUrl => text()();
   TextColumn get apiBaseUrl => text()();
   TextColumn get websocketUrl => text()();
-  TextColumn get lastKnownVersion => text().nullable()();
+  TextColumn get lastKnownVersion => text().withDefault(const Constant(''))();
   BoolColumn get isDefault => boolean().withDefault(const Constant(false))();
   DateTimeColumn get lastConnectedAt => dateTime().nullable()();
 

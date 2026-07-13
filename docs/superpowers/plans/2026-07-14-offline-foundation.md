@@ -282,7 +282,7 @@ git commit -m "feat(0.1): add offline sync outbox"
 - 修改：`apps/client_flutter/lib/src/features/server_profiles/data/server_profile_store.dart`
 - 创建：`apps/client_flutter/test/server_profile_migration_test.dart`
 
-- [ ] **步骤 1：编写迁移失败测试**
+- [x] **步骤 1：编写迁移失败测试**
 
 ```dart
 test('migrates shared-preferences profiles only once', () async {
@@ -306,7 +306,7 @@ test('migrates shared-preferences profiles only once', () async {
 });
 ```
 
-- [ ] **步骤 2：运行并确认迁移器缺失**
+- [x] **步骤 2：运行并确认迁移器缺失**
 
 ```powershell
 cd apps/client_flutter
@@ -315,11 +315,11 @@ flutter test test/server_profile_migration_test.dart
 
 预期：FAIL，迁移器和 Drift Store 未定义。
 
-- [ ] **步骤 3：实现 Store 和一次性迁移**
+- [x] **步骤 3：实现 Store 和一次性迁移**
 
 `DriftServerProfileStore` 完整实现现有 `ServerProfileStore` 接口。`ServerProfileMigrator.run()` 在事务中检查 `MigrationMarkers.key == 'server-profiles-v1'`，读取旧 Store，写入全部 Profile 和默认标志，再写 marker。迁移成功后保留 SharedPreferences 原值一个版本，不主动删除。
 
-- [ ] **步骤 4：运行迁移与旧 Store 契约测试**
+- [x] **步骤 4：运行迁移与旧 Store 契约测试**
 
 ```powershell
 cd apps/client_flutter
@@ -328,7 +328,7 @@ flutter test test/server_profile_migration_test.dart test/widget_test.dart --pla
 
 预期：新迁移测试和既有 Profile 行为均通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/features/server_profiles apps/client_flutter/test/server_profile_migration_test.dart

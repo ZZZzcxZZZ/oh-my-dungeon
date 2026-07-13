@@ -4,7 +4,7 @@ part of 'app_database.dart';
 
 // ignore_for_file: type=lint
 class $ServerProfilesTable extends ServerProfiles
-    with TableInfo<$ServerProfilesTable, ServerProfile> {
+    with TableInfo<$ServerProfilesTable, ServerProfileRow> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -67,9 +67,10 @@ class $ServerProfilesTable extends ServerProfiles
   late final GeneratedColumn<String> lastKnownVersion = GeneratedColumn<String>(
     'last_known_version',
     aliasedName,
-    true,
+    false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
+    defaultValue: const Constant(''),
   );
   static const VerificationMeta _isDefaultMeta = const VerificationMeta(
     'isDefault',
@@ -116,7 +117,7 @@ class $ServerProfilesTable extends ServerProfiles
   static const String $name = 'server_profiles';
   @override
   VerificationContext validateIntegrity(
-    Insertable<ServerProfile> instance, {
+    Insertable<ServerProfileRow> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
@@ -194,9 +195,9 @@ class $ServerProfilesTable extends ServerProfiles
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
-  ServerProfile map(Map<String, dynamic> data, {String? tablePrefix}) {
+  ServerProfileRow map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return ServerProfile(
+    return ServerProfileRow(
       id: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}id'],
@@ -220,7 +221,7 @@ class $ServerProfilesTable extends ServerProfiles
       lastKnownVersion: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}last_known_version'],
-      ),
+      )!,
       isDefault: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_default'],
@@ -238,22 +239,23 @@ class $ServerProfilesTable extends ServerProfiles
   }
 }
 
-class ServerProfile extends DataClass implements Insertable<ServerProfile> {
+class ServerProfileRow extends DataClass
+    implements Insertable<ServerProfileRow> {
   final String id;
   final String name;
   final String baseUrl;
   final String apiBaseUrl;
   final String websocketUrl;
-  final String? lastKnownVersion;
+  final String lastKnownVersion;
   final bool isDefault;
   final DateTime? lastConnectedAt;
-  const ServerProfile({
+  const ServerProfileRow({
     required this.id,
     required this.name,
     required this.baseUrl,
     required this.apiBaseUrl,
     required this.websocketUrl,
-    this.lastKnownVersion,
+    required this.lastKnownVersion,
     required this.isDefault,
     this.lastConnectedAt,
   });
@@ -265,9 +267,7 @@ class ServerProfile extends DataClass implements Insertable<ServerProfile> {
     map['base_url'] = Variable<String>(baseUrl);
     map['api_base_url'] = Variable<String>(apiBaseUrl);
     map['websocket_url'] = Variable<String>(websocketUrl);
-    if (!nullToAbsent || lastKnownVersion != null) {
-      map['last_known_version'] = Variable<String>(lastKnownVersion);
-    }
+    map['last_known_version'] = Variable<String>(lastKnownVersion);
     map['is_default'] = Variable<bool>(isDefault);
     if (!nullToAbsent || lastConnectedAt != null) {
       map['last_connected_at'] = Variable<DateTime>(lastConnectedAt);
@@ -282,9 +282,7 @@ class ServerProfile extends DataClass implements Insertable<ServerProfile> {
       baseUrl: Value(baseUrl),
       apiBaseUrl: Value(apiBaseUrl),
       websocketUrl: Value(websocketUrl),
-      lastKnownVersion: lastKnownVersion == null && nullToAbsent
-          ? const Value.absent()
-          : Value(lastKnownVersion),
+      lastKnownVersion: Value(lastKnownVersion),
       isDefault: Value(isDefault),
       lastConnectedAt: lastConnectedAt == null && nullToAbsent
           ? const Value.absent()
@@ -292,18 +290,18 @@ class ServerProfile extends DataClass implements Insertable<ServerProfile> {
     );
   }
 
-  factory ServerProfile.fromJson(
+  factory ServerProfileRow.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return ServerProfile(
+    return ServerProfileRow(
       id: serializer.fromJson<String>(json['id']),
       name: serializer.fromJson<String>(json['name']),
       baseUrl: serializer.fromJson<String>(json['baseUrl']),
       apiBaseUrl: serializer.fromJson<String>(json['apiBaseUrl']),
       websocketUrl: serializer.fromJson<String>(json['websocketUrl']),
-      lastKnownVersion: serializer.fromJson<String?>(json['lastKnownVersion']),
+      lastKnownVersion: serializer.fromJson<String>(json['lastKnownVersion']),
       isDefault: serializer.fromJson<bool>(json['isDefault']),
       lastConnectedAt: serializer.fromJson<DateTime?>(json['lastConnectedAt']),
     );
@@ -317,37 +315,35 @@ class ServerProfile extends DataClass implements Insertable<ServerProfile> {
       'baseUrl': serializer.toJson<String>(baseUrl),
       'apiBaseUrl': serializer.toJson<String>(apiBaseUrl),
       'websocketUrl': serializer.toJson<String>(websocketUrl),
-      'lastKnownVersion': serializer.toJson<String?>(lastKnownVersion),
+      'lastKnownVersion': serializer.toJson<String>(lastKnownVersion),
       'isDefault': serializer.toJson<bool>(isDefault),
       'lastConnectedAt': serializer.toJson<DateTime?>(lastConnectedAt),
     };
   }
 
-  ServerProfile copyWith({
+  ServerProfileRow copyWith({
     String? id,
     String? name,
     String? baseUrl,
     String? apiBaseUrl,
     String? websocketUrl,
-    Value<String?> lastKnownVersion = const Value.absent(),
+    String? lastKnownVersion,
     bool? isDefault,
     Value<DateTime?> lastConnectedAt = const Value.absent(),
-  }) => ServerProfile(
+  }) => ServerProfileRow(
     id: id ?? this.id,
     name: name ?? this.name,
     baseUrl: baseUrl ?? this.baseUrl,
     apiBaseUrl: apiBaseUrl ?? this.apiBaseUrl,
     websocketUrl: websocketUrl ?? this.websocketUrl,
-    lastKnownVersion: lastKnownVersion.present
-        ? lastKnownVersion.value
-        : this.lastKnownVersion,
+    lastKnownVersion: lastKnownVersion ?? this.lastKnownVersion,
     isDefault: isDefault ?? this.isDefault,
     lastConnectedAt: lastConnectedAt.present
         ? lastConnectedAt.value
         : this.lastConnectedAt,
   );
-  ServerProfile copyWithCompanion(ServerProfilesCompanion data) {
-    return ServerProfile(
+  ServerProfileRow copyWithCompanion(ServerProfilesCompanion data) {
+    return ServerProfileRow(
       id: data.id.present ? data.id.value : this.id,
       name: data.name.present ? data.name.value : this.name,
       baseUrl: data.baseUrl.present ? data.baseUrl.value : this.baseUrl,
@@ -369,7 +365,7 @@ class ServerProfile extends DataClass implements Insertable<ServerProfile> {
 
   @override
   String toString() {
-    return (StringBuffer('ServerProfile(')
+    return (StringBuffer('ServerProfileRow(')
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('baseUrl: $baseUrl, ')
@@ -396,7 +392,7 @@ class ServerProfile extends DataClass implements Insertable<ServerProfile> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is ServerProfile &&
+      (other is ServerProfileRow &&
           other.id == this.id &&
           other.name == this.name &&
           other.baseUrl == this.baseUrl &&
@@ -407,13 +403,13 @@ class ServerProfile extends DataClass implements Insertable<ServerProfile> {
           other.lastConnectedAt == this.lastConnectedAt);
 }
 
-class ServerProfilesCompanion extends UpdateCompanion<ServerProfile> {
+class ServerProfilesCompanion extends UpdateCompanion<ServerProfileRow> {
   final Value<String> id;
   final Value<String> name;
   final Value<String> baseUrl;
   final Value<String> apiBaseUrl;
   final Value<String> websocketUrl;
-  final Value<String?> lastKnownVersion;
+  final Value<String> lastKnownVersion;
   final Value<bool> isDefault;
   final Value<DateTime?> lastConnectedAt;
   final Value<int> rowid;
@@ -443,7 +439,7 @@ class ServerProfilesCompanion extends UpdateCompanion<ServerProfile> {
        baseUrl = Value(baseUrl),
        apiBaseUrl = Value(apiBaseUrl),
        websocketUrl = Value(websocketUrl);
-  static Insertable<ServerProfile> custom({
+  static Insertable<ServerProfileRow> custom({
     Expression<String>? id,
     Expression<String>? name,
     Expression<String>? baseUrl,
@@ -473,7 +469,7 @@ class ServerProfilesCompanion extends UpdateCompanion<ServerProfile> {
     Value<String>? baseUrl,
     Value<String>? apiBaseUrl,
     Value<String>? websocketUrl,
-    Value<String?>? lastKnownVersion,
+    Value<String>? lastKnownVersion,
     Value<bool>? isDefault,
     Value<DateTime?>? lastConnectedAt,
     Value<int>? rowid,
@@ -1619,7 +1615,7 @@ typedef $$ServerProfilesTableCreateCompanionBuilder =
       required String baseUrl,
       required String apiBaseUrl,
       required String websocketUrl,
-      Value<String?> lastKnownVersion,
+      Value<String> lastKnownVersion,
       Value<bool> isDefault,
       Value<DateTime?> lastConnectedAt,
       Value<int> rowid,
@@ -1631,7 +1627,7 @@ typedef $$ServerProfilesTableUpdateCompanionBuilder =
       Value<String> baseUrl,
       Value<String> apiBaseUrl,
       Value<String> websocketUrl,
-      Value<String?> lastKnownVersion,
+      Value<String> lastKnownVersion,
       Value<bool> isDefault,
       Value<DateTime?> lastConnectedAt,
       Value<int> rowid,
@@ -1784,17 +1780,21 @@ class $$ServerProfilesTableTableManager
         RootTableManager<
           _$AppDatabase,
           $ServerProfilesTable,
-          ServerProfile,
+          ServerProfileRow,
           $$ServerProfilesTableFilterComposer,
           $$ServerProfilesTableOrderingComposer,
           $$ServerProfilesTableAnnotationComposer,
           $$ServerProfilesTableCreateCompanionBuilder,
           $$ServerProfilesTableUpdateCompanionBuilder,
           (
-            ServerProfile,
-            BaseReferences<_$AppDatabase, $ServerProfilesTable, ServerProfile>,
+            ServerProfileRow,
+            BaseReferences<
+              _$AppDatabase,
+              $ServerProfilesTable,
+              ServerProfileRow
+            >,
           ),
-          ServerProfile,
+          ServerProfileRow,
           PrefetchHooks Function()
         > {
   $$ServerProfilesTableTableManager(
@@ -1817,7 +1817,7 @@ class $$ServerProfilesTableTableManager
                 Value<String> baseUrl = const Value.absent(),
                 Value<String> apiBaseUrl = const Value.absent(),
                 Value<String> websocketUrl = const Value.absent(),
-                Value<String?> lastKnownVersion = const Value.absent(),
+                Value<String> lastKnownVersion = const Value.absent(),
                 Value<bool> isDefault = const Value.absent(),
                 Value<DateTime?> lastConnectedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -1839,7 +1839,7 @@ class $$ServerProfilesTableTableManager
                 required String baseUrl,
                 required String apiBaseUrl,
                 required String websocketUrl,
-                Value<String?> lastKnownVersion = const Value.absent(),
+                Value<String> lastKnownVersion = const Value.absent(),
                 Value<bool> isDefault = const Value.absent(),
                 Value<DateTime?> lastConnectedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -1866,17 +1866,17 @@ typedef $$ServerProfilesTableProcessedTableManager =
     ProcessedTableManager<
       _$AppDatabase,
       $ServerProfilesTable,
-      ServerProfile,
+      ServerProfileRow,
       $$ServerProfilesTableFilterComposer,
       $$ServerProfilesTableOrderingComposer,
       $$ServerProfilesTableAnnotationComposer,
       $$ServerProfilesTableCreateCompanionBuilder,
       $$ServerProfilesTableUpdateCompanionBuilder,
       (
-        ServerProfile,
-        BaseReferences<_$AppDatabase, $ServerProfilesTable, ServerProfile>,
+        ServerProfileRow,
+        BaseReferences<_$AppDatabase, $ServerProfilesTable, ServerProfileRow>,
       ),
-      ServerProfile,
+      ServerProfileRow,
       PrefetchHooks Function()
     >;
 typedef $$SyncOutboxTableCreateCompanionBuilder =

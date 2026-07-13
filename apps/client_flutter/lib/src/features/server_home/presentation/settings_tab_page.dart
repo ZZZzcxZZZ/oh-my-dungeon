@@ -6,6 +6,7 @@ import '../../auth/presentation/auth_page.dart';
 import '../../client_mode/domain/client_mode.dart';
 import '../../server_profiles/data/server_profile_store.dart';
 import '../../server_profiles/domain/server_profile.dart';
+import '../domain/active_server_session.dart';
 
 /// Top-level "设置" tab.
 ///
@@ -13,20 +14,22 @@ import '../../server_profiles/domain/server_profile.dart';
 /// logout), and the Player/DM mode switch.
 class SettingsTabPage extends StatefulWidget {
   const SettingsTabPage({
-    required this.profile,
+    required this.session,
     required this.modeController,
     required this.authController,
     required this.appPreferencesController,
     this.serverProfileStore,
+    this.serverProfilesPageBuilder,
     this.onSwitchToProfile,
     super.key,
   });
 
-  final ServerProfile profile;
+  final ActiveServerSession session;
   final ClientModeController modeController;
   final AuthController authController;
   final AppPreferencesController appPreferencesController;
   final ServerProfileStore? serverProfileStore;
+  final WidgetBuilder? serverProfilesPageBuilder;
   final ValueChanged<ServerProfile>? onSwitchToProfile;
 
   @override
@@ -58,6 +61,7 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
       animation: Listenable.merge([
         widget.modeController,
         widget.authController,
+        widget.session,
       ]),
       builder: (context, _) {
         return AnimatedBuilder(
@@ -95,6 +99,7 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
 
   Widget _buildServerSection(BuildContext context) {
     final store = widget.serverProfileStore;
+    final profile = widget.session.profile;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -103,45 +108,85 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
         Card(
           child: Column(
             children: [
-              ListTile(
-                leading: const Icon(Icons.dns_outlined),
-                title: Text(widget.profile.name),
-                subtitle: Text(widget.profile.baseUrl),
-              ),
-              ListTile(
-                leading: const Icon(Icons.tag),
-                title: Text('版本 ${widget.profile.lastKnownVersion}'),
-                dense: true,
-              ),
-              if (store != null && _allProfiles.length > 1) ...[
-                const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      '切换服务器',
-                      style: Theme.of(context).textTheme.labelMedium,
+              if (profile == null) ...[
+                ListTile(
+                  leading: const Icon(Icons.cloud_off),
+                  title: const Text('未连接服务器'),
+                  subtitle: const Text('离线模式下本地资料、角色和笔记仍可用'),
+                ),
+                if (widget.serverProfilesPageBuilder != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: FilledButton.tonalIcon(
+                        onPressed: () => _openServerProfilesPage(context),
+                        icon: const Icon(Icons.add),
+                        label: const Text('管理服务器'),
+                      ),
                     ),
                   ),
+              ] else ...[
+                ListTile(
+                  leading: const Icon(Icons.dns_outlined),
+                  title: Text(profile.name),
+                  subtitle: Text(profile.baseUrl),
                 ),
-                for (final p in _allProfiles)
-                  ListTile(
-                    leading: Icon(
-                      p.id == widget.profile.id
-                          ? Icons.radio_button_checked
-                          : Icons.radio_button_off,
+                ListTile(
+                  leading: const Icon(Icons.tag),
+                  title: Text('版本 ${profile.lastKnownVersion}'),
+                  dense: true,
+                ),
+                if (store != null && _allProfiles.length > 1) ...[
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '切换服务器',
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
                     ),
-                    title: Text(p.name),
-                    subtitle: Text(p.baseUrl),
-                    enabled: p.id != widget.profile.id,
-                    onTap: () => widget.onSwitchToProfile?.call(p),
+                  ),
+                  for (final p in _allProfiles)
+                    ListTile(
+                      leading: Icon(
+                        p.id == profile.id
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_off,
+                      ),
+                      title: Text(p.name),
+                      subtitle: Text(p.baseUrl),
+                      enabled: p.id != profile.id,
+                      onTap: () => widget.onSwitchToProfile?.call(p),
+                    ),
+                ],
+                if (widget.serverProfilesPageBuilder != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () => _openServerProfilesPage(context),
+                        icon: const Icon(Icons.settings_outlined),
+                        label: const Text('管理服务器'),
+                      ),
+                    ),
                   ),
               ],
             ],
           ),
         ),
       ],
+    );
+  }
+
+  void _openServerProfilesPage(BuildContext context) {
+    final builder = widget.serverProfilesPageBuilder;
+    if (builder == null) return;
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: builder),
     );
   }
 

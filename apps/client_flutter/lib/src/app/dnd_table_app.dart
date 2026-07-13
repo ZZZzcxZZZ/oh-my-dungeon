@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/database/app_database.dart';
 import '../features/app_preferences/data/app_preferences_store.dart';
 import '../features/app_preferences/domain/app_preferences.dart';
 import '../features/app_preferences/presentation/app_preferences_controller.dart';
@@ -15,15 +16,18 @@ import '../features/content/data/content_api_client.dart';
 import '../features/encounters/data/encounter_api_client.dart';
 import '../features/rooms/data/room_api_client.dart';
 import '../features/rooms/domain/dice_roller.dart';
+import '../features/server_home/domain/active_server_session.dart';
+import '../features/server_profiles/data/drift_server_profile_store.dart';
 import '../features/server_profiles/data/server_discovery_client.dart';
+import '../features/server_profiles/data/server_profile_migrator.dart';
 import '../features/server_profiles/data/server_profile_store.dart';
-import '../features/server_profiles/domain/server_profile.dart';
 import '../features/server_profiles/presentation/server_profiles_page.dart';
 import '../features/sessions/data/session_api_client.dart';
 import '../features/server_home/presentation/main_shell.dart';
 
 class DndTableApp extends StatefulWidget {
   const DndTableApp({
+    this.database,
     this.serverProfileStore,
     this.authTokenStore,
     this.discoveryClient,
@@ -42,6 +46,7 @@ class DndTableApp extends StatefulWidget {
     super.key,
   });
 
+  final AppDatabase? database;
   final ServerProfileStore? serverProfileStore;
   final AuthTokenStore? authTokenStore;
   final ServerDiscoveryClient? discoveryClient;
@@ -67,7 +72,8 @@ class _DndTableAppState extends State<DndTableApp> {
   late final bool _ownsModeController;
   AppPreferencesController? _ownedPreferencesController;
   late final Future<_AppDeps> _depsFuture;
-  final _ActiveProfileNotifier _profileNotifier = _ActiveProfileNotifier();
+  final ActiveServerSession _session = ActiveServerSession();
+  AppDatabase? _ownedDatabase;
 
   @override
   void initState() {
@@ -75,7 +81,7 @@ class _DndTableAppState extends State<DndTableApp> {
     _modeController = widget.modeController ?? ClientModeController();
     _ownsModeController = widget.modeController == null;
     _depsFuture = _createDeps().then((deps) async {
-      await _profileNotifier.initialize(deps.serverProfileStore);
+      await _session.initialize(deps.serverProfileStore);
       return deps;
     });
   }
@@ -85,14 +91,16 @@ class _DndTableAppState extends State<DndTableApp> {
     if (_ownsModeController) {
       _modeController.dispose();
     }
-    _profileNotifier.dispose();
+    _session.dispose();
     _ownedPreferencesController?.dispose();
+    _ownedDatabase?.close();
     super.dispose();
   }
 
   Future<_AppDeps> _createDeps() async {
     final injectedStore = widget.serverProfileStore;
     final injectedTokenStore = widget.authTokenStore;
+    final injectedDatabase = widget.database;
     final useInMemoryPreferences =
         injectedStore != null &&
         injectedTokenStore != null &&
@@ -119,35 +127,56 @@ class _DndTableAppState extends State<DndTableApp> {
       await appPreferencesController.initialize();
     }
 
+    final authClient = widget.authClient ?? AuthApiClient();
+    final campaignClient = widget.campaignClient ?? CampaignApiClient();
+    final characterClient = widget.characterClient ?? CharacterApiClient();
+    final checkRequestClient =
+        widget.checkRequestClient ?? CheckRequestApiClient();
+    final contentClient = widget.contentClient ?? ContentApiClient();
+    final encounterClient = widget.encounterClient ?? EncounterApiClient();
+    final sessionClient = widget.sessionClient ?? SessionApiClient();
+
     if (injectedStore != null && injectedTokenStore != null) {
       return _AppDeps(
         serverProfileStore: injectedStore,
         authTokenStore: injectedTokenStore,
         appPreferencesController: appPreferencesController,
-        authClient: widget.authClient ?? AuthApiClient(),
-        campaignClient: widget.campaignClient ?? CampaignApiClient(),
-        characterClient: widget.characterClient ?? CharacterApiClient(),
-        checkRequestClient:
-            widget.checkRequestClient ?? CheckRequestApiClient(),
-        contentClient: widget.contentClient ?? ContentApiClient(),
-        encounterClient: widget.encounterClient ?? EncounterApiClient(),
-        sessionClient: widget.sessionClient ?? SessionApiClient(),
+        authClient: authClient,
+        campaignClient: campaignClient,
+        characterClient: characterClient,
+        checkRequestClient: checkRequestClient,
+        contentClient: contentClient,
+        encounterClient: encounterClient,
+        sessionClient: sessionClient,
       );
     }
 
+    final ServerProfileStore serverProfileStore;
+    if (injectedStore != null) {
+      serverProfileStore = injectedStore;
+    } else if (injectedDatabase != null) {
+      serverProfileStore = DriftServerProfileStore(injectedDatabase);
+      final prefs = preferences ?? await SharedPreferences.getInstance();
+      await ServerProfileMigrator(injectedDatabase, prefs).run();
+    } else {
+      _ownedDatabase = AppDatabase();
+      serverProfileStore = DriftServerProfileStore(_ownedDatabase!);
+      final prefs = preferences ?? await SharedPreferences.getInstance();
+      await ServerProfileMigrator(_ownedDatabase!, prefs).run();
+    }
+
     return _AppDeps(
-      serverProfileStore:
-          injectedStore ?? SharedPreferencesServerProfileStore(preferences!),
+      serverProfileStore: serverProfileStore,
       authTokenStore:
           injectedTokenStore ?? SharedPreferencesAuthTokenStore(preferences!),
       appPreferencesController: appPreferencesController,
-      authClient: widget.authClient ?? AuthApiClient(),
-      campaignClient: widget.campaignClient ?? CampaignApiClient(),
-      characterClient: widget.characterClient ?? CharacterApiClient(),
-      checkRequestClient: widget.checkRequestClient ?? CheckRequestApiClient(),
-      contentClient: widget.contentClient ?? ContentApiClient(),
-      encounterClient: widget.encounterClient ?? EncounterApiClient(),
-      sessionClient: widget.sessionClient ?? SessionApiClient(),
+      authClient: authClient,
+      campaignClient: campaignClient,
+      characterClient: characterClient,
+      checkRequestClient: checkRequestClient,
+      contentClient: contentClient,
+      encounterClient: encounterClient,
+      sessionClient: sessionClient,
     );
   }
 
@@ -176,7 +205,7 @@ class _DndTableAppState extends State<DndTableApp> {
         return AnimatedBuilder(
           animation: Listenable.merge([
             deps.appPreferencesController,
-            _profileNotifier,
+            _session,
           ]),
           builder: (context, _) {
             return _buildMaterialApp(
@@ -189,13 +218,25 @@ class _DndTableAppState extends State<DndTableApp> {
     );
   }
 
-  /// 根据当前激活的服务器 profile 决定主界面：
-  /// 有默认 profile → 直接进 MainShell（底部导航主页）；
-  /// 无 → 进 ServerProfilesPage 引导页。
+  /// 离线优先：始终进入 MainShell，服务器会话可选。
   Widget _buildHome(_AppDeps deps) {
-    final profile = _profileNotifier.activeProfile;
-    if (profile == null) {
-      return ServerProfilesPage(
+    return MainShell(
+      session: _session,
+      modeController: _modeController,
+      roomClient: widget.roomClient ?? RoomApiClient(),
+      authTokenStore: deps.authTokenStore,
+      authClient: deps.authClient,
+      campaignClient: deps.campaignClient,
+      campaignSocketService: widget.campaignSocketService,
+      characterClient: deps.characterClient,
+      checkRequestClient: deps.checkRequestClient,
+      contentClient: deps.contentClient,
+      encounterClient: deps.encounterClient,
+      sessionClient: deps.sessionClient,
+      appPreferencesController: deps.appPreferencesController,
+      diceRoller: widget.diceRoller,
+      serverProfileStore: deps.serverProfileStore,
+      serverProfilesPageBuilder: (context) => ServerProfilesPage(
         store: deps.serverProfileStore,
         authTokenStore: deps.authTokenStore,
         discoveryClient:
@@ -212,31 +253,14 @@ class _DndTableAppState extends State<DndTableApp> {
         modeController: _modeController,
         appPreferencesController: deps.appPreferencesController,
         diceRoller: widget.diceRoller,
-        onProfileActivated: (activated) {
-          _profileNotifier.activate(activated);
+        onProfileActivated: (activated) async {
+          await deps.serverProfileStore.setDefaultProfileId(activated.id);
+          _session.activate(activated);
         },
-      );
-    }
-
-    return MainShell(
-      profile: profile,
-      modeController: _modeController,
-      roomClient: widget.roomClient ?? RoomApiClient(),
-      authTokenStore: deps.authTokenStore,
-      authClient: deps.authClient,
-      campaignClient: deps.campaignClient,
-      campaignSocketService: widget.campaignSocketService,
-      characterClient: deps.characterClient,
-      checkRequestClient: deps.checkRequestClient,
-      contentClient: deps.contentClient,
-      encounterClient: deps.encounterClient,
-      sessionClient: deps.sessionClient,
-      appPreferencesController: deps.appPreferencesController,
-      diceRoller: widget.diceRoller,
-      serverProfileStore: deps.serverProfileStore,
+      ),
       onSwitchToProfile: (profile) async {
         await deps.serverProfileStore.setDefaultProfileId(profile.id);
-        _profileNotifier.activate(profile);
+        _session.activate(profile);
       },
     );
   }
@@ -356,32 +380,4 @@ class _AppDeps {
   final ContentClient contentClient;
   final EncounterClient encounterClient;
   final SessionClient sessionClient;
-}
-
-/// 跟踪当前激活的服务器 profile。
-///
-/// 应用启动时从 [ServerProfileStore] 读取默认 profile；为 null 则显示引导页。
-/// 用户在设置页切换服务器时调用 [activate]，退出时调用 [deactivate]，
-/// 触发 [DndTableApp] 重建主界面。
-class _ActiveProfileNotifier extends ChangeNotifier {
-  ServerProfile? _activeProfile;
-
-  ServerProfile? get activeProfile => _activeProfile;
-
-  Future<void> initialize(ServerProfileStore store) async {
-    final defaultId = await store.getDefaultProfileId();
-    if (defaultId == null) return;
-    final profiles = await store.listProfiles();
-    _activeProfile = profiles.where((p) => p.id == defaultId).firstOrNull;
-  }
-
-  void activate(ServerProfile profile) {
-    _activeProfile = profile;
-    notifyListeners();
-  }
-
-  void deactivate() {
-    _activeProfile = null;
-    notifyListeners();
-  }
 }

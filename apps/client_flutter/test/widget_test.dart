@@ -44,8 +44,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('连接你的跑团服务器'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, '添加服务器'), findsOneWidget);
+    // 离线优先：未配置服务器时直接进入 MainShell（本地模式）。
+    expect(find.text('首页'), findsWidgets);
+    expect(find.text('战役'), findsWidgets);
+    expect(find.text('角色'), findsWidgets);
+    expect(find.text('资料库'), findsWidgets);
+    expect(find.text('设置'), findsWidgets);
+    expect(find.text('连接你的跑团服务器'), findsNothing);
+    expect(find.text('本地模式'), findsOneWidget);
   });
 
   testWidgets('shows a recoverable startup error instead of a blank page', (
@@ -109,6 +115,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '管理服务器'));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.byTooltip('服务器操作'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('设为默认'));
@@ -127,6 +138,11 @@ void main() {
         authTokenStore: InMemoryAuthTokenStore(),
       ),
     );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '管理服务器'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('服务器操作'));
@@ -153,6 +169,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '管理服务器'));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.byTooltip('服务器操作'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('删除'));
@@ -169,6 +190,7 @@ void main() {
   ) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
     final roomClient = _FakeRoomClient(
       initialRooms: const [Room(id: 'room-1', name: 'Friday One Shot')],
     );
@@ -180,9 +202,6 @@ void main() {
         roomClient: roomClient,
       ),
     );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Local Table'));
     await tester.pumpAndSettle();
 
     // Default tab is 首页, giving the app a product-level entry point.
@@ -202,6 +221,7 @@ void main() {
   testWidgets('switches to dm mode from settings tab', (tester) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
 
     await tester.pumpWidget(
       DndTableApp(
@@ -209,9 +229,6 @@ void main() {
         authTokenStore: InMemoryAuthTokenStore(),
       ),
     );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Local Table'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('设置'));
@@ -227,6 +244,7 @@ void main() {
   testWidgets('settings tab exposes local app preferences', (tester) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
 
     await tester.pumpWidget(
       DndTableApp(
@@ -236,8 +254,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Local Table'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
 
@@ -271,6 +287,7 @@ void main() {
   ) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
     final preferencesController = AppPreferencesController(
       store: InMemoryAppPreferencesStore(),
     );
@@ -285,8 +302,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Local Table'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
 
@@ -317,6 +332,7 @@ void main() {
 
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
 
     await tester.pumpWidget(
       DndTableApp(
@@ -324,9 +340,6 @@ void main() {
         authTokenStore: InMemoryAuthTokenStore(),
       ),
     );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Local Table'));
     await tester.pumpAndSettle();
 
     expect(find.byType(NavigationRail), findsOneWidget);
@@ -338,6 +351,7 @@ void main() {
   ) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
 
     await tester.pumpWidget(
       DndTableApp(
@@ -345,9 +359,6 @@ void main() {
         authTokenStore: InMemoryAuthTokenStore(),
       ),
     );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Local Table'));
     await tester.pumpAndSettle();
 
     expect(find.widgetWithText(NavigationDestination, '桌面'), findsNothing);
@@ -357,6 +368,7 @@ void main() {
   testWidgets('shows a characters tab in the main shell', (tester) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
 
     await tester.pumpWidget(
       DndTableApp(
@@ -364,9 +376,6 @@ void main() {
         authTokenStore: InMemoryAuthTokenStore(),
       ),
     );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Local Table'));
     await tester.pumpAndSettle();
 
     expect(find.text('角色'), findsWidgets);
@@ -380,6 +389,7 @@ void main() {
   testWidgets('characters tab uses compact list preference', (tester) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
     final tokenStore = InMemoryAuthTokenStore();
     await tokenStore.saveTokens(
       profile.id,
@@ -409,8 +419,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Local Table'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('角色').last);
     await tester.pumpAndSettle();
 
@@ -426,6 +434,7 @@ void main() {
   ) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
     final tokenStore = InMemoryAuthTokenStore();
     await tokenStore.saveTokens(
       profile.id,
@@ -455,8 +464,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Local Table'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('角色').last);
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FloatingActionButton, '新角色'));
@@ -477,6 +484,7 @@ void main() {
   testWidgets('campaigns tab uses compact list preference', (tester) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
     final tokenStore = InMemoryAuthTokenStore();
     await tokenStore.saveTokens(
       profile.id,
@@ -502,8 +510,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Local Table'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('战役'));
     await tester.pumpAndSettle();
 
@@ -519,6 +525,7 @@ void main() {
   ) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
     final tokenStore = InMemoryAuthTokenStore();
     await tokenStore.saveTokens(
       profile.id,
@@ -539,8 +546,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Local Table'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('战役'));
     await tester.pumpAndSettle();
 
@@ -553,6 +558,7 @@ void main() {
   testWidgets('campaign actions match player and dm modes', (tester) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
     final tokenStore = InMemoryAuthTokenStore();
     await tokenStore.saveTokens(
       profile.id,
@@ -575,8 +581,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Local Table'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('战役'));
     await tester.pumpAndSettle();
 
@@ -599,6 +603,7 @@ void main() {
   ) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
     final tokenStore = InMemoryAuthTokenStore();
     await tokenStore.saveTokens(
       profile.id,
@@ -638,8 +643,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Local Table'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('战役'));
     await tester.pumpAndSettle();
 
@@ -739,6 +742,7 @@ void main() {
   ) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
     final tokenStore = InMemoryAuthTokenStore();
     await tokenStore.saveTokens(
       profile.id,
@@ -781,8 +785,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Local Table'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('战役'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Starter Campaign'));
@@ -799,6 +801,7 @@ void main() {
   ) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
     final tokenStore = InMemoryAuthTokenStore();
     await tokenStore.saveTokens(
       profile.id,
@@ -827,8 +830,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Local Table'));
-    await tester.pumpAndSettle();
     expect(find.widgetWithText(NavigationDestination, '桌面'), findsNothing);
 
     await tester.tap(find.text('战役'));
@@ -848,6 +849,7 @@ void main() {
   testWidgets('content library uses compact list preference', (tester) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
     final tokenStore = InMemoryAuthTokenStore();
     await tokenStore.saveTokens(
       profile.id,
@@ -874,8 +876,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Local Table'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('资料库'));
     await tester.pumpAndSettle();
     await tester.pumpAndSettle();
@@ -892,6 +892,7 @@ void main() {
   ) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
     final tokenStore = InMemoryAuthTokenStore();
     await tokenStore.saveTokens(
       profile.id,
@@ -916,8 +917,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Local Table'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('内容库'));
     await tester.pumpAndSettle();
 
@@ -998,6 +997,7 @@ void main() {
   ) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
     final tokenStore = InMemoryAuthTokenStore();
     await tokenStore.saveTokens(
       profile.id,
@@ -1022,8 +1022,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Local Table'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('内容库'));
     await tester.pumpAndSettle();
 
@@ -1064,6 +1062,7 @@ void main() {
   testWidgets('shows a content library tab in the main shell', (tester) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
 
     await tester.pumpWidget(
       DndTableApp(
@@ -1071,9 +1070,6 @@ void main() {
         authTokenStore: InMemoryAuthTokenStore(),
       ),
     );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Local Table'));
     await tester.pumpAndSettle();
 
     expect(find.text('资料库'), findsOneWidget);
@@ -1091,6 +1087,7 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
     final tokenStore = InMemoryAuthTokenStore();
     await tokenStore.saveTokens(
       profile.id,
@@ -1111,8 +1108,6 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Local Table'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('资料库'));
     await tester.pumpAndSettle();
 
@@ -1128,6 +1123,7 @@ void main() {
   ) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
     final tokenStore = InMemoryAuthTokenStore();
     await tokenStore.saveTokens(
       profile.id,
@@ -1157,8 +1153,6 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Local Table'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('角色').last);
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FloatingActionButton, '新角色'));
@@ -1177,6 +1171,7 @@ void main() {
   ) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
     final tokenStore = InMemoryAuthTokenStore();
     await tokenStore.saveTokens(
       profile.id,
@@ -1203,9 +1198,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Local Table'));
-    await tester.pumpAndSettle();
-
     await tester.tap(find.text('战役'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Starter Campaign'));
@@ -1222,6 +1214,7 @@ void main() {
   testWidgets('player campaign chat hides dm-only table tools', (tester) async {
     final store = InMemoryServerProfileStore();
     await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
     final tokenStore = InMemoryAuthTokenStore();
     await tokenStore.saveTokens(
       profile.id,
@@ -1244,8 +1237,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Local Table'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('战役'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Starter Campaign'));

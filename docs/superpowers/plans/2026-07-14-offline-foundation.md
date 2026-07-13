@@ -343,7 +343,7 @@ git commit -m "feat(0.1): persist server profiles in drift"
 - 修改：`apps/client_flutter/lib/src/features/server_home/presentation/main_shell.dart`
 - 创建：`apps/client_flutter/test/offline_shell_test.dart`
 
-- [ ] **步骤 1：写无服务器启动失败测试**
+- [x] **步骤 1：写无服务器启动失败测试**
 
 ```dart
 testWidgets('opens the local shell without a server profile', (tester) async {
@@ -361,7 +361,7 @@ testWidgets('opens the local shell without a server profile', (tester) async {
 });
 ```
 
-- [ ] **步骤 2：运行并确认仍进入服务器引导**
+- [x] **步骤 2：运行并确认仍进入服务器引导**
 
 ```powershell
 cd apps/client_flutter
@@ -370,7 +370,7 @@ flutter test test/offline_shell_test.dart
 
 预期：FAIL，当前首页仍是 `ServerProfilesPage` 或 `database` 参数不存在。
 
-- [ ] **步骤 3：实现可选会话**
+- [x] **步骤 3：实现可选会话**
 
 ```dart
 class ActiveServerSession extends ChangeNotifier {
@@ -392,7 +392,7 @@ class ActiveServerSession extends ChangeNotifier {
 
 `DndTableApp` 新增可注入 `AppDatabase? database`，初始化 Drift Store 和迁移器后始终构建 `MainShell`。删除 `_buildHome` 中 `profile == null` 返回 `ServerProfilesPage` 的分支。`MainShell.profile` 改为 `ActiveServerSession`，个人页面不再读取 Profile；战役页在未配置时显示连接入口。
 
-- [ ] **步骤 4：验证离线 Shell 和原服务器流程**
+- [x] **步骤 4：验证离线 Shell 和原服务器流程**
 
 ```powershell
 cd apps/client_flutter
@@ -402,7 +402,7 @@ flutter analyze
 
 预期：离线 Shell 测试通过；既有服务器添加、登录和导航测试保持通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/app apps/client_flutter/lib/src/features/server_home apps/client_flutter/test/offline_shell_test.dart apps/client_flutter/test/widget_test.dart

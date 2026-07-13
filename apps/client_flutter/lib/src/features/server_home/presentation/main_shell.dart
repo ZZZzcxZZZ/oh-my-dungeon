@@ -24,6 +24,7 @@ import '../../../features/server_profiles/domain/server_profile.dart';
 import '../../../features/server_profiles/data/server_profile_store.dart';
 import '../../../features/sessions/data/session_api_client.dart';
 import '../../../features/sessions/presentation/session_controller.dart';
+import '../domain/active_server_session.dart';
 import 'home_dashboard_page.dart';
 import 'settings_tab_page.dart';
 
@@ -33,7 +34,7 @@ import 'settings_tab_page.dart';
 /// reload data.
 class MainShell extends StatefulWidget {
   const MainShell({
-    required this.profile,
+    required this.session,
     required this.modeController,
     required this.roomClient,
     required this.authTokenStore,
@@ -48,11 +49,12 @@ class MainShell extends StatefulWidget {
     required this.appPreferencesController,
     this.diceRoller,
     this.serverProfileStore,
+    this.serverProfilesPageBuilder,
     this.onSwitchToProfile,
     super.key,
   });
 
-  final ServerProfile profile;
+  final ActiveServerSession session;
   final ClientModeController modeController;
   final RoomClient roomClient;
   final AuthTokenStore authTokenStore;
@@ -67,6 +69,7 @@ class MainShell extends StatefulWidget {
   final AppPreferencesController appPreferencesController;
   final DiceRoller? diceRoller;
   final ServerProfileStore? serverProfileStore;
+  final WidgetBuilder? serverProfilesPageBuilder;
   final ValueChanged<ServerProfile>? onSwitchToProfile;
 
   @override
@@ -86,32 +89,33 @@ class _MainShellState extends State<MainShell> {
   void initState() {
     super.initState();
     widget.modeController.addListener(_onModeChanged);
+    final profile = widget.session.profile;
     _authController = AuthController(
       tokenStore: widget.authTokenStore,
       authClient: widget.authClient,
-      serverProfileId: widget.profile.id,
-      apiBaseUrl: widget.profile.apiBaseUrl,
+      serverProfileId: profile?.id ?? '',
+      apiBaseUrl: profile?.apiBaseUrl ?? '',
     )..initialize();
     _campaignSocketService =
         widget.campaignSocketService ?? SocketIoCampaignSocketService();
     _campaignController = CampaignController(
-      apiBaseUrl: widget.profile.apiBaseUrl,
+      apiBaseUrl: profile?.apiBaseUrl ?? '',
       authController: _authController,
       campaignClient: widget.campaignClient,
       campaignSocketService: _campaignSocketService,
     );
     _characterController = CharacterController(
-      apiBaseUrl: widget.profile.apiBaseUrl,
+      apiBaseUrl: profile?.apiBaseUrl ?? '',
       authController: _authController,
       characterClient: widget.characterClient,
     );
     _contentController = ContentController(
-      apiBaseUrl: widget.profile.apiBaseUrl,
+      apiBaseUrl: profile?.apiBaseUrl ?? '',
       authController: _authController,
       contentClient: widget.contentClient,
     );
     _sessionController = SessionController(
-      apiBaseUrl: widget.profile.apiBaseUrl,
+      apiBaseUrl: profile?.apiBaseUrl ?? '',
       authController: _authController,
       sessionClient: widget.sessionClient,
     );
@@ -137,7 +141,7 @@ class _MainShellState extends State<MainShell> {
   Widget build(BuildContext context) {
     final pages = [
       HomeDashboardPage(
-        profile: widget.profile,
+        session: widget.session,
         modeController: widget.modeController,
         authController: _authController,
         campaignController: _campaignController,
@@ -146,7 +150,7 @@ class _MainShellState extends State<MainShell> {
         onNavigateToTab: (index) => setState(() => _currentIndex = index),
       ),
       CampaignsTabPage(
-        profile: widget.profile,
+        session: widget.session,
         authController: _authController,
         campaignController: _campaignController,
         characterController: _characterController,
@@ -170,11 +174,12 @@ class _MainShellState extends State<MainShell> {
         appPreferencesController: widget.appPreferencesController,
       ),
       SettingsTabPage(
-        profile: widget.profile,
+        session: widget.session,
         modeController: widget.modeController,
         authController: _authController,
         appPreferencesController: widget.appPreferencesController,
         serverProfileStore: widget.serverProfileStore,
+        serverProfilesPageBuilder: widget.serverProfilesPageBuilder,
         onSwitchToProfile: widget.onSwitchToProfile,
       ),
     ];

@@ -7,7 +7,7 @@ import '../../characters/presentation/character_controller.dart';
 import '../../client_mode/domain/client_mode.dart';
 import '../../content/presentation/content_controller.dart';
 import '../../rooms/domain/dice_roller.dart';
-import '../../server_profiles/domain/server_profile.dart';
+import '../../server_home/domain/active_server_session.dart';
 import '../domain/campaign.dart';
 import 'campaign_chat_page.dart';
 import 'campaign_controller.dart';
@@ -18,7 +18,7 @@ import 'campaign_controller.dart';
 /// list of campaigns with create/join entry points.
 class CampaignsTabPage extends StatefulWidget {
   const CampaignsTabPage({
-    required this.profile,
+    required this.session,
     required this.authController,
     required this.campaignController,
     required this.characterController,
@@ -29,7 +29,7 @@ class CampaignsTabPage extends StatefulWidget {
     super.key,
   });
 
-  final ServerProfile profile;
+  final ActiveServerSession session;
   final AuthController authController;
   final CampaignController campaignController;
   final CharacterController characterController;
@@ -65,8 +65,12 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
         widget.characterController,
         widget.modeController,
         widget.appPreferencesController,
+        widget.session,
       ]),
       builder: (context, _) {
+        if (!widget.session.isConfigured) {
+          return _buildOfflinePrompt(context);
+        }
         if (!widget.authController.isLoggedIn) {
           return _buildLoginPrompt(context);
         }
@@ -100,6 +104,40 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
           body: _buildCampaignList(context, campaigns),
         );
       },
+    );
+  }
+
+  Widget _buildOfflinePrompt(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('战役')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.cloud_off,
+                  size: 56,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '未连接服务器',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '在设置中添加跑团服务器后，可以创建和加入在线战役。',
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 

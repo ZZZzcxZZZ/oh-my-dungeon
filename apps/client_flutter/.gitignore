@@ -39,6 +39,10 @@ app.*.symbols
 # Obfuscation related
 app.*.map.json
 
+# Drift worker build artifacts
+web/drift_worker.dart.js.deps
+web/drift_worker.dart.js.map
+
 # Android Studio will place build artifacts here
 /android/app/debug
 /android/app/profile

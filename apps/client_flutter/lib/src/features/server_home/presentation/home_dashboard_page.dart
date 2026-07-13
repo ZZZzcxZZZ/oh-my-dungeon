@@ -4,12 +4,12 @@ import '../../auth/presentation/auth_controller.dart';
 import '../../campaigns/presentation/campaign_controller.dart';
 import '../../characters/presentation/character_controller.dart';
 import '../../client_mode/domain/client_mode.dart';
-import '../../server_profiles/domain/server_profile.dart';
 import '../../sessions/presentation/session_controller.dart';
+import '../domain/active_server_session.dart';
 
 class HomeDashboardPage extends StatefulWidget {
   const HomeDashboardPage({
-    required this.profile,
+    required this.session,
     required this.modeController,
     required this.authController,
     required this.campaignController,
@@ -19,7 +19,7 @@ class HomeDashboardPage extends StatefulWidget {
     super.key,
   });
 
-  final ServerProfile profile;
+  final ActiveServerSession session;
   final ClientModeController modeController;
   final AuthController authController;
   final CampaignController campaignController;
@@ -134,6 +134,7 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
   Widget _buildOverview(BuildContext context) {
     final theme = Theme.of(context);
     final signedIn = widget.authController.isLoggedIn;
+    final profile = widget.session.profile;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -150,7 +151,9 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
                   children: [
                     CircleAvatar(
                       radius: 28,
-                      child: Text(widget.profile.name.characters.first),
+                      child: Text(
+                        profile?.name.characters.first ?? '本',
+                      ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -158,12 +161,12 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            widget.profile.name,
+                            profile?.name ?? '本地模式',
                             style: theme.textTheme.titleLarge,
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            widget.profile.baseUrl,
+                            profile?.baseUrl ?? '未连接服务器，离线使用中',
                             style: theme.textTheme.bodyMedium,
                           ),
                         ],

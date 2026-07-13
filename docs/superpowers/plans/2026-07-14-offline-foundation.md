@@ -417,7 +417,7 @@ git commit -m "refactor(0.1): make the main shell offline-first"
 - 创建：`apps/client_flutter/lib/src/core/sync/sync_status_tile.dart`
 - 修改：`apps/client_flutter/test/widget_test.dart`
 
-- [ ] **步骤 1：写设置页失败测试**
+- [x] **步骤 1：写设置页失败测试**
 
 ```dart
 testWidgets('offline settings exposes servers and sync status', (tester) async {
@@ -435,7 +435,7 @@ testWidgets('offline settings exposes servers and sync status', (tester) async {
 });
 ```
 
-- [ ] **步骤 2：运行并确认入口缺失**
+- [x] **步骤 2：运行并确认入口缺失**
 
 ```powershell
 cd apps/client_flutter
@@ -444,11 +444,11 @@ flutter test test/widget_test.dart --plain-name "offline settings exposes server
 
 预期：FAIL，设置页尚未显示离线服务器和同步分组。
 
-- [ ] **步骤 3：实现 Material 3 设置分组**
+- [x] **步骤 3：实现 Material 3 设置分组**
 
 使用 `ListTile` 显示当前服务器，`FilledButton.tonalIcon` 打开现有 Profile 管理页；`SyncStatusTile` 根据 `SyncPhase` 显示离线、等待、同步、冲突或错误。未登录时同步副标题固定为“仅保存在此设备”。不得在设置页嵌套 Card。
 
-- [ ] **步骤 4：运行设置与全客户端测试**
+- [x] **步骤 4：运行设置与全客户端测试**
 
 ```powershell
 cd apps/client_flutter
@@ -458,7 +458,7 @@ flutter analyze
 
 预期：测试通过，Material 3 analyzer 无问题。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/core/sync apps/client_flutter/lib/src/features/server_home apps/client_flutter/lib/src/features/server_profiles apps/client_flutter/test/widget_test.dart

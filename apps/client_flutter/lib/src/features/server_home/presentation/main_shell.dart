@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/sync/sync_status_controller.dart';
 import '../../../features/app_preferences/presentation/app_preferences_controller.dart';
 import '../../../features/auth/data/auth_api_client.dart';
 import '../../../features/auth/data/auth_token_store.dart';
@@ -83,6 +84,7 @@ class _MainShellState extends State<MainShell> {
   late final ContentController _contentController;
   late final SessionController _sessionController;
   late final CampaignSocketService _campaignSocketService;
+  final SyncStatusController _syncStatusController = SyncStatusController();
   int _currentIndex = 0;
 
   @override
@@ -130,6 +132,7 @@ class _MainShellState extends State<MainShell> {
     _characterController.dispose();
     _campaignController.dispose();
     _authController.dispose();
+    _syncStatusController.dispose();
     super.dispose();
   }
 
@@ -178,6 +181,7 @@ class _MainShellState extends State<MainShell> {
         modeController: widget.modeController,
         authController: _authController,
         appPreferencesController: widget.appPreferencesController,
+        syncStatusController: _syncStatusController,
         serverProfileStore: widget.serverProfileStore,
         serverProfilesPageBuilder: widget.serverProfilesPageBuilder,
         onSwitchToProfile: widget.onSwitchToProfile,

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/sync/sync_status_controller.dart';
+import '../../../core/sync/sync_status_tile.dart';
 import '../../app_preferences/presentation/app_preferences_controller.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../auth/presentation/auth_page.dart';
@@ -18,6 +20,7 @@ class SettingsTabPage extends StatefulWidget {
     required this.modeController,
     required this.authController,
     required this.appPreferencesController,
+    required this.syncStatusController,
     this.serverProfileStore,
     this.serverProfilesPageBuilder,
     this.onSwitchToProfile,
@@ -28,6 +31,7 @@ class SettingsTabPage extends StatefulWidget {
   final ClientModeController modeController;
   final AuthController authController;
   final AppPreferencesController appPreferencesController;
+  final SyncStatusController syncStatusController;
   final ServerProfileStore? serverProfileStore;
   final WidgetBuilder? serverProfilesPageBuilder;
   final ValueChanged<ServerProfile>? onSwitchToProfile;
@@ -62,6 +66,7 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
         widget.modeController,
         widget.authController,
         widget.session,
+        widget.syncStatusController,
       ]),
       builder: (context, _) {
         return AnimatedBuilder(
@@ -75,6 +80,8 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _buildServerSection(context),
+                    const SizedBox(height: 24),
+                    _buildSyncSection(context),
                     const SizedBox(height: 24),
                     _buildAccountSection(context),
                     const SizedBox(height: 24),
@@ -111,7 +118,7 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
               if (profile == null) ...[
                 ListTile(
                   leading: const Icon(Icons.cloud_off),
-                  title: const Text('未连接服务器'),
+                  title: const Text('尚未连接服务器'),
                   subtitle: const Text('离线模式下本地资料、角色和笔记仍可用'),
                 ),
                 if (widget.serverProfilesPageBuilder != null)
@@ -187,6 +194,22 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
     if (builder == null) return;
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(builder: builder),
+    );
+  }
+
+  Widget _buildSyncSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('同步', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Card(
+          child: SyncStatusTile(
+            controller: widget.syncStatusController,
+            isLoggedIn: widget.authController.isLoggedIn,
+          ),
+        ),
+      ],
     );
   }
 

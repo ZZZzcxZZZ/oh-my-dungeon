@@ -50,7 +50,7 @@ void main() {
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
 
-    expect(find.text('未连接服务器'), findsOneWidget);
+    expect(find.text('尚未连接服务器'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, '管理服务器'), findsOneWidget);
     await database.close();
   });

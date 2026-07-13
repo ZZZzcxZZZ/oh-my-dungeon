@@ -1,4 +1,5 @@
 import 'package:dnd_table_client/src/app/dnd_table_app.dart';
+import 'package:dnd_table_client/src/core/database/app_database.dart';
 import 'package:dnd_table_client/src/features/auth/data/auth_api_client.dart';
 import 'package:dnd_table_client/src/features/auth/data/auth_token_store.dart';
 import 'package:dnd_table_client/src/features/auth/domain/auth_session.dart';
@@ -22,8 +23,10 @@ import 'package:dnd_table_client/src/features/rooms/domain/room.dart';
 import 'package:dnd_table_client/src/features/rooms/domain/room_roll.dart';
 import 'package:dnd_table_client/src/features/server_profiles/data/server_profile_store.dart';
 import 'package:dnd_table_client/src/features/server_profiles/domain/server_profile.dart';
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   const profile = ServerProfile(
@@ -1246,6 +1249,21 @@ void main() {
 
     expect(find.text('DM 控场'), findsNothing);
     expect(find.text('检定请求'), findsOneWidget);
+  });
+
+  testWidgets('offline settings exposes servers and sync status', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    await tester.pumpWidget(DndTableApp(database: database));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('设置').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('服务器'), findsOneWidget);
+    expect(find.text('尚未连接服务器'), findsOneWidget);
+    expect(find.text('同步'), findsOneWidget);
+    expect(find.text('仅保存在此设备'), findsOneWidget);
+    await database.close();
   });
 }
 

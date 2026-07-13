@@ -89,6 +89,55 @@ export class ContentService {
     };
   }
 
+  async importCampaignPackage(
+    actor: AccessTokenPayload,
+    campaignId: string,
+    input: unknown,
+    dryRun: boolean,
+  ): Promise<ImportContentPackageResult> {
+    const campaign = await this.fetchCampaign(campaignId);
+    this.campaignPolicy.canManageCampaign(actor, {
+      campaignId: campaign.id,
+      ownerId: campaign.ownerId,
+      members: campaign.members,
+    });
+    const validation = this.validator.validate(input);
+    if (dryRun || !validation.valid) {
+      return { valid: validation.valid, errors: validation.errors, package: null };
+    }
+
+    const contentPackage = input as ContentPackageImport;
+    const created = await this.prismaService.$transaction(async (tx) => {
+      const result = await tx.contentPackage.create({
+        data: {
+          scope: "campaign", ownerUserId: null, campaignId,
+          name: contentPackage.name, version: contentPackage.version,
+          schemaVersion: contentPackage.schemaVersion ?? 1,
+          locale: contentPackage.locale ?? "zh-CN", status: "active",
+          createdBy: actor.userId,
+          items: { create: contentPackage.items.map((item) => ({
+            type: item.type, slug: item.slug, name: item.name,
+            description: item.description ?? "", structured: item.structured ?? {},
+            tags: item.tags ?? [], sourceLabel: item.sourceLabel ?? "",
+            schemaVersion: item.schemaVersion ?? contentPackage.schemaVersion ?? 1,
+          })) },
+        },
+        include: { items: true },
+      });
+      await tx.campaignContentPackage.upsert({
+        where: { campaignId_packageId: { campaignId, packageId: result.id } },
+        create: { campaignId, packageId: result.id, enabled: true, enabledBy: actor.userId },
+        update: { enabled: true, enabledBy: actor.userId },
+      });
+      await tx.journalEntry.create({ data: {
+        campaignId, type: "content_package_imported",
+        summary: `Imported content package ${contentPackage.name}`, refId: result.id,
+      } });
+      return result;
+    });
+    return { valid: true, errors: [], package: toPackageView(created) };
+  }
+
   async listPackages(actor: AccessTokenPayload): Promise<ContentPackageView[]> {
     const packages = await this.prismaService.contentPackage.findMany({
       where: {

@@ -172,8 +172,8 @@ describe("content endpoints", () => {
     prismaService.journalEntry.create.mockResolvedValue({});
   });
 
-  async function login(): Promise<string> {
-    prismaService.user.findFirst.mockResolvedValueOnce(storedUser);
+  async function login(user = storedUser): Promise<string> {
+    prismaService.user.findFirst.mockResolvedValueOnce(user);
     const response = await request(app.getHttpServer())
       .post("/api/auth/login")
       .send({ identifier: "dm", password: "p@ssw0rd" })
@@ -286,6 +286,48 @@ describe("content endpoints", () => {
     expect(prismaService.journalEntry.create.mock.calls[0][0].data.type).toBe(
       "content_package_enabled",
     );
+  });
+
+  it("allows a campaign dm to import a package into that campaign", async () => {
+    const token = await login();
+    prismaService.campaign.findUnique.mockResolvedValueOnce(campaign);
+    prismaService.contentPackage.create.mockResolvedValueOnce({
+      ...packageRow,
+      scope: "campaign",
+      ownerUserId: null,
+      campaignId: "camp-1",
+      items: [itemRow],
+    });
+
+    await request(app.getHttpServer())
+      .post("/api/campaigns/camp-1/content/packages/import")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ package: validImport })
+      .expect(201)
+      .expect(({ body }) => {
+        expect(body.valid).toBe(true);
+        expect(body.package.scope).toBe("campaign");
+        expect(body.package.campaignId).toBe("camp-1");
+      });
+
+    const createArgs = prismaService.contentPackage.create.mock.calls[0][0];
+    expect(createArgs.data.campaignId).toBe("camp-1");
+    expect(createArgs.data.scope).toBe("campaign");
+  });
+
+  it("rejects a player importing a package into a campaign", async () => {
+    const token = await login({
+      ...storedUser,
+      id: "player-2",
+      username: "player",
+    });
+    prismaService.campaign.findUnique.mockResolvedValueOnce(campaign);
+
+    await request(app.getHttpServer())
+      .post("/api/campaigns/camp-1/content/packages/import")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ package: validImport })
+      .expect(403);
   });
 
   it("rejects campaign content for non-members", async () => {

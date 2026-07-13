@@ -54,6 +54,20 @@ export class ContentController {
     );
   }
 
+  @Post("campaigns/:id/content/packages/import")
+  importCampaignPackage(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param("id") campaignId: string,
+    @Body() body: ImportPackageBody,
+  ): Promise<ImportContentPackageResult> {
+    return this.contentService.importCampaignPackage(
+      user,
+      campaignId,
+      body.package,
+      body.dryRun === true,
+    );
+  }
+
   @Get("content/packages")
   listPackages(
     @CurrentUser() user: AccessTokenPayload,

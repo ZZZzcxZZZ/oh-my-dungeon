@@ -124,7 +124,7 @@ git commit -m "feat(0.1): define local compendium package schema"
 - 创建：`apps/client_flutter/test/content_repository_test.dart`
 - 创建：`apps/client_flutter/test/support/content_test_support.dart`
 
-- [ ] **步骤 1：编写失败的空库和检索测试**
+- [x] **步骤 1：编写失败的空库和检索测试**
 
 ```dart
 test('starts empty and searches enabled packages only', () async {
@@ -160,7 +160,7 @@ test('starts empty and searches enabled packages only', () async {
 });
 ```
 
-- [ ] **步骤 2：运行并确认 Repository 缺失**
+- [x] **步骤 2：运行并确认 Repository 缺失**
 
 ```powershell
 cd apps/client_flutter
@@ -169,7 +169,7 @@ flutter test test/content_repository_test.dart
 
 预期：FAIL，资料表和 `DriftContentRepository` 不存在。
 
-- [ ] **步骤 3：实现本地表与接口**
+- [x] **步骤 3：实现本地表与接口**
 
 接口固定为：
 
@@ -201,7 +201,7 @@ abstract interface class ContentRepository {
 
 同时在 `test/support/content_test_support.dart` 实现 `MemoryContentRepository`。它完整实现上述接口，构造函数接受 `initialEntries`，写操作更新内存集合并通过 broadcast stream 通知测试；同文件提供 `testFighterEntry()`，使用步骤 1 的稳定 ID 和字段。后续 Widget 测试只使用这些已声明的测试支撑类型。
 
-- [ ] **步骤 4：生成代码并验证查询**
+- [x] **步骤 4：生成代码并验证查询**
 
 ```powershell
 cd apps/client_flutter
@@ -211,7 +211,7 @@ flutter test test/content_repository_test.dart test/app_database_test.dart
 
 预期：空库、启用过滤、名称搜索和 schema 升级均通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/core/database apps/client_flutter/lib/src/features/content/data/local apps/client_flutter/test/content_repository_test.dart apps/client_flutter/test/app_database_test.dart apps/client_flutter/test/support/content_test_support.dart

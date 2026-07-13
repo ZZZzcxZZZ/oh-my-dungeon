@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:meta/meta.dart';
 
+import '../../features/content/data/local/content_tables.dart';
 import 'tables/core_tables.dart';
 
 part 'app_database.g.dart';
@@ -13,6 +14,13 @@ part 'app_database.g.dart';
   SyncOutbox,
   SyncCursors,
   MigrationMarkers,
+  LocalContentPackages,
+  LocalContentEntries,
+  LocalContentAssets,
+  ContentLinks,
+  ContentFavorites,
+  ContentNotes,
+  ContentReadHistory,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -22,7 +30,23 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onCreate: (m) => m.createAll(),
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await m.createTable(localContentPackages);
+            await m.createTable(localContentEntries);
+            await m.createTable(localContentAssets);
+            await m.createTable(contentLinks);
+            await m.createTable(contentFavorites);
+            await m.createTable(contentNotes);
+            await m.createTable(contentReadHistory);
+          }
+        },
+      );
 
   static QueryExecutor _openConnection() {
     return driftDatabase(

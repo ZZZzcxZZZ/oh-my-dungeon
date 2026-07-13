@@ -1587,6 +1587,2729 @@ class MigrationMarkersCompanion extends UpdateCompanion<MigrationMarker> {
   }
 }
 
+class $LocalContentPackagesTable extends LocalContentPackages
+    with TableInfo<$LocalContentPackagesTable, LocalContentPackageRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LocalContentPackagesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _formatVersionMeta = const VerificationMeta(
+    'formatVersion',
+  );
+  @override
+  late final GeneratedColumn<int> formatVersion = GeneratedColumn<int>(
+    'format_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _versionMeta = const VerificationMeta(
+    'version',
+  );
+  @override
+  late final GeneratedColumn<String> version = GeneratedColumn<String>(
+    'version',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _localeMeta = const VerificationMeta('locale');
+  @override
+  late final GeneratedColumn<String> locale = GeneratedColumn<String>(
+    'locale',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _systemMeta = const VerificationMeta('system');
+  @override
+  late final GeneratedColumn<String> system = GeneratedColumn<String>(
+    'system',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _entryCountMeta = const VerificationMeta(
+    'entryCount',
+  );
+  @override
+  late final GeneratedColumn<int> entryCount = GeneratedColumn<int>(
+    'entry_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contentHashMeta = const VerificationMeta(
+    'contentHash',
+  );
+  @override
+  late final GeneratedColumn<String> contentHash = GeneratedColumn<String>(
+    'content_hash',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _enabledMeta = const VerificationMeta(
+    'enabled',
+  );
+  @override
+  late final GeneratedColumn<bool> enabled = GeneratedColumn<bool>(
+    'enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _installedAtMeta = const VerificationMeta(
+    'installedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> installedAt = GeneratedColumn<DateTime>(
+    'installed_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    formatVersion,
+    name,
+    version,
+    locale,
+    system,
+    entryCount,
+    contentHash,
+    enabled,
+    installedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'local_content_packages';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LocalContentPackageRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('format_version')) {
+      context.handle(
+        _formatVersionMeta,
+        formatVersion.isAcceptableOrUnknown(
+          data['format_version']!,
+          _formatVersionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_formatVersionMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('version')) {
+      context.handle(
+        _versionMeta,
+        version.isAcceptableOrUnknown(data['version']!, _versionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_versionMeta);
+    }
+    if (data.containsKey('locale')) {
+      context.handle(
+        _localeMeta,
+        locale.isAcceptableOrUnknown(data['locale']!, _localeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_localeMeta);
+    }
+    if (data.containsKey('system')) {
+      context.handle(
+        _systemMeta,
+        system.isAcceptableOrUnknown(data['system']!, _systemMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_systemMeta);
+    }
+    if (data.containsKey('entry_count')) {
+      context.handle(
+        _entryCountMeta,
+        entryCount.isAcceptableOrUnknown(data['entry_count']!, _entryCountMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entryCountMeta);
+    }
+    if (data.containsKey('content_hash')) {
+      context.handle(
+        _contentHashMeta,
+        contentHash.isAcceptableOrUnknown(
+          data['content_hash']!,
+          _contentHashMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_contentHashMeta);
+    }
+    if (data.containsKey('enabled')) {
+      context.handle(
+        _enabledMeta,
+        enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
+      );
+    }
+    if (data.containsKey('installed_at')) {
+      context.handle(
+        _installedAtMeta,
+        installedAt.isAcceptableOrUnknown(
+          data['installed_at']!,
+          _installedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_installedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  LocalContentPackageRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LocalContentPackageRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      formatVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}format_version'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      version: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}version'],
+      )!,
+      locale: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}locale'],
+      )!,
+      system: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}system'],
+      )!,
+      entryCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}entry_count'],
+      )!,
+      contentHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content_hash'],
+      )!,
+      enabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}enabled'],
+      )!,
+      installedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}installed_at'],
+      )!,
+    );
+  }
+
+  @override
+  $LocalContentPackagesTable createAlias(String alias) {
+    return $LocalContentPackagesTable(attachedDatabase, alias);
+  }
+}
+
+class LocalContentPackageRow extends DataClass
+    implements Insertable<LocalContentPackageRow> {
+  final String id;
+  final int formatVersion;
+  final String name;
+  final String version;
+  final String locale;
+  final String system;
+  final int entryCount;
+  final String contentHash;
+  final bool enabled;
+  final DateTime installedAt;
+  const LocalContentPackageRow({
+    required this.id,
+    required this.formatVersion,
+    required this.name,
+    required this.version,
+    required this.locale,
+    required this.system,
+    required this.entryCount,
+    required this.contentHash,
+    required this.enabled,
+    required this.installedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['format_version'] = Variable<int>(formatVersion);
+    map['name'] = Variable<String>(name);
+    map['version'] = Variable<String>(version);
+    map['locale'] = Variable<String>(locale);
+    map['system'] = Variable<String>(system);
+    map['entry_count'] = Variable<int>(entryCount);
+    map['content_hash'] = Variable<String>(contentHash);
+    map['enabled'] = Variable<bool>(enabled);
+    map['installed_at'] = Variable<DateTime>(installedAt);
+    return map;
+  }
+
+  LocalContentPackagesCompanion toCompanion(bool nullToAbsent) {
+    return LocalContentPackagesCompanion(
+      id: Value(id),
+      formatVersion: Value(formatVersion),
+      name: Value(name),
+      version: Value(version),
+      locale: Value(locale),
+      system: Value(system),
+      entryCount: Value(entryCount),
+      contentHash: Value(contentHash),
+      enabled: Value(enabled),
+      installedAt: Value(installedAt),
+    );
+  }
+
+  factory LocalContentPackageRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LocalContentPackageRow(
+      id: serializer.fromJson<String>(json['id']),
+      formatVersion: serializer.fromJson<int>(json['formatVersion']),
+      name: serializer.fromJson<String>(json['name']),
+      version: serializer.fromJson<String>(json['version']),
+      locale: serializer.fromJson<String>(json['locale']),
+      system: serializer.fromJson<String>(json['system']),
+      entryCount: serializer.fromJson<int>(json['entryCount']),
+      contentHash: serializer.fromJson<String>(json['contentHash']),
+      enabled: serializer.fromJson<bool>(json['enabled']),
+      installedAt: serializer.fromJson<DateTime>(json['installedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'formatVersion': serializer.toJson<int>(formatVersion),
+      'name': serializer.toJson<String>(name),
+      'version': serializer.toJson<String>(version),
+      'locale': serializer.toJson<String>(locale),
+      'system': serializer.toJson<String>(system),
+      'entryCount': serializer.toJson<int>(entryCount),
+      'contentHash': serializer.toJson<String>(contentHash),
+      'enabled': serializer.toJson<bool>(enabled),
+      'installedAt': serializer.toJson<DateTime>(installedAt),
+    };
+  }
+
+  LocalContentPackageRow copyWith({
+    String? id,
+    int? formatVersion,
+    String? name,
+    String? version,
+    String? locale,
+    String? system,
+    int? entryCount,
+    String? contentHash,
+    bool? enabled,
+    DateTime? installedAt,
+  }) => LocalContentPackageRow(
+    id: id ?? this.id,
+    formatVersion: formatVersion ?? this.formatVersion,
+    name: name ?? this.name,
+    version: version ?? this.version,
+    locale: locale ?? this.locale,
+    system: system ?? this.system,
+    entryCount: entryCount ?? this.entryCount,
+    contentHash: contentHash ?? this.contentHash,
+    enabled: enabled ?? this.enabled,
+    installedAt: installedAt ?? this.installedAt,
+  );
+  LocalContentPackageRow copyWithCompanion(LocalContentPackagesCompanion data) {
+    return LocalContentPackageRow(
+      id: data.id.present ? data.id.value : this.id,
+      formatVersion: data.formatVersion.present
+          ? data.formatVersion.value
+          : this.formatVersion,
+      name: data.name.present ? data.name.value : this.name,
+      version: data.version.present ? data.version.value : this.version,
+      locale: data.locale.present ? data.locale.value : this.locale,
+      system: data.system.present ? data.system.value : this.system,
+      entryCount: data.entryCount.present
+          ? data.entryCount.value
+          : this.entryCount,
+      contentHash: data.contentHash.present
+          ? data.contentHash.value
+          : this.contentHash,
+      enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      installedAt: data.installedAt.present
+          ? data.installedAt.value
+          : this.installedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocalContentPackageRow(')
+          ..write('id: $id, ')
+          ..write('formatVersion: $formatVersion, ')
+          ..write('name: $name, ')
+          ..write('version: $version, ')
+          ..write('locale: $locale, ')
+          ..write('system: $system, ')
+          ..write('entryCount: $entryCount, ')
+          ..write('contentHash: $contentHash, ')
+          ..write('enabled: $enabled, ')
+          ..write('installedAt: $installedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    formatVersion,
+    name,
+    version,
+    locale,
+    system,
+    entryCount,
+    contentHash,
+    enabled,
+    installedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LocalContentPackageRow &&
+          other.id == this.id &&
+          other.formatVersion == this.formatVersion &&
+          other.name == this.name &&
+          other.version == this.version &&
+          other.locale == this.locale &&
+          other.system == this.system &&
+          other.entryCount == this.entryCount &&
+          other.contentHash == this.contentHash &&
+          other.enabled == this.enabled &&
+          other.installedAt == this.installedAt);
+}
+
+class LocalContentPackagesCompanion
+    extends UpdateCompanion<LocalContentPackageRow> {
+  final Value<String> id;
+  final Value<int> formatVersion;
+  final Value<String> name;
+  final Value<String> version;
+  final Value<String> locale;
+  final Value<String> system;
+  final Value<int> entryCount;
+  final Value<String> contentHash;
+  final Value<bool> enabled;
+  final Value<DateTime> installedAt;
+  final Value<int> rowid;
+  const LocalContentPackagesCompanion({
+    this.id = const Value.absent(),
+    this.formatVersion = const Value.absent(),
+    this.name = const Value.absent(),
+    this.version = const Value.absent(),
+    this.locale = const Value.absent(),
+    this.system = const Value.absent(),
+    this.entryCount = const Value.absent(),
+    this.contentHash = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.installedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LocalContentPackagesCompanion.insert({
+    required String id,
+    required int formatVersion,
+    required String name,
+    required String version,
+    required String locale,
+    required String system,
+    required int entryCount,
+    required String contentHash,
+    this.enabled = const Value.absent(),
+    required DateTime installedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       formatVersion = Value(formatVersion),
+       name = Value(name),
+       version = Value(version),
+       locale = Value(locale),
+       system = Value(system),
+       entryCount = Value(entryCount),
+       contentHash = Value(contentHash),
+       installedAt = Value(installedAt);
+  static Insertable<LocalContentPackageRow> custom({
+    Expression<String>? id,
+    Expression<int>? formatVersion,
+    Expression<String>? name,
+    Expression<String>? version,
+    Expression<String>? locale,
+    Expression<String>? system,
+    Expression<int>? entryCount,
+    Expression<String>? contentHash,
+    Expression<bool>? enabled,
+    Expression<DateTime>? installedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (formatVersion != null) 'format_version': formatVersion,
+      if (name != null) 'name': name,
+      if (version != null) 'version': version,
+      if (locale != null) 'locale': locale,
+      if (system != null) 'system': system,
+      if (entryCount != null) 'entry_count': entryCount,
+      if (contentHash != null) 'content_hash': contentHash,
+      if (enabled != null) 'enabled': enabled,
+      if (installedAt != null) 'installed_at': installedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LocalContentPackagesCompanion copyWith({
+    Value<String>? id,
+    Value<int>? formatVersion,
+    Value<String>? name,
+    Value<String>? version,
+    Value<String>? locale,
+    Value<String>? system,
+    Value<int>? entryCount,
+    Value<String>? contentHash,
+    Value<bool>? enabled,
+    Value<DateTime>? installedAt,
+    Value<int>? rowid,
+  }) {
+    return LocalContentPackagesCompanion(
+      id: id ?? this.id,
+      formatVersion: formatVersion ?? this.formatVersion,
+      name: name ?? this.name,
+      version: version ?? this.version,
+      locale: locale ?? this.locale,
+      system: system ?? this.system,
+      entryCount: entryCount ?? this.entryCount,
+      contentHash: contentHash ?? this.contentHash,
+      enabled: enabled ?? this.enabled,
+      installedAt: installedAt ?? this.installedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (formatVersion.present) {
+      map['format_version'] = Variable<int>(formatVersion.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (version.present) {
+      map['version'] = Variable<String>(version.value);
+    }
+    if (locale.present) {
+      map['locale'] = Variable<String>(locale.value);
+    }
+    if (system.present) {
+      map['system'] = Variable<String>(system.value);
+    }
+    if (entryCount.present) {
+      map['entry_count'] = Variable<int>(entryCount.value);
+    }
+    if (contentHash.present) {
+      map['content_hash'] = Variable<String>(contentHash.value);
+    }
+    if (enabled.present) {
+      map['enabled'] = Variable<bool>(enabled.value);
+    }
+    if (installedAt.present) {
+      map['installed_at'] = Variable<DateTime>(installedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocalContentPackagesCompanion(')
+          ..write('id: $id, ')
+          ..write('formatVersion: $formatVersion, ')
+          ..write('name: $name, ')
+          ..write('version: $version, ')
+          ..write('locale: $locale, ')
+          ..write('system: $system, ')
+          ..write('entryCount: $entryCount, ')
+          ..write('contentHash: $contentHash, ')
+          ..write('enabled: $enabled, ')
+          ..write('installedAt: $installedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $LocalContentEntriesTable extends LocalContentEntries
+    with TableInfo<$LocalContentEntriesTable, LocalContentEntryRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LocalContentEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _entryKeyMeta = const VerificationMeta(
+    'entryKey',
+  );
+  @override
+  late final GeneratedColumn<String> entryKey = GeneratedColumn<String>(
+    'entry_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _packageIdMeta = const VerificationMeta(
+    'packageId',
+  );
+  @override
+  late final GeneratedColumn<String> packageId = GeneratedColumn<String>(
+    'package_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _slugMeta = const VerificationMeta('slug');
+  @override
+  late final GeneratedColumn<String> slug = GeneratedColumn<String>(
+    'slug',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _aliasesJsonMeta = const VerificationMeta(
+    'aliasesJson',
+  );
+  @override
+  late final GeneratedColumn<String> aliasesJson = GeneratedColumn<String>(
+    'aliases_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('[]'),
+  );
+  static const VerificationMeta _summaryMeta = const VerificationMeta(
+    'summary',
+  );
+  @override
+  late final GeneratedColumn<String> summary = GeneratedColumn<String>(
+    'summary',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _bodyJsonMeta = const VerificationMeta(
+    'bodyJson',
+  );
+  @override
+  late final GeneratedColumn<String> bodyJson = GeneratedColumn<String>(
+    'body_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('[]'),
+  );
+  static const VerificationMeta _structuredJsonMeta = const VerificationMeta(
+    'structuredJson',
+  );
+  @override
+  late final GeneratedColumn<String> structuredJson = GeneratedColumn<String>(
+    'structured_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('{}'),
+  );
+  static const VerificationMeta _tagsJsonMeta = const VerificationMeta(
+    'tagsJson',
+  );
+  @override
+  late final GeneratedColumn<String> tagsJson = GeneratedColumn<String>(
+    'tags_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('[]'),
+  );
+  static const VerificationMeta _sourceLabelMeta = const VerificationMeta(
+    'sourceLabel',
+  );
+  @override
+  late final GeneratedColumn<String> sourceLabel = GeneratedColumn<String>(
+    'source_label',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _revisionMeta = const VerificationMeta(
+    'revision',
+  );
+  @override
+  late final GeneratedColumn<int> revision = GeneratedColumn<int>(
+    'revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    entryKey,
+    packageId,
+    type,
+    slug,
+    name,
+    aliasesJson,
+    summary,
+    bodyJson,
+    structuredJson,
+    tagsJson,
+    sourceLabel,
+    revision,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'local_content_entries';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LocalContentEntryRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('entry_key')) {
+      context.handle(
+        _entryKeyMeta,
+        entryKey.isAcceptableOrUnknown(data['entry_key']!, _entryKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entryKeyMeta);
+    }
+    if (data.containsKey('package_id')) {
+      context.handle(
+        _packageIdMeta,
+        packageId.isAcceptableOrUnknown(data['package_id']!, _packageIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_packageIdMeta);
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_typeMeta);
+    }
+    if (data.containsKey('slug')) {
+      context.handle(
+        _slugMeta,
+        slug.isAcceptableOrUnknown(data['slug']!, _slugMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_slugMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('aliases_json')) {
+      context.handle(
+        _aliasesJsonMeta,
+        aliasesJson.isAcceptableOrUnknown(
+          data['aliases_json']!,
+          _aliasesJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('summary')) {
+      context.handle(
+        _summaryMeta,
+        summary.isAcceptableOrUnknown(data['summary']!, _summaryMeta),
+      );
+    }
+    if (data.containsKey('body_json')) {
+      context.handle(
+        _bodyJsonMeta,
+        bodyJson.isAcceptableOrUnknown(data['body_json']!, _bodyJsonMeta),
+      );
+    }
+    if (data.containsKey('structured_json')) {
+      context.handle(
+        _structuredJsonMeta,
+        structuredJson.isAcceptableOrUnknown(
+          data['structured_json']!,
+          _structuredJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('tags_json')) {
+      context.handle(
+        _tagsJsonMeta,
+        tagsJson.isAcceptableOrUnknown(data['tags_json']!, _tagsJsonMeta),
+      );
+    }
+    if (data.containsKey('source_label')) {
+      context.handle(
+        _sourceLabelMeta,
+        sourceLabel.isAcceptableOrUnknown(
+          data['source_label']!,
+          _sourceLabelMeta,
+        ),
+      );
+    }
+    if (data.containsKey('revision')) {
+      context.handle(
+        _revisionMeta,
+        revision.isAcceptableOrUnknown(data['revision']!, _revisionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_revisionMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {entryKey};
+  @override
+  LocalContentEntryRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LocalContentEntryRow(
+      entryKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entry_key'],
+      )!,
+      packageId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}package_id'],
+      )!,
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
+      slug: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}slug'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      aliasesJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}aliases_json'],
+      )!,
+      summary: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}summary'],
+      )!,
+      bodyJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}body_json'],
+      )!,
+      structuredJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}structured_json'],
+      )!,
+      tagsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tags_json'],
+      )!,
+      sourceLabel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_label'],
+      )!,
+      revision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}revision'],
+      )!,
+    );
+  }
+
+  @override
+  $LocalContentEntriesTable createAlias(String alias) {
+    return $LocalContentEntriesTable(attachedDatabase, alias);
+  }
+}
+
+class LocalContentEntryRow extends DataClass
+    implements Insertable<LocalContentEntryRow> {
+  final String entryKey;
+  final String packageId;
+  final String type;
+  final String slug;
+  final String name;
+  final String aliasesJson;
+  final String summary;
+  final String bodyJson;
+  final String structuredJson;
+  final String tagsJson;
+  final String sourceLabel;
+  final int revision;
+  const LocalContentEntryRow({
+    required this.entryKey,
+    required this.packageId,
+    required this.type,
+    required this.slug,
+    required this.name,
+    required this.aliasesJson,
+    required this.summary,
+    required this.bodyJson,
+    required this.structuredJson,
+    required this.tagsJson,
+    required this.sourceLabel,
+    required this.revision,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['entry_key'] = Variable<String>(entryKey);
+    map['package_id'] = Variable<String>(packageId);
+    map['type'] = Variable<String>(type);
+    map['slug'] = Variable<String>(slug);
+    map['name'] = Variable<String>(name);
+    map['aliases_json'] = Variable<String>(aliasesJson);
+    map['summary'] = Variable<String>(summary);
+    map['body_json'] = Variable<String>(bodyJson);
+    map['structured_json'] = Variable<String>(structuredJson);
+    map['tags_json'] = Variable<String>(tagsJson);
+    map['source_label'] = Variable<String>(sourceLabel);
+    map['revision'] = Variable<int>(revision);
+    return map;
+  }
+
+  LocalContentEntriesCompanion toCompanion(bool nullToAbsent) {
+    return LocalContentEntriesCompanion(
+      entryKey: Value(entryKey),
+      packageId: Value(packageId),
+      type: Value(type),
+      slug: Value(slug),
+      name: Value(name),
+      aliasesJson: Value(aliasesJson),
+      summary: Value(summary),
+      bodyJson: Value(bodyJson),
+      structuredJson: Value(structuredJson),
+      tagsJson: Value(tagsJson),
+      sourceLabel: Value(sourceLabel),
+      revision: Value(revision),
+    );
+  }
+
+  factory LocalContentEntryRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LocalContentEntryRow(
+      entryKey: serializer.fromJson<String>(json['entryKey']),
+      packageId: serializer.fromJson<String>(json['packageId']),
+      type: serializer.fromJson<String>(json['type']),
+      slug: serializer.fromJson<String>(json['slug']),
+      name: serializer.fromJson<String>(json['name']),
+      aliasesJson: serializer.fromJson<String>(json['aliasesJson']),
+      summary: serializer.fromJson<String>(json['summary']),
+      bodyJson: serializer.fromJson<String>(json['bodyJson']),
+      structuredJson: serializer.fromJson<String>(json['structuredJson']),
+      tagsJson: serializer.fromJson<String>(json['tagsJson']),
+      sourceLabel: serializer.fromJson<String>(json['sourceLabel']),
+      revision: serializer.fromJson<int>(json['revision']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'entryKey': serializer.toJson<String>(entryKey),
+      'packageId': serializer.toJson<String>(packageId),
+      'type': serializer.toJson<String>(type),
+      'slug': serializer.toJson<String>(slug),
+      'name': serializer.toJson<String>(name),
+      'aliasesJson': serializer.toJson<String>(aliasesJson),
+      'summary': serializer.toJson<String>(summary),
+      'bodyJson': serializer.toJson<String>(bodyJson),
+      'structuredJson': serializer.toJson<String>(structuredJson),
+      'tagsJson': serializer.toJson<String>(tagsJson),
+      'sourceLabel': serializer.toJson<String>(sourceLabel),
+      'revision': serializer.toJson<int>(revision),
+    };
+  }
+
+  LocalContentEntryRow copyWith({
+    String? entryKey,
+    String? packageId,
+    String? type,
+    String? slug,
+    String? name,
+    String? aliasesJson,
+    String? summary,
+    String? bodyJson,
+    String? structuredJson,
+    String? tagsJson,
+    String? sourceLabel,
+    int? revision,
+  }) => LocalContentEntryRow(
+    entryKey: entryKey ?? this.entryKey,
+    packageId: packageId ?? this.packageId,
+    type: type ?? this.type,
+    slug: slug ?? this.slug,
+    name: name ?? this.name,
+    aliasesJson: aliasesJson ?? this.aliasesJson,
+    summary: summary ?? this.summary,
+    bodyJson: bodyJson ?? this.bodyJson,
+    structuredJson: structuredJson ?? this.structuredJson,
+    tagsJson: tagsJson ?? this.tagsJson,
+    sourceLabel: sourceLabel ?? this.sourceLabel,
+    revision: revision ?? this.revision,
+  );
+  LocalContentEntryRow copyWithCompanion(LocalContentEntriesCompanion data) {
+    return LocalContentEntryRow(
+      entryKey: data.entryKey.present ? data.entryKey.value : this.entryKey,
+      packageId: data.packageId.present ? data.packageId.value : this.packageId,
+      type: data.type.present ? data.type.value : this.type,
+      slug: data.slug.present ? data.slug.value : this.slug,
+      name: data.name.present ? data.name.value : this.name,
+      aliasesJson: data.aliasesJson.present
+          ? data.aliasesJson.value
+          : this.aliasesJson,
+      summary: data.summary.present ? data.summary.value : this.summary,
+      bodyJson: data.bodyJson.present ? data.bodyJson.value : this.bodyJson,
+      structuredJson: data.structuredJson.present
+          ? data.structuredJson.value
+          : this.structuredJson,
+      tagsJson: data.tagsJson.present ? data.tagsJson.value : this.tagsJson,
+      sourceLabel: data.sourceLabel.present
+          ? data.sourceLabel.value
+          : this.sourceLabel,
+      revision: data.revision.present ? data.revision.value : this.revision,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocalContentEntryRow(')
+          ..write('entryKey: $entryKey, ')
+          ..write('packageId: $packageId, ')
+          ..write('type: $type, ')
+          ..write('slug: $slug, ')
+          ..write('name: $name, ')
+          ..write('aliasesJson: $aliasesJson, ')
+          ..write('summary: $summary, ')
+          ..write('bodyJson: $bodyJson, ')
+          ..write('structuredJson: $structuredJson, ')
+          ..write('tagsJson: $tagsJson, ')
+          ..write('sourceLabel: $sourceLabel, ')
+          ..write('revision: $revision')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    entryKey,
+    packageId,
+    type,
+    slug,
+    name,
+    aliasesJson,
+    summary,
+    bodyJson,
+    structuredJson,
+    tagsJson,
+    sourceLabel,
+    revision,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LocalContentEntryRow &&
+          other.entryKey == this.entryKey &&
+          other.packageId == this.packageId &&
+          other.type == this.type &&
+          other.slug == this.slug &&
+          other.name == this.name &&
+          other.aliasesJson == this.aliasesJson &&
+          other.summary == this.summary &&
+          other.bodyJson == this.bodyJson &&
+          other.structuredJson == this.structuredJson &&
+          other.tagsJson == this.tagsJson &&
+          other.sourceLabel == this.sourceLabel &&
+          other.revision == this.revision);
+}
+
+class LocalContentEntriesCompanion
+    extends UpdateCompanion<LocalContentEntryRow> {
+  final Value<String> entryKey;
+  final Value<String> packageId;
+  final Value<String> type;
+  final Value<String> slug;
+  final Value<String> name;
+  final Value<String> aliasesJson;
+  final Value<String> summary;
+  final Value<String> bodyJson;
+  final Value<String> structuredJson;
+  final Value<String> tagsJson;
+  final Value<String> sourceLabel;
+  final Value<int> revision;
+  final Value<int> rowid;
+  const LocalContentEntriesCompanion({
+    this.entryKey = const Value.absent(),
+    this.packageId = const Value.absent(),
+    this.type = const Value.absent(),
+    this.slug = const Value.absent(),
+    this.name = const Value.absent(),
+    this.aliasesJson = const Value.absent(),
+    this.summary = const Value.absent(),
+    this.bodyJson = const Value.absent(),
+    this.structuredJson = const Value.absent(),
+    this.tagsJson = const Value.absent(),
+    this.sourceLabel = const Value.absent(),
+    this.revision = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LocalContentEntriesCompanion.insert({
+    required String entryKey,
+    required String packageId,
+    required String type,
+    required String slug,
+    required String name,
+    this.aliasesJson = const Value.absent(),
+    this.summary = const Value.absent(),
+    this.bodyJson = const Value.absent(),
+    this.structuredJson = const Value.absent(),
+    this.tagsJson = const Value.absent(),
+    this.sourceLabel = const Value.absent(),
+    required int revision,
+    this.rowid = const Value.absent(),
+  }) : entryKey = Value(entryKey),
+       packageId = Value(packageId),
+       type = Value(type),
+       slug = Value(slug),
+       name = Value(name),
+       revision = Value(revision);
+  static Insertable<LocalContentEntryRow> custom({
+    Expression<String>? entryKey,
+    Expression<String>? packageId,
+    Expression<String>? type,
+    Expression<String>? slug,
+    Expression<String>? name,
+    Expression<String>? aliasesJson,
+    Expression<String>? summary,
+    Expression<String>? bodyJson,
+    Expression<String>? structuredJson,
+    Expression<String>? tagsJson,
+    Expression<String>? sourceLabel,
+    Expression<int>? revision,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (entryKey != null) 'entry_key': entryKey,
+      if (packageId != null) 'package_id': packageId,
+      if (type != null) 'type': type,
+      if (slug != null) 'slug': slug,
+      if (name != null) 'name': name,
+      if (aliasesJson != null) 'aliases_json': aliasesJson,
+      if (summary != null) 'summary': summary,
+      if (bodyJson != null) 'body_json': bodyJson,
+      if (structuredJson != null) 'structured_json': structuredJson,
+      if (tagsJson != null) 'tags_json': tagsJson,
+      if (sourceLabel != null) 'source_label': sourceLabel,
+      if (revision != null) 'revision': revision,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LocalContentEntriesCompanion copyWith({
+    Value<String>? entryKey,
+    Value<String>? packageId,
+    Value<String>? type,
+    Value<String>? slug,
+    Value<String>? name,
+    Value<String>? aliasesJson,
+    Value<String>? summary,
+    Value<String>? bodyJson,
+    Value<String>? structuredJson,
+    Value<String>? tagsJson,
+    Value<String>? sourceLabel,
+    Value<int>? revision,
+    Value<int>? rowid,
+  }) {
+    return LocalContentEntriesCompanion(
+      entryKey: entryKey ?? this.entryKey,
+      packageId: packageId ?? this.packageId,
+      type: type ?? this.type,
+      slug: slug ?? this.slug,
+      name: name ?? this.name,
+      aliasesJson: aliasesJson ?? this.aliasesJson,
+      summary: summary ?? this.summary,
+      bodyJson: bodyJson ?? this.bodyJson,
+      structuredJson: structuredJson ?? this.structuredJson,
+      tagsJson: tagsJson ?? this.tagsJson,
+      sourceLabel: sourceLabel ?? this.sourceLabel,
+      revision: revision ?? this.revision,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (entryKey.present) {
+      map['entry_key'] = Variable<String>(entryKey.value);
+    }
+    if (packageId.present) {
+      map['package_id'] = Variable<String>(packageId.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (slug.present) {
+      map['slug'] = Variable<String>(slug.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (aliasesJson.present) {
+      map['aliases_json'] = Variable<String>(aliasesJson.value);
+    }
+    if (summary.present) {
+      map['summary'] = Variable<String>(summary.value);
+    }
+    if (bodyJson.present) {
+      map['body_json'] = Variable<String>(bodyJson.value);
+    }
+    if (structuredJson.present) {
+      map['structured_json'] = Variable<String>(structuredJson.value);
+    }
+    if (tagsJson.present) {
+      map['tags_json'] = Variable<String>(tagsJson.value);
+    }
+    if (sourceLabel.present) {
+      map['source_label'] = Variable<String>(sourceLabel.value);
+    }
+    if (revision.present) {
+      map['revision'] = Variable<int>(revision.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocalContentEntriesCompanion(')
+          ..write('entryKey: $entryKey, ')
+          ..write('packageId: $packageId, ')
+          ..write('type: $type, ')
+          ..write('slug: $slug, ')
+          ..write('name: $name, ')
+          ..write('aliasesJson: $aliasesJson, ')
+          ..write('summary: $summary, ')
+          ..write('bodyJson: $bodyJson, ')
+          ..write('structuredJson: $structuredJson, ')
+          ..write('tagsJson: $tagsJson, ')
+          ..write('sourceLabel: $sourceLabel, ')
+          ..write('revision: $revision, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $LocalContentAssetsTable extends LocalContentAssets
+    with TableInfo<$LocalContentAssetsTable, LocalContentAssetRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LocalContentAssetsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _packageIdMeta = const VerificationMeta(
+    'packageId',
+  );
+  @override
+  late final GeneratedColumn<String> packageId = GeneratedColumn<String>(
+    'package_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _relativePathMeta = const VerificationMeta(
+    'relativePath',
+  );
+  @override
+  late final GeneratedColumn<String> relativePath = GeneratedColumn<String>(
+    'relative_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bytesMeta = const VerificationMeta('bytes');
+  @override
+  late final GeneratedColumn<Uint8List> bytes = GeneratedColumn<Uint8List>(
+    'bytes',
+    aliasedName,
+    false,
+    type: DriftSqlType.blob,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _mediaTypeMeta = const VerificationMeta(
+    'mediaType',
+  );
+  @override
+  late final GeneratedColumn<String> mediaType = GeneratedColumn<String>(
+    'media_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _contentHashMeta = const VerificationMeta(
+    'contentHash',
+  );
+  @override
+  late final GeneratedColumn<String> contentHash = GeneratedColumn<String>(
+    'content_hash',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    packageId,
+    relativePath,
+    bytes,
+    mediaType,
+    contentHash,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'local_content_assets';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LocalContentAssetRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('package_id')) {
+      context.handle(
+        _packageIdMeta,
+        packageId.isAcceptableOrUnknown(data['package_id']!, _packageIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_packageIdMeta);
+    }
+    if (data.containsKey('relative_path')) {
+      context.handle(
+        _relativePathMeta,
+        relativePath.isAcceptableOrUnknown(
+          data['relative_path']!,
+          _relativePathMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_relativePathMeta);
+    }
+    if (data.containsKey('bytes')) {
+      context.handle(
+        _bytesMeta,
+        bytes.isAcceptableOrUnknown(data['bytes']!, _bytesMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bytesMeta);
+    }
+    if (data.containsKey('media_type')) {
+      context.handle(
+        _mediaTypeMeta,
+        mediaType.isAcceptableOrUnknown(data['media_type']!, _mediaTypeMeta),
+      );
+    }
+    if (data.containsKey('content_hash')) {
+      context.handle(
+        _contentHashMeta,
+        contentHash.isAcceptableOrUnknown(
+          data['content_hash']!,
+          _contentHashMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {packageId, relativePath};
+  @override
+  LocalContentAssetRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LocalContentAssetRow(
+      packageId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}package_id'],
+      )!,
+      relativePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}relative_path'],
+      )!,
+      bytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}bytes'],
+      )!,
+      mediaType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}media_type'],
+      )!,
+      contentHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content_hash'],
+      )!,
+    );
+  }
+
+  @override
+  $LocalContentAssetsTable createAlias(String alias) {
+    return $LocalContentAssetsTable(attachedDatabase, alias);
+  }
+}
+
+class LocalContentAssetRow extends DataClass
+    implements Insertable<LocalContentAssetRow> {
+  final String packageId;
+  final String relativePath;
+  final Uint8List bytes;
+  final String mediaType;
+  final String contentHash;
+  const LocalContentAssetRow({
+    required this.packageId,
+    required this.relativePath,
+    required this.bytes,
+    required this.mediaType,
+    required this.contentHash,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['package_id'] = Variable<String>(packageId);
+    map['relative_path'] = Variable<String>(relativePath);
+    map['bytes'] = Variable<Uint8List>(bytes);
+    map['media_type'] = Variable<String>(mediaType);
+    map['content_hash'] = Variable<String>(contentHash);
+    return map;
+  }
+
+  LocalContentAssetsCompanion toCompanion(bool nullToAbsent) {
+    return LocalContentAssetsCompanion(
+      packageId: Value(packageId),
+      relativePath: Value(relativePath),
+      bytes: Value(bytes),
+      mediaType: Value(mediaType),
+      contentHash: Value(contentHash),
+    );
+  }
+
+  factory LocalContentAssetRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LocalContentAssetRow(
+      packageId: serializer.fromJson<String>(json['packageId']),
+      relativePath: serializer.fromJson<String>(json['relativePath']),
+      bytes: serializer.fromJson<Uint8List>(json['bytes']),
+      mediaType: serializer.fromJson<String>(json['mediaType']),
+      contentHash: serializer.fromJson<String>(json['contentHash']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'packageId': serializer.toJson<String>(packageId),
+      'relativePath': serializer.toJson<String>(relativePath),
+      'bytes': serializer.toJson<Uint8List>(bytes),
+      'mediaType': serializer.toJson<String>(mediaType),
+      'contentHash': serializer.toJson<String>(contentHash),
+    };
+  }
+
+  LocalContentAssetRow copyWith({
+    String? packageId,
+    String? relativePath,
+    Uint8List? bytes,
+    String? mediaType,
+    String? contentHash,
+  }) => LocalContentAssetRow(
+    packageId: packageId ?? this.packageId,
+    relativePath: relativePath ?? this.relativePath,
+    bytes: bytes ?? this.bytes,
+    mediaType: mediaType ?? this.mediaType,
+    contentHash: contentHash ?? this.contentHash,
+  );
+  LocalContentAssetRow copyWithCompanion(LocalContentAssetsCompanion data) {
+    return LocalContentAssetRow(
+      packageId: data.packageId.present ? data.packageId.value : this.packageId,
+      relativePath: data.relativePath.present
+          ? data.relativePath.value
+          : this.relativePath,
+      bytes: data.bytes.present ? data.bytes.value : this.bytes,
+      mediaType: data.mediaType.present ? data.mediaType.value : this.mediaType,
+      contentHash: data.contentHash.present
+          ? data.contentHash.value
+          : this.contentHash,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocalContentAssetRow(')
+          ..write('packageId: $packageId, ')
+          ..write('relativePath: $relativePath, ')
+          ..write('bytes: $bytes, ')
+          ..write('mediaType: $mediaType, ')
+          ..write('contentHash: $contentHash')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    packageId,
+    relativePath,
+    $driftBlobEquality.hash(bytes),
+    mediaType,
+    contentHash,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LocalContentAssetRow &&
+          other.packageId == this.packageId &&
+          other.relativePath == this.relativePath &&
+          $driftBlobEquality.equals(other.bytes, this.bytes) &&
+          other.mediaType == this.mediaType &&
+          other.contentHash == this.contentHash);
+}
+
+class LocalContentAssetsCompanion
+    extends UpdateCompanion<LocalContentAssetRow> {
+  final Value<String> packageId;
+  final Value<String> relativePath;
+  final Value<Uint8List> bytes;
+  final Value<String> mediaType;
+  final Value<String> contentHash;
+  final Value<int> rowid;
+  const LocalContentAssetsCompanion({
+    this.packageId = const Value.absent(),
+    this.relativePath = const Value.absent(),
+    this.bytes = const Value.absent(),
+    this.mediaType = const Value.absent(),
+    this.contentHash = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LocalContentAssetsCompanion.insert({
+    required String packageId,
+    required String relativePath,
+    required Uint8List bytes,
+    this.mediaType = const Value.absent(),
+    this.contentHash = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : packageId = Value(packageId),
+       relativePath = Value(relativePath),
+       bytes = Value(bytes);
+  static Insertable<LocalContentAssetRow> custom({
+    Expression<String>? packageId,
+    Expression<String>? relativePath,
+    Expression<Uint8List>? bytes,
+    Expression<String>? mediaType,
+    Expression<String>? contentHash,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (packageId != null) 'package_id': packageId,
+      if (relativePath != null) 'relative_path': relativePath,
+      if (bytes != null) 'bytes': bytes,
+      if (mediaType != null) 'media_type': mediaType,
+      if (contentHash != null) 'content_hash': contentHash,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LocalContentAssetsCompanion copyWith({
+    Value<String>? packageId,
+    Value<String>? relativePath,
+    Value<Uint8List>? bytes,
+    Value<String>? mediaType,
+    Value<String>? contentHash,
+    Value<int>? rowid,
+  }) {
+    return LocalContentAssetsCompanion(
+      packageId: packageId ?? this.packageId,
+      relativePath: relativePath ?? this.relativePath,
+      bytes: bytes ?? this.bytes,
+      mediaType: mediaType ?? this.mediaType,
+      contentHash: contentHash ?? this.contentHash,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (packageId.present) {
+      map['package_id'] = Variable<String>(packageId.value);
+    }
+    if (relativePath.present) {
+      map['relative_path'] = Variable<String>(relativePath.value);
+    }
+    if (bytes.present) {
+      map['bytes'] = Variable<Uint8List>(bytes.value);
+    }
+    if (mediaType.present) {
+      map['media_type'] = Variable<String>(mediaType.value);
+    }
+    if (contentHash.present) {
+      map['content_hash'] = Variable<String>(contentHash.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocalContentAssetsCompanion(')
+          ..write('packageId: $packageId, ')
+          ..write('relativePath: $relativePath, ')
+          ..write('bytes: $bytes, ')
+          ..write('mediaType: $mediaType, ')
+          ..write('contentHash: $contentHash, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ContentLinksTable extends ContentLinks
+    with TableInfo<$ContentLinksTable, ContentLinkRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ContentLinksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _targetIdMeta = const VerificationMeta(
+    'targetId',
+  );
+  @override
+  late final GeneratedColumn<String> targetId = GeneratedColumn<String>(
+    'target_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _linkTextMeta = const VerificationMeta(
+    'linkText',
+  );
+  @override
+  late final GeneratedColumn<String> linkText = GeneratedColumn<String>(
+    'link_text',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, sourceId, targetId, linkText];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'content_links';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ContentLinkRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('target_id')) {
+      context.handle(
+        _targetIdMeta,
+        targetId.isAcceptableOrUnknown(data['target_id']!, _targetIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_targetIdMeta);
+    }
+    if (data.containsKey('link_text')) {
+      context.handle(
+        _linkTextMeta,
+        linkText.isAcceptableOrUnknown(data['link_text']!, _linkTextMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ContentLinkRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ContentLinkRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      sourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_id'],
+      )!,
+      targetId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}target_id'],
+      )!,
+      linkText: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}link_text'],
+      )!,
+    );
+  }
+
+  @override
+  $ContentLinksTable createAlias(String alias) {
+    return $ContentLinksTable(attachedDatabase, alias);
+  }
+}
+
+class ContentLinkRow extends DataClass implements Insertable<ContentLinkRow> {
+  final String id;
+  final String sourceId;
+  final String targetId;
+  final String linkText;
+  const ContentLinkRow({
+    required this.id,
+    required this.sourceId,
+    required this.targetId,
+    required this.linkText,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['source_id'] = Variable<String>(sourceId);
+    map['target_id'] = Variable<String>(targetId);
+    map['link_text'] = Variable<String>(linkText);
+    return map;
+  }
+
+  ContentLinksCompanion toCompanion(bool nullToAbsent) {
+    return ContentLinksCompanion(
+      id: Value(id),
+      sourceId: Value(sourceId),
+      targetId: Value(targetId),
+      linkText: Value(linkText),
+    );
+  }
+
+  factory ContentLinkRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ContentLinkRow(
+      id: serializer.fromJson<String>(json['id']),
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      targetId: serializer.fromJson<String>(json['targetId']),
+      linkText: serializer.fromJson<String>(json['linkText']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'sourceId': serializer.toJson<String>(sourceId),
+      'targetId': serializer.toJson<String>(targetId),
+      'linkText': serializer.toJson<String>(linkText),
+    };
+  }
+
+  ContentLinkRow copyWith({
+    String? id,
+    String? sourceId,
+    String? targetId,
+    String? linkText,
+  }) => ContentLinkRow(
+    id: id ?? this.id,
+    sourceId: sourceId ?? this.sourceId,
+    targetId: targetId ?? this.targetId,
+    linkText: linkText ?? this.linkText,
+  );
+  ContentLinkRow copyWithCompanion(ContentLinksCompanion data) {
+    return ContentLinkRow(
+      id: data.id.present ? data.id.value : this.id,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      targetId: data.targetId.present ? data.targetId.value : this.targetId,
+      linkText: data.linkText.present ? data.linkText.value : this.linkText,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ContentLinkRow(')
+          ..write('id: $id, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('targetId: $targetId, ')
+          ..write('linkText: $linkText')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, sourceId, targetId, linkText);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ContentLinkRow &&
+          other.id == this.id &&
+          other.sourceId == this.sourceId &&
+          other.targetId == this.targetId &&
+          other.linkText == this.linkText);
+}
+
+class ContentLinksCompanion extends UpdateCompanion<ContentLinkRow> {
+  final Value<String> id;
+  final Value<String> sourceId;
+  final Value<String> targetId;
+  final Value<String> linkText;
+  final Value<int> rowid;
+  const ContentLinksCompanion({
+    this.id = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.targetId = const Value.absent(),
+    this.linkText = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ContentLinksCompanion.insert({
+    required String id,
+    required String sourceId,
+    required String targetId,
+    this.linkText = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       sourceId = Value(sourceId),
+       targetId = Value(targetId);
+  static Insertable<ContentLinkRow> custom({
+    Expression<String>? id,
+    Expression<String>? sourceId,
+    Expression<String>? targetId,
+    Expression<String>? linkText,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (sourceId != null) 'source_id': sourceId,
+      if (targetId != null) 'target_id': targetId,
+      if (linkText != null) 'link_text': linkText,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ContentLinksCompanion copyWith({
+    Value<String>? id,
+    Value<String>? sourceId,
+    Value<String>? targetId,
+    Value<String>? linkText,
+    Value<int>? rowid,
+  }) {
+    return ContentLinksCompanion(
+      id: id ?? this.id,
+      sourceId: sourceId ?? this.sourceId,
+      targetId: targetId ?? this.targetId,
+      linkText: linkText ?? this.linkText,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (targetId.present) {
+      map['target_id'] = Variable<String>(targetId.value);
+    }
+    if (linkText.present) {
+      map['link_text'] = Variable<String>(linkText.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ContentLinksCompanion(')
+          ..write('id: $id, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('targetId: $targetId, ')
+          ..write('linkText: $linkText, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ContentFavoritesTable extends ContentFavorites
+    with TableInfo<$ContentFavoritesTable, ContentFavoriteRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ContentFavoritesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _entryKeyMeta = const VerificationMeta(
+    'entryKey',
+  );
+  @override
+  late final GeneratedColumn<String> entryKey = GeneratedColumn<String>(
+    'entry_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [entryKey, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'content_favorites';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ContentFavoriteRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('entry_key')) {
+      context.handle(
+        _entryKeyMeta,
+        entryKey.isAcceptableOrUnknown(data['entry_key']!, _entryKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entryKeyMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {entryKey};
+  @override
+  ContentFavoriteRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ContentFavoriteRow(
+      entryKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entry_key'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $ContentFavoritesTable createAlias(String alias) {
+    return $ContentFavoritesTable(attachedDatabase, alias);
+  }
+}
+
+class ContentFavoriteRow extends DataClass
+    implements Insertable<ContentFavoriteRow> {
+  final String entryKey;
+  final DateTime createdAt;
+  const ContentFavoriteRow({required this.entryKey, required this.createdAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['entry_key'] = Variable<String>(entryKey);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  ContentFavoritesCompanion toCompanion(bool nullToAbsent) {
+    return ContentFavoritesCompanion(
+      entryKey: Value(entryKey),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory ContentFavoriteRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ContentFavoriteRow(
+      entryKey: serializer.fromJson<String>(json['entryKey']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'entryKey': serializer.toJson<String>(entryKey),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  ContentFavoriteRow copyWith({String? entryKey, DateTime? createdAt}) =>
+      ContentFavoriteRow(
+        entryKey: entryKey ?? this.entryKey,
+        createdAt: createdAt ?? this.createdAt,
+      );
+  ContentFavoriteRow copyWithCompanion(ContentFavoritesCompanion data) {
+    return ContentFavoriteRow(
+      entryKey: data.entryKey.present ? data.entryKey.value : this.entryKey,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ContentFavoriteRow(')
+          ..write('entryKey: $entryKey, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(entryKey, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ContentFavoriteRow &&
+          other.entryKey == this.entryKey &&
+          other.createdAt == this.createdAt);
+}
+
+class ContentFavoritesCompanion extends UpdateCompanion<ContentFavoriteRow> {
+  final Value<String> entryKey;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const ContentFavoritesCompanion({
+    this.entryKey = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ContentFavoritesCompanion.insert({
+    required String entryKey,
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : entryKey = Value(entryKey),
+       createdAt = Value(createdAt);
+  static Insertable<ContentFavoriteRow> custom({
+    Expression<String>? entryKey,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (entryKey != null) 'entry_key': entryKey,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ContentFavoritesCompanion copyWith({
+    Value<String>? entryKey,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return ContentFavoritesCompanion(
+      entryKey: entryKey ?? this.entryKey,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (entryKey.present) {
+      map['entry_key'] = Variable<String>(entryKey.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ContentFavoritesCompanion(')
+          ..write('entryKey: $entryKey, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ContentNotesTable extends ContentNotes
+    with TableInfo<$ContentNotesTable, ContentNoteRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ContentNotesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _entryKeyMeta = const VerificationMeta(
+    'entryKey',
+  );
+  @override
+  late final GeneratedColumn<String> entryKey = GeneratedColumn<String>(
+    'entry_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _markdownMeta = const VerificationMeta(
+    'markdown',
+  );
+  @override
+  late final GeneratedColumn<String> markdown = GeneratedColumn<String>(
+    'markdown',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [entryKey, markdown, updatedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'content_notes';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ContentNoteRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('entry_key')) {
+      context.handle(
+        _entryKeyMeta,
+        entryKey.isAcceptableOrUnknown(data['entry_key']!, _entryKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entryKeyMeta);
+    }
+    if (data.containsKey('markdown')) {
+      context.handle(
+        _markdownMeta,
+        markdown.isAcceptableOrUnknown(data['markdown']!, _markdownMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_markdownMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {entryKey};
+  @override
+  ContentNoteRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ContentNoteRow(
+      entryKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entry_key'],
+      )!,
+      markdown: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}markdown'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $ContentNotesTable createAlias(String alias) {
+    return $ContentNotesTable(attachedDatabase, alias);
+  }
+}
+
+class ContentNoteRow extends DataClass implements Insertable<ContentNoteRow> {
+  final String entryKey;
+  final String markdown;
+  final DateTime updatedAt;
+  const ContentNoteRow({
+    required this.entryKey,
+    required this.markdown,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['entry_key'] = Variable<String>(entryKey);
+    map['markdown'] = Variable<String>(markdown);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  ContentNotesCompanion toCompanion(bool nullToAbsent) {
+    return ContentNotesCompanion(
+      entryKey: Value(entryKey),
+      markdown: Value(markdown),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory ContentNoteRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ContentNoteRow(
+      entryKey: serializer.fromJson<String>(json['entryKey']),
+      markdown: serializer.fromJson<String>(json['markdown']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'entryKey': serializer.toJson<String>(entryKey),
+      'markdown': serializer.toJson<String>(markdown),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  ContentNoteRow copyWith({
+    String? entryKey,
+    String? markdown,
+    DateTime? updatedAt,
+  }) => ContentNoteRow(
+    entryKey: entryKey ?? this.entryKey,
+    markdown: markdown ?? this.markdown,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  ContentNoteRow copyWithCompanion(ContentNotesCompanion data) {
+    return ContentNoteRow(
+      entryKey: data.entryKey.present ? data.entryKey.value : this.entryKey,
+      markdown: data.markdown.present ? data.markdown.value : this.markdown,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ContentNoteRow(')
+          ..write('entryKey: $entryKey, ')
+          ..write('markdown: $markdown, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(entryKey, markdown, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ContentNoteRow &&
+          other.entryKey == this.entryKey &&
+          other.markdown == this.markdown &&
+          other.updatedAt == this.updatedAt);
+}
+
+class ContentNotesCompanion extends UpdateCompanion<ContentNoteRow> {
+  final Value<String> entryKey;
+  final Value<String> markdown;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const ContentNotesCompanion({
+    this.entryKey = const Value.absent(),
+    this.markdown = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ContentNotesCompanion.insert({
+    required String entryKey,
+    required String markdown,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : entryKey = Value(entryKey),
+       markdown = Value(markdown),
+       updatedAt = Value(updatedAt);
+  static Insertable<ContentNoteRow> custom({
+    Expression<String>? entryKey,
+    Expression<String>? markdown,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (entryKey != null) 'entry_key': entryKey,
+      if (markdown != null) 'markdown': markdown,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ContentNotesCompanion copyWith({
+    Value<String>? entryKey,
+    Value<String>? markdown,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return ContentNotesCompanion(
+      entryKey: entryKey ?? this.entryKey,
+      markdown: markdown ?? this.markdown,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (entryKey.present) {
+      map['entry_key'] = Variable<String>(entryKey.value);
+    }
+    if (markdown.present) {
+      map['markdown'] = Variable<String>(markdown.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ContentNotesCompanion(')
+          ..write('entryKey: $entryKey, ')
+          ..write('markdown: $markdown, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ContentReadHistoryTable extends ContentReadHistory
+    with TableInfo<$ContentReadHistoryTable, ContentReadHistoryRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ContentReadHistoryTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _entryKeyMeta = const VerificationMeta(
+    'entryKey',
+  );
+  @override
+  late final GeneratedColumn<String> entryKey = GeneratedColumn<String>(
+    'entry_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _readAtMeta = const VerificationMeta('readAt');
+  @override
+  late final GeneratedColumn<DateTime> readAt = GeneratedColumn<DateTime>(
+    'read_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [entryKey, readAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'content_read_history';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ContentReadHistoryRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('entry_key')) {
+      context.handle(
+        _entryKeyMeta,
+        entryKey.isAcceptableOrUnknown(data['entry_key']!, _entryKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entryKeyMeta);
+    }
+    if (data.containsKey('read_at')) {
+      context.handle(
+        _readAtMeta,
+        readAt.isAcceptableOrUnknown(data['read_at']!, _readAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_readAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {entryKey};
+  @override
+  ContentReadHistoryRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ContentReadHistoryRow(
+      entryKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entry_key'],
+      )!,
+      readAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}read_at'],
+      )!,
+    );
+  }
+
+  @override
+  $ContentReadHistoryTable createAlias(String alias) {
+    return $ContentReadHistoryTable(attachedDatabase, alias);
+  }
+}
+
+class ContentReadHistoryRow extends DataClass
+    implements Insertable<ContentReadHistoryRow> {
+  final String entryKey;
+  final DateTime readAt;
+  const ContentReadHistoryRow({required this.entryKey, required this.readAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['entry_key'] = Variable<String>(entryKey);
+    map['read_at'] = Variable<DateTime>(readAt);
+    return map;
+  }
+
+  ContentReadHistoryCompanion toCompanion(bool nullToAbsent) {
+    return ContentReadHistoryCompanion(
+      entryKey: Value(entryKey),
+      readAt: Value(readAt),
+    );
+  }
+
+  factory ContentReadHistoryRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ContentReadHistoryRow(
+      entryKey: serializer.fromJson<String>(json['entryKey']),
+      readAt: serializer.fromJson<DateTime>(json['readAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'entryKey': serializer.toJson<String>(entryKey),
+      'readAt': serializer.toJson<DateTime>(readAt),
+    };
+  }
+
+  ContentReadHistoryRow copyWith({String? entryKey, DateTime? readAt}) =>
+      ContentReadHistoryRow(
+        entryKey: entryKey ?? this.entryKey,
+        readAt: readAt ?? this.readAt,
+      );
+  ContentReadHistoryRow copyWithCompanion(ContentReadHistoryCompanion data) {
+    return ContentReadHistoryRow(
+      entryKey: data.entryKey.present ? data.entryKey.value : this.entryKey,
+      readAt: data.readAt.present ? data.readAt.value : this.readAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ContentReadHistoryRow(')
+          ..write('entryKey: $entryKey, ')
+          ..write('readAt: $readAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(entryKey, readAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ContentReadHistoryRow &&
+          other.entryKey == this.entryKey &&
+          other.readAt == this.readAt);
+}
+
+class ContentReadHistoryCompanion
+    extends UpdateCompanion<ContentReadHistoryRow> {
+  final Value<String> entryKey;
+  final Value<DateTime> readAt;
+  final Value<int> rowid;
+  const ContentReadHistoryCompanion({
+    this.entryKey = const Value.absent(),
+    this.readAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ContentReadHistoryCompanion.insert({
+    required String entryKey,
+    required DateTime readAt,
+    this.rowid = const Value.absent(),
+  }) : entryKey = Value(entryKey),
+       readAt = Value(readAt);
+  static Insertable<ContentReadHistoryRow> custom({
+    Expression<String>? entryKey,
+    Expression<DateTime>? readAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (entryKey != null) 'entry_key': entryKey,
+      if (readAt != null) 'read_at': readAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ContentReadHistoryCompanion copyWith({
+    Value<String>? entryKey,
+    Value<DateTime>? readAt,
+    Value<int>? rowid,
+  }) {
+    return ContentReadHistoryCompanion(
+      entryKey: entryKey ?? this.entryKey,
+      readAt: readAt ?? this.readAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (entryKey.present) {
+      map['entry_key'] = Variable<String>(entryKey.value);
+    }
+    if (readAt.present) {
+      map['read_at'] = Variable<DateTime>(readAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ContentReadHistoryCompanion(')
+          ..write('entryKey: $entryKey, ')
+          ..write('readAt: $readAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -1596,6 +4319,19 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $MigrationMarkersTable migrationMarkers = $MigrationMarkersTable(
     this,
   );
+  late final $LocalContentPackagesTable localContentPackages =
+      $LocalContentPackagesTable(this);
+  late final $LocalContentEntriesTable localContentEntries =
+      $LocalContentEntriesTable(this);
+  late final $LocalContentAssetsTable localContentAssets =
+      $LocalContentAssetsTable(this);
+  late final $ContentLinksTable contentLinks = $ContentLinksTable(this);
+  late final $ContentFavoritesTable contentFavorites = $ContentFavoritesTable(
+    this,
+  );
+  late final $ContentNotesTable contentNotes = $ContentNotesTable(this);
+  late final $ContentReadHistoryTable contentReadHistory =
+      $ContentReadHistoryTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1605,6 +4341,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     syncOutbox,
     syncCursors,
     migrationMarkers,
+    localContentPackages,
+    localContentEntries,
+    localContentAssets,
+    contentLinks,
+    contentFavorites,
+    contentNotes,
+    contentReadHistory,
   ];
 }
 
@@ -2474,6 +5217,1549 @@ typedef $$MigrationMarkersTableProcessedTableManager =
       MigrationMarker,
       PrefetchHooks Function()
     >;
+typedef $$LocalContentPackagesTableCreateCompanionBuilder =
+    LocalContentPackagesCompanion Function({
+      required String id,
+      required int formatVersion,
+      required String name,
+      required String version,
+      required String locale,
+      required String system,
+      required int entryCount,
+      required String contentHash,
+      Value<bool> enabled,
+      required DateTime installedAt,
+      Value<int> rowid,
+    });
+typedef $$LocalContentPackagesTableUpdateCompanionBuilder =
+    LocalContentPackagesCompanion Function({
+      Value<String> id,
+      Value<int> formatVersion,
+      Value<String> name,
+      Value<String> version,
+      Value<String> locale,
+      Value<String> system,
+      Value<int> entryCount,
+      Value<String> contentHash,
+      Value<bool> enabled,
+      Value<DateTime> installedAt,
+      Value<int> rowid,
+    });
+
+class $$LocalContentPackagesTableFilterComposer
+    extends Composer<_$AppDatabase, $LocalContentPackagesTable> {
+  $$LocalContentPackagesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get formatVersion => $composableBuilder(
+    column: $table.formatVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get locale => $composableBuilder(
+    column: $table.locale,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get system => $composableBuilder(
+    column: $table.system,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get entryCount => $composableBuilder(
+    column: $table.entryCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contentHash => $composableBuilder(
+    column: $table.contentHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get installedAt => $composableBuilder(
+    column: $table.installedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LocalContentPackagesTableOrderingComposer
+    extends Composer<_$AppDatabase, $LocalContentPackagesTable> {
+  $$LocalContentPackagesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get formatVersion => $composableBuilder(
+    column: $table.formatVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get locale => $composableBuilder(
+    column: $table.locale,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get system => $composableBuilder(
+    column: $table.system,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get entryCount => $composableBuilder(
+    column: $table.entryCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contentHash => $composableBuilder(
+    column: $table.contentHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get installedAt => $composableBuilder(
+    column: $table.installedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LocalContentPackagesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LocalContentPackagesTable> {
+  $$LocalContentPackagesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get formatVersion => $composableBuilder(
+    column: $table.formatVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get version =>
+      $composableBuilder(column: $table.version, builder: (column) => column);
+
+  GeneratedColumn<String> get locale =>
+      $composableBuilder(column: $table.locale, builder: (column) => column);
+
+  GeneratedColumn<String> get system =>
+      $composableBuilder(column: $table.system, builder: (column) => column);
+
+  GeneratedColumn<int> get entryCount => $composableBuilder(
+    column: $table.entryCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get contentHash => $composableBuilder(
+    column: $table.contentHash,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get enabled =>
+      $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get installedAt => $composableBuilder(
+    column: $table.installedAt,
+    builder: (column) => column,
+  );
+}
+
+class $$LocalContentPackagesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LocalContentPackagesTable,
+          LocalContentPackageRow,
+          $$LocalContentPackagesTableFilterComposer,
+          $$LocalContentPackagesTableOrderingComposer,
+          $$LocalContentPackagesTableAnnotationComposer,
+          $$LocalContentPackagesTableCreateCompanionBuilder,
+          $$LocalContentPackagesTableUpdateCompanionBuilder,
+          (
+            LocalContentPackageRow,
+            BaseReferences<
+              _$AppDatabase,
+              $LocalContentPackagesTable,
+              LocalContentPackageRow
+            >,
+          ),
+          LocalContentPackageRow,
+          PrefetchHooks Function()
+        > {
+  $$LocalContentPackagesTableTableManager(
+    _$AppDatabase db,
+    $LocalContentPackagesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LocalContentPackagesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LocalContentPackagesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$LocalContentPackagesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<int> formatVersion = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> version = const Value.absent(),
+                Value<String> locale = const Value.absent(),
+                Value<String> system = const Value.absent(),
+                Value<int> entryCount = const Value.absent(),
+                Value<String> contentHash = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<DateTime> installedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LocalContentPackagesCompanion(
+                id: id,
+                formatVersion: formatVersion,
+                name: name,
+                version: version,
+                locale: locale,
+                system: system,
+                entryCount: entryCount,
+                contentHash: contentHash,
+                enabled: enabled,
+                installedAt: installedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required int formatVersion,
+                required String name,
+                required String version,
+                required String locale,
+                required String system,
+                required int entryCount,
+                required String contentHash,
+                Value<bool> enabled = const Value.absent(),
+                required DateTime installedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => LocalContentPackagesCompanion.insert(
+                id: id,
+                formatVersion: formatVersion,
+                name: name,
+                version: version,
+                locale: locale,
+                system: system,
+                entryCount: entryCount,
+                contentHash: contentHash,
+                enabled: enabled,
+                installedAt: installedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LocalContentPackagesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LocalContentPackagesTable,
+      LocalContentPackageRow,
+      $$LocalContentPackagesTableFilterComposer,
+      $$LocalContentPackagesTableOrderingComposer,
+      $$LocalContentPackagesTableAnnotationComposer,
+      $$LocalContentPackagesTableCreateCompanionBuilder,
+      $$LocalContentPackagesTableUpdateCompanionBuilder,
+      (
+        LocalContentPackageRow,
+        BaseReferences<
+          _$AppDatabase,
+          $LocalContentPackagesTable,
+          LocalContentPackageRow
+        >,
+      ),
+      LocalContentPackageRow,
+      PrefetchHooks Function()
+    >;
+typedef $$LocalContentEntriesTableCreateCompanionBuilder =
+    LocalContentEntriesCompanion Function({
+      required String entryKey,
+      required String packageId,
+      required String type,
+      required String slug,
+      required String name,
+      Value<String> aliasesJson,
+      Value<String> summary,
+      Value<String> bodyJson,
+      Value<String> structuredJson,
+      Value<String> tagsJson,
+      Value<String> sourceLabel,
+      required int revision,
+      Value<int> rowid,
+    });
+typedef $$LocalContentEntriesTableUpdateCompanionBuilder =
+    LocalContentEntriesCompanion Function({
+      Value<String> entryKey,
+      Value<String> packageId,
+      Value<String> type,
+      Value<String> slug,
+      Value<String> name,
+      Value<String> aliasesJson,
+      Value<String> summary,
+      Value<String> bodyJson,
+      Value<String> structuredJson,
+      Value<String> tagsJson,
+      Value<String> sourceLabel,
+      Value<int> revision,
+      Value<int> rowid,
+    });
+
+class $$LocalContentEntriesTableFilterComposer
+    extends Composer<_$AppDatabase, $LocalContentEntriesTable> {
+  $$LocalContentEntriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get entryKey => $composableBuilder(
+    column: $table.entryKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get packageId => $composableBuilder(
+    column: $table.packageId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get slug => $composableBuilder(
+    column: $table.slug,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get aliasesJson => $composableBuilder(
+    column: $table.aliasesJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get summary => $composableBuilder(
+    column: $table.summary,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bodyJson => $composableBuilder(
+    column: $table.bodyJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get structuredJson => $composableBuilder(
+    column: $table.structuredJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tagsJson => $composableBuilder(
+    column: $table.tagsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceLabel => $composableBuilder(
+    column: $table.sourceLabel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LocalContentEntriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $LocalContentEntriesTable> {
+  $$LocalContentEntriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get entryKey => $composableBuilder(
+    column: $table.entryKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get packageId => $composableBuilder(
+    column: $table.packageId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get slug => $composableBuilder(
+    column: $table.slug,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get aliasesJson => $composableBuilder(
+    column: $table.aliasesJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get summary => $composableBuilder(
+    column: $table.summary,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bodyJson => $composableBuilder(
+    column: $table.bodyJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get structuredJson => $composableBuilder(
+    column: $table.structuredJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tagsJson => $composableBuilder(
+    column: $table.tagsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceLabel => $composableBuilder(
+    column: $table.sourceLabel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LocalContentEntriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LocalContentEntriesTable> {
+  $$LocalContentEntriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get entryKey =>
+      $composableBuilder(column: $table.entryKey, builder: (column) => column);
+
+  GeneratedColumn<String> get packageId =>
+      $composableBuilder(column: $table.packageId, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<String> get slug =>
+      $composableBuilder(column: $table.slug, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get aliasesJson => $composableBuilder(
+    column: $table.aliasesJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get summary =>
+      $composableBuilder(column: $table.summary, builder: (column) => column);
+
+  GeneratedColumn<String> get bodyJson =>
+      $composableBuilder(column: $table.bodyJson, builder: (column) => column);
+
+  GeneratedColumn<String> get structuredJson => $composableBuilder(
+    column: $table.structuredJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get tagsJson =>
+      $composableBuilder(column: $table.tagsJson, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceLabel => $composableBuilder(
+    column: $table.sourceLabel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get revision =>
+      $composableBuilder(column: $table.revision, builder: (column) => column);
+}
+
+class $$LocalContentEntriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LocalContentEntriesTable,
+          LocalContentEntryRow,
+          $$LocalContentEntriesTableFilterComposer,
+          $$LocalContentEntriesTableOrderingComposer,
+          $$LocalContentEntriesTableAnnotationComposer,
+          $$LocalContentEntriesTableCreateCompanionBuilder,
+          $$LocalContentEntriesTableUpdateCompanionBuilder,
+          (
+            LocalContentEntryRow,
+            BaseReferences<
+              _$AppDatabase,
+              $LocalContentEntriesTable,
+              LocalContentEntryRow
+            >,
+          ),
+          LocalContentEntryRow,
+          PrefetchHooks Function()
+        > {
+  $$LocalContentEntriesTableTableManager(
+    _$AppDatabase db,
+    $LocalContentEntriesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LocalContentEntriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LocalContentEntriesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$LocalContentEntriesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> entryKey = const Value.absent(),
+                Value<String> packageId = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<String> slug = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> aliasesJson = const Value.absent(),
+                Value<String> summary = const Value.absent(),
+                Value<String> bodyJson = const Value.absent(),
+                Value<String> structuredJson = const Value.absent(),
+                Value<String> tagsJson = const Value.absent(),
+                Value<String> sourceLabel = const Value.absent(),
+                Value<int> revision = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LocalContentEntriesCompanion(
+                entryKey: entryKey,
+                packageId: packageId,
+                type: type,
+                slug: slug,
+                name: name,
+                aliasesJson: aliasesJson,
+                summary: summary,
+                bodyJson: bodyJson,
+                structuredJson: structuredJson,
+                tagsJson: tagsJson,
+                sourceLabel: sourceLabel,
+                revision: revision,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String entryKey,
+                required String packageId,
+                required String type,
+                required String slug,
+                required String name,
+                Value<String> aliasesJson = const Value.absent(),
+                Value<String> summary = const Value.absent(),
+                Value<String> bodyJson = const Value.absent(),
+                Value<String> structuredJson = const Value.absent(),
+                Value<String> tagsJson = const Value.absent(),
+                Value<String> sourceLabel = const Value.absent(),
+                required int revision,
+                Value<int> rowid = const Value.absent(),
+              }) => LocalContentEntriesCompanion.insert(
+                entryKey: entryKey,
+                packageId: packageId,
+                type: type,
+                slug: slug,
+                name: name,
+                aliasesJson: aliasesJson,
+                summary: summary,
+                bodyJson: bodyJson,
+                structuredJson: structuredJson,
+                tagsJson: tagsJson,
+                sourceLabel: sourceLabel,
+                revision: revision,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LocalContentEntriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LocalContentEntriesTable,
+      LocalContentEntryRow,
+      $$LocalContentEntriesTableFilterComposer,
+      $$LocalContentEntriesTableOrderingComposer,
+      $$LocalContentEntriesTableAnnotationComposer,
+      $$LocalContentEntriesTableCreateCompanionBuilder,
+      $$LocalContentEntriesTableUpdateCompanionBuilder,
+      (
+        LocalContentEntryRow,
+        BaseReferences<
+          _$AppDatabase,
+          $LocalContentEntriesTable,
+          LocalContentEntryRow
+        >,
+      ),
+      LocalContentEntryRow,
+      PrefetchHooks Function()
+    >;
+typedef $$LocalContentAssetsTableCreateCompanionBuilder =
+    LocalContentAssetsCompanion Function({
+      required String packageId,
+      required String relativePath,
+      required Uint8List bytes,
+      Value<String> mediaType,
+      Value<String> contentHash,
+      Value<int> rowid,
+    });
+typedef $$LocalContentAssetsTableUpdateCompanionBuilder =
+    LocalContentAssetsCompanion Function({
+      Value<String> packageId,
+      Value<String> relativePath,
+      Value<Uint8List> bytes,
+      Value<String> mediaType,
+      Value<String> contentHash,
+      Value<int> rowid,
+    });
+
+class $$LocalContentAssetsTableFilterComposer
+    extends Composer<_$AppDatabase, $LocalContentAssetsTable> {
+  $$LocalContentAssetsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get packageId => $composableBuilder(
+    column: $table.packageId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get relativePath => $composableBuilder(
+    column: $table.relativePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get bytes => $composableBuilder(
+    column: $table.bytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mediaType => $composableBuilder(
+    column: $table.mediaType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contentHash => $composableBuilder(
+    column: $table.contentHash,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LocalContentAssetsTableOrderingComposer
+    extends Composer<_$AppDatabase, $LocalContentAssetsTable> {
+  $$LocalContentAssetsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get packageId => $composableBuilder(
+    column: $table.packageId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get relativePath => $composableBuilder(
+    column: $table.relativePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<Uint8List> get bytes => $composableBuilder(
+    column: $table.bytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mediaType => $composableBuilder(
+    column: $table.mediaType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contentHash => $composableBuilder(
+    column: $table.contentHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LocalContentAssetsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LocalContentAssetsTable> {
+  $$LocalContentAssetsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get packageId =>
+      $composableBuilder(column: $table.packageId, builder: (column) => column);
+
+  GeneratedColumn<String> get relativePath => $composableBuilder(
+    column: $table.relativePath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<Uint8List> get bytes =>
+      $composableBuilder(column: $table.bytes, builder: (column) => column);
+
+  GeneratedColumn<String> get mediaType =>
+      $composableBuilder(column: $table.mediaType, builder: (column) => column);
+
+  GeneratedColumn<String> get contentHash => $composableBuilder(
+    column: $table.contentHash,
+    builder: (column) => column,
+  );
+}
+
+class $$LocalContentAssetsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LocalContentAssetsTable,
+          LocalContentAssetRow,
+          $$LocalContentAssetsTableFilterComposer,
+          $$LocalContentAssetsTableOrderingComposer,
+          $$LocalContentAssetsTableAnnotationComposer,
+          $$LocalContentAssetsTableCreateCompanionBuilder,
+          $$LocalContentAssetsTableUpdateCompanionBuilder,
+          (
+            LocalContentAssetRow,
+            BaseReferences<
+              _$AppDatabase,
+              $LocalContentAssetsTable,
+              LocalContentAssetRow
+            >,
+          ),
+          LocalContentAssetRow,
+          PrefetchHooks Function()
+        > {
+  $$LocalContentAssetsTableTableManager(
+    _$AppDatabase db,
+    $LocalContentAssetsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LocalContentAssetsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LocalContentAssetsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LocalContentAssetsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> packageId = const Value.absent(),
+                Value<String> relativePath = const Value.absent(),
+                Value<Uint8List> bytes = const Value.absent(),
+                Value<String> mediaType = const Value.absent(),
+                Value<String> contentHash = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LocalContentAssetsCompanion(
+                packageId: packageId,
+                relativePath: relativePath,
+                bytes: bytes,
+                mediaType: mediaType,
+                contentHash: contentHash,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String packageId,
+                required String relativePath,
+                required Uint8List bytes,
+                Value<String> mediaType = const Value.absent(),
+                Value<String> contentHash = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LocalContentAssetsCompanion.insert(
+                packageId: packageId,
+                relativePath: relativePath,
+                bytes: bytes,
+                mediaType: mediaType,
+                contentHash: contentHash,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LocalContentAssetsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LocalContentAssetsTable,
+      LocalContentAssetRow,
+      $$LocalContentAssetsTableFilterComposer,
+      $$LocalContentAssetsTableOrderingComposer,
+      $$LocalContentAssetsTableAnnotationComposer,
+      $$LocalContentAssetsTableCreateCompanionBuilder,
+      $$LocalContentAssetsTableUpdateCompanionBuilder,
+      (
+        LocalContentAssetRow,
+        BaseReferences<
+          _$AppDatabase,
+          $LocalContentAssetsTable,
+          LocalContentAssetRow
+        >,
+      ),
+      LocalContentAssetRow,
+      PrefetchHooks Function()
+    >;
+typedef $$ContentLinksTableCreateCompanionBuilder =
+    ContentLinksCompanion Function({
+      required String id,
+      required String sourceId,
+      required String targetId,
+      Value<String> linkText,
+      Value<int> rowid,
+    });
+typedef $$ContentLinksTableUpdateCompanionBuilder =
+    ContentLinksCompanion Function({
+      Value<String> id,
+      Value<String> sourceId,
+      Value<String> targetId,
+      Value<String> linkText,
+      Value<int> rowid,
+    });
+
+class $$ContentLinksTableFilterComposer
+    extends Composer<_$AppDatabase, $ContentLinksTable> {
+  $$ContentLinksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get targetId => $composableBuilder(
+    column: $table.targetId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get linkText => $composableBuilder(
+    column: $table.linkText,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ContentLinksTableOrderingComposer
+    extends Composer<_$AppDatabase, $ContentLinksTable> {
+  $$ContentLinksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get targetId => $composableBuilder(
+    column: $table.targetId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get linkText => $composableBuilder(
+    column: $table.linkText,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ContentLinksTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ContentLinksTable> {
+  $$ContentLinksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<String> get targetId =>
+      $composableBuilder(column: $table.targetId, builder: (column) => column);
+
+  GeneratedColumn<String> get linkText =>
+      $composableBuilder(column: $table.linkText, builder: (column) => column);
+}
+
+class $$ContentLinksTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ContentLinksTable,
+          ContentLinkRow,
+          $$ContentLinksTableFilterComposer,
+          $$ContentLinksTableOrderingComposer,
+          $$ContentLinksTableAnnotationComposer,
+          $$ContentLinksTableCreateCompanionBuilder,
+          $$ContentLinksTableUpdateCompanionBuilder,
+          (
+            ContentLinkRow,
+            BaseReferences<_$AppDatabase, $ContentLinksTable, ContentLinkRow>,
+          ),
+          ContentLinkRow,
+          PrefetchHooks Function()
+        > {
+  $$ContentLinksTableTableManager(_$AppDatabase db, $ContentLinksTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ContentLinksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ContentLinksTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ContentLinksTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> sourceId = const Value.absent(),
+                Value<String> targetId = const Value.absent(),
+                Value<String> linkText = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ContentLinksCompanion(
+                id: id,
+                sourceId: sourceId,
+                targetId: targetId,
+                linkText: linkText,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String sourceId,
+                required String targetId,
+                Value<String> linkText = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ContentLinksCompanion.insert(
+                id: id,
+                sourceId: sourceId,
+                targetId: targetId,
+                linkText: linkText,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ContentLinksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ContentLinksTable,
+      ContentLinkRow,
+      $$ContentLinksTableFilterComposer,
+      $$ContentLinksTableOrderingComposer,
+      $$ContentLinksTableAnnotationComposer,
+      $$ContentLinksTableCreateCompanionBuilder,
+      $$ContentLinksTableUpdateCompanionBuilder,
+      (
+        ContentLinkRow,
+        BaseReferences<_$AppDatabase, $ContentLinksTable, ContentLinkRow>,
+      ),
+      ContentLinkRow,
+      PrefetchHooks Function()
+    >;
+typedef $$ContentFavoritesTableCreateCompanionBuilder =
+    ContentFavoritesCompanion Function({
+      required String entryKey,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$ContentFavoritesTableUpdateCompanionBuilder =
+    ContentFavoritesCompanion Function({
+      Value<String> entryKey,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$ContentFavoritesTableFilterComposer
+    extends Composer<_$AppDatabase, $ContentFavoritesTable> {
+  $$ContentFavoritesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get entryKey => $composableBuilder(
+    column: $table.entryKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ContentFavoritesTableOrderingComposer
+    extends Composer<_$AppDatabase, $ContentFavoritesTable> {
+  $$ContentFavoritesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get entryKey => $composableBuilder(
+    column: $table.entryKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ContentFavoritesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ContentFavoritesTable> {
+  $$ContentFavoritesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get entryKey =>
+      $composableBuilder(column: $table.entryKey, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$ContentFavoritesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ContentFavoritesTable,
+          ContentFavoriteRow,
+          $$ContentFavoritesTableFilterComposer,
+          $$ContentFavoritesTableOrderingComposer,
+          $$ContentFavoritesTableAnnotationComposer,
+          $$ContentFavoritesTableCreateCompanionBuilder,
+          $$ContentFavoritesTableUpdateCompanionBuilder,
+          (
+            ContentFavoriteRow,
+            BaseReferences<
+              _$AppDatabase,
+              $ContentFavoritesTable,
+              ContentFavoriteRow
+            >,
+          ),
+          ContentFavoriteRow,
+          PrefetchHooks Function()
+        > {
+  $$ContentFavoritesTableTableManager(
+    _$AppDatabase db,
+    $ContentFavoritesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ContentFavoritesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ContentFavoritesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ContentFavoritesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> entryKey = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ContentFavoritesCompanion(
+                entryKey: entryKey,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String entryKey,
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => ContentFavoritesCompanion.insert(
+                entryKey: entryKey,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ContentFavoritesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ContentFavoritesTable,
+      ContentFavoriteRow,
+      $$ContentFavoritesTableFilterComposer,
+      $$ContentFavoritesTableOrderingComposer,
+      $$ContentFavoritesTableAnnotationComposer,
+      $$ContentFavoritesTableCreateCompanionBuilder,
+      $$ContentFavoritesTableUpdateCompanionBuilder,
+      (
+        ContentFavoriteRow,
+        BaseReferences<
+          _$AppDatabase,
+          $ContentFavoritesTable,
+          ContentFavoriteRow
+        >,
+      ),
+      ContentFavoriteRow,
+      PrefetchHooks Function()
+    >;
+typedef $$ContentNotesTableCreateCompanionBuilder =
+    ContentNotesCompanion Function({
+      required String entryKey,
+      required String markdown,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$ContentNotesTableUpdateCompanionBuilder =
+    ContentNotesCompanion Function({
+      Value<String> entryKey,
+      Value<String> markdown,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$ContentNotesTableFilterComposer
+    extends Composer<_$AppDatabase, $ContentNotesTable> {
+  $$ContentNotesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get entryKey => $composableBuilder(
+    column: $table.entryKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get markdown => $composableBuilder(
+    column: $table.markdown,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ContentNotesTableOrderingComposer
+    extends Composer<_$AppDatabase, $ContentNotesTable> {
+  $$ContentNotesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get entryKey => $composableBuilder(
+    column: $table.entryKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get markdown => $composableBuilder(
+    column: $table.markdown,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ContentNotesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ContentNotesTable> {
+  $$ContentNotesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get entryKey =>
+      $composableBuilder(column: $table.entryKey, builder: (column) => column);
+
+  GeneratedColumn<String> get markdown =>
+      $composableBuilder(column: $table.markdown, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$ContentNotesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ContentNotesTable,
+          ContentNoteRow,
+          $$ContentNotesTableFilterComposer,
+          $$ContentNotesTableOrderingComposer,
+          $$ContentNotesTableAnnotationComposer,
+          $$ContentNotesTableCreateCompanionBuilder,
+          $$ContentNotesTableUpdateCompanionBuilder,
+          (
+            ContentNoteRow,
+            BaseReferences<_$AppDatabase, $ContentNotesTable, ContentNoteRow>,
+          ),
+          ContentNoteRow,
+          PrefetchHooks Function()
+        > {
+  $$ContentNotesTableTableManager(_$AppDatabase db, $ContentNotesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ContentNotesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ContentNotesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ContentNotesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> entryKey = const Value.absent(),
+                Value<String> markdown = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ContentNotesCompanion(
+                entryKey: entryKey,
+                markdown: markdown,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String entryKey,
+                required String markdown,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => ContentNotesCompanion.insert(
+                entryKey: entryKey,
+                markdown: markdown,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ContentNotesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ContentNotesTable,
+      ContentNoteRow,
+      $$ContentNotesTableFilterComposer,
+      $$ContentNotesTableOrderingComposer,
+      $$ContentNotesTableAnnotationComposer,
+      $$ContentNotesTableCreateCompanionBuilder,
+      $$ContentNotesTableUpdateCompanionBuilder,
+      (
+        ContentNoteRow,
+        BaseReferences<_$AppDatabase, $ContentNotesTable, ContentNoteRow>,
+      ),
+      ContentNoteRow,
+      PrefetchHooks Function()
+    >;
+typedef $$ContentReadHistoryTableCreateCompanionBuilder =
+    ContentReadHistoryCompanion Function({
+      required String entryKey,
+      required DateTime readAt,
+      Value<int> rowid,
+    });
+typedef $$ContentReadHistoryTableUpdateCompanionBuilder =
+    ContentReadHistoryCompanion Function({
+      Value<String> entryKey,
+      Value<DateTime> readAt,
+      Value<int> rowid,
+    });
+
+class $$ContentReadHistoryTableFilterComposer
+    extends Composer<_$AppDatabase, $ContentReadHistoryTable> {
+  $$ContentReadHistoryTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get entryKey => $composableBuilder(
+    column: $table.entryKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get readAt => $composableBuilder(
+    column: $table.readAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ContentReadHistoryTableOrderingComposer
+    extends Composer<_$AppDatabase, $ContentReadHistoryTable> {
+  $$ContentReadHistoryTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get entryKey => $composableBuilder(
+    column: $table.entryKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get readAt => $composableBuilder(
+    column: $table.readAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ContentReadHistoryTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ContentReadHistoryTable> {
+  $$ContentReadHistoryTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get entryKey =>
+      $composableBuilder(column: $table.entryKey, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get readAt =>
+      $composableBuilder(column: $table.readAt, builder: (column) => column);
+}
+
+class $$ContentReadHistoryTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ContentReadHistoryTable,
+          ContentReadHistoryRow,
+          $$ContentReadHistoryTableFilterComposer,
+          $$ContentReadHistoryTableOrderingComposer,
+          $$ContentReadHistoryTableAnnotationComposer,
+          $$ContentReadHistoryTableCreateCompanionBuilder,
+          $$ContentReadHistoryTableUpdateCompanionBuilder,
+          (
+            ContentReadHistoryRow,
+            BaseReferences<
+              _$AppDatabase,
+              $ContentReadHistoryTable,
+              ContentReadHistoryRow
+            >,
+          ),
+          ContentReadHistoryRow,
+          PrefetchHooks Function()
+        > {
+  $$ContentReadHistoryTableTableManager(
+    _$AppDatabase db,
+    $ContentReadHistoryTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ContentReadHistoryTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ContentReadHistoryTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ContentReadHistoryTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> entryKey = const Value.absent(),
+                Value<DateTime> readAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ContentReadHistoryCompanion(
+                entryKey: entryKey,
+                readAt: readAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String entryKey,
+                required DateTime readAt,
+                Value<int> rowid = const Value.absent(),
+              }) => ContentReadHistoryCompanion.insert(
+                entryKey: entryKey,
+                readAt: readAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ContentReadHistoryTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ContentReadHistoryTable,
+      ContentReadHistoryRow,
+      $$ContentReadHistoryTableFilterComposer,
+      $$ContentReadHistoryTableOrderingComposer,
+      $$ContentReadHistoryTableAnnotationComposer,
+      $$ContentReadHistoryTableCreateCompanionBuilder,
+      $$ContentReadHistoryTableUpdateCompanionBuilder,
+      (
+        ContentReadHistoryRow,
+        BaseReferences<
+          _$AppDatabase,
+          $ContentReadHistoryTable,
+          ContentReadHistoryRow
+        >,
+      ),
+      ContentReadHistoryRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -2486,4 +6772,18 @@ class $AppDatabaseManager {
       $$SyncCursorsTableTableManager(_db, _db.syncCursors);
   $$MigrationMarkersTableTableManager get migrationMarkers =>
       $$MigrationMarkersTableTableManager(_db, _db.migrationMarkers);
+  $$LocalContentPackagesTableTableManager get localContentPackages =>
+      $$LocalContentPackagesTableTableManager(_db, _db.localContentPackages);
+  $$LocalContentEntriesTableTableManager get localContentEntries =>
+      $$LocalContentEntriesTableTableManager(_db, _db.localContentEntries);
+  $$LocalContentAssetsTableTableManager get localContentAssets =>
+      $$LocalContentAssetsTableTableManager(_db, _db.localContentAssets);
+  $$ContentLinksTableTableManager get contentLinks =>
+      $$ContentLinksTableTableManager(_db, _db.contentLinks);
+  $$ContentFavoritesTableTableManager get contentFavorites =>
+      $$ContentFavoritesTableTableManager(_db, _db.contentFavorites);
+  $$ContentNotesTableTableManager get contentNotes =>
+      $$ContentNotesTableTableManager(_db, _db.contentNotes);
+  $$ContentReadHistoryTableTableManager get contentReadHistory =>
+      $$ContentReadHistoryTableTableManager(_db, _db.contentReadHistory);
 }

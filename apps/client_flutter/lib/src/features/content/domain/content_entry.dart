@@ -12,6 +12,14 @@ class ContentSource {
   }
 
   Map<String, Object?> toJson() => {'label': label};
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ContentSource && label == other.label;
+
+  @override
+  int get hashCode => label.hashCode;
 }
 
 class ContentEntry {
@@ -97,4 +105,27 @@ class ContentEntry {
         'tags': tags,
         'source': source.toJson(),
       };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ContentEntry &&
+          id == other.id &&
+          type == other.type &&
+          slug == other.slug &&
+          name == other.name &&
+          revision == other.revision &&
+          summary == other.summary &&
+          source == other.source;
+
+  @override
+  int get hashCode => Object.hash(
+        id,
+        type,
+        slug,
+        name,
+        revision,
+        summary,
+        source,
+      );
 }

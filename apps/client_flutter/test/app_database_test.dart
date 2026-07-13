@@ -3,11 +3,13 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('opens an empty schema at version one', () async {
+  test('opens an empty schema at version two', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
-    expect(database.schemaVersion, 1);
+    expect(database.schemaVersion, 2);
     expect(await database.select(database.serverProfiles).get(), isEmpty);
     expect(await database.select(database.syncOutbox).get(), isEmpty);
+    expect(await database.select(database.localContentPackages).get(), isEmpty);
+    expect(await database.select(database.localContentEntries).get(), isEmpty);
     await database.close();
   });
 }

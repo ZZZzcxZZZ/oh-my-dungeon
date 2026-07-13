@@ -490,7 +490,7 @@ git commit -m "feat(0.1): enqueue personal data for vault sync"
 - 创建：`apps/client_flutter/test/legacy_character_importer_test.dart`
 - 修改：`apps/client_flutter/test/support/character_test_support.dart`
 
-- [ ] **步骤 1：写一次性迁移失败测试**
+- [x] **步骤 1：写一次性迁移失败测试**
 
 ```dart
 test('imports legacy remote characters once and preserves local conflicts', () async {
@@ -531,7 +531,7 @@ test('imports legacy remote characters once and preserves local conflicts', () a
 });
 ```
 
-- [ ] **步骤 2：运行并确认 importer 缺失**
+- [x] **步骤 2：运行并确认 importer 缺失**
 
 ```powershell
 cd apps/client_flutter
@@ -540,13 +540,13 @@ flutter test test/legacy_character_importer_test.dart
 
 预期：FAIL，迁移器不存在。
 
-- [ ] **步骤 3：实现明确迁移策略**
+- [x] **步骤 3：实现明确迁移策略**
 
 首次登录旧服务器时拉取角色；本地不存在相同 ID 则导入，相同 ID 且内容不同则复制远端角色并使用新本地 UUID，名称追加“（服务器导入）”。成功后写服务器+用户 marker。任何失败都不写 marker。
 
 在 `test/support/character_test_support.dart` 增加 `MemoryLegacyCharacterClient`，其 `list(VaultSession)` 返回构造函数传入角色；增加 `MemoryMigrationMarkers`，用 `Set<String> completed` 实现 `contains` 和 `markCompleted`。`LegacyCharacterImporter.run` 参数固定为 `VaultSession`。
 
-- [ ] **步骤 4：验证迁移与旧 API 兼容**
+- [x] **步骤 4：验证迁移与旧 API 兼容**
 
 ```powershell
 cd apps/client_flutter
@@ -555,7 +555,7 @@ flutter test test/legacy_character_importer_test.dart test/character_api_client_
 
 预期：一次性、冲突复制和失败重试测试通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/features/characters/data apps/client_flutter/test/legacy_character_importer_test.dart apps/client_flutter/test/support/character_test_support.dart

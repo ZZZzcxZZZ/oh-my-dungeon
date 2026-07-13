@@ -165,7 +165,7 @@ flutter build web --release
 
 预期：`build/web/index.html`、`build/web/sqlite3.wasm` 和 worker 均存在。
 
-- [ ] **步骤 6：提交**
+- [x] **步骤 6：提交**
 
 ```powershell
 git add apps/client_flutter/pubspec.yaml apps/client_flutter/pubspec.lock apps/client_flutter/lib/src/core/database apps/client_flutter/test/app_database_test.dart apps/client_flutter/web
@@ -180,7 +180,7 @@ git commit -m "feat(0.1): add cross-platform local database"
 - 创建：`apps/client_flutter/lib/src/core/sync/sync_status_controller.dart`
 - 创建：`apps/client_flutter/test/sync_repository_test.dart`
 
-- [ ] **步骤 1：编写失败的幂等 Outbox 测试**
+- [x] **步骤 1：编写失败的幂等 Outbox 测试**
 
 ```dart
 test('queues an operation once and advances a cursor', () async {
@@ -209,7 +209,7 @@ test('queues an operation once and advances a cursor', () async {
 });
 ```
 
-- [ ] **步骤 2：运行测试并确认类型缺失**
+- [x] **步骤 2：运行测试并确认类型缺失**
 
 ```powershell
 cd apps/client_flutter
@@ -218,7 +218,7 @@ flutter test test/sync_repository_test.dart
 
 预期：FAIL，`SyncOperation` 与 `DriftSyncRepository` 未定义。
 
-- [ ] **步骤 3：实现明确接口**
+- [x] **步骤 3：实现明确接口**
 
 ```dart
 enum SyncPhase { offline, idle, syncing, conflict, error }
@@ -256,7 +256,7 @@ abstract interface class SyncRepository {
 
 `DriftSyncRepository.enqueue` 使用 `insertOnConflictDoNothing`；`saveCursor` 使用 upsert。`SyncStatusController` 暴露 `phase`、`pendingCount`、`lastError` 和 `refresh()`。
 
-- [ ] **步骤 4：验证 Repository 和 analyzer**
+- [x] **步骤 4：验证 Repository 和 analyzer**
 
 ```powershell
 cd apps/client_flutter
@@ -267,7 +267,7 @@ flutter analyze
 
 预期：测试通过，analyzer 无问题。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/core/sync apps/client_flutter/lib/src/core/database apps/client_flutter/test/sync_repository_test.dart

@@ -573,7 +573,7 @@ git commit -m "feat(0.1): import legacy server characters safely"
 - 修改：`README.md`
 - 修改：`docs/roadmap/current-execution-status.md`
 
-- [ ] **步骤 1：写同步控制失败测试**
+- [x] **步骤 1：写同步控制失败测试**
 
 ```dart
 testWidgets('shows pending vault operations and syncs on command', (tester) async {
@@ -595,7 +595,7 @@ testWidgets('shows pending vault operations and syncs on command', (tester) asyn
 });
 ```
 
-- [ ] **步骤 2：运行并确认 Vault 设置缺失**
+- [x] **步骤 2：运行并确认 Vault 设置缺失**
 
 ```powershell
 cd apps/client_flutter
@@ -604,7 +604,7 @@ flutter test test/widget_test.dart --plain-name "shows pending vault operations 
 
 预期：FAIL，Vault 设置组件不存在。
 
-- [ ] **步骤 3：实现设置状态**
+- [x] **步骤 3：实现设置状态**
 
 定义可测试的窄接口：
 
@@ -625,7 +625,7 @@ abstract interface class VaultSyncActions {
 
 登录后显示最后同步时间、待同步数量、立即同步、暂停后台同步和冲突入口；未登录时显示“登录后可跨设备同步”，但不禁用本地角色。错误信息使用可复制详情，不显示 Token 或实体全文。
 
-- [ ] **步骤 4：运行跨端门禁**
+- [x] **步骤 4：运行跨端门禁**
 
 ```powershell
 npm run doctor
@@ -635,7 +635,7 @@ flutter build web --release
 
 预期：全量测试、lint、analyze、Compose config 和 Web build 通过。
 
-- [ ] **步骤 5：更新文档并提交**
+- [x] **步骤 5：更新文档并提交**
 
 README 说明 Vault 同步范围和基础资料正文不上传；执行状态记录本地角色迁移与缺包快照。提交：
 

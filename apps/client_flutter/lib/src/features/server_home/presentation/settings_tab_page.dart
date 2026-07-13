@@ -12,6 +12,8 @@ import '../../content/domain/content_file_picker.dart';
 import '../../content/presentation/content_package_settings_page.dart';
 import '../../server_profiles/data/server_profile_store.dart';
 import '../../server_profiles/domain/server_profile.dart';
+import '../../vault/presentation/vault_settings_section.dart';
+import '../../vault/presentation/vault_sync_controller.dart';
 import '../domain/active_server_session.dart';
 
 /// Top-level "设置" tab.
@@ -31,6 +33,7 @@ class SettingsTabPage extends StatefulWidget {
     this.contentRepository,
     this.contentImporter,
     this.contentFilePicker,
+    this.vaultSyncActions,
     super.key,
   });
 
@@ -45,6 +48,7 @@ class SettingsTabPage extends StatefulWidget {
   final ContentRepository? contentRepository;
   final ContentPackageImporter? contentImporter;
   final ContentFilePicker? contentFilePicker;
+  final VaultSyncActions? vaultSyncActions;
 
   @override
   State<SettingsTabPage> createState() => _SettingsTabPageState();
@@ -94,6 +98,8 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
                     _buildSyncSection(context),
                     const SizedBox(height: 24),
                     _buildContentSection(context),
+                    const SizedBox(height: 24),
+                    _buildVaultSection(context),
                     const SizedBox(height: 24),
                     _buildAccountSection(context),
                     const SizedBox(height: 24),
@@ -270,6 +276,12 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
         ),
       ),
     );
+  }
+
+  Widget _buildVaultSection(BuildContext context) {
+    final actions = widget.vaultSyncActions;
+    if (actions == null) return const SizedBox.shrink();
+    return VaultSettingsSection(actions: actions);
   }
 
   Widget _buildAccountSection(BuildContext context) {

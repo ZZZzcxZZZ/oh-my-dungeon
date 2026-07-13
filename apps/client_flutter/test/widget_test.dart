@@ -24,10 +24,14 @@ import 'package:dnd_table_client/src/features/rooms/domain/room.dart';
 import 'package:dnd_table_client/src/features/rooms/domain/room_roll.dart';
 import 'package:dnd_table_client/src/features/server_profiles/data/server_profile_store.dart';
 import 'package:dnd_table_client/src/features/server_profiles/domain/server_profile.dart';
+import 'package:dnd_table_client/src/features/vault/domain/vault_models.dart';
+import 'package:dnd_table_client/src/features/vault/presentation/vault_settings_section.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/vault_test_support.dart';
 
 void main() {
   const profile = ServerProfile(
@@ -1111,6 +1115,40 @@ void main() {
     expect(find.text('同步'), findsOneWidget);
     expect(find.text('仅保存在此设备'), findsOneWidget);
     await database.close();
+  });
+
+  testWidgets('shows pending vault operations and syncs on command', (
+    tester,
+  ) async {
+    final controller = MemoryVaultSyncActions(
+      pendingCount: 3,
+      devices: const [
+        VaultDeviceView(
+          deviceId: 'device-1',
+          name: '此设备',
+          platform: 'windows',
+          lastCursor: '5',
+          lastSeenAt: '2026-07-14T00:00:00.000Z',
+        ),
+        VaultDeviceView(
+          deviceId: 'device-2',
+          name: 'Laptop',
+          platform: 'web',
+          lastCursor: '3',
+          lastSeenAt: '2026-07-14T00:00:00.000Z',
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: VaultSettingsSection(actions: controller)),
+      ),
+    );
+    expect(find.text('3 项等待同步'), findsOneWidget);
+    expect(find.text('Laptop'), findsOneWidget);
+    await tester.tap(find.text('立即同步'));
+    await tester.pumpAndSettle();
+    expect(controller.syncCalls, 1);
   });
 }
 

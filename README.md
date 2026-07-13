@@ -10,6 +10,8 @@
 
 客户端采用离线优先架构：基于 Drift 的本地数据库作为唯一事实来源，应用无需配置服务器即可启动并使用首页、角色、资料库和设置；服务器是可选协作设施，用于跨设备同步和战役联机。服务器 Profile 迁入 Drift 持久化，旧 SharedPreferences 数据一次性迁移。资料库默认为空，项目不内置任何 SRD/PHB/官方规则正文；用户通过本地导入 JSON 或 `.dndpack` 包添加自己的资料。
 
+登录后可启用 Personal Vault 跨设备同步：个人角色、收藏、笔记和偏好作为通用实体写入 Vault，客户端先推送本地 Outbox 再拉取远端变化，按 cursor 增量合并并处理 409 冲突。本地基础资料包正文与 assets 永不进入 Vault payload，只同步包的 manifest（`id/version/locale/system/contentHash`），商业规则正文不会被上传。未登录时所有本地功能照常可用，同步为可选能力。
+
 - Monorepo 基础结构
 - Flutter 客户端骨架（Material 3 + 首页 / 战役 / 角色 / 资料库 / 设置导航）
 - NestJS 服务端骨架

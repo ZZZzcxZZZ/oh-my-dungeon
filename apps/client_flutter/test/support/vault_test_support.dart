@@ -3,6 +3,7 @@ import 'package:dnd_table_client/src/core/sync/sync_repository.dart';
 import 'package:dnd_table_client/src/features/vault/data/vault_api_client.dart';
 import 'package:dnd_table_client/src/features/vault/data/vault_sync_service.dart';
 import 'package:dnd_table_client/src/features/vault/domain/vault_models.dart';
+import 'package:dnd_table_client/src/features/vault/presentation/vault_sync_controller.dart';
 
 class MemorySyncRepository implements SyncRepository {
   MemorySyncRepository({List<SyncOperation> pendingOperations = const []}) {
@@ -109,5 +110,49 @@ class MemoryVaultChangeApplier implements VaultChangeApplier {
   @override
   Future<void> applyAll(List<VaultChange> changes) async {
     appliedEntityIds.addAll(changes.map((c) => c.entityId));
+  }
+}
+
+/// [VaultSyncActions] 的内存测试替身。不依赖 Drift 或 HTTP，仅记录调用次数。
+class MemoryVaultSyncActions extends VaultSyncActions {
+  MemoryVaultSyncActions({
+    this.pendingCount = 0,
+    this.devices = const [],
+    this.phase = SyncPhase.idle,
+    this.lastError,
+    this.paused = false,
+  });
+
+  @override
+  int pendingCount;
+
+  @override
+  SyncPhase phase;
+
+  @override
+  String? lastError;
+
+  @override
+  bool paused;
+
+  @override
+  List<VaultDeviceView> devices;
+
+  int syncCalls = 0;
+  final List<String> revokedDeviceIds = [];
+
+  @override
+  Future<void> syncNow() async {
+    syncCalls++;
+  }
+
+  @override
+  Future<void> setPaused(bool value) async {
+    paused = value;
+  }
+
+  @override
+  Future<void> revokeDevice(String deviceId) async {
+    revokedDeviceIds.add(deviceId);
   }
 }

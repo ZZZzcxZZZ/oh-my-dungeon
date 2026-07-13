@@ -16,6 +16,7 @@ import { ContentService } from "./content.service";
 import type {
   CampaignContentPackageView,
   ContentItemView,
+  CampaignContentItemDetailView,
   ContentPackageImport,
   ContentOverrideView,
   ContentPackageView,
@@ -143,6 +144,15 @@ export class ContentController {
     @Param("itemId") itemId: string,
   ): Promise<void> {
     return this.contentService.setCampaignItemFavorite(user, campaignId, itemId, true);
+  }
+
+  @Get("campaigns/:id/content/items/:itemId")
+  getCampaignItem(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param("id") campaignId: string,
+    @Param("itemId") itemId: string,
+  ): Promise<CampaignContentItemDetailView> {
+    return this.contentService.getCampaignItem(user, campaignId, itemId);
   }
 
   @Delete("campaigns/:id/content/items/:itemId/favorite")

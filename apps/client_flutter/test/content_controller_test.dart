@@ -200,6 +200,8 @@ class _FakeAuthClient implements AuthClient {
 
 class _FakeContentClient implements ContentClient {
   @override
+  Future<ContentItemDetail> getCampaignItem({required String apiBaseUrl, required String accessToken, required String campaignId, required String itemId}) async => ContentItemDetail(item: _item, isFavorite: false, outgoingLinks: const []);
+  @override
   Future<ImportContentPackageResult> importCampaignPackage({
     required String apiBaseUrl,
     required String accessToken,

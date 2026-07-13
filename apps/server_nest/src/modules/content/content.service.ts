@@ -10,6 +10,7 @@ import { ContentPackageValidatorService } from "./content-package-validator.serv
 import type {
   CampaignContentPackageView,
   ContentItemView,
+  CampaignContentItemDetailView,
   ContentOverrideView,
   ContentPackageImport,
   ContentPackageView,
@@ -429,6 +430,34 @@ export class ContentService {
       return;
     }
     await this.prismaService.userContentFavorite.deleteMany({ where: { userId: actor.userId, contentItemId: itemId } });
+  }
+
+  async getCampaignItem(
+    actor: AccessTokenPayload,
+    campaignId: string,
+    itemId: string,
+  ): Promise<CampaignContentItemDetailView> {
+    const visible = await this.listAvailableCampaignItems(actor, campaignId, {});
+    const item = visible.find((entry) => entry.id === itemId);
+    if (!item) throw new NotFoundException("Content item is not available in this campaign");
+    const links = await this.prismaService.contentItemLink.findMany({
+      where: { sourceItemId: itemId },
+      include: { target: true },
+      orderBy: { sortOrder: "asc" },
+    });
+    const favorites = await this.prismaService.userContentFavorite.findMany({
+      where: { userId: actor.userId, contentItemId: itemId },
+      select: { id: true },
+    });
+    return {
+      ...item,
+      isFavorite: favorites.length > 0,
+      outgoingLinks: links.map((link: any) => ({
+        relation: link.relation,
+        label: link.label,
+        target: toItemView(link.target),
+      })),
+    };
   }
 
   async createCampaignOverride(

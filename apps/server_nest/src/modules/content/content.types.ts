@@ -50,6 +50,15 @@ export interface ContentItemView {
   updatedAt: string;
 }
 
+export interface CampaignContentItemDetailView extends ContentItemView {
+  isFavorite: boolean;
+  outgoingLinks: Array<{
+    relation: string;
+    label: string;
+    target: ContentItemView;
+  }>;
+}
+
 export interface ContentPackageView {
   id: string;
   scope: string;

@@ -311,6 +311,49 @@ class ContentController extends ChangeNotifier {
     }
   }
 
+  Future<ContentItemDetail?> loadCampaignItemDetail({
+    required String campaignId,
+    required String itemId,
+  }) async {
+    final token = accessToken;
+    if (token == null) return null;
+    try {
+      return await contentClient.getCampaignItem(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        campaignId: campaignId,
+        itemId: itemId,
+      );
+    } on ContentApiException catch (e) {
+      _error = e.message;
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<bool> setCampaignItemFavorite({
+    required String campaignId,
+    required String itemId,
+    required bool favorite,
+  }) async {
+    final token = accessToken;
+    if (token == null) return false;
+    try {
+      await contentClient.setCampaignItemFavorite(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        campaignId: campaignId,
+        itemId: itemId,
+        favorite: favorite,
+      );
+      return true;
+    } on ContentApiException catch (e) {
+      _error = e.message;
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<String?> exportPackageJson(String packageId) async {
     final token = accessToken;
     if (token == null) return null;

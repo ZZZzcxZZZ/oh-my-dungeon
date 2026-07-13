@@ -69,6 +69,13 @@ abstract class ContentClient {
     required String itemId,
     required bool favorite,
   });
+
+  Future<ContentItemDetail> getCampaignItem({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String itemId,
+  });
 }
 
 class ContentApiClient implements ContentClient {
@@ -272,6 +279,21 @@ class ContentApiClient implements ContentClient {
         ? await _httpClient.post(uri, headers: _headers(accessToken))
         : await _httpClient.delete(uri, headers: _headers(accessToken));
     if (response.statusCode != 201 && response.statusCode != 204) throw _toException(response);
+  }
+
+  @override
+  Future<ContentItemDetail> getCampaignItem({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String itemId,
+  }) async {
+    final response = await _httpClient.get(
+      Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/content/items/$itemId'),
+      headers: _headers(accessToken),
+    );
+    if (response.statusCode != 200) throw _toException(response);
+    return ContentItemDetail.fromJson(jsonDecode(response.body) as Map<String, Object?>);
   }
 
   Map<String, String> _headers(String accessToken) {

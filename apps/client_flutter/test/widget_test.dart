@@ -1518,6 +1518,8 @@ class _FakeCharacterClient implements CharacterClient {
 
 class _FakeContentClient implements ContentClient {
   @override
+  Future<ContentItemDetail> getCampaignItem({required String apiBaseUrl, required String accessToken, required String campaignId, required String itemId}) async => ContentItemDetail(item: _contentItem, isFavorite: false, outgoingLinks: const []);
+  @override
   Future<ImportContentPackageResult> importCampaignPackage({
     required String apiBaseUrl,
     required String accessToken,

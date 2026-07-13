@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/database/app_database.dart';
 import '../../../core/sync/sync_status_controller.dart';
 import '../../../features/app_preferences/presentation/app_preferences_controller.dart';
 import '../../../features/auth/data/auth_api_client.dart';
@@ -16,7 +17,9 @@ import '../../../features/characters/presentation/characters_tab_page.dart';
 import '../../../features/check_requests/data/check_request_api_client.dart';
 import '../../../features/client_mode/domain/client_mode.dart';
 import '../../../features/content/data/content_api_client.dart';
+import '../../../features/content/data/local/content_repository.dart';
 import '../../../features/content/presentation/content_controller.dart';
+import '../../../features/content/presentation/content_library_controller.dart';
 import '../../../features/content/presentation/content_library_page.dart';
 import '../../../features/encounters/data/encounter_api_client.dart';
 import '../../../features/rooms/data/room_api_client.dart';
@@ -48,6 +51,7 @@ class MainShell extends StatefulWidget {
     required this.encounterClient,
     required this.sessionClient,
     required this.appPreferencesController,
+    this.database,
     this.diceRoller,
     this.serverProfileStore,
     this.serverProfilesPageBuilder,
@@ -68,6 +72,7 @@ class MainShell extends StatefulWidget {
   final EncounterClient encounterClient;
   final SessionClient sessionClient;
   final AppPreferencesController appPreferencesController;
+  final AppDatabase? database;
   final DiceRoller? diceRoller;
   final ServerProfileStore? serverProfileStore;
   final WidgetBuilder? serverProfilesPageBuilder;
@@ -82,6 +87,7 @@ class _MainShellState extends State<MainShell> {
   late final CampaignController _campaignController;
   late final CharacterController _characterController;
   late final ContentController _contentController;
+  late final ContentLibraryController _libraryController;
   late final SessionController _sessionController;
   late final CampaignSocketService _campaignSocketService;
   final SyncStatusController _syncStatusController = SyncStatusController();
@@ -116,6 +122,11 @@ class _MainShellState extends State<MainShell> {
       authController: _authController,
       contentClient: widget.contentClient,
     );
+    _libraryController = ContentLibraryController(
+      repository: widget.database != null
+          ? DriftContentRepository(widget.database!)
+          : EmptyContentRepository(),
+    );
     _sessionController = SessionController(
       apiBaseUrl: profile?.apiBaseUrl ?? '',
       authController: _authController,
@@ -128,6 +139,7 @@ class _MainShellState extends State<MainShell> {
     widget.modeController.removeListener(_onModeChanged);
     _campaignSocketService.disconnect();
     _sessionController.dispose();
+    _libraryController.dispose();
     _contentController.dispose();
     _characterController.dispose();
     _campaignController.dispose();
@@ -170,11 +182,8 @@ class _MainShellState extends State<MainShell> {
         appPreferencesController: widget.appPreferencesController,
       ),
       ContentLibraryPage(
-        authController: _authController,
-        campaignController: _campaignController,
-        contentController: _contentController,
-        modeController: widget.modeController,
-        appPreferencesController: widget.appPreferencesController,
+        controller: _libraryController,
+        onImportRequested: () {},
       ),
       SettingsTabPage(
         session: widget.session,

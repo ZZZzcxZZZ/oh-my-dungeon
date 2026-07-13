@@ -382,7 +382,7 @@ git commit -m "feat(0.1): render extensible wiki entry types"
 - 修改：`apps/client_flutter/test/widget_test.dart`
 - 创建：`apps/client_flutter/test/content_wiki_page_test.dart`
 
-- [ ] **步骤 1：写空状态和详情路由失败测试**
+- [x] **步骤 1：写空状态和详情路由失败测试**
 
 ```dart
 Widget buildContentTestApp({required List<ContentEntry> entries}) {
@@ -414,7 +414,7 @@ testWidgets('opens a narrow-screen entry on a full page', (tester) async {
 });
 ```
 
-- [ ] **步骤 2：运行并确认当前弹窗行为失败**
+- [x] **步骤 2：运行并确认当前弹窗行为失败**
 
 ```powershell
 cd apps/client_flutter
@@ -423,11 +423,11 @@ flutter test test/content_wiki_page_test.dart
 
 预期：FAIL，空状态文案或独立详情路由不存在。
 
-- [ ] **步骤 3：实现页面职责拆分**
+- [x] **步骤 3：实现页面职责拆分**
 
 `ContentLibraryPage` 只负责响应式容器。宽度 `>= 1000` 时左侧 `ContentSearchPage`、右侧 `ContentDetailPage`；窄屏点击使用 `MaterialPageRoute`。`ContentHomePage` 展示分类、包、收藏和最近阅读。筛选使用 `SearchBar`、`FilterChip`、`DropdownMenu`；条目列表使用 `ListTile` 和 `Divider`，不使用嵌套 Card。
 
-- [ ] **步骤 4：验证响应式 Wiki**
+- [x] **步骤 4：验证响应式 Wiki**
 
 ```powershell
 cd apps/client_flutter
@@ -437,7 +437,7 @@ flutter analyze
 
 预期：空状态、窄屏路由、宽屏双栏、收藏与搜索测试通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/features/content/presentation apps/client_flutter/test/content_wiki_page_test.dart apps/client_flutter/test/widget_test.dart

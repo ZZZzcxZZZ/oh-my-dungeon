@@ -19,6 +19,20 @@ class MemoryContentRepository implements ContentRepository {
   MemoryContentRepository({List<ContentEntry> initialEntries = const []}) {
     for (final entry in initialEntries) {
       _entries[entry.id] = entry;
+      final packageId = entry.id.split(':').first;
+      _packages.putIfAbsent(
+        packageId,
+        () => ContentPackageManifest(
+          formatVersion: 1,
+          id: packageId,
+          name: packageId,
+          version: '1.0.0',
+          locale: 'zh-CN',
+          system: 'dnd5e-2024',
+          entryCount: 1,
+        ),
+      );
+      _enabled.putIfAbsent(packageId, () => true);
     }
   }
 

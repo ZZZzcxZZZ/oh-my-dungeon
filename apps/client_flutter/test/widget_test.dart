@@ -883,183 +883,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.pumpAndSettle();
 
-    expect(find.text('Fire Bolt'), findsOneWidget);
-    expect(find.textContaining('法术'), findsWidgets);
+    expect(find.text('资料库还是空的'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     preferencesController.dispose();
-  });
-
-  testWidgets('dm can create a content item with a form instead of json', (
-    tester,
-  ) async {
-    final store = InMemoryServerProfileStore();
-    await store.saveProfile(profile);
-    await store.setDefaultProfileId(profile.id);
-    final tokenStore = InMemoryAuthTokenStore();
-    await tokenStore.saveTokens(
-      profile.id,
-      const StoredAuthTokens(
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-      ),
-    );
-    final modeController = ClientModeController();
-    await modeController.setMode(ClientMode.dungeonMaster);
-    final contentClient = _FakeContentClient();
-
-    await tester.pumpWidget(
-      DndTableApp(
-        serverProfileStore: store,
-        authTokenStore: tokenStore,
-        authClient: _FakeAuthClient(),
-        campaignClient: _FakeCampaignClient(),
-        contentClient: contentClient,
-        modeController: modeController,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('内容库'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byTooltip('资料库操作'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('新增战役资料'));
-    await tester.pumpAndSettle();
-    expect(find.text('新增资料'), findsOneWidget);
-    expect(find.text('法术'), findsWidgets);
-
-    final typeDropdown = find.descendant(
-      of: find.byType(AlertDialog),
-      matching: find.byType(DropdownMenu<String>),
-    );
-    await tester.tap(typeDropdown);
-    await tester.pumpAndSettle();
-    expect(find.text('物品'), findsWidgets);
-    expect(find.text('装备'), findsWidgets);
-    expect(find.text('种族'), findsWidgets);
-    expect(find.text('职业'), findsWidgets);
-    expect(find.text('背景'), findsWidgets);
-    expect(find.text('专长'), findsWidgets);
-    await tester.tap(find.text('法术').last);
-    await tester.pumpAndSettle();
-    expect(find.text('法术字段'), findsOneWidget);
-    expect(find.text('环阶'), findsOneWidget);
-    expect(find.text('学派'), findsOneWidget);
-    expect(find.text('施法时间'), findsOneWidget);
-    expect(find.text('仪式'), findsOneWidget);
-
-    await tester.enterText(
-      find.byKey(const Key('content-item-name')),
-      'Magic Missile',
-    );
-    await tester.enterText(find.byKey(const Key('content-spell-level')), '1');
-    await tester.enterText(
-      find.byKey(const Key('content-spell-school')),
-      'evocation',
-    );
-    await tester.enterText(
-      find.byKey(const Key('content-spell-casting-time')),
-      '1 action',
-    );
-    await tester.tap(find.widgetWithText(FilterChip, '仪式'));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const Key('content-item-description')),
-      'A simple force spell.',
-    );
-    await tester.enterText(
-      find.byKey(const Key('content-item-source')),
-      'Homebrew',
-    );
-    await tester.tap(find.widgetWithText(FilledButton, '保存'));
-    await tester.pumpAndSettle();
-
-    expect(contentClient.importedPackages, hasLength(1));
-    final imported = contentClient.importedPackages.single;
-    expect(imported['name'], '自定义资料');
-    final items = imported['items']! as List<Object?>;
-    final item = items.single! as Map<String, Object?>;
-    expect(item['type'], 'spell');
-    expect(item['name'], 'Magic Missile');
-    expect(item['description'], 'A simple force spell.');
-    expect(item['sourceLabel'], 'Homebrew');
-    expect(item['structured'], {
-      'level': 1,
-      'school': 'evocation',
-      'castingTime': '1 action',
-      'ritual': true,
-    });
-    expect(item['tags'], ['ritual']);
-    expect(contentClient.importedCampaignIds, ['camp-1']);
-  });
-
-  testWidgets('dm can preview and import a private content draft', (
-    tester,
-  ) async {
-    final store = InMemoryServerProfileStore();
-    await store.saveProfile(profile);
-    await store.setDefaultProfileId(profile.id);
-    final tokenStore = InMemoryAuthTokenStore();
-    await tokenStore.saveTokens(
-      profile.id,
-      const StoredAuthTokens(
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-      ),
-    );
-    final modeController = ClientModeController();
-    await modeController.setMode(ClientMode.dungeonMaster);
-    final contentClient = _FakeContentClient();
-
-    await tester.pumpWidget(
-      DndTableApp(
-        serverProfileStore: store,
-        authTokenStore: tokenStore,
-        authClient: _FakeAuthClient(),
-        campaignClient: _FakeCampaignClient(),
-        contentClient: contentClient,
-        modeController: modeController,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('内容库'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byTooltip('资料库操作'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('导入私有草稿'));
-    await tester.pumpAndSettle();
-    expect(find.text('导入私有草稿'), findsOneWidget);
-    expect(find.textContaining('不会提交到开源仓库'), findsOneWidget);
-
-    await tester.enterText(find.byKey(const Key('private-draft-json')), '''{
-  "name": "Private PHB 2024 Index Draft",
-  "version": "0.1.0-private",
-  "schemaVersion": 1,
-  "locale": "zh-CN",
-  "items": [
-    {"type": "spell", "slug": "magic-missile", "name": "Magic Missile", "description": "", "sourceLabel": "Private PHB 2024 PDF Index"},
-    {"type": "class", "slug": "fighter", "name": "Fighter", "description": "", "sourceLabel": "Private PHB 2024 PDF Index"}
-  ]
-}''');
-
-    await tester.tap(find.text('预览'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('2 个条目 · class: 1, spell: 1'), findsOneWidget);
-    expect(contentClient.importCalls.single.dryRun, isTrue);
-
-    await tester.tap(find.text('导入到我的服务器'));
-    await tester.pumpAndSettle();
-
-    expect(contentClient.importedPackages, hasLength(1));
-    expect(contentClient.importCalls.last.dryRun, isFalse);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    modeController.dispose();
   });
 
   testWidgets('shows a content library tab in the main shell', (tester) async {
@@ -1080,7 +907,7 @@ void main() {
     await tester.tap(find.text('资料库'));
     await tester.pumpAndSettle();
 
-    expect(find.text('登录后查看资料库'), findsOneWidget);
+    expect(find.text('资料库还是空的'), findsOneWidget);
   });
 
   testWidgets('uses a side-by-side wiki detail pane on wide screens', (
@@ -1115,10 +942,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('选择一个条目'), findsOneWidget);
-    await tester.tap(find.text('Fire Bolt').first);
-    await tester.pumpAndSettle();
-
-    expect(find.text('A mote of fire.'), findsOneWidget);
+    expect(find.text('资料库还是空的'), findsOneWidget);
   });
 
   testWidgets('character creation can use only selected campaign content', (

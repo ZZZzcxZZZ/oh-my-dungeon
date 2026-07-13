@@ -414,3 +414,44 @@ class DriftContentRepository implements ContentRepository {
     return ContentEntry.fromJson(json);
   }
 }
+
+/// No-op [ContentRepository] used as a fallback when no database is available
+/// (e.g. tests that inject in-memory stores).
+class EmptyContentRepository implements ContentRepository {
+  @override
+  Stream<List<ContentPackageManifest>> watchPackages() =>
+      Stream.value(const []);
+  @override
+  Future<List<ContentEntry>> search(ContentQuery query) async => const [];
+  @override
+  Future<ContentEntry?> getByKey(String entryKey) async => null;
+  @override
+  Future<List<ContentLink>> outgoingLinks(String entryKey) async => const [];
+  @override
+  Future<List<ContentLink>> incomingLinks(String entryKey) async => const [];
+  @override
+  Future<Uint8List?> readAsset(String packageId, String relativePath) async =>
+      null;
+  @override
+  Future<void> replacePackage({
+    required ContentPackageManifest manifest,
+    required List<ContentEntry> entries,
+    required String contentHash,
+    Map<String, Uint8List> assets = const {},
+  }) async {}
+  @override
+  Future<void> setPackageEnabled(String packageId, bool enabled) async {}
+  @override
+  Future<ContentDeletionImpact> deletionImpact(String packageId) async =>
+      const ContentDeletionImpact(
+        entryCount: 0,
+        favoriteCount: 0,
+        noteCount: 0,
+      );
+  @override
+  Future<void> deletePackage(String packageId) async {}
+  @override
+  Future<void> setFavorite(String entryKey, bool favorite) async {}
+  @override
+  Future<void> saveNote(String entryKey, String markdown) async {}
+}

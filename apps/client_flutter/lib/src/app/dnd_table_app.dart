@@ -138,6 +138,7 @@ class _DndTableAppState extends State<DndTableApp> {
 
     if (injectedStore != null && injectedTokenStore != null) {
       return _AppDeps(
+        database: injectedDatabase,
         serverProfileStore: injectedStore,
         authTokenStore: injectedTokenStore,
         appPreferencesController: appPreferencesController,
@@ -151,21 +152,27 @@ class _DndTableAppState extends State<DndTableApp> {
       );
     }
 
+    final AppDatabase database;
+    if (injectedDatabase != null) {
+      database = injectedDatabase;
+    } else if (_ownedDatabase != null) {
+      database = _ownedDatabase!;
+    } else {
+      _ownedDatabase = AppDatabase();
+      database = _ownedDatabase!;
+    }
+
     final ServerProfileStore serverProfileStore;
     if (injectedStore != null) {
       serverProfileStore = injectedStore;
-    } else if (injectedDatabase != null) {
-      serverProfileStore = DriftServerProfileStore(injectedDatabase);
-      final prefs = preferences ?? await SharedPreferences.getInstance();
-      await ServerProfileMigrator(injectedDatabase, prefs).run();
     } else {
-      _ownedDatabase = AppDatabase();
-      serverProfileStore = DriftServerProfileStore(_ownedDatabase!);
+      serverProfileStore = DriftServerProfileStore(database);
       final prefs = preferences ?? await SharedPreferences.getInstance();
-      await ServerProfileMigrator(_ownedDatabase!, prefs).run();
+      await ServerProfileMigrator(database, prefs).run();
     }
 
     return _AppDeps(
+      database: database,
       serverProfileStore: serverProfileStore,
       authTokenStore:
           injectedTokenStore ?? SharedPreferencesAuthTokenStore(preferences!),
@@ -234,6 +241,7 @@ class _DndTableAppState extends State<DndTableApp> {
       encounterClient: deps.encounterClient,
       sessionClient: deps.sessionClient,
       appPreferencesController: deps.appPreferencesController,
+      database: deps.database,
       diceRoller: widget.diceRoller,
       serverProfileStore: deps.serverProfileStore,
       serverProfilesPageBuilder: (context) => ServerProfilesPage(
@@ -358,6 +366,7 @@ class _StartupErrorPage extends StatelessWidget {
 
 class _AppDeps {
   const _AppDeps({
+    this.database,
     required this.serverProfileStore,
     required this.authTokenStore,
     required this.appPreferencesController,
@@ -370,6 +379,7 @@ class _AppDeps {
     required this.sessionClient,
   });
 
+  final AppDatabase? database;
   final ServerProfileStore serverProfileStore;
   final AuthTokenStore authTokenStore;
   final AppPreferencesController appPreferencesController;

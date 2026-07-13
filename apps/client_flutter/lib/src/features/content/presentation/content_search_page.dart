@@ -1,0 +1,207 @@
+import 'package:flutter/material.dart';
+
+import '../domain/content_entry.dart';
+import 'content_home_page.dart';
+import 'content_library_controller.dart';
+import 'content_type_registry.dart';
+
+class _TypeFilter {
+  const _TypeFilter({this.value, required this.label});
+
+  final String? value;
+  final String label;
+}
+
+const _typeFilters = <_TypeFilter>[
+  _TypeFilter(value: null, label: '全部'),
+  _TypeFilter(value: 'spell', label: '法术'),
+  _TypeFilter(value: 'equipment', label: '装备'),
+  _TypeFilter(value: 'item', label: '物品'),
+  _TypeFilter(value: 'species', label: '种族'),
+  _TypeFilter(value: 'class', label: '职业'),
+  _TypeFilter(value: 'background', label: '背景'),
+  _TypeFilter(value: 'feat', label: '专长'),
+  _TypeFilter(value: 'monster', label: '怪物'),
+  _TypeFilter(value: 'condition', label: '状态'),
+  _TypeFilter(value: 'rule', label: '规则'),
+];
+
+class ContentSearchPage extends StatefulWidget {
+  const ContentSearchPage({
+    required this.controller,
+    required this.onSelect,
+    required this.onImportRequested,
+    this.selectedEntryKey,
+    super.key,
+  });
+
+  final ContentLibraryController controller;
+  final ValueChanged<ContentEntry> onSelect;
+  final VoidCallback onImportRequested;
+  final String? selectedEntryKey;
+
+  @override
+  State<ContentSearchPage> createState() => _ContentSearchPageState();
+}
+
+class _ContentSearchPageState extends State<ContentSearchPage> {
+  final TextEditingController _searchController = TextEditingController();
+  String? _selectedType;
+  bool _favoritesOnly = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _runSearch();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _runSearch() {
+    final text = _searchController.text.trim();
+    widget.controller.search(
+      text: text.isEmpty ? null : text,
+      type: _selectedType,
+      favoritesOnly: _favoritesOnly,
+    );
+  }
+
+  bool get _hasActiveFilter =>
+      (_searchController.text.trim().isNotEmpty) ||
+      _selectedType != null ||
+      _favoritesOnly;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final registry = ContentTypeRegistry.defaults();
+    return Scaffold(
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SearchBar(
+                  controller: _searchController,
+                  hintText: '搜索名称、关键字…',
+                  leading: const Icon(Icons.search),
+                  onSubmitted: (_) => _runSearch(),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownMenu<String?>(
+                        key: ValueKey('type-filter-$_selectedType'),
+                        initialSelection: _selectedType,
+                        expandedInsets: EdgeInsets.zero,
+                        label: const Text('类型'),
+                        dropdownMenuEntries: [
+                          for (final filter in _typeFilters)
+                            DropdownMenuEntry(
+                              value: filter.value,
+                              label: filter.label,
+                            ),
+                        ],
+                        onSelected: (value) {
+                          setState(() => _selectedType = value);
+                          _runSearch();
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      avatar: const Icon(Icons.favorite_border, size: 18),
+                      label: const Text('收藏'),
+                      selected: _favoritesOnly,
+                      onSelected: (selected) {
+                        setState(() => _favoritesOnly = selected);
+                        _runSearch();
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: AnimatedBuilder(
+              animation: widget.controller,
+              builder: (context, _) {
+                if (widget.controller.isLoading) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (widget.controller.error != null) {
+                  return Center(
+                    child: Text(
+                      widget.controller.error!,
+                      style: TextStyle(color: colorScheme.error),
+                    ),
+                  );
+                }
+                final results = widget.controller.results;
+                if (results.isEmpty) {
+                  if (_hasActiveFilter) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.search_off,
+                              size: 40,
+                              color: colorScheme.outline,
+                            ),
+                            const SizedBox(height: 12),
+                            Text('暂无内容', style: theme.textTheme.titleMedium),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                  return ContentHomePage(
+                    controller: widget.controller,
+                    onImportRequested: widget.onImportRequested,
+                  );
+                }
+                return ListView.separated(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  itemCount: results.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final entry = results[index];
+                    final definition = registry.definitionFor(entry.type);
+                    final isSelected =
+                        widget.selectedEntryKey == entry.id;
+                    return ListTile(
+                      leading: Icon(definition.icon),
+                      title: Text(entry.name),
+                      subtitle: entry.summary.isEmpty
+                          ? null
+                          : Text(
+                              entry.summary,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                      trailing: const Icon(Icons.chevron_right),
+                      selected: isSelected,
+                      onTap: () => widget.onSelect(entry),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

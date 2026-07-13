@@ -1,0 +1,142 @@
+import 'package:flutter/material.dart';
+
+import 'content_library_controller.dart';
+import 'content_type_registry.dart';
+
+class ContentHomePage extends StatelessWidget {
+  const ContentHomePage({
+    required this.controller,
+    required this.onImportRequested,
+    super.key,
+  });
+
+  final ContentLibraryController controller;
+  final VoidCallback onImportRequested;
+
+  static const _categories = <String>[
+    'spell',
+    'equipment',
+    'item',
+    'species',
+    'class',
+    'background',
+    'feat',
+    'monster',
+    'condition',
+    'rule',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List>(
+      stream: controller.watchPackages(),
+      builder: (context, snapshot) {
+        final packages = snapshot.data ?? const [];
+        if (packages.isEmpty) {
+          return _EmptyLibraryState(onImportRequested: onImportRequested);
+        }
+        return _CategoryGrid();
+      },
+    );
+  }
+}
+
+class _EmptyLibraryState extends StatelessWidget {
+  const _EmptyLibraryState({required this.onImportRequested});
+
+  final VoidCallback onImportRequested;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.menu_book_outlined,
+              size: 56,
+              color: colorScheme.outline,
+            ),
+            const SizedBox(height: 16),
+            Text('资料库还是空的', style: theme.textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Text(
+              '导入资料包后即可离线查阅规则、法术与怪物。',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: onImportRequested,
+              icon: const Icon(Icons.download_outlined),
+              label: const Text('导入资料包'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryGrid extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final registry = ContentTypeRegistry.defaults();
+    return GridView.count(
+      crossAxisCount: 3,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 8,
+      childAspectRatio: 1.4,
+      children: [
+        for (final type in ContentHomePage._categories)
+          _CategoryCard(
+            definition: registry.definitionFor(type),
+            colorScheme: colorScheme,
+            theme: theme,
+          ),
+      ],
+    );
+  }
+}
+
+class _CategoryCard extends StatelessWidget {
+  const _CategoryCard({
+    required this.definition,
+    required this.colorScheme,
+    required this.theme,
+  });
+
+  final dynamic definition;
+  final ColorScheme colorScheme;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {},
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(definition.icon, color: colorScheme.primary),
+            const SizedBox(height: 4),
+            Text(definition.label, style: theme.textTheme.labelMedium),
+          ],
+        ),
+      ),
+    );
+  }
+}

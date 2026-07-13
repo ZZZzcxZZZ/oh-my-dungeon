@@ -43,6 +43,8 @@ describe("content endpoints", () => {
       findMany: jest.fn(),
       findUnique: jest.fn(),
     },
+    contentItemLink: { findMany: jest.fn(), createMany: jest.fn() },
+    userContentFavorite: { upsert: jest.fn(), deleteMany: jest.fn(), findMany: jest.fn() },
     campaignContentPackage: {
       upsert: jest.fn(),
       findMany: jest.fn(),
@@ -165,6 +167,11 @@ describe("content endpoints", () => {
     prismaService.contentPackage.findUnique.mockResolvedValue(null);
     prismaService.contentItem.findMany.mockResolvedValue([]);
     prismaService.contentItem.findUnique.mockResolvedValue(null);
+    prismaService.contentItemLink.findMany.mockResolvedValue([]);
+    prismaService.contentItemLink.createMany.mockResolvedValue({ count: 0 });
+    prismaService.userContentFavorite.findMany.mockResolvedValue([]);
+    prismaService.userContentFavorite.upsert.mockResolvedValue({});
+    prismaService.userContentFavorite.deleteMany.mockResolvedValue({ count: 1 });
     prismaService.campaignContentPackage.upsert.mockResolvedValue({});
     prismaService.campaignContentPackage.findMany.mockResolvedValue([]);
     prismaService.contentOverride.create.mockResolvedValue({});
@@ -313,6 +320,26 @@ describe("content endpoints", () => {
     const createArgs = prismaService.contentPackage.create.mock.calls[0][0];
     expect(createArgs.data.campaignId).toBe("camp-1");
     expect(createArgs.data.scope).toBe("campaign");
+  });
+
+  it("rejects a campaign import with an unresolved wiki link", async () => {
+    const token = await login();
+    prismaService.campaign.findUnique.mockResolvedValueOnce(campaign);
+
+    await request(app.getHttpServer())
+      .post("/api/campaigns/camp-1/content/packages/import")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        package: {
+          ...validImport,
+          items: [{ ...validImport.items[0], references: [{ type: "feature", slug: "missing", relation: "grants" }] }],
+        },
+      })
+      .expect(201)
+      .expect(({ body }) => {
+        expect(body.valid).toBe(false);
+        expect(body.errors).toContain("items[0].references[0] cannot be resolved");
+      });
   });
 
   it("rejects a player importing a package into a campaign", async () => {

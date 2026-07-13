@@ -5,6 +5,13 @@ import 'package:http/http.dart' as http;
 import '../domain/content.dart';
 
 abstract class ContentClient {
+  Future<ImportContentPackageResult> importCampaignPackage({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required Object package,
+    bool dryRun = false,
+  });
   Future<ImportContentPackageResult> importPackage({
     required String apiBaseUrl,
     required String accessToken,
@@ -54,6 +61,14 @@ abstract class ContentClient {
     required String itemId,
     String? reason,
   });
+
+  Future<void> setCampaignItemFavorite({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String itemId,
+    required bool favorite,
+  });
 }
 
 class ContentApiClient implements ContentClient {
@@ -61,6 +76,23 @@ class ContentApiClient implements ContentClient {
     : _httpClient = httpClient ?? http.Client();
 
   final http.Client _httpClient;
+
+  @override
+  Future<ImportContentPackageResult> importCampaignPackage({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required Object package,
+    bool dryRun = false,
+  }) async {
+    final response = await _httpClient.post(
+      Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/content/packages/import'),
+      headers: _headers(accessToken),
+      body: jsonEncode({'dryRun': dryRun, 'package': package}),
+    );
+    if (response.statusCode != 201) throw _toException(response);
+    return ImportContentPackageResult.fromJson(jsonDecode(response.body) as Map<String, Object?>);
+  }
 
   @override
   Future<ImportContentPackageResult> importPackage({
@@ -225,6 +257,21 @@ class ContentApiClient implements ContentClient {
     if (response.statusCode != 201) {
       throw _toException(response);
     }
+  }
+
+  @override
+  Future<void> setCampaignItemFavorite({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String itemId,
+    required bool favorite,
+  }) async {
+    final uri = Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/content/items/$itemId/favorite');
+    final response = favorite
+        ? await _httpClient.post(uri, headers: _headers(accessToken))
+        : await _httpClient.delete(uri, headers: _headers(accessToken));
+    if (response.statusCode != 201 && response.statusCode != 204) throw _toException(response);
   }
 
   Map<String, String> _headers(String accessToken) {

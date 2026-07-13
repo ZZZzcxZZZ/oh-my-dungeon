@@ -70,6 +70,30 @@ export class ContentService {
         },
         include: { items: true },
       });
+      const itemsByKey = new Map(
+        result.items.map((item: any) => [`${item.type}:${item.slug}`, item]),
+      );
+      const links = contentPackage.items.flatMap((item, sourceIndex) =>
+        (item.references ?? []).map((reference, sortOrder) => ({
+          sourceItemId: itemsByKey.get(`${item.type}:${item.slug}`)?.id,
+          targetItemId: itemsByKey.get(`${reference.type}:${reference.slug}`)?.id,
+          relation: reference.relation,
+          label: reference.label ?? "",
+          sortOrder,
+          sourceIndex,
+        })),
+      );
+      if (links.length > 0) {
+        await tx.contentItemLink.createMany({
+          data: links.map(({ sourceItemId, targetItemId, relation, label, sortOrder }) => ({
+            sourceItemId,
+            targetItemId,
+            relation,
+            label,
+            sortOrder,
+          })),
+        });
+      }
 
       await tx.journalEntry.create({
         data: {
@@ -124,6 +148,21 @@ export class ContentService {
         },
         include: { items: true },
       });
+      const itemsByKey = new Map(
+        result.items.map((item: any) => [`${item.type}:${item.slug}`, item]),
+      );
+      const links = contentPackage.items.flatMap((item) =>
+        (item.references ?? []).map((reference, sortOrder) => ({
+          sourceItemId: itemsByKey.get(`${item.type}:${item.slug}`)?.id,
+          targetItemId: itemsByKey.get(`${reference.type}:${reference.slug}`)?.id,
+          relation: reference.relation,
+          label: reference.label ?? "",
+          sortOrder,
+        })),
+      );
+      if (links.length > 0) {
+        await tx.contentItemLink.createMany({ data: links });
+      }
       await tx.campaignContentPackage.upsert({
         where: { campaignId_packageId: { campaignId, packageId: result.id } },
         create: { campaignId, packageId: result.id, enabled: true, enabledBy: actor.userId },
@@ -368,6 +407,28 @@ export class ContentService {
     return items
       .filter((item: any) => !disabledItemIds.has(item.id))
       .map(toItemView);
+  }
+
+  async setCampaignItemFavorite(
+    actor: AccessTokenPayload,
+    campaignId: string,
+    itemId: string,
+    favorite: boolean,
+  ): Promise<void> {
+    const campaign = await this.fetchCampaign(campaignId);
+    this.campaignPolicy.canViewCampaign(actor, { campaignId: campaign.id, ownerId: campaign.ownerId, members: campaign.members });
+    const visible = await this.listAvailableCampaignItems(actor, campaignId, {});
+    if (!visible.some((item) => item.id === itemId)) {
+      throw new ForbiddenException("Content item is not available in this campaign");
+    }
+    if (favorite) {
+      await this.prismaService.userContentFavorite.upsert({
+        where: { userId_contentItemId: { userId: actor.userId, contentItemId: itemId } },
+        create: { userId: actor.userId, contentItemId: itemId }, update: {},
+      });
+      return;
+    }
+    await this.prismaService.userContentFavorite.deleteMany({ where: { userId: actor.userId, contentItemId: itemId } });
   }
 
   async createCampaignOverride(

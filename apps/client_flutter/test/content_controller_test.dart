@@ -199,6 +199,23 @@ class _FakeAuthClient implements AuthClient {
 }
 
 class _FakeContentClient implements ContentClient {
+  @override
+  Future<ImportContentPackageResult> importCampaignPackage({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required Object package,
+    bool dryRun = false,
+  }) async => const ImportContentPackageResult(valid: true, errors: [], package: null);
+
+  @override
+  Future<void> setCampaignItemFavorite({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String itemId,
+    required bool favorite,
+  }) async {}
   _FakeContentClient({
     this.importResult = const ImportContentPackageResult(
       valid: true,

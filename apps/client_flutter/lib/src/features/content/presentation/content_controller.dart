@@ -76,6 +76,46 @@ class ContentController extends ChangeNotifier {
     return _sendImportJson(jsonText, dryRun: false);
   }
 
+  Future<bool> importCampaignJson({
+    required String campaignId,
+    required String jsonText,
+    bool dryRun = false,
+  }) async {
+    final token = accessToken;
+    if (token == null) return false;
+    Object decoded;
+    try {
+      decoded = jsonDecode(jsonText);
+    } catch (_) {
+      _importErrors = ['JSON 格式无效'];
+      notifyListeners();
+      return false;
+    }
+    _loading = true;
+    _error = null;
+    _importErrors = [];
+    notifyListeners();
+    try {
+      final result = await contentClient.importCampaignPackage(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        campaignId: campaignId,
+        package: decoded,
+        dryRun: dryRun,
+      );
+      _importErrors = result.errors;
+      if (!result.valid) return false;
+      if (!dryRun && result.package != null) _packages = [..._packages, result.package!];
+      return true;
+    } on ContentApiException catch (e) {
+      _error = e.message;
+      return false;
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> importSingleItem({
     required String packageName,
     required String type,

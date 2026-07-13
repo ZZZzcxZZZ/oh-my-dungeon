@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Delete,
   Param,
   Post,
   Query,
@@ -133,6 +134,24 @@ export class ContentController {
       type,
       q,
     });
+  }
+
+  @Post("campaigns/:id/content/items/:itemId/favorite")
+  favoriteItem(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param("id") campaignId: string,
+    @Param("itemId") itemId: string,
+  ): Promise<void> {
+    return this.contentService.setCampaignItemFavorite(user, campaignId, itemId, true);
+  }
+
+  @Delete("campaigns/:id/content/items/:itemId/favorite")
+  unfavoriteItem(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param("id") campaignId: string,
+    @Param("itemId") itemId: string,
+  ): Promise<void> {
+    return this.contentService.setCampaignItemFavorite(user, campaignId, itemId, false);
   }
 
   @Post("campaigns/:id/content/overrides")

@@ -19,6 +19,7 @@ export interface ContentPackageImportItem {
   tags?: string[];
   sourceLabel?: string;
   schemaVersion?: number;
+  references?: Array<{ type: string; slug: string; relation: string; label?: string }>;
 }
 
 export interface ContentPackageImport {

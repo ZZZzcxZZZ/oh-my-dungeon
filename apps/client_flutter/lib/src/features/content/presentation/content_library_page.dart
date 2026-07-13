@@ -213,6 +213,14 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
   }
 
   Future<void> _showPrivateDraftDialog() async {
+    _ensureCampaignSelection();
+    final campaignId = _selectedCampaignId;
+    if (campaignId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先选择要导入资料包的战役')),
+      );
+      return;
+    }
     final controller = TextEditingController();
     String? summary;
     String? localError;
@@ -240,8 +248,10 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
                 localError = null;
                 summary = nextSummary;
               });
-              final ok = await widget.contentController.validateImportJson(
-                controller.text,
+              final ok = await widget.contentController.importCampaignJson(
+                campaignId: campaignId,
+                jsonText: controller.text,
+                dryRun: true,
               );
               if (!context.mounted) return;
               setDialogState(() {
@@ -257,8 +267,9 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
                 busy = true;
                 localError = null;
               });
-              final ok = await widget.contentController.importJson(
-                controller.text,
+              final ok = await widget.contentController.importCampaignJson(
+                campaignId: campaignId,
+                jsonText: controller.text,
               );
               if (!context.mounted) return;
               setDialogState(() => busy = false);
@@ -709,6 +720,7 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
                   ),
                   // 详细内容区：基本信息 + 描述
                   ..._structuredDetailRows(item),
+                  if (item.type == 'class') ..._classFeatureSections(item),
                   if (item.description.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     Text(
@@ -884,6 +896,40 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
           ],
         ),
       ),
+    ];
+  }
+
+  List<Widget> _classFeatureSections(ContentItem item) {
+    final structured = item.structured;
+    if (structured is! Map) return const [];
+    final rawFeatures = structured['levelFeatures'];
+    if (rawFeatures is! List) return const [];
+    final grouped = <int, List<Map>>{};
+    for (final raw in rawFeatures) {
+      if (raw is! Map) continue;
+      final level = raw['level'] is num ? (raw['level'] as num).toInt() : 0;
+      grouped.putIfAbsent(level, () => []).add(raw);
+    }
+    if (grouped.isEmpty) return const [];
+    final levels = grouped.keys.toList()..sort();
+    return [
+      const SizedBox(height: 20),
+      Text('等级特性', style: Theme.of(context).textTheme.titleMedium),
+      const SizedBox(height: 8),
+      for (final level in levels)
+        ExpansionTile(
+          title: Text(level > 0 ? '等级 $level' : '未分级特性'),
+          children: [
+            for (final feature in grouped[level]!)
+              ListTile(
+                leading: const Icon(Icons.auto_awesome_outlined),
+                title: Text('${feature['name'] ?? '职业特性'}'),
+                subtitle: feature['summary'] == null ? null : Text('${feature['summary']}'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {},
+              ),
+          ],
+        ),
     ];
   }
 

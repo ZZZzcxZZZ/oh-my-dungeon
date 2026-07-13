@@ -207,7 +207,7 @@ git commit -m "refactor(0.1): make personal characters fully offline"
 - 修改：`apps/server_nest/src/app.module.ts`
 - 创建：`apps/server_nest/test/vault.e2e-spec.ts`
 
-- [ ] **步骤 1：写用户隔离和幂等失败测试**
+- [x] **步骤 1：写用户隔离和幂等失败测试**
 
 ```typescript
 it('pushes an operation once and returns changes after the cursor', async () => {
@@ -236,7 +236,7 @@ it('pushes an operation once and returns changes after the cursor', async () => 
 });
 ```
 
-- [ ] **步骤 2：运行并确认端点不存在**
+- [x] **步骤 2：运行并确认端点不存在**
 
 ```powershell
 npm --prefix apps/server_nest test -- vault.e2e-spec.ts
@@ -244,7 +244,7 @@ npm --prefix apps/server_nest test -- vault.e2e-spec.ts
 
 预期：FAIL，Vault 路由返回 404。
 
-- [ ] **步骤 3：增加 Prisma 模型**
+- [x] **步骤 3：增加 Prisma 模型**
 
 ```prisma
 model VaultEntity {
@@ -297,7 +297,7 @@ model VaultDevice {
 
 给 `User` 增加 `vaultEntities VaultEntity[]` 和 `vaultDevices VaultDevice[]`。服务端把 BigInt cursor 序列化为十进制字符串。
 
-- [ ] **步骤 4：实现 push/changes 并验证**
+- [x] **步骤 4：实现 push/changes 并验证**
 
 `POST /vault/push` 在事务中跳过已存在 operation ID，校验 `baseRevision`，upsert/tombstone 实体并写 change；冲突返回 HTTP 409 和当前实体。`GET /vault/changes` 只查询当前用户且 `cursor > supplied`，最多返回 500 项。push/changes 都要求 `X-Device-Id`，并更新设备名称、平台、lastCursor 和 lastSeenAt；已撤销设备返回 403。增加 `GET /vault/devices` 与 `DELETE /vault/devices/:deviceId`，只允许用户查看和撤销自己的设备，不能撤销当前请求设备。删除 tombstone 仅在所有 90 天内活跃且未撤销设备的 lastCursor 越过该 change 后清理，超过 180 天可强制过期。测试覆盖设备隔离、撤销、cursor 更新和 tombstone 保留。
 
@@ -311,7 +311,7 @@ npm run lint:server
 
 预期：隔离、幂等、cursor 和冲突测试通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/server_nest/prisma/schema.prisma apps/server_nest/src/modules/vault apps/server_nest/src/app.module.ts apps/server_nest/test/vault.e2e-spec.ts

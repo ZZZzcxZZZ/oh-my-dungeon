@@ -12,6 +12,7 @@ import { RoomsModule } from './modules/rooms/rooms.module';
 import { ServerInfoModule } from './modules/server-info/server-info.module';
 import { ServerSettingsModule } from './modules/server-settings/server-settings.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
+import { VaultModule } from './modules/vault/vault.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -32,7 +33,8 @@ import { PrismaModule } from './prisma/prisma.module';
     ContentModule,
     EncountersModule,
     RealtimeModule,
-    SessionsModule
+    SessionsModule,
+    VaultModule
   ]
 })
 export class AppModule {}

@@ -39,6 +39,59 @@ model User {
   contentFavorites    UserContentFavorite[]
   checkRequests       CheckRequest[]
   checkResponses      CheckResponse[]
+  vaultEntities       VaultEntity[]
+  vaultDevices        VaultDevice[]
+}
+
+model VaultEntity {
+  id         String   @id @default(uuid())
+  userId     String
+  entityType String
+  entityId   String
+  payload    Json
+  revision   Int      @default(1)
+  deletedAt  DateTime?
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, entityType, entityId])
+  @@index([userId, updatedAt])
+}
+
+model VaultChange {
+  cursor     BigInt   @id @default(autoincrement())
+  userId     String
+  entityType String
+  entityId   String
+  operation  String
+  payload    Json
+  revision   Int
+  createdAt  DateTime @default(now())
+
+  @@index([userId, cursor])
+}
+
+model VaultOperation {
+  operationId String   @id
+  userId      String
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+model VaultDevice {
+  id         String    @id @default(uuid())
+  userId     String
+  deviceId   String
+  name       String
+  platform   String
+  lastCursor BigInt    @default(0)
+  lastSeenAt DateTime  @default(now())
+  revokedAt  DateTime?
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceId])
+  @@index([userId, lastSeenAt])
 }
 
 model ServerAdmin {

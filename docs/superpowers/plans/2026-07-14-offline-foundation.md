@@ -472,7 +472,7 @@ git commit -m "feat(0.1): manage optional servers from settings"
 - 修改：`README.md`
 - 修改：`docs/roadmap/current-execution-status.md`
 
-- [ ] **步骤 1：给门禁增加生成代码检查**
+- [x] **步骤 1：给门禁增加生成代码检查**
 
 在 `scripts/check.ps1` 的客户端 analyze 前执行：
 
@@ -486,7 +486,7 @@ try {
 }
 ```
 
-- [ ] **步骤 2：运行完整门禁**
+- [x] **步骤 2：运行完整门禁**
 
 ```powershell
 npm run doctor
@@ -496,11 +496,11 @@ flutter build web --release
 
 预期：服务端 lint、Flutter analyze、246 个以上服务端测试、182 个以上客户端测试、Docker Compose config 和 Web build 全部通过。
 
-- [ ] **步骤 3：更新文档中的启动边界**
+- [x] **步骤 3：更新文档中的启动边界**
 
 README 明确写出“无服务器可直接启动”；执行状态记录 Drift、Outbox 和 Profile 迁移完成；删除“默认 Profile 才能进入主界面”的描述。
 
-- [ ] **步骤 4：检查工作树**
+- [x] **步骤 4：检查工作树**
 
 ```powershell
 git diff --check
@@ -509,7 +509,7 @@ git status --short
 
 预期：无空白错误；只有本任务文档改动未提交。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add scripts/check.ps1 README.md docs/roadmap/current-execution-status.md

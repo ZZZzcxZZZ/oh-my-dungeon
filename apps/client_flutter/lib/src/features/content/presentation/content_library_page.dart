@@ -38,6 +38,7 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
   int? _selectedSpellLevel;
   String? _selectedSpellClass;
   String? _selectedFeatCategory;
+  bool _favoriteOnly = false;
   final Set<String> _enabledPackageIds = {};
   String? _bootstrappedForToken;
 
@@ -144,6 +145,7 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
         campaignId: campaignId,
         type: serverType,
         query: query,
+        favoriteOnly: _favoriteOnly,
       );
     } else {
       await widget.contentController.loadItems(
@@ -673,14 +675,25 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
     return categories.toList()..sort();
   }
 
-  void _showItemDetail(ContentItem item) {
+  Future<void> _showItemDetail(ContentItem item) async {
+    final campaignId = _selectedCampaignId;
+    final detail = campaignId == null
+        ? null
+        : await widget.contentController.loadCampaignItemDetail(
+            campaignId: campaignId,
+            itemId: item.id,
+          );
+    final displayedItem = detail?.item ?? item;
+    var isFavorite = detail?.isFavorite ?? false;
+    final links = detail?.outgoingLinks ?? const <ContentItemLink>[];
+    if (!mounted) return;
     showDialog<void>(
       context: context,
       builder: (context) {
         final theme = Theme.of(context);
         final colorScheme = theme.colorScheme;
         return AlertDialog(
-          title: Text(item.name),
+          title: Text(displayedItem.name),
           content: SizedBox(
             width: 560,
             child: SingleChildScrollView(
@@ -704,24 +717,40 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Chip(
-                          avatar: Icon(_typeIcon(item.type), size: 16),
-                          label: Text(_typeLabel(item.type)),
+                          avatar: Icon(_typeIcon(displayedItem.type), size: 16),
+                          label: Text(_typeLabel(displayedItem.type)),
                           side: BorderSide.none,
                         ),
-                        if (item.sourceLabel.isNotEmpty)
+                        if (displayedItem.sourceLabel.isNotEmpty)
                           Chip(
                             avatar: const Icon(Icons.book_outlined, size: 16),
-                            label: Text(item.sourceLabel),
+                            label: Text(displayedItem.sourceLabel),
                             side: BorderSide.none,
                           ),
-                        ..._structuredChips(item),
+                        ..._structuredChips(displayedItem),
                       ],
                     ),
                   ),
                   // 详细内容区：基本信息 + 描述
-                  ..._structuredDetailRows(item),
-                  if (item.type == 'class') ..._classFeatureSections(item),
-                  if (item.description.isNotEmpty) ...[
+                  ..._structuredDetailRows(displayedItem),
+                  if (displayedItem.type == 'class') ..._classFeatureSections(displayedItem),
+                  if (links.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text('关联条目', style: theme.textTheme.titleSmall),
+                    for (final link in links)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(_typeIcon(link.target.type)),
+                        title: Text(link.target.name),
+                        subtitle: Text(link.label.isEmpty ? link.relation : link.label),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          _showItemDetail(link.target);
+                        },
+                      ),
+                  ],
+                  if (displayedItem.description.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     Text(
                       '描述',
@@ -737,7 +766,7 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: SelectableText(
-                        item.description,
+                        displayedItem.description,
                         style: theme.textTheme.bodyMedium,
                       ),
                     ),
@@ -747,6 +776,20 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
             ),
           ),
           actions: [
+            if (campaignId != null)
+              IconButton(
+                tooltip: isFavorite ? '取消收藏' : '收藏',
+                onPressed: () async {
+                  await widget.contentController.setCampaignItemFavorite(
+                    campaignId: campaignId,
+                    itemId: displayedItem.id,
+                    favorite: !isFavorite,
+                  );
+                  if (context.mounted) Navigator.of(context).pop();
+                  await _showItemDetail(displayedItem);
+                },
+                icon: Icon(isFavorite ? Icons.bookmark : Icons.bookmark_outline),
+              ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('关闭'),
@@ -1093,6 +1136,21 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
                       await _loadItems();
                     },
                   ),
+                  if (_selectedCampaignId != null) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: FilterChip(
+                        avatar: const Icon(Icons.bookmark_outline, size: 18),
+                        label: const Text('仅看收藏'),
+                        selected: _favoriteOnly,
+                        onSelected: (selected) async {
+                          setState(() => _favoriteOnly = selected);
+                          await _loadItems();
+                        },
+                      ),
+                    ),
+                  ],
                   // 3. 子筛选（法术：环阶 + 学派 + 职业）
                   if (_selectedTypeFilter == 'spell') ...[
                     const SizedBox(height: 8),

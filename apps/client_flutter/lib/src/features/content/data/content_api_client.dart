@@ -44,6 +44,7 @@ abstract class ContentClient {
     required String campaignId,
     String? type,
     String? query,
+    bool favoriteOnly = false,
   });
 
   Future<void> setCampaignPackage({
@@ -197,11 +198,13 @@ class ContentApiClient implements ContentClient {
     required String campaignId,
     String? type,
     String? query,
+    bool favoriteOnly = false,
   }) async {
     final uri = _buildUri(
       '${_normalize(apiBaseUrl)}/campaigns/$campaignId/content/available',
       type: type,
       query: query,
+      favoriteOnly: favoriteOnly,
     );
     final response = await _httpClient.get(
       uri,
@@ -304,13 +307,14 @@ class ContentApiClient implements ContentClient {
   }
 }
 
-Uri _buildUri(String base, {String? type, String? query, String? packageId}) {
+Uri _buildUri(String base, {String? type, String? query, String? packageId, bool favoriteOnly = false}) {
   final params = <String, String>{};
   if (type != null && type.isNotEmpty) params['type'] = type;
   if (query != null && query.isNotEmpty) params['q'] = query;
   if (packageId != null && packageId.isNotEmpty) {
     params['packageId'] = packageId;
   }
+  if (favoriteOnly) params['favoriteOnly'] = 'true';
   return Uri.parse(
     base,
   ).replace(queryParameters: params.isEmpty ? null : params);

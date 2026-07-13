@@ -130,10 +130,12 @@ export class ContentController {
     @Param("id") id: string,
     @Query("type") type?: string,
     @Query("q") q?: string,
+    @Query("favoriteOnly") favoriteOnly?: string,
   ): Promise<ContentItemView[]> {
     return this.contentService.listAvailableCampaignItems(user, id, {
       type,
       q,
+      favoriteOnly: favoriteOnly === "true",
     });
   }
 

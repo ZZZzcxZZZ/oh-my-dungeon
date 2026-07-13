@@ -140,11 +140,12 @@ void main() {
       campaignId: 'camp-1',
       type: 'spell',
       query: 'fire',
+      favoriteOnly: true,
     );
 
     expect(
       captured?.url.toString(),
-      '$_apiBaseUrl/campaigns/camp-1/content/available?type=spell&q=fire',
+      '$_apiBaseUrl/campaigns/camp-1/content/available?type=spell&q=fire&favoriteOnly=true',
     );
     expect(result, [ContentItem.fromJson(_itemJson)]);
   });

@@ -1526,7 +1526,12 @@ class _FakeContentClient implements ContentClient {
     required String campaignId,
     required Object package,
     bool dryRun = false,
-  }) async => const ImportContentPackageResult(valid: true, errors: [], package: null);
+  }) => importPackage(
+    apiBaseUrl: apiBaseUrl,
+    accessToken: accessToken,
+    package: package,
+    dryRun: dryRun,
+  );
 
   @override
   Future<void> setCampaignItemFavorite({
@@ -1618,6 +1623,7 @@ class _FakeContentClient implements ContentClient {
     required String campaignId,
     String? type,
     String? query,
+    bool favoriteOnly = false,
   }) async {
     return const [_contentItem];
   }

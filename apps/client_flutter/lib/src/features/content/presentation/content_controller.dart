@@ -259,6 +259,7 @@ class ContentController extends ChangeNotifier {
     required String campaignId,
     String? type,
     String? query,
+    bool favoriteOnly = false,
   }) async {
     final token = accessToken;
     if (token == null) return;
@@ -274,6 +275,7 @@ class ContentController extends ChangeNotifier {
         campaignId: campaignId,
         type: type,
         query: query,
+        favoriteOnly: favoriteOnly,
       );
     } on ContentApiException catch (e) {
       _error = e.message;

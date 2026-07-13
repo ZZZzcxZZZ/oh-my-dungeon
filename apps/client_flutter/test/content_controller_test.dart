@@ -253,6 +253,7 @@ class _FakeContentClient implements ContentClient {
     required String campaignId,
     String? type,
     String? query,
+    bool favoriteOnly = false,
   }) async {
     availableCalls.add((campaignId, type, query));
     return availableItems;

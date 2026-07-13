@@ -395,6 +395,32 @@ describe("content endpoints", () => {
       });
   });
 
+  it("filters available campaign items to the current user's favorites", async () => {
+    const token = await login();
+    prismaService.campaign.findUnique.mockResolvedValueOnce(campaign);
+    prismaService.campaignContentPackage.findMany.mockResolvedValueOnce([
+      { packageId: "pkg-1", enabled: true },
+    ]);
+    prismaService.contentPackage.findMany.mockResolvedValueOnce([]);
+    prismaService.contentOverride.findMany.mockResolvedValueOnce([]);
+    prismaService.contentItem.findMany.mockResolvedValueOnce([
+      itemRow,
+      { ...itemRow, id: "item-2", slug: "shield", name: "Shield" },
+    ]);
+    prismaService.userContentFavorite.findMany.mockResolvedValueOnce([
+      { contentItemId: "item-2" },
+    ]);
+
+    await request(app.getHttpServer())
+      .get("/api/campaigns/camp-1/content/available?favoriteOnly=true")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toHaveLength(1);
+        expect(body[0].id).toBe("item-2");
+      });
+  });
+
   it("allows a campaign manager to disable one content item", async () => {
     const token = await login();
     prismaService.campaign.findUnique.mockResolvedValueOnce(campaign);

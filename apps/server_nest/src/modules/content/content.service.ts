@@ -355,7 +355,7 @@ export class ContentService {
   async listAvailableCampaignItems(
     actor: AccessTokenPayload,
     campaignId: string,
-    query: { type?: string; q?: string },
+    query: { type?: string; q?: string; favoriteOnly?: boolean },
   ): Promise<ContentItemView[]> {
     const campaign = await this.fetchCampaign(campaignId);
     this.campaignPolicy.canViewCampaign(actor, {
@@ -405,9 +405,18 @@ export class ContentService {
       orderBy: { name: "asc" },
     });
 
-    return items
+    let visibleItems = items
       .filter((item: any) => !disabledItemIds.has(item.id))
       .map(toItemView);
+    if (query.favoriteOnly) {
+      const favorites = await this.prismaService.userContentFavorite.findMany({
+        where: { userId: actor.userId },
+        select: { contentItemId: true },
+      });
+      const favoriteIds = new Set(favorites.map((entry: any) => entry.contentItemId));
+      visibleItems = visibleItems.filter((item) => favoriteIds.has(item.id));
+    }
+    return visibleItems;
   }
 
   async setCampaignItemFavorite(

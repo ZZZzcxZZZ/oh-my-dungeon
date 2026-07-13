@@ -226,7 +226,7 @@ git commit -m "feat(0.1): store compendium entries locally"
 - 创建：`apps/client_flutter/lib/src/features/content/domain/content_import_report.dart`
 - 创建：`apps/client_flutter/test/content_package_importer_test.dart`
 
-- [ ] **步骤 1：编写失败的 dry-run 与回滚测试**
+- [x] **步骤 1：编写失败的 dry-run 与回滚测试**
 
 ```dart
 test('validates links before replacing the installed package', () async {
@@ -259,7 +259,7 @@ test('validates links before replacing the installed package', () async {
 });
 ```
 
-- [ ] **步骤 2：运行并确认导入器缺失**
+- [x] **步骤 2：运行并确认导入器缺失**
 
 ```powershell
 cd apps/client_flutter
@@ -268,11 +268,11 @@ flutter test test/content_package_importer_test.dart
 
 预期：FAIL，`ContentPackageImporter` 不存在。
 
-- [ ] **步骤 3：实现预览与确认导入**
+- [x] **步骤 3：实现预览与确认导入**
 
 `previewJson` 接受单文件对象并验证 `entryCount`、ID、slug、块类型和包内链接。`previewDndPack(Uint8List bytes)` 只读取根目录 `manifest.json`、`entries.json` 和 `assets/`，限制压缩后 50 MB、解压后 200 MB、文件数 5000、单文件 20 MB，并拒绝绝对路径、`..`、符号链接和重复规范化路径。每个 image block 的相对路径必须存在于 assets，MIME 与文件签名不一致时拒绝。`importReport(report)` 只能接收 `valid == true` 且包含已解析条目和 assets 快照的报告，并在 Repository 单事务中替换同 ID 包。
 
-- [ ] **步骤 4：覆盖升级与失败回滚**
+- [x] **步骤 4：覆盖升级与失败回滚**
 
 向测试增加：先导入 `1.0.0`，再导入损坏的 `2.0.0`，断言 `1.0.0` 仍存在；导入有效 `2.0.0` 后收藏和笔记仍按稳定 ID 存在。再构造一个含 PNG 的 `.dndpack`，断言 `readAsset` 返回原 bytes；分别验证 zip-slip、超限、缺失 image asset 和伪造 MIME 被拒绝且旧包不变。
 
@@ -285,7 +285,7 @@ flutter test test/content_package_importer_test.dart test/content_repository_tes
 
 预期：全部通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/features/content/data/import apps/client_flutter/lib/src/features/content/domain/content_import_report.dart apps/client_flutter/test/content_package_importer_test.dart

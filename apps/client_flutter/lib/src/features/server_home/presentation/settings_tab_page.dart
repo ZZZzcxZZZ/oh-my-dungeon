@@ -18,7 +18,7 @@ class SettingsTabPage extends StatefulWidget {
     required this.authController,
     required this.appPreferencesController,
     this.serverProfileStore,
-    this.onSwitchServer,
+    this.onSwitchToProfile,
     super.key,
   });
 
@@ -27,7 +27,7 @@ class SettingsTabPage extends StatefulWidget {
   final AuthController authController;
   final AppPreferencesController appPreferencesController;
   final ServerProfileStore? serverProfileStore;
-  final VoidCallback? onSwitchServer;
+  final ValueChanged<ServerProfile>? onSwitchToProfile;
 
   @override
   State<SettingsTabPage> createState() => _SettingsTabPageState();
@@ -35,7 +35,6 @@ class SettingsTabPage extends StatefulWidget {
 
 class _SettingsTabPageState extends State<SettingsTabPage> {
   List<ServerProfile> _allProfiles = const [];
-  bool _loadingProfiles = false;
 
   @override
   void initState() {
@@ -46,12 +45,10 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
   Future<void> _loadProfiles() async {
     final store = widget.serverProfileStore;
     if (store == null) return;
-    setState(() => _loadingProfiles = true);
     final profiles = await store.listProfiles();
     if (!mounted) return;
     setState(() {
       _allProfiles = profiles;
-      _loadingProfiles = false;
     });
   }
 
@@ -116,41 +113,30 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
                 title: Text('版本 ${widget.profile.lastKnownVersion}'),
                 dense: true,
               ),
-              if (store != null) ...[
+              if (store != null && _allProfiles.length > 1) ...[
                 const Divider(height: 1),
-                if (_loadingProfiles)
-                  const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Center(
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '切换服务器',
+                      style: Theme.of(context).textTheme.labelMedium,
                     ),
-                  )
-                else if (_allProfiles.length <= 1)
-                  ListTile(
-                    leading: const Icon(Icons.add),
-                    title: const Text('添加其他服务器'),
-                    subtitle: const Text('在服务器选择页管理多个服务器'),
-                    onTap: widget.onSwitchServer,
-                  )
-                else
-                  ListTile(
-                    leading: const Icon(Icons.swap_horiz),
-                    title: const Text('切换服务器'),
-                    subtitle: Text(
-                      '当前 ${widget.profile.name}，共 ${_allProfiles.length} 个',
-                    ),
-                    onTap: widget.onSwitchServer,
                   ),
-                ListTile(
-                  leading: const Icon(Icons.list_alt),
-                  title: const Text('服务器列表'),
-                  subtitle: const Text('返回服务器选择页管理'),
-                  onTap: widget.onSwitchServer,
                 ),
+                for (final p in _allProfiles)
+                  ListTile(
+                    leading: Icon(
+                      p.id == widget.profile.id
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_off,
+                    ),
+                    title: Text(p.name),
+                    subtitle: Text(p.baseUrl),
+                    enabled: p.id != widget.profile.id,
+                    onTap: () => widget.onSwitchToProfile?.call(p),
+                  ),
               ],
             ],
           ),

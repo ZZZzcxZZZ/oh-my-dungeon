@@ -234,9 +234,9 @@ class _DndTableAppState extends State<DndTableApp> {
       appPreferencesController: deps.appPreferencesController,
       diceRoller: widget.diceRoller,
       serverProfileStore: deps.serverProfileStore,
-      onSwitchServer: () {
-        // 退出当前服务器，回到引导页选择。
-        _profileNotifier.deactivate();
+      onSwitchToProfile: (profile) async {
+        await deps.serverProfileStore.setDefaultProfileId(profile.id);
+        _profileNotifier.activate(profile);
       },
     );
   }

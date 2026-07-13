@@ -48,7 +48,7 @@ class MainShell extends StatefulWidget {
     required this.appPreferencesController,
     this.diceRoller,
     this.serverProfileStore,
-    this.onSwitchServer,
+    this.onSwitchToProfile,
     super.key,
   });
 
@@ -67,7 +67,7 @@ class MainShell extends StatefulWidget {
   final AppPreferencesController appPreferencesController;
   final DiceRoller? diceRoller;
   final ServerProfileStore? serverProfileStore;
-  final VoidCallback? onSwitchServer;
+  final ValueChanged<ServerProfile>? onSwitchToProfile;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -175,7 +175,7 @@ class _MainShellState extends State<MainShell> {
         authController: _authController,
         appPreferencesController: widget.appPreferencesController,
         serverProfileStore: widget.serverProfileStore,
-        onSwitchServer: widget.onSwitchServer,
+        onSwitchToProfile: widget.onSwitchToProfile,
       ),
     ];
     final body = IndexedStack(index: _currentIndex, children: pages);

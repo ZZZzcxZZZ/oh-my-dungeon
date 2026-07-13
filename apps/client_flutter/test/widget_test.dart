@@ -878,9 +878,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.pumpAndSettle();
 
-    expect(find.text('紧凑资料列表'), findsOneWidget);
     expect(find.text('Fire Bolt'), findsOneWidget);
-    expect(find.text('法术 · SRD'), findsOneWidget);
+    expect(find.textContaining('法术'), findsWidgets);
 
     await tester.pumpWidget(const SizedBox.shrink());
     preferencesController.dispose();

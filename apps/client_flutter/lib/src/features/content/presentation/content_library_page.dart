@@ -7,6 +7,7 @@ import '../../app_preferences/presentation/app_preferences_controller.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../campaigns/presentation/campaign_controller.dart';
 import '../../client_mode/domain/client_mode.dart';
+import '../domain/content.dart';
 import 'content_controller.dart';
 
 class ContentLibraryPage extends StatefulWidget {
@@ -32,8 +33,59 @@ class ContentLibraryPage extends StatefulWidget {
 class _ContentLibraryPageState extends State<ContentLibraryPage> {
   final TextEditingController _searchController = TextEditingController();
   String? _selectedCampaignId;
-  String? _selectedType;
+  String? _selectedTypeFilter = 'all';
+  String? _selectedSpellSchool;
+  int? _selectedSpellLevel;
+  String? _selectedSpellClass;
+  String? _selectedFeatCategory;
+  final Set<String> _enabledPackageIds = {};
   String? _bootstrappedForToken;
+
+  /// 虚拟类型过滤器：把"武器/护甲/冒险装备"等细分类型映射到服务端 type + 客户端 category 过滤。
+  static const _typeFilters = <_TypeFilterEntry>[
+    _TypeFilterEntry(value: 'all', label: '全部'),
+    _TypeFilterEntry(value: 'spell', label: '法术', serverType: 'spell'),
+    _TypeFilterEntry(
+      value: 'weapon',
+      label: '武器',
+      serverType: 'equipment',
+      categoryMatch: _matchWeapon,
+    ),
+    _TypeFilterEntry(
+      value: 'armor',
+      label: '护甲',
+      serverType: 'equipment',
+      categoryMatch: _matchArmor,
+    ),
+    _TypeFilterEntry(
+      value: 'gear',
+      label: '冒险装备',
+      serverType: 'item',
+    ),
+    _TypeFilterEntry(value: 'species', label: '种族', serverType: 'species'),
+    _TypeFilterEntry(value: 'class', label: '职业', serverType: 'class'),
+    _TypeFilterEntry(value: 'background', label: '背景', serverType: 'background'),
+    _TypeFilterEntry(value: 'feat', label: '专长', serverType: 'feat'),
+    _TypeFilterEntry(value: 'monster', label: '怪物', serverType: 'monster'),
+    _TypeFilterEntry(value: 'condition', label: '状态', serverType: 'condition'),
+  ];
+
+  static bool _matchWeapon(Map structured) {
+    final category = '${structured['category'] ?? ''}';
+    return category.contains('武器');
+  }
+
+  static bool _matchArmor(Map structured) {
+    final category = '${structured['category'] ?? ''}';
+    return category.contains('甲') || category.contains('盾');
+  }
+
+  _TypeFilterEntry get _activeTypeFilter {
+    return _typeFilters.firstWhere(
+      (e) => e.value == _selectedTypeFilter,
+      orElse: () => _typeFilters.first,
+    );
+  }
 
   @override
   void initState() {
@@ -51,7 +103,7 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
     await widget.campaignController.loadCampaigns();
     await widget.contentController.loadPackages();
     _ensureCampaignSelection();
-    await _loadAvailableItems();
+    await _loadItems();
   }
 
   void _refresh() {
@@ -79,18 +131,26 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
     _selectedCampaignId = campaigns.isEmpty ? null : campaigns.first.id;
   }
 
-  Future<void> _loadAvailableItems() async {
+  Future<void> _loadItems() async {
     _ensureCampaignSelection();
     final campaignId = _selectedCampaignId;
-    if (campaignId == null) return;
+    final query = _searchController.text.trim().isEmpty
+        ? null
+        : _searchController.text.trim();
+    final serverType = _activeTypeFilter.serverType;
 
-    await widget.contentController.loadAvailableCampaignItems(
-      campaignId: campaignId,
-      type: _selectedType,
-      query: _searchController.text.trim().isEmpty
-          ? null
-          : _searchController.text.trim(),
-    );
+    if (campaignId != null) {
+      await widget.contentController.loadAvailableCampaignItems(
+        campaignId: campaignId,
+        type: serverType,
+        query: query,
+      );
+    } else {
+      await widget.contentController.loadItems(
+        type: serverType,
+        query: query,
+      );
+    }
   }
 
   Future<void> _showImportDialog() async {
@@ -148,7 +208,7 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
     );
 
     if (imported == true) {
-      await _loadAvailableItems();
+      await _loadItems();
     }
   }
 
@@ -274,7 +334,7 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
     await Future<void>.delayed(const Duration(milliseconds: 300));
     controller.dispose();
     if (imported == true) {
-      await _loadAvailableItems();
+      await _loadItems();
     }
   }
 
@@ -451,19 +511,19 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
     );
 
     if (created == true) {
-      await _loadAvailableItems();
+      await _loadItems();
     }
   }
 
-  Future<void> _enableSelectedPackage(String packageId) async {
+  Future<void> _setPackageEnabled(String packageId, bool enabled) async {
     final campaignId = _selectedCampaignId;
     if (campaignId == null) return;
     await widget.contentController.setCampaignPackage(
       campaignId: campaignId,
       packageId: packageId,
-      enabled: true,
+      enabled: enabled,
     );
-    await _loadAvailableItems();
+    await _loadItems();
   }
 
   Future<void> _copyPackageJson(String packageId) async {
@@ -489,6 +549,410 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
     super.dispose();
   }
 
+  List<ContentItem> get _filteredItems {
+    final hasCampaign = _selectedCampaignId != null;
+    final items = hasCampaign
+        ? widget.contentController.availableItems
+        : widget.contentController.items;
+    final filter = _activeTypeFilter;
+    return items.where((item) {
+      // 1. 虚拟类型过滤：服务端已粗过滤 type，客户端再按 category 精筛
+      if (filter.categoryMatch != null) {
+        final structured = item.structured;
+        if (structured is! Map) return false;
+        if (!filter.categoryMatch!(structured)) return false;
+      }
+      // 2. 法术细分：环阶 + 学派 + 职业
+      if (item.type == 'spell') {
+        final structured = item.structured;
+        if (structured is Map) {
+          if (_selectedSpellSchool != null) {
+            final school = structured['school'];
+            if (school == null ||
+                '$school'.toLowerCase() !=
+                    _selectedSpellSchool!.toLowerCase()) {
+              return false;
+            }
+          }
+          if (_selectedSpellLevel != null) {
+            final level = structured['level'];
+            if (level is! num || level.toInt() != _selectedSpellLevel) {
+              return false;
+            }
+          }
+          if (_selectedSpellClass != null) {
+            final classes = structured['classes'];
+            if (classes is! List ||
+                !classes.any(
+                  (c) => '$c'.toLowerCase() ==
+                      _selectedSpellClass!.toLowerCase(),
+                )) {
+              return false;
+            }
+          }
+        }
+      }
+      // 3. 专长细分：类别
+      if (item.type == 'feat' && _selectedFeatCategory != null) {
+        final structured = item.structured;
+        if (structured is Map) {
+          final category = '${structured['category'] ?? ''}';
+          if (category != _selectedFeatCategory) return false;
+        }
+      }
+      return true;
+    }).toList();
+  }
+
+  List<String> get _availableSpellSchools {
+    final hasCampaign = _selectedCampaignId != null;
+    final items = hasCampaign
+        ? widget.contentController.availableItems
+        : widget.contentController.items;
+    final schools = <String>{};
+    for (final item in items) {
+      if (item.type != 'spell') continue;
+      final structured = item.structured;
+      if (structured is Map) {
+        final school = structured['school'];
+        if (school != null) schools.add('$school');
+      }
+    }
+    return schools.toList()..sort();
+  }
+
+  List<String> get _availableSpellClasses {
+    final hasCampaign = _selectedCampaignId != null;
+    final items = hasCampaign
+        ? widget.contentController.availableItems
+        : widget.contentController.items;
+    final classes = <String>{};
+    for (final item in items) {
+      if (item.type != 'spell') continue;
+      final structured = item.structured;
+      if (structured is Map) {
+        final value = structured['classes'];
+        if (value is List) {
+          for (final c in value) {
+            final s = '$c';
+            if (s.isNotEmpty) classes.add(s);
+          }
+        }
+      }
+    }
+    return classes.toList()..sort();
+  }
+
+  List<String> get _availableFeatCategories {
+    final hasCampaign = _selectedCampaignId != null;
+    final items = hasCampaign
+        ? widget.contentController.availableItems
+        : widget.contentController.items;
+    final categories = <String>{};
+    for (final item in items) {
+      if (item.type != 'feat') continue;
+      final structured = item.structured;
+      if (structured is Map) {
+        final category = structured['category'];
+        if (category != null && '$category'.isNotEmpty) {
+          categories.add('$category');
+        }
+      }
+    }
+    return categories.toList()..sort();
+  }
+
+  void _showItemDetail(ContentItem item) {
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        final theme = Theme.of(context);
+        final colorScheme = theme.colorScheme;
+        return AlertDialog(
+          title: Text(item.name),
+          content: SizedBox(
+            width: 560,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 顶部类型横幅：使用 M3 surfaceContainerHigh
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Chip(
+                          avatar: Icon(_typeIcon(item.type), size: 16),
+                          label: Text(_typeLabel(item.type)),
+                          side: BorderSide.none,
+                        ),
+                        if (item.sourceLabel.isNotEmpty)
+                          Chip(
+                            avatar: const Icon(Icons.book_outlined, size: 16),
+                            label: Text(item.sourceLabel),
+                            side: BorderSide.none,
+                          ),
+                        ..._structuredChips(item),
+                      ],
+                    ),
+                  ),
+                  // 详细内容区：基本信息 + 描述
+                  ..._structuredDetailRows(item),
+                  if (item.description.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      '描述',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: SelectableText(
+                        item.description,
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('关闭'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  List<Widget> _structuredChips(ContentItem item) {
+    final structured = item.structured;
+    if (structured is! Map) return const [];
+    final chips = <Widget>[];
+    // 统一纯文字 chip（顶部已有类型+来源两个带图标 chip 作为标识）
+    Widget chip(String text) => Chip(
+          label: Text(text),
+          side: BorderSide.none,
+          visualDensity: VisualDensity.compact,
+        );
+
+    if (item.type == 'spell') {
+      final level = structured['level'];
+      if (level is num) {
+        chips.add(chip(level == 0 ? '戏法' : '$level环'));
+      }
+      final school = structured['school'];
+      if (school != null) chips.add(chip('$school'));
+      if (structured['ritual'] == true) chips.add(chip('仪式'));
+    } else if (item.type == 'equipment') {
+      final category = structured['category'];
+      if (category != null) chips.add(chip('$category'));
+      final damage = structured['damage'];
+      if (damage != null) chips.add(chip('伤害 $damage'));
+      final ac = structured['ac'];
+      if (ac != null) chips.add(chip('AC $ac'));
+      final price = structured['price'];
+      if (price != null) chips.add(chip('$price'));
+    } else if (item.type == 'item') {
+      final category = structured['category'];
+      if (category != null) chips.add(chip('$category'));
+      final price = structured['price'];
+      if (price != null) chips.add(chip('$price'));
+    } else if (item.type == 'species') {
+      final size = structured['size'];
+      if (size != null) chips.add(chip('$size'));
+      final speed = structured['speed'];
+      if (speed != null) chips.add(chip('速度 $speed'));
+      final creatureType = structured['creatureType'];
+      if (creatureType != null) chips.add(chip('$creatureType'));
+    } else if (item.type == 'class') {
+      final hitDie = structured['hitDie'];
+      if (hitDie != null) chips.add(chip('生命骰 $hitDie'));
+      final primaryAbility = structured['primaryAbility'];
+      if (primaryAbility != null) chips.add(chip('主属性 $primaryAbility'));
+    } else if (item.type == 'feat') {
+      final category = structured['category'];
+      if (category != null) chips.add(chip('$category'));
+      final prereq = structured['prerequisite'];
+      if (prereq != null) chips.add(chip('先决 $prereq'));
+    }
+    return chips;
+  }
+
+  List<Widget> _structuredDetailRows(ContentItem item) {
+    final structured = item.structured;
+    if (structured is! Map) return const [];
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    // 过滤掉已经在 chips 中展示过的字段，避免重复
+    final skipKeys = <String>{};
+    if (item.type == 'spell') {
+      skipKeys.addAll(const {'level', 'school', 'ritual'});
+    } else if (item.type == 'equipment') {
+      skipKeys.addAll(const {'category', 'damage', 'ac', 'price'});
+    } else if (item.type == 'item') {
+      skipKeys.addAll(const {'category', 'price'});
+    } else if (item.type == 'species') {
+      skipKeys.addAll(const {'size', 'speed', 'creatureType'});
+    } else if (item.type == 'class') {
+      skipKeys.add('primaryAbility');
+    } else if (item.type == 'feat') {
+      skipKeys.addAll(const {'category', 'prerequisite'});
+    }
+    // 专长只显示描述，不显示基本信息
+    if (item.type == 'feat') return const [];
+
+    final entries = structured.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    final visibleEntries = entries.where((e) {
+      if (e.value == null) return false;
+      if (skipKeys.contains(e.key)) return false;
+      String display;
+      if (e.value is List) {
+        display = (e.value as List).join(', ');
+      } else if (e.value is Map) {
+        display = e.value.toString();
+      } else {
+        display = '${e.value}';
+      }
+      return display.isNotEmpty;
+    }).toList();
+    if (visibleEntries.isEmpty) return const [];
+
+    return [
+      const SizedBox(height: 16),
+      Text(
+        '基本信息',
+        style: theme.textTheme.labelLarge?.copyWith(
+          color: colorScheme.onSurfaceVariant,
+        ),
+      ),
+      const SizedBox(height: 6),
+      Container(
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Column(
+          children: [
+            for (final entry in visibleEntries) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 96,
+                      child: Text(
+                        _structuredFieldLabel(entry.key),
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    Expanded(child: _renderStructuredValue(entry.value)),
+                  ],
+                ),
+              ),
+              if (entry != visibleEntries.last)
+                Divider(
+                  height: 1,
+                  color: colorScheme.outlineVariant,
+                ),
+            ],
+          ],
+        ),
+      ),
+    ];
+  }
+
+  Widget _renderStructuredValue(Object? value) {
+    if (value is List) {
+      return Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        children: [
+          for (final v in value)
+            Chip(
+              label: Text('$v'),
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+        ],
+      );
+    }
+    return SelectableText('$value');
+  }
+
+  String _structuredFieldLabel(String key) {
+    return switch (key) {
+      'level' => '环阶',
+      'levelLabel' => '环阶',
+      'school' => '学派',
+      'castingTime' => '施法时间',
+      'range' => '射程',
+      'components' => '成分',
+      'duration' => '持续时间',
+      'ritual' => '仪式',
+      'classes' => '职业列表',
+      'category' => '类别',
+      'price' => '价格',
+      'weight' => '重量',
+      'size' => '体型',
+      'speed' => '速度',
+      'creatureType' => '生物类型',
+      'abilityScoreHint' => '属性加成',
+      'traits' => '特性',
+      'hitDie' => '生命骰',
+      'primaryAbility' => '主属性',
+      'savingThrows' => '豁免熟练',
+      'spellcastingAbility' => '施法属性',
+      'armorProficiency' => '护甲熟练',
+      'weaponProficiency' => '武器熟练',
+      'toolProficiency' => '工具熟练',
+      'skills' => '技能熟练',
+      'recommendedFeat' => '推荐专长',
+      'prerequisite' => '先决条件',
+      'page' => '页码',
+      'zhName' => '中文名',
+      'enName' => '英文名',
+      'outlinePath' => '目录路径',
+      'damage' => '伤害',
+      'versatileDamage' => '双手伤害',
+      'properties' => '属性',
+      'mastery' => '精通',
+      'armorType' => '护甲类型',
+      'weaponType' => '武器类型',
+      'ac' => 'AC',
+      'acBonus' => 'AC 加成',
+      'strengthRequirement' => '力量要求',
+      'stealthDisadvantage' => '隐匿劣势',
+      _ => key,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!widget.authController.isLoggedIn) {
@@ -498,8 +962,10 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
     final isDm = widget.modeController.mode == ClientMode.dungeonMaster;
     final campaigns = widget.campaignController.campaigns;
     final packages = widget.contentController.packages;
-    final items = widget.contentController.availableItems;
+    final items = _filteredItems;
     final compact = widget.appPreferencesController.preferences.compactLists;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -530,142 +996,522 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
           ),
         ],
       ),
-      body: ListView(
-        padding: EdgeInsets.all(compact ? 12 : 16),
-        children: [
-          DropdownMenu<String>(
-            label: const Text('战役'),
-            initialSelection: _selectedCampaignId,
-            expandedInsets: EdgeInsets.zero,
-            dropdownMenuEntries: [
-              for (final campaign in campaigns)
-                DropdownMenuEntry(value: campaign.id, label: campaign.name),
-            ],
-            onSelected: (value) async {
-              _selectedCampaignId = value;
-              await _loadAvailableItems();
-            },
-          ),
-          const SizedBox(height: 12),
-          SegmentedButton<String?>(
-            segments: const [
-              ButtonSegment(value: null, label: Text('全部')),
-              ButtonSegment(value: 'spell', label: Text('法术')),
-              ButtonSegment(value: 'item', label: Text('物品')),
-              ButtonSegment(value: 'equipment', label: Text('装备')),
-              ButtonSegment(value: 'species', label: Text('种族')),
-              ButtonSegment(value: 'class', label: Text('职业')),
-              ButtonSegment(value: 'background', label: Text('背景')),
-              ButtonSegment(value: 'feat', label: Text('专长')),
-              ButtonSegment(value: 'monster', label: Text('怪物')),
-              ButtonSegment(value: 'condition', label: Text('状态')),
-            ],
-            selected: {_selectedType},
-            onSelectionChanged: (selection) async {
-              _selectedType = selection.single;
-              await _loadAvailableItems();
-            },
-          ),
-          const SizedBox(height: 12),
-          SearchBar(
-            controller: _searchController,
-            hintText: '搜索资料',
-            leading: const Icon(Icons.search),
-            onSubmitted: (_) => _loadAvailableItems(),
-          ),
-          if (isDm) ...[
-            const SizedBox(height: 20),
-            Text('内容包', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            if (packages.isEmpty)
-              const ListTile(
-                leading: Icon(Icons.inventory_2_outlined),
-                title: Text('还没有内容包'),
-                subtitle: Text('导入 JSON 后可为战役启用'),
-              )
-            else
-              for (final contentPackage in packages)
-                ListTile(
-                  dense: compact,
-                  visualDensity: compact
-                      ? VisualDensity.compact
-                      : VisualDensity.standard,
-                  leading: const Icon(Icons.inventory_2_outlined),
-                  title: Text(contentPackage.name),
-                  subtitle: Text(contentPackage.version),
-                  trailing: Wrap(
-                    spacing: 8,
-                    children: [
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                compact ? 12 : 16,
+                compact ? 12 : 16,
+                compact ? 12 : 16,
+                8,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 1. 顶部搜索栏
+                  SearchBar(
+                    controller: _searchController,
+                    hintText: '搜索名称、关键字…',
+                    leading: const Icon(Icons.search),
+                    trailing: [
                       IconButton(
-                        tooltip: '复制 JSON',
-                        onPressed: () => _copyPackageJson(contentPackage.id),
-                        icon: const Icon(Icons.copy_outlined),
+                        tooltip: '搜索',
+                        icon: const Icon(Icons.arrow_forward),
+                        onPressed: _loadItems,
                       ),
-                      FilledButton.tonal(
-                        onPressed: () =>
-                            _enableSelectedPackage(contentPackage.id),
-                        child: const Text('启用'),
+                    ],
+                    onSubmitted: (_) => _loadItems(),
+                  ),
+                  const SizedBox(height: 12),
+                  // 2. 类型选择
+                  DropdownMenu<String?>(
+                    key: ValueKey('type-filter-$_selectedTypeFilter'),
+                    label: const Text('类型'),
+                    initialSelection: _selectedTypeFilter,
+                    expandedInsets: EdgeInsets.zero,
+                    dropdownMenuEntries: [
+                      for (final entry in _typeFilters)
+                        DropdownMenuEntry(value: entry.value, label: entry.label),
+                    ],
+                    onSelected: (value) async {
+                      if (value == null) return;
+                      setState(() {
+                        _selectedTypeFilter = value;
+                        // 切换类型时清空子筛选项
+                        _selectedSpellLevel = null;
+                        _selectedSpellSchool = null;
+                        _selectedSpellClass = null;
+                        _selectedFeatCategory = null;
+                      });
+                      await _loadItems();
+                    },
+                  ),
+                  // 3. 子筛选（法术：环阶 + 学派 + 职业）
+                  if (_selectedTypeFilter == 'spell') ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        SizedBox(
+                          width: 130,
+                          child: DropdownMenu<int?>(
+                            key: ValueKey(
+                              'spell-level-$_selectedSpellLevel',
+                            ),
+                            label: const Text('环阶'),
+                            initialSelection: _selectedSpellLevel,
+                            expandedInsets: EdgeInsets.zero,
+                            dropdownMenuEntries: const [
+                              DropdownMenuEntry(value: null, label: '全部'),
+                              DropdownMenuEntry(value: 0, label: '戏法'),
+                              DropdownMenuEntry(value: 1, label: '1 环'),
+                              DropdownMenuEntry(value: 2, label: '2 环'),
+                              DropdownMenuEntry(value: 3, label: '3 环'),
+                              DropdownMenuEntry(value: 4, label: '4 环'),
+                              DropdownMenuEntry(value: 5, label: '5 环'),
+                              DropdownMenuEntry(value: 6, label: '6 环'),
+                              DropdownMenuEntry(value: 7, label: '7 环'),
+                              DropdownMenuEntry(value: 8, label: '8 环'),
+                              DropdownMenuEntry(value: 9, label: '9 环'),
+                            ],
+                            onSelected: (value) {
+                              setState(() => _selectedSpellLevel = value);
+                            },
+                          ),
+                        ),
+                        SizedBox(
+                          width: 150,
+                          child: DropdownMenu<String?>(
+                            key: ValueKey(
+                              'spell-school-$_selectedSpellSchool',
+                            ),
+                            label: const Text('学派'),
+                            initialSelection: _selectedSpellSchool,
+                            expandedInsets: EdgeInsets.zero,
+                            dropdownMenuEntries: [
+                              const DropdownMenuEntry(
+                                value: null,
+                                label: '全部',
+                              ),
+                              for (final school in _availableSpellSchools)
+                                DropdownMenuEntry(
+                                  value: school,
+                                  label: school,
+                                ),
+                            ],
+                            onSelected: (value) {
+                              setState(() => _selectedSpellSchool = value);
+                            },
+                          ),
+                        ),
+                        SizedBox(
+                          width: 150,
+                          child: DropdownMenu<String?>(
+                            key: ValueKey(
+                              'spell-class-$_selectedSpellClass',
+                            ),
+                            label: const Text('职业'),
+                            initialSelection: _selectedSpellClass,
+                            expandedInsets: EdgeInsets.zero,
+                            dropdownMenuEntries: [
+                              const DropdownMenuEntry(
+                                value: null,
+                                label: '全部',
+                              ),
+                              for (final cls in _availableSpellClasses)
+                                DropdownMenuEntry(
+                                  value: cls,
+                                  label: cls,
+                                ),
+                            ],
+                            onSelected: (value) {
+                              setState(() => _selectedSpellClass = value);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  // 4. 子筛选（专长：类别）
+                  if (_selectedTypeFilter == 'feat' &&
+                      _availableFeatCategories.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: 200,
+                      child: DropdownMenu<String?>(
+                        key: ValueKey(
+                          'feat-category-$_selectedFeatCategory',
+                        ),
+                        label: const Text('类别'),
+                        initialSelection: _selectedFeatCategory,
+                        expandedInsets: EdgeInsets.zero,
+                        dropdownMenuEntries: [
+                          const DropdownMenuEntry(
+                            value: null,
+                            label: '全部',
+                          ),
+                          for (final category in _availableFeatCategories)
+                            DropdownMenuEntry(
+                              value: category,
+                              label: category,
+                            ),
+                        ],
+                        onSelected: (value) {
+                          setState(() => _selectedFeatCategory = value);
+                        },
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          // 5. DM 内容包管理（折叠在卡片里）
+          if (isDm && campaigns.isNotEmpty) ...[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Card(
+                  elevation: 0,
+                  color: colorScheme.surfaceContainerLow,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.inventory_2_outlined,
+                              size: 20,
+                              color: colorScheme.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '内容包',
+                              style: theme.textTheme.titleMedium,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (packages.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: Text('还没有内容包，导入 JSON 后可为战役启用'),
+                          )
+                        else
+                          for (final contentPackage in packages)
+                            ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(
+                                Icons.inventory_2_outlined,
+                                size: 22,
+                              ),
+                              title: Text(contentPackage.name),
+                              subtitle: Text(
+                                '${contentPackage.version}'
+                                '${contentPackage.scope == "system" ? " · 内置" : ""}',
+                              ),
+                              trailing: _buildPackageToggle(contentPackage),
+                            ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+          ],
+          // 6. 条目计数
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Text(
+                    '条目',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${items.length}',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSecondaryContainer,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 8)),
+          // 7. 条目列表（卡片样式）
+          if (widget.contentController.isLoading)
+            const SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+            )
+          else if (items.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.menu_book_outlined,
+                        size: 48,
+                        color: colorScheme.outline,
+                      ),
+                      const SizedBox(height: 12),
+                      Text('暂无内容', style: theme.textTheme.titleMedium),
+                      const SizedBox(height: 4),
+                      Text(
+                        '尝试更换筛选或刷新资料库',
+                        style: theme.textTheme.bodySmall,
                       ),
                     ],
                   ),
                 ),
-          ],
-          const SizedBox(height: 20),
-          Text('可用条目', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          if (widget.contentController.isLoading)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: CircularProgressIndicator(),
               ),
-            )
-          else if (items.isEmpty)
-            const ListTile(
-              leading: Icon(Icons.menu_book_outlined),
-              title: Text('暂无可用内容'),
-              subtitle: Text('选择战役或让 DM 启用内容包'),
             )
           else
-            for (final item in items)
-              ListTile(
-                dense: compact,
-                visualDensity: compact
-                    ? VisualDensity.compact
-                    : VisualDensity.standard,
-                leading: const Icon(Icons.menu_book_outlined),
-                title: Text(item.name),
-                subtitle: compact
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('紧凑资料列表'),
-                          Text(
-                            '${_typeLabel(item.type)} · ${item.sourceLabel}',
-                          ),
-                        ],
-                      )
-                    : Text('${_typeLabel(item.type)} · ${item.sourceLabel}'),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverList.builder(
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  return _buildItemCard(item, compact);
+                },
               ),
-          if (widget.contentController.importErrors.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            for (final error in widget.contentController.importErrors)
-              Text(
-                error,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          // 错误信息
+          if (widget.contentController.importErrors.isNotEmpty ||
+              widget.contentController.error != null) ...[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final error
+                        in widget.contentController.importErrors)
+                      Text(
+                        error,
+                        style: TextStyle(color: colorScheme.error),
+                      ),
+                    if (widget.contentController.error != null)
+                      Text(
+                        widget.contentController.error!,
+                        style: TextStyle(color: colorScheme.error),
+                      ),
+                  ],
+                ),
               ),
-          ],
-          if (widget.contentController.error != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              widget.contentController.error!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ],
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
       ),
     );
   }
+
+  Widget _buildItemCard(ContentItem item, bool compact) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.symmetric(vertical: compact ? 3 : 5),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: colorScheme.outlineVariant),
+      ),
+      child: InkWell(
+        onTap: () => _showItemDetail(item),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: compact ? 8 : 12,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: colorScheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  _typeIcon(item.type),
+                  color: colorScheme.onSecondaryContainer,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            item.name,
+                            style: theme.textTheme.titleSmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _typeLabel(item.type),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    _buildItemSubtitle(item),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.chevron_right,
+                color: colorScheme.onSurfaceVariant,
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPackageToggle(ContentPackage contentPackage) {
+    if (contentPackage.scope == 'system') {
+      return const Chip(
+        label: Text('内置'),
+        avatar: Icon(Icons.verified, size: 16),
+      );
+    }
+    final campaignId = _selectedCampaignId;
+    if (campaignId == null) {
+      return const SizedBox.shrink();
+    }
+    final enabled = _enabledPackageIds.contains(contentPackage.id);
+    return Wrap(
+      spacing: 8,
+      children: [
+        IconButton(
+          tooltip: '复制 JSON',
+          onPressed: () => _copyPackageJson(contentPackage.id),
+          icon: const Icon(Icons.copy_outlined),
+        ),
+        FilledButton.tonal(
+          onPressed: enabled
+              ? () => _setPackageEnabled(contentPackage.id, false)
+              : () => _setPackageEnabled(contentPackage.id, true),
+          child: Text(enabled ? '取消启用' : '启用'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildItemSubtitle(ContentItem item) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final parts = <String>[];
+    final structured = item.structured;
+    if (structured is Map) {
+      if (item.type == 'spell') {
+        final level = structured['level'];
+        if (level is num) {
+          parts.add(level == 0 ? '戏法' : '$level环');
+        }
+        final school = structured['school'];
+        if (school != null) parts.add('$school');
+        final castingTime = structured['castingTime'];
+        if (castingTime != null) parts.add('$castingTime');
+      } else if (item.type == 'equipment' || item.type == 'item') {
+        final category = structured['category'];
+        if (category != null) parts.add('$category');
+        final damage = structured['damage'];
+        if (damage != null) parts.add('伤害 $damage');
+        final ac = structured['ac'];
+        if (ac != null) parts.add('AC $ac');
+        final price = structured['price'];
+        if (price != null) parts.add('$price');
+      } else if (item.type == 'species') {
+        final size = structured['size'];
+        if (size != null) parts.add('$size');
+        final speed = structured['speed'];
+        if (speed != null) parts.add('速度 $speed');
+      } else if (item.type == 'class') {
+        final hitDie = structured['hitDie'];
+        if (hitDie != null) parts.add('生命骰 $hitDie');
+        final primaryAbility = structured['primaryAbility'];
+        if (primaryAbility != null) parts.add('主属性 $primaryAbility');
+      } else if (item.type == 'feat') {
+        final category = structured['category'];
+        if (category != null) parts.add('$category');
+        final prerequisite = structured['prerequisite'];
+        if (prerequisite != null && prerequisite.toString().isNotEmpty) {
+          parts.add('先决 $prerequisite');
+        }
+      } else if (item.type == 'background') {
+        final ability = structured['abilityScoreHint'];
+        if (ability != null) parts.add('$ability');
+      }
+    }
+    if (item.sourceLabel.isNotEmpty) parts.add(item.sourceLabel);
+    return Text(
+      parts.join(' · '),
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: colorScheme.onSurfaceVariant,
+      ),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+}
+
+class _TypeFilterEntry {
+  const _TypeFilterEntry({
+    required this.value,
+    required this.label,
+    this.serverType,
+    this.categoryMatch,
+  });
+
+  final String value;
+  final String label;
+  final String? serverType;
+  final bool Function(Map structured)? categoryMatch;
 }
 
 class _ContentTypeFields extends StatelessWidget {
@@ -936,6 +1782,24 @@ String _typeLabel(String type) {
     _ => type,
   };
 }
+
+IconData _typeIcon(String type) {
+  return switch (type) {
+    'spell' => Icons.auto_fix_high_outlined,
+    'item' => Icons.inventory_2_outlined,
+    'equipment' => Icons.shield_outlined,
+    'species' => Icons.face_outlined,
+    'class' => Icons.school_outlined,
+    'background' => Icons.history_edu_outlined,
+    'feat' => Icons.star_outline,
+    'feature' => Icons.star_outline,
+    'monster' => Icons.pets_outlined,
+    'condition' => Icons.healing_outlined,
+    _ => Icons.menu_book_outlined,
+  };
+}
+
+
 
 String _privateDraftSummary(String jsonText) {
   final decoded = jsonDecode(jsonText);

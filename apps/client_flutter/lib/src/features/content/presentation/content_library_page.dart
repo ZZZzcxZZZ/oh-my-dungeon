@@ -1385,16 +1385,10 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
   Widget _buildItemCard(ContentItem item, bool compact) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    return Card(
-      elevation: 0,
-      margin: EdgeInsets.symmetric(vertical: compact ? 3 : 5),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: colorScheme.outlineVariant),
-      ),
+    return Material(
+      color: Colors.transparent,
       child: InkWell(
         onTap: () => _showItemDetail(item),
-        borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: EdgeInsets.symmetric(
             horizontal: 12,

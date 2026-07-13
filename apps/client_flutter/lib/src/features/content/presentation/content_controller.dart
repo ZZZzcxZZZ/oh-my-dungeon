@@ -105,7 +105,9 @@ class ContentController extends ChangeNotifier {
       );
       _importErrors = result.errors;
       if (!result.valid) return false;
-      if (!dryRun && result.package != null) _packages = [..._packages, result.package!];
+      if (!dryRun && result.package != null) {
+        _packages = [..._packages, result.package!];
+      }
       return true;
     } on ContentApiException catch (e) {
       _error = e.message;
@@ -128,25 +130,15 @@ class ContentController extends ChangeNotifier {
     final token = accessToken;
     if (token == null) return false;
 
-    final package = <String, Object?>{
-      'name': packageName.trim().isEmpty ? '自定义资料' : packageName.trim(),
-      'version': '1.0.0',
-      'schemaVersion': 1,
-      'locale': 'zh-CN',
-      'items': [
-        {
-          'type': type,
-          'slug': _slugify(name),
-          'name': name.trim(),
-          'description': description.trim(),
-          'structured': structured,
-          'tags': tags,
-          'sourceLabel': sourceLabel.trim().isEmpty
-              ? 'Homebrew'
-              : sourceLabel.trim(),
-        },
-      ],
-    };
+    final package = _singleItemPackage(
+      packageName: packageName,
+      type: type,
+      name: name,
+      description: description,
+      sourceLabel: sourceLabel,
+      structured: structured,
+      tags: tags,
+    );
 
     _loading = true;
     _error = null;
@@ -180,6 +172,32 @@ class ContentController extends ChangeNotifier {
     _loading = false;
     notifyListeners();
     return false;
+  }
+
+  Future<bool> importCampaignSingleItem({
+    required String campaignId,
+    required String packageName,
+    required String type,
+    required String name,
+    required String description,
+    required String sourceLabel,
+    Map<String, Object?> structured = const {},
+    List<String> tags = const [],
+  }) {
+    return importCampaignJson(
+      campaignId: campaignId,
+      jsonText: jsonEncode(
+        _singleItemPackage(
+          packageName: packageName,
+          type: type,
+          name: name,
+          description: description,
+          sourceLabel: sourceLabel,
+          structured: structured,
+          tags: tags,
+        ),
+      ),
+    );
   }
 
   Future<bool> _sendImportJson(String jsonText, {required bool dryRun}) async {
@@ -389,4 +407,34 @@ String _slugify(String value) {
       .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
       .replaceAll(RegExp(r'^-+|-+$'), '');
   return slug.isEmpty ? 'custom-item' : slug;
+}
+
+Map<String, Object?> _singleItemPackage({
+  required String packageName,
+  required String type,
+  required String name,
+  required String description,
+  required String sourceLabel,
+  required Map<String, Object?> structured,
+  required List<String> tags,
+}) {
+  return {
+    'name': packageName.trim().isEmpty ? '自定义资料' : packageName.trim(),
+    'version': '1.0.0',
+    'schemaVersion': 1,
+    'locale': 'zh-CN',
+    'items': [
+      {
+        'type': type,
+        'slug': _slugify(name),
+        'name': name.trim(),
+        'description': description.trim(),
+        'structured': structured,
+        'tags': tags,
+        'sourceLabel': sourceLabel.trim().isEmpty
+            ? 'Homebrew'
+            : sourceLabel.trim(),
+      },
+    ],
+  };
 }

@@ -13,7 +13,7 @@
 - NestJS 服务端骨架
 - `/health`
 - `/.well-known/dnd-tool-server`
-- Prisma schema（User / ServerAdmin / RefreshToken / ServerSetting / Campaign / CampaignMember / CampaignInvite / Session / SessionMember / ChatMessage / DiceRoll / JournalEntry / Character / CharacterCampaignBinding / ContentPackage / ContentItem / CampaignContentPackage / ContentOverride / Npc / Encounter / EncounterParticipant / CheckRequest / CheckResponse）
+- Prisma schema（User / ServerAdmin / RefreshToken / ServerSetting / Campaign / CampaignMember / CampaignInvite / Session / SessionMember / ChatMessage / DiceRoll / JournalEntry / Character / CharacterCampaignBinding / ContentPackage / ContentItem / ContentItemLink / UserContentFavorite / CampaignContentPackage / ContentOverride / Npc / Encounter / EncounterParticipant / CheckRequest / CheckResponse）
 - Docker Compose 配置
 - GitHub Actions CI 配置
 - 服务端与客户端基础测试
@@ -32,7 +32,7 @@
 - 服务端角色 API：创建 / 编辑 / 自有角色列表 / 角色绑定战役 / 战役角色列表 / 战役角色 HP 调整
 - 客户端角色入口：Material 3 底部导航“角色”页、基础创建/编辑、战役绑定和 HP 快捷调整
 - 服务端内容库 API：内容包 dry-run 校验 / 导入 / 条目查询 / 战役启用内容包 / 单条内容禁用 / 战役可用内容查询
-- 客户端资料库入口：Material 3 “资料库/内容库”页、JSON 导入校验、内容包启用、战役内容查询
+- 客户端资料库入口：Material 3 “资料库/内容库”页、战役作用域的 GUI / JSON / 私有草稿导入、内容包启用、收藏、关联条目和战役内容查询
 - 服务端 DM 控场 API：NPC、Encounter、EncounterParticipant、开始/推进/结束遭遇、HP/状态/可见性更新与 JournalEntry 记录
 - 客户端战役工具入口：战役聊天室 `+` 菜单提供桌面工具和 DM 控场入口，遭遇控场将从旧桌面页继续迁入
 - 服务端检定请求 API：DM 发起检定请求、玩家响应、重复响应保护、目标可见性过滤、关闭请求、结果写入 ChatMessage / DiceRoll / JournalEntry

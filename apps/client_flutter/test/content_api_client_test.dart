@@ -181,4 +181,43 @@ void main() {
     );
     expect(jsonDecode(captured!.body), {'packageId': 'pkg-1', 'enabled': true});
   });
+
+  test('loads a linked campaign item detail and toggles its favorite', () async {
+    final requests = <http.Request>[];
+    final client = ContentApiClient(
+      httpClient: MockClient((request) async {
+        requests.add(request);
+        if (request.method == 'GET') {
+          return http.Response(jsonEncode({
+            ..._itemJson,
+            'isFavorite': true,
+            'outgoingLinks': [
+              {'relation': 'grants', 'label': 'Feature', 'target': _itemJson},
+            ],
+          }), 200);
+        }
+        return http.Response('', 204);
+      }),
+    );
+
+    final detail = await client.getCampaignItem(
+      apiBaseUrl: _apiBaseUrl,
+      accessToken: _accessToken,
+      campaignId: 'camp-1',
+      itemId: 'item-1',
+    );
+    await client.setCampaignItemFavorite(
+      apiBaseUrl: _apiBaseUrl,
+      accessToken: _accessToken,
+      campaignId: 'camp-1',
+      itemId: 'item-1',
+      favorite: false,
+    );
+
+    expect(detail.isFavorite, isTrue);
+    expect(detail.outgoingLinks.single.target.name, 'Fire Bolt');
+    expect(requests[0].url.path, '/api/campaigns/camp-1/content/items/item-1');
+    expect(requests[1].method, 'DELETE');
+    expect(requests[1].url.path, '/api/campaigns/camp-1/content/items/item-1/favorite');
+  });
 }

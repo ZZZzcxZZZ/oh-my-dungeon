@@ -118,6 +118,28 @@ void main() {
     controller.dispose();
     authController.dispose();
   });
+
+  test('persists a campaign item favorite for the active user', () async {
+    final authController = await buildLoggedInAuthController();
+    final client = _FakeContentClient();
+    final controller = ContentController(
+      apiBaseUrl: apiBaseUrl,
+      authController: authController,
+      contentClient: client,
+    );
+
+    final success = await controller.setCampaignItemFavorite(
+      campaignId: 'camp-1',
+      itemId: 'item-1',
+      favorite: true,
+    );
+
+    expect(success, isTrue);
+    expect(client.favoriteCalls, [('camp-1', 'item-1', true)]);
+
+    controller.dispose();
+    authController.dispose();
+  });
 }
 
 const _item = ContentItem(
@@ -200,7 +222,16 @@ class _FakeAuthClient implements AuthClient {
 
 class _FakeContentClient implements ContentClient {
   @override
-  Future<ContentItemDetail> getCampaignItem({required String apiBaseUrl, required String accessToken, required String campaignId, required String itemId}) async => ContentItemDetail(item: _item, isFavorite: false, outgoingLinks: const []);
+  Future<ContentItemDetail> getCampaignItem({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String itemId,
+  }) async => ContentItemDetail(
+    item: _item,
+    isFavorite: false,
+    outgoingLinks: const [],
+  );
   @override
   Future<ImportContentPackageResult> importCampaignPackage({
     required String apiBaseUrl,
@@ -208,7 +239,8 @@ class _FakeContentClient implements ContentClient {
     required String campaignId,
     required Object package,
     bool dryRun = false,
-  }) async => const ImportContentPackageResult(valid: true, errors: [], package: null);
+  }) async =>
+      const ImportContentPackageResult(valid: true, errors: [], package: null);
 
   @override
   Future<void> setCampaignItemFavorite({
@@ -217,7 +249,10 @@ class _FakeContentClient implements ContentClient {
     required String campaignId,
     required String itemId,
     required bool favorite,
-  }) async {}
+  }) async {
+    favoriteCalls.add((campaignId, itemId, favorite));
+  }
+
   _FakeContentClient({
     this.importResult = const ImportContentPackageResult(
       valid: true,
@@ -234,6 +269,7 @@ class _FakeContentClient implements ContentClient {
   final List<({bool dryRun, Object package})> importCalls = [];
   final List<(String, String?, String?)> availableCalls = [];
   final List<(String?, String?)> itemCalls = [];
+  final List<(String, String, bool)> favoriteCalls = [];
 
   @override
   Future<ImportContentPackageResult> importPackage({

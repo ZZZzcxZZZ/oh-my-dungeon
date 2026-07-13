@@ -1,9 +1,14 @@
+import 'dart:convert';
+
 import 'package:dnd_table_client/src/core/database/app_database.dart';
+import 'package:dnd_table_client/src/core/sync/sync_repository.dart';
 import 'package:dnd_table_client/src/features/content/data/local/content_repository.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_package_manifest.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/content_test_support.dart';
 
 void main() {
   late AppDatabase database;
@@ -215,5 +220,64 @@ void main() {
     final packages = await repository.watchPackages().first;
     expect(packages, hasLength(1));
     expect(packages.first.id, 'example');
+  });
+
+  test('setting a favorite enqueues a vault operation', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    final repository = DriftContentRepository(database);
+    await repository.replacePackage(
+      manifest: const ContentPackageManifest(
+        formatVersion: 1, id: 'example', name: 'Example', version: '1.0.0',
+        locale: 'zh-CN', system: 'dnd5e-2024', entryCount: 1,
+      ),
+      entries: [testFighterEntry()],
+      contentHash: 'hash-1',
+    );
+    await repository.setFavorite('example:class/fighter', true);
+    final pending = await DriftSyncRepository(database).pending(scope: 'vault');
+    final favoriteOp = pending.firstWhere((op) => op.entityType == 'favorite');
+    expect(favoriteOp.entityId, 'example:class/fighter');
+    await database.close();
+  });
+
+  test('saving a note enqueues a vault operation', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    final repository = DriftContentRepository(database);
+    await repository.replacePackage(
+      manifest: const ContentPackageManifest(
+        formatVersion: 1, id: 'example', name: 'Example', version: '1.0.0',
+        locale: 'zh-CN', system: 'dnd5e-2024', entryCount: 1,
+      ),
+      entries: [testFighterEntry()],
+      contentHash: 'hash-1',
+    );
+    await repository.saveNote('example:class/fighter', 'My notes');
+    final pending = await DriftSyncRepository(database).pending(scope: 'vault');
+    final noteOp = pending.firstWhere((op) => op.entityType == 'note');
+    expect(noteOp.entityId, 'example:class/fighter');
+    await database.close();
+  });
+
+  test('package manifest operation excludes body and entries', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    final repository = DriftContentRepository(database);
+    await repository.replacePackage(
+      manifest: const ContentPackageManifest(
+        formatVersion: 1, id: 'example', name: 'Example', version: '1.0.0',
+        locale: 'zh-CN', system: 'dnd5e-2024', entryCount: 1,
+      ),
+      entries: [testFighterEntry()],
+      contentHash: 'hash-abc',
+    );
+    final pending = await DriftSyncRepository(database).pending(scope: 'vault');
+    expect(pending, hasLength(1));
+    expect(pending.single.entityType, 'installedPackageManifest');
+    final payload = jsonDecode(pending.single.payloadJson) as Map<String, Object?>;
+    expect(payload.containsKey('entries'), isFalse);
+    expect(payload.containsKey('body'), isFalse);
+    expect(payload['id'], 'example');
+    expect(payload['version'], '1.0.0');
+    expect(payload['contentHash'], 'hash-abc');
+    await database.close();
   });
 }

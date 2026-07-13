@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 
 import '../../../../core/database/app_database.dart';
+import '../../../../core/sync/sync_models.dart';
+import '../../../../core/sync/sync_repository.dart';
 import '../../domain/character.dart';
 import '../../domain/character_content_reference.dart';
 import '../character_repository.dart';
@@ -44,29 +46,56 @@ class DriftCharacterRepository implements CharacterRepository {
   Future<void> save(CharacterSheet character) async {
     final db = _database;
     await db.transaction(() async {
-      await db.into(db.characters).insertOnConflictUpdate(
-            CharactersCompanion.insert(
-              id: character.id,
-              ownerLocalId: Value(character.ownerUserId),
-              sheetJson: jsonEncode(character.toJson()),
-              updatedAt: Value(DateTime.now()),
+      await _writeCharacter(character);
+      await DriftSyncRepository(_database).enqueue(SyncOperation(
+        id: 'vault:character:${character.id}:${DateTime.now().millisecondsSinceEpoch}',
+        scope: 'vault',
+        entityType: 'character',
+        entityId: character.id,
+        baseRevision: 0,
+        payloadJson: jsonEncode(character.toJson()),
+      ));
+    });
+  }
+
+  /// Saves a character that arrived from the remote Vault without enqueuing a
+  /// new outbox operation. [syncRevision] records the server revision so the
+  /// local store can detect remote-origin writes.
+  Future<void> saveRemote(CharacterSheet character, int syncRevision) async {
+    final db = _database;
+    await db.transaction(() async {
+      await _writeCharacter(character, syncRevision: Value(syncRevision));
+    });
+  }
+
+  Future<void> _writeCharacter(
+    CharacterSheet character, {
+    Value<int?> syncRevision = const Value.absent(),
+  }) async {
+    final db = _database;
+    await db.into(db.characters).insertOnConflictUpdate(
+          CharactersCompanion.insert(
+            id: character.id,
+            ownerLocalId: Value(character.ownerUserId),
+            sheetJson: jsonEncode(character.toJson()),
+            syncRevision: syncRevision,
+            updatedAt: Value(DateTime.now()),
+          ),
+        );
+    await (db.delete(db.characterContentRefs)
+          ..where((t) => t.characterId.equals(character.id)))
+        .go();
+    for (final ref in character.contentReferences) {
+      await db.into(db.characterContentRefs).insert(
+            CharacterContentRefsCompanion.insert(
+              characterId: character.id,
+              slot: ref.slot,
+              entryKey: ref.entryKey,
+              sourceRevision: Value(ref.sourceRevision),
+              snapshotJson: Value(jsonEncode(ref.snapshot)),
             ),
           );
-      await (db.delete(db.characterContentRefs)
-            ..where((t) => t.characterId.equals(character.id)))
-          .go();
-      for (final ref in character.contentReferences) {
-        await db.into(db.characterContentRefs).insert(
-              CharacterContentRefsCompanion.insert(
-                characterId: character.id,
-                slot: ref.slot,
-                entryKey: ref.entryKey,
-                sourceRevision: Value(ref.sourceRevision),
-                snapshotJson: Value(jsonEncode(ref.snapshot)),
-              ),
-            );
-      }
-    });
+    }
   }
 
   @override

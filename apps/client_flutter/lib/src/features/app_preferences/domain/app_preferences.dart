@@ -52,6 +52,23 @@ class AppPreferences {
 
   Color get seedColor => Color(seedColorValue);
 
+  Map<String, Object?> toJson() => {
+        'themeMode': themeMode.name,
+        'seedColorValue': seedColorValue,
+        'defaultDice': defaultDice,
+        'compactLists': compactLists,
+        'confirmBeforeRoll': confirmBeforeRoll,
+        'ruleset': ruleset,
+        'defaultCreationMethod': defaultCreationMethod,
+        'showLegacyContent': showLegacyContent,
+        'showCharacterSources': showCharacterSources,
+        'showEncumbrance': showEncumbrance,
+        'defaultCharacterTab': defaultCharacterTab,
+        'highContrastTheme': highContrastTheme,
+        'dynamicSchemeVariant': dynamicSchemeVariant,
+        'logCharacterRuntimeChanges': logCharacterRuntimeChanges,
+      };
+
   AppPreferences copyWith({
     ThemeMode? themeMode,
     int? seedColorValue,

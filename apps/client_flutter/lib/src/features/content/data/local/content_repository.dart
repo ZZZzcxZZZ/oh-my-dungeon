@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 
 import '../../../../core/database/app_database.dart';
+import '../../../../core/sync/sync_models.dart';
+import '../../../../core/sync/sync_repository.dart';
 import '../../domain/content_block.dart';
 import '../../domain/content_entry.dart';
 import '../../domain/content_package_manifest.dart';
@@ -262,6 +264,21 @@ class DriftContentRepository implements ContentRepository {
               ),
             );
       }
+
+      await DriftSyncRepository(_database).enqueue(SyncOperation(
+        id: 'vault:installedPackageManifest:$packageId',
+        scope: 'vault',
+        entityType: 'installedPackageManifest',
+        entityId: packageId,
+        baseRevision: 0,
+        payloadJson: jsonEncode({
+          'id': manifest.id,
+          'version': manifest.version,
+          'locale': manifest.locale,
+          'system': manifest.system,
+          'contentHash': contentHash,
+        }),
+      ));
     });
   }
 
@@ -367,30 +384,50 @@ class DriftContentRepository implements ContentRepository {
   @override
   Future<void> setFavorite(String entryKey, bool favorite) async {
     final db = _database;
-    if (favorite) {
-      await db.into(db.contentFavorites).insertOnConflictUpdate(
-            ContentFavoritesCompanion.insert(
-              entryKey: entryKey,
-              createdAt: DateTime.now(),
-            ),
-          );
-    } else {
-      await (db.delete(db.contentFavorites)
-            ..where((t) => t.entryKey.equals(entryKey)))
-          .go();
-    }
+    await db.transaction(() async {
+      if (favorite) {
+        await db.into(db.contentFavorites).insertOnConflictUpdate(
+              ContentFavoritesCompanion.insert(
+                entryKey: entryKey,
+                createdAt: DateTime.now(),
+              ),
+            );
+      } else {
+        await (db.delete(db.contentFavorites)
+              ..where((t) => t.entryKey.equals(entryKey)))
+            .go();
+      }
+      await DriftSyncRepository(_database).enqueue(SyncOperation(
+        id: 'vault:favorite:$entryKey',
+        scope: 'vault',
+        entityType: 'favorite',
+        entityId: entryKey,
+        baseRevision: 0,
+        payloadJson: jsonEncode({'entryKey': entryKey, 'favorite': favorite}),
+      ));
+    });
   }
 
   @override
   Future<void> saveNote(String entryKey, String markdown) async {
     final db = _database;
-    await db.into(db.contentNotes).insertOnConflictUpdate(
-          ContentNotesCompanion.insert(
-            entryKey: entryKey,
-            markdown: markdown,
-            updatedAt: DateTime.now(),
-          ),
-        );
+    await db.transaction(() async {
+      await db.into(db.contentNotes).insertOnConflictUpdate(
+            ContentNotesCompanion.insert(
+              entryKey: entryKey,
+              markdown: markdown,
+              updatedAt: DateTime.now(),
+            ),
+          );
+      await DriftSyncRepository(_database).enqueue(SyncOperation(
+        id: 'vault:note:$entryKey',
+        scope: 'vault',
+        entityType: 'note',
+        entityId: entryKey,
+        baseRevision: 0,
+        payloadJson: jsonEncode({'entryKey': entryKey, 'markdown': markdown}),
+      ));
+    });
   }
 
   ContentPackageManifest _mapPackage(LocalContentPackageRow row) {

@@ -1,8 +1,16 @@
+import 'dart:convert';
+
+import 'package:dnd_table_client/src/core/database/app_database.dart';
 import 'package:dnd_table_client/src/core/sync/sync_models.dart';
+import 'package:dnd_table_client/src/core/sync/sync_repository.dart';
+import 'package:dnd_table_client/src/features/characters/data/local/drift_character_repository.dart';
+import 'package:dnd_table_client/src/features/vault/data/drift_vault_change_applier.dart';
 import 'package:dnd_table_client/src/features/vault/data/vault_sync_service.dart';
 import 'package:dnd_table_client/src/features/vault/domain/vault_models.dart';
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/character_test_support.dart';
 import 'support/vault_test_support.dart';
 
 void main() {
@@ -148,5 +156,57 @@ void main() {
 
     final result = await service.sync(session);
     expect(result.phase, SyncPhase.conflict);
+  });
+
+  test('DriftVaultChangeApplier applies remote character without re-enqueuing', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    final applier = DriftVaultChangeApplier(database);
+    final character = testCharacter(id: 'char-1', name: 'Arannis');
+    final change = VaultChange(
+      cursor: '1',
+      operation: 'upsert',
+      entityType: 'character',
+      entityId: character.id,
+      revision: 5,
+      payloadJson: jsonEncode(character.toJson()),
+    );
+
+    await applier.applyAll([change]);
+
+    final saved = await DriftCharacterRepository(database).getById(character.id);
+    expect(saved, isNotNull);
+    expect(saved!.name, 'Arannis');
+
+    final pending = await DriftSyncRepository(database).pending(scope: 'vault');
+    expect(pending, isEmpty);
+    await database.close();
+  });
+
+  test('DriftVaultChangeApplier applies remote favorite and note without re-enqueuing', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    final applier = DriftVaultChangeApplier(database);
+
+    final favoriteChange = VaultChange(
+      cursor: '1',
+      operation: 'upsert',
+      entityType: 'favorite',
+      entityId: 'example:class/fighter',
+      revision: 1,
+      payloadJson: jsonEncode({'entryKey': 'example:class/fighter', 'favorite': true}),
+    );
+    final noteChange = VaultChange(
+      cursor: '2',
+      operation: 'upsert',
+      entityType: 'note',
+      entityId: 'example:class/fighter',
+      revision: 1,
+      payloadJson: jsonEncode({'entryKey': 'example:class/fighter', 'markdown': 'Synced note'}),
+    );
+
+    await applier.applyAll([favoriteChange, noteChange]);
+
+    final pending = await DriftSyncRepository(database).pending(scope: 'vault');
+    expect(pending, isEmpty);
+    await database.close();
   });
 }

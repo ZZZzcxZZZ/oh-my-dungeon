@@ -1,6 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/sync/sync_models.dart';
+import '../../../core/sync/sync_repository.dart';
 import '../domain/app_preferences.dart';
 
 abstract class AppPreferencesStore {
@@ -9,9 +13,13 @@ abstract class AppPreferencesStore {
 }
 
 class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
-  const SharedPreferencesAppPreferencesStore(this._preferences);
+  const SharedPreferencesAppPreferencesStore(
+    this._preferences, [
+    this.syncRepository,
+  ]);
 
   final SharedPreferences _preferences;
+  final SyncRepository? syncRepository;
 
   static const _themeModeKey = 'app_preferences.theme_mode';
   static const _seedColorKey = 'app_preferences.seed_color';
@@ -122,6 +130,17 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
       _logCharacterRuntimeChangesKey,
       preferences.logCharacterRuntimeChanges,
     );
+    final repo = syncRepository;
+    if (repo != null) {
+      await repo.enqueue(SyncOperation(
+        id: 'vault:preferences:default:${DateTime.now().millisecondsSinceEpoch}',
+        scope: 'vault',
+        entityType: 'preferences',
+        entityId: 'default',
+        baseRevision: 0,
+        payloadJson: jsonEncode(preferences.toJson()),
+      ));
+    }
   }
 }
 

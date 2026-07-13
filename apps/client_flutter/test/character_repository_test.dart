@@ -1,9 +1,12 @@
 import 'package:dnd_table_client/src/core/database/app_database.dart';
+import 'package:dnd_table_client/src/core/sync/sync_repository.dart';
 import 'package:dnd_table_client/src/features/characters/data/local/drift_character_repository.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character_content_reference.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/character_test_support.dart';
 
 void main() {
   test('creates a character and keeps a content snapshot after package removal', () async {
@@ -78,6 +81,22 @@ void main() {
     final loaded = await repository.getById('c1');
     expect(loaded!.contentReferences, hasLength(1));
     expect(loaded.contentReferences.single.entryKey, 'pkg:class/wizard');
+    await database.close();
+  });
+
+  test('saving a character writes the character and vault operation atomically', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    final repository = DriftCharacterRepository(database);
+    final arannis = testCharacter(
+      id: 'character-1',
+      name: 'Arannis',
+      notes: 'Local notes',
+    );
+    await repository.save(arannis);
+    final pending = await DriftSyncRepository(database).pending(scope: 'vault');
+    expect(pending, hasLength(1));
+    expect(pending.single.entityType, 'character');
+    expect(pending.single.entityId, arannis.id);
     await database.close();
   });
 }

@@ -431,7 +431,7 @@ git commit -m "feat(0.1): sync personal vault across devices"
 - 修改：`apps/client_flutter/test/vault_sync_service_test.dart`
 - 修改：`apps/client_flutter/test/character_repository_test.dart`
 
-- [ ] **步骤 1：写本地修改自动入队失败测试**
+- [x] **步骤 1：写本地修改自动入队失败测试**
 
 ```dart
 test('saving a character writes the character and vault operation atomically', () async {
@@ -451,7 +451,7 @@ test('saving a character writes the character and vault operation atomically', (
 });
 ```
 
-- [ ] **步骤 2：运行并确认 Outbox 为空**
+- [x] **步骤 2：运行并确认 Outbox 为空**
 
 ```powershell
 cd apps/client_flutter
@@ -460,11 +460,11 @@ flutter test test/character_repository_test.dart --plain-name "saving a characte
 
 预期：FAIL，角色保存尚未写 Outbox。
 
-- [ ] **步骤 3：实现原子入队和远端应用**
+- [x] **步骤 3：实现原子入队和远端应用**
 
 个人实体类型固定为 `character`、`personalContentEntry`、`favorite`、`note`、`bookmark`、`preferences`、`installedPackageManifest`。资料包 manifest payload 只含 `id/version/locale/system/contentHash`，不得含 `body`、`entries` 或 assets。远端应用使用 `syncRevision` 防止重复，不再产生新的 Outbox 操作。
 
-- [ ] **步骤 4：验证所有实体及禁止正文上传**
+- [x] **步骤 4：验证所有实体及禁止正文上传**
 
 增加测试断言 package manifest operation JSON 不包含 `entries` 和 `body`。运行：
 
@@ -475,7 +475,7 @@ flutter test test/character_repository_test.dart test/content_repository_test.da
 
 预期：原子保存、远端合并和正文禁止测试通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/features/characters/data/local apps/client_flutter/lib/src/features/content/data/local apps/client_flutter/lib/src/features/app_preferences/data apps/client_flutter/lib/src/features/vault/data apps/client_flutter/test

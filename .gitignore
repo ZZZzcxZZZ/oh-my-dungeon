@@ -8,6 +8,7 @@ node_modules/
 dist/
 coverage/
 .logs/
+.worktrees/
 __pycache__/
 *.pyc
 

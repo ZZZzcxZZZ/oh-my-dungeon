@@ -35,10 +35,14 @@ docs/deployment/self-hosting.md
 
 ## Current Version State
 
-- `v0.1.0` is tagged and represents the engineering skeleton baseline.
-- `v0.2.0` is tagged and covers accounts, server auth, and Player/DM mode integration.
-- `v0.3.0` is tagged and covers the Campaign / CampaignMember / CampaignInvite model, permissions, and invite-code join flow.
-- The `rooms` and dice prototype is frozen: do not extend it. It will be replaced by the formal Session / DiceRoll model in v0.4.
+- The public development line is `0.1.0`; historical `v0.x`, `v1.x`, and
+  `v2.x` tags are internal iteration records, not release gates.
+- The product is campaign-first: a campaign opens as a group-chat room. Do not
+  extend the frozen `rooms` prototype or revive the old top-level table flow.
+- The immediate milestone is `0.1-content-wiki`: campaign-scoped packages,
+  linked Wiki entries, favorites, and a Material 3 library redesign.
+- Commercial rulebook content remains a user-provided private import. Never
+  commit it, seed it, or include it in a distributable build artifact.
 
 ## Development Rules
 
@@ -72,4 +76,8 @@ Do not use `doctor` as a substitute for reading the roadmap and validating requi
 
 ## Immediate Next Work
 
-v0.3 is sealed. Next milestone is `v0.4` 跑团桌面基础版: Session model, formal DiceRoll replacing the `rooms` prototype, ChatMessage, JournalEntry, and WebSocket realtime broadcast. Start by creating `docs/roadmap/v0.4-execution-plan.md` with version goals, acceptance criteria, task list, and data model changes before implementing.
+Read `docs/superpowers/specs/2026-07-13-campaign-content-wiki-design.md` and
+`docs/superpowers/plans/2026-07-13-campaign-content-wiki.md` before changing
+the content module. Execute it with TDD. The first boundary is intentionally
+limited to campaign packages, Wiki links, favorites, class progression, and
+the library UX; do not add a public package marketplace or rules graph editor.

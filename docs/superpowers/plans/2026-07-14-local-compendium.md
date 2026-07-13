@@ -533,11 +533,11 @@ git commit -m "feat(0.1): manage local content packs from settings"
 - 删除：`docs/content/private-phb-import-policy.md`
 - 修改：`apps/server_nest/test/content.e2e-spec.ts`
 
-- [ ] **步骤 1：写服务端 seed 边界测试**
+- [x] **步骤 1：写服务端 seed 边界测试**
 
 在 `content.e2e-spec.ts` 增加断言：全新 mock 数据下 `GET /content/packages` 不会隐式返回 system/SRD 包；删除依赖 `srd-5.1-seed.json` 的测试夹具。
 
-- [ ] **步骤 2：删除 seed 文件并简化 seed.ts**
+- [x] **步骤 2：删除 seed 文件并简化 seed.ts**
 
 `seed.ts` 只初始化服务器设置，不创建 `ContentPackage` 或 `ContentItem`。公开仓库搜索必须不再命中该文件：
 
@@ -547,11 +547,11 @@ rg -n -i "srd-5.1-seed|SRD 5.1 Seed|玩家手册 2024 内置资料" apps/client_
 
 预期：生产客户端、seed 和服务端源码无默认规则包命中；测试与历史迁移说明可保留边界断言，但不得包含正文。
 
-- [ ] **步骤 3：替换 MainShell 的个人资料依赖**
+- [x] **步骤 3：替换 MainShell 的个人资料依赖**
 
 MainShell 注入 `ContentRepository` 和 `ContentLibraryController`。旧 `ContentController` 只保留临时战役兼容适配，并标记 `@Deprecated('Use ContentRepository and campaign sync')`。资料库页、角色创建和设置不得再持有 `ContentApiClient`。
 
-- [ ] **步骤 4：运行完整验证**
+- [x] **步骤 4：运行完整验证**
 
 ```powershell
 npm run doctor
@@ -561,7 +561,7 @@ flutter build web --release
 
 预期：全量测试、lint、analyze、Compose config 和 Web build 通过；资料库测试明确覆盖默认空库。
 
-- [ ] **步骤 5：更新文档并提交**
+- [x] **步骤 5：更新文档并提交**
 
 README 写明“项目不内置规则正文”；执行状态列出本地导入格式和空库验收。`docs/content/content-package-format-v1.md` 完整定义 JSON 与 `.dndpack` 目录、manifest 字段、稳定 ID、所有安全内容块、结构化字段扩展原则、assets 路径/MIME/大小限制、链接解析、升级原子性、示例空包和兼容策略。删除针对特定商业书籍或私有 PDF 提取的旧文档，公开文档只描述来源中立的用户自备 JSON/ZIP 导入。提交：
 

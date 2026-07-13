@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:meta/meta.dart';
 
+import '../../features/characters/data/local/character_tables.dart';
 import '../../features/content/data/local/content_tables.dart';
 import 'tables/core_tables.dart';
 
@@ -21,6 +22,8 @@ part 'app_database.g.dart';
   ContentFavorites,
   ContentNotes,
   ContentReadHistory,
+  Characters,
+  CharacterContentRefs,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -30,7 +33,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -44,6 +47,10 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(contentFavorites);
             await m.createTable(contentNotes);
             await m.createTable(contentReadHistory);
+          }
+          if (from < 3) {
+            await m.createTable(characters);
+            await m.createTable(characterContentRefs);
           }
         },
       );

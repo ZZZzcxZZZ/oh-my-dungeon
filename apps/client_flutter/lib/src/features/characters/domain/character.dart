@@ -1,3 +1,4 @@
+import 'character_content_reference.dart';
 import 'dnd5e_rules.dart';
 
 class CharacterSheet {
@@ -24,7 +25,46 @@ class CharacterSheet {
     required this.data,
     required this.createdAt,
     required this.updatedAt,
+    this.contentReferences = const <CharacterContentReference>[],
   });
+
+  factory CharacterSheet.local({
+    required String id,
+    required String name,
+    required int level,
+    List<CharacterContentReference> contentReferences = const <
+        CharacterContentReference>[],
+    String notes = '',
+    String classSummary = '',
+    String raceSummary = '',
+  }) {
+    final now = DateTime.now().toUtc().toIso8601String();
+    return CharacterSheet(
+      id: id,
+      ownerUserId: 'local',
+      name: name,
+      avatarUrl: null,
+      system: 'dnd5e-2024',
+      level: level,
+      classSummary: classSummary,
+      raceSummary: raceSummary,
+      currentHp: 0,
+      maxHp: 0,
+      armorClass: 10,
+      speed: 30,
+      initiativeBonus: 0,
+      abilities: null,
+      saves: null,
+      skills: null,
+      inventory: null,
+      currency: null,
+      notes: notes,
+      data: null,
+      createdAt: now,
+      updatedAt: now,
+      contentReferences: contentReferences,
+    );
+  }
 
   final String id;
   final String ownerUserId;
@@ -48,6 +88,7 @@ class CharacterSheet {
   final Object? data;
   final String createdAt;
   final String updatedAt;
+  final List<CharacterContentReference> contentReferences;
 
   Map<String, Object?> get abilityMap => _asMap(abilities);
   Map<String, Object?> get saveMap => _asMap(saves);
@@ -115,6 +156,14 @@ class CharacterSheet {
   }
 
   factory CharacterSheet.fromJson(Map<String, Object?> json) {
+    final refsRaw = json['contentReferences'];
+    final contentReferences = refsRaw is List
+        ? refsRaw
+            .map((item) => CharacterContentReference.fromJson(
+                  Map<String, Object?>.from(item as Map),
+                ))
+            .toList(growable: false)
+        : const <CharacterContentReference>[];
     return CharacterSheet(
       id: json['id']! as String,
       ownerUserId: json['ownerUserId']! as String,
@@ -138,8 +187,36 @@ class CharacterSheet {
       data: json['data'],
       createdAt: json['createdAt']! as String,
       updatedAt: json['updatedAt']! as String,
+      contentReferences: contentReferences,
     );
   }
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'ownerUserId': ownerUserId,
+        'name': name,
+        'avatarUrl': avatarUrl,
+        'system': system,
+        'level': level,
+        'classSummary': classSummary,
+        'raceSummary': raceSummary,
+        'currentHp': currentHp,
+        'maxHp': maxHp,
+        'armorClass': armorClass,
+        'speed': speed,
+        'initiativeBonus': initiativeBonus,
+        'abilities': abilities,
+        'saves': saves,
+        'skills': skills,
+        'inventory': inventory,
+        'currency': currency,
+        'notes': notes,
+        'data': data,
+        'createdAt': createdAt,
+        'updatedAt': updatedAt,
+        'contentReferences':
+            contentReferences.map((ref) => ref.toJson()).toList(),
+      };
 
   CharacterSheet copyWith({
     String? name,
@@ -158,6 +235,7 @@ class CharacterSheet {
     Object? currency,
     String? notes,
     Object? data,
+    List<CharacterContentReference>? contentReferences,
   }) {
     return CharacterSheet(
       id: id,
@@ -182,6 +260,7 @@ class CharacterSheet {
       data: data ?? this.data,
       createdAt: createdAt,
       updatedAt: updatedAt,
+      contentReferences: contentReferences ?? this.contentReferences,
     );
   }
 
@@ -204,7 +283,8 @@ class CharacterSheet {
             initiativeBonus == other.initiativeBonus &&
             notes == other.notes &&
             createdAt == other.createdAt &&
-            updatedAt == other.updatedAt;
+            updatedAt == other.updatedAt &&
+            _listEquals(contentReferences, other.contentReferences);
   }
 
   @override
@@ -225,6 +305,7 @@ class CharacterSheet {
     notes,
     createdAt,
     updatedAt,
+    Object.hashAll(contentReferences),
   );
 }
 
@@ -257,6 +338,15 @@ List<Object?> _asList(Object? value) {
 int _intValue(Object? value) {
   if (value is num) return value.toInt();
   return 0;
+}
+
+bool _listEquals<T>(List<T> a, List<T> b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
 }
 
 class CharacterCampaignBinding {

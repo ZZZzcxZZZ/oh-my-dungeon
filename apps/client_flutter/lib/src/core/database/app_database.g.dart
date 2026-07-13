@@ -4310,6 +4310,903 @@ class ContentReadHistoryCompanion
   }
 }
 
+class $CharactersTable extends Characters
+    with TableInfo<$CharactersTable, CharacterRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CharactersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _ownerLocalIdMeta = const VerificationMeta(
+    'ownerLocalId',
+  );
+  @override
+  late final GeneratedColumn<String> ownerLocalId = GeneratedColumn<String>(
+    'owner_local_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('local'),
+  );
+  static const VerificationMeta _sheetJsonMeta = const VerificationMeta(
+    'sheetJson',
+  );
+  @override
+  late final GeneratedColumn<String> sheetJson = GeneratedColumn<String>(
+    'sheet_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _revisionMeta = const VerificationMeta(
+    'revision',
+  );
+  @override
+  late final GeneratedColumn<int> revision = GeneratedColumn<int>(
+    'revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _syncRevisionMeta = const VerificationMeta(
+    'syncRevision',
+  );
+  @override
+  late final GeneratedColumn<int> syncRevision = GeneratedColumn<int>(
+    'sync_revision',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _archivedAtMeta = const VerificationMeta(
+    'archivedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> archivedAt = GeneratedColumn<DateTime>(
+    'archived_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    ownerLocalId,
+    sheetJson,
+    revision,
+    syncRevision,
+    archivedAt,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'characters';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CharacterRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('owner_local_id')) {
+      context.handle(
+        _ownerLocalIdMeta,
+        ownerLocalId.isAcceptableOrUnknown(
+          data['owner_local_id']!,
+          _ownerLocalIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('sheet_json')) {
+      context.handle(
+        _sheetJsonMeta,
+        sheetJson.isAcceptableOrUnknown(data['sheet_json']!, _sheetJsonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sheetJsonMeta);
+    }
+    if (data.containsKey('revision')) {
+      context.handle(
+        _revisionMeta,
+        revision.isAcceptableOrUnknown(data['revision']!, _revisionMeta),
+      );
+    }
+    if (data.containsKey('sync_revision')) {
+      context.handle(
+        _syncRevisionMeta,
+        syncRevision.isAcceptableOrUnknown(
+          data['sync_revision']!,
+          _syncRevisionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('archived_at')) {
+      context.handle(
+        _archivedAtMeta,
+        archivedAt.isAcceptableOrUnknown(data['archived_at']!, _archivedAtMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CharacterRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CharacterRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      ownerLocalId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}owner_local_id'],
+      )!,
+      sheetJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sheet_json'],
+      )!,
+      revision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}revision'],
+      )!,
+      syncRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sync_revision'],
+      ),
+      archivedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}archived_at'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $CharactersTable createAlias(String alias) {
+    return $CharactersTable(attachedDatabase, alias);
+  }
+}
+
+class CharacterRow extends DataClass implements Insertable<CharacterRow> {
+  final String id;
+  final String ownerLocalId;
+  final String sheetJson;
+  final int revision;
+  final int? syncRevision;
+  final DateTime? archivedAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const CharacterRow({
+    required this.id,
+    required this.ownerLocalId,
+    required this.sheetJson,
+    required this.revision,
+    this.syncRevision,
+    this.archivedAt,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['owner_local_id'] = Variable<String>(ownerLocalId);
+    map['sheet_json'] = Variable<String>(sheetJson);
+    map['revision'] = Variable<int>(revision);
+    if (!nullToAbsent || syncRevision != null) {
+      map['sync_revision'] = Variable<int>(syncRevision);
+    }
+    if (!nullToAbsent || archivedAt != null) {
+      map['archived_at'] = Variable<DateTime>(archivedAt);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  CharactersCompanion toCompanion(bool nullToAbsent) {
+    return CharactersCompanion(
+      id: Value(id),
+      ownerLocalId: Value(ownerLocalId),
+      sheetJson: Value(sheetJson),
+      revision: Value(revision),
+      syncRevision: syncRevision == null && nullToAbsent
+          ? const Value.absent()
+          : Value(syncRevision),
+      archivedAt: archivedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(archivedAt),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory CharacterRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CharacterRow(
+      id: serializer.fromJson<String>(json['id']),
+      ownerLocalId: serializer.fromJson<String>(json['ownerLocalId']),
+      sheetJson: serializer.fromJson<String>(json['sheetJson']),
+      revision: serializer.fromJson<int>(json['revision']),
+      syncRevision: serializer.fromJson<int?>(json['syncRevision']),
+      archivedAt: serializer.fromJson<DateTime?>(json['archivedAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'ownerLocalId': serializer.toJson<String>(ownerLocalId),
+      'sheetJson': serializer.toJson<String>(sheetJson),
+      'revision': serializer.toJson<int>(revision),
+      'syncRevision': serializer.toJson<int?>(syncRevision),
+      'archivedAt': serializer.toJson<DateTime?>(archivedAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  CharacterRow copyWith({
+    String? id,
+    String? ownerLocalId,
+    String? sheetJson,
+    int? revision,
+    Value<int?> syncRevision = const Value.absent(),
+    Value<DateTime?> archivedAt = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => CharacterRow(
+    id: id ?? this.id,
+    ownerLocalId: ownerLocalId ?? this.ownerLocalId,
+    sheetJson: sheetJson ?? this.sheetJson,
+    revision: revision ?? this.revision,
+    syncRevision: syncRevision.present ? syncRevision.value : this.syncRevision,
+    archivedAt: archivedAt.present ? archivedAt.value : this.archivedAt,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  CharacterRow copyWithCompanion(CharactersCompanion data) {
+    return CharacterRow(
+      id: data.id.present ? data.id.value : this.id,
+      ownerLocalId: data.ownerLocalId.present
+          ? data.ownerLocalId.value
+          : this.ownerLocalId,
+      sheetJson: data.sheetJson.present ? data.sheetJson.value : this.sheetJson,
+      revision: data.revision.present ? data.revision.value : this.revision,
+      syncRevision: data.syncRevision.present
+          ? data.syncRevision.value
+          : this.syncRevision,
+      archivedAt: data.archivedAt.present
+          ? data.archivedAt.value
+          : this.archivedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CharacterRow(')
+          ..write('id: $id, ')
+          ..write('ownerLocalId: $ownerLocalId, ')
+          ..write('sheetJson: $sheetJson, ')
+          ..write('revision: $revision, ')
+          ..write('syncRevision: $syncRevision, ')
+          ..write('archivedAt: $archivedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    ownerLocalId,
+    sheetJson,
+    revision,
+    syncRevision,
+    archivedAt,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CharacterRow &&
+          other.id == this.id &&
+          other.ownerLocalId == this.ownerLocalId &&
+          other.sheetJson == this.sheetJson &&
+          other.revision == this.revision &&
+          other.syncRevision == this.syncRevision &&
+          other.archivedAt == this.archivedAt &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class CharactersCompanion extends UpdateCompanion<CharacterRow> {
+  final Value<String> id;
+  final Value<String> ownerLocalId;
+  final Value<String> sheetJson;
+  final Value<int> revision;
+  final Value<int?> syncRevision;
+  final Value<DateTime?> archivedAt;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const CharactersCompanion({
+    this.id = const Value.absent(),
+    this.ownerLocalId = const Value.absent(),
+    this.sheetJson = const Value.absent(),
+    this.revision = const Value.absent(),
+    this.syncRevision = const Value.absent(),
+    this.archivedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CharactersCompanion.insert({
+    required String id,
+    this.ownerLocalId = const Value.absent(),
+    required String sheetJson,
+    this.revision = const Value.absent(),
+    this.syncRevision = const Value.absent(),
+    this.archivedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       sheetJson = Value(sheetJson);
+  static Insertable<CharacterRow> custom({
+    Expression<String>? id,
+    Expression<String>? ownerLocalId,
+    Expression<String>? sheetJson,
+    Expression<int>? revision,
+    Expression<int>? syncRevision,
+    Expression<DateTime>? archivedAt,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (ownerLocalId != null) 'owner_local_id': ownerLocalId,
+      if (sheetJson != null) 'sheet_json': sheetJson,
+      if (revision != null) 'revision': revision,
+      if (syncRevision != null) 'sync_revision': syncRevision,
+      if (archivedAt != null) 'archived_at': archivedAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CharactersCompanion copyWith({
+    Value<String>? id,
+    Value<String>? ownerLocalId,
+    Value<String>? sheetJson,
+    Value<int>? revision,
+    Value<int?>? syncRevision,
+    Value<DateTime?>? archivedAt,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return CharactersCompanion(
+      id: id ?? this.id,
+      ownerLocalId: ownerLocalId ?? this.ownerLocalId,
+      sheetJson: sheetJson ?? this.sheetJson,
+      revision: revision ?? this.revision,
+      syncRevision: syncRevision ?? this.syncRevision,
+      archivedAt: archivedAt ?? this.archivedAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (ownerLocalId.present) {
+      map['owner_local_id'] = Variable<String>(ownerLocalId.value);
+    }
+    if (sheetJson.present) {
+      map['sheet_json'] = Variable<String>(sheetJson.value);
+    }
+    if (revision.present) {
+      map['revision'] = Variable<int>(revision.value);
+    }
+    if (syncRevision.present) {
+      map['sync_revision'] = Variable<int>(syncRevision.value);
+    }
+    if (archivedAt.present) {
+      map['archived_at'] = Variable<DateTime>(archivedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CharactersCompanion(')
+          ..write('id: $id, ')
+          ..write('ownerLocalId: $ownerLocalId, ')
+          ..write('sheetJson: $sheetJson, ')
+          ..write('revision: $revision, ')
+          ..write('syncRevision: $syncRevision, ')
+          ..write('archivedAt: $archivedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CharacterContentRefsTable extends CharacterContentRefs
+    with TableInfo<$CharacterContentRefsTable, CharacterContentRefRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CharacterContentRefsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _characterIdMeta = const VerificationMeta(
+    'characterId',
+  );
+  @override
+  late final GeneratedColumn<String> characterId = GeneratedColumn<String>(
+    'character_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _slotMeta = const VerificationMeta('slot');
+  @override
+  late final GeneratedColumn<String> slot = GeneratedColumn<String>(
+    'slot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _entryKeyMeta = const VerificationMeta(
+    'entryKey',
+  );
+  @override
+  late final GeneratedColumn<String> entryKey = GeneratedColumn<String>(
+    'entry_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceRevisionMeta = const VerificationMeta(
+    'sourceRevision',
+  );
+  @override
+  late final GeneratedColumn<int> sourceRevision = GeneratedColumn<int>(
+    'source_revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _snapshotJsonMeta = const VerificationMeta(
+    'snapshotJson',
+  );
+  @override
+  late final GeneratedColumn<String> snapshotJson = GeneratedColumn<String>(
+    'snapshot_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('{}'),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    characterId,
+    slot,
+    entryKey,
+    sourceRevision,
+    snapshotJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'character_content_refs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CharacterContentRefRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('character_id')) {
+      context.handle(
+        _characterIdMeta,
+        characterId.isAcceptableOrUnknown(
+          data['character_id']!,
+          _characterIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_characterIdMeta);
+    }
+    if (data.containsKey('slot')) {
+      context.handle(
+        _slotMeta,
+        slot.isAcceptableOrUnknown(data['slot']!, _slotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_slotMeta);
+    }
+    if (data.containsKey('entry_key')) {
+      context.handle(
+        _entryKeyMeta,
+        entryKey.isAcceptableOrUnknown(data['entry_key']!, _entryKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entryKeyMeta);
+    }
+    if (data.containsKey('source_revision')) {
+      context.handle(
+        _sourceRevisionMeta,
+        sourceRevision.isAcceptableOrUnknown(
+          data['source_revision']!,
+          _sourceRevisionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('snapshot_json')) {
+      context.handle(
+        _snapshotJsonMeta,
+        snapshotJson.isAcceptableOrUnknown(
+          data['snapshot_json']!,
+          _snapshotJsonMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {characterId, slot};
+  @override
+  CharacterContentRefRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CharacterContentRefRow(
+      characterId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}character_id'],
+      )!,
+      slot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}slot'],
+      )!,
+      entryKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entry_key'],
+      )!,
+      sourceRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}source_revision'],
+      )!,
+      snapshotJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot_json'],
+      )!,
+    );
+  }
+
+  @override
+  $CharacterContentRefsTable createAlias(String alias) {
+    return $CharacterContentRefsTable(attachedDatabase, alias);
+  }
+}
+
+class CharacterContentRefRow extends DataClass
+    implements Insertable<CharacterContentRefRow> {
+  final String characterId;
+  final String slot;
+  final String entryKey;
+  final int sourceRevision;
+  final String snapshotJson;
+  const CharacterContentRefRow({
+    required this.characterId,
+    required this.slot,
+    required this.entryKey,
+    required this.sourceRevision,
+    required this.snapshotJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['character_id'] = Variable<String>(characterId);
+    map['slot'] = Variable<String>(slot);
+    map['entry_key'] = Variable<String>(entryKey);
+    map['source_revision'] = Variable<int>(sourceRevision);
+    map['snapshot_json'] = Variable<String>(snapshotJson);
+    return map;
+  }
+
+  CharacterContentRefsCompanion toCompanion(bool nullToAbsent) {
+    return CharacterContentRefsCompanion(
+      characterId: Value(characterId),
+      slot: Value(slot),
+      entryKey: Value(entryKey),
+      sourceRevision: Value(sourceRevision),
+      snapshotJson: Value(snapshotJson),
+    );
+  }
+
+  factory CharacterContentRefRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CharacterContentRefRow(
+      characterId: serializer.fromJson<String>(json['characterId']),
+      slot: serializer.fromJson<String>(json['slot']),
+      entryKey: serializer.fromJson<String>(json['entryKey']),
+      sourceRevision: serializer.fromJson<int>(json['sourceRevision']),
+      snapshotJson: serializer.fromJson<String>(json['snapshotJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'characterId': serializer.toJson<String>(characterId),
+      'slot': serializer.toJson<String>(slot),
+      'entryKey': serializer.toJson<String>(entryKey),
+      'sourceRevision': serializer.toJson<int>(sourceRevision),
+      'snapshotJson': serializer.toJson<String>(snapshotJson),
+    };
+  }
+
+  CharacterContentRefRow copyWith({
+    String? characterId,
+    String? slot,
+    String? entryKey,
+    int? sourceRevision,
+    String? snapshotJson,
+  }) => CharacterContentRefRow(
+    characterId: characterId ?? this.characterId,
+    slot: slot ?? this.slot,
+    entryKey: entryKey ?? this.entryKey,
+    sourceRevision: sourceRevision ?? this.sourceRevision,
+    snapshotJson: snapshotJson ?? this.snapshotJson,
+  );
+  CharacterContentRefRow copyWithCompanion(CharacterContentRefsCompanion data) {
+    return CharacterContentRefRow(
+      characterId: data.characterId.present
+          ? data.characterId.value
+          : this.characterId,
+      slot: data.slot.present ? data.slot.value : this.slot,
+      entryKey: data.entryKey.present ? data.entryKey.value : this.entryKey,
+      sourceRevision: data.sourceRevision.present
+          ? data.sourceRevision.value
+          : this.sourceRevision,
+      snapshotJson: data.snapshotJson.present
+          ? data.snapshotJson.value
+          : this.snapshotJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CharacterContentRefRow(')
+          ..write('characterId: $characterId, ')
+          ..write('slot: $slot, ')
+          ..write('entryKey: $entryKey, ')
+          ..write('sourceRevision: $sourceRevision, ')
+          ..write('snapshotJson: $snapshotJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(characterId, slot, entryKey, sourceRevision, snapshotJson);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CharacterContentRefRow &&
+          other.characterId == this.characterId &&
+          other.slot == this.slot &&
+          other.entryKey == this.entryKey &&
+          other.sourceRevision == this.sourceRevision &&
+          other.snapshotJson == this.snapshotJson);
+}
+
+class CharacterContentRefsCompanion
+    extends UpdateCompanion<CharacterContentRefRow> {
+  final Value<String> characterId;
+  final Value<String> slot;
+  final Value<String> entryKey;
+  final Value<int> sourceRevision;
+  final Value<String> snapshotJson;
+  final Value<int> rowid;
+  const CharacterContentRefsCompanion({
+    this.characterId = const Value.absent(),
+    this.slot = const Value.absent(),
+    this.entryKey = const Value.absent(),
+    this.sourceRevision = const Value.absent(),
+    this.snapshotJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CharacterContentRefsCompanion.insert({
+    required String characterId,
+    required String slot,
+    required String entryKey,
+    this.sourceRevision = const Value.absent(),
+    this.snapshotJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : characterId = Value(characterId),
+       slot = Value(slot),
+       entryKey = Value(entryKey);
+  static Insertable<CharacterContentRefRow> custom({
+    Expression<String>? characterId,
+    Expression<String>? slot,
+    Expression<String>? entryKey,
+    Expression<int>? sourceRevision,
+    Expression<String>? snapshotJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (characterId != null) 'character_id': characterId,
+      if (slot != null) 'slot': slot,
+      if (entryKey != null) 'entry_key': entryKey,
+      if (sourceRevision != null) 'source_revision': sourceRevision,
+      if (snapshotJson != null) 'snapshot_json': snapshotJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CharacterContentRefsCompanion copyWith({
+    Value<String>? characterId,
+    Value<String>? slot,
+    Value<String>? entryKey,
+    Value<int>? sourceRevision,
+    Value<String>? snapshotJson,
+    Value<int>? rowid,
+  }) {
+    return CharacterContentRefsCompanion(
+      characterId: characterId ?? this.characterId,
+      slot: slot ?? this.slot,
+      entryKey: entryKey ?? this.entryKey,
+      sourceRevision: sourceRevision ?? this.sourceRevision,
+      snapshotJson: snapshotJson ?? this.snapshotJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (characterId.present) {
+      map['character_id'] = Variable<String>(characterId.value);
+    }
+    if (slot.present) {
+      map['slot'] = Variable<String>(slot.value);
+    }
+    if (entryKey.present) {
+      map['entry_key'] = Variable<String>(entryKey.value);
+    }
+    if (sourceRevision.present) {
+      map['source_revision'] = Variable<int>(sourceRevision.value);
+    }
+    if (snapshotJson.present) {
+      map['snapshot_json'] = Variable<String>(snapshotJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CharacterContentRefsCompanion(')
+          ..write('characterId: $characterId, ')
+          ..write('slot: $slot, ')
+          ..write('entryKey: $entryKey, ')
+          ..write('sourceRevision: $sourceRevision, ')
+          ..write('snapshotJson: $snapshotJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -4332,6 +5229,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ContentNotesTable contentNotes = $ContentNotesTable(this);
   late final $ContentReadHistoryTable contentReadHistory =
       $ContentReadHistoryTable(this);
+  late final $CharactersTable characters = $CharactersTable(this);
+  late final $CharacterContentRefsTable characterContentRefs =
+      $CharacterContentRefsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4348,6 +5248,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     contentFavorites,
     contentNotes,
     contentReadHistory,
+    characters,
+    characterContentRefs,
   ];
 }
 
@@ -6760,6 +7662,491 @@ typedef $$ContentReadHistoryTableProcessedTableManager =
       ContentReadHistoryRow,
       PrefetchHooks Function()
     >;
+typedef $$CharactersTableCreateCompanionBuilder =
+    CharactersCompanion Function({
+      required String id,
+      Value<String> ownerLocalId,
+      required String sheetJson,
+      Value<int> revision,
+      Value<int?> syncRevision,
+      Value<DateTime?> archivedAt,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$CharactersTableUpdateCompanionBuilder =
+    CharactersCompanion Function({
+      Value<String> id,
+      Value<String> ownerLocalId,
+      Value<String> sheetJson,
+      Value<int> revision,
+      Value<int?> syncRevision,
+      Value<DateTime?> archivedAt,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$CharactersTableFilterComposer
+    extends Composer<_$AppDatabase, $CharactersTable> {
+  $$CharactersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get ownerLocalId => $composableBuilder(
+    column: $table.ownerLocalId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sheetJson => $composableBuilder(
+    column: $table.sheetJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get syncRevision => $composableBuilder(
+    column: $table.syncRevision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get archivedAt => $composableBuilder(
+    column: $table.archivedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CharactersTableOrderingComposer
+    extends Composer<_$AppDatabase, $CharactersTable> {
+  $$CharactersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get ownerLocalId => $composableBuilder(
+    column: $table.ownerLocalId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sheetJson => $composableBuilder(
+    column: $table.sheetJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get syncRevision => $composableBuilder(
+    column: $table.syncRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get archivedAt => $composableBuilder(
+    column: $table.archivedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CharactersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CharactersTable> {
+  $$CharactersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get ownerLocalId => $composableBuilder(
+    column: $table.ownerLocalId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sheetJson =>
+      $composableBuilder(column: $table.sheetJson, builder: (column) => column);
+
+  GeneratedColumn<int> get revision =>
+      $composableBuilder(column: $table.revision, builder: (column) => column);
+
+  GeneratedColumn<int> get syncRevision => $composableBuilder(
+    column: $table.syncRevision,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get archivedAt => $composableBuilder(
+    column: $table.archivedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$CharactersTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CharactersTable,
+          CharacterRow,
+          $$CharactersTableFilterComposer,
+          $$CharactersTableOrderingComposer,
+          $$CharactersTableAnnotationComposer,
+          $$CharactersTableCreateCompanionBuilder,
+          $$CharactersTableUpdateCompanionBuilder,
+          (
+            CharacterRow,
+            BaseReferences<_$AppDatabase, $CharactersTable, CharacterRow>,
+          ),
+          CharacterRow,
+          PrefetchHooks Function()
+        > {
+  $$CharactersTableTableManager(_$AppDatabase db, $CharactersTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CharactersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CharactersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CharactersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> ownerLocalId = const Value.absent(),
+                Value<String> sheetJson = const Value.absent(),
+                Value<int> revision = const Value.absent(),
+                Value<int?> syncRevision = const Value.absent(),
+                Value<DateTime?> archivedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CharactersCompanion(
+                id: id,
+                ownerLocalId: ownerLocalId,
+                sheetJson: sheetJson,
+                revision: revision,
+                syncRevision: syncRevision,
+                archivedAt: archivedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<String> ownerLocalId = const Value.absent(),
+                required String sheetJson,
+                Value<int> revision = const Value.absent(),
+                Value<int?> syncRevision = const Value.absent(),
+                Value<DateTime?> archivedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CharactersCompanion.insert(
+                id: id,
+                ownerLocalId: ownerLocalId,
+                sheetJson: sheetJson,
+                revision: revision,
+                syncRevision: syncRevision,
+                archivedAt: archivedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CharactersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CharactersTable,
+      CharacterRow,
+      $$CharactersTableFilterComposer,
+      $$CharactersTableOrderingComposer,
+      $$CharactersTableAnnotationComposer,
+      $$CharactersTableCreateCompanionBuilder,
+      $$CharactersTableUpdateCompanionBuilder,
+      (
+        CharacterRow,
+        BaseReferences<_$AppDatabase, $CharactersTable, CharacterRow>,
+      ),
+      CharacterRow,
+      PrefetchHooks Function()
+    >;
+typedef $$CharacterContentRefsTableCreateCompanionBuilder =
+    CharacterContentRefsCompanion Function({
+      required String characterId,
+      required String slot,
+      required String entryKey,
+      Value<int> sourceRevision,
+      Value<String> snapshotJson,
+      Value<int> rowid,
+    });
+typedef $$CharacterContentRefsTableUpdateCompanionBuilder =
+    CharacterContentRefsCompanion Function({
+      Value<String> characterId,
+      Value<String> slot,
+      Value<String> entryKey,
+      Value<int> sourceRevision,
+      Value<String> snapshotJson,
+      Value<int> rowid,
+    });
+
+class $$CharacterContentRefsTableFilterComposer
+    extends Composer<_$AppDatabase, $CharacterContentRefsTable> {
+  $$CharacterContentRefsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get characterId => $composableBuilder(
+    column: $table.characterId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get slot => $composableBuilder(
+    column: $table.slot,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entryKey => $composableBuilder(
+    column: $table.entryKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sourceRevision => $composableBuilder(
+    column: $table.sourceRevision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshotJson => $composableBuilder(
+    column: $table.snapshotJson,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CharacterContentRefsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CharacterContentRefsTable> {
+  $$CharacterContentRefsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get characterId => $composableBuilder(
+    column: $table.characterId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get slot => $composableBuilder(
+    column: $table.slot,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entryKey => $composableBuilder(
+    column: $table.entryKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sourceRevision => $composableBuilder(
+    column: $table.sourceRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshotJson => $composableBuilder(
+    column: $table.snapshotJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CharacterContentRefsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CharacterContentRefsTable> {
+  $$CharacterContentRefsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get characterId => $composableBuilder(
+    column: $table.characterId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get slot =>
+      $composableBuilder(column: $table.slot, builder: (column) => column);
+
+  GeneratedColumn<String> get entryKey =>
+      $composableBuilder(column: $table.entryKey, builder: (column) => column);
+
+  GeneratedColumn<int> get sourceRevision => $composableBuilder(
+    column: $table.sourceRevision,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get snapshotJson => $composableBuilder(
+    column: $table.snapshotJson,
+    builder: (column) => column,
+  );
+}
+
+class $$CharacterContentRefsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CharacterContentRefsTable,
+          CharacterContentRefRow,
+          $$CharacterContentRefsTableFilterComposer,
+          $$CharacterContentRefsTableOrderingComposer,
+          $$CharacterContentRefsTableAnnotationComposer,
+          $$CharacterContentRefsTableCreateCompanionBuilder,
+          $$CharacterContentRefsTableUpdateCompanionBuilder,
+          (
+            CharacterContentRefRow,
+            BaseReferences<
+              _$AppDatabase,
+              $CharacterContentRefsTable,
+              CharacterContentRefRow
+            >,
+          ),
+          CharacterContentRefRow,
+          PrefetchHooks Function()
+        > {
+  $$CharacterContentRefsTableTableManager(
+    _$AppDatabase db,
+    $CharacterContentRefsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CharacterContentRefsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CharacterContentRefsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$CharacterContentRefsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> characterId = const Value.absent(),
+                Value<String> slot = const Value.absent(),
+                Value<String> entryKey = const Value.absent(),
+                Value<int> sourceRevision = const Value.absent(),
+                Value<String> snapshotJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CharacterContentRefsCompanion(
+                characterId: characterId,
+                slot: slot,
+                entryKey: entryKey,
+                sourceRevision: sourceRevision,
+                snapshotJson: snapshotJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String characterId,
+                required String slot,
+                required String entryKey,
+                Value<int> sourceRevision = const Value.absent(),
+                Value<String> snapshotJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CharacterContentRefsCompanion.insert(
+                characterId: characterId,
+                slot: slot,
+                entryKey: entryKey,
+                sourceRevision: sourceRevision,
+                snapshotJson: snapshotJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CharacterContentRefsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CharacterContentRefsTable,
+      CharacterContentRefRow,
+      $$CharacterContentRefsTableFilterComposer,
+      $$CharacterContentRefsTableOrderingComposer,
+      $$CharacterContentRefsTableAnnotationComposer,
+      $$CharacterContentRefsTableCreateCompanionBuilder,
+      $$CharacterContentRefsTableUpdateCompanionBuilder,
+      (
+        CharacterContentRefRow,
+        BaseReferences<
+          _$AppDatabase,
+          $CharacterContentRefsTable,
+          CharacterContentRefRow
+        >,
+      ),
+      CharacterContentRefRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -6786,4 +8173,8 @@ class $AppDatabaseManager {
       $$ContentNotesTableTableManager(_db, _db.contentNotes);
   $$ContentReadHistoryTableTableManager get contentReadHistory =>
       $$ContentReadHistoryTableTableManager(_db, _db.contentReadHistory);
+  $$CharactersTableTableManager get characters =>
+      $$CharactersTableTableManager(_db, _db.characters);
+  $$CharacterContentRefsTableTableManager get characterContentRefs =>
+      $$CharacterContentRefsTableTableManager(_db, _db.characterContentRefs);
 }

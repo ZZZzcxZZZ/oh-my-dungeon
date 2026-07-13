@@ -47,7 +47,7 @@
 - 创建：`apps/client_flutter/test/character_repository_test.dart`
 - 创建：`apps/client_flutter/test/support/character_test_support.dart`
 
-- [ ] **步骤 1：写离线角色和快照失败测试**
+- [x] **步骤 1：写离线角色和快照失败测试**
 
 ```dart
 test('creates a character and keeps a content snapshot after package removal', () async {
@@ -75,7 +75,7 @@ test('creates a character and keeps a content snapshot after package removal', (
 });
 ```
 
-- [ ] **步骤 2：运行并确认本地 Repository 缺失**
+- [x] **步骤 2：运行并确认本地 Repository 缺失**
 
 ```powershell
 cd apps/client_flutter
@@ -84,7 +84,7 @@ flutter test test/character_repository_test.dart
 
 预期：FAIL，`DriftCharacterRepository` 和 `CharacterContentReference` 不存在。
 
-- [ ] **步骤 3：实现表与接口**
+- [x] **步骤 3：实现表与接口**
 
 ```dart
 abstract interface class CharacterRepository {
@@ -100,7 +100,7 @@ abstract interface class CharacterRepository {
 
 在 `test/support/character_test_support.dart` 创建 `MemoryCharacterRepository implements CharacterRepository`，用 `Map<String, CharacterSheet>` 存储角色并支持 `initial` 构造参数；提供 `testCharacter({id, name, notes})`，返回完整且稳定的最小角色。后续测试统一使用这些名字，不再依赖隐式 fixture。
 
-- [ ] **步骤 4：生成代码并验证**
+- [x] **步骤 4：生成代码并验证**
 
 ```powershell
 cd apps/client_flutter
@@ -110,7 +110,7 @@ flutter test test/character_repository_test.dart test/app_database_test.dart
 
 预期：角色、快照和 schema 升级测试通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/core/database apps/client_flutter/lib/src/features/characters/data apps/client_flutter/lib/src/features/characters/domain apps/client_flutter/test/character_repository_test.dart apps/client_flutter/test/support/character_test_support.dart

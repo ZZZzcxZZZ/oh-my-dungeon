@@ -42,7 +42,7 @@
 - 修改：`apps/server_nest/src/app.module.ts`
 - 创建：`apps/server_nest/src/modules/campaign-sync/campaign-change.service.spec.ts`
 
-- [ ] **步骤 1：编写游标单调递增与事务回滚测试**
+- [x] **步骤 1：编写游标单调递增与事务回滚测试**
 
 ```typescript
 it('allocates one campaign cursor per accepted mutation', async () => {
@@ -52,13 +52,13 @@ it('allocates one campaign cursor per accepted mutation', async () => {
 });
 ```
 
-- [ ] **步骤 2：运行测试并确认模型缺失**
+- [x] **步骤 2：运行测试并确认模型缺失**
 
 运行：`npm run test:server -- campaign-change.service.spec.ts`
 
 预期：FAIL，Prisma 尚无战役变化模型，`CampaignChangeService` 不存在。
 
-- [ ] **步骤 3：增加 Prisma 模型**
+- [x] **步骤 3：增加 Prisma 模型**
 
 模型字段固定为：
 
@@ -143,7 +143,7 @@ model CampaignChange {
 
 在 `Campaign` 增加对应 relations。`CampaignChangeService.recordInTransaction` 必须在同一个 Prisma 事务中原子递增 `CampaignSyncState.cursor` 并创建 `CampaignChange`；API 将 `BigInt` cursor 序列化为十进制字符串。
 
-- [ ] **步骤 4：生成 Prisma Client 并验证**
+- [x] **步骤 4：生成 Prisma Client 并验证**
 
 ```powershell
 npm --prefix apps/server_nest run prisma:generate
@@ -153,7 +153,7 @@ npm run lint:server
 
 预期：游标测试通过，lint 无错误。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/server_nest/prisma/schema.prisma apps/server_nest/src/modules/campaign-sync apps/server_nest/src/app.module.ts

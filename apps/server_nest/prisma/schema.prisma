@@ -133,6 +133,87 @@ model Campaign {
   contentOverrides  ContentOverride[]
   npcs              Npc[]
   encounters        Encounter[]
+  syncState         CampaignSyncState?
+  actors            CampaignActor[]
+  contentEntries    CampaignContentEntry[]
+  changes           CampaignChange[]
+}
+
+model CampaignSyncState {
+  campaignId String   @id
+  cursor     BigInt   @default(0)
+  updatedAt  DateTime @updatedAt
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+}
+
+model CampaignActor {
+  id                String              @id @default(uuid())
+  campaignId        String
+  ownerUserId       String?
+  sourceCharacterId String?
+  actorType         String              @default("player")
+  status            String              @default("active")
+  sheetJson         Json
+  revision          Int                 @default(1)
+  updatedBy         String
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  campaign          Campaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  audits            CampaignActorAudit[]
+
+  @@unique([campaignId, sourceCharacterId])
+  @@index([campaignId, status])
+  @@index([ownerUserId])
+}
+
+model CampaignActorAudit {
+  id              String        @id @default(uuid())
+  campaignActorId String
+  campaignId      String
+  actorUserId     String
+  baseRevision    Int
+  resultRevision  Int
+  changedPaths    Json
+  beforeJson      Json
+  afterJson       Json
+  createdAt       DateTime      @default(now())
+  campaignActor   CampaignActor @relation(fields: [campaignActorId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, createdAt])
+}
+
+model CampaignContentEntry {
+  id         String    @id @default(uuid())
+  campaignId String
+  type       String
+  slug       String
+  name       String
+  entryJson  Json
+  revision   Int       @default(1)
+  createdBy  String
+  updatedBy  String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+  campaign   Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, slug])
+  @@index([campaignId, type, deletedAt])
+}
+
+model CampaignChange {
+  id         String   @id @default(uuid())
+  campaignId String
+  cursor     BigInt
+  entityType String
+  entityId   String
+  operation  String
+  revision   Int
+  createdAt  DateTime @default(now())
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, cursor])
+  @@index([campaignId, cursor])
 }
 
 model CampaignChatMessage {

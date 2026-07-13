@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './modules/auth/auth.module';
+import { CampaignSyncModule } from './modules/campaign-sync/campaign-sync.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { CharactersModule } from './modules/characters/characters.module';
 import { CheckRequestsModule } from './modules/check-requests/check-requests.module';
@@ -28,6 +29,7 @@ import { PrismaModule } from './prisma/prisma.module';
     AuthModule,
     ServerSettingsModule,
     CampaignsModule,
+    CampaignSyncModule,
     CharactersModule,
     CheckRequestsModule,
     ContentModule,

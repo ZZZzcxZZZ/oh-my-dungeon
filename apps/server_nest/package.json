@@ -5,9 +5,11 @@
   "description": "NestJS server for D&D Table Tool.",
   "scripts": {
     "build": "nest build",
+    "prebuild": "prisma generate",
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\"",
+    "pretest": "prisma generate",
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
     "prisma:generate": "prisma generate",

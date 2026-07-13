@@ -38,17 +38,25 @@ dependencies:
   shared_preferences: ^2.5.5
   dart_dice_parser: 7.1.1
   socket_io_client: ^3.0.0
+  drift: ^2.34.1
+  drift_flutter: ^0.3.0
+  sqlite3_flutter_libs: ^0.6.0
+  path_provider: ^2.1.5
+  path: ^1.9.1
+  meta: ^1.16.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
   # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
+  # encourage good coding practices. The lint set provided by the "flutter_lints"
+  # package is activated in the `analysis_options.yaml` file located at the root of
+  # your package. See that file for information about deactivating specific lint
+  # rules and activating additional lint rules.
   flutter_lints: ^6.0.0
+  build_runner: ^2.6.0
+  drift_dev: ^2.34.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

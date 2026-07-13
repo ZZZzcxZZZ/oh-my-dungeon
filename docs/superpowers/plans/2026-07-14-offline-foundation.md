@@ -38,7 +38,7 @@
 - 创建：`apps/client_flutter/lib/src/core/database/app_database.dart`
 - 创建：`apps/client_flutter/test/app_database_test.dart`
 
-- [ ] **步骤 1：添加失败的空数据库测试**
+- [x] **步骤 1：添加失败的空数据库测试**
 
 ```dart
 import 'package:dnd_table_client/src/core/database/app_database.dart';
@@ -56,7 +56,7 @@ void main() {
 }
 ```
 
-- [ ] **步骤 2：运行测试并确认缺少 `AppDatabase`**
+- [x] **步骤 2：运行测试并确认缺少 `AppDatabase`**
 
 运行：
 
@@ -67,7 +67,7 @@ flutter test test/app_database_test.dart
 
 预期：FAIL，提示 `core/database/app_database.dart` 不存在。
 
-- [ ] **步骤 3：加入依赖和最小 schema**
+- [x] **步骤 3：加入依赖和最小 schema**
 
 在 `pubspec.yaml` 加入：
 
@@ -134,7 +134,7 @@ class MigrationMarkers extends Table {
 
 `app_database.dart` 使用 `@DriftDatabase` 注册四张表，提供 `AppDatabase.defaults()` 与 `AppDatabase.forTesting(QueryExecutor executor)`，`schemaVersion` 返回 `1`。
 
-- [ ] **步骤 4：生成代码并验证测试通过**
+- [x] **步骤 4：生成代码并验证测试通过**
 
 ```powershell
 cd apps/client_flutter
@@ -144,7 +144,7 @@ flutter test test/app_database_test.dart
 
 预期：PASS，1 个测试通过。
 
-- [ ] **步骤 5：配置 Web worker 并验证 Web 构建**
+- [x] **步骤 5：配置 Web worker 并验证 Web 构建**
 
 创建 `apps/client_flutter/web/drift_worker.dart`：
 

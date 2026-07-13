@@ -57,6 +57,7 @@ abstract interface class ContentRepository {
     Map<String, Uint8List> assets = const {},
   });
   Future<void> setPackageEnabled(String packageId, bool enabled);
+  Future<bool> isPackageEnabled(String packageId);
   Future<ContentDeletionImpact> deletionImpact(String packageId);
   Future<void> deletePackage(String packageId);
   Future<void> setFavorite(String entryKey, bool favorite);
@@ -273,6 +274,15 @@ class DriftContentRepository implements ContentRepository {
   }
 
   @override
+  Future<bool> isPackageEnabled(String packageId) async {
+    final db = _database;
+    final row = await (db.select(db.localContentPackages)
+          ..where((t) => t.id.equals(packageId)))
+        .getSingleOrNull();
+    return row?.enabled ?? false;
+  }
+
+  @override
   Future<ContentDeletionImpact> deletionImpact(String packageId) async {
     final db = _database;
     final entries = db.localContentEntries;
@@ -441,6 +451,10 @@ class EmptyContentRepository implements ContentRepository {
   }) async {}
   @override
   Future<void> setPackageEnabled(String packageId, bool enabled) async {}
+
+  @override
+  Future<bool> isPackageEnabled(String packageId) async => false;
+
   @override
   Future<ContentDeletionImpact> deletionImpact(String packageId) async =>
       const ContentDeletionImpact(

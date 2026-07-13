@@ -452,7 +452,7 @@ git commit -m "feat(0.1): rebuild the local library as a material wiki"
 - 修改：`apps/client_flutter/lib/src/features/server_home/presentation/settings_tab_page.dart`
 - 创建：`apps/client_flutter/test/content_package_settings_test.dart`
 
-- [ ] **步骤 1：写设置导入失败测试**
+- [x] **步骤 1：写设置导入失败测试**
 
 ```dart
 testWidgets('previews and imports a local package from settings', (tester) async {
@@ -486,7 +486,7 @@ testWidgets('previews and imports a local package from settings', (tester) async
 });
 ```
 
-- [ ] **步骤 2：运行并确认设置页缺失**
+- [x] **步骤 2：运行并确认设置页缺失**
 
 ```powershell
 cd apps/client_flutter
@@ -495,13 +495,13 @@ flutter test test/content_package_settings_test.dart
 
 预期：FAIL，设置页和可注入文件选择器不存在。
 
-- [ ] **步骤 3：实现文件选择与管理命令**
+- [x] **步骤 3：实现文件选择与管理命令**
 
 定义 `ContentFilePicker.pick()` 返回文件名与 bytes，生产实现使用 `file_picker`，测试使用 fake。包列表每项提供启用开关、升级、导出、删除菜单。删除前调用 `deletionImpact` 并显示受影响角色、收藏和笔记数量；确认后才删除。
 
 在 `test/support/content_test_support.dart` 增加 `MemoryContentFilePicker implements ContentFilePicker`，构造参数为 `PickedContentFile? result`，`pick()` 原样返回该值。`PickedContentFile` 只包含 `name` 和 `Uint8List bytes`，不泄露平台文件对象到业务层。
 
-- [ ] **步骤 4：验证设置与空库跳转**
+- [x] **步骤 4：验证设置与空库跳转**
 
 ```powershell
 cd apps/client_flutter
@@ -511,7 +511,7 @@ flutter analyze
 
 预期：导入、启停、升级预览和删除确认测试通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/features/content/presentation apps/client_flutter/lib/src/features/server_home/presentation/settings_tab_page.dart apps/client_flutter/test/content_package_settings_test.dart apps/client_flutter/test/support/content_test_support.dart

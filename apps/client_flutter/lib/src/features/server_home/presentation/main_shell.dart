@@ -17,10 +17,13 @@ import '../../../features/characters/presentation/characters_tab_page.dart';
 import '../../../features/check_requests/data/check_request_api_client.dart';
 import '../../../features/client_mode/domain/client_mode.dart';
 import '../../../features/content/data/content_api_client.dart';
+import '../../../features/content/data/import/content_package_importer.dart';
 import '../../../features/content/data/local/content_repository.dart';
+import '../../../features/content/domain/content_file_picker.dart';
 import '../../../features/content/presentation/content_controller.dart';
 import '../../../features/content/presentation/content_library_controller.dart';
 import '../../../features/content/presentation/content_library_page.dart';
+import '../../../features/content/presentation/content_package_settings_page.dart';
 import '../../../features/encounters/data/encounter_api_client.dart';
 import '../../../features/rooms/data/room_api_client.dart';
 import '../../../features/rooms/domain/dice_roller.dart';
@@ -87,10 +90,13 @@ class _MainShellState extends State<MainShell> {
   late final CampaignController _campaignController;
   late final CharacterController _characterController;
   late final ContentController _contentController;
+  late final ContentRepository _contentRepository;
+  late final ContentPackageImporter _contentImporter;
   late final ContentLibraryController _libraryController;
   late final SessionController _sessionController;
   late final CampaignSocketService _campaignSocketService;
   final SyncStatusController _syncStatusController = SyncStatusController();
+  final ContentFilePicker _contentFilePicker = const FilePickerContentFilePicker();
   int _currentIndex = 0;
 
   @override
@@ -122,10 +128,12 @@ class _MainShellState extends State<MainShell> {
       authController: _authController,
       contentClient: widget.contentClient,
     );
+    _contentRepository = widget.database != null
+        ? DriftContentRepository(widget.database!)
+        : EmptyContentRepository();
+    _contentImporter = ContentPackageImporter(_contentRepository);
     _libraryController = ContentLibraryController(
-      repository: widget.database != null
-          ? DriftContentRepository(widget.database!)
-          : EmptyContentRepository(),
+      repository: _contentRepository,
     );
     _sessionController = SessionController(
       apiBaseUrl: profile?.apiBaseUrl ?? '',
@@ -150,6 +158,18 @@ class _MainShellState extends State<MainShell> {
 
   void _onModeChanged() {
     if (mounted) setState(() {});
+  }
+
+  void _openContentPackageSettings(BuildContext context) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => ContentPackageSettingsPage(
+          repository: _contentRepository,
+          importer: _contentImporter,
+          filePicker: _contentFilePicker,
+        ),
+      ),
+    );
   }
 
   @override
@@ -183,7 +203,7 @@ class _MainShellState extends State<MainShell> {
       ),
       ContentLibraryPage(
         controller: _libraryController,
-        onImportRequested: () {},
+        onImportRequested: () => _openContentPackageSettings(context),
       ),
       SettingsTabPage(
         session: widget.session,
@@ -194,6 +214,9 @@ class _MainShellState extends State<MainShell> {
         serverProfileStore: widget.serverProfileStore,
         serverProfilesPageBuilder: widget.serverProfilesPageBuilder,
         onSwitchToProfile: widget.onSwitchToProfile,
+        contentRepository: _contentRepository,
+        contentImporter: _contentImporter,
+        contentFilePicker: _contentFilePicker,
       ),
     ];
     final body = IndexedStack(index: _currentIndex, children: pages);

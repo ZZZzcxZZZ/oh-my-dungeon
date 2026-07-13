@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:dnd_table_client/src/features/content/data/local/content_repository.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_block.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
+import 'package:dnd_table_client/src/features/content/domain/content_file_picker.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_package_manifest.dart';
 
 ContentEntry testFighterEntry() => ContentEntry.fromJson({
@@ -14,6 +15,15 @@ ContentEntry testFighterEntry() => ContentEntry.fromJson({
       'body': <Map<String, Object?>>[],
       'revision': 1,
     });
+
+class MemoryContentFilePicker implements ContentFilePicker {
+  MemoryContentFilePicker({this.result});
+
+  PickedContentFile? result;
+
+  @override
+  Future<PickedContentFile?> pick() async => result;
+}
 
 class MemoryContentRepository implements ContentRepository {
   MemoryContentRepository({List<ContentEntry> initialEntries = const []}) {
@@ -54,7 +64,7 @@ class MemoryContentRepository implements ContentRepository {
   Stream<List<ContentPackageManifest>> watchPackages() {
     final controller =
         StreamController<List<ContentPackageManifest>>.broadcast();
-    controller.add(_packages.values.toList());
+    scheduleMicrotask(() => controller.add(_packages.values.toList()));
     _controller.stream.listen(controller.add);
     return controller.stream;
   }
@@ -152,6 +162,10 @@ class MemoryContentRepository implements ContentRepository {
     _enabled[packageId] = enabled;
     _emit();
   }
+
+  @override
+  Future<bool> isPackageEnabled(String packageId) async =>
+      _enabled[packageId] ?? false;
 
   @override
   Future<ContentDeletionImpact> deletionImpact(String packageId) async {

@@ -6,6 +6,10 @@ import '../../app_preferences/presentation/app_preferences_controller.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../auth/presentation/auth_page.dart';
 import '../../client_mode/domain/client_mode.dart';
+import '../../content/data/import/content_package_importer.dart';
+import '../../content/data/local/content_repository.dart';
+import '../../content/domain/content_file_picker.dart';
+import '../../content/presentation/content_package_settings_page.dart';
 import '../../server_profiles/data/server_profile_store.dart';
 import '../../server_profiles/domain/server_profile.dart';
 import '../domain/active_server_session.dart';
@@ -24,6 +28,9 @@ class SettingsTabPage extends StatefulWidget {
     this.serverProfileStore,
     this.serverProfilesPageBuilder,
     this.onSwitchToProfile,
+    this.contentRepository,
+    this.contentImporter,
+    this.contentFilePicker,
     super.key,
   });
 
@@ -35,6 +42,9 @@ class SettingsTabPage extends StatefulWidget {
   final ServerProfileStore? serverProfileStore;
   final WidgetBuilder? serverProfilesPageBuilder;
   final ValueChanged<ServerProfile>? onSwitchToProfile;
+  final ContentRepository? contentRepository;
+  final ContentPackageImporter? contentImporter;
+  final ContentFilePicker? contentFilePicker;
 
   @override
   State<SettingsTabPage> createState() => _SettingsTabPageState();
@@ -82,6 +92,8 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
                     _buildServerSection(context),
                     const SizedBox(height: 24),
                     _buildSyncSection(context),
+                    const SizedBox(height: 24),
+                    _buildContentSection(context),
                     const SizedBox(height: 24),
                     _buildAccountSection(context),
                     const SizedBox(height: 24),
@@ -210,6 +222,53 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildContentSection(BuildContext context) {
+    final repository = widget.contentRepository;
+    final importer = widget.contentImporter;
+    final filePicker = widget.contentFilePicker;
+    if (repository == null || importer == null || filePicker == null) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('资料包', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.inventory_2_outlined),
+            title: const Text('资料包'),
+            subtitle: const Text('导入、启用或删除本地资料包'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _openContentPackageSettings(
+              context,
+              repository: repository,
+              importer: importer,
+              filePicker: filePicker,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _openContentPackageSettings(
+    BuildContext context, {
+    required ContentRepository repository,
+    required ContentPackageImporter importer,
+    required ContentFilePicker filePicker,
+  }) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => ContentPackageSettingsPage(
+          repository: repository,
+          importer: importer,
+          filePicker: filePicker,
+        ),
+      ),
     );
   }
 

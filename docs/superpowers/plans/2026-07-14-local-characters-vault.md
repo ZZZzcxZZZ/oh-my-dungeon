@@ -328,7 +328,7 @@ git commit -m "feat(0.1): add personal vault sync api"
 - 创建：`apps/client_flutter/test/vault_sync_service_test.dart`
 - 创建：`apps/client_flutter/test/support/vault_test_support.dart`
 
-- [ ] **步骤 1：写 push 后 pull 的失败测试**
+- [x] **步骤 1：写 push 后 pull 的失败测试**
 
 ```dart
 test('pushes outbox before applying remote changes and cursor', () async {
@@ -376,7 +376,7 @@ test('pushes outbox before applying remote changes and cursor', () async {
 });
 ```
 
-- [ ] **步骤 2：运行并确认 Vault 客户端缺失**
+- [x] **步骤 2：运行并确认 Vault 客户端缺失**
 
 ```powershell
 cd apps/client_flutter
@@ -385,7 +385,7 @@ flutter test test/vault_api_client_test.dart test/vault_sync_service_test.dart
 
 预期：FAIL，Vault 类型和服务不存在。
 
-- [ ] **步骤 3：实现接口和同步顺序**
+- [x] **步骤 3：实现接口和同步顺序**
 
 ```dart
 abstract interface class VaultApiClient {
@@ -404,7 +404,7 @@ abstract interface class VaultChangeApplier {
 
 `VaultSyncService.sync` 固定执行：读取 Outbox、最多 100 项 push、标记完成、读取 cursor、循环拉取直至 `hasMore == false`、事务应用、保存 cursor。网络异常增加 attempts 并保持 Outbox；409 转为 `SyncPhase.conflict`。
 
-- [ ] **步骤 4：验证 URL、Bearer、失败保留与幂等**
+- [x] **步骤 4：验证 URL、Bearer、失败保留与幂等**
 
 ```powershell
 cd apps/client_flutter
@@ -414,7 +414,7 @@ flutter analyze
 
 预期：HTTP 契约和同步顺序测试通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/features/vault apps/client_flutter/test/vault_api_client_test.dart apps/client_flutter/test/vault_sync_service_test.dart apps/client_flutter/test/support/vault_test_support.dart

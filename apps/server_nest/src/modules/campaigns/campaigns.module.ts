@@ -10,6 +10,6 @@ import { CampaignPolicy } from './policies/campaign.policy';
   imports: [PrismaModule, AuthModule, RealtimeModule],
   controllers: [CampaignsController],
   providers: [CampaignsService, CampaignPolicy],
-  exports: [CampaignsService]
+  exports: [CampaignsService, CampaignPolicy]
 })
 export class CampaignsModule {}

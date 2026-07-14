@@ -66,3 +66,55 @@ export interface CampaignChangedEvent {
   cursor: string;
   entityType: CampaignEntityType;
 }
+
+export type CampaignActorType = "player" | "npc" | "unclaimed" | "companion";
+
+export type CampaignActorStatus = "active" | "archived";
+
+export type CampaignRuntimeCommandType =
+  | "setHp"
+  | "adjustHp"
+  | "setTemporaryHp"
+  | "setCondition"
+  | "removeCondition"
+  | "setResource";
+
+export interface CampaignRuntimeCommand {
+  type: CampaignRuntimeCommandType;
+  value?: unknown;
+  delta?: number;
+  name?: string;
+  amount?: number;
+}
+
+export interface PublishActorInput {
+  sourceCharacterId: string;
+  actorType: CampaignActorType;
+  baseRevision: number;
+  sheet: Record<string, unknown>;
+}
+
+export interface CreateActorInput {
+  actorType: CampaignActorType;
+  ownerUserId?: string | null;
+  sheet: Record<string, unknown>;
+}
+
+export interface UpdateActorInput {
+  baseRevision: number;
+  sheet: Record<string, unknown>;
+}
+
+export interface AssignActorInput {
+  ownerUserId: string | null;
+  baseRevision: number;
+}
+
+export interface ArchiveActorInput {
+  baseRevision: number;
+}
+
+export interface RuntimeCommandInput {
+  baseRevision: number;
+  commands: CampaignRuntimeCommand[];
+}

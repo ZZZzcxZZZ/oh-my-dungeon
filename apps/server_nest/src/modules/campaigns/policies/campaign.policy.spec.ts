@@ -214,4 +214,169 @@ describe('CampaignPolicy', () => {
       ).toThrow(ForbiddenException);
     });
   });
+
+  describe('canViewActor', () => {
+    const actorCtx = {
+      campaignId: 'c-1',
+      ownerId: 'user-1',
+      members: [
+        { userId: 'user-1', role: 'owner' },
+        { userId: 'user-2', role: 'player' }
+      ],
+      actorId: 'actor-1',
+      actorOwnerUserId: 'user-2',
+      actorSourceCharacterId: 'char-1',
+      actorRevision: 1
+    };
+
+    it('allows a campaign member to view the actor', () => {
+      expect(() =>
+        policy.canViewActor(
+          { userId: 'user-2', username: 'bard' },
+          actorCtx
+        )
+      ).not.toThrow();
+    });
+
+    it('rejects a non-member', () => {
+      expect(() =>
+        policy.canViewActor(
+          { userId: 'user-3', username: 'stranger' },
+          actorCtx
+        )
+      ).toThrow(ForbiddenException);
+    });
+  });
+
+  describe('canManageActor', () => {
+    const actorCtx = {
+      campaignId: 'c-1',
+      ownerId: 'user-1',
+      members: [
+        { userId: 'user-1', role: 'owner' },
+        { userId: 'user-2', role: 'dm' },
+        { userId: 'user-3', role: 'player' }
+      ],
+      actorId: 'actor-1',
+      actorOwnerUserId: 'user-3',
+      actorSourceCharacterId: null,
+      actorRevision: 1
+    };
+
+    it('allows the owner', () => {
+      expect(() =>
+        policy.canManageActor(
+          { userId: 'user-1', username: 'ranger' },
+          actorCtx
+        )
+      ).not.toThrow();
+    });
+
+    it('allows a DM', () => {
+      expect(() =>
+        policy.canManageActor(
+          { userId: 'user-2', username: 'bard' },
+          actorCtx
+        )
+      ).not.toThrow();
+    });
+
+    it('rejects a player even if they own the actor', () => {
+      expect(() =>
+        policy.canManageActor(
+          { userId: 'user-3', username: 'player' },
+          actorCtx
+        )
+      ).toThrow(ForbiddenException);
+    });
+  });
+
+  describe('canEditOwnedActor', () => {
+    const baseCtx = {
+      campaignId: 'c-1',
+      ownerId: 'user-1',
+      members: [
+        { userId: 'user-1', role: 'owner' },
+        { userId: 'user-2', role: 'dm' },
+        { userId: 'user-3', role: 'player' }
+      ],
+      actorId: 'actor-1',
+      actorSourceCharacterId: null,
+      actorRevision: 1
+    };
+
+    it('allows the owner of the campaign (DM path)', () => {
+      expect(() =>
+        policy.canEditOwnedActor(
+          { userId: 'user-1', username: 'ranger' },
+          { ...baseCtx, actorOwnerUserId: 'user-3' }
+        )
+      ).not.toThrow();
+    });
+
+    it('allows a DM (manager path)', () => {
+      expect(() =>
+        policy.canEditOwnedActor(
+          { userId: 'user-2', username: 'bard' },
+          { ...baseCtx, actorOwnerUserId: 'user-3' }
+        )
+      ).not.toThrow();
+    });
+
+    it('allows the player who owns the actor', () => {
+      expect(() =>
+        policy.canEditOwnedActor(
+          { userId: 'user-3', username: 'player' },
+          { ...baseCtx, actorOwnerUserId: 'user-3' }
+        )
+      ).not.toThrow();
+    });
+
+    it('rejects a different player', () => {
+      expect(() =>
+        policy.canEditOwnedActor(
+          { userId: 'user-4', username: 'other' },
+          { ...baseCtx, actorOwnerUserId: 'user-3' }
+        )
+      ).toThrow(ForbiddenException);
+    });
+
+    it('rejects a player when the actor has no owner', () => {
+      expect(() =>
+        policy.canEditOwnedActor(
+          { userId: 'user-3', username: 'player' },
+          { ...baseCtx, actorOwnerUserId: null }
+        )
+      ).toThrow(ForbiddenException);
+    });
+  });
+
+  describe('canPublishActor', () => {
+    const campaignCtx = {
+      campaignId: 'c-1',
+      ownerId: 'user-1',
+      members: [
+        { userId: 'user-1', role: 'owner' },
+        { userId: 'user-2', role: 'player' }
+      ]
+    };
+
+    it('allows a campaign member to publish', () => {
+      expect(() =>
+        policy.canPublishActor(
+          { userId: 'user-2', username: 'bard' },
+          campaignCtx
+        )
+      ).not.toThrow();
+    });
+
+    it('rejects a non-member', () => {
+      expect(() =>
+        policy.canPublishActor(
+          { userId: 'user-3', username: 'stranger' },
+          campaignCtx
+        )
+      ).toThrow(ForbiddenException);
+    });
+  });
 });

@@ -171,7 +171,7 @@ git commit -m "feat(0.1): add campaign collaboration models"
 - 修改：`apps/server_nest/src/modules/campaigns/policies/campaign.policy.spec.ts`
 - 创建：`apps/server_nest/test/campaign-actors.e2e-spec.ts`
 
-- [ ] **步骤 1：编写权限、冲突和审计失败测试**
+- [x] **步骤 1：编写权限、冲突和审计失败测试**
 
 在 e2e 测试沿用现有注册、登录和创建战役装配，覆盖：玩家发布自己的本地角色成功；DM 创建 NPC 或未认领 Actor 成功而 player 返回 403；非成员读取返回 403；DM 用 `baseRevision` 完整编辑成功；旧修订更新返回 409 和当前 Actor；DM 更新后生成一条审计记录；DM 不能删除玩家本地角色，只能归档战役副本。
 
@@ -190,13 +190,13 @@ await request(server)
   .expect(409);
 ```
 
-- [ ] **步骤 2：运行测试并确认端点不存在**
+- [x] **步骤 2：运行测试并确认端点不存在**
 
 运行：`npm run test:server -- campaign-actors.e2e-spec.ts`
 
 预期：FAIL，Actor 路由返回 404。
 
-- [ ] **步骤 3：实现固定端点与权限**
+- [x] **步骤 3：实现固定端点与权限**
 
 端点固定为：
 
@@ -214,7 +214,7 @@ GET    /api/campaigns/:campaignId/actors/:actorId/audits
 
 发布请求使用 `{ sourceCharacterId, actorType, baseRevision, sheet }`。DM 创建请求使用 `{ actorType: 'npc' | 'unclaimed' | 'companion', ownerUserId?, sheet }`，sourceCharacterId 为 null；完整更新使用 `{ baseRevision, sheet }`；assign 使用 `{ ownerUserId: string | null, baseRevision }` 且目标必须是战役成员。运行时命令只允许 `setHp`、`adjustHp`、`setTemporaryHp`、`setCondition`、`removeCondition` 和 `setResource`，由服务端按接收顺序应用。owner/DM 可创建、分配并完整编辑所有 Actor；玩家可发布和更新自己拥有的 Actor；所有写入在同一事务内递增 revision、写审计和写 `CampaignChange`。
 
-- [ ] **步骤 4：验证服务与权限**
+- [x] **步骤 4：验证服务与权限**
 
 ```powershell
 npm run test:server -- campaign.policy.spec.ts
@@ -224,7 +224,7 @@ npm run lint:server
 
 预期：成员隔离、DM 完整编辑、409 冲突、审计与运行时命令测试通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/server_nest/src/modules/campaign-sync apps/server_nest/src/modules/campaigns/policies apps/server_nest/test/campaign-actors.e2e-spec.ts

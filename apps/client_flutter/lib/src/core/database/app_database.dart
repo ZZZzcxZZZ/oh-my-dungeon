@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:meta/meta.dart';
 
+import '../../features/campaigns/data/local/campaign_cache_tables.dart';
 import '../../features/characters/data/local/character_tables.dart';
 import '../../features/content/data/local/content_tables.dart';
 import 'tables/core_tables.dart';
@@ -24,6 +25,11 @@ part 'app_database.g.dart';
   ContentReadHistory,
   Characters,
   CharacterContentRefs,
+  CampaignActorsCache,
+  CampaignActorBacklinks,
+  CampaignContentCache,
+  CampaignSyncCursors,
+  CharacterSyncConflicts,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -33,7 +39,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -51,6 +57,13 @@ class AppDatabase extends _$AppDatabase {
           if (from < 3) {
             await m.createTable(characters);
             await m.createTable(characterContentRefs);
+          }
+          if (from < 4) {
+            await m.createTable(campaignActorsCache);
+            await m.createTable(campaignActorBacklinks);
+            await m.createTable(campaignContentCache);
+            await m.createTable(campaignSyncCursors);
+            await m.createTable(characterSyncConflicts);
           }
         },
       );

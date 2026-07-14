@@ -375,7 +375,7 @@ git commit -m "feat(0.1): notify campaign cache changes"
 - 创建：`apps/client_flutter/test/campaign_sync_service_test.dart`
 - 创建：`apps/client_flutter/test/support/campaign_test_support.dart`
 
-- [ ] **步骤 1：编写原子应用分页和 tombstone 测试**
+- [x] **步骤 1：编写原子应用分页和 tombstone 测试**
 
 ```dart
 test('applies a page atomically and advances cursor after writes', () async {
@@ -404,13 +404,13 @@ test('applies a page atomically and advances cursor after writes', () async {
 
 再测试 delete 移除缓存、重复页幂等、写入失败不推进 cursor、Actor JSON 保持完整，以及 DM 的 Actor 更新按 `sourceCharacterId` 回写角色所有者的本地角色。
 
-- [ ] **步骤 2：运行测试并确认缓存不存在**
+- [x] **步骤 2：运行测试并确认缓存不存在**
 
 运行：`cd apps/client_flutter; flutter test test/campaign_cache_repository_test.dart`
 
 预期：FAIL，缓存 Repository 和表不存在。
 
-- [ ] **步骤 3：实现表、接口和拉取循环**
+- [x] **步骤 3：实现表、接口和拉取循环**
 
 Drift 表固定为 `CampaignActorsCache`、`CampaignActorBacklinks`、`CampaignContentCache`、`CampaignMessagesCache`、`CampaignSyncCursors` 和 `CharacterSyncConflicts`。`CampaignActorBacklinks` 保存 campaignActorId、sourceCharacterId、lastPublishedLocalRevision 和 lastAppliedActorRevision，用于判断双向同步基线。接口固定为：
 
@@ -429,7 +429,7 @@ abstract interface class CampaignCacheRepository {
 
 在 `test/support/campaign_test_support.dart` 实现 `MemoryCampaignCacheRepository`（构造参数 `actors` 与 `entriesByCampaign`）和 `MemoryCampaignSyncApiClient`（记录 publish/create/update/runtime/assign/archive 调用并可返回 409 冲突）。两个类型完整实现生产接口，后续 Widget 与组合 Repository 测试统一复用。
 
-- [ ] **步骤 4：生成并验证同步服务**
+- [x] **步骤 4：生成并验证同步服务**
 
 ```powershell
 cd apps/client_flutter
@@ -440,7 +440,7 @@ flutter analyze
 
 预期：分页、幂等、错误保留和数据库迁移测试通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/core/database apps/client_flutter/lib/src/features/campaigns/domain apps/client_flutter/lib/src/features/campaigns/data apps/client_flutter/test/campaign_cache_repository_test.dart apps/client_flutter/test/campaign_sync_service_test.dart apps/client_flutter/test/app_database_test.dart apps/client_flutter/test/support/campaign_test_support.dart

@@ -56,7 +56,49 @@ export class CampaignContentService {
   ): Promise<CampaignChangePage> {
     const campaign = await this.fetchCampaignContext(campaignId);
     this.policy.canViewCampaign(actor, campaign);
-    return this.changeService.listChanges(campaignId, cursor, limit);
+    const page = await this.changeService.listChanges(campaignId, cursor, limit);
+
+    // Enrich upsert items with the full entity so the client can apply
+    // changes without a second round-trip. Delete items stay lightweight.
+    const actorIds = page.items
+        .filter((item) => item.entityType === "actor" && item.operation === "upsert")
+        .map((item) => item.entityId);
+    const contentIds = page.items
+        .filter((item) => item.entityType === "content" && item.operation === "upsert")
+        .map((item) => item.entityId);
+
+    const actorMap = new Map<string, Record<string, unknown>>();
+    const contentMap = new Map<string, Record<string, unknown>>();
+
+    if (actorIds.length > 0) {
+      const actors = await this.prismaService.campaignActor.findMany({
+        where: { id: { in: actorIds } },
+      });
+      for (const row of actors) {
+        actorMap.set(row.id, toActorEntity(row));
+      }
+    }
+    if (contentIds.length > 0) {
+      const entries = await this.prismaService.campaignContentEntry.findMany({
+        where: { id: { in: contentIds } },
+      });
+      for (const row of entries) {
+        contentMap.set(row.id, toEntryEntity(row));
+      }
+    }
+
+    page.items = page.items.map((item) => {
+      if (item.operation !== "upsert") return item;
+      if (item.entityType === "actor") {
+        return { ...item, entity: actorMap.get(item.entityId) ?? null };
+      }
+      if (item.entityType === "content") {
+        return { ...item, entity: contentMap.get(item.entityId) ?? null };
+      }
+      return item;
+    });
+
+    return page;
   }
 
   async create(
@@ -308,4 +350,38 @@ function conflict(row: EntryRow): ConflictException {
     message: "Content entry revision conflict",
     current: toEntrySummary(row),
   });
+}
+
+interface ActorEntityRow {
+  id: string;
+  campaignId: string;
+  ownerUserId: string | null;
+  sourceCharacterId: string | null;
+  actorType: string;
+  status: string;
+  sheetJson: unknown;
+  revision: number;
+  updatedBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+function toActorEntity(row: ActorEntityRow): Record<string, unknown> {
+  return {
+    id: row.id,
+    campaignId: row.campaignId,
+    ownerUserId: row.ownerUserId,
+    sourceCharacterId: row.sourceCharacterId,
+    actorType: row.actorType,
+    status: row.status,
+    sheet: (row.sheetJson ?? {}) as Record<string, unknown>,
+    revision: row.revision,
+    updatedBy: row.updatedBy,
+    createdAt: toIso(row.createdAt),
+    updatedAt: toIso(row.updatedAt),
+  };
+}
+
+function toEntryEntity(row: EntryRow): Record<string, unknown> {
+  return toEntrySummary(row) as unknown as Record<string, unknown>;
 }

@@ -5207,6 +5207,2565 @@ class CharacterContentRefsCompanion
   }
 }
 
+class $CampaignActorsCacheTable extends CampaignActorsCache
+    with TableInfo<$CampaignActorsCacheTable, CampaignActorsCacheRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CampaignActorsCacheTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _campaignIdMeta = const VerificationMeta(
+    'campaignId',
+  );
+  @override
+  late final GeneratedColumn<String> campaignId = GeneratedColumn<String>(
+    'campaign_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _ownerUserIdMeta = const VerificationMeta(
+    'ownerUserId',
+  );
+  @override
+  late final GeneratedColumn<String> ownerUserId = GeneratedColumn<String>(
+    'owner_user_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sourceCharacterIdMeta = const VerificationMeta(
+    'sourceCharacterId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceCharacterId =
+      GeneratedColumn<String>(
+        'source_character_id',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _actorTypeMeta = const VerificationMeta(
+    'actorType',
+  );
+  @override
+  late final GeneratedColumn<String> actorType = GeneratedColumn<String>(
+    'actor_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sheetJsonMeta = const VerificationMeta(
+    'sheetJson',
+  );
+  @override
+  late final GeneratedColumn<String> sheetJson = GeneratedColumn<String>(
+    'sheet_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _revisionMeta = const VerificationMeta(
+    'revision',
+  );
+  @override
+  late final GeneratedColumn<int> revision = GeneratedColumn<int>(
+    'revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedByMeta = const VerificationMeta(
+    'updatedBy',
+  );
+  @override
+  late final GeneratedColumn<String> updatedBy = GeneratedColumn<String>(
+    'updated_by',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    campaignId,
+    ownerUserId,
+    sourceCharacterId,
+    actorType,
+    status,
+    sheetJson,
+    revision,
+    updatedBy,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'campaign_actors_cache';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CampaignActorsCacheRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('campaign_id')) {
+      context.handle(
+        _campaignIdMeta,
+        campaignId.isAcceptableOrUnknown(data['campaign_id']!, _campaignIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_campaignIdMeta);
+    }
+    if (data.containsKey('owner_user_id')) {
+      context.handle(
+        _ownerUserIdMeta,
+        ownerUserId.isAcceptableOrUnknown(
+          data['owner_user_id']!,
+          _ownerUserIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('source_character_id')) {
+      context.handle(
+        _sourceCharacterIdMeta,
+        sourceCharacterId.isAcceptableOrUnknown(
+          data['source_character_id']!,
+          _sourceCharacterIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('actor_type')) {
+      context.handle(
+        _actorTypeMeta,
+        actorType.isAcceptableOrUnknown(data['actor_type']!, _actorTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_actorTypeMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('sheet_json')) {
+      context.handle(
+        _sheetJsonMeta,
+        sheetJson.isAcceptableOrUnknown(data['sheet_json']!, _sheetJsonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sheetJsonMeta);
+    }
+    if (data.containsKey('revision')) {
+      context.handle(
+        _revisionMeta,
+        revision.isAcceptableOrUnknown(data['revision']!, _revisionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_revisionMeta);
+    }
+    if (data.containsKey('updated_by')) {
+      context.handle(
+        _updatedByMeta,
+        updatedBy.isAcceptableOrUnknown(data['updated_by']!, _updatedByMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedByMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CampaignActorsCacheRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CampaignActorsCacheRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      campaignId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}campaign_id'],
+      )!,
+      ownerUserId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}owner_user_id'],
+      ),
+      sourceCharacterId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_character_id'],
+      ),
+      actorType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}actor_type'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      sheetJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sheet_json'],
+      )!,
+      revision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}revision'],
+      )!,
+      updatedBy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}updated_by'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $CampaignActorsCacheTable createAlias(String alias) {
+    return $CampaignActorsCacheTable(attachedDatabase, alias);
+  }
+}
+
+class CampaignActorsCacheRow extends DataClass
+    implements Insertable<CampaignActorsCacheRow> {
+  final String id;
+  final String campaignId;
+  final String? ownerUserId;
+  final String? sourceCharacterId;
+  final String actorType;
+  final String status;
+  final String sheetJson;
+  final int revision;
+  final String updatedBy;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const CampaignActorsCacheRow({
+    required this.id,
+    required this.campaignId,
+    this.ownerUserId,
+    this.sourceCharacterId,
+    required this.actorType,
+    required this.status,
+    required this.sheetJson,
+    required this.revision,
+    required this.updatedBy,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['campaign_id'] = Variable<String>(campaignId);
+    if (!nullToAbsent || ownerUserId != null) {
+      map['owner_user_id'] = Variable<String>(ownerUserId);
+    }
+    if (!nullToAbsent || sourceCharacterId != null) {
+      map['source_character_id'] = Variable<String>(sourceCharacterId);
+    }
+    map['actor_type'] = Variable<String>(actorType);
+    map['status'] = Variable<String>(status);
+    map['sheet_json'] = Variable<String>(sheetJson);
+    map['revision'] = Variable<int>(revision);
+    map['updated_by'] = Variable<String>(updatedBy);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  CampaignActorsCacheCompanion toCompanion(bool nullToAbsent) {
+    return CampaignActorsCacheCompanion(
+      id: Value(id),
+      campaignId: Value(campaignId),
+      ownerUserId: ownerUserId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(ownerUserId),
+      sourceCharacterId: sourceCharacterId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceCharacterId),
+      actorType: Value(actorType),
+      status: Value(status),
+      sheetJson: Value(sheetJson),
+      revision: Value(revision),
+      updatedBy: Value(updatedBy),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory CampaignActorsCacheRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CampaignActorsCacheRow(
+      id: serializer.fromJson<String>(json['id']),
+      campaignId: serializer.fromJson<String>(json['campaignId']),
+      ownerUserId: serializer.fromJson<String?>(json['ownerUserId']),
+      sourceCharacterId: serializer.fromJson<String?>(
+        json['sourceCharacterId'],
+      ),
+      actorType: serializer.fromJson<String>(json['actorType']),
+      status: serializer.fromJson<String>(json['status']),
+      sheetJson: serializer.fromJson<String>(json['sheetJson']),
+      revision: serializer.fromJson<int>(json['revision']),
+      updatedBy: serializer.fromJson<String>(json['updatedBy']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'campaignId': serializer.toJson<String>(campaignId),
+      'ownerUserId': serializer.toJson<String?>(ownerUserId),
+      'sourceCharacterId': serializer.toJson<String?>(sourceCharacterId),
+      'actorType': serializer.toJson<String>(actorType),
+      'status': serializer.toJson<String>(status),
+      'sheetJson': serializer.toJson<String>(sheetJson),
+      'revision': serializer.toJson<int>(revision),
+      'updatedBy': serializer.toJson<String>(updatedBy),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  CampaignActorsCacheRow copyWith({
+    String? id,
+    String? campaignId,
+    Value<String?> ownerUserId = const Value.absent(),
+    Value<String?> sourceCharacterId = const Value.absent(),
+    String? actorType,
+    String? status,
+    String? sheetJson,
+    int? revision,
+    String? updatedBy,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => CampaignActorsCacheRow(
+    id: id ?? this.id,
+    campaignId: campaignId ?? this.campaignId,
+    ownerUserId: ownerUserId.present ? ownerUserId.value : this.ownerUserId,
+    sourceCharacterId: sourceCharacterId.present
+        ? sourceCharacterId.value
+        : this.sourceCharacterId,
+    actorType: actorType ?? this.actorType,
+    status: status ?? this.status,
+    sheetJson: sheetJson ?? this.sheetJson,
+    revision: revision ?? this.revision,
+    updatedBy: updatedBy ?? this.updatedBy,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  CampaignActorsCacheRow copyWithCompanion(CampaignActorsCacheCompanion data) {
+    return CampaignActorsCacheRow(
+      id: data.id.present ? data.id.value : this.id,
+      campaignId: data.campaignId.present
+          ? data.campaignId.value
+          : this.campaignId,
+      ownerUserId: data.ownerUserId.present
+          ? data.ownerUserId.value
+          : this.ownerUserId,
+      sourceCharacterId: data.sourceCharacterId.present
+          ? data.sourceCharacterId.value
+          : this.sourceCharacterId,
+      actorType: data.actorType.present ? data.actorType.value : this.actorType,
+      status: data.status.present ? data.status.value : this.status,
+      sheetJson: data.sheetJson.present ? data.sheetJson.value : this.sheetJson,
+      revision: data.revision.present ? data.revision.value : this.revision,
+      updatedBy: data.updatedBy.present ? data.updatedBy.value : this.updatedBy,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CampaignActorsCacheRow(')
+          ..write('id: $id, ')
+          ..write('campaignId: $campaignId, ')
+          ..write('ownerUserId: $ownerUserId, ')
+          ..write('sourceCharacterId: $sourceCharacterId, ')
+          ..write('actorType: $actorType, ')
+          ..write('status: $status, ')
+          ..write('sheetJson: $sheetJson, ')
+          ..write('revision: $revision, ')
+          ..write('updatedBy: $updatedBy, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    campaignId,
+    ownerUserId,
+    sourceCharacterId,
+    actorType,
+    status,
+    sheetJson,
+    revision,
+    updatedBy,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CampaignActorsCacheRow &&
+          other.id == this.id &&
+          other.campaignId == this.campaignId &&
+          other.ownerUserId == this.ownerUserId &&
+          other.sourceCharacterId == this.sourceCharacterId &&
+          other.actorType == this.actorType &&
+          other.status == this.status &&
+          other.sheetJson == this.sheetJson &&
+          other.revision == this.revision &&
+          other.updatedBy == this.updatedBy &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class CampaignActorsCacheCompanion
+    extends UpdateCompanion<CampaignActorsCacheRow> {
+  final Value<String> id;
+  final Value<String> campaignId;
+  final Value<String?> ownerUserId;
+  final Value<String?> sourceCharacterId;
+  final Value<String> actorType;
+  final Value<String> status;
+  final Value<String> sheetJson;
+  final Value<int> revision;
+  final Value<String> updatedBy;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const CampaignActorsCacheCompanion({
+    this.id = const Value.absent(),
+    this.campaignId = const Value.absent(),
+    this.ownerUserId = const Value.absent(),
+    this.sourceCharacterId = const Value.absent(),
+    this.actorType = const Value.absent(),
+    this.status = const Value.absent(),
+    this.sheetJson = const Value.absent(),
+    this.revision = const Value.absent(),
+    this.updatedBy = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CampaignActorsCacheCompanion.insert({
+    required String id,
+    required String campaignId,
+    this.ownerUserId = const Value.absent(),
+    this.sourceCharacterId = const Value.absent(),
+    required String actorType,
+    required String status,
+    required String sheetJson,
+    required int revision,
+    required String updatedBy,
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       campaignId = Value(campaignId),
+       actorType = Value(actorType),
+       status = Value(status),
+       sheetJson = Value(sheetJson),
+       revision = Value(revision),
+       updatedBy = Value(updatedBy),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<CampaignActorsCacheRow> custom({
+    Expression<String>? id,
+    Expression<String>? campaignId,
+    Expression<String>? ownerUserId,
+    Expression<String>? sourceCharacterId,
+    Expression<String>? actorType,
+    Expression<String>? status,
+    Expression<String>? sheetJson,
+    Expression<int>? revision,
+    Expression<String>? updatedBy,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (campaignId != null) 'campaign_id': campaignId,
+      if (ownerUserId != null) 'owner_user_id': ownerUserId,
+      if (sourceCharacterId != null) 'source_character_id': sourceCharacterId,
+      if (actorType != null) 'actor_type': actorType,
+      if (status != null) 'status': status,
+      if (sheetJson != null) 'sheet_json': sheetJson,
+      if (revision != null) 'revision': revision,
+      if (updatedBy != null) 'updated_by': updatedBy,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CampaignActorsCacheCompanion copyWith({
+    Value<String>? id,
+    Value<String>? campaignId,
+    Value<String?>? ownerUserId,
+    Value<String?>? sourceCharacterId,
+    Value<String>? actorType,
+    Value<String>? status,
+    Value<String>? sheetJson,
+    Value<int>? revision,
+    Value<String>? updatedBy,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return CampaignActorsCacheCompanion(
+      id: id ?? this.id,
+      campaignId: campaignId ?? this.campaignId,
+      ownerUserId: ownerUserId ?? this.ownerUserId,
+      sourceCharacterId: sourceCharacterId ?? this.sourceCharacterId,
+      actorType: actorType ?? this.actorType,
+      status: status ?? this.status,
+      sheetJson: sheetJson ?? this.sheetJson,
+      revision: revision ?? this.revision,
+      updatedBy: updatedBy ?? this.updatedBy,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (campaignId.present) {
+      map['campaign_id'] = Variable<String>(campaignId.value);
+    }
+    if (ownerUserId.present) {
+      map['owner_user_id'] = Variable<String>(ownerUserId.value);
+    }
+    if (sourceCharacterId.present) {
+      map['source_character_id'] = Variable<String>(sourceCharacterId.value);
+    }
+    if (actorType.present) {
+      map['actor_type'] = Variable<String>(actorType.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (sheetJson.present) {
+      map['sheet_json'] = Variable<String>(sheetJson.value);
+    }
+    if (revision.present) {
+      map['revision'] = Variable<int>(revision.value);
+    }
+    if (updatedBy.present) {
+      map['updated_by'] = Variable<String>(updatedBy.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CampaignActorsCacheCompanion(')
+          ..write('id: $id, ')
+          ..write('campaignId: $campaignId, ')
+          ..write('ownerUserId: $ownerUserId, ')
+          ..write('sourceCharacterId: $sourceCharacterId, ')
+          ..write('actorType: $actorType, ')
+          ..write('status: $status, ')
+          ..write('sheetJson: $sheetJson, ')
+          ..write('revision: $revision, ')
+          ..write('updatedBy: $updatedBy, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CampaignActorBacklinksTable extends CampaignActorBacklinks
+    with TableInfo<$CampaignActorBacklinksTable, CampaignActorBacklinkRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CampaignActorBacklinksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _campaignActorIdMeta = const VerificationMeta(
+    'campaignActorId',
+  );
+  @override
+  late final GeneratedColumn<String> campaignActorId = GeneratedColumn<String>(
+    'campaign_actor_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceCharacterIdMeta = const VerificationMeta(
+    'sourceCharacterId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceCharacterId =
+      GeneratedColumn<String>(
+        'source_character_id',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _lastPublishedLocalRevisionMeta =
+      const VerificationMeta('lastPublishedLocalRevision');
+  @override
+  late final GeneratedColumn<int> lastPublishedLocalRevision =
+      GeneratedColumn<int>(
+        'last_published_local_revision',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(0),
+      );
+  static const VerificationMeta _lastAppliedActorRevisionMeta =
+      const VerificationMeta('lastAppliedActorRevision');
+  @override
+  late final GeneratedColumn<int> lastAppliedActorRevision =
+      GeneratedColumn<int>(
+        'last_applied_actor_revision',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(0),
+      );
+  @override
+  List<GeneratedColumn> get $columns => [
+    campaignActorId,
+    sourceCharacterId,
+    lastPublishedLocalRevision,
+    lastAppliedActorRevision,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'campaign_actor_backlinks';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CampaignActorBacklinkRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('campaign_actor_id')) {
+      context.handle(
+        _campaignActorIdMeta,
+        campaignActorId.isAcceptableOrUnknown(
+          data['campaign_actor_id']!,
+          _campaignActorIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_campaignActorIdMeta);
+    }
+    if (data.containsKey('source_character_id')) {
+      context.handle(
+        _sourceCharacterIdMeta,
+        sourceCharacterId.isAcceptableOrUnknown(
+          data['source_character_id']!,
+          _sourceCharacterIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceCharacterIdMeta);
+    }
+    if (data.containsKey('last_published_local_revision')) {
+      context.handle(
+        _lastPublishedLocalRevisionMeta,
+        lastPublishedLocalRevision.isAcceptableOrUnknown(
+          data['last_published_local_revision']!,
+          _lastPublishedLocalRevisionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_applied_actor_revision')) {
+      context.handle(
+        _lastAppliedActorRevisionMeta,
+        lastAppliedActorRevision.isAcceptableOrUnknown(
+          data['last_applied_actor_revision']!,
+          _lastAppliedActorRevisionMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {campaignActorId};
+  @override
+  CampaignActorBacklinkRow map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CampaignActorBacklinkRow(
+      campaignActorId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}campaign_actor_id'],
+      )!,
+      sourceCharacterId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_character_id'],
+      )!,
+      lastPublishedLocalRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_published_local_revision'],
+      )!,
+      lastAppliedActorRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_applied_actor_revision'],
+      )!,
+    );
+  }
+
+  @override
+  $CampaignActorBacklinksTable createAlias(String alias) {
+    return $CampaignActorBacklinksTable(attachedDatabase, alias);
+  }
+}
+
+class CampaignActorBacklinkRow extends DataClass
+    implements Insertable<CampaignActorBacklinkRow> {
+  final String campaignActorId;
+  final String sourceCharacterId;
+  final int lastPublishedLocalRevision;
+  final int lastAppliedActorRevision;
+  const CampaignActorBacklinkRow({
+    required this.campaignActorId,
+    required this.sourceCharacterId,
+    required this.lastPublishedLocalRevision,
+    required this.lastAppliedActorRevision,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['campaign_actor_id'] = Variable<String>(campaignActorId);
+    map['source_character_id'] = Variable<String>(sourceCharacterId);
+    map['last_published_local_revision'] = Variable<int>(
+      lastPublishedLocalRevision,
+    );
+    map['last_applied_actor_revision'] = Variable<int>(
+      lastAppliedActorRevision,
+    );
+    return map;
+  }
+
+  CampaignActorBacklinksCompanion toCompanion(bool nullToAbsent) {
+    return CampaignActorBacklinksCompanion(
+      campaignActorId: Value(campaignActorId),
+      sourceCharacterId: Value(sourceCharacterId),
+      lastPublishedLocalRevision: Value(lastPublishedLocalRevision),
+      lastAppliedActorRevision: Value(lastAppliedActorRevision),
+    );
+  }
+
+  factory CampaignActorBacklinkRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CampaignActorBacklinkRow(
+      campaignActorId: serializer.fromJson<String>(json['campaignActorId']),
+      sourceCharacterId: serializer.fromJson<String>(json['sourceCharacterId']),
+      lastPublishedLocalRevision: serializer.fromJson<int>(
+        json['lastPublishedLocalRevision'],
+      ),
+      lastAppliedActorRevision: serializer.fromJson<int>(
+        json['lastAppliedActorRevision'],
+      ),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'campaignActorId': serializer.toJson<String>(campaignActorId),
+      'sourceCharacterId': serializer.toJson<String>(sourceCharacterId),
+      'lastPublishedLocalRevision': serializer.toJson<int>(
+        lastPublishedLocalRevision,
+      ),
+      'lastAppliedActorRevision': serializer.toJson<int>(
+        lastAppliedActorRevision,
+      ),
+    };
+  }
+
+  CampaignActorBacklinkRow copyWith({
+    String? campaignActorId,
+    String? sourceCharacterId,
+    int? lastPublishedLocalRevision,
+    int? lastAppliedActorRevision,
+  }) => CampaignActorBacklinkRow(
+    campaignActorId: campaignActorId ?? this.campaignActorId,
+    sourceCharacterId: sourceCharacterId ?? this.sourceCharacterId,
+    lastPublishedLocalRevision:
+        lastPublishedLocalRevision ?? this.lastPublishedLocalRevision,
+    lastAppliedActorRevision:
+        lastAppliedActorRevision ?? this.lastAppliedActorRevision,
+  );
+  CampaignActorBacklinkRow copyWithCompanion(
+    CampaignActorBacklinksCompanion data,
+  ) {
+    return CampaignActorBacklinkRow(
+      campaignActorId: data.campaignActorId.present
+          ? data.campaignActorId.value
+          : this.campaignActorId,
+      sourceCharacterId: data.sourceCharacterId.present
+          ? data.sourceCharacterId.value
+          : this.sourceCharacterId,
+      lastPublishedLocalRevision: data.lastPublishedLocalRevision.present
+          ? data.lastPublishedLocalRevision.value
+          : this.lastPublishedLocalRevision,
+      lastAppliedActorRevision: data.lastAppliedActorRevision.present
+          ? data.lastAppliedActorRevision.value
+          : this.lastAppliedActorRevision,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CampaignActorBacklinkRow(')
+          ..write('campaignActorId: $campaignActorId, ')
+          ..write('sourceCharacterId: $sourceCharacterId, ')
+          ..write('lastPublishedLocalRevision: $lastPublishedLocalRevision, ')
+          ..write('lastAppliedActorRevision: $lastAppliedActorRevision')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    campaignActorId,
+    sourceCharacterId,
+    lastPublishedLocalRevision,
+    lastAppliedActorRevision,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CampaignActorBacklinkRow &&
+          other.campaignActorId == this.campaignActorId &&
+          other.sourceCharacterId == this.sourceCharacterId &&
+          other.lastPublishedLocalRevision == this.lastPublishedLocalRevision &&
+          other.lastAppliedActorRevision == this.lastAppliedActorRevision);
+}
+
+class CampaignActorBacklinksCompanion
+    extends UpdateCompanion<CampaignActorBacklinkRow> {
+  final Value<String> campaignActorId;
+  final Value<String> sourceCharacterId;
+  final Value<int> lastPublishedLocalRevision;
+  final Value<int> lastAppliedActorRevision;
+  final Value<int> rowid;
+  const CampaignActorBacklinksCompanion({
+    this.campaignActorId = const Value.absent(),
+    this.sourceCharacterId = const Value.absent(),
+    this.lastPublishedLocalRevision = const Value.absent(),
+    this.lastAppliedActorRevision = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CampaignActorBacklinksCompanion.insert({
+    required String campaignActorId,
+    required String sourceCharacterId,
+    this.lastPublishedLocalRevision = const Value.absent(),
+    this.lastAppliedActorRevision = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : campaignActorId = Value(campaignActorId),
+       sourceCharacterId = Value(sourceCharacterId);
+  static Insertable<CampaignActorBacklinkRow> custom({
+    Expression<String>? campaignActorId,
+    Expression<String>? sourceCharacterId,
+    Expression<int>? lastPublishedLocalRevision,
+    Expression<int>? lastAppliedActorRevision,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (campaignActorId != null) 'campaign_actor_id': campaignActorId,
+      if (sourceCharacterId != null) 'source_character_id': sourceCharacterId,
+      if (lastPublishedLocalRevision != null)
+        'last_published_local_revision': lastPublishedLocalRevision,
+      if (lastAppliedActorRevision != null)
+        'last_applied_actor_revision': lastAppliedActorRevision,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CampaignActorBacklinksCompanion copyWith({
+    Value<String>? campaignActorId,
+    Value<String>? sourceCharacterId,
+    Value<int>? lastPublishedLocalRevision,
+    Value<int>? lastAppliedActorRevision,
+    Value<int>? rowid,
+  }) {
+    return CampaignActorBacklinksCompanion(
+      campaignActorId: campaignActorId ?? this.campaignActorId,
+      sourceCharacterId: sourceCharacterId ?? this.sourceCharacterId,
+      lastPublishedLocalRevision:
+          lastPublishedLocalRevision ?? this.lastPublishedLocalRevision,
+      lastAppliedActorRevision:
+          lastAppliedActorRevision ?? this.lastAppliedActorRevision,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (campaignActorId.present) {
+      map['campaign_actor_id'] = Variable<String>(campaignActorId.value);
+    }
+    if (sourceCharacterId.present) {
+      map['source_character_id'] = Variable<String>(sourceCharacterId.value);
+    }
+    if (lastPublishedLocalRevision.present) {
+      map['last_published_local_revision'] = Variable<int>(
+        lastPublishedLocalRevision.value,
+      );
+    }
+    if (lastAppliedActorRevision.present) {
+      map['last_applied_actor_revision'] = Variable<int>(
+        lastAppliedActorRevision.value,
+      );
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CampaignActorBacklinksCompanion(')
+          ..write('campaignActorId: $campaignActorId, ')
+          ..write('sourceCharacterId: $sourceCharacterId, ')
+          ..write('lastPublishedLocalRevision: $lastPublishedLocalRevision, ')
+          ..write('lastAppliedActorRevision: $lastAppliedActorRevision, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CampaignContentCacheTable extends CampaignContentCache
+    with TableInfo<$CampaignContentCacheTable, CampaignContentCacheRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CampaignContentCacheTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _campaignIdMeta = const VerificationMeta(
+    'campaignId',
+  );
+  @override
+  late final GeneratedColumn<String> campaignId = GeneratedColumn<String>(
+    'campaign_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _slugMeta = const VerificationMeta('slug');
+  @override
+  late final GeneratedColumn<String> slug = GeneratedColumn<String>(
+    'slug',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _entryJsonMeta = const VerificationMeta(
+    'entryJson',
+  );
+  @override
+  late final GeneratedColumn<String> entryJson = GeneratedColumn<String>(
+    'entry_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('{}'),
+  );
+  static const VerificationMeta _revisionMeta = const VerificationMeta(
+    'revision',
+  );
+  @override
+  late final GeneratedColumn<int> revision = GeneratedColumn<int>(
+    'revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdByMeta = const VerificationMeta(
+    'createdBy',
+  );
+  @override
+  late final GeneratedColumn<String> createdBy = GeneratedColumn<String>(
+    'created_by',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedByMeta = const VerificationMeta(
+    'updatedBy',
+  );
+  @override
+  late final GeneratedColumn<String> updatedBy = GeneratedColumn<String>(
+    'updated_by',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    campaignId,
+    type,
+    slug,
+    name,
+    entryJson,
+    revision,
+    createdBy,
+    updatedBy,
+    createdAt,
+    updatedAt,
+    deletedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'campaign_content_cache';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CampaignContentCacheRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('campaign_id')) {
+      context.handle(
+        _campaignIdMeta,
+        campaignId.isAcceptableOrUnknown(data['campaign_id']!, _campaignIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_campaignIdMeta);
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_typeMeta);
+    }
+    if (data.containsKey('slug')) {
+      context.handle(
+        _slugMeta,
+        slug.isAcceptableOrUnknown(data['slug']!, _slugMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_slugMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('entry_json')) {
+      context.handle(
+        _entryJsonMeta,
+        entryJson.isAcceptableOrUnknown(data['entry_json']!, _entryJsonMeta),
+      );
+    }
+    if (data.containsKey('revision')) {
+      context.handle(
+        _revisionMeta,
+        revision.isAcceptableOrUnknown(data['revision']!, _revisionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_revisionMeta);
+    }
+    if (data.containsKey('created_by')) {
+      context.handle(
+        _createdByMeta,
+        createdBy.isAcceptableOrUnknown(data['created_by']!, _createdByMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdByMeta);
+    }
+    if (data.containsKey('updated_by')) {
+      context.handle(
+        _updatedByMeta,
+        updatedBy.isAcceptableOrUnknown(data['updated_by']!, _updatedByMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedByMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CampaignContentCacheRow map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CampaignContentCacheRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      campaignId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}campaign_id'],
+      )!,
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
+      slug: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}slug'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      entryJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entry_json'],
+      )!,
+      revision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}revision'],
+      )!,
+      createdBy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}created_by'],
+      )!,
+      updatedBy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}updated_by'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+    );
+  }
+
+  @override
+  $CampaignContentCacheTable createAlias(String alias) {
+    return $CampaignContentCacheTable(attachedDatabase, alias);
+  }
+}
+
+class CampaignContentCacheRow extends DataClass
+    implements Insertable<CampaignContentCacheRow> {
+  final String id;
+  final String campaignId;
+  final String type;
+  final String slug;
+  final String name;
+  final String entryJson;
+  final int revision;
+  final String createdBy;
+  final String updatedBy;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  const CampaignContentCacheRow({
+    required this.id,
+    required this.campaignId,
+    required this.type,
+    required this.slug,
+    required this.name,
+    required this.entryJson,
+    required this.revision,
+    required this.createdBy,
+    required this.updatedBy,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['campaign_id'] = Variable<String>(campaignId);
+    map['type'] = Variable<String>(type);
+    map['slug'] = Variable<String>(slug);
+    map['name'] = Variable<String>(name);
+    map['entry_json'] = Variable<String>(entryJson);
+    map['revision'] = Variable<int>(revision);
+    map['created_by'] = Variable<String>(createdBy);
+    map['updated_by'] = Variable<String>(updatedBy);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    return map;
+  }
+
+  CampaignContentCacheCompanion toCompanion(bool nullToAbsent) {
+    return CampaignContentCacheCompanion(
+      id: Value(id),
+      campaignId: Value(campaignId),
+      type: Value(type),
+      slug: Value(slug),
+      name: Value(name),
+      entryJson: Value(entryJson),
+      revision: Value(revision),
+      createdBy: Value(createdBy),
+      updatedBy: Value(updatedBy),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+    );
+  }
+
+  factory CampaignContentCacheRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CampaignContentCacheRow(
+      id: serializer.fromJson<String>(json['id']),
+      campaignId: serializer.fromJson<String>(json['campaignId']),
+      type: serializer.fromJson<String>(json['type']),
+      slug: serializer.fromJson<String>(json['slug']),
+      name: serializer.fromJson<String>(json['name']),
+      entryJson: serializer.fromJson<String>(json['entryJson']),
+      revision: serializer.fromJson<int>(json['revision']),
+      createdBy: serializer.fromJson<String>(json['createdBy']),
+      updatedBy: serializer.fromJson<String>(json['updatedBy']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'campaignId': serializer.toJson<String>(campaignId),
+      'type': serializer.toJson<String>(type),
+      'slug': serializer.toJson<String>(slug),
+      'name': serializer.toJson<String>(name),
+      'entryJson': serializer.toJson<String>(entryJson),
+      'revision': serializer.toJson<int>(revision),
+      'createdBy': serializer.toJson<String>(createdBy),
+      'updatedBy': serializer.toJson<String>(updatedBy),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+    };
+  }
+
+  CampaignContentCacheRow copyWith({
+    String? id,
+    String? campaignId,
+    String? type,
+    String? slug,
+    String? name,
+    String? entryJson,
+    int? revision,
+    String? createdBy,
+    String? updatedBy,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+  }) => CampaignContentCacheRow(
+    id: id ?? this.id,
+    campaignId: campaignId ?? this.campaignId,
+    type: type ?? this.type,
+    slug: slug ?? this.slug,
+    name: name ?? this.name,
+    entryJson: entryJson ?? this.entryJson,
+    revision: revision ?? this.revision,
+    createdBy: createdBy ?? this.createdBy,
+    updatedBy: updatedBy ?? this.updatedBy,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+  );
+  CampaignContentCacheRow copyWithCompanion(
+    CampaignContentCacheCompanion data,
+  ) {
+    return CampaignContentCacheRow(
+      id: data.id.present ? data.id.value : this.id,
+      campaignId: data.campaignId.present
+          ? data.campaignId.value
+          : this.campaignId,
+      type: data.type.present ? data.type.value : this.type,
+      slug: data.slug.present ? data.slug.value : this.slug,
+      name: data.name.present ? data.name.value : this.name,
+      entryJson: data.entryJson.present ? data.entryJson.value : this.entryJson,
+      revision: data.revision.present ? data.revision.value : this.revision,
+      createdBy: data.createdBy.present ? data.createdBy.value : this.createdBy,
+      updatedBy: data.updatedBy.present ? data.updatedBy.value : this.updatedBy,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CampaignContentCacheRow(')
+          ..write('id: $id, ')
+          ..write('campaignId: $campaignId, ')
+          ..write('type: $type, ')
+          ..write('slug: $slug, ')
+          ..write('name: $name, ')
+          ..write('entryJson: $entryJson, ')
+          ..write('revision: $revision, ')
+          ..write('createdBy: $createdBy, ')
+          ..write('updatedBy: $updatedBy, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    campaignId,
+    type,
+    slug,
+    name,
+    entryJson,
+    revision,
+    createdBy,
+    updatedBy,
+    createdAt,
+    updatedAt,
+    deletedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CampaignContentCacheRow &&
+          other.id == this.id &&
+          other.campaignId == this.campaignId &&
+          other.type == this.type &&
+          other.slug == this.slug &&
+          other.name == this.name &&
+          other.entryJson == this.entryJson &&
+          other.revision == this.revision &&
+          other.createdBy == this.createdBy &&
+          other.updatedBy == this.updatedBy &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt);
+}
+
+class CampaignContentCacheCompanion
+    extends UpdateCompanion<CampaignContentCacheRow> {
+  final Value<String> id;
+  final Value<String> campaignId;
+  final Value<String> type;
+  final Value<String> slug;
+  final Value<String> name;
+  final Value<String> entryJson;
+  final Value<int> revision;
+  final Value<String> createdBy;
+  final Value<String> updatedBy;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> rowid;
+  const CampaignContentCacheCompanion({
+    this.id = const Value.absent(),
+    this.campaignId = const Value.absent(),
+    this.type = const Value.absent(),
+    this.slug = const Value.absent(),
+    this.name = const Value.absent(),
+    this.entryJson = const Value.absent(),
+    this.revision = const Value.absent(),
+    this.createdBy = const Value.absent(),
+    this.updatedBy = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CampaignContentCacheCompanion.insert({
+    required String id,
+    required String campaignId,
+    required String type,
+    required String slug,
+    required String name,
+    this.entryJson = const Value.absent(),
+    required int revision,
+    required String createdBy,
+    required String updatedBy,
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       campaignId = Value(campaignId),
+       type = Value(type),
+       slug = Value(slug),
+       name = Value(name),
+       revision = Value(revision),
+       createdBy = Value(createdBy),
+       updatedBy = Value(updatedBy),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<CampaignContentCacheRow> custom({
+    Expression<String>? id,
+    Expression<String>? campaignId,
+    Expression<String>? type,
+    Expression<String>? slug,
+    Expression<String>? name,
+    Expression<String>? entryJson,
+    Expression<int>? revision,
+    Expression<String>? createdBy,
+    Expression<String>? updatedBy,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (campaignId != null) 'campaign_id': campaignId,
+      if (type != null) 'type': type,
+      if (slug != null) 'slug': slug,
+      if (name != null) 'name': name,
+      if (entryJson != null) 'entry_json': entryJson,
+      if (revision != null) 'revision': revision,
+      if (createdBy != null) 'created_by': createdBy,
+      if (updatedBy != null) 'updated_by': updatedBy,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CampaignContentCacheCompanion copyWith({
+    Value<String>? id,
+    Value<String>? campaignId,
+    Value<String>? type,
+    Value<String>? slug,
+    Value<String>? name,
+    Value<String>? entryJson,
+    Value<int>? revision,
+    Value<String>? createdBy,
+    Value<String>? updatedBy,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? rowid,
+  }) {
+    return CampaignContentCacheCompanion(
+      id: id ?? this.id,
+      campaignId: campaignId ?? this.campaignId,
+      type: type ?? this.type,
+      slug: slug ?? this.slug,
+      name: name ?? this.name,
+      entryJson: entryJson ?? this.entryJson,
+      revision: revision ?? this.revision,
+      createdBy: createdBy ?? this.createdBy,
+      updatedBy: updatedBy ?? this.updatedBy,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (campaignId.present) {
+      map['campaign_id'] = Variable<String>(campaignId.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (slug.present) {
+      map['slug'] = Variable<String>(slug.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (entryJson.present) {
+      map['entry_json'] = Variable<String>(entryJson.value);
+    }
+    if (revision.present) {
+      map['revision'] = Variable<int>(revision.value);
+    }
+    if (createdBy.present) {
+      map['created_by'] = Variable<String>(createdBy.value);
+    }
+    if (updatedBy.present) {
+      map['updated_by'] = Variable<String>(updatedBy.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CampaignContentCacheCompanion(')
+          ..write('id: $id, ')
+          ..write('campaignId: $campaignId, ')
+          ..write('type: $type, ')
+          ..write('slug: $slug, ')
+          ..write('name: $name, ')
+          ..write('entryJson: $entryJson, ')
+          ..write('revision: $revision, ')
+          ..write('createdBy: $createdBy, ')
+          ..write('updatedBy: $updatedBy, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CampaignSyncCursorsTable extends CampaignSyncCursors
+    with TableInfo<$CampaignSyncCursorsTable, CampaignSyncCursorRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CampaignSyncCursorsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _campaignIdMeta = const VerificationMeta(
+    'campaignId',
+  );
+  @override
+  late final GeneratedColumn<String> campaignId = GeneratedColumn<String>(
+    'campaign_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _cursorMeta = const VerificationMeta('cursor');
+  @override
+  late final GeneratedColumn<String> cursor = GeneratedColumn<String>(
+    'cursor',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('0'),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [campaignId, cursor, updatedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'campaign_sync_cursors';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CampaignSyncCursorRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('campaign_id')) {
+      context.handle(
+        _campaignIdMeta,
+        campaignId.isAcceptableOrUnknown(data['campaign_id']!, _campaignIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_campaignIdMeta);
+    }
+    if (data.containsKey('cursor')) {
+      context.handle(
+        _cursorMeta,
+        cursor.isAcceptableOrUnknown(data['cursor']!, _cursorMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {campaignId};
+  @override
+  CampaignSyncCursorRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CampaignSyncCursorRow(
+      campaignId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}campaign_id'],
+      )!,
+      cursor: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cursor'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $CampaignSyncCursorsTable createAlias(String alias) {
+    return $CampaignSyncCursorsTable(attachedDatabase, alias);
+  }
+}
+
+class CampaignSyncCursorRow extends DataClass
+    implements Insertable<CampaignSyncCursorRow> {
+  final String campaignId;
+  final String cursor;
+  final DateTime updatedAt;
+  const CampaignSyncCursorRow({
+    required this.campaignId,
+    required this.cursor,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['campaign_id'] = Variable<String>(campaignId);
+    map['cursor'] = Variable<String>(cursor);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  CampaignSyncCursorsCompanion toCompanion(bool nullToAbsent) {
+    return CampaignSyncCursorsCompanion(
+      campaignId: Value(campaignId),
+      cursor: Value(cursor),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory CampaignSyncCursorRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CampaignSyncCursorRow(
+      campaignId: serializer.fromJson<String>(json['campaignId']),
+      cursor: serializer.fromJson<String>(json['cursor']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'campaignId': serializer.toJson<String>(campaignId),
+      'cursor': serializer.toJson<String>(cursor),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  CampaignSyncCursorRow copyWith({
+    String? campaignId,
+    String? cursor,
+    DateTime? updatedAt,
+  }) => CampaignSyncCursorRow(
+    campaignId: campaignId ?? this.campaignId,
+    cursor: cursor ?? this.cursor,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  CampaignSyncCursorRow copyWithCompanion(CampaignSyncCursorsCompanion data) {
+    return CampaignSyncCursorRow(
+      campaignId: data.campaignId.present
+          ? data.campaignId.value
+          : this.campaignId,
+      cursor: data.cursor.present ? data.cursor.value : this.cursor,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CampaignSyncCursorRow(')
+          ..write('campaignId: $campaignId, ')
+          ..write('cursor: $cursor, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(campaignId, cursor, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CampaignSyncCursorRow &&
+          other.campaignId == this.campaignId &&
+          other.cursor == this.cursor &&
+          other.updatedAt == this.updatedAt);
+}
+
+class CampaignSyncCursorsCompanion
+    extends UpdateCompanion<CampaignSyncCursorRow> {
+  final Value<String> campaignId;
+  final Value<String> cursor;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const CampaignSyncCursorsCompanion({
+    this.campaignId = const Value.absent(),
+    this.cursor = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CampaignSyncCursorsCompanion.insert({
+    required String campaignId,
+    this.cursor = const Value.absent(),
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : campaignId = Value(campaignId),
+       updatedAt = Value(updatedAt);
+  static Insertable<CampaignSyncCursorRow> custom({
+    Expression<String>? campaignId,
+    Expression<String>? cursor,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (campaignId != null) 'campaign_id': campaignId,
+      if (cursor != null) 'cursor': cursor,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CampaignSyncCursorsCompanion copyWith({
+    Value<String>? campaignId,
+    Value<String>? cursor,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return CampaignSyncCursorsCompanion(
+      campaignId: campaignId ?? this.campaignId,
+      cursor: cursor ?? this.cursor,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (campaignId.present) {
+      map['campaign_id'] = Variable<String>(campaignId.value);
+    }
+    if (cursor.present) {
+      map['cursor'] = Variable<String>(cursor.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CampaignSyncCursorsCompanion(')
+          ..write('campaignId: $campaignId, ')
+          ..write('cursor: $cursor, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CharacterSyncConflictsTable extends CharacterSyncConflicts
+    with TableInfo<$CharacterSyncConflictsTable, CharacterSyncConflictRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CharacterSyncConflictsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _characterIdMeta = const VerificationMeta(
+    'characterId',
+  );
+  @override
+  late final GeneratedColumn<String> characterId = GeneratedColumn<String>(
+    'character_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _campaignActorIdMeta = const VerificationMeta(
+    'campaignActorId',
+  );
+  @override
+  late final GeneratedColumn<String> campaignActorId = GeneratedColumn<String>(
+    'campaign_actor_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _fieldPathMeta = const VerificationMeta(
+    'fieldPath',
+  );
+  @override
+  late final GeneratedColumn<String> fieldPath = GeneratedColumn<String>(
+    'field_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _localValueJsonMeta = const VerificationMeta(
+    'localValueJson',
+  );
+  @override
+  late final GeneratedColumn<String> localValueJson = GeneratedColumn<String>(
+    'local_value_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('{}'),
+  );
+  static const VerificationMeta _remoteValueJsonMeta = const VerificationMeta(
+    'remoteValueJson',
+  );
+  @override
+  late final GeneratedColumn<String> remoteValueJson = GeneratedColumn<String>(
+    'remote_value_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('{}'),
+  );
+  static const VerificationMeta _resolvedAtMeta = const VerificationMeta(
+    'resolvedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> resolvedAt = GeneratedColumn<DateTime>(
+    'resolved_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    characterId,
+    campaignActorId,
+    fieldPath,
+    localValueJson,
+    remoteValueJson,
+    resolvedAt,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'character_sync_conflicts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CharacterSyncConflictRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('character_id')) {
+      context.handle(
+        _characterIdMeta,
+        characterId.isAcceptableOrUnknown(
+          data['character_id']!,
+          _characterIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_characterIdMeta);
+    }
+    if (data.containsKey('campaign_actor_id')) {
+      context.handle(
+        _campaignActorIdMeta,
+        campaignActorId.isAcceptableOrUnknown(
+          data['campaign_actor_id']!,
+          _campaignActorIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_campaignActorIdMeta);
+    }
+    if (data.containsKey('field_path')) {
+      context.handle(
+        _fieldPathMeta,
+        fieldPath.isAcceptableOrUnknown(data['field_path']!, _fieldPathMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_fieldPathMeta);
+    }
+    if (data.containsKey('local_value_json')) {
+      context.handle(
+        _localValueJsonMeta,
+        localValueJson.isAcceptableOrUnknown(
+          data['local_value_json']!,
+          _localValueJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('remote_value_json')) {
+      context.handle(
+        _remoteValueJsonMeta,
+        remoteValueJson.isAcceptableOrUnknown(
+          data['remote_value_json']!,
+          _remoteValueJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('resolved_at')) {
+      context.handle(
+        _resolvedAtMeta,
+        resolvedAt.isAcceptableOrUnknown(data['resolved_at']!, _resolvedAtMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CharacterSyncConflictRow map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CharacterSyncConflictRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      characterId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}character_id'],
+      )!,
+      campaignActorId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}campaign_actor_id'],
+      )!,
+      fieldPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}field_path'],
+      )!,
+      localValueJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_value_json'],
+      )!,
+      remoteValueJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_value_json'],
+      )!,
+      resolvedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}resolved_at'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $CharacterSyncConflictsTable createAlias(String alias) {
+    return $CharacterSyncConflictsTable(attachedDatabase, alias);
+  }
+}
+
+class CharacterSyncConflictRow extends DataClass
+    implements Insertable<CharacterSyncConflictRow> {
+  final String id;
+  final String characterId;
+  final String campaignActorId;
+  final String fieldPath;
+  final String localValueJson;
+  final String remoteValueJson;
+  final DateTime? resolvedAt;
+  final DateTime createdAt;
+  const CharacterSyncConflictRow({
+    required this.id,
+    required this.characterId,
+    required this.campaignActorId,
+    required this.fieldPath,
+    required this.localValueJson,
+    required this.remoteValueJson,
+    this.resolvedAt,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['character_id'] = Variable<String>(characterId);
+    map['campaign_actor_id'] = Variable<String>(campaignActorId);
+    map['field_path'] = Variable<String>(fieldPath);
+    map['local_value_json'] = Variable<String>(localValueJson);
+    map['remote_value_json'] = Variable<String>(remoteValueJson);
+    if (!nullToAbsent || resolvedAt != null) {
+      map['resolved_at'] = Variable<DateTime>(resolvedAt);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  CharacterSyncConflictsCompanion toCompanion(bool nullToAbsent) {
+    return CharacterSyncConflictsCompanion(
+      id: Value(id),
+      characterId: Value(characterId),
+      campaignActorId: Value(campaignActorId),
+      fieldPath: Value(fieldPath),
+      localValueJson: Value(localValueJson),
+      remoteValueJson: Value(remoteValueJson),
+      resolvedAt: resolvedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(resolvedAt),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory CharacterSyncConflictRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CharacterSyncConflictRow(
+      id: serializer.fromJson<String>(json['id']),
+      characterId: serializer.fromJson<String>(json['characterId']),
+      campaignActorId: serializer.fromJson<String>(json['campaignActorId']),
+      fieldPath: serializer.fromJson<String>(json['fieldPath']),
+      localValueJson: serializer.fromJson<String>(json['localValueJson']),
+      remoteValueJson: serializer.fromJson<String>(json['remoteValueJson']),
+      resolvedAt: serializer.fromJson<DateTime?>(json['resolvedAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'characterId': serializer.toJson<String>(characterId),
+      'campaignActorId': serializer.toJson<String>(campaignActorId),
+      'fieldPath': serializer.toJson<String>(fieldPath),
+      'localValueJson': serializer.toJson<String>(localValueJson),
+      'remoteValueJson': serializer.toJson<String>(remoteValueJson),
+      'resolvedAt': serializer.toJson<DateTime?>(resolvedAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  CharacterSyncConflictRow copyWith({
+    String? id,
+    String? characterId,
+    String? campaignActorId,
+    String? fieldPath,
+    String? localValueJson,
+    String? remoteValueJson,
+    Value<DateTime?> resolvedAt = const Value.absent(),
+    DateTime? createdAt,
+  }) => CharacterSyncConflictRow(
+    id: id ?? this.id,
+    characterId: characterId ?? this.characterId,
+    campaignActorId: campaignActorId ?? this.campaignActorId,
+    fieldPath: fieldPath ?? this.fieldPath,
+    localValueJson: localValueJson ?? this.localValueJson,
+    remoteValueJson: remoteValueJson ?? this.remoteValueJson,
+    resolvedAt: resolvedAt.present ? resolvedAt.value : this.resolvedAt,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  CharacterSyncConflictRow copyWithCompanion(
+    CharacterSyncConflictsCompanion data,
+  ) {
+    return CharacterSyncConflictRow(
+      id: data.id.present ? data.id.value : this.id,
+      characterId: data.characterId.present
+          ? data.characterId.value
+          : this.characterId,
+      campaignActorId: data.campaignActorId.present
+          ? data.campaignActorId.value
+          : this.campaignActorId,
+      fieldPath: data.fieldPath.present ? data.fieldPath.value : this.fieldPath,
+      localValueJson: data.localValueJson.present
+          ? data.localValueJson.value
+          : this.localValueJson,
+      remoteValueJson: data.remoteValueJson.present
+          ? data.remoteValueJson.value
+          : this.remoteValueJson,
+      resolvedAt: data.resolvedAt.present
+          ? data.resolvedAt.value
+          : this.resolvedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CharacterSyncConflictRow(')
+          ..write('id: $id, ')
+          ..write('characterId: $characterId, ')
+          ..write('campaignActorId: $campaignActorId, ')
+          ..write('fieldPath: $fieldPath, ')
+          ..write('localValueJson: $localValueJson, ')
+          ..write('remoteValueJson: $remoteValueJson, ')
+          ..write('resolvedAt: $resolvedAt, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    characterId,
+    campaignActorId,
+    fieldPath,
+    localValueJson,
+    remoteValueJson,
+    resolvedAt,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CharacterSyncConflictRow &&
+          other.id == this.id &&
+          other.characterId == this.characterId &&
+          other.campaignActorId == this.campaignActorId &&
+          other.fieldPath == this.fieldPath &&
+          other.localValueJson == this.localValueJson &&
+          other.remoteValueJson == this.remoteValueJson &&
+          other.resolvedAt == this.resolvedAt &&
+          other.createdAt == this.createdAt);
+}
+
+class CharacterSyncConflictsCompanion
+    extends UpdateCompanion<CharacterSyncConflictRow> {
+  final Value<String> id;
+  final Value<String> characterId;
+  final Value<String> campaignActorId;
+  final Value<String> fieldPath;
+  final Value<String> localValueJson;
+  final Value<String> remoteValueJson;
+  final Value<DateTime?> resolvedAt;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const CharacterSyncConflictsCompanion({
+    this.id = const Value.absent(),
+    this.characterId = const Value.absent(),
+    this.campaignActorId = const Value.absent(),
+    this.fieldPath = const Value.absent(),
+    this.localValueJson = const Value.absent(),
+    this.remoteValueJson = const Value.absent(),
+    this.resolvedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CharacterSyncConflictsCompanion.insert({
+    required String id,
+    required String characterId,
+    required String campaignActorId,
+    required String fieldPath,
+    this.localValueJson = const Value.absent(),
+    this.remoteValueJson = const Value.absent(),
+    this.resolvedAt = const Value.absent(),
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       characterId = Value(characterId),
+       campaignActorId = Value(campaignActorId),
+       fieldPath = Value(fieldPath),
+       createdAt = Value(createdAt);
+  static Insertable<CharacterSyncConflictRow> custom({
+    Expression<String>? id,
+    Expression<String>? characterId,
+    Expression<String>? campaignActorId,
+    Expression<String>? fieldPath,
+    Expression<String>? localValueJson,
+    Expression<String>? remoteValueJson,
+    Expression<DateTime>? resolvedAt,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (characterId != null) 'character_id': characterId,
+      if (campaignActorId != null) 'campaign_actor_id': campaignActorId,
+      if (fieldPath != null) 'field_path': fieldPath,
+      if (localValueJson != null) 'local_value_json': localValueJson,
+      if (remoteValueJson != null) 'remote_value_json': remoteValueJson,
+      if (resolvedAt != null) 'resolved_at': resolvedAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CharacterSyncConflictsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? characterId,
+    Value<String>? campaignActorId,
+    Value<String>? fieldPath,
+    Value<String>? localValueJson,
+    Value<String>? remoteValueJson,
+    Value<DateTime?>? resolvedAt,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return CharacterSyncConflictsCompanion(
+      id: id ?? this.id,
+      characterId: characterId ?? this.characterId,
+      campaignActorId: campaignActorId ?? this.campaignActorId,
+      fieldPath: fieldPath ?? this.fieldPath,
+      localValueJson: localValueJson ?? this.localValueJson,
+      remoteValueJson: remoteValueJson ?? this.remoteValueJson,
+      resolvedAt: resolvedAt ?? this.resolvedAt,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (characterId.present) {
+      map['character_id'] = Variable<String>(characterId.value);
+    }
+    if (campaignActorId.present) {
+      map['campaign_actor_id'] = Variable<String>(campaignActorId.value);
+    }
+    if (fieldPath.present) {
+      map['field_path'] = Variable<String>(fieldPath.value);
+    }
+    if (localValueJson.present) {
+      map['local_value_json'] = Variable<String>(localValueJson.value);
+    }
+    if (remoteValueJson.present) {
+      map['remote_value_json'] = Variable<String>(remoteValueJson.value);
+    }
+    if (resolvedAt.present) {
+      map['resolved_at'] = Variable<DateTime>(resolvedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CharacterSyncConflictsCompanion(')
+          ..write('id: $id, ')
+          ..write('characterId: $characterId, ')
+          ..write('campaignActorId: $campaignActorId, ')
+          ..write('fieldPath: $fieldPath, ')
+          ..write('localValueJson: $localValueJson, ')
+          ..write('remoteValueJson: $remoteValueJson, ')
+          ..write('resolvedAt: $resolvedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -5232,6 +7791,28 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $CharactersTable characters = $CharactersTable(this);
   late final $CharacterContentRefsTable characterContentRefs =
       $CharacterContentRefsTable(this);
+  late final $CampaignActorsCacheTable campaignActorsCache =
+      $CampaignActorsCacheTable(this);
+  late final $CampaignActorBacklinksTable campaignActorBacklinks =
+      $CampaignActorBacklinksTable(this);
+  late final $CampaignContentCacheTable campaignContentCache =
+      $CampaignContentCacheTable(this);
+  late final $CampaignSyncCursorsTable campaignSyncCursors =
+      $CampaignSyncCursorsTable(this);
+  late final $CharacterSyncConflictsTable characterSyncConflicts =
+      $CharacterSyncConflictsTable(this);
+  late final Index idxCampaignActorsCampaignStatus = Index(
+    'idx_campaign_actors_campaign_status',
+    'CREATE INDEX idx_campaign_actors_campaign_status ON campaign_actors_cache (campaign_id, status)',
+  );
+  late final Index idxCampaignContentCampaignTypeDeleted = Index(
+    'idx_campaign_content_campaign_type_deleted',
+    'CREATE INDEX idx_campaign_content_campaign_type_deleted ON campaign_content_cache (campaign_id, type, deleted_at)',
+  );
+  late final Index idxCharacterSyncConflictsCharacter = Index(
+    'idx_character_sync_conflicts_character',
+    'CREATE INDEX idx_character_sync_conflicts_character ON character_sync_conflicts (character_id)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -5250,6 +7831,14 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     contentReadHistory,
     characters,
     characterContentRefs,
+    campaignActorsCache,
+    campaignActorBacklinks,
+    campaignContentCache,
+    campaignSyncCursors,
+    characterSyncConflicts,
+    idxCampaignActorsCampaignStatus,
+    idxCampaignContentCampaignTypeDeleted,
+    idxCharacterSyncConflictsCharacter,
   ];
 }
 
@@ -8147,6 +10736,1367 @@ typedef $$CharacterContentRefsTableProcessedTableManager =
       CharacterContentRefRow,
       PrefetchHooks Function()
     >;
+typedef $$CampaignActorsCacheTableCreateCompanionBuilder =
+    CampaignActorsCacheCompanion Function({
+      required String id,
+      required String campaignId,
+      Value<String?> ownerUserId,
+      Value<String?> sourceCharacterId,
+      required String actorType,
+      required String status,
+      required String sheetJson,
+      required int revision,
+      required String updatedBy,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$CampaignActorsCacheTableUpdateCompanionBuilder =
+    CampaignActorsCacheCompanion Function({
+      Value<String> id,
+      Value<String> campaignId,
+      Value<String?> ownerUserId,
+      Value<String?> sourceCharacterId,
+      Value<String> actorType,
+      Value<String> status,
+      Value<String> sheetJson,
+      Value<int> revision,
+      Value<String> updatedBy,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$CampaignActorsCacheTableFilterComposer
+    extends Composer<_$AppDatabase, $CampaignActorsCacheTable> {
+  $$CampaignActorsCacheTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get campaignId => $composableBuilder(
+    column: $table.campaignId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get ownerUserId => $composableBuilder(
+    column: $table.ownerUserId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceCharacterId => $composableBuilder(
+    column: $table.sourceCharacterId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get actorType => $composableBuilder(
+    column: $table.actorType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sheetJson => $composableBuilder(
+    column: $table.sheetJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get updatedBy => $composableBuilder(
+    column: $table.updatedBy,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CampaignActorsCacheTableOrderingComposer
+    extends Composer<_$AppDatabase, $CampaignActorsCacheTable> {
+  $$CampaignActorsCacheTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get campaignId => $composableBuilder(
+    column: $table.campaignId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get ownerUserId => $composableBuilder(
+    column: $table.ownerUserId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceCharacterId => $composableBuilder(
+    column: $table.sourceCharacterId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get actorType => $composableBuilder(
+    column: $table.actorType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sheetJson => $composableBuilder(
+    column: $table.sheetJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get updatedBy => $composableBuilder(
+    column: $table.updatedBy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CampaignActorsCacheTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CampaignActorsCacheTable> {
+  $$CampaignActorsCacheTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get campaignId => $composableBuilder(
+    column: $table.campaignId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get ownerUserId => $composableBuilder(
+    column: $table.ownerUserId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sourceCharacterId => $composableBuilder(
+    column: $table.sourceCharacterId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get actorType =>
+      $composableBuilder(column: $table.actorType, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<String> get sheetJson =>
+      $composableBuilder(column: $table.sheetJson, builder: (column) => column);
+
+  GeneratedColumn<int> get revision =>
+      $composableBuilder(column: $table.revision, builder: (column) => column);
+
+  GeneratedColumn<String> get updatedBy =>
+      $composableBuilder(column: $table.updatedBy, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$CampaignActorsCacheTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CampaignActorsCacheTable,
+          CampaignActorsCacheRow,
+          $$CampaignActorsCacheTableFilterComposer,
+          $$CampaignActorsCacheTableOrderingComposer,
+          $$CampaignActorsCacheTableAnnotationComposer,
+          $$CampaignActorsCacheTableCreateCompanionBuilder,
+          $$CampaignActorsCacheTableUpdateCompanionBuilder,
+          (
+            CampaignActorsCacheRow,
+            BaseReferences<
+              _$AppDatabase,
+              $CampaignActorsCacheTable,
+              CampaignActorsCacheRow
+            >,
+          ),
+          CampaignActorsCacheRow,
+          PrefetchHooks Function()
+        > {
+  $$CampaignActorsCacheTableTableManager(
+    _$AppDatabase db,
+    $CampaignActorsCacheTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CampaignActorsCacheTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CampaignActorsCacheTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$CampaignActorsCacheTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> campaignId = const Value.absent(),
+                Value<String?> ownerUserId = const Value.absent(),
+                Value<String?> sourceCharacterId = const Value.absent(),
+                Value<String> actorType = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<String> sheetJson = const Value.absent(),
+                Value<int> revision = const Value.absent(),
+                Value<String> updatedBy = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CampaignActorsCacheCompanion(
+                id: id,
+                campaignId: campaignId,
+                ownerUserId: ownerUserId,
+                sourceCharacterId: sourceCharacterId,
+                actorType: actorType,
+                status: status,
+                sheetJson: sheetJson,
+                revision: revision,
+                updatedBy: updatedBy,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String campaignId,
+                Value<String?> ownerUserId = const Value.absent(),
+                Value<String?> sourceCharacterId = const Value.absent(),
+                required String actorType,
+                required String status,
+                required String sheetJson,
+                required int revision,
+                required String updatedBy,
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => CampaignActorsCacheCompanion.insert(
+                id: id,
+                campaignId: campaignId,
+                ownerUserId: ownerUserId,
+                sourceCharacterId: sourceCharacterId,
+                actorType: actorType,
+                status: status,
+                sheetJson: sheetJson,
+                revision: revision,
+                updatedBy: updatedBy,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CampaignActorsCacheTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CampaignActorsCacheTable,
+      CampaignActorsCacheRow,
+      $$CampaignActorsCacheTableFilterComposer,
+      $$CampaignActorsCacheTableOrderingComposer,
+      $$CampaignActorsCacheTableAnnotationComposer,
+      $$CampaignActorsCacheTableCreateCompanionBuilder,
+      $$CampaignActorsCacheTableUpdateCompanionBuilder,
+      (
+        CampaignActorsCacheRow,
+        BaseReferences<
+          _$AppDatabase,
+          $CampaignActorsCacheTable,
+          CampaignActorsCacheRow
+        >,
+      ),
+      CampaignActorsCacheRow,
+      PrefetchHooks Function()
+    >;
+typedef $$CampaignActorBacklinksTableCreateCompanionBuilder =
+    CampaignActorBacklinksCompanion Function({
+      required String campaignActorId,
+      required String sourceCharacterId,
+      Value<int> lastPublishedLocalRevision,
+      Value<int> lastAppliedActorRevision,
+      Value<int> rowid,
+    });
+typedef $$CampaignActorBacklinksTableUpdateCompanionBuilder =
+    CampaignActorBacklinksCompanion Function({
+      Value<String> campaignActorId,
+      Value<String> sourceCharacterId,
+      Value<int> lastPublishedLocalRevision,
+      Value<int> lastAppliedActorRevision,
+      Value<int> rowid,
+    });
+
+class $$CampaignActorBacklinksTableFilterComposer
+    extends Composer<_$AppDatabase, $CampaignActorBacklinksTable> {
+  $$CampaignActorBacklinksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get campaignActorId => $composableBuilder(
+    column: $table.campaignActorId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceCharacterId => $composableBuilder(
+    column: $table.sourceCharacterId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastPublishedLocalRevision => $composableBuilder(
+    column: $table.lastPublishedLocalRevision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastAppliedActorRevision => $composableBuilder(
+    column: $table.lastAppliedActorRevision,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CampaignActorBacklinksTableOrderingComposer
+    extends Composer<_$AppDatabase, $CampaignActorBacklinksTable> {
+  $$CampaignActorBacklinksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get campaignActorId => $composableBuilder(
+    column: $table.campaignActorId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceCharacterId => $composableBuilder(
+    column: $table.sourceCharacterId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastPublishedLocalRevision => $composableBuilder(
+    column: $table.lastPublishedLocalRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastAppliedActorRevision => $composableBuilder(
+    column: $table.lastAppliedActorRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CampaignActorBacklinksTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CampaignActorBacklinksTable> {
+  $$CampaignActorBacklinksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get campaignActorId => $composableBuilder(
+    column: $table.campaignActorId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sourceCharacterId => $composableBuilder(
+    column: $table.sourceCharacterId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lastPublishedLocalRevision => $composableBuilder(
+    column: $table.lastPublishedLocalRevision,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lastAppliedActorRevision => $composableBuilder(
+    column: $table.lastAppliedActorRevision,
+    builder: (column) => column,
+  );
+}
+
+class $$CampaignActorBacklinksTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CampaignActorBacklinksTable,
+          CampaignActorBacklinkRow,
+          $$CampaignActorBacklinksTableFilterComposer,
+          $$CampaignActorBacklinksTableOrderingComposer,
+          $$CampaignActorBacklinksTableAnnotationComposer,
+          $$CampaignActorBacklinksTableCreateCompanionBuilder,
+          $$CampaignActorBacklinksTableUpdateCompanionBuilder,
+          (
+            CampaignActorBacklinkRow,
+            BaseReferences<
+              _$AppDatabase,
+              $CampaignActorBacklinksTable,
+              CampaignActorBacklinkRow
+            >,
+          ),
+          CampaignActorBacklinkRow,
+          PrefetchHooks Function()
+        > {
+  $$CampaignActorBacklinksTableTableManager(
+    _$AppDatabase db,
+    $CampaignActorBacklinksTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CampaignActorBacklinksTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$CampaignActorBacklinksTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$CampaignActorBacklinksTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> campaignActorId = const Value.absent(),
+                Value<String> sourceCharacterId = const Value.absent(),
+                Value<int> lastPublishedLocalRevision = const Value.absent(),
+                Value<int> lastAppliedActorRevision = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CampaignActorBacklinksCompanion(
+                campaignActorId: campaignActorId,
+                sourceCharacterId: sourceCharacterId,
+                lastPublishedLocalRevision: lastPublishedLocalRevision,
+                lastAppliedActorRevision: lastAppliedActorRevision,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String campaignActorId,
+                required String sourceCharacterId,
+                Value<int> lastPublishedLocalRevision = const Value.absent(),
+                Value<int> lastAppliedActorRevision = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CampaignActorBacklinksCompanion.insert(
+                campaignActorId: campaignActorId,
+                sourceCharacterId: sourceCharacterId,
+                lastPublishedLocalRevision: lastPublishedLocalRevision,
+                lastAppliedActorRevision: lastAppliedActorRevision,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CampaignActorBacklinksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CampaignActorBacklinksTable,
+      CampaignActorBacklinkRow,
+      $$CampaignActorBacklinksTableFilterComposer,
+      $$CampaignActorBacklinksTableOrderingComposer,
+      $$CampaignActorBacklinksTableAnnotationComposer,
+      $$CampaignActorBacklinksTableCreateCompanionBuilder,
+      $$CampaignActorBacklinksTableUpdateCompanionBuilder,
+      (
+        CampaignActorBacklinkRow,
+        BaseReferences<
+          _$AppDatabase,
+          $CampaignActorBacklinksTable,
+          CampaignActorBacklinkRow
+        >,
+      ),
+      CampaignActorBacklinkRow,
+      PrefetchHooks Function()
+    >;
+typedef $$CampaignContentCacheTableCreateCompanionBuilder =
+    CampaignContentCacheCompanion Function({
+      required String id,
+      required String campaignId,
+      required String type,
+      required String slug,
+      required String name,
+      Value<String> entryJson,
+      required int revision,
+      required String createdBy,
+      required String updatedBy,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> rowid,
+    });
+typedef $$CampaignContentCacheTableUpdateCompanionBuilder =
+    CampaignContentCacheCompanion Function({
+      Value<String> id,
+      Value<String> campaignId,
+      Value<String> type,
+      Value<String> slug,
+      Value<String> name,
+      Value<String> entryJson,
+      Value<int> revision,
+      Value<String> createdBy,
+      Value<String> updatedBy,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> rowid,
+    });
+
+class $$CampaignContentCacheTableFilterComposer
+    extends Composer<_$AppDatabase, $CampaignContentCacheTable> {
+  $$CampaignContentCacheTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get campaignId => $composableBuilder(
+    column: $table.campaignId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get slug => $composableBuilder(
+    column: $table.slug,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entryJson => $composableBuilder(
+    column: $table.entryJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get createdBy => $composableBuilder(
+    column: $table.createdBy,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get updatedBy => $composableBuilder(
+    column: $table.updatedBy,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CampaignContentCacheTableOrderingComposer
+    extends Composer<_$AppDatabase, $CampaignContentCacheTable> {
+  $$CampaignContentCacheTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get campaignId => $composableBuilder(
+    column: $table.campaignId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get slug => $composableBuilder(
+    column: $table.slug,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entryJson => $composableBuilder(
+    column: $table.entryJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get createdBy => $composableBuilder(
+    column: $table.createdBy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get updatedBy => $composableBuilder(
+    column: $table.updatedBy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CampaignContentCacheTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CampaignContentCacheTable> {
+  $$CampaignContentCacheTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get campaignId => $composableBuilder(
+    column: $table.campaignId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<String> get slug =>
+      $composableBuilder(column: $table.slug, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get entryJson =>
+      $composableBuilder(column: $table.entryJson, builder: (column) => column);
+
+  GeneratedColumn<int> get revision =>
+      $composableBuilder(column: $table.revision, builder: (column) => column);
+
+  GeneratedColumn<String> get createdBy =>
+      $composableBuilder(column: $table.createdBy, builder: (column) => column);
+
+  GeneratedColumn<String> get updatedBy =>
+      $composableBuilder(column: $table.updatedBy, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+}
+
+class $$CampaignContentCacheTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CampaignContentCacheTable,
+          CampaignContentCacheRow,
+          $$CampaignContentCacheTableFilterComposer,
+          $$CampaignContentCacheTableOrderingComposer,
+          $$CampaignContentCacheTableAnnotationComposer,
+          $$CampaignContentCacheTableCreateCompanionBuilder,
+          $$CampaignContentCacheTableUpdateCompanionBuilder,
+          (
+            CampaignContentCacheRow,
+            BaseReferences<
+              _$AppDatabase,
+              $CampaignContentCacheTable,
+              CampaignContentCacheRow
+            >,
+          ),
+          CampaignContentCacheRow,
+          PrefetchHooks Function()
+        > {
+  $$CampaignContentCacheTableTableManager(
+    _$AppDatabase db,
+    $CampaignContentCacheTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CampaignContentCacheTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CampaignContentCacheTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$CampaignContentCacheTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> campaignId = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<String> slug = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> entryJson = const Value.absent(),
+                Value<int> revision = const Value.absent(),
+                Value<String> createdBy = const Value.absent(),
+                Value<String> updatedBy = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CampaignContentCacheCompanion(
+                id: id,
+                campaignId: campaignId,
+                type: type,
+                slug: slug,
+                name: name,
+                entryJson: entryJson,
+                revision: revision,
+                createdBy: createdBy,
+                updatedBy: updatedBy,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String campaignId,
+                required String type,
+                required String slug,
+                required String name,
+                Value<String> entryJson = const Value.absent(),
+                required int revision,
+                required String createdBy,
+                required String updatedBy,
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CampaignContentCacheCompanion.insert(
+                id: id,
+                campaignId: campaignId,
+                type: type,
+                slug: slug,
+                name: name,
+                entryJson: entryJson,
+                revision: revision,
+                createdBy: createdBy,
+                updatedBy: updatedBy,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CampaignContentCacheTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CampaignContentCacheTable,
+      CampaignContentCacheRow,
+      $$CampaignContentCacheTableFilterComposer,
+      $$CampaignContentCacheTableOrderingComposer,
+      $$CampaignContentCacheTableAnnotationComposer,
+      $$CampaignContentCacheTableCreateCompanionBuilder,
+      $$CampaignContentCacheTableUpdateCompanionBuilder,
+      (
+        CampaignContentCacheRow,
+        BaseReferences<
+          _$AppDatabase,
+          $CampaignContentCacheTable,
+          CampaignContentCacheRow
+        >,
+      ),
+      CampaignContentCacheRow,
+      PrefetchHooks Function()
+    >;
+typedef $$CampaignSyncCursorsTableCreateCompanionBuilder =
+    CampaignSyncCursorsCompanion Function({
+      required String campaignId,
+      Value<String> cursor,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$CampaignSyncCursorsTableUpdateCompanionBuilder =
+    CampaignSyncCursorsCompanion Function({
+      Value<String> campaignId,
+      Value<String> cursor,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$CampaignSyncCursorsTableFilterComposer
+    extends Composer<_$AppDatabase, $CampaignSyncCursorsTable> {
+  $$CampaignSyncCursorsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get campaignId => $composableBuilder(
+    column: $table.campaignId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cursor => $composableBuilder(
+    column: $table.cursor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CampaignSyncCursorsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CampaignSyncCursorsTable> {
+  $$CampaignSyncCursorsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get campaignId => $composableBuilder(
+    column: $table.campaignId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cursor => $composableBuilder(
+    column: $table.cursor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CampaignSyncCursorsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CampaignSyncCursorsTable> {
+  $$CampaignSyncCursorsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get campaignId => $composableBuilder(
+    column: $table.campaignId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get cursor =>
+      $composableBuilder(column: $table.cursor, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$CampaignSyncCursorsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CampaignSyncCursorsTable,
+          CampaignSyncCursorRow,
+          $$CampaignSyncCursorsTableFilterComposer,
+          $$CampaignSyncCursorsTableOrderingComposer,
+          $$CampaignSyncCursorsTableAnnotationComposer,
+          $$CampaignSyncCursorsTableCreateCompanionBuilder,
+          $$CampaignSyncCursorsTableUpdateCompanionBuilder,
+          (
+            CampaignSyncCursorRow,
+            BaseReferences<
+              _$AppDatabase,
+              $CampaignSyncCursorsTable,
+              CampaignSyncCursorRow
+            >,
+          ),
+          CampaignSyncCursorRow,
+          PrefetchHooks Function()
+        > {
+  $$CampaignSyncCursorsTableTableManager(
+    _$AppDatabase db,
+    $CampaignSyncCursorsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CampaignSyncCursorsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CampaignSyncCursorsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$CampaignSyncCursorsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> campaignId = const Value.absent(),
+                Value<String> cursor = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CampaignSyncCursorsCompanion(
+                campaignId: campaignId,
+                cursor: cursor,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String campaignId,
+                Value<String> cursor = const Value.absent(),
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => CampaignSyncCursorsCompanion.insert(
+                campaignId: campaignId,
+                cursor: cursor,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CampaignSyncCursorsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CampaignSyncCursorsTable,
+      CampaignSyncCursorRow,
+      $$CampaignSyncCursorsTableFilterComposer,
+      $$CampaignSyncCursorsTableOrderingComposer,
+      $$CampaignSyncCursorsTableAnnotationComposer,
+      $$CampaignSyncCursorsTableCreateCompanionBuilder,
+      $$CampaignSyncCursorsTableUpdateCompanionBuilder,
+      (
+        CampaignSyncCursorRow,
+        BaseReferences<
+          _$AppDatabase,
+          $CampaignSyncCursorsTable,
+          CampaignSyncCursorRow
+        >,
+      ),
+      CampaignSyncCursorRow,
+      PrefetchHooks Function()
+    >;
+typedef $$CharacterSyncConflictsTableCreateCompanionBuilder =
+    CharacterSyncConflictsCompanion Function({
+      required String id,
+      required String characterId,
+      required String campaignActorId,
+      required String fieldPath,
+      Value<String> localValueJson,
+      Value<String> remoteValueJson,
+      Value<DateTime?> resolvedAt,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$CharacterSyncConflictsTableUpdateCompanionBuilder =
+    CharacterSyncConflictsCompanion Function({
+      Value<String> id,
+      Value<String> characterId,
+      Value<String> campaignActorId,
+      Value<String> fieldPath,
+      Value<String> localValueJson,
+      Value<String> remoteValueJson,
+      Value<DateTime?> resolvedAt,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$CharacterSyncConflictsTableFilterComposer
+    extends Composer<_$AppDatabase, $CharacterSyncConflictsTable> {
+  $$CharacterSyncConflictsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get characterId => $composableBuilder(
+    column: $table.characterId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get campaignActorId => $composableBuilder(
+    column: $table.campaignActorId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fieldPath => $composableBuilder(
+    column: $table.fieldPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localValueJson => $composableBuilder(
+    column: $table.localValueJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remoteValueJson => $composableBuilder(
+    column: $table.remoteValueJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get resolvedAt => $composableBuilder(
+    column: $table.resolvedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CharacterSyncConflictsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CharacterSyncConflictsTable> {
+  $$CharacterSyncConflictsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get characterId => $composableBuilder(
+    column: $table.characterId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get campaignActorId => $composableBuilder(
+    column: $table.campaignActorId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fieldPath => $composableBuilder(
+    column: $table.fieldPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localValueJson => $composableBuilder(
+    column: $table.localValueJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get remoteValueJson => $composableBuilder(
+    column: $table.remoteValueJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get resolvedAt => $composableBuilder(
+    column: $table.resolvedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CharacterSyncConflictsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CharacterSyncConflictsTable> {
+  $$CharacterSyncConflictsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get characterId => $composableBuilder(
+    column: $table.characterId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get campaignActorId => $composableBuilder(
+    column: $table.campaignActorId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get fieldPath =>
+      $composableBuilder(column: $table.fieldPath, builder: (column) => column);
+
+  GeneratedColumn<String> get localValueJson => $composableBuilder(
+    column: $table.localValueJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get remoteValueJson => $composableBuilder(
+    column: $table.remoteValueJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get resolvedAt => $composableBuilder(
+    column: $table.resolvedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$CharacterSyncConflictsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CharacterSyncConflictsTable,
+          CharacterSyncConflictRow,
+          $$CharacterSyncConflictsTableFilterComposer,
+          $$CharacterSyncConflictsTableOrderingComposer,
+          $$CharacterSyncConflictsTableAnnotationComposer,
+          $$CharacterSyncConflictsTableCreateCompanionBuilder,
+          $$CharacterSyncConflictsTableUpdateCompanionBuilder,
+          (
+            CharacterSyncConflictRow,
+            BaseReferences<
+              _$AppDatabase,
+              $CharacterSyncConflictsTable,
+              CharacterSyncConflictRow
+            >,
+          ),
+          CharacterSyncConflictRow,
+          PrefetchHooks Function()
+        > {
+  $$CharacterSyncConflictsTableTableManager(
+    _$AppDatabase db,
+    $CharacterSyncConflictsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CharacterSyncConflictsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$CharacterSyncConflictsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$CharacterSyncConflictsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> characterId = const Value.absent(),
+                Value<String> campaignActorId = const Value.absent(),
+                Value<String> fieldPath = const Value.absent(),
+                Value<String> localValueJson = const Value.absent(),
+                Value<String> remoteValueJson = const Value.absent(),
+                Value<DateTime?> resolvedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CharacterSyncConflictsCompanion(
+                id: id,
+                characterId: characterId,
+                campaignActorId: campaignActorId,
+                fieldPath: fieldPath,
+                localValueJson: localValueJson,
+                remoteValueJson: remoteValueJson,
+                resolvedAt: resolvedAt,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String characterId,
+                required String campaignActorId,
+                required String fieldPath,
+                Value<String> localValueJson = const Value.absent(),
+                Value<String> remoteValueJson = const Value.absent(),
+                Value<DateTime?> resolvedAt = const Value.absent(),
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => CharacterSyncConflictsCompanion.insert(
+                id: id,
+                characterId: characterId,
+                campaignActorId: campaignActorId,
+                fieldPath: fieldPath,
+                localValueJson: localValueJson,
+                remoteValueJson: remoteValueJson,
+                resolvedAt: resolvedAt,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CharacterSyncConflictsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CharacterSyncConflictsTable,
+      CharacterSyncConflictRow,
+      $$CharacterSyncConflictsTableFilterComposer,
+      $$CharacterSyncConflictsTableOrderingComposer,
+      $$CharacterSyncConflictsTableAnnotationComposer,
+      $$CharacterSyncConflictsTableCreateCompanionBuilder,
+      $$CharacterSyncConflictsTableUpdateCompanionBuilder,
+      (
+        CharacterSyncConflictRow,
+        BaseReferences<
+          _$AppDatabase,
+          $CharacterSyncConflictsTable,
+          CharacterSyncConflictRow
+        >,
+      ),
+      CharacterSyncConflictRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -8177,4 +12127,20 @@ class $AppDatabaseManager {
       $$CharactersTableTableManager(_db, _db.characters);
   $$CharacterContentRefsTableTableManager get characterContentRefs =>
       $$CharacterContentRefsTableTableManager(_db, _db.characterContentRefs);
+  $$CampaignActorsCacheTableTableManager get campaignActorsCache =>
+      $$CampaignActorsCacheTableTableManager(_db, _db.campaignActorsCache);
+  $$CampaignActorBacklinksTableTableManager get campaignActorBacklinks =>
+      $$CampaignActorBacklinksTableTableManager(
+        _db,
+        _db.campaignActorBacklinks,
+      );
+  $$CampaignContentCacheTableTableManager get campaignContentCache =>
+      $$CampaignContentCacheTableTableManager(_db, _db.campaignContentCache);
+  $$CampaignSyncCursorsTableTableManager get campaignSyncCursors =>
+      $$CampaignSyncCursorsTableTableManager(_db, _db.campaignSyncCursors);
+  $$CharacterSyncConflictsTableTableManager get characterSyncConflicts =>
+      $$CharacterSyncConflictsTableTableManager(
+        _db,
+        _db.characterSyncConflicts,
+      );
 }

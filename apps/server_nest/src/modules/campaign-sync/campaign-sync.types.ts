@@ -11,6 +11,7 @@ export interface CampaignChangeRecord {
   operation: CampaignChangeOperation;
   revision: number;
   createdAt: string;
+  entity?: Record<string, unknown> | null;
 }
 
 export interface CampaignChangePage {

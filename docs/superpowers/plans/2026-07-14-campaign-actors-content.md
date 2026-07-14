@@ -697,7 +697,7 @@ git commit -m "feat(0.1): bind campaign chat to actors"
 - 创建：`apps/client_flutter/test/local_data_archive_service_test.dart`
 - 创建：`apps/client_flutter/test/data_management_page_test.dart`
 
-- [ ] **步骤 1：编写无凭据备份与原子恢复失败测试**
+- [x] **步骤 1：编写无凭据备份与原子恢复失败测试**
 
 ```dart
 test('exports local-owned data and restores it atomically without tokens', () async {

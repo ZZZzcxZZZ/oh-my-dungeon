@@ -65,6 +65,12 @@
 - 个人实体（角色、收藏、笔记、偏好、资料包 manifest）在本地写入时原子入队 Vault Outbox；资料包 manifest 只含 `id/version/locale/system/contentHash`，正文与 assets 永不上传。
 - 旧服务器角色可一次性安全导入：首次登录旧服务器时拉取远端角色，本地不存在的直接导入，ID 相同且内容不同则复制为带新本地 UUID 的副本并追加「（服务器导入）」，成功后写服务器+用户 marker，任何失败都不写 marker。
 - 设置页已暴露个人同步控制：登录后显示 pending 数量、立即同步、后台同步开关、错误详情（可复制，不含 token 或实体全文）和设备列表 / 撤销；未登录时明确提示同步可选，不禁用本地角色与资料。
+- 战役协作链路已就位：服务端 `CampaignActor` / `CampaignContentEntry` / `CampaignChange` / `CampaignActorAudit` 模型与 API 完成；DM 可在战役作用域内创建独立 JSON 条目，玩家本地角色发布后形成完整 `CampaignActor`，owner/DM 都有完整编辑权，所有修改有审计、修订号和冲突可见。
+- 客户端战役缓存已落地：5 张本地 Drift 表（`CampaignActorsCache` / `CampaignActorBacklinks` / `CampaignContentCache` / `CampaignSyncCursors` / `CharacterSyncConflicts`）缓存当前战役的 Actor、内容条目、反向链接和同步游标，离线可读，联网时按 cursor 增量更新；WebSocket 仅广播 cursor 与 entityType，完整实体通过 HTTP changes 拉取。
+- Wiki 已合并本地资料包与当前战役缓存：同名条目不覆盖，来源 chip 标注「本地」/「战役」，战役缓存缺失时自动回退到本地包。
+- 战役聊天身份已绑定 `CampaignActor`：消息持久化 `campaignActorId`，不再信任客户端 displayName；支持说/做两种格式、头像角色卡、资料引用快照和离线历史。
+- 本地备份与恢复已就位：`设置 → 数据管理` 提供 `.dndtable-backup` ZIP 导出（`manifest.json` + `database.json` + `assets/`）、SHA-256 校验、单事务原子恢复、战役缓存清理和资料索引重建，所有破坏性操作都需二次确认。
+- 旧服务端资料模块已下线：`apps/server_nest/src/modules/content/` 整个目录删除，对应 Prisma 模型（`ContentPackage` / `ContentItem` / `ContentItemLink` / `UserContentFavorite` / `CampaignContentPackage` / `ContentOverride`）已从 schema 移除，迁移 SQL 把存量战役作用域内容转入 `CampaignContentEntry` 并记录初始 `CampaignChange`，旧全局/用户/战役内容包 API 返回 404。`CharacterCampaignBinding` 暂时保留以兼容旧角色端点。
 
 ## 当前缺口
 
@@ -79,12 +85,13 @@
 
 ## 0.1 下一步顺序
 
-1. 完成战役聊天室信息架构：群聊式列表、最近消息、角色状态摘要。
+1. 完成战役聊天室信息架构：群聊式列表、最近消息、未读、成员头像叠放。
 2. 把检定请求和日志从旧 Session 详情迁入战役 `+` 工具。
 3. 把遭遇控场从旧桌面页迁入「DM 控场」底部页。
 4. 推进标准创建向导：法术准备和装备购买。
 5. 增强本地资料库 GUI：编辑条目、复制条目、批量导入确认向导。
 6. 清理旧 `rooms` 和旧顶层 `TableTabPage` 的用户入口；代码可暂留为迁移素材，但不再作为主流程。
+7. DM Actor 编辑与玩家本地角色的双向同步：DM 在战役里修改 Actor 后，把变化回写到玩家本地角色；玩家继续在本地修改后再发布新一版 Actor，配合审计与冲突提示。
 
 ## 验证规则
 

@@ -35,8 +35,6 @@ model User {
   campaignMemberships CampaignMember[]
   characters          Character[]
   characterBindings   CharacterCampaignBinding[]
-  contentPackages     ContentPackage[]
-  contentFavorites    UserContentFavorite[]
   checkRequests       CheckRequest[]
   checkResponses      CheckResponse[]
   vaultEntities       VaultEntity[]
@@ -128,9 +126,6 @@ model Campaign {
   sessions          Session[]
   characterBindings CharacterCampaignBinding[]
   journal           JournalEntry[]
-  contentPackages   CampaignContentPackage[]
-  scopedContent     ContentPackage[]
-  contentOverrides  ContentOverride[]
   npcs              Npc[]
   encounters        Encounter[]
   syncState         CampaignSyncState?
@@ -327,111 +322,6 @@ model JournalEntry {
   createdAt  DateTime  @default(now())
   campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   session    Session?  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-}
-
-model ContentPackage {
-  id              String                   @id @default(uuid())
-  scope           String                   @default("user")
-  ownerUserId     String?
-  campaignId      String?
-  name            String
-  version         String
-  schemaVersion   Int                      @default(1)
-  locale          String                   @default("zh-CN")
-  status          String                   @default("active")
-  createdBy       String
-  createdAt       DateTime                 @default(now())
-  updatedAt       DateTime                 @updatedAt
-  owner           User?                    @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
-  campaign        Campaign?                @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  items           ContentItem[]
-  campaignEnables CampaignContentPackage[]
-
-  @@index([ownerUserId])
-  @@index([campaignId])
-}
-
-model ContentItem {
-  id               String            @id @default(uuid())
-  packageId        String
-  type             String
-  slug             String
-  name             String
-  description      String            @default("")
-  structured       Json              @default("{}")
-  tags             Json              @default("[]")
-  sourceLabel      String            @default("")
-  schemaVersion    Int               @default(1)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  package          ContentPackage    @relation(fields: [packageId], references: [id], onDelete: Cascade)
-  baseOverrides    ContentOverride[] @relation("BaseContentItem")
-  derivedOverrides ContentOverride[] @relation("DerivedContentItem")
-  outgoingLinks     ContentItemLink[] @relation("ContentItemLinkSource")
-  incomingLinks     ContentItemLink[] @relation("ContentItemLinkTarget")
-  favorites         UserContentFavorite[]
-
-  @@unique([packageId, type, slug])
-  @@index([type])
-}
-
-model ContentItemLink {
-  id           String      @id @default(uuid())
-  sourceItemId String
-  targetItemId String
-  relation     String
-  label        String      @default("")
-  sortOrder    Int         @default(0)
-  source       ContentItem @relation("ContentItemLinkSource", fields: [sourceItemId], references: [id], onDelete: Cascade)
-  target       ContentItem @relation("ContentItemLinkTarget", fields: [targetItemId], references: [id], onDelete: Cascade)
-
-  @@unique([sourceItemId, targetItemId, relation])
-  @@index([targetItemId])
-}
-
-model UserContentFavorite {
-  id            String      @id @default(uuid())
-  userId        String
-  contentItemId String
-  createdAt     DateTime    @default(now())
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  contentItem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, contentItemId])
-  @@index([contentItemId])
-}
-
-model CampaignContentPackage {
-  id         String         @id @default(uuid())
-  campaignId String
-  packageId  String
-  enabled    Boolean        @default(true)
-  enabledBy  String
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
-  campaign   Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  package    ContentPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
-
-  @@unique([campaignId, packageId])
-}
-
-model ContentOverride {
-  id                   String       @id @default(uuid())
-  campaignId           String
-  baseContentItemId    String
-  overrideType         String
-  derivedContentItemId String?
-  patchData            Json         @default("{}")
-  reason               String       @default("")
-  createdBy            String
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
-  campaign             Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  baseContentItem      ContentItem  @relation("BaseContentItem", fields: [baseContentItemId], references: [id], onDelete: Cascade)
-  derivedContentItem   ContentItem? @relation("DerivedContentItem", fields: [derivedContentItemId], references: [id], onDelete: SetNull)
-
-  @@index([campaignId])
-  @@index([baseContentItemId])
 }
 
 model Character {

@@ -798,17 +798,17 @@ git commit -m "feat(0.1): back up and restore local app data"
 - 修改：`docs/agents/agent-execution-guide.md`
 - 创建：`docs/architecture/offline-data-and-sync.md`
 
-- [ ] **步骤 1：编写迁移与已移除 API 测试**
+- [x] **步骤 1：编写迁移与已移除 API 测试**
 
 迁移测试准备一个 campaign scoped `ContentPackage` 和两个 `ContentItem`，执行迁移后断言得到两个 `CampaignContentEntry`，slug 和正文保留，变化游标可从 0 拉取。接口测试断言旧全局/用户 package 写入端点返回 404，战役新端点仍可用。已有 `Character` 数据只迁移到所属战役的 Actor；没有 binding 的角色不复制，避免把个人角色误放进战役。
 
-- [ ] **步骤 2：先运行迁移测试确认失败**
+- [x] **步骤 2：先运行迁移测试确认失败**
 
 运行：`npm run test:server -- content.e2e-spec.ts campaign-content-sync.e2e-spec.ts`
 
 预期：FAIL，旧 Content API 仍存在，迁移尚未转换数据。
 
-- [ ] **步骤 3：完成一次性 SQL 与边界清理**
+- [x] **步骤 3：完成一次性 SQL 与边界清理**
 
 迁移顺序固定为：创建新表；转换 campaign scoped 内容；转换 `CharacterCampaignBinding`；为转换记录建立 change cursor；将聊天关联更新到 Actor；删除旧 `ContentOverride`、`CampaignContentPackage`、服务端用户/global package 和 `CharacterCampaignBinding` 表；保留个人数据的客户端/Vault 迁移路径。公开代码与数据库种子不得包含 SRD 或官方规则正文。
 
@@ -822,7 +822,7 @@ git commit -m "feat(0.1): back up and restore local app data"
 - owner/DM 对战役 Actor 有完整编辑权，所有修改有审计。
 ```
 
-- [ ] **步骤 4：执行完整封版验证**
+- [x] **步骤 4：执行完整封版验证**
 
 ```powershell
 npm run setup
@@ -834,7 +834,7 @@ flutter build web
 
 预期：服务端 lint、Flutter analyze、全部服务端/客户端测试、Docker Compose 配置和 Web build 全部通过；Web 控制台无启动错误；未配置服务器时资料库、角色和设置可打开。
 
-- [ ] **步骤 5：检查仓库不含受版权保护的默认正文**
+- [x] **步骤 5：检查仓库不含受版权保护的默认正文**
 
 ```powershell
 rg -n -i "srd|player.?s handbook|players handbook|玩家手册" apps packages --glob '!**/build/**' --glob '!**/node_modules/**'
@@ -844,7 +844,7 @@ git status --short
 
 预期：搜索结果只允许出现在兼容性代码、测试名或说明文字中，不存在规则正文或默认资料包；diff 无空白错误，状态只包含本计划变更。
 
-- [ ] **步骤 6：提交**
+- [x] **步骤 6：提交**
 
 ```powershell
 git add apps/server_nest apps/client_flutter docs README.md

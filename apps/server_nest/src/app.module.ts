@@ -5,7 +5,6 @@ import { CampaignSyncModule } from './modules/campaign-sync/campaign-sync.module
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { CharactersModule } from './modules/characters/characters.module';
 import { CheckRequestsModule } from './modules/check-requests/check-requests.module';
-import { ContentModule } from './modules/content/content.module';
 import { EncountersModule } from './modules/encounters/encounters.module';
 import { HealthModule } from './modules/health/health.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
@@ -32,7 +31,6 @@ import { PrismaModule } from './prisma/prisma.module';
     CampaignSyncModule,
     CharactersModule,
     CheckRequestsModule,
-    ContentModule,
     EncountersModule,
     RealtimeModule,
     SessionsModule,

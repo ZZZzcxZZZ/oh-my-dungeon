@@ -34,25 +34,6 @@ describe("vault endpoints", () => {
     campaignMember: {
       findUnique: jest.fn(),
     },
-    contentPackage: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-    },
-    contentItem: {
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-    },
-    contentItemLink: { findMany: jest.fn(), createMany: jest.fn() },
-    userContentFavorite: { upsert: jest.fn(), deleteMany: jest.fn(), findMany: jest.fn() },
-    campaignContentPackage: {
-      upsert: jest.fn(),
-      findMany: jest.fn(),
-    },
-    contentOverride: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-    },
     journalEntry: {
       create: jest.fn(),
     },
@@ -134,20 +115,6 @@ describe("vault endpoints", () => {
     passwordHashService.compare.mockResolvedValue(true);
     prismaService.campaign.findUnique.mockResolvedValue(null);
     prismaService.campaignMember.findUnique.mockResolvedValue(null);
-    prismaService.contentPackage.create.mockResolvedValue({});
-    prismaService.contentPackage.findMany.mockResolvedValue([]);
-    prismaService.contentPackage.findUnique.mockResolvedValue(null);
-    prismaService.contentItem.findMany.mockResolvedValue([]);
-    prismaService.contentItem.findUnique.mockResolvedValue(null);
-    prismaService.contentItemLink.findMany.mockResolvedValue([]);
-    prismaService.contentItemLink.createMany.mockResolvedValue({ count: 0 });
-    prismaService.userContentFavorite.findMany.mockResolvedValue([]);
-    prismaService.userContentFavorite.upsert.mockResolvedValue({});
-    prismaService.userContentFavorite.deleteMany.mockResolvedValue({ count: 1 });
-    prismaService.campaignContentPackage.upsert.mockResolvedValue({});
-    prismaService.campaignContentPackage.findMany.mockResolvedValue([]);
-    prismaService.contentOverride.create.mockResolvedValue({});
-    prismaService.contentOverride.findMany.mockResolvedValue([]);
     prismaService.journalEntry.create.mockResolvedValue({});
     prismaService.vaultEntity.upsert.mockResolvedValue({});
     prismaService.vaultEntity.findUnique.mockResolvedValue(null);

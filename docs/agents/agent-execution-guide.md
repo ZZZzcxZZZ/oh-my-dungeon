@@ -9,15 +9,16 @@
 3. `docs/architecture/system-architecture.md`
 4. `docs/architecture/domain-model.md`
 5. `docs/architecture/api-realtime-boundary.md`
-6. `docs/engineering/engineering-standards.md`
-7. `docs/roadmap/current-execution-status.md`
-8. `docs/roadmap/v0.1-unified-mvp-plan.md`
-9. `docs/content/private-phb-import-policy.md`
-10. `docs/content/phb-2024-private-import-notes.md`
+6. `docs/architecture/offline-data-and-sync.md`
+7. `docs/engineering/engineering-standards.md`
+8. `docs/roadmap/current-execution-status.md`
+9. `docs/roadmap/v0.1-unified-mvp-plan.md`
+10. `docs/content/private-phb-import-policy.md`
+11. `docs/content/phb-2024-private-import-notes.md`
 
 如果任务涉及部署，还必须阅读：
 
-11. `docs/deployment/self-hosting.md`
+12. `docs/deployment/self-hosting.md`
 
 ## 2. 当前阶段
 
@@ -224,11 +225,16 @@ v0.3 实现战役与成员。
 - 账号和 token 按服务器隔离。
 - Player Mode 和 DM Mode 是客户端工作台，不是权限来源。
 - 服务端权限以 CampaignMember 和 ServerAdmin 为准。
-- DM 修改基础内容必须通过 ContentOverride。
 - 关键业务事件必须写 JournalEntry。
-- WebSocket 不能作为唯一持久化来源。
+- WebSocket 不能作为唯一持久化来源，只广播 cursor + entityType，完整实体通过 HTTP changes 拉取。
 - Material 3 官方组件优先。
 - 不在 MVP 中实现地图战棋。
+- **离线优先**：未配置服务器、未登录或断网时，资料库、角色、收藏、笔记、设置、规则计算和本地备份必须完整可用；服务器是可选同步设施，不作为本地功能门禁。
+- **正文永不上传**：本地资料包正文与 assets 永远不进入 Vault payload，也不进入战役同步。Vault 只同步个人实体和资料包 manifest（`id/version/locale/system/contentHash`），战役只同步 DM 创建的独立 JSON 条目。
+- **不信任客户端身份**：聊天身份必须绑定 `CampaignActor`，服务端以 `campaignActorId` 为准，不接受客户端 displayName 作为权威。
+- **不内置版权正文**：公开仓库、默认数据库 seed、客户端安装包不含 SRD/PHB 或任何官方规则正文；商业内容只能由用户本地导入 `.dndpack` / JSON。
+- **旧 ContentModule 已下线**：`apps/server_nest/src/modules/content/` 不再存在；旧全局/用户/战役内容包 API 返回 404；战役作用域内容统一通过 `CampaignContentEntry` 同步。
+- **本地备份不触碰同步状态**：`.dndtable-backup` 只含个人数据表 + assets，不含 token、Vault Outbox / Cursor / Devices / Conflicts 和战役缓存。
 
 ## 8. 完成定义
 

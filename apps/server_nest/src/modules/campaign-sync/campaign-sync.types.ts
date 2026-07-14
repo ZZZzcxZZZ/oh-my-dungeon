@@ -118,3 +118,25 @@ export interface RuntimeCommandInput {
   baseRevision: number;
   commands: CampaignRuntimeCommand[];
 }
+
+export interface CreateContentEntryInput {
+  type: string;
+  slug: string;
+  name: string;
+  entry: Record<string, unknown>;
+}
+
+export interface UpdateContentEntryInput {
+  baseRevision: number;
+  entry: Record<string, unknown>;
+}
+
+export interface ContentValidationReport {
+  valid: boolean;
+  errors: ContentValidationError[];
+}
+
+export interface ContentValidationError {
+  path: string;
+  message: string;
+}

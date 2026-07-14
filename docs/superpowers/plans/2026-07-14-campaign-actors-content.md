@@ -240,7 +240,7 @@ git commit -m "feat(0.1): publish and manage campaign actors"
 - 修改：`apps/server_nest/src/modules/campaign-sync/campaign-sync.module.ts`
 - 创建：`apps/server_nest/test/campaign-content-sync.e2e-spec.ts`
 
-- [ ] **步骤 1：编写 JSON 校验、权限、删除和 cursor 测试**
+- [x] **步骤 1：编写 JSON 校验、权限、删除和 cursor 测试**
 
 ```typescript
 await request(server)
@@ -263,13 +263,13 @@ expect(changes.body.items[0].entityType).toBe('content');
 
 再覆盖 player 写入 403、非成员读取 403、重复 slug 409、非法内容块返回带 JSON path 的 400、删除产生 tombstone、分页 `nextCursor` 不跳项。
 
-- [ ] **步骤 2：运行测试并确认路由缺失**
+- [x] **步骤 2：运行测试并确认路由缺失**
 
 运行：`npm run test:server -- campaign-content-sync.e2e-spec.ts`
 
 预期：FAIL，content 与 changes 路由返回 404。
 
-- [ ] **步骤 3：实现简单同步协议**
+- [x] **步骤 3：实现简单同步协议**
 
 端点固定为：
 
@@ -283,7 +283,7 @@ DELETE /api/campaigns/:campaignId/content/entries/:entryId
 
 `changes` 返回 `{ items, nextCursor, hasMore }`。Actor upsert 项带完整 Actor，content upsert 项带完整 `ContentEntry`，delete 项只带 `entityType/entityId/revision`。limit 默认 100、最大 500。Validator 复用本地资料包允许的内容块和字段约束，但禁止 package manifest、baseEntryId、patch、override 和 dependency 字段；条目 ID 由服务器生成 UUID。
 
-- [ ] **步骤 4：验证完整变化流**
+- [x] **步骤 4：验证完整变化流**
 
 ```powershell
 npm run test:server -- campaign-content-sync.e2e-spec.ts campaign-actors.e2e-spec.ts
@@ -292,7 +292,7 @@ npm run lint:server
 
 预期：独立条目 CRUD、dry-run、权限、tombstone 和分页游标全部通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/server_nest/src/modules/campaign-sync apps/server_nest/test/campaign-content-sync.e2e-spec.ts

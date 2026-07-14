@@ -240,6 +240,7 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
           characterController: widget.characterController,
           contentController: widget.contentController,
           isDm: widget.modeController.mode == ClientMode.dungeonMaster,
+          campaignActorId: null,
           diceRoller: widget.diceRoller,
         ),
       ),

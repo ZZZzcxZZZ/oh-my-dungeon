@@ -56,9 +56,7 @@ abstract class CampaignClient {
     required String campaignId,
     required String kind,
     required String content,
-    String? characterId,
-    String? displayName,
-    String? avatarUrl,
+    String? campaignActorId,
   });
 }
 
@@ -239,9 +237,7 @@ class CampaignApiClient implements CampaignClient {
     required String campaignId,
     required String kind,
     required String content,
-    String? characterId,
-    String? displayName,
-    String? avatarUrl,
+    String? campaignActorId,
   }) async {
     final response = await _httpClient.post(
       Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/messages'),
@@ -252,9 +248,7 @@ class CampaignApiClient implements CampaignClient {
       body: jsonEncode({
         'kind': kind,
         'content': content,
-        'characterId': characterId,
-        'displayName': displayName,
-        'avatarUrl': avatarUrl,
+        'campaignActorId': campaignActorId,
       }),
     );
 

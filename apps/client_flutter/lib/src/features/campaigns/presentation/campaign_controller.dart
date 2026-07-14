@@ -230,9 +230,7 @@ class CampaignController extends ChangeNotifier {
     required String campaignId,
     required String kind,
     required String content,
-    String? characterId,
-    String? displayName,
-    String? avatarUrl,
+    String? campaignActorId,
   }) async {
     final token = accessToken;
     if (token == null) return false;
@@ -245,9 +243,7 @@ class CampaignController extends ChangeNotifier {
         campaignId: campaignId,
         kind: kind,
         content: content,
-        characterId: characterId,
-        displayName: displayName,
-        avatarUrl: avatarUrl,
+        campaignActorId: campaignActorId,
       );
       _appendMessage(message);
       notifyListeners();

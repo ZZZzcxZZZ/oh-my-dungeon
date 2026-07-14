@@ -36,9 +36,7 @@ interface JoinCampaignBody {
 interface CreateCampaignChatMessageBody {
   kind?: unknown;
   content?: unknown;
-  characterId?: unknown;
-  displayName?: unknown;
-  avatarUrl?: unknown;
+  campaignActorId?: unknown;
 }
 
 @Controller("campaigns")
@@ -91,11 +89,10 @@ export class CampaignsController {
     return this.campaignsService.sendMessage(user, campaignId, {
       kind: typeof body.kind === "string" ? body.kind : undefined,
       content: body.content,
-      characterId:
-        typeof body.characterId === "string" ? body.characterId : null,
-      displayName:
-        typeof body.displayName === "string" ? body.displayName : undefined,
-      avatarUrl: typeof body.avatarUrl === "string" ? body.avatarUrl : null,
+      campaignActorId:
+        typeof body.campaignActorId === "string"
+          ? body.campaignActorId
+          : null,
     });
   }
 

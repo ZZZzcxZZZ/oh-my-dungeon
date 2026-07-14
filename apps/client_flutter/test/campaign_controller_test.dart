@@ -65,7 +65,7 @@ const _remoteMessage = CampaignChatMessage(
   id: 'msg-remote',
   campaignId: 'camp-1',
   senderId: 'user-2',
-  characterId: 'char-2',
+  campaignActorId: 'actor-2',
   displayName: 'Mira',
   avatarUrl: null,
   kind: 'say',
@@ -188,9 +188,7 @@ class _FakeCampaignClient implements CampaignClient {
     required String campaignId,
     required String kind,
     required String content,
-    String? characterId,
-    String? displayName,
-    String? avatarUrl,
+    String? campaignActorId,
   }) {
     throw UnimplementedError();
   }

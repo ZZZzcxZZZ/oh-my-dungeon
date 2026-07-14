@@ -51,6 +51,9 @@ describe("campaigns endpoints", () => {
       create: jest.fn(),
       findMany: jest.fn(),
     },
+    campaignActor: {
+      findUnique: jest.fn(),
+    },
     $transaction: jest.fn(),
     $queryRaw: jest.fn().mockResolvedValue([{ health_check: 1 }]),
   };
@@ -274,7 +277,7 @@ describe("campaigns endpoints", () => {
                 id: "msg-1",
                 campaignId: "camp-1",
                 senderId: "user-2",
-                characterId: null,
+                campaignActorId: null,
                 displayName: "bard",
                 avatarUrl: null,
                 kind: "say",
@@ -295,7 +298,7 @@ describe("campaigns endpoints", () => {
             id: "msg-1",
             campaignId: "camp-1",
             senderId: "user-2",
-            characterId: null,
+            campaignActorId: null,
             displayName: "bard",
             avatarUrl: null,
             kind: "say",
@@ -555,7 +558,7 @@ describe("campaigns endpoints", () => {
           id: "msg-1",
           campaignId: "camp-1",
           senderId: "user-1",
-          characterId: "char-1",
+          campaignActorId: "actor-1",
           displayName: "Arannis",
           avatarUrl: null,
           kind: "say",
@@ -574,7 +577,7 @@ describe("campaigns endpoints", () => {
             id: "msg-1",
             campaignId: "camp-1",
             senderId: "user-1",
-            characterId: "char-1",
+            campaignActorId: "actor-1",
             displayName: "Arannis",
             avatarUrl: null,
             kind: "say",
@@ -589,11 +592,17 @@ describe("campaigns endpoints", () => {
       prismaService.campaign.findUnique.mockResolvedValueOnce(
         campaignWithOwner,
       );
+      prismaService.campaignActor.findUnique.mockResolvedValueOnce({
+        id: "actor-1",
+        campaignId: "camp-1",
+        ownerUserId: "user-1",
+        sheetJson: { name: "Arannis", avatarUrl: null },
+      });
       prismaService.campaignChatMessage.create.mockResolvedValueOnce({
         id: "msg-2",
         campaignId: "camp-1",
         senderId: "user-1",
-        characterId: "char-1",
+        campaignActorId: "actor-1",
         displayName: "Arannis",
         avatarUrl: null,
         kind: "action",
@@ -607,9 +616,7 @@ describe("campaigns endpoints", () => {
         .send({
           kind: "action",
           content: "推开吱呀作响的木门",
-          characterId: "char-1",
-          displayName: "Arannis",
-          avatarUrl: null,
+          campaignActorId: "actor-1",
         })
         .expect(201)
         .expect(({ body }) => {
@@ -623,7 +630,7 @@ describe("campaigns endpoints", () => {
       expect(createArgs.data).toMatchObject({
         campaignId: "camp-1",
         senderId: "user-1",
-        characterId: "char-1",
+        campaignActorId: "actor-1",
         displayName: "Arannis",
         avatarUrl: null,
         kind: "action",
@@ -639,6 +646,71 @@ describe("campaigns endpoints", () => {
           displayName: "Arannis",
         }),
       );
+    });
+
+    it("ignores client-sent displayName and derives from actor sheet", async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwner,
+      );
+      prismaService.campaignActor.findUnique.mockResolvedValueOnce({
+        id: "actor-1",
+        campaignId: "camp-1",
+        ownerUserId: "user-1",
+        sheetJson: { name: "Arannis", avatarUrl: null },
+      });
+      prismaService.campaignChatMessage.create.mockResolvedValueOnce({
+        id: "msg-3",
+        campaignId: "camp-1",
+        senderId: "user-1",
+        campaignActorId: "actor-1",
+        displayName: "Arannis",
+        avatarUrl: null,
+        kind: "say",
+        content: "test",
+        createdAt: "2026-07-09T00:00:00.000Z",
+      });
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/messages")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          content: "test",
+          campaignActorId: "actor-1",
+          displayName: "HACKED",
+          avatarUrl: "http://evil",
+        })
+        .expect(201);
+
+      const createArgs =
+        prismaService.campaignChatMessage.create.mock.calls[0][0];
+      expect(createArgs.data.displayName).toBe("Arannis");
+      expect(createArgs.data.avatarUrl).toBeNull();
+      expect(createArgs.data.campaignActorId).toBe("actor-1");
+    });
+
+    it("rejects actor from different campaign", async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwner,
+      );
+      prismaService.campaignActor.findUnique.mockResolvedValueOnce({
+        id: "actor-1",
+        campaignId: "other-campaign",
+        ownerUserId: "user-1",
+        sheetJson: {},
+      });
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/messages")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          content: "test",
+          campaignActorId: "actor-1",
+        })
+        .expect(400);
+
+      expect(prismaService.campaignChatMessage.create).not.toHaveBeenCalled();
     });
 
     it("rejects campaign chat access for non-members", async () => {

@@ -641,7 +641,7 @@ git commit -m "feat(0.1): merge campaign entries into wiki"
 - 修改：`apps/client_flutter/test/campaign_controller_test.dart`
 - 创建：`apps/client_flutter/test/campaign_chat_actor_test.dart`
 
-- [ ] **步骤 1：编写 Actor 身份、说/做和快照降级测试**
+- [x] **步骤 1：编写 Actor 身份、说/做和快照降级测试**
 
 服务端测试要求发送者必须选择自己拥有的 Actor，DM 可选择任意战役 Actor，伪造 `displayName/avatarUrl` 被忽略。客户端测试要求输入框有“说”和“做”两种分段状态；say 显示气泡，action 显示斜体动作；点击头像时 DM 打开完整可编辑页、Player 打开公开只读页；`[[` 同时搜索本地与战役缓存；缺失条目仍显示名称与摘要快照。
 
@@ -653,7 +653,7 @@ await tester.pumpAndSettle();
 expect(find.byKey(const Key('action-message')), findsOneWidget);
 ```
 
-- [ ] **步骤 2：运行测试并确认旧自由身份失败**
+- [x] **步骤 2：运行测试并确认旧自由身份失败**
 
 ```powershell
 npm run test:server -- campaigns.e2e-spec.ts
@@ -663,11 +663,11 @@ flutter test test/campaign_api_client_test.dart test/campaign_chat_actor_test.da
 
 预期：FAIL，消息仍接受客户端自由填写的角色名与头像。
 
-- [ ] **步骤 3：绑定消息到 Actor 并缓存历史**
+- [x] **步骤 3：绑定消息到 Actor 并缓存历史**
 
 将 `CampaignChatMessage.characterId` 迁移为 `campaignActorId` relation；服务端从 Actor sheet 提取 `displayName/avatarUrl/statusSummary` 快照，忽略客户端同名字段。消息 payload 增加可选 `contentReference`：`{ entryKey, nameSnapshot, summarySnapshot, diceExpression }`。客户端成功收发消息后写 `CampaignMessagesCache`；离线时显示历史只读状态并禁用发送，但角色、资料库和其他本地页面保持可用。
 
-- [ ] **步骤 4：验证聊天和缓存回归**
+- [x] **步骤 4：验证聊天和缓存回归**
 
 ```powershell
 npm run test:server -- campaigns.e2e-spec.ts campaign-actors.e2e-spec.ts
@@ -679,7 +679,7 @@ flutter analyze
 
 预期：身份不可伪造、说/做格式、头像跳转、资料快照和离线历史测试通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/server_nest/prisma/schema.prisma apps/server_nest/src/modules/campaigns apps/server_nest/test/campaigns.e2e-spec.ts apps/client_flutter/lib/src/features/campaigns apps/client_flutter/test/campaign_api_client_test.dart apps/client_flutter/test/campaign_controller_test.dart apps/client_flutter/test/campaign_chat_actor_test.dart

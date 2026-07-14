@@ -19,6 +19,7 @@ class CampaignChatPage extends StatefulWidget {
     required this.characterController,
     required this.contentController,
     required this.isDm,
+    this.campaignActorId,
     this.diceRoller,
     super.key,
   });
@@ -29,6 +30,7 @@ class CampaignChatPage extends StatefulWidget {
   final CharacterController characterController;
   final ContentController contentController;
   final bool isDm;
+  final String? campaignActorId;
   final DiceRoller? diceRoller;
 
   @override
@@ -67,11 +69,6 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       ]),
       builder: (context, _) {
         final messages = widget.campaignController.messages;
-        final characterById = {
-          for (final binding in widget.characterController.campaignCharacters)
-            if (binding.character != null)
-              binding.characterId: binding.character!,
-        };
         return Scaffold(
           appBar: AppBar(
             title: Column(
@@ -125,12 +122,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                         itemCount: messages.length,
                         itemBuilder: (context, index) {
                           final message = messages[index];
-                          return _CampaignChatBubble(
-                            message: message,
-                            character: message.characterId == null
-                                ? null
-                                : characterById[message.characterId],
-                          );
+                          return _CampaignChatBubble(message: message);
                         },
                       ),
               ),
@@ -188,6 +180,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
+                  key: const Key('campaign-chat-send'),
                   onPressed: _sending ? null : _send,
                   child: Text(_t('send')),
                 ),
@@ -203,15 +196,12 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     final content = _controller.text.trim();
     if (content.isEmpty || _sending) return;
 
-    final character = widget.character;
     setState(() => _sending = true);
     final sent = await widget.campaignController.sendMessage(
       campaignId: widget.campaign.id,
       kind: _mode == _ChatMode.act ? 'action' : 'say',
       content: content,
-      characterId: character?.id,
-      displayName: character?.name,
-      avatarUrl: character?.avatarUrl,
+      campaignActorId: widget.campaignActorId,
     );
     if (!mounted) return;
     setState(() => _sending = false);
@@ -391,15 +381,12 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     try {
       final roll = (widget.diceRoller ?? DiceRoller()).rollExpression(notation);
       Navigator.of(context).pop();
-      final character = widget.character;
       setState(() => _sending = true);
       final sent = await widget.campaignController.sendMessage(
         campaignId: widget.campaign.id,
         kind: 'roll',
         content: roll.label,
-        characterId: character?.id,
-        displayName: character?.name,
-        avatarUrl: character?.avatarUrl,
+        campaignActorId: widget.campaignActorId,
       );
       if (!mounted) return;
       setState(() => _sending = false);
@@ -748,7 +735,7 @@ class _ChatModePicker extends StatelessWidget {
           children: [
             Expanded(
               child: _ChatModeHalf(
-                key: const Key('campaign-say-tab'),
+                key: const Key('chat-mode-say'),
                 selected: mode == _ChatMode.say,
                 enabled: enabled,
                 icon: Icons.chat_bubble_outline,
@@ -758,7 +745,7 @@ class _ChatModePicker extends StatelessWidget {
             ),
             Expanded(
               child: _ChatModeHalf(
-                key: const Key('campaign-act-tab'),
+                key: const Key('chat-mode-action'),
                 selected: mode == _ChatMode.act,
                 enabled: enabled,
                 icon: Icons.directions_run_outlined,
@@ -825,10 +812,9 @@ class _ChatModeHalf extends StatelessWidget {
 }
 
 class _CampaignChatBubble extends StatelessWidget {
-  const _CampaignChatBubble({required this.message, required this.character});
+  const _CampaignChatBubble({required this.message});
 
   final CampaignChatMessage message;
-  final CharacterSheet? character;
 
   @override
   Widget build(BuildContext context) {
@@ -846,6 +832,7 @@ class _CampaignChatBubble extends StatelessWidget {
 
     if (message.kind == 'action') {
       return Padding(
+        key: const Key('action-message'),
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Center(
           child: Text(
@@ -863,9 +850,8 @@ class _CampaignChatBubble extends StatelessWidget {
     final displayName = message.displayName.trim().isEmpty
         ? _t('unknownSpeaker')
         : message.displayName;
-    final status = _statusLine(character);
-    final heading = status.isEmpty ? displayName : '$displayName · $status';
     return Padding(
+      key: const Key('say-message'),
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -876,7 +862,10 @@ class _CampaignChatBubble extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(heading, style: Theme.of(context).textTheme.labelMedium),
+                Text(
+                  displayName,
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
                 Card(
                   margin: const EdgeInsets.only(top: 4),
                   color: colorScheme.primaryContainer,

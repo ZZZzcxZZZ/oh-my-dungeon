@@ -160,6 +160,7 @@ model CampaignActor {
   updatedAt         DateTime            @updatedAt
   campaign          Campaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   audits            CampaignActorAudit[]
+  chatMessages      CampaignChatMessage[]
 
   @@unique([campaignId, sourceCharacterId])
   @@index([campaignId, status])
@@ -217,20 +218,21 @@ model CampaignChange {
 }
 
 model CampaignChatMessage {
-  id          String   @id @default(uuid())
-  campaignId  String
-  senderId    String
-  characterId String?
-  displayName String   @default("")
-  avatarUrl   String?
-  kind        String   @default("say")
-  content     String
-  createdAt   DateTime @default(now())
-  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  id               String         @id @default(uuid())
+  campaignId       String
+  senderId         String
+  campaignActorId  String?
+  displayName      String         @default("")
+  avatarUrl        String?
+  kind             String         @default("say")
+  content          String
+  createdAt        DateTime       @default(now())
+  campaign         Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignActor    CampaignActor? @relation(fields: [campaignActorId], references: [id], onDelete: SetNull)
 
   @@index([campaignId, createdAt])
   @@index([senderId])
-  @@index([characterId])
+  @@index([campaignActorId])
 }
 
 model CampaignMember {

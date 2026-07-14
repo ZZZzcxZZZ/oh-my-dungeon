@@ -21,7 +21,7 @@ export interface CampaignChatMessageView {
   id: string;
   campaignId: string;
   senderId: string;
-  characterId: string | null;
+  campaignActorId: string | null;
   displayName: string;
   avatarUrl: string | null;
   kind: string;
@@ -32,9 +32,7 @@ export interface CampaignChatMessageView {
 export interface CreateCampaignChatMessageInput {
   kind?: string;
   content: string;
-  characterId?: string | null;
-  displayName?: string;
-  avatarUrl?: string | null;
+  campaignActorId?: string | null;
 }
 
 export interface CreateCampaignInput {

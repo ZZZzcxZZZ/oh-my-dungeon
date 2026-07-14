@@ -643,7 +643,7 @@ void main() {
           id: 'msg-0',
           campaignId: 'camp-1',
           senderId: 'user-1',
-          characterId: 'char-1',
+          campaignActorId: 'actor-1',
           displayName: 'Arannis',
           avatarUrl: null,
           kind: 'say',
@@ -685,8 +685,8 @@ void main() {
     expect(find.text('Arannis · HP 24/24 · AC 15'), findsOneWidget);
     expect(find.text('说'), findsOneWidget);
     expect(find.text('做'), findsOneWidget);
-    expect(find.byKey(const Key('campaign-say-tab')), findsOneWidget);
-    expect(find.byKey(const Key('campaign-act-tab')), findsOneWidget);
+    expect(find.byKey(const Key('chat-mode-say')), findsOneWidget);
+    expect(find.byKey(const Key('chat-mode-action')), findsOneWidget);
     expect(find.byTooltip('更多跑团功能'), findsOneWidget);
 
     await tester.tap(find.byTooltip('成员'));
@@ -715,8 +715,7 @@ void main() {
     final actionText = tester.widget<Text>(find.text('推开吱呀作响的木门'));
     expect(actionText.style?.fontStyle, FontStyle.italic);
     expect(campaignClient.sentMessages.last.kind, 'action');
-    expect(campaignClient.sentMessages.last.characterId, 'char-1');
-    expect(campaignClient.sentMessages.last.displayName, 'Arannis');
+    expect(campaignClient.sentMessages.last.campaignActorId, isNull);
 
     await tester.tap(find.byTooltip('更多跑团功能'));
     await tester.pumpAndSettle();
@@ -796,7 +795,7 @@ void main() {
               id: 'msg-conditions',
               campaignId: 'camp-1',
               senderId: 'user-1',
-              characterId: 'char-1',
+              campaignActorId: 'actor-1',
               displayName: 'Arannis',
               avatarUrl: null,
               kind: 'say',
@@ -1355,25 +1354,22 @@ class _FakeCampaignClient implements CampaignClient {
     required String campaignId,
     required String kind,
     required String content,
-    String? characterId,
-    String? displayName,
-    String? avatarUrl,
+    String? campaignActorId,
   }) async {
     sentMessages.add(
       _SentCampaignMessage(
         kind: kind,
         content: content,
-        characterId: characterId,
-        displayName: displayName,
+        campaignActorId: campaignActorId,
       ),
     );
     final message = CampaignChatMessage(
       id: 'msg-${_messages.length + 1}',
       campaignId: campaignId,
       senderId: 'user-1',
-      characterId: characterId,
-      displayName: displayName ?? 'dm',
-      avatarUrl: avatarUrl,
+      campaignActorId: campaignActorId,
+      displayName: 'Arannis',
+      avatarUrl: null,
       kind: kind,
       content: content,
       createdAt: '2026-07-09T00:00:00.000Z',
@@ -1387,14 +1383,12 @@ class _SentCampaignMessage {
   const _SentCampaignMessage({
     required this.kind,
     required this.content,
-    required this.characterId,
-    required this.displayName,
+    required this.campaignActorId,
   });
 
   final String kind;
   final String content;
-  final String? characterId;
-  final String? displayName;
+  final String? campaignActorId;
 }
 
 class _FakeCharacterClient implements CharacterClient {

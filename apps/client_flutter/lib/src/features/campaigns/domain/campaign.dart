@@ -142,7 +142,7 @@ class CampaignChatMessage {
     required this.id,
     required this.campaignId,
     required this.senderId,
-    required this.characterId,
+    required this.campaignActorId,
     required this.displayName,
     required this.avatarUrl,
     required this.kind,
@@ -153,7 +153,7 @@ class CampaignChatMessage {
   final String id;
   final String campaignId;
   final String senderId;
-  final String? characterId;
+  final String? campaignActorId;
   final String displayName;
   final String? avatarUrl;
   final String kind;
@@ -165,7 +165,7 @@ class CampaignChatMessage {
       id: json['id']! as String,
       campaignId: json['campaignId']! as String,
       senderId: json['senderId']! as String,
-      characterId: json['characterId'] as String?,
+      campaignActorId: json['campaignActorId'] as String?,
       displayName: json['displayName']! as String,
       avatarUrl: json['avatarUrl'] as String?,
       kind: json['kind']! as String,
@@ -181,7 +181,7 @@ class CampaignChatMessage {
             id == other.id &&
             campaignId == other.campaignId &&
             senderId == other.senderId &&
-            characterId == other.characterId &&
+            campaignActorId == other.campaignActorId &&
             displayName == other.displayName &&
             avatarUrl == other.avatarUrl &&
             kind == other.kind &&
@@ -194,7 +194,7 @@ class CampaignChatMessage {
     id,
     campaignId,
     senderId,
-    characterId,
+    campaignActorId,
     displayName,
     avatarUrl,
     kind,

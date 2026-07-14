@@ -77,7 +77,7 @@ final _campaignChatMessageJson = {
   'id': 'msg-1',
   'campaignId': 'camp-1',
   'senderId': 'user-1',
-  'characterId': 'char-1',
+  'campaignActorId': 'actor-1',
   'displayName': 'Arannis',
   'avatarUrl': null,
   'kind': 'action',
@@ -89,7 +89,7 @@ final _campaignChatMessage = CampaignChatMessage(
   id: 'msg-1',
   campaignId: 'camp-1',
   senderId: 'user-1',
-  characterId: 'char-1',
+  campaignActorId: 'actor-1',
   displayName: 'Arannis',
   avatarUrl: null,
   kind: 'action',
@@ -435,7 +435,7 @@ void main() {
       expect(result, [_campaignChatMessage]);
     });
 
-    test('sends action messages with character summary', () async {
+    test('sends action messages with campaign actor identity', () async {
       http.Request? captured;
       final client = CampaignApiClient(
         httpClient: MockClient((request) async {
@@ -454,9 +454,7 @@ void main() {
         campaignId: 'camp-1',
         kind: 'action',
         content: '推开吱呀作响的木门',
-        characterId: 'char-1',
-        displayName: 'Arannis',
-        avatarUrl: null,
+        campaignActorId: 'actor-1',
       );
 
       expect(captured?.method, 'POST');
@@ -468,9 +466,7 @@ void main() {
       expect(jsonDecode(captured!.body), {
         'kind': 'action',
         'content': '推开吱呀作响的木门',
-        'characterId': 'char-1',
-        'displayName': 'Arannis',
-        'avatarUrl': null,
+        'campaignActorId': 'actor-1',
       });
       expect(result, _campaignChatMessage);
     });

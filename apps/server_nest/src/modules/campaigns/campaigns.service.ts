@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { randomBytes } from "crypto";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AccessTokenPayload } from "../auth/auth.types";
@@ -122,13 +127,41 @@ export class CampaignsService {
 
     const content = input.content.trim();
     const kind = normalizeMessageKind(input.kind);
+
+    let displayName = actor.username;
+    let avatarUrl: string | null = null;
+    let campaignActorId: string | null = null;
+
+    if (input.campaignActorId) {
+      const campaignActor =
+        await this.prismaService.campaignActor.findUnique({
+          where: { id: input.campaignActorId },
+        });
+      if (!campaignActor || campaignActor.campaignId !== campaignId) {
+        throw new BadRequestException(
+          "Actor does not belong to this campaign",
+        );
+      }
+      const isOwner = actor.userId === campaign.context.ownerId;
+      const isActorOwner = campaignActor.ownerUserId === actor.userId;
+      if (!isOwner && !isActorOwner) {
+        throw new ForbiddenException("You can only speak as your own actor");
+      }
+      const sheet = (campaignActor.sheetJson ?? {}) as Record<string, unknown>;
+      displayName =
+        typeof sheet.name === "string" ? sheet.name : "";
+      avatarUrl =
+        typeof sheet.avatarUrl === "string" ? sheet.avatarUrl : null;
+      campaignActorId = input.campaignActorId;
+    }
+
     const created = await this.prismaService.campaignChatMessage.create({
       data: {
         campaignId,
         senderId: actor.userId,
-        characterId: input.characterId ?? null,
-        displayName: input.displayName?.trim() || actor.username,
-        avatarUrl: input.avatarUrl ?? null,
+        campaignActorId,
+        displayName,
+        avatarUrl,
         kind,
         content,
       },
@@ -323,7 +356,7 @@ function toCampaignChatMessageView(message: any): CampaignChatMessageView {
     id: message.id,
     campaignId: message.campaignId,
     senderId: message.senderId,
-    characterId: message.characterId ?? null,
+    campaignActorId: message.campaignActorId ?? null,
     displayName: message.displayName,
     avatarUrl: message.avatarUrl ?? null,
     kind: message.kind,

@@ -307,7 +307,7 @@ git commit -m "feat(0.1): sync campaign json entries"
 - 修改：`apps/server_nest/src/modules/campaign-sync/campaign-change.service.ts`
 - 修改：`apps/server_nest/src/modules/campaign-sync/campaign-sync.module.ts`
 
-- [ ] **步骤 1：编写最小通知载荷失败测试**
+- [x] **步骤 1：编写最小通知载荷失败测试**
 
 ```typescript
 it('broadcasts a cursor notification without entry or sheet bodies', () => {
@@ -324,13 +324,13 @@ it('broadcasts a cursor notification without entry or sheet bodies', () => {
 });
 ```
 
-- [ ] **步骤 2：运行测试并确认新方法缺失**
+- [x] **步骤 2：运行测试并确认新方法缺失**
 
 运行：`npm run test:server -- campaigns.gateway.spec.ts`
 
 预期：FAIL，`broadcastChange` 不存在。
 
-- [ ] **步骤 3：实现提交后广播**
+- [x] **步骤 3：实现提交后广播**
 
 定义：
 
@@ -344,7 +344,7 @@ export interface CampaignChangedEvent {
 
 仅在数据库事务提交成功后调用 `broadcastChange`。事件不得包含 `sheetJson`、`entryJson`、Token 或审计正文。客户端收到事件后按本地 cursor 调 HTTP changes，不能直接信任事件内容更新缓存。
 
-- [ ] **步骤 4：验证网关与服务回归**
+- [x] **步骤 4：验证网关与服务回归**
 
 ```powershell
 npm run test:server -- campaigns.gateway.spec.ts campaign-change.service.spec.ts
@@ -353,7 +353,7 @@ npm run test:server -- campaign-content-sync.e2e-spec.ts
 
 预期：通知载荷精简，事务失败不广播，HTTP 拉取仍完整。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/server_nest/src/modules/realtime apps/server_nest/src/modules/campaign-sync

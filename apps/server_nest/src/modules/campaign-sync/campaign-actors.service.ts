@@ -98,7 +98,7 @@ export class CampaignActorsService {
       });
     }
 
-    const created = await this.prismaService.$transaction(async (tx) => {
+    const { row: created, cursor } = await this.prismaService.$transaction(async (tx) => {
       const row = await tx.campaignActor.create({
         data: {
           campaignId,
@@ -111,7 +111,7 @@ export class CampaignActorsService {
           updatedBy: actor.userId,
         },
       });
-      await this.changeService.recordInTransaction(
+      const change = await this.changeService.recordInTransaction(
         tx,
         campaignId,
         "actor",
@@ -119,10 +119,10 @@ export class CampaignActorsService {
         "upsert",
         revision,
       );
-      return row;
+      return { row, cursor: change.cursor };
     });
 
-    this.broadcastChange(campaignId, "actor");
+    this.broadcastChange(campaignId, "actor", cursor);
     return toActorSummary(created);
   }
 
@@ -164,7 +164,7 @@ export class CampaignActorsService {
     }
 
     const revision = 1;
-    const created = await this.prismaService.$transaction(async (tx) => {
+    const { row: created, cursor } = await this.prismaService.$transaction(async (tx) => {
       const row = await tx.campaignActor.create({
         data: {
           campaignId,
@@ -177,7 +177,7 @@ export class CampaignActorsService {
           updatedBy: actor.userId,
         },
       });
-      await this.changeService.recordInTransaction(
+      const change = await this.changeService.recordInTransaction(
         tx,
         campaignId,
         "actor",
@@ -185,10 +185,10 @@ export class CampaignActorsService {
         "upsert",
         revision,
       );
-      return row;
+      return { row, cursor: change.cursor };
     });
 
-    this.broadcastChange(campaignId, "actor");
+    this.broadcastChange(campaignId, "actor", cursor);
     return toActorSummary(created);
   }
 
@@ -240,7 +240,7 @@ export class CampaignActorsService {
     }
 
     const nextRevision = row.revision + 1;
-    const updated = await this.prismaService.$transaction(async (tx) => {
+    const { row: updated, cursor } = await this.prismaService.$transaction(async (tx) => {
       const result = await tx.campaignActor.update({
         where: { id: actorId },
         data: {
@@ -261,7 +261,7 @@ export class CampaignActorsService {
           afterJson: { status: "archived" } as unknown as Prisma.InputJsonValue,
         },
       });
-      await this.changeService.recordInTransaction(
+      const change = await this.changeService.recordInTransaction(
         tx,
         campaignId,
         "actor",
@@ -269,10 +269,10 @@ export class CampaignActorsService {
         "upsert",
         nextRevision,
       );
-      return result;
+      return { row: result, cursor: change.cursor };
     });
 
-    this.broadcastChange(campaignId, "actor");
+    this.broadcastChange(campaignId, "actor", cursor);
     return toActorSummary(updated);
   }
 
@@ -305,7 +305,7 @@ export class CampaignActorsService {
     }
 
     const nextRevision = row.revision + 1;
-    const updated = await this.prismaService.$transaction(async (tx) => {
+    const { row: updated, cursor } = await this.prismaService.$transaction(async (tx) => {
       const result = await tx.campaignActor.update({
         where: { id: actorId },
         data: {
@@ -326,7 +326,7 @@ export class CampaignActorsService {
           afterJson: { ownerUserId } as unknown as Prisma.InputJsonValue,
         },
       });
-      await this.changeService.recordInTransaction(
+      const change = await this.changeService.recordInTransaction(
         tx,
         campaignId,
         "actor",
@@ -334,10 +334,10 @@ export class CampaignActorsService {
         "upsert",
         nextRevision,
       );
-      return result;
+      return { row: result, cursor: change.cursor };
     });
 
-    this.broadcastChange(campaignId, "actor");
+    this.broadcastChange(campaignId, "actor", cursor);
     return toActorSummary(updated);
   }
 
@@ -387,7 +387,7 @@ export class CampaignActorsService {
           afterJson: afterSheet as unknown as Prisma.InputJsonValue,
         },
       });
-      await this.changeService.recordInTransaction(
+      const change = await this.changeService.recordInTransaction(
         tx,
         campaignId,
         "actor",
@@ -395,11 +395,11 @@ export class CampaignActorsService {
         "upsert",
         nextRevision,
       );
-      return result;
+      return { row: result, cursor: change.cursor };
     });
 
-    this.broadcastChange(campaignId, "actor");
-    return toActorSummary(updated);
+    this.broadcastChange(campaignId, "actor", updated.cursor);
+    return toActorSummary(updated.row);
   }
 
   async listAudits(
@@ -456,7 +456,7 @@ export class CampaignActorsService {
           afterJson: afterSheet as unknown as Prisma.InputJsonValue,
         },
       });
-      await this.changeService.recordInTransaction(
+      const change = await this.changeService.recordInTransaction(
         tx,
         campaignId,
         "actor",
@@ -464,11 +464,11 @@ export class CampaignActorsService {
         "upsert",
         nextRevision,
       );
-      return result;
+      return { row: result, cursor: change.cursor };
     });
 
-    this.broadcastChange(campaignId, "actor");
-    return toActorSummary(updated);
+    this.broadcastChange(campaignId, "actor", updated.cursor);
+    return toActorSummary(updated.row);
   }
 
   private async loadActor(campaignId: string, actorId: string): Promise<{
@@ -514,14 +514,12 @@ export class CampaignActorsService {
     };
   }
 
-  private broadcastChange(campaignId: string, entityType: "actor" | "content"): void {
-    // The gateway currently broadcasts the latest cursor + entityType only.
-    // The cursor is appended on the gateway side after Task 4 wires
-    // `broadcastChange`; for now this is a no-op notification so the contract
-    // stays stable even before the realtime task lands.
-    if (typeof (this.gateway as any).broadcastChange === "function") {
-      (this.gateway as any).broadcastChange({ campaignId, entityType });
-    }
+  private broadcastChange(
+    campaignId: string,
+    entityType: "actor" | "content",
+    cursor: string,
+  ): void {
+    this.gateway.broadcastChange({ campaignId, entityType, cursor });
   }
 }
 

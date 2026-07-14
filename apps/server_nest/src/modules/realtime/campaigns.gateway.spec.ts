@@ -180,4 +180,21 @@ describe('CampaignsGateway', () => {
       });
     });
   });
+
+  describe('broadcastChange', () => {
+    it('broadcasts a cursor notification without entry or sheet bodies', () => {
+      gateway.broadcastChange({
+        campaignId: 'campaign-1',
+        cursor: '8',
+        entityType: 'content',
+      });
+
+      expect(fakeServer.to).toHaveBeenCalledWith('campaign:campaign-1');
+      expect(toRoomEmit).toHaveBeenCalledWith('campaign:changed', {
+        campaignId: 'campaign-1',
+        cursor: '8',
+        entityType: 'content',
+      });
+    });
+  });
 });

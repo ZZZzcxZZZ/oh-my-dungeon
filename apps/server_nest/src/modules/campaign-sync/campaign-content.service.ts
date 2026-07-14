@@ -100,7 +100,7 @@ export class CampaignContentService {
     }
 
     const revision = 1;
-    const created = await this.prismaService.$transaction(async (tx) => {
+    const { row: created, cursor } = await this.prismaService.$transaction(async (tx) => {
       const row = await tx.campaignContentEntry.create({
         data: {
           campaignId,
@@ -113,7 +113,7 @@ export class CampaignContentService {
           updatedBy: actor.userId,
         },
       });
-      await this.changeService.recordInTransaction(
+      const change = await this.changeService.recordInTransaction(
         tx,
         campaignId,
         "content",
@@ -121,10 +121,10 @@ export class CampaignContentService {
         "upsert",
         revision,
       );
-      return row;
+      return { row, cursor: change.cursor };
     });
 
-    this.broadcastChange(campaignId, "content");
+    this.broadcastChange(campaignId, "content", cursor);
     return toEntrySummary(created);
   }
 
@@ -168,7 +168,7 @@ export class CampaignContentService {
     }
 
     const nextRevision = row.revision + 1;
-    const updated = await this.prismaService.$transaction(async (tx) => {
+    const { row: updated, cursor } = await this.prismaService.$transaction(async (tx) => {
       const result = await tx.campaignContentEntry.update({
         where: { id: entryId },
         data: {
@@ -177,7 +177,7 @@ export class CampaignContentService {
           updatedBy: actor.userId,
         },
       });
-      await this.changeService.recordInTransaction(
+      const change = await this.changeService.recordInTransaction(
         tx,
         campaignId,
         "content",
@@ -185,10 +185,10 @@ export class CampaignContentService {
         "upsert",
         nextRevision,
       );
-      return result;
+      return { row: result, cursor: change.cursor };
     });
 
-    this.broadcastChange(campaignId, "content");
+    this.broadcastChange(campaignId, "content", cursor);
     return toEntrySummary(updated);
   }
 
@@ -203,7 +203,7 @@ export class CampaignContentService {
 
     const nextRevision = row.revision + 1;
     const now = new Date();
-    const updated = await this.prismaService.$transaction(async (tx) => {
+    const { row: updated, cursor } = await this.prismaService.$transaction(async (tx) => {
       const result = await tx.campaignContentEntry.update({
         where: { id: entryId },
         data: {
@@ -212,7 +212,7 @@ export class CampaignContentService {
           updatedBy: actor.userId,
         },
       });
-      await this.changeService.recordInTransaction(
+      const change = await this.changeService.recordInTransaction(
         tx,
         campaignId,
         "content",
@@ -220,10 +220,10 @@ export class CampaignContentService {
         "delete",
         nextRevision,
       );
-      return result;
+      return { row: result, cursor: change.cursor };
     });
 
-    this.broadcastChange(campaignId, "content");
+    this.broadcastChange(campaignId, "content", cursor);
     return toEntrySummary(updated);
   }
 
@@ -261,10 +261,9 @@ export class CampaignContentService {
   private broadcastChange(
     campaignId: string,
     entityType: "actor" | "content",
+    cursor: string,
   ): void {
-    if (typeof (this.gateway as any).broadcastChange === "function") {
-      (this.gateway as any).broadcastChange({ campaignId, entityType });
-    }
+    this.gateway.broadcastChange({ campaignId, entityType, cursor });
   }
 }
 

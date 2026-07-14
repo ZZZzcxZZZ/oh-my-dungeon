@@ -8,6 +8,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TokenService } from '../auth/token.service';
+import type { CampaignChangedEvent } from '../campaign-sync/campaign-sync.types';
 
 export interface CampaignSocketUser {
   userId: string;
@@ -109,6 +110,12 @@ export class CampaignsGateway {
     payload: unknown
   ): void {
     this.server.to(`campaign:${campaignId}`).emit(event, payload);
+  }
+
+  broadcastChange(event: CampaignChangedEvent): void {
+    this.server
+      .to(`campaign:${event.campaignId}`)
+      .emit('campaign:changed', event);
   }
 
   private extractToken(client: Socket): string | null {

@@ -8,7 +8,10 @@ import '../../../features/auth/data/auth_token_store.dart';
 import '../../../features/auth/presentation/auth_controller.dart';
 import '../../../features/campaigns/data/campaign_api_client.dart';
 import '../../../features/campaigns/data/campaign_socket_service.dart';
+import '../../../features/campaigns/data/local/campaign_cache_repository.dart';
 import '../../../features/campaigns/data/socket_io_campaign_socket_service.dart';
+import '../../../features/campaigns/data/sync/campaign_sync_api_client.dart';
+import '../../../features/campaigns/presentation/actors/campaign_actor_controller.dart';
 import '../../../features/campaigns/presentation/campaign_controller.dart';
 import '../../../features/campaigns/presentation/campaigns_tab_page.dart';
 import '../../../features/characters/data/character_api_client.dart';
@@ -98,6 +101,7 @@ class _MainShellState extends State<MainShell> {
   late final ContentLibraryController _libraryController;
   late final SessionController _sessionController;
   late final CampaignSocketService _campaignSocketService;
+  late final CampaignActorController _actorController;
   final SyncStatusController _syncStatusController = SyncStatusController();
   final ContentFilePicker _contentFilePicker = const FilePickerContentFilePicker();
   int _currentIndex = 0;
@@ -144,12 +148,23 @@ class _MainShellState extends State<MainShell> {
       authController: _authController,
       sessionClient: widget.sessionClient,
     );
+    final CampaignCacheRepository cacheRepository = widget.database != null
+        ? DriftCampaignCacheRepository(widget.database!)
+        : EmptyCampaignCacheRepository();
+    _actorController = CampaignActorController(
+      cacheRepository: cacheRepository,
+      apiClient: HttpCampaignSyncApiClient(),
+      apiBaseUrl: profile?.apiBaseUrl ?? '',
+      accessToken: _authController.accessToken ?? '',
+      currentUserId: _authController.user?.id ?? '',
+    );
   }
 
   @override
   void dispose() {
     widget.modeController.removeListener(_onModeChanged);
     _campaignSocketService.disconnect();
+    _actorController.dispose();
     _sessionController.dispose();
     _libraryController.dispose();
     _contentController.dispose();
@@ -203,6 +218,8 @@ class _MainShellState extends State<MainShell> {
         campaignController: _campaignController,
         contentController: _contentController,
         appPreferencesController: widget.appPreferencesController,
+        modeController: widget.modeController,
+        actorController: _actorController,
       ),
       ContentLibraryPage(
         controller: _libraryController,

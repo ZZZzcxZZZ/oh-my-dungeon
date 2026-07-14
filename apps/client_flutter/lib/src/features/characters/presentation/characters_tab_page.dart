@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../app_preferences/presentation/app_preferences_controller.dart';
+import '../../campaigns/presentation/actors/campaign_actor_controller.dart';
+import '../../campaigns/presentation/actors/campaign_actor_directory_page.dart';
+import '../../campaigns/presentation/actors/publish_character_sheet.dart';
 import '../../campaigns/presentation/campaign_controller.dart';
+import '../../client_mode/domain/client_mode.dart';
 import '../../content/presentation/content_controller.dart';
 import '../domain/character.dart';
 import '../domain/dnd5e_rules.dart';
@@ -15,6 +19,8 @@ class CharactersTabPage extends StatefulWidget {
     this.campaignController,
     this.contentController,
     this.appPreferencesController,
+    this.modeController,
+    this.actorController,
     super.key,
   });
 
@@ -22,6 +28,8 @@ class CharactersTabPage extends StatefulWidget {
   final CampaignController? campaignController;
   final ContentController? contentController;
   final AppPreferencesController? appPreferencesController;
+  final ClientModeController? modeController;
+  final CampaignActorController? actorController;
 
   @override
   State<CharactersTabPage> createState() => _CharactersTabPageState();
@@ -29,7 +37,44 @@ class CharactersTabPage extends StatefulWidget {
 
 class _CharactersTabPageState extends State<CharactersTabPage> {
   @override
+  void initState() {
+    super.initState();
+    widget.modeController?.addListener(_onModeChanged);
+    widget.actorController?.addListener(_onActorChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant CharactersTabPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.modeController != widget.modeController) {
+      oldWidget.modeController?.removeListener(_onModeChanged);
+      widget.modeController?.addListener(_onModeChanged);
+    }
+    if (oldWidget.actorController != widget.actorController) {
+      oldWidget.actorController?.removeListener(_onActorChanged);
+      widget.actorController?.addListener(_onActorChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.modeController?.removeListener(_onModeChanged);
+    widget.actorController?.removeListener(_onActorChanged);
+    super.dispose();
+  }
+
+  void _onModeChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onActorChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final mode = widget.modeController?.mode ?? ClientMode.player;
+    final isDm = mode == ClientMode.dungeonMaster;
     return AnimatedBuilder(
       animation: Listenable.merge([
         widget.controller,
@@ -39,16 +84,53 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
       ]),
       builder: (context, _) {
         return Scaffold(
-          appBar: AppBar(title: const Text('角色')),
-          floatingActionButton: FloatingActionButton.extended(
-            heroTag: 'create_character',
-            onPressed: _openCreatePage,
-            icon: const Icon(Icons.person_add_alt_1),
-            label: const Text('新角色'),
+          appBar: AppBar(
+            title: const Text('角色'),
+            actions: [
+              if (widget.modeController != null)
+                _ModeSwitchToggle(
+                  modeController: widget.modeController!,
+                  isDm: isDm,
+                ),
+            ],
           ),
-          body: _buildCharacterList(context),
+          floatingActionButton: isDm
+              ? null
+              : FloatingActionButton.extended(
+                  heroTag: 'create_character',
+                  onPressed: _openCreatePage,
+                  icon: const Icon(Icons.person_add_alt_1),
+                  label: const Text('新角色'),
+                ),
+          body: isDm ? _buildDmBody(context) : _buildPlayerBody(context),
         );
       },
+    );
+  }
+
+  Widget _buildPlayerBody(BuildContext context) {
+    return KeyedSubtree(
+      key: const Key('player-local-characters'),
+      child: _buildCharacterList(context),
+    );
+  }
+
+  Widget _buildDmBody(BuildContext context) {
+    final actorController = widget.actorController;
+    if (actorController == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text('DM 模式不可用：未连接战役同步。'),
+        ),
+      );
+    }
+    final campaigns = (widget.campaignController?.campaigns ?? const [])
+        .map((campaign) => CampaignOption(id: campaign.id, name: campaign.name))
+        .toList(growable: false);
+    return CampaignActorDirectoryPage(
+      controller: actorController,
+      campaigns: campaigns,
     );
   }
 
@@ -93,10 +175,14 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
         return _CharacterCard(
           character: character,
           compact: compact,
+          canPublish: widget.actorController != null,
           onOpen: () => _openDetailPage(character),
           onEdit: () => _openEditPage(character),
           onContentRefs: () => _showContentRefsDialog(character),
           onBind: () => _showBindDialog(character),
+          onPublish: widget.actorController == null
+              ? null
+              : () => _showPublishSheet(character),
           onHpDelta: (delta) => _adjustHp(character, delta),
         );
       },
@@ -421,6 +507,18 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     );
   }
 
+  Future<void> _showPublishSheet(CharacterSheet character) async {
+    final actorController = widget.actorController;
+    if (actorController == null) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => PublishCharacterSheet(
+        controller: actorController,
+        character: character,
+      ),
+    );
+  }
+
   Future<void> _adjustHp(CharacterSheet character, int delta) async {
     final success = await widget.controller.updateCharacter(
       character.copyWith(currentHp: character.currentHp + delta),
@@ -432,23 +530,47 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
   }
 }
 
+/// Player <-> DM 模式切换按钮。Player 模式下显示“DM 视图”，反之亦然。
+class _ModeSwitchToggle extends StatelessWidget {
+  const _ModeSwitchToggle({required this.modeController, required this.isDm});
+
+  final ClientModeController modeController;
+  final bool isDm;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      key: Key(isDm ? 'mode-switch-player' : 'mode-switch-dm'),
+      tooltip: isDm ? '切换为玩家视图' : '切换为 DM 视图',
+      icon: Icon(isDm ? Icons.person_outline : Icons.castle_outlined),
+      onPressed: () => modeController.setMode(
+        isDm ? ClientMode.player : ClientMode.dungeonMaster,
+      ),
+    );
+  }
+}
+
 class _CharacterCard extends StatelessWidget {
   const _CharacterCard({
     required this.character,
     required this.compact,
+    required this.canPublish,
     required this.onOpen,
     required this.onEdit,
     required this.onContentRefs,
     required this.onBind,
     required this.onHpDelta,
+    this.onPublish,
   });
 
   final CharacterSheet character;
   final bool compact;
+  final bool canPublish;
   final VoidCallback onOpen;
   final VoidCallback onEdit;
   final VoidCallback onContentRefs;
   final VoidCallback onBind;
+  final VoidCallback? onPublish;
   final ValueChanged<int> onHpDelta;
 
   @override
@@ -460,97 +582,115 @@ class _CharacterCard extends StatelessWidget {
     ].join(' / ');
 
     return Card.outlined(
-      child: ListTile(
-        onTap: onOpen,
-        dense: compact,
-        visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
-        leading: CircleAvatar(
-          child: Text(character.name.characters.first.toUpperCase()),
-        ),
-        title: Text(character.name),
-        subtitle: compact
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('紧凑角色列表'),
-                  Text(subtitle),
-                  Text(
-                    'HP ${character.currentHp}/${character.maxHp} · AC ${character.armorClass} · 先攻 ${Dnd5eRules.formatModifier(character.initiativeBonus)}',
-                  ),
-                ],
-              )
-            : Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(subtitle),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ListTile(
+            onTap: onOpen,
+            dense: compact,
+            visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+            leading: CircleAvatar(
+              child: Text(character.name.characters.first.toUpperCase()),
+            ),
+            title: Text(character.name),
+            subtitle: compact
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('紧凑角色列表'),
+                      Text(subtitle),
+                      Text(
+                        'HP ${character.currentHp}/${character.maxHp} · AC ${character.armorClass} · 先攻 ${Dnd5eRules.formatModifier(character.initiativeBonus)}',
+                      ),
+                    ],
+                  )
+                : Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Chip(
-                          label: Text(
-                            'HP ${character.currentHp}/${character.maxHp}',
-                          ),
-                        ),
-                        Chip(label: Text('AC ${character.armorClass}')),
-                        Chip(
-                          label: Text(
-                            '先攻 ${Dnd5eRules.formatModifier(character.initiativeBonus)}',
-                          ),
-                        ),
-                        Chip(
-                          label: Text(
-                            '熟练 +${Dnd5eRules.proficiencyBonus(character.level)}',
-                          ),
+                        Text(subtitle),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            Chip(
+                              label: Text(
+                                'HP ${character.currentHp}/${character.maxHp}',
+                              ),
+                            ),
+                            Chip(label: Text('AC ${character.armorClass}')),
+                            Chip(
+                              label: Text(
+                                '先攻 ${Dnd5eRules.formatModifier(character.initiativeBonus)}',
+                              ),
+                            ),
+                            Chip(
+                              label: Text(
+                                '熟练 +${Dnd5eRules.proficiencyBonus(character.level)}',
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
+                  ),
+            trailing: Wrap(
+              spacing: 2,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                IconButton(
+                  tooltip: 'HP -1',
+                  onPressed: () => onHpDelta(-1),
+                  icon: const Icon(Icons.remove_circle_outline),
+                ),
+                IconButton(
+                  tooltip: 'HP +1',
+                  onPressed: () => onHpDelta(1),
+                  icon: const Icon(Icons.add_circle_outline),
+                ),
+                PopupMenuButton<_CharacterAction>(
+                  tooltip: '角色操作',
+                  onSelected: (action) {
+                    switch (action) {
+                      case _CharacterAction.edit:
+                        onEdit();
+                      case _CharacterAction.contentRefs:
+                        onContentRefs();
+                      case _CharacterAction.bind:
+                        onBind();
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(value: _CharacterAction.edit, child: Text('编辑')),
+                    PopupMenuItem(
+                      value: _CharacterAction.contentRefs,
+                      child: Text('内容引用'),
+                    ),
+                    PopupMenuItem(
+                      value: _CharacterAction.bind,
+                      child: Text('绑定战役'),
+                    ),
                   ],
-                ),
-              ),
-        trailing: Wrap(
-          spacing: 2,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            IconButton(
-              tooltip: 'HP -1',
-              onPressed: () => onHpDelta(-1),
-              icon: const Icon(Icons.remove_circle_outline),
-            ),
-            IconButton(
-              tooltip: 'HP +1',
-              onPressed: () => onHpDelta(1),
-              icon: const Icon(Icons.add_circle_outline),
-            ),
-            PopupMenuButton<_CharacterAction>(
-              tooltip: '角色操作',
-              onSelected: (action) {
-                switch (action) {
-                  case _CharacterAction.edit:
-                    onEdit();
-                  case _CharacterAction.contentRefs:
-                    onContentRefs();
-                  case _CharacterAction.bind:
-                    onBind();
-                }
-              },
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: _CharacterAction.edit, child: Text('编辑')),
-                PopupMenuItem(
-                  value: _CharacterAction.contentRefs,
-                  child: Text('内容引用'),
-                ),
-                PopupMenuItem(
-                  value: _CharacterAction.bind,
-                  child: Text('绑定战役'),
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+          if (canPublish && onPublish != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  key: Key('publish-character-${character.id}'),
+                  onPressed: onPublish,
+                  icon: const Icon(Icons.campaign_outlined),
+                  label: const Text('发布到战役'),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

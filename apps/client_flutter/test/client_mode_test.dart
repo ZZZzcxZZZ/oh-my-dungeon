@@ -28,4 +28,12 @@ void main() {
 
     expect(notifications, 0);
   });
+
+  test('initialMode allows starting in dungeon master mode', () {
+    final controller = ClientModeController(
+      initialMode: ClientMode.dungeonMaster,
+    );
+
+    expect(controller.mode, ClientMode.dungeonMaster);
+  });
 }

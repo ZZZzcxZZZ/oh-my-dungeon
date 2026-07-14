@@ -153,6 +153,9 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
   int _changePageIndex = 0;
   final Object? listChangesException;
 
+  /// 注入下一次 `updateActor` 调用要抛出的异常；用于 409 冲突场景测试。
+  Object? nextUpdateActorException;
+
   final List<Map<String, Object?>> publishCalls = [];
   final List<Map<String, Object?>> createActorCalls = [];
   final List<Map<String, Object?>> updateActorCalls = [];
@@ -256,6 +259,11 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
       'baseRevision': baseRevision,
       'sheet': sheet,
     });
+    final exception = nextUpdateActorException;
+    if (exception != null) {
+      nextUpdateActorException = null;
+      throw exception;
+    }
     return testCampaignActor(id: actorId, campaignId: campaignId, sheet: sheet);
   }
 

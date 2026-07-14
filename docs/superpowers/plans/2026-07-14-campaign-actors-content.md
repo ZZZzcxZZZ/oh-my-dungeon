@@ -459,7 +459,7 @@ git commit -m "feat(0.1): cache campaign collaboration data"
 - 创建：`apps/client_flutter/test/campaign_actor_pages_test.dart`
 - 修改：`apps/client_flutter/test/client_mode_test.dart`
 
-- [ ] **步骤 1：编写模式语义和 DM 编辑失败测试**
+- [x] **步骤 1：编写模式语义和 DM 编辑失败测试**
 
 Widget 测试使用 `MemoryCampaignCacheRepository` 与 `MemoryCampaignSyncApiClient`，覆盖：Player 模式显示本地角色和“发布到战役”；DM 模式先选择战役并显示玩家角色、NPC、未认领和归档筛选；点击 Actor 打开完整角色卡；DM 修改 HP、状态、装备、法术和备注后发送带 `baseRevision` 的更新；409 显示比较与重新加载动作；玩家角色页能处理 DM 回写产生的构建冲突并选择保留本地或接受战役版本。
 
@@ -471,17 +471,17 @@ expect(find.byKey(const Key('campaign-actor-directory')), findsOneWidget);
 expect(find.text('发布到战役'), findsNothing);
 ```
 
-- [ ] **步骤 2：运行测试并确认现有角色页语义错误**
+- [x] **步骤 2：运行测试并确认现有角色页语义错误**
 
 运行：`cd apps/client_flutter; flutter test test/campaign_actor_pages_test.dart test/client_mode_test.dart`
 
 预期：FAIL，DM 模式仍显示个人角色页或缺少 Actor 目录。
 
-- [ ] **步骤 3：实现 Material 3 角色工作流**
+- [x] **步骤 3：实现 Material 3 角色工作流**
 
-窄屏使用 `NavigationBar` 保持“角色”主入口，Actor 目录使用搜索、`FilterChip` 和 `ListTile`；宽屏在同页使用 master-detail 双栏。Actor 详情使用 `SliverAppBar`、状态摘要、`TabBar`（概览、能力、装备、法术、备注、历史）和标准 `FilledButton`/`IconButton`。完整编辑权必须覆盖 sheet 全字段，但危险动作使用确认对话框；每次成功更新立即写本地缓存并触发后台拉取。
+窄屏使用 `NavigationBar` 保持"角色"主入口，Actor 目录使用搜索、`FilterChip` 和 `ListTile`；宽屏在同页使用 master-detail 双栏。Actor 详情使用 `SliverAppBar`、状态摘要、`TabBar`（概览、能力、装备、法术、备注、历史）和标准 `FilledButton`/`IconButton`。完整编辑权必须覆盖 sheet 全字段，但危险动作使用确认对话框；每次成功更新立即写本地缓存并触发后台拉取。
 
-- [ ] **步骤 4：验证两种模式和响应式布局**
+- [x] **步骤 4：验证两种模式和响应式布局**
 
 ```powershell
 cd apps/client_flutter

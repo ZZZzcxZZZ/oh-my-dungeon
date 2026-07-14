@@ -1,5 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
+import '../../../core/backup/drift_local_data_archive_service.dart';
+import '../../../core/backup/local_backup_models.dart';
+import '../../../core/backup/local_data_archive_service.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/sync/sync_status_controller.dart';
 import '../../../features/app_preferences/presentation/app_preferences_controller.dart';
@@ -102,6 +107,7 @@ class _MainShellState extends State<MainShell> {
   late final SessionController _sessionController;
   late final CampaignSocketService _campaignSocketService;
   late final CampaignActorController _actorController;
+  late final LocalDataArchiveService _archiveService;
   final SyncStatusController _syncStatusController = SyncStatusController();
   final ContentFilePicker _contentFilePicker = const FilePickerContentFilePicker();
   int _currentIndex = 0;
@@ -158,6 +164,9 @@ class _MainShellState extends State<MainShell> {
       accessToken: _authController.accessToken ?? '',
       currentUserId: _authController.user?.id ?? '',
     );
+    _archiveService = widget.database != null
+        ? DriftLocalDataArchiveService(widget.database!)
+        : _NullLocalDataArchiveService();
   }
 
   @override
@@ -237,6 +246,7 @@ class _MainShellState extends State<MainShell> {
         contentRepository: _contentRepository,
         contentImporter: _contentImporter,
         contentFilePicker: _contentFilePicker,
+        archiveService: _archiveService,
       ),
     ];
     final body = IndexedStack(index: _currentIndex, children: pages);
@@ -333,4 +343,26 @@ class _MainShellState extends State<MainShell> {
         ? '内容库'
         : '资料库';
   }
+}
+
+/// Fallback archive service used when no [AppDatabase] is attached.
+///
+/// All operations throw [UnsupportedError] so callers surface a clear message
+/// instead of silently producing an empty archive.
+class _NullLocalDataArchiveService implements LocalDataArchiveService {
+  @override
+  Future<Uint8List> exportArchive() =>
+      throw UnsupportedError('Local database unavailable');
+  @override
+  Future<ArchivePreview> previewArchive(Uint8List bytes) =>
+      throw UnsupportedError('Local database unavailable');
+  @override
+  Future<void> restoreArchive(ArchivePreview preview) =>
+      throw UnsupportedError('Local database unavailable');
+  @override
+  Future<void> clearCampaignCache() =>
+      throw UnsupportedError('Local database unavailable');
+  @override
+  Future<void> rebuildContentIndex() =>
+      throw UnsupportedError('Local database unavailable');
 }

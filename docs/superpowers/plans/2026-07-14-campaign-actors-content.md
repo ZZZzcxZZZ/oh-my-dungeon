@@ -726,13 +726,13 @@ test('exports local-owned data and restores it atomically without tokens', () as
 
 在测试文件内实现 `seedBackupFixture(AppDatabase)`，写入一个服务器 Profile（不写 Token）、一个资料包及 asset、一个角色、收藏、笔记、书签和偏好。再测试损坏 archive、未知 schema、哈希不符或中途写失败时目标数据库完全不变。
 
-- [ ] **步骤 2：运行测试并确认服务缺失**
+- [x] **步骤 2：运行测试并确认服务缺失**
 
 运行：`cd apps/client_flutter; flutter test test/local_data_archive_service_test.dart`
 
 预期：FAIL，备份模型和服务不存在。
 
-- [ ] **步骤 3：实现版本化 archive 和事务恢复**
+- [x] **步骤 3：实现版本化 archive 和事务恢复**
 
 备份格式固定为 `.dndtable-backup` ZIP：
 
@@ -744,7 +744,7 @@ assets/<packageId>/<relativePath>
 
 `manifest.json` 包含 `formatVersion=1`、`createdAt`、客户端版本、各类计数、总大小和 SHA-256；`database.json` 只含服务器 Profile 的名称/URL、本地资料、角色、收藏、笔记、书签、偏好和安装清单，不含 access/refresh token、密码、Outbox、cursor、战役缓存或聊天缓存。恢复先完整解析和校验，再用单个 Drift transaction 替换本地所有权数据；失败回滚。assets 使用与资料包导入相同的路径和大小限制。
 
-- [ ] **步骤 4：编写设置页面失败测试**
+- [x] **步骤 4：编写设置页面失败测试**
 
 ```dart
 testWidgets('opens data tools and requires confirmation before restore', (tester) async {
@@ -761,11 +761,11 @@ testWidgets('opens data tools and requires confirmation before restore', (tester
 
 `MemoryLocalDataArchiveService` 在同一测试文件中完整实现接口并记录 export、preview、restore、clearCache 和 rebuildIndex 调用。
 
-- [ ] **步骤 5：实现 Material 3 数据管理页**
+- [x] **步骤 5：实现 Material 3 数据管理页**
 
 设置页“数据”分组提供导出备份、恢复备份、清理战役缓存、重建资料索引四个 `ListTile`。文件动作使用平台无关 picker/saver 接口；恢复必须先显示来源、版本、计数、大小和错误，再二次确认。清缓存只删除 `CampaignActorsCache`、`CampaignContentCache`、`CampaignMessagesCache` 和 cursor，不删除个人角色或本地资料；重建索引从 `LocalContentEntries` 事务重建搜索数据。
 
-- [ ] **步骤 6：验证备份与设置 UI**
+- [x] **步骤 6：验证备份与设置 UI**
 
 ```powershell
 cd apps/client_flutter
@@ -775,7 +775,7 @@ flutter analyze
 
 预期：无凭据导出、assets、原子恢复、损坏回滚、清缓存边界、重建索引和确认 UI 通过。
 
-- [ ] **步骤 7：提交**
+- [x] **步骤 7：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/core/backup apps/client_flutter/lib/src/features/server_home/presentation apps/client_flutter/test/local_data_archive_service_test.dart apps/client_flutter/test/data_management_page_test.dart

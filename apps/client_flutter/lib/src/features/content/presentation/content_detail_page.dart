@@ -209,6 +209,17 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                     avatar: const Icon(Icons.book_outlined, size: 16),
                     label: Text(entry.source.label),
                   ),
+                Chip(
+                  avatar: Icon(
+                    entry.origin == ContentOrigin.campaign
+                        ? Icons.campaign_outlined
+                        : Icons.cloud_off_outlined,
+                    size: 16,
+                  ),
+                  label: Text(
+                    entry.origin == ContentOrigin.campaign ? '战役' : '本地',
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 16),

@@ -63,6 +63,7 @@ abstract interface class ContentRepository {
   Future<ContentDeletionImpact> deletionImpact(String packageId);
   Future<void> deletePackage(String packageId);
   Future<void> setFavorite(String entryKey, bool favorite);
+  Future<bool> isFavorite(String entryKey);
   Future<void> saveNote(String entryKey, String markdown);
 }
 
@@ -409,6 +410,15 @@ class DriftContentRepository implements ContentRepository {
   }
 
   @override
+  Future<bool> isFavorite(String entryKey) async {
+    final db = _database;
+    final row = await (db.select(db.contentFavorites)
+          ..where((t) => t.entryKey.equals(entryKey)))
+        .getSingleOrNull();
+    return row != null;
+  }
+
+  @override
   Future<void> saveNote(String entryKey, String markdown) async {
     final db = _database;
     await db.transaction(() async {
@@ -503,6 +513,8 @@ class EmptyContentRepository implements ContentRepository {
   Future<void> deletePackage(String packageId) async {}
   @override
   Future<void> setFavorite(String entryKey, bool favorite) async {}
+  @override
+  Future<bool> isFavorite(String entryKey) async => false;
   @override
   Future<void> saveNote(String entryKey, String markdown) async {}
 }

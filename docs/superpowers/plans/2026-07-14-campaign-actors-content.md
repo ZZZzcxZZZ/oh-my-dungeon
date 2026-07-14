@@ -558,7 +558,7 @@ git commit -m "feat(0.1): manage campaign json entries"
 - 修改：`apps/client_flutter/lib/src/features/content/presentation/content_detail_page.dart`
 - 创建：`apps/client_flutter/test/campaign_aware_content_repository_test.dart`
 
-- [ ] **步骤 1：编写合并与同名隔离失败测试**
+- [x] **步骤 1：编写合并与同名隔离失败测试**
 
 ```dart
 test('searches local packages and current campaign cache without overriding', () async {
@@ -599,17 +599,17 @@ test('searches local packages and current campaign cache without overriding', ()
 
 战役端复用任务 5 已定义的 `MemoryCampaignCacheRepository`，本地端复用计划二的 `MemoryContentRepository`。再覆盖无当前战役时只返回本地、战役撤权后不显示、详情来源标识和链接跳转。
 
-- [ ] **步骤 2：运行测试并确认组合 Repository 缺失**
+- [x] **步骤 2：运行测试并确认组合 Repository 缺失**
 
 运行：`cd apps/client_flutter; flutter test test/campaign_aware_content_repository_test.dart`
 
 预期：FAIL，`CampaignAwareContentRepository` 不存在。
 
-- [ ] **步骤 3：实现只读组合查询**
+- [x] **步骤 3：实现只读组合查询**
 
 在 `content_entry.dart` 增加 `enum ContentOrigin { local, campaign }` 和不可由导入 JSON 指定的运行时 `origin` 字段；本地 Repository 返回 `local`，组合 Repository 为战役缓存条目复制 `campaign`。条目键分别使用 `local:<packageId>:<entryId>` 与 `campaign:<campaignId>:<entryId>`，同名条目不得覆盖。搜索结果显示来源 chip；战役条目完整打开缓存正文；本地缺少链接目标时显示缺失来源状态。收藏与笔记仍写个人 Vault，不写战役条目服务端。
 
-- [ ] **步骤 4：验证 Wiki 回归**
+- [x] **步骤 4：验证 Wiki 回归**
 
 ```powershell
 cd apps/client_flutter
@@ -619,7 +619,7 @@ flutter analyze
 
 预期：本地、战役和空库三种状态均正常。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/features/content apps/client_flutter/test/campaign_aware_content_repository_test.dart

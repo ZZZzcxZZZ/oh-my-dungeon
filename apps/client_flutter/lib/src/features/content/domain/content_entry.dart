@@ -1,5 +1,8 @@
 import 'content_block.dart';
 
+/// 条目来源标识。运行时字段，不参与 JSON 序列化，由具体 Repository 决定。
+enum ContentOrigin { local, campaign }
+
 class ContentSource {
   const ContentSource({required this.label});
 
@@ -35,6 +38,7 @@ class ContentEntry {
     this.structured = const <String, Object?>{},
     this.tags = const <String>[],
     this.source = ContentSource.empty,
+    this.origin = ContentOrigin.local,
   });
 
   final String id;
@@ -48,6 +52,9 @@ class ContentEntry {
   final Map<String, Object?> structured;
   final List<String> tags;
   final ContentSource source;
+
+  /// 运行时来源标识，不写入 JSON。组合 Repository 会为战役缓存条目设置为 [ContentOrigin.campaign]。
+  final ContentOrigin origin;
 
   factory ContentEntry.fromJson(Map<String, Object?> json) {
     final id = json['id'];
@@ -106,6 +113,24 @@ class ContentEntry {
         'source': source.toJson(),
       };
 
+  /// 复制条目并替换来源字段。仅用于运行时组合 Repository。
+  ContentEntry withOrigin(ContentOrigin origin) {
+    return ContentEntry(
+      id: id,
+      type: type,
+      slug: slug,
+      name: name,
+      body: body,
+      revision: revision,
+      aliases: aliases,
+      summary: summary,
+      structured: structured,
+      tags: tags,
+      source: source,
+      origin: origin,
+    );
+  }
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -116,7 +141,8 @@ class ContentEntry {
           name == other.name &&
           revision == other.revision &&
           summary == other.summary &&
-          source == other.source;
+          source == other.source &&
+          origin == other.origin;
 
   @override
   int get hashCode => Object.hash(
@@ -127,5 +153,6 @@ class ContentEntry {
         revision,
         summary,
         source,
+        origin,
       );
 }

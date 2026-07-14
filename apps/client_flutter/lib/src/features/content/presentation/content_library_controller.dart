@@ -61,10 +61,7 @@ class ContentLibraryController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> isFavorite(String entryKey) async {
-    final favorites = await repository.search(const ContentQuery(favoritesOnly: true));
-    return favorites.any((entry) => entry.id == entryKey);
-  }
+  Future<bool> isFavorite(String entryKey) => repository.isFavorite(entryKey);
 
   Future<ContentEntry?> getByKey(String entryKey) =>
       repository.getByKey(entryKey);

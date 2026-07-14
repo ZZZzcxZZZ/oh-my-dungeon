@@ -214,6 +214,9 @@ class MemoryContentRepository implements ContentRepository {
   }
 
   @override
+  Future<bool> isFavorite(String entryKey) async => _favorites.contains(entryKey);
+
+  @override
   Future<void> saveNote(String entryKey, String markdown) async {
     _notes[entryKey] = markdown;
   }

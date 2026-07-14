@@ -491,7 +491,7 @@ flutter analyze
 
 预期：Player/DM 语义隔离、发布、完整编辑、冲突状态和窄/宽布局测试通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/app apps/client_flutter/lib/src/features/campaigns/presentation/actors apps/client_flutter/lib/src/features/characters/presentation/characters_tab_page.dart apps/client_flutter/test/campaign_actor_pages_test.dart apps/client_flutter/test/client_mode_test.dart
@@ -509,9 +509,9 @@ git commit -m "feat(0.1): manage campaign actors in dm mode"
 - 创建：`apps/client_flutter/lib/src/features/campaigns/presentation/content/campaign_json_import_dialog.dart`
 - 创建：`apps/client_flutter/test/campaign_content_pages_test.dart`
 
-- [ ] **步骤 1：编写创建入口、表单和 dry-run 失败测试**
+- [x] **步骤 1：编写创建入口、表单和 dry-run 失败测试**
 
-覆盖战役创建向导中的可跳过“自定义资料”步骤、战役详情 `+` 菜单入口、owner/DM 可见而 player 隐藏、GUI 创建、JSON 粘贴预览、错误 path 展示、确认后同步和离线时保存草稿但不伪装发布成功。
+覆盖战役创建向导中的可跳过"自定义资料"步骤、战役详情 `+` 菜单入口、owner/DM 可见而 player 隐藏、GUI 创建、JSON 粘贴预览、错误 path 展示、确认后同步和离线时保存草稿但不伪装发布成功。
 
 ```dart
 await tester.tap(find.byKey(const Key('campaign-more-actions')));
@@ -521,17 +521,17 @@ expect(find.byKey(const Key('campaign-content-page')), findsOneWidget);
 expect(find.text('新建条目'), findsOneWidget);
 ```
 
-- [ ] **步骤 2：运行测试并确认管理入口缺失**
+- [x] **步骤 2：运行测试并确认管理入口缺失**
 
 运行：`cd apps/client_flutter; flutter test test/campaign_content_pages_test.dart`
 
 预期：FAIL，战役资料页面不存在。
 
-- [ ] **步骤 3：实现简洁 GUI 与 JSON 预览**
+- [x] **步骤 3：实现简洁 GUI 与 JSON 预览**
 
 编辑器只展示条目类型、名称、slug、摘要、标签和安全内容块，不展示 package、dependency、overlay 或 patch 概念。JSON 导入允许单对象或数组，先调用本地解析器显示本地错误，再调用服务器 validate；预览明确列出新增数量和错误。列表从 Drift 战役缓存读取，因此断网时可查阅；只有发布、编辑和删除操作要求连接服务器。
 
-- [ ] **步骤 4：验证权限和离线阅读**
+- [x] **步骤 4：验证权限和离线阅读**
 
 ```powershell
 cd apps/client_flutter
@@ -541,7 +541,7 @@ flutter analyze
 
 预期：创建与中途入口、权限、预览、错误展示和离线缓存阅读通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/features/campaigns/presentation apps/client_flutter/test/campaign_content_pages_test.dart

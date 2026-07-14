@@ -67,6 +67,8 @@ class MemoryCampaignCacheRepository implements CampaignCacheRepository {
   final Map<String, String> _cursors;
   final StreamController<List<CampaignActor>> _controller =
       StreamController<List<CampaignActor>>.broadcast();
+  final StreamController<List<CampaignContentEntrySummary>> _entryController =
+      StreamController<List<CampaignContentEntrySummary>>.broadcast();
 
   List<CampaignActor> get actors => _actors.values.toList(growable: false);
   List<CampaignContentEntrySummary> get entries =>
@@ -78,6 +80,11 @@ class MemoryCampaignCacheRepository implements CampaignCacheRepository {
           .where((actor) => actor.campaignId == campaignId)
           .toList(growable: false),
     );
+    _entryController.add(
+      _entries.values
+          .where((entry) => entry.campaignId == campaignId)
+          .toList(growable: false),
+    );
   }
 
   @override
@@ -87,6 +94,19 @@ class MemoryCampaignCacheRepository implements CampaignCacheRepository {
         .where((actor) => actor.campaignId == campaignId)
         .toList(growable: false)));
     _controller.stream.listen(controller.add);
+    return controller.stream;
+  }
+
+  @override
+  Stream<List<CampaignContentEntrySummary>> watchContentEntries(
+    String campaignId,
+  ) {
+    final controller =
+        StreamController<List<CampaignContentEntrySummary>>.broadcast();
+    scheduleMicrotask(() => controller.add(_entries.values
+        .where((entry) => entry.campaignId == campaignId)
+        .toList(growable: false)));
+    _entryController.stream.listen(controller.add);
     return controller.stream;
   }
 

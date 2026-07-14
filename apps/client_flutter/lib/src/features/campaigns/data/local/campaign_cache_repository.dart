@@ -10,6 +10,7 @@ import '../../domain/campaign_change.dart';
 abstract interface class CampaignCacheRepository {
   Stream<List<CampaignActor>> watchActors(String campaignId);
   Future<CampaignActor?> getActor(String campaignId, String actorId);
+  Stream<List<CampaignContentEntrySummary>> watchContentEntries(String campaignId);
   Future<CampaignContentEntrySummary?> getContentEntry(
     String campaignId,
     String entryId,
@@ -42,6 +43,18 @@ class DriftCampaignCacheRepository implements CampaignCacheRepository {
           ..where((t) => t.id.equals(actorId) & t.campaignId.equals(campaignId)))
         .getSingleOrNull();
     return row == null ? null : _toActor(row);
+  }
+
+  @override
+  Stream<List<CampaignContentEntrySummary>> watchContentEntries(
+    String campaignId,
+  ) {
+    final db = _database;
+    return (db.select(db.campaignContentCache)
+          ..where((t) => t.campaignId.equals(campaignId))
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+        .watch()
+        .map((rows) => rows.map(_toEntry).toList(growable: false));
   }
 
   @override
@@ -221,6 +234,10 @@ class EmptyCampaignCacheRepository implements CampaignCacheRepository {
   @override
   Future<CampaignActor?> getActor(String campaignId, String actorId) async =>
       null;
+  @override
+  Stream<List<CampaignContentEntrySummary>> watchContentEntries(
+          String campaignId) =>
+      Stream.value(const []);
   @override
   Future<CampaignContentEntrySummary?> getContentEntry(
           String campaignId, String entryId) async =>

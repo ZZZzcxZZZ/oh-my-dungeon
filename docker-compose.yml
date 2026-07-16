@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: dnd_table
       POSTGRES_USER: dnd
@@ -20,6 +21,7 @@ services:
     build:
       context: .
       dockerfile: apps/server_nest/Dockerfile
+    restart: unless-stopped
     environment:
       SERVER_NAME: ${SERVER_NAME:-D&D Table Tool}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}

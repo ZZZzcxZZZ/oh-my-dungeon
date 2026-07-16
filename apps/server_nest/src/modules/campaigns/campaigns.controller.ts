@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UseGuards,
 } from "@nestjs/common";
 import { CurrentUser } from "../auth/current-user.decorator";
@@ -84,8 +85,9 @@ export class CampaignsController {
   listMessages(
     @CurrentUser() user: AccessTokenPayload,
     @Param("id") campaignId: string,
+    @Query("query") query?: string,
   ): Promise<CampaignChatMessageView[]> {
-    return this.campaignsService.listMessages(user, campaignId);
+    return this.campaignsService.listMessages(user, campaignId, query);
   }
 
   @Post(":id/messages")
@@ -163,6 +165,14 @@ export class CampaignsController {
       speakerMode: body.speakerMode,
       actorId: typeof body.actorId === "string" ? body.actorId : null,
     });
+  }
+
+  @Post(":id/read")
+  markRead(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param("id") campaignId: string,
+  ): Promise<MembershipView> {
+    return this.campaignsService.markRead(user, campaignId);
   }
 
   @Post(":id/invites")

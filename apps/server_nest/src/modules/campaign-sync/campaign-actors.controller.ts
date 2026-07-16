@@ -29,6 +29,7 @@ interface PublishActorBody {
 interface CreateActorBody {
   actorType?: unknown;
   ownerUserId?: unknown;
+  lifecycle?: unknown;
   sheet?: unknown;
 }
 
@@ -82,6 +83,7 @@ export class CampaignActorsController {
         typeof body.ownerUserId === "string" && body.ownerUserId.length > 0
           ? body.ownerUserId
           : null,
+      lifecycle: parseLifecycle(body.lifecycle),
       sheet: parseSheet(body.sheet),
     });
   }
@@ -192,6 +194,12 @@ function parseActorType(value: unknown): CampaignActorType {
     return value;
   }
   throw new BadRequestException("actorType must be one of player|npc|unclaimed|companion");
+}
+
+function parseLifecycle(value: unknown): "persistent" | "temporary" {
+  if (value === undefined || value === "persistent") return "persistent";
+  if (value === "temporary") return "temporary";
+  throw new BadRequestException("lifecycle must be persistent or temporary");
 }
 
 function parseBaseRevision(value: unknown): number {

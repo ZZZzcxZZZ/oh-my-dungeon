@@ -172,6 +172,7 @@ export class CampaignActorsService {
           sourceCharacterId: null,
           actorType: input.actorType,
           status: "active",
+          lifecycle: input.lifecycle ?? "persistent",
           sheetJson: input.sheet as unknown as Prisma.InputJsonValue,
           revision,
           updatedBy: actor.userId,
@@ -530,6 +531,7 @@ interface ActorRow {
   sourceCharacterId: string | null;
   actorType: string;
   status: string;
+  lifecycle?: string;
   sheetJson: unknown;
   revision: number;
   updatedBy: string;
@@ -545,6 +547,7 @@ function toActorSummary(row: ActorRow): CampaignActorSummary {
     sourceCharacterId: row.sourceCharacterId,
     actorType: row.actorType,
     status: row.status,
+    lifecycle: row.lifecycle === "temporary" ? "temporary" : "persistent",
     sheet: (row.sheetJson ?? {}) as Record<string, unknown>,
     revision: row.revision,
     updatedBy: row.updatedBy,

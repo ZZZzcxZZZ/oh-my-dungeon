@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -27,6 +28,7 @@ export class VaultService {
     deviceId: string,
     operations: VaultPushOperation[],
   ): Promise<VaultPushResult> {
+    await this.assertDeviceCanSync(userId, deviceId);
     const applied: string[] = [];
     const skipped: string[] = [];
     const conflicts: VaultConflict[] = [];
@@ -40,11 +42,17 @@ export class VaultService {
         }
         seenOperationIds.add(op.operationId);
 
-        await tx.vaultOperation.upsert({
-          where: { operationId: op.operationId },
-          create: { operationId: op.operationId, userId },
-          update: {},
-        });
+        try {
+          await tx.vaultOperation.create({
+            data: { operationId: op.operationId, userId },
+          });
+        } catch (error) {
+          if (isPrismaUniqueViolation(error)) {
+            skipped.push(op.operationId);
+            continue;
+          }
+          throw error;
+        }
 
         const existing = await tx.vaultEntity.findUnique({
           where: {
@@ -72,51 +80,64 @@ export class VaultService {
             entityId: op.entityId,
           },
         };
+        const entityWhere = {
+          userId,
+          entityType: op.entityType,
+          entityId: op.entityId,
+        };
         const payloadJson = op.payload as Prisma.InputJsonValue;
 
-        try {
-          if (op.operation === "delete") {
-            await tx.vaultEntity.upsert({
+        const deletedAt = op.operation === "delete" ? new Date() : null;
+        if (existing) {
+          // The prior read is only for the fast conflict path. The revision is
+          // repeated in the write predicate so another device cannot slip a
+          // write between this read and the mutation.
+          const result = await tx.vaultEntity.updateMany({
+            where: {
+              ...entityWhere,
+              revision: op.baseRevision,
+            },
+            data: {
+              payload: payloadJson,
+              revision: nextRevision,
+              deletedAt,
+            },
+          });
+          if (result.count !== 1) {
+            const current = await tx.vaultEntity.findUnique({
               where: compoundWhere,
-              create: {
-                userId,
-                entityType: op.entityType,
-                entityId: op.entityId,
-                payload: payloadJson,
-                revision: nextRevision,
-                deletedAt: new Date(),
-              },
-              update: {
-                payload: payloadJson,
-                revision: nextRevision,
-                deletedAt: new Date(),
-              },
             });
-          } else {
-            await tx.vaultEntity.upsert({
-              where: compoundWhere,
-              create: {
-                userId,
-                entityType: op.entityType,
-                entityId: op.entityId,
-                payload: payloadJson,
-                revision: nextRevision,
-              },
-              update: {
-                payload: payloadJson,
-                revision: nextRevision,
-              },
-            });
-          }
-        } catch (error) {
-          if (isPrismaUniqueViolation(error)) {
             conflicts.push({
               entityId: op.entityId,
-              currentRevision: existing?.revision ?? 0,
+              currentRevision: current?.revision ?? 0,
             });
             continue;
           }
-          throw error;
+        } else {
+          try {
+            await tx.vaultEntity.create({
+              data: {
+                userId,
+                entityType: op.entityType,
+                entityId: op.entityId,
+                payload: payloadJson,
+                revision: nextRevision,
+                deletedAt,
+              },
+            });
+          } catch (error) {
+            if (isPrismaUniqueViolation(error)) {
+              const current = await tx.vaultEntity.findUnique({
+                where: compoundWhere,
+              });
+              conflicts.push({
+                entityId: op.entityId,
+                currentRevision: current?.revision ?? 0,
+              });
+              continue;
+            }
+            throw error;
+          }
         }
 
         await tx.vaultChange.createMany({
@@ -155,6 +176,7 @@ export class VaultService {
     deviceId: string,
     cursor: string,
   ): Promise<VaultChangePage> {
+    await this.assertDeviceCanSync(userId, deviceId);
     const cursorBigInt = BigInt(cursor);
     const rows = await this.prismaService.vaultChange.findMany({
       where: { userId, cursor: { gt: cursorBigInt } },
@@ -231,9 +253,21 @@ export class VaultService {
     }
 
     await this.prismaService.vaultDevice.update({
-      where: { deviceId: targetDeviceId } as unknown as Prisma.VaultDeviceWhereUniqueInput,
+      where: { userId_deviceId: { userId, deviceId: targetDeviceId } },
       data: { revokedAt: new Date() },
     });
+  }
+
+  private async assertDeviceCanSync(
+    userId: string,
+    deviceId: string,
+  ): Promise<void> {
+    const device = await this.prismaService.vaultDevice.findUnique({
+      where: { userId_deviceId: { userId, deviceId } },
+    });
+    if (device?.revokedAt != null) {
+      throw new ForbiddenException("This device has been revoked");
+    }
   }
 }
 

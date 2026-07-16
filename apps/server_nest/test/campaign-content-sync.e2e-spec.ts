@@ -64,6 +64,7 @@ describe("campaign content sync endpoints", () => {
       findUnique: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       delete: jest.fn(),
       count: jest.fn(),
     },
@@ -180,6 +181,7 @@ describe("campaign content sync endpoints", () => {
     prismaService.campaignContentEntry.findUnique.mockResolvedValue(null);
     prismaService.campaignContentEntry.findMany.mockResolvedValue([]);
     prismaService.campaignContentEntry.update.mockResolvedValue({});
+    prismaService.campaignContentEntry.updateMany.mockResolvedValue({ count: 1 });
     prismaService.campaignContentEntry.delete.mockResolvedValue({});
     prismaService.campaignContentEntry.count.mockResolvedValue(0);
     prismaService.campaignChange.create.mockImplementation(async (args: any) => ({
@@ -315,6 +317,52 @@ describe("campaign content sync endpoints", () => {
           entry: { body: [{ type: "paragraph", text: "x" }] },
         })
         .expect(409);
+    });
+
+    it("restores a soft-deleted entry when its slug is created again", async () => {
+      const token = await loginAs(storedDm);
+      const deleted = {
+        id: "entry-deleted",
+        campaignId: "camp-1",
+        type: "location",
+        slug: "moon-harbor",
+        name: "Old harbor",
+        entryJson: { body: [] },
+        revision: 2,
+        createdBy: "dm-1",
+        updatedBy: "dm-1",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: new Date(),
+      };
+      const restored = {
+        ...deleted,
+        name: "Moon Harbor",
+        entryJson: { body: [{ type: "paragraph", text: "Restored" }] },
+        revision: 3,
+        deletedAt: null,
+      };
+      prismaService.campaignContentEntry.findUnique.mockResolvedValueOnce(deleted);
+      prismaService.campaignContentEntry.update.mockResolvedValueOnce(restored);
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/content/entries")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          type: "location",
+          slug: "moon-harbor",
+          name: "Moon Harbor",
+          entry: { body: [{ type: "paragraph", text: "Restored" }] },
+        })
+        .expect(201);
+
+      expect(prismaService.campaignContentEntry.create).not.toHaveBeenCalled();
+      expect(prismaService.campaignContentEntry.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "entry-deleted" },
+          data: expect.objectContaining({ deletedAt: null, revision: 3 }),
+        }),
+      );
     });
 
     it("returns 400 with JSON path on invalid content block type", async () => {
@@ -495,7 +543,7 @@ describe("campaign content sync endpoints", () => {
         updatedAt: new Date("2026-07-14T01:00:00.000Z"),
       };
       prismaService.campaignContentEntry.findUnique.mockResolvedValueOnce(existing);
-      prismaService.campaignContentEntry.update.mockResolvedValueOnce(updated);
+      prismaService.campaignContentEntry.updateMany.mockResolvedValueOnce({ count: 1 });
 
       const res = await request(app.getHttpServer())
         .put("/api/campaigns/camp-1/content/entries/entry-1")
@@ -508,6 +556,29 @@ describe("campaign content sync endpoints", () => {
 
       expect(res.body.revision).toBe(2);
       expect(prismaService.campaignChange.create).toHaveBeenCalled();
+    });
+
+    it("returns 409 when a concurrent update wins after the initial read", async () => {
+      const token = await loginAs(storedDm);
+      const existing = {
+        id: "entry-1", campaignId: "camp-1", type: "location", slug: "moon-harbor",
+        name: "Moon Harbor", entryJson: {}, revision: 1, createdBy: "dm-1",
+        updatedBy: "dm-1", createdAt: new Date(), updatedAt: new Date(), deletedAt: null,
+      };
+      const current = { ...existing, revision: 2, updatedBy: "player-1" };
+      prismaService.campaignContentEntry.findUnique
+        .mockResolvedValueOnce(existing)
+        .mockResolvedValueOnce(current);
+      prismaService.campaignContentEntry.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      const res = await request(app.getHttpServer())
+        .put("/api/campaigns/camp-1/content/entries/entry-1")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ baseRevision: 1, entry: { body: [] } })
+        .expect(409);
+
+      expect(res.body.current.revision).toBe(2);
+      expect(prismaService.campaignChange.create).not.toHaveBeenCalled();
     });
 
     it("returns 409 on stale revision", async () => {
@@ -561,7 +632,7 @@ describe("campaign content sync endpoints", () => {
         deletedAt: new Date("2026-07-14T02:00:00.000Z"),
       };
       prismaService.campaignContentEntry.findUnique.mockResolvedValueOnce(existing);
-      prismaService.campaignContentEntry.update.mockResolvedValueOnce(tombstoned);
+      prismaService.campaignContentEntry.updateMany.mockResolvedValueOnce({ count: 1 });
 
       const res = await request(app.getHttpServer())
         .delete("/api/campaigns/camp-1/content/entries/entry-1")
@@ -569,7 +640,7 @@ describe("campaign content sync endpoints", () => {
         .expect(200);
 
       expect(res.body.deletedAt).not.toBeNull();
-      const updateArgs = prismaService.campaignContentEntry.update.mock.calls[0][0];
+      const updateArgs = prismaService.campaignContentEntry.updateMany.mock.calls[0][0];
       expect(updateArgs.data.deletedAt).toBeInstanceOf(Date);
       expect(prismaService.campaignChange.create).toHaveBeenCalled();
       const changeArgs = prismaService.campaignChange.create.mock.calls[0][0];

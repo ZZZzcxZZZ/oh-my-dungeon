@@ -7,6 +7,7 @@ import { CharactersModule } from './modules/characters/characters.module';
 import { CheckRequestsModule } from './modules/check-requests/check-requests.module';
 import { EncountersModule } from './modules/encounters/encounters.module';
 import { HealthModule } from './modules/health/health.module';
+import { MediaModule } from './modules/media/media.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { RoomsModule } from './modules/rooms/rooms.module';
 import { ServerInfoModule } from './modules/server-info/server-info.module';
@@ -23,6 +24,7 @@ import { PrismaModule } from './prisma/prisma.module';
     }),
     PrismaModule,
     HealthModule,
+    MediaModule,
     RoomsModule,
     ServerInfoModule,
     AuthModule,

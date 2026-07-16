@@ -141,6 +141,36 @@ export class CampaignContentService {
       });
     }
 
+    if (existing?.deletedAt) {
+      const revision = existing.revision + 1;
+      const { row: restored, cursor } = await this.prismaService.$transaction(
+        async (tx) => {
+          const row = await tx.campaignContentEntry.update({
+            where: { id: existing.id },
+            data: {
+              type: input.type,
+              name: input.name,
+              entryJson: input.entry as unknown as Prisma.InputJsonValue,
+              revision,
+              updatedBy: actor.userId,
+              deletedAt: null,
+            },
+          });
+          const change = await this.changeService.recordInTransaction(
+            tx,
+            campaignId,
+            "content",
+            row.id,
+            "upsert",
+            revision,
+          );
+          return { row, cursor: change.cursor };
+        },
+      );
+      this.broadcastChange(campaignId, "content", cursor);
+      return toEntrySummary(restored);
+    }
+
     const revision = 1;
     const { row: created, cursor } = await this.prismaService.$transaction(async (tx) => {
       const row = await tx.campaignContentEntry.create({
@@ -211,14 +241,26 @@ export class CampaignContentService {
 
     const nextRevision = row.revision + 1;
     const { row: updated, cursor } = await this.prismaService.$transaction(async (tx) => {
-      const result = await tx.campaignContentEntry.update({
-        where: { id: entryId },
+      const result = await tx.campaignContentEntry.updateMany({
+        where: {
+          id: entryId,
+          campaignId,
+          revision: input.baseRevision,
+          deletedAt: null,
+        },
         data: {
           entryJson: input.entry as unknown as Prisma.InputJsonValue,
           revision: nextRevision,
           updatedBy: actor.userId,
         },
       });
+      if (result.count !== 1) {
+        const current = await tx.campaignContentEntry.findUnique({
+          where: { id: entryId },
+        });
+        if (current) throw conflict(current);
+        throw new NotFoundException("Campaign content entry not found");
+      }
       const change = await this.changeService.recordInTransaction(
         tx,
         campaignId,
@@ -227,7 +269,16 @@ export class CampaignContentService {
         "upsert",
         nextRevision,
       );
-      return { row: result, cursor: change.cursor };
+      return {
+        row: {
+          ...row,
+          entryJson: input.entry,
+          revision: nextRevision,
+          updatedBy: actor.userId,
+          updatedAt: new Date(),
+        },
+        cursor: change.cursor,
+      };
     });
 
     this.broadcastChange(campaignId, "content", cursor);
@@ -246,14 +297,26 @@ export class CampaignContentService {
     const nextRevision = row.revision + 1;
     const now = new Date();
     const { row: updated, cursor } = await this.prismaService.$transaction(async (tx) => {
-      const result = await tx.campaignContentEntry.update({
-        where: { id: entryId },
+      const result = await tx.campaignContentEntry.updateMany({
+        where: {
+          id: entryId,
+          campaignId,
+          revision: row.revision,
+          deletedAt: null,
+        },
         data: {
           deletedAt: now,
           revision: nextRevision,
           updatedBy: actor.userId,
         },
       });
+      if (result.count !== 1) {
+        const current = await tx.campaignContentEntry.findUnique({
+          where: { id: entryId },
+        });
+        if (current) throw conflict(current);
+        throw new NotFoundException("Campaign content entry not found");
+      }
       const change = await this.changeService.recordInTransaction(
         tx,
         campaignId,
@@ -262,7 +325,16 @@ export class CampaignContentService {
         "delete",
         nextRevision,
       );
-      return { row: result, cursor: change.cursor };
+      return {
+        row: {
+          ...row,
+          deletedAt: now,
+          revision: nextRevision,
+          updatedBy: actor.userId,
+          updatedAt: now,
+        },
+        cursor: change.cursor,
+      };
     });
 
     this.broadcastChange(campaignId, "content", cursor);

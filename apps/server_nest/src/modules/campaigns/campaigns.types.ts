@@ -8,6 +8,7 @@ export interface CampaignView {
   createdAt: string;
   updatedAt: string;
   lastMessage: CampaignChatMessageView | null;
+  unreadCount: number;
   memberPreview: CampaignMemberPreview[];
 }
 

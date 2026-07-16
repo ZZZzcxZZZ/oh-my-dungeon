@@ -27,6 +27,7 @@ export interface CampaignActorSummary {
   sourceCharacterId: string | null;
   actorType: string;
   status: string;
+  lifecycle: "persistent" | "temporary";
   sheet: Record<string, unknown>;
   revision: number;
   updatedBy: string;
@@ -98,6 +99,7 @@ export interface PublishActorInput {
 export interface CreateActorInput {
   actorType: CampaignActorType;
   ownerUserId?: string | null;
+  lifecycle?: "persistent" | "temporary";
   sheet: Record<string, unknown>;
 }
 

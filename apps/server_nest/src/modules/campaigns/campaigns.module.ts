@@ -5,11 +5,13 @@ import { RealtimeModule } from '../realtime/realtime.module';
 import { CampaignsController } from './campaigns.controller';
 import { CampaignsService } from './campaigns.service';
 import { CampaignPolicy } from './policies/campaign.policy';
+import { CampaignArchivesService } from './campaign-archives.service';
+import { CampaignArchivesController } from './campaign-archives.controller';
 
 @Module({
   imports: [PrismaModule, AuthModule, RealtimeModule],
-  controllers: [CampaignsController],
-  providers: [CampaignsService, CampaignPolicy],
+  controllers: [CampaignsController, CampaignArchivesController],
+  providers: [CampaignsService, CampaignPolicy, CampaignArchivesService],
   exports: [CampaignsService, CampaignPolicy]
 })
 export class CampaignsModule {}

@@ -39,6 +39,8 @@ describe("vault endpoints", () => {
     },
     vaultEntity: {
       upsert: jest.fn(),
+      create: jest.fn(),
+      updateMany: jest.fn(),
       findUnique: jest.fn(),
       findMany: jest.fn(),
       delete: jest.fn(),
@@ -51,6 +53,7 @@ describe("vault endpoints", () => {
     },
     vaultOperation: {
       upsert: jest.fn(),
+      create: jest.fn(),
     },
     vaultDevice: {
       upsert: jest.fn(),
@@ -117,6 +120,8 @@ describe("vault endpoints", () => {
     prismaService.campaignMember.findUnique.mockResolvedValue(null);
     prismaService.journalEntry.create.mockResolvedValue({});
     prismaService.vaultEntity.upsert.mockResolvedValue({});
+    prismaService.vaultEntity.create.mockResolvedValue({});
+    prismaService.vaultEntity.updateMany.mockResolvedValue({ count: 1 });
     prismaService.vaultEntity.findUnique.mockResolvedValue(null);
     prismaService.vaultEntity.findMany.mockResolvedValue([]);
     prismaService.vaultEntity.delete.mockResolvedValue({});
@@ -125,6 +130,7 @@ describe("vault endpoints", () => {
     prismaService.vaultChange.count.mockResolvedValue(0);
     prismaService.vaultChange.deleteMany.mockResolvedValue({ count: 0 });
     prismaService.vaultOperation.upsert.mockResolvedValue({});
+    prismaService.vaultOperation.create.mockResolvedValue({});
     prismaService.vaultDevice.upsert.mockResolvedValue({});
     prismaService.vaultDevice.findUnique.mockResolvedValue(null);
     prismaService.vaultDevice.findMany.mockResolvedValue([]);
@@ -144,7 +150,7 @@ describe("vault endpoints", () => {
   it("pushes an operation once and returns changes after the cursor", async () => {
     const token = await login();
     prismaService.vaultOperation.upsert.mockResolvedValue({});
-    prismaService.vaultEntity.upsert.mockResolvedValue({
+    prismaService.vaultEntity.create.mockResolvedValue({
       id: "ve-1",
       userId: "user-1",
       entityType: "character",
@@ -174,7 +180,7 @@ describe("vault endpoints", () => {
       .send({ operations: [operation, operation] })
       .expect(200);
 
-    expect(prismaService.vaultOperation.upsert).toHaveBeenCalledTimes(1);
+    expect(prismaService.vaultOperation.create).toHaveBeenCalledTimes(1);
 
     prismaService.vaultChange.findMany.mockResolvedValue([
       {
@@ -209,6 +215,67 @@ describe("vault endpoints", () => {
       .expect(400);
   });
 
+  it("treats a retried operation id as already applied", async () => {
+    const token = await login();
+    prismaService.vaultOperation.create
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce({ code: "P2002" });
+    prismaService.vaultEntity.create.mockResolvedValue({});
+
+    const operation = {
+      operationId: "retryable-operation",
+      entityType: "character",
+      entityId: "character-1",
+      baseRevision: 0,
+      operation: "upsert",
+      payload: { name: "Arannis" },
+    };
+    await request(app.getHttpServer())
+      .post("/api/vault/push")
+      .set("Authorization", `Bearer ${token}`)
+      .set("X-Device-Id", "device-1")
+      .send({ operations: [operation] })
+      .expect(200);
+
+    const retry = await request(app.getHttpServer())
+      .post("/api/vault/push")
+      .set("Authorization", `Bearer ${token}`)
+      .set("X-Device-Id", "device-1")
+      .send({ operations: [operation] })
+      .expect(200);
+
+    expect(retry.body.applied).toEqual([]);
+    expect(retry.body.skipped).toEqual(["retryable-operation"]);
+    expect(prismaService.vaultEntity.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects push and pull from a revoked device", async () => {
+    const token = await login();
+    prismaService.vaultDevice.findUnique.mockResolvedValue({
+      id: "dev-1",
+      userId: "user-1",
+      deviceId: "revoked-device",
+      name: "Old laptop",
+      platform: "web",
+      lastCursor: BigInt(0),
+      lastSeenAt: new Date(),
+      revokedAt: new Date(),
+    });
+
+    await request(app.getHttpServer())
+      .get("/api/vault/changes?cursor=0")
+      .set("Authorization", `Bearer ${token}`)
+      .set("X-Device-Id", "revoked-device")
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .post("/api/vault/push")
+      .set("Authorization", `Bearer ${token}`)
+      .set("X-Device-Id", "revoked-device")
+      .send({ operations: [] })
+      .expect(403);
+  });
+
   it("isolates entities between users", async () => {
     const token = await login();
     prismaService.vaultChange.findMany.mockResolvedValue([]);
@@ -230,8 +297,10 @@ describe("vault endpoints", () => {
 
   it("returns 409 on revision conflict", async () => {
     const token = await login();
-    prismaService.vaultOperation.upsert.mockResolvedValue({});
-    prismaService.vaultEntity.upsert.mockImplementation(() => {
+    prismaService.vaultEntity.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ revision: 4 });
+    prismaService.vaultEntity.create.mockImplementation(() => {
       throw { code: "P2002" };
     });
     prismaService.vaultDevice.upsert.mockResolvedValue({});
@@ -250,6 +319,36 @@ describe("vault endpoints", () => {
       .set("X-Device-Id", "device-1")
       .send({ operations: [operation] })
       .expect(409);
+  });
+
+  it("returns the newer revision when a concurrent vault update wins", async () => {
+    const token = await login();
+    const current = {
+      id: "ve-1", userId: "user-1", entityType: "character",
+      entityId: "character-1", payload: { name: "Arannis" }, revision: 2,
+      deletedAt: null, updatedAt: new Date(),
+    };
+    prismaService.vaultEntity.findUnique
+      .mockResolvedValueOnce({ ...current, revision: 1 })
+      .mockResolvedValueOnce(current);
+    prismaService.vaultEntity.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    const response = await request(app.getHttpServer())
+      .post("/api/vault/push")
+      .set("Authorization", `Bearer ${token}`)
+      .set("X-Device-Id", "device-1")
+      .send({
+        operations: [{
+          operationId: "op-race", entityType: "character", entityId: "character-1",
+          baseRevision: 1, operation: "upsert", payload: { name: "Updated" },
+        }],
+      })
+      .expect(409);
+
+    expect(response.body.conflicts).toEqual([
+      expect.objectContaining({ entityId: "character-1", currentRevision: 2 }),
+    ]);
+    expect(prismaService.vaultChange.createMany).not.toHaveBeenCalled();
   });
 
   it("lists and revokes devices", async () => {
@@ -301,7 +400,7 @@ describe("vault endpoints", () => {
       .expect(204);
     expect(prismaService.vaultDevice.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { deviceId: "device-2" },
+        where: { userId_deviceId: { userId: "user-1", deviceId: "device-2" } },
         data: expect.objectContaining({ revokedAt: expect.any(Date) }),
       }),
     );

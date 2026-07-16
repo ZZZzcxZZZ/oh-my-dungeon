@@ -91,8 +91,19 @@ export class CampaignsService {
       },
     });
 
-    return memberships.map((membership: any) =>
-      toCampaignView(membership.campaign),
+    return Promise.all(
+      memberships.map(async (membership: any) => {
+        const unreadCount = await this.prismaService.campaignChatMessage.count({
+          where: {
+            campaignId: membership.campaignId,
+            senderId: { not: actor.userId },
+            ...(membership.lastReadAt
+              ? { createdAt: { gt: membership.lastReadAt } }
+              : {}),
+          },
+        });
+        return toCampaignView(membership.campaign, unreadCount);
+      }),
     );
   }
 
@@ -242,6 +253,25 @@ export class CampaignsService {
     return this.saveSpeaker(membership.id, actorId, input.speakerMode);
   }
 
+  async markRead(
+    actor: AccessTokenPayload,
+    campaignId: string,
+  ): Promise<MembershipView> {
+    const campaign = await this.fetchCampaignContext(campaignId);
+    this.policy.canViewCampaign(actor, campaign.context);
+    const membership = campaign.members.find(
+      (member: any) => member.userId === actor.userId,
+    );
+    if (!membership) {
+      throw new ForbiddenException("Campaign membership not found");
+    }
+    const updated = await this.prismaService.campaignMember.update({
+      where: { id: membership.id },
+      data: { lastReadAt: new Date() },
+    });
+    return toMembershipView(updated);
+  }
+
   private async saveSpeaker(
     membershipId: string,
     activeSpeakerActorId: string | null,
@@ -257,12 +287,19 @@ export class CampaignsService {
   async listMessages(
     actor: AccessTokenPayload,
     campaignId: string,
+    query?: string,
   ): Promise<CampaignChatMessageView[]> {
     const campaign = await this.fetchCampaignContext(campaignId);
     this.policy.canViewCampaign(actor, campaign.context);
 
+    const normalizedQuery = query?.trim();
     const messages = await this.prismaService.campaignChatMessage.findMany({
-      where: { campaignId },
+      where: {
+        campaignId,
+        ...(normalizedQuery
+          ? { content: { contains: normalizedQuery, mode: "insensitive" } }
+          : {}),
+      },
       orderBy: { createdAt: "desc" },
       take: CAMPAIGN_MESSAGE_LIMIT,
     });
@@ -562,7 +599,7 @@ export class CampaignsService {
   }
 }
 
-function toCampaignView(campaign: any): CampaignView {
+function toCampaignView(campaign: any, unreadCount = 0): CampaignView {
   const members: any[] = campaign.members ?? [];
   const chatMessages: any[] = campaign.chatMessages ?? [];
   const lastMessageRaw =
@@ -597,6 +634,7 @@ function toCampaignView(campaign: any): CampaignView {
     lastMessage: lastMessageRaw
       ? toCampaignChatMessageView(lastMessageRaw)
       : null,
+    unreadCount,
     memberPreview,
   };
 }

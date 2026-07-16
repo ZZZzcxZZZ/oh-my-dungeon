@@ -51,10 +51,17 @@ describe("campaigns endpoints", () => {
     campaignChatMessage: {
       create: jest.fn(),
       findMany: jest.fn(),
+      count: jest.fn(),
     },
     campaignActor: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
+    },
+    campaignArchiveEntry: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      update: jest.fn(),
     },
     $transaction: jest.fn(),
     $queryRaw: jest.fn().mockResolvedValue([{ health_check: 1 }]),
@@ -149,6 +156,25 @@ describe("campaigns endpoints", () => {
     prismaService.campaignInvite.update.mockResolvedValue({});
     prismaService.campaignChatMessage.create.mockResolvedValue({});
     prismaService.campaignChatMessage.findMany.mockResolvedValue([]);
+    prismaService.campaignChatMessage.count.mockResolvedValue(0);
+    prismaService.campaignArchiveEntry.create.mockResolvedValue({
+      id: "archive-1",
+      campaignId: "camp-1",
+      kind: "clue",
+      title: "The silver key",
+      summary: "Found below the chapel.",
+      payload: {},
+      visibility: "members",
+      pinned: false,
+      createdBy: "user-1",
+      updatedBy: "user-1",
+      createdAt: "2026-07-16T00:00:00.000Z",
+      updatedAt: "2026-07-16T00:00:00.000Z",
+      deletedAt: null,
+    });
+    prismaService.campaignArchiveEntry.findMany.mockResolvedValue([]);
+    prismaService.campaignArchiveEntry.findFirst.mockResolvedValue(null);
+    prismaService.campaignArchiveEntry.update.mockResolvedValue({});
   });
 
   async function loginAsDm(): Promise<string> {
@@ -257,6 +283,7 @@ describe("campaigns endpoints", () => {
           expect(body[0].id).toBe("camp-1");
           expect(body[0].name).toBe("Curse of Strahd");
           expect(body[0].lastMessage).toBeNull();
+          expect(body[0].unreadCount).toBe(0);
           expect(body[0].memberPreview).toEqual([
             {
               userId: "user-1",
@@ -730,6 +757,25 @@ describe("campaigns endpoints", () => {
             createdAt: "2026-07-09T00:00:00.000Z",
           });
         });
+    });
+
+    it("searches campaign messages on the server for a campaign member", async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce({
+        id: "camp-1", ownerId: "user-1", members: [{ userId: "user-1", role: "owner" }],
+      });
+      prismaService.campaignChatMessage.findMany.mockResolvedValueOnce([]);
+
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/messages?query=chapel")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200);
+
+      expect(prismaService.campaignChatMessage.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { campaignId: "camp-1", content: { contains: "chapel", mode: "insensitive" } },
+        }),
+      );
     });
 
     it("creates action messages directly under a campaign", async () => {
@@ -1284,6 +1330,208 @@ describe("campaigns endpoints", () => {
           expect(body.speakerMode).toBe("narrator");
           expect(body.activeSpeakerActorId).toBeNull();
         });
+    });
+
+    it("marks a campaign read using the authenticated member, not a client timestamp", async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce({
+        id: "camp-1",
+        name: "Curse of Strahd",
+        description: "",
+        system: "dnd5e",
+        ownerId: "user-1",
+        status: "active",
+        createdAt: "2026-07-09T00:00:00.000Z",
+        updatedAt: "2026-07-09T00:00:00.000Z",
+        members: [{ id: "member-1", userId: "user-1", role: "owner", displayName: "ranger" }],
+      });
+      prismaService.campaignMember.update.mockResolvedValueOnce({
+        id: "member-1",
+        campaignId: "camp-1",
+        userId: "user-1",
+        role: "owner",
+        displayName: "ranger",
+        lastReadAt: "2026-07-16T00:00:00.000Z",
+      });
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/read")
+        .set("Authorization", `Bearer ${token}`)
+        .send({})
+        .expect(201);
+
+      expect(prismaService.campaignMember.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "member-1" },
+          data: { lastReadAt: expect.any(Date) },
+        }),
+      );
+    });
+  });
+
+  describe("campaign archive endpoints", () => {
+    const campaignWithOwnerAndPlayer = {
+      id: "camp-1",
+      name: "Curse of Strahd",
+      description: "",
+      system: "dnd5e",
+      ownerId: "user-1",
+      status: "active",
+      createdAt: "2026-07-09T00:00:00.000Z",
+      updatedAt: "2026-07-09T00:00:00.000Z",
+      members: [
+        { userId: "user-1", role: "owner" },
+        { userId: "user-2", role: "player" },
+      ],
+    };
+
+    it("lets campaign members list shared archive entries", async () => {
+      const token = await loginAs(storedPlayerUser);
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwnerAndPlayer,
+      );
+      prismaService.campaignArchiveEntry.findMany.mockResolvedValueOnce([
+        {
+          id: "archive-1",
+          campaignId: "camp-1",
+          kind: "clue",
+          title: "The silver key",
+          summary: "Found below the chapel.",
+          payload: {},
+          pinned: false,
+          updatedAt: "2026-07-16T00:00:00.000Z",
+        },
+      ]);
+
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/archives")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body).toHaveLength(1);
+          expect(body[0]).toMatchObject({
+            id: "archive-1",
+            kind: "clue",
+            title: "The silver key",
+          });
+        });
+
+      expect(prismaService.campaignArchiveEntry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ campaignId: "camp-1", deletedAt: null }),
+        }),
+      );
+    });
+
+    it("lets a DM create a shared archive entry", async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwnerAndPlayer,
+      );
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/archives")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          kind: "clue",
+          title: "  The silver key  ",
+          summary: "Found below the chapel.",
+          payload: { location: "chapel" },
+        })
+        .expect(201)
+        .expect(({ body }) => {
+          expect(body.title).toBe("The silver key");
+          expect(body.kind).toBe("clue");
+        });
+
+      expect(prismaService.campaignArchiveEntry.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            campaignId: "camp-1",
+            title: "The silver key",
+            createdBy: "user-1",
+          }),
+        }),
+      );
+    });
+
+    it("rejects player archive creation and unknown archive kinds", async () => {
+      const playerToken = await loginAs(storedPlayerUser);
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwnerAndPlayer,
+      );
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/archives")
+        .set("Authorization", `Bearer ${playerToken}`)
+        .send({ kind: "clue", title: "A private note" })
+        .expect(403);
+
+      const dmToken = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwnerAndPlayer,
+      );
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/archives")
+        .set("Authorization", `Bearer ${dmToken}`)
+        .send({ kind: "map", title: "Not a supported category" })
+        .expect(400);
+    });
+
+    it("lets a DM edit and archive a shared entry without deleting its history", async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique
+        .mockResolvedValueOnce(campaignWithOwnerAndPlayer)
+        .mockResolvedValueOnce(campaignWithOwnerAndPlayer);
+      prismaService.campaignArchiveEntry.findFirst
+        .mockResolvedValueOnce({
+          id: "archive-1",
+          campaignId: "camp-1",
+          kind: "clue",
+          title: "The silver key",
+          deletedAt: null,
+        })
+        .mockResolvedValueOnce({
+          id: "archive-1",
+          campaignId: "camp-1",
+          kind: "clue",
+          title: "The silver key (identified)",
+          deletedAt: null,
+        });
+      prismaService.campaignArchiveEntry.update
+        .mockResolvedValueOnce({
+          id: "archive-1",
+          campaignId: "camp-1",
+          kind: "clue",
+          title: "The silver key (identified)",
+          summary: "It opens the crypt.",
+          payload: {},
+          pinned: true,
+          updatedAt: "2026-07-16T01:00:00.000Z",
+        })
+        .mockResolvedValueOnce({ id: "archive-1", deletedAt: new Date() });
+
+      await request(app.getHttpServer())
+        .put("/api/campaigns/camp-1/archives/archive-1")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          title: "The silver key (identified)",
+          summary: "It opens the crypt.",
+          pinned: true,
+        })
+        .expect(200)
+        .expect(({ body }) => expect(body.pinned).toBe(true));
+
+      await request(app.getHttpServer())
+        .delete("/api/campaigns/camp-1/archives/archive-1")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200);
+
+      expect(prismaService.campaignArchiveEntry.update).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          where: { id: "archive-1" },
+          data: expect.objectContaining({ deletedAt: expect.any(Date) }),
+        }),
+      );
     });
   });
 

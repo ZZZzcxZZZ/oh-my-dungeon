@@ -294,6 +294,41 @@ describe("campaign actors endpoints", () => {
       expect(res.body.ownerUserId).toBeNull();
     });
 
+    it("keeps an explicitly temporary NPC distinct from persistent actors", async () => {
+      const token = await loginAs(storedDm);
+      prismaService.campaignActor.create.mockResolvedValueOnce({
+        id: "actor-temp",
+        campaignId: "camp-1",
+        ownerUserId: null,
+        sourceCharacterId: null,
+        actorType: "npc",
+        status: "active",
+        lifecycle: "temporary",
+        sheetJson: { name: "Street informant" },
+        revision: 1,
+        updatedBy: "dm-1",
+        createdAt: new Date("2026-07-14T00:00:00.000Z"),
+        updatedAt: new Date("2026-07-14T00:00:00.000Z"),
+      });
+
+      const res = await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/actors")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          actorType: "npc",
+          lifecycle: "temporary",
+          sheet: { name: "Street informant" },
+        })
+        .expect(201);
+
+      expect(res.body.lifecycle).toBe("temporary");
+      expect(prismaService.campaignActor.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ lifecycle: "temporary" }),
+        }),
+      );
+    });
+
     it("rejects a player trying to create an NPC", async () => {
       const token = await loginAs(storedPlayer);
 

@@ -7,6 +7,7 @@ class CampaignActor {
     required this.sourceCharacterId,
     required this.actorType,
     required this.status,
+    this.lifecycle = 'persistent',
     required this.sheet,
     required this.revision,
     required this.updatedBy,
@@ -20,6 +21,7 @@ class CampaignActor {
   final String? sourceCharacterId;
   final String actorType;
   final String status;
+  final String lifecycle;
   final Map<String, Object?> sheet;
   final int revision;
   final String updatedBy;
@@ -60,6 +62,7 @@ class CampaignActor {
       sourceCharacterId: json['sourceCharacterId'] as String?,
       actorType: actorType,
       status: status,
+      lifecycle: json['lifecycle'] as String? ?? 'persistent',
       sheet: Map<String, Object?>.from(sheet),
       revision: revision.toInt(),
       updatedBy: json['updatedBy'] as String? ?? '',
@@ -75,6 +78,7 @@ class CampaignActor {
         'sourceCharacterId': sourceCharacterId,
         'actorType': actorType,
         'status': status,
+        'lifecycle': lifecycle,
         'sheet': sheet,
         'revision': revision,
         'updatedBy': updatedBy,
@@ -92,6 +96,7 @@ class CampaignActor {
         sourceCharacterId == other.sourceCharacterId &&
         actorType == other.actorType &&
         status == other.status &&
+        lifecycle == other.lifecycle &&
         _mapEquals(sheet, other.sheet) &&
         revision == other.revision &&
         updatedBy == other.updatedBy &&
@@ -107,6 +112,7 @@ class CampaignActor {
         sourceCharacterId,
         actorType,
         status,
+        lifecycle,
         revision,
         updatedBy,
         createdAt,

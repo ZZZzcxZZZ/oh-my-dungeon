@@ -4,9 +4,9 @@ import '../data/local/content_repository.dart';
 import '../domain/content_entry.dart';
 import 'content_library_controller.dart';
 import 'content_type_registry.dart';
-import 'widgets/content_block_view.dart';
 import 'widgets/content_class_feature_list.dart';
-import 'widgets/content_metadata_view.dart';
+import 'widgets/content_character_rules_view.dart';
+import 'widgets/content_entry_reader.dart';
 
 class ContentDetailPage extends StatefulWidget {
   const ContentDetailPage({
@@ -104,10 +104,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   Future<void> _saveNote() async {
     final entryKey = widget.entryKey;
     if (entryKey == null) return;
-    await widget.controller.repository.saveNote(
-      entryKey,
-      _noteController.text,
-    );
+    await widget.controller.repository.saveNote(entryKey, _noteController.text);
   }
 
   @override
@@ -133,10 +130,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                 const SizedBox(height: 12),
                 Text('选择一个条目', style: theme.textTheme.titleMedium),
                 const SizedBox(height: 4),
-                Text(
-                  '在此查看规则、关联条目与职业特性。',
-                  style: theme.textTheme.bodySmall,
-                ),
+                Text('在此查看规则、关联条目与职业特性。', style: theme.textTheme.bodySmall),
               ],
             ),
           ),
@@ -161,11 +155,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.error_outline,
-                  size: 48,
-                  color: colorScheme.outline,
-                ),
+                Icon(Icons.error_outline, size: 48, color: colorScheme.outline),
                 const SizedBox(height: 12),
                 Text('条目不存在', style: theme.textTheme.titleMedium),
               ],
@@ -185,9 +175,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
           IconButton(
             tooltip: _isFavorite ? '取消收藏' : '收藏',
             onPressed: _toggleFavorite,
-            icon: Icon(
-              _isFavorite ? Icons.bookmark : Icons.bookmark_outline,
-            ),
+            icon: Icon(_isFavorite ? Icons.bookmark : Icons.bookmark_outline),
           ),
         ],
       ),
@@ -223,13 +211,12 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
               ],
             ),
             const SizedBox(height: 16),
-            ContentMetadataView(entry: entry),
-            const SizedBox(height: 16),
-            ContentBlockView(
-              blocks: entry.body,
+            ContentEntryReader(
+              entry: entry,
               packageId: packageId,
               readAsset: widget.controller.repository.readAsset,
               onOpenEntry: widget.onOpenEntry,
+              showRules: false,
             ),
             if (entry.type == 'class')
               ContentClassFeatureList(
@@ -237,6 +224,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                 featureEntries: _classFeatures,
                 onFeatureTap: (feature) => widget.onOpenEntry(feature.id),
               ),
+            ContentCharacterRulesView(entry: entry),
             const SizedBox(height: 24),
             Text('笔记', style: theme.textTheme.titleSmall),
             const SizedBox(height: 8),

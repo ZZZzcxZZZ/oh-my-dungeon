@@ -10,7 +10,7 @@ class ContentImportPreviewDialog extends StatelessWidget {
   });
 
   final ContentImportReport report;
-  final VoidCallback onConfirm;
+  final Future<void> Function() onConfirm;
 
   @override
   Widget build(BuildContext context) {
@@ -32,8 +32,9 @@ class ContentImportPreviewDialog extends StatelessWidget {
             child: const Text('取消'),
           ),
           FilledButton(
-            onPressed: () {
-              onConfirm();
+            onPressed: () async {
+              await onConfirm();
+              if (!context.mounted) return;
               Navigator.of(context).pop();
             },
             child: const Text('确认导入'),

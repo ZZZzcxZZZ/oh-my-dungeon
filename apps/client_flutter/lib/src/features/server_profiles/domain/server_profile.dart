@@ -25,7 +25,7 @@ class ServerProfile {
       id: Uri.parse(baseUrl).host,
       name: metadata.name,
       baseUrl: baseUrl,
-      apiBaseUrl: metadata.apiBaseUrl,
+      apiBaseUrl: normalizeApiBaseUrl(metadata.apiBaseUrl),
       websocketUrl: metadata.websocketUrl,
       lastKnownVersion: metadata.version,
     );
@@ -54,7 +54,7 @@ class ServerProfile {
       id: json['id']! as String,
       name: json['name']! as String,
       baseUrl: json['baseUrl']! as String,
-      apiBaseUrl: json['apiBaseUrl']! as String,
+      apiBaseUrl: normalizeApiBaseUrl(json['apiBaseUrl']! as String),
       websocketUrl: json['websocketUrl']! as String,
       lastKnownVersion: json['lastKnownVersion']! as String,
     );
@@ -69,6 +69,13 @@ class ServerProfile {
       'websocketUrl': websocketUrl,
       'lastKnownVersion': lastKnownVersion,
     };
+  }
+
+  /// All server APIs use the stable `/api` prefix. Older previews persisted
+  /// the server origin here, so normalize that legacy shape while loading it.
+  static String normalizeApiBaseUrl(String value) {
+    final normalized = value.replaceFirst(RegExp(r'/+$'), '');
+    return normalized.endsWith('/api') ? normalized : '$normalized/api';
   }
 
   @override

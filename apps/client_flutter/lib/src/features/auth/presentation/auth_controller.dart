@@ -20,11 +20,13 @@ class AuthController extends ChangeNotifier {
   AuthUser? _user;
   StoredAuthTokens? _tokens;
   bool _loading = false;
+  bool _autoLoginEnabled = true;
   String? _error;
 
   AuthUser? get user => _user;
   bool get isLoading => _loading;
   bool get isLoggedIn => _user != null && _tokens != null;
+  bool get autoLoginEnabled => _autoLoginEnabled;
   String? get error => _error;
   String? get accessToken => _tokens?.accessToken;
 
@@ -33,6 +35,14 @@ class AuthController extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
+    _autoLoginEnabled = await tokenStore.getAutoLoginEnabled(serverProfileId);
+    if (!_autoLoginEnabled) {
+      await tokenStore.clearTokens(serverProfileId);
+      _loading = false;
+      notifyListeners();
+      return;
+    }
+
     final tokens = await tokenStore.getTokens(serverProfileId);
     if (tokens == null) {
       _loading = false;
@@ -40,17 +50,65 @@ class AuthController extends ChangeNotifier {
       return;
     }
 
+    await _restoreSession(tokens);
+    _loading = false;
+    notifyListeners();
+  }
+
+  Future<void> _restoreSession(StoredAuthTokens tokens) async {
     try {
       _user = await authClient.me(
         apiBaseUrl: apiBaseUrl,
         accessToken: tokens.accessToken,
       );
       _tokens = tokens;
+      return;
+    } on AuthApiException catch (error) {
+      if (error.statusCode != 401) {
+        _error = error.message;
+        return;
+      }
     } catch (_) {
-      await tokenStore.clearTokens(serverProfileId);
+      _error = '暂时无法连接服务器，自动登录将在下次启动时重试。';
+      return;
     }
 
-    _loading = false;
+    try {
+      final accessToken = await authClient.refresh(
+        apiBaseUrl: apiBaseUrl,
+        refreshToken: tokens.refreshToken,
+      );
+      final refreshedTokens = StoredAuthTokens(
+        accessToken: accessToken,
+        refreshToken: tokens.refreshToken,
+      );
+      final user = await authClient.me(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: accessToken,
+      );
+      _tokens = refreshedTokens;
+      _user = user;
+      await tokenStore.saveTokens(serverProfileId, refreshedTokens);
+    } on AuthApiException catch (error) {
+      if (error.statusCode == 401 || error.statusCode == 403) {
+        await tokenStore.clearTokens(serverProfileId);
+        return;
+      }
+      _error = error.message;
+    } catch (_) {
+      _error = '暂时无法连接服务器，自动登录将在下次启动时重试。';
+    }
+  }
+
+  Future<void> setAutoLoginEnabled(bool enabled) async {
+    if (_autoLoginEnabled == enabled) return;
+    _autoLoginEnabled = enabled;
+    await tokenStore.setAutoLoginEnabled(serverProfileId, enabled);
+    if (enabled && _tokens != null) {
+      await tokenStore.saveTokens(serverProfileId, _tokens!);
+    } else if (!enabled) {
+      await tokenStore.clearTokens(serverProfileId);
+    }
     notifyListeners();
   }
 
@@ -70,7 +128,11 @@ class AuthController extends ChangeNotifier {
         accessToken: session.accessToken,
         refreshToken: session.refreshToken,
       );
-      await tokenStore.saveTokens(serverProfileId, _tokens!);
+      if (_autoLoginEnabled) {
+        await tokenStore.saveTokens(serverProfileId, _tokens!);
+      } else {
+        await tokenStore.clearTokens(serverProfileId);
+      }
       notifyListeners();
     } on AuthApiException catch (e) {
       _error = e.message;

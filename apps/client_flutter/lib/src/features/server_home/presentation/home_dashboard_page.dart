@@ -4,7 +4,6 @@ import '../../auth/presentation/auth_controller.dart';
 import '../../campaigns/presentation/campaign_controller.dart';
 import '../../characters/presentation/character_controller.dart';
 import '../../client_mode/domain/client_mode.dart';
-import '../../sessions/presentation/session_controller.dart';
 import '../domain/active_server_session.dart';
 
 class HomeDashboardPage extends StatefulWidget {
@@ -14,7 +13,6 @@ class HomeDashboardPage extends StatefulWidget {
     required this.authController,
     required this.campaignController,
     required this.characterController,
-    required this.sessionController,
     required this.onNavigateToTab,
     super.key,
   });
@@ -24,7 +22,6 @@ class HomeDashboardPage extends StatefulWidget {
   final AuthController authController;
   final CampaignController campaignController;
   final CharacterController characterController;
-  final SessionController sessionController;
   final ValueChanged<int> onNavigateToTab;
 
   @override
@@ -74,7 +71,6 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
         widget.authController,
         widget.campaignController,
         widget.characterController,
-        widget.sessionController,
       ]),
       builder: (context, _) {
         return Scaffold(
@@ -150,9 +146,7 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
                   children: [
                     CircleAvatar(
                       radius: 28,
-                      child: Text(
-                        profile?.name.characters.first ?? '本',
-                      ),
+                      child: Text(profile?.name.characters.first ?? '本'),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -196,11 +190,6 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
                         value:
                             '${widget.characterController.characters.length}',
                       ),
-                      _MetricChip(
-                        icon: Icons.table_restaurant_outlined,
-                        label: '场次',
-                        value: '${widget.sessionController.sessions.length}',
-                      ),
                     ],
                   ),
                 ],
@@ -239,7 +228,6 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
   }
 
   Widget _buildSideRail(BuildContext context) {
-    final activeSession = widget.sessionController.activeSession;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -252,10 +240,8 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
         const SizedBox(height: 12),
         _ActionCard(
           icon: Icons.forum_outlined,
-          title: activeSession == null ? '战役聊天室' : activeSession.name,
-          subtitle: activeSession == null
-              ? '进入战役后可聊天、掷骰、检定和打开 DM 控场。'
-              : '继续当前跑团上下文。',
+          title: '战役聊天室',
+          subtitle: '进入战役后可聊天、掷骰、检定和打开 DM 控场。',
           onTap: () => widget.onNavigateToTab(1),
         ),
         const SizedBox(height: 12),

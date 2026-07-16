@@ -106,6 +106,7 @@ class _AuthPageState extends State<AuthPage> {
               title: Text(user.username),
               subtitle: Text(user.email),
             ),
+            _buildAutoLoginToggle(controller),
             const SizedBox(height: 24),
             FilledButton(
               onPressed: _submitting ? null : _handleLogout,
@@ -165,7 +166,9 @@ class _AuthPageState extends State<AuthPage> {
                     decoration: const InputDecoration(labelText: '密码'),
                     obscureText: true,
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 8),
+                  _buildAutoLoginToggle(controller),
+                  const SizedBox(height: 12),
                   FilledButton(
                     onPressed: _submitting ? null : _handleLogin,
                     child: const Text('登录'),
@@ -195,7 +198,9 @@ class _AuthPageState extends State<AuthPage> {
                     decoration: const InputDecoration(labelText: '密码'),
                     obscureText: true,
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 8),
+                  _buildAutoLoginToggle(controller),
+                  const SizedBox(height: 12),
                   FilledButton(
                     onPressed: _submitting ? null : _handleRegister,
                     child: const Text('注册'),
@@ -213,6 +218,16 @@ class _AuthPageState extends State<AuthPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildAutoLoginToggle(AuthController controller) {
+    return SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      title: const Text('自动登录'),
+      subtitle: const Text('下次启动时使用保存的会话自动登录'),
+      value: controller.autoLoginEnabled,
+      onChanged: _submitting ? null : controller.setAutoLoginEnabled,
     );
   }
 }

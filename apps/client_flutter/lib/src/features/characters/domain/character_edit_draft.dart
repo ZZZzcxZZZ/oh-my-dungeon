@@ -1,4 +1,5 @@
 import 'character.dart';
+import 'character_content_reference.dart';
 
 class CharacterEditDraft {
   const CharacterEditDraft({
@@ -18,6 +19,7 @@ class CharacterEditDraft {
     required this.currency,
     required this.notes,
     this.data = const {},
+    this.contentReferences = const <CharacterContentReference>[],
   });
 
   final String name;
@@ -36,6 +38,7 @@ class CharacterEditDraft {
   final Map<String, int> currency;
   final String notes;
   final Map<String, Object?> data;
+  final List<CharacterContentReference> contentReferences;
 
   static int _idCounter = 0;
 
@@ -49,6 +52,7 @@ class CharacterEditDraft {
       classSummary: classSummary,
       raceSummary: raceSummary,
       notes: notes,
+      contentReferences: contentReferences,
     ).copyWith(
       currentHp: currentHp,
       maxHp: maxHp,

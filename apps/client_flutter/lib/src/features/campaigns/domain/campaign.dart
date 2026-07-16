@@ -9,6 +9,7 @@ class Campaign {
     required this.createdAt,
     required this.updatedAt,
     this.lastMessage,
+    this.unreadCount = 0,
     this.memberPreview = const [],
   });
 
@@ -21,6 +22,7 @@ class Campaign {
   final String createdAt;
   final String updatedAt;
   final CampaignChatMessage? lastMessage;
+  final int unreadCount;
   final List<CampaignMemberPreview> memberPreview;
 
   factory Campaign.fromJson(Map<String, Object?> json) {
@@ -38,17 +40,19 @@ class Campaign {
       lastMessage: lastMessageJson is Map<String, Object?>
           ? CampaignChatMessage.fromJson(lastMessageJson)
           : null,
+      unreadCount: json['unreadCount'] as int? ?? 0,
       memberPreview: memberPreviewJson is List
           ? memberPreviewJson
-              .whereType<Map<String, Object?>>()
-              .map(CampaignMemberPreview.fromJson)
-              .toList(growable: false)
+                .whereType<Map<String, Object?>>()
+                .map(CampaignMemberPreview.fromJson)
+                .toList(growable: false)
           : const [],
     );
   }
 
   Campaign copyWith({
     CampaignChatMessage? lastMessage,
+    int? unreadCount,
     List<CampaignMemberPreview>? memberPreview,
   }) {
     return Campaign(
@@ -61,6 +65,7 @@ class Campaign {
       createdAt: createdAt,
       updatedAt: updatedAt,
       lastMessage: lastMessage ?? this.lastMessage,
+      unreadCount: unreadCount ?? this.unreadCount,
       memberPreview: memberPreview ?? this.memberPreview,
     );
   }
@@ -78,22 +83,24 @@ class Campaign {
             createdAt == other.createdAt &&
             updatedAt == other.updatedAt &&
             lastMessage == other.lastMessage &&
+            unreadCount == other.unreadCount &&
             _listEquals(memberPreview, other.memberPreview);
   }
 
   @override
   int get hashCode => Object.hash(
-        id,
-        name,
-        description,
-        system,
-        ownerId,
-        status,
-        createdAt,
-        updatedAt,
-        lastMessage,
-        Object.hashAll(memberPreview),
-      );
+    id,
+    name,
+    description,
+    system,
+    ownerId,
+    status,
+    createdAt,
+    updatedAt,
+    lastMessage,
+    unreadCount,
+    Object.hashAll(memberPreview),
+  );
 }
 
 class CampaignMemberPreview {
@@ -148,6 +155,13 @@ class CampaignChatMessage {
     required this.kind,
     required this.content,
     required this.createdAt,
+    this.speakerMode = 'actor',
+    this.delegatedByUserId,
+    this.speakerAvatarAssetId,
+    this.publicHealthState,
+    this.ooc = false,
+    this.actionSnapshot,
+    this.eventData,
   });
 
   final String id;
@@ -156,9 +170,16 @@ class CampaignChatMessage {
   final String? campaignActorId;
   final String displayName;
   final String? avatarUrl;
+  final String speakerMode;
+  final String? delegatedByUserId;
+  final String? speakerAvatarAssetId;
+  final String? publicHealthState;
+  final bool ooc;
   final String kind;
   final String content;
   final String createdAt;
+  final Map<String, Object?>? actionSnapshot;
+  final Map<String, Object?>? eventData;
 
   factory CampaignChatMessage.fromJson(Map<String, Object?> json) {
     return CampaignChatMessage(
@@ -168,9 +189,20 @@ class CampaignChatMessage {
       campaignActorId: json['campaignActorId'] as String?,
       displayName: json['displayName']! as String,
       avatarUrl: json['avatarUrl'] as String?,
+      speakerMode: json['speakerMode'] as String? ?? 'actor',
+      delegatedByUserId: json['delegatedByUserId'] as String?,
+      speakerAvatarAssetId: json['speakerAvatarAssetId'] as String?,
+      publicHealthState: json['publicHealthState'] as String?,
+      ooc: json['ooc'] as bool? ?? false,
       kind: json['kind']! as String,
       content: json['content']! as String,
       createdAt: json['createdAt']! as String,
+      actionSnapshot: json['actionSnapshot'] is Map
+          ? Map<String, Object?>.from(json['actionSnapshot']! as Map)
+          : null,
+      eventData: json['eventData'] is Map
+          ? Map<String, Object?>.from(json['eventData']! as Map)
+          : null,
     );
   }
 
@@ -184,9 +216,16 @@ class CampaignChatMessage {
             campaignActorId == other.campaignActorId &&
             displayName == other.displayName &&
             avatarUrl == other.avatarUrl &&
+            speakerMode == other.speakerMode &&
+            delegatedByUserId == other.delegatedByUserId &&
+            speakerAvatarAssetId == other.speakerAvatarAssetId &&
+            publicHealthState == other.publicHealthState &&
+            ooc == other.ooc &&
             kind == other.kind &&
             content == other.content &&
-            createdAt == other.createdAt;
+            createdAt == other.createdAt &&
+            _mapEquals(actionSnapshot, other.actionSnapshot) &&
+            _mapEquals(eventData, other.eventData);
   }
 
   @override
@@ -197,10 +236,32 @@ class CampaignChatMessage {
     campaignActorId,
     displayName,
     avatarUrl,
+    speakerMode,
+    delegatedByUserId,
+    speakerAvatarAssetId,
+    publicHealthState,
+    ooc,
     kind,
     content,
     createdAt,
+    actionSnapshot == null
+        ? null
+        : Object.hashAllUnordered(actionSnapshot!.entries),
+    eventData == null ? null : Object.hashAllUnordered(eventData!.entries),
   );
+}
+
+bool _mapEquals(Map<String, Object?>? first, Map<String, Object?>? second) {
+  if (identical(first, second)) return true;
+  if (first == null || second == null || first.length != second.length) {
+    return false;
+  }
+  for (final entry in first.entries) {
+    if (!second.containsKey(entry.key) || second[entry.key] != entry.value) {
+      return false;
+    }
+  }
+  return true;
 }
 
 class CampaignInvite {
@@ -277,6 +338,10 @@ class CampaignMembership {
     required this.role,
     required this.displayName,
     required this.joinedAt,
+    this.boundActorId,
+    this.activeSpeakerActorId,
+    this.speakerMode = 'boundActor',
+    this.lastReadAt,
   });
 
   final String id;
@@ -285,6 +350,10 @@ class CampaignMembership {
   final String role;
   final String displayName;
   final String joinedAt;
+  final String? boundActorId;
+  final String? activeSpeakerActorId;
+  final String speakerMode;
+  final String? lastReadAt;
 
   factory CampaignMembership.fromJson(Map<String, Object?> json) {
     return CampaignMembership(
@@ -294,6 +363,10 @@ class CampaignMembership {
       role: json['role']! as String,
       displayName: json['displayName']! as String,
       joinedAt: json['joinedAt']! as String,
+      boundActorId: json['boundActorId'] as String?,
+      activeSpeakerActorId: json['activeSpeakerActorId'] as String?,
+      speakerMode: json['speakerMode'] as String? ?? 'boundActor',
+      lastReadAt: json['lastReadAt'] as String?,
     );
   }
 
@@ -306,10 +379,128 @@ class CampaignMembership {
             userId == other.userId &&
             role == other.role &&
             displayName == other.displayName &&
-            joinedAt == other.joinedAt;
+            joinedAt == other.joinedAt &&
+            boundActorId == other.boundActorId &&
+            activeSpeakerActorId == other.activeSpeakerActorId &&
+            speakerMode == other.speakerMode &&
+            lastReadAt == other.lastReadAt;
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, campaignId, userId, role, displayName, joinedAt);
+  int get hashCode => Object.hash(
+    id,
+    campaignId,
+    userId,
+    role,
+    displayName,
+    joinedAt,
+    boundActorId,
+    activeSpeakerActorId,
+    speakerMode,
+    lastReadAt,
+  );
+}
+
+class CampaignWorkspaceContext {
+  const CampaignWorkspaceContext({
+    required this.campaign,
+    required this.membership,
+    required this.members,
+    required this.actors,
+    required this.capabilities,
+  });
+
+  final Campaign campaign;
+  final CampaignMembership membership;
+  final List<CampaignMemberPreview> members;
+  final List<CampaignWorkspaceActor> actors;
+  final CampaignCapabilities capabilities;
+
+  factory CampaignWorkspaceContext.fromJson(Map<String, Object?> json) {
+    return CampaignWorkspaceContext(
+      campaign: Campaign.fromJson(json['campaign']! as Map<String, Object?>),
+      membership: CampaignMembership.fromJson(
+        json['membership']! as Map<String, Object?>,
+      ),
+      members: (json['members'] as List? ?? const [])
+          .whereType<Map<String, Object?>>()
+          .map(CampaignMemberPreview.fromJson)
+          .toList(growable: false),
+      actors: (json['actors'] as List? ?? const [])
+          .whereType<Map<String, Object?>>()
+          .map(CampaignWorkspaceActor.fromJson)
+          .toList(growable: false),
+      capabilities: CampaignCapabilities.fromJson(
+        json['capabilities']! as Map<String, Object?>,
+      ),
+    );
+  }
+
+  CampaignWorkspaceContext copyWith({CampaignMembership? membership}) {
+    return CampaignWorkspaceContext(
+      campaign: campaign,
+      membership: membership ?? this.membership,
+      members: members,
+      actors: actors,
+      capabilities: capabilities,
+    );
+  }
+}
+
+class CampaignWorkspaceActor {
+  const CampaignWorkspaceActor({
+    required this.id,
+    required this.ownerUserId,
+    required this.actorType,
+    required this.status,
+    required this.lifecycle,
+    required this.displayName,
+    required this.avatarAssetId,
+    required this.publicHealthState,
+  });
+
+  final String id;
+  final String? ownerUserId;
+  final String actorType;
+  final String status;
+  final String lifecycle;
+  final String displayName;
+  final String? avatarAssetId;
+  final String publicHealthState;
+
+  factory CampaignWorkspaceActor.fromJson(Map<String, Object?> json) {
+    return CampaignWorkspaceActor(
+      id: json['id']! as String,
+      ownerUserId: json['ownerUserId'] as String?,
+      actorType: json['actorType']! as String,
+      status: json['status']! as String,
+      lifecycle: json['lifecycle'] as String? ?? 'persistent',
+      displayName: json['displayName']! as String,
+      avatarAssetId: json['avatarAssetId'] as String?,
+      publicHealthState: json['publicHealthState'] as String? ?? 'unknown',
+    );
+  }
+}
+
+class CampaignCapabilities {
+  const CampaignCapabilities({
+    required this.canManageCampaign,
+    required this.canManageMembers,
+    required this.canCreateActors,
+    required this.canSpeakAsNarrator,
+  });
+
+  final bool canManageCampaign;
+  final bool canManageMembers;
+  final bool canCreateActors;
+  final bool canSpeakAsNarrator;
+
+  factory CampaignCapabilities.fromJson(Map<String, Object?> json) {
+    return CampaignCapabilities(
+      canManageCampaign: json['canManageCampaign'] as bool? ?? false,
+      canManageMembers: json['canManageMembers'] as bool? ?? false,
+      canCreateActors: json['canCreateActors'] as bool? ?? false,
+      canSpeakAsNarrator: json['canSpeakAsNarrator'] as bool? ?? false,
+    );
+  }
 }

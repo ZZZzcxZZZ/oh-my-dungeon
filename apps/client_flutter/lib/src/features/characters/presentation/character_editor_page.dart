@@ -4,20 +4,26 @@ import '../domain/character.dart';
 import '../domain/character_edit_draft.dart';
 import '../domain/dnd5e_rules.dart';
 import '../domain/quick_build.dart';
-import '../../content/domain/content.dart';
+import '../domain/rules_driven_character_builder.dart';
+import '../../content/domain/content_entry.dart';
+import '../../content/presentation/content_entry_preview_page.dart';
+import '../../rules/domain/character_build.dart';
+import '../../rules/domain/character_rule_definition.dart';
+import '../../rules/domain/character_rules_engine.dart';
+import '../../rules/domain/rule_choice_resolver.dart';
 
 class CharacterEditorPage extends StatefulWidget {
   const CharacterEditorPage({
     required this.onSubmit,
     this.initialCharacter,
     this.defaultCreationMethod = 'choose',
-    this.contentItems = const [],
+    this.contentEntries = const [],
     super.key,
   });
 
   final CharacterSheet? initialCharacter;
   final String defaultCreationMethod;
-  final List<ContentItem> contentItems;
+  final List<ContentEntry> contentEntries;
   final Future<bool> Function(CharacterEditDraft draft) onSubmit;
 
   @override
@@ -41,6 +47,8 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
   late final Map<String, bool> _saves;
   late final Map<String, bool> _skills;
   late _CreationFlow _flow;
+  Map<String, Object?>? _appliedRulesData;
+  final Map<String, Set<String>> _upgradeRuleChoices = {};
   bool _saving = false;
 
   @override
@@ -123,7 +131,7 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
     }
     if (!isEditing && _flow == _CreationFlow.standard) {
       return _StandardBuildPage(
-        contentItems: widget.contentItems,
+        contentEntries: widget.contentEntries,
         onSubmit: _submitQuickBuild,
         onContinueToFullSheet: () {
           setState(() => _flow = _CreationFlow.fullSheet);
@@ -180,7 +188,18 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      Expanded(child: _numberField(_levelController, '等级')),
+                      Expanded(
+                        child: _numberField(
+                          _levelController,
+                          '等级',
+                          key: const Key('character-level-field'),
+                          onChanged: (_) => setState(() {
+                            _appliedRulesData = null;
+                            _upgradeRuleChoices.clear();
+                            _applyRecommendedUpgradeChoices();
+                          }),
+                        ),
+                      ),
                       const SizedBox(width: 12),
                       Expanded(child: _numberField(_speedController, '速度')),
                     ],
@@ -188,6 +207,19 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                 ],
               ),
             ),
+            if (isEditing)
+              if (_upgradePreview() case final preview?)
+                _CharacterUpgradeSection(
+                  preview: preview,
+                  applied: _appliedRulesData != null,
+                  onApply: preview.canApply ? _applyRulesUpgrade : null,
+                  entries: widget.contentEntries,
+                  onChoiceChanged: (key, selected) => setState(() {
+                    _upgradeRuleChoices[key] = selected;
+                    _appliedRulesData = null;
+                    _applyRecommendedUpgradeChoices();
+                  }),
+                ),
             _Section(
               title: '能力值',
               child: Wrap(
@@ -330,15 +362,144 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
     );
   }
 
-  Widget _numberField(TextEditingController controller, String label) {
+  Widget _numberField(
+    TextEditingController controller,
+    String label, {
+    Key? key,
+    ValueChanged<String>? onChanged,
+  }) {
     return TextField(
+      key: key,
       controller: controller,
       decoration: InputDecoration(
         labelText: label,
         border: const OutlineInputBorder(),
       ),
       keyboardType: TextInputType.number,
+      onChanged: onChanged,
     );
+  }
+
+  _CharacterUpgradePreview? _upgradePreview() {
+    final character = widget.initialCharacter;
+    final buildJson = character?.dataMap['build'];
+    if (character == null ||
+        buildJson is! Map ||
+        widget.contentEntries.isEmpty) {
+      return null;
+    }
+    final targetLevel = _intValue(_levelController, character.level);
+    if (targetLevel <= character.level || targetLevel > 20) return null;
+    final previousBuild = CharacterBuild.fromJson(
+      Map<String, Object?>.from(buildJson),
+    );
+    final nextBuild = CharacterBuild(
+      level: targetLevel,
+      selections: previousBuild.selections,
+      choices: {
+        ...previousBuild.choices,
+        for (final entry in _upgradeRuleChoices.entries)
+          entry.key: entry.value.toList(growable: false),
+      },
+    );
+    final engine = CharacterRulesEngine(
+      entries: {for (final entry in widget.contentEntries) entry.id: entry},
+    );
+    final previousLedger = engine.evaluate(previousBuild);
+    final nextLedger = engine.evaluate(nextBuild);
+    final previousKeys = {
+      for (final grant in previousLedger.grants)
+        '${grant.sourceEntryId}#${grant.id}',
+    };
+    final newGrants = nextLedger.grants
+        .where(
+          (grant) =>
+              !previousKeys.contains('${grant.sourceEntryId}#${grant.id}'),
+        )
+        .toList(growable: false);
+    final previousChoiceKeys = {
+      for (final choice in previousLedger.activeChoices) choice.key,
+    };
+    final upgradeChoices = nextLedger.activeChoices
+        .where(
+          (choice) =>
+              !previousChoiceKeys.contains(choice.key) || !choice.isValid,
+        )
+        .toList(growable: false);
+    return _CharacterUpgradePreview(
+      build: nextBuild,
+      newGrants: newGrants,
+      ruleChoices: upgradeChoices,
+      pendingChoices: nextLedger.pendingChoices,
+      missingEntryIds: nextLedger.missingEntryIds,
+    );
+  }
+
+  void _applyRecommendedUpgradeChoices() {
+    final resolver = RuleChoiceResolver(
+      entries: {for (final entry in widget.contentEntries) entry.id: entry},
+    );
+    var changed = true;
+    while (changed) {
+      changed = false;
+      final preview = _upgradePreview();
+      if (preview == null) return;
+      for (final choice in preview.ruleChoices) {
+        if ((_upgradeRuleChoices[choice.key] ?? const <String>{}).isNotEmpty) {
+          continue;
+        }
+        final recommended = resolver.recommendedFor(
+          choice.definition,
+          sourceEntryId: choice.sourceEntryId,
+        );
+        if (recommended.isEmpty) continue;
+        _upgradeRuleChoices[choice.key] = recommended.toSet();
+        changed = true;
+      }
+    }
+  }
+
+  void _applyRulesUpgrade() {
+    final preview = _upgradePreview();
+    final character = widget.initialCharacter;
+    if (preview == null || !preview.canApply || character == null) return;
+    final abilities = {
+      for (final entry in _abilityControllers.entries)
+        entry.key: int.tryParse(entry.value.text.trim()) ?? 10,
+    };
+    final generated =
+        RulesDrivenCharacterBuilder(
+          entries: {for (final entry in widget.contentEntries) entry.id: entry},
+        ).build(
+          name: _nameController.text,
+          build: preview.build,
+          abilities: abilities,
+          notes: _notesController.text,
+        );
+    setState(() {
+      _maxHpController.text = '${generated.maxHp}';
+      _acController.text = '${generated.armorClass}';
+      _speedController.text = '${generated.speed}';
+      _initiativeController.text = '${generated.initiativeBonus}';
+      _inventoryController.text = _inventoryToLines(
+        _mergeInventory(
+          _parseInventory(_inventoryController.text),
+          generated.inventory,
+        ),
+      );
+      _saves
+        ..clear()
+        ..addAll(generated.saves);
+      _skills
+        ..clear()
+        ..addAll(generated.skills);
+      _appliedRulesData = {
+        ...character.dataMap,
+        ...generated.data,
+        if (character.runtimeMap.isNotEmpty)
+          'runtime': Map<String, Object?>.from(character.runtimeMap),
+      };
+    });
   }
 
   Widget _buildCreationChoicePage(BuildContext context) {
@@ -425,7 +586,37 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
     }
 
     setState(() => _saving = true);
-    final draft = QuickBuildService.build(quickDraft);
+    final entries = {
+      for (final entry in widget.contentEntries) entry.id: entry,
+    };
+    final selectedEntryIds = [
+      quickDraft.classEntryId,
+      quickDraft.speciesEntryId,
+      quickDraft.backgroundEntryId,
+    ].whereType<String>().toList(growable: false);
+    final hasStructuredRules = selectedEntryIds.any(
+      (entryId) => entries[entryId]?.rules != null,
+    );
+    final draft = hasStructuredRules
+        ? RulesDrivenCharacterBuilder(entries: entries).build(
+            name: name,
+            build: CharacterBuild(
+              level: quickDraft.level,
+              selections: {
+                if (quickDraft.classEntryId != null)
+                  'class': quickDraft.classEntryId!,
+                if (quickDraft.speciesEntryId != null)
+                  'species': quickDraft.speciesEntryId!,
+                if (quickDraft.backgroundEntryId != null)
+                  'background': quickDraft.backgroundEntryId!,
+              },
+              choices: quickDraft.ruleChoices,
+            ),
+            abilities: quickDraft.abilities ?? Dnd5eRules.defaultAbilities,
+            extraSpellRefs: quickDraft.spellRefs,
+            extraItemRefs: quickDraft.itemRefs,
+          )
+        : QuickBuildService.build(quickDraft);
     final ok = await widget.onSubmit(draft);
     if (!mounted) return;
     setState(() => _saving = false);
@@ -470,7 +661,197 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
           entry.key: int.tryParse(entry.value.text.trim()) ?? 0,
       },
       notes: _notesController.text.trim(),
-      data: widget.initialCharacter?.dataMap ?? const {},
+      data: _appliedRulesData ?? widget.initialCharacter?.dataMap ?? const {},
+    );
+  }
+}
+
+class _CharacterUpgradePreview {
+  const _CharacterUpgradePreview({
+    required this.build,
+    required this.newGrants,
+    required this.ruleChoices,
+    required this.pendingChoices,
+    required this.missingEntryIds,
+  });
+
+  final CharacterBuild build;
+  final List<ResolvedRuleGrant> newGrants;
+  final List<ActiveRuleChoice> ruleChoices;
+  final List<PendingRuleChoice> pendingChoices;
+  final List<String> missingEntryIds;
+
+  bool get canApply => pendingChoices.isEmpty && missingEntryIds.isEmpty;
+}
+
+class _CharacterUpgradeSection extends StatelessWidget {
+  const _CharacterUpgradeSection({
+    required this.preview,
+    required this.applied,
+    required this.onApply,
+    required this.entries,
+    required this.onChoiceChanged,
+  });
+
+  final _CharacterUpgradePreview preview;
+  final bool applied;
+  final VoidCallback? onApply;
+  final List<ContentEntry> entries;
+  final void Function(String key, Set<String> selected) onChoiceChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Section(
+      title: '升级队列',
+      child: Card.filled(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.trending_up_outlined),
+                title: Text('升级到 ${preview.build.level} 级'),
+                subtitle: Text(
+                  applied ? '等级规则已应用，保存角色后生效。' : '检查本级自动授予与必须完成的选择。',
+                ),
+              ),
+              for (final grant in preview.newGrants)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.add_circle_outline),
+                  title: Text('新增：${grant.label}'),
+                  subtitle: Text(
+                    grant.sourceLevel == null
+                        ? grant.sourceEntryName
+                        : '${grant.sourceEntryName} · 等级 ${grant.sourceLevel}',
+                  ),
+                ),
+              for (final choice in preview.ruleChoices)
+                _UpgradeRuleChoiceSection(
+                  choice: choice,
+                  entries: entries,
+                  onChanged: (selected) =>
+                      onChoiceChanged(choice.key, selected),
+                ),
+              for (final entryId in preview.missingEntryIds)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    Icons.link_off_outlined,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                  title: Text('缺少资料：$entryId'),
+                ),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: applied ? null : onApply,
+                icon: Icon(
+                  applied ? Icons.check_circle_outline : Icons.auto_fix_high,
+                ),
+                label: Text(applied ? '等级规则已应用' : '应用等级规则'),
+              ),
+              if (!preview.canApply)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    '请完成本级新增选择，或恢复缺失的资料条目。',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UpgradeRuleChoiceSection extends StatelessWidget {
+  const _UpgradeRuleChoiceSection({
+    required this.choice,
+    required this.entries,
+    required this.onChanged,
+  });
+
+  final ActiveRuleChoice choice;
+  final List<ContentEntry> entries;
+  final ValueChanged<Set<String>> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final definition = choice.definition;
+    final options = RuleChoiceResolver(
+      entries: {for (final entry in entries) entry.id: entry},
+    ).optionsFor(definition, sourceEntryId: choice.sourceEntryId);
+    return Card.outlined(
+      margin: const EdgeInsets.only(top: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    definition.label,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                Icon(
+                  choice.isValid
+                      ? Icons.check_circle_outline
+                      : Icons.pending_actions_outlined,
+                  color: choice.isValid
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.error,
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${choice.sourceEntryName} · 选择 ${definition.minimum}-${definition.maximum} 项',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            if (options.isEmpty)
+              Text(
+                '没有符合当前等级与资格的选项。',
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final option in options)
+                    FilterChip(
+                      label: Text(option.name),
+                      selected: choice.selected.contains(option.id),
+                      onSelected: (selected) {
+                        final next = choice.selected.toSet();
+                        if (selected) {
+                          if (definition.maximum == 1) next.clear();
+                          if (next.length < definition.maximum) {
+                            next.add(option.id);
+                          }
+                        } else {
+                          next.remove(option.id);
+                        }
+                        onChanged(next);
+                      },
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -639,12 +1020,12 @@ class _QuickBuildPageState extends State<_QuickBuildPage> {
 
 class _StandardBuildPage extends StatefulWidget {
   const _StandardBuildPage({
-    required this.contentItems,
+    required this.contentEntries,
     required this.onSubmit,
     required this.onContinueToFullSheet,
   });
 
-  final List<ContentItem> contentItems;
+  final List<ContentEntry> contentEntries;
   final Future<void> Function(QuickBuildSelection draft) onSubmit;
   final VoidCallback onContinueToFullSheet;
 
@@ -653,15 +1034,31 @@ class _StandardBuildPage extends StatefulWidget {
 }
 
 class _StandardBuildPageState extends State<_StandardBuildPage> {
-  static const _steps = ['来源', '职业', '起源', '属性', '熟练', '装备', '法术', '详情', '审核'];
+  static const _steps = ['职业', '背景', '物种', '属性', '熟练', '装备', '法术', '详情', '审核'];
+  static const _stepIcons = [
+    Icons.shield_outlined,
+    Icons.history_edu_outlined,
+    Icons.diversity_3_outlined,
+    Icons.tune_outlined,
+    Icons.workspace_premium_outlined,
+    Icons.backpack_outlined,
+    Icons.auto_fix_high_outlined,
+    Icons.badge_outlined,
+    Icons.fact_check_outlined,
+  ];
 
   final _nameController = TextEditingController();
+  int _currentStep = 0;
   late String _className;
   late String _species;
   late String _background;
+  String? _classEntryId;
+  String? _speciesEntryId;
+  String? _backgroundEntryId;
   int _level = 1;
   final Set<String> _selectedSpellRefs = {};
   final Set<String> _selectedItemRefs = {};
+  final Map<String, Set<String>> _ruleChoices = {};
   late Set<String> _selectedSkillProficiencies;
   late Map<String, int> _abilityScores;
   late Map<String, TextEditingController> _abilityControllers;
@@ -675,12 +1072,16 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       'background',
       _defaultBackgroundOptions,
     ).first;
+    _classEntryId = _entryIdFor('class', _className);
+    _speciesEntryId = _entryIdFor('species', _species);
+    _backgroundEntryId = _entryIdFor('background', _background);
     _selectedSkillProficiencies = _presetSkillsForBackground(_background);
     _abilityScores = _presetAbilitiesForClass(_className);
     _abilityControllers = {
       for (final entry in Dnd5eRules.abilityLabels.entries)
         entry.key: TextEditingController(text: '${_abilityScores[entry.key]}'),
     };
+    _applyRecommendedRuleChoices();
   }
 
   @override
@@ -720,228 +1121,344 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       'equipment',
       'item',
     ], const []);
+    final activeRuleChoices = _activeRuleChoices();
+    final visibleStepIndexes = <int>[
+      0,
+      1,
+      2,
+      3,
+      4,
+      if (itemOptions.isNotEmpty ||
+          activeRuleChoices.any((choice) => choice.builderStep == 5))
+        5,
+      if (spellOptions.isNotEmpty ||
+          activeRuleChoices.any((choice) => choice.builderStep == 6))
+        6,
+      7,
+      8,
+    ];
+    final visibleStep = visibleStepIndexes.indexOf(_currentStep);
+    final ruleChoicesAreValid = activeRuleChoices.every((active) {
+      final selected = _ruleChoices[active.key] ?? const <String>{};
+      return selected.length >= active.definition.minimum &&
+          selected.length <= active.definition.maximum;
+    });
+    final stepContent = _buildStepContent(
+      context: context,
+      classOptions: classOptions,
+      speciesOptions: speciesOptions,
+      backgroundOptions: backgroundOptions,
+      spellOptions: spellOptions,
+      itemOptions: itemOptions,
+      activeRuleChoices: activeRuleChoices,
+      review: review,
+      summary: summary,
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('标准创建角色')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 880),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth >= 1000;
+          final editor = _BuilderStepEditor(
+            step: _currentStep,
+            stepLabel: _steps[_currentStep],
+            stepDescription: _stepDescription(_steps[_currentStep]),
+            nameController: _nameController,
+            onNameChanged: (_) => setState(() {}),
+            child: stepContent,
+          );
+          if (!isWide) {
+            return Column(
               children: [
-                const _SourceBanner(),
-                const SizedBox(height: 16),
-                TextField(
-                  key: const Key('standard-character-name-field'),
-                  controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: '角色名',
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (_) => setState(() {}),
+                _MobileBuilderStepSelector(
+                  currentStep: visibleStep,
+                  steps: [
+                    for (final index in visibleStepIndexes) _steps[index],
+                  ],
+                  onSelected: (index) => _selectStep(visibleStepIndexes[index]),
                 ),
-                const SizedBox(height: 16),
-                _ChoiceSection(
-                  title: '职业',
-                  selected: _className,
-                  options: classOptions,
-                  sourceLabel: _hasContentChoices('class') ? '来自资料库' : null,
-                  onSelected: (value) => setState(() {
-                    _className = value;
-                    _resetAbilityScoresForClass(value);
-                  }),
-                ),
-                _LevelProgressionSection(
+                Expanded(child: editor),
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              NavigationRail(
+                extended: true,
+                scrollable: true,
+                selectedIndex: visibleStep,
+                onDestinationSelected: (index) =>
+                    _selectStep(visibleStepIndexes[index]),
+                labelType: NavigationRailLabelType.none,
+                destinations: [
+                  for (final index in visibleStepIndexes)
+                    NavigationRailDestination(
+                      icon: Icon(
+                        _stepIcons[index],
+                        key: Key('builder-step-$index'),
+                      ),
+                      selectedIcon: Icon(
+                        _stepIcons[index],
+                        key: Key('builder-step-$index-selected'),
+                      ),
+                      label: Text(_steps[index]),
+                    ),
+                ],
+              ),
+              const VerticalDivider(width: 1),
+              Expanded(child: editor),
+              const VerticalDivider(width: 1),
+              SizedBox(
+                width: 300,
+                child: _BuilderSummaryPanel(
+                  summary: summary,
+                  review: review,
                   level: _level,
                   className: _className,
                   abilities: _abilityScores,
-                  onChanged: (value) => setState(() => _level = value),
-                ),
-                _ChoiceSection(
-                  title: '起源：物种',
-                  selected: _species,
-                  options: speciesOptions,
-                  sourceLabel: _hasContentChoices('species') ? '来自资料库' : null,
-                  onSelected: (value) => setState(() => _species = value),
-                ),
-                _ChoiceSection(
-                  title: '起源：背景',
-                  selected: _background,
-                  options: backgroundOptions,
-                  sourceLabel: _hasContentChoices('background')
-                      ? '来自资料库'
-                      : null,
-                  onSelected: (value) => setState(() {
-                    _background = value;
-                    _selectedSkillProficiencies = _presetSkillsForBackground(
-                      value,
-                    );
-                  }),
-                ),
-                _AbilityScoreSection(
-                  scores: _abilityScores,
-                  controllers: _abilityControllers,
-                  onChanged: (ability, value) =>
-                      setState(() => _abilityScores[ability] = value),
-                ),
-                _SkillProficiencySection(
-                  selected: _selectedSkillProficiencies,
-                  onChanged: (next) =>
-                      setState(() => _selectedSkillProficiencies = next),
-                ),
-                _MultiChoiceSection(
-                  title: '法术',
-                  selected: _selectedSpellRefs,
-                  options: spellOptions,
-                  sourceLabel: _hasContentChoices('spell') ? '来自资料库' : null,
-                  emptyLabel: '资料库中暂无法术；可先跳过，之后在角色卡里补充。',
-                  onChanged: (next) =>
-                      setState(() => _replaceSet(_selectedSpellRefs, next)),
-                ),
-                _MultiChoiceSection(
-                  title: '装备',
-                  selected: _selectedItemRefs,
-                  options: itemOptions,
-                  sourceLabel:
-                      _hasContentChoicesForTypes(const ['equipment', 'item'])
-                      ? '来自资料库'
-                      : null,
-                  emptyLabel: '资料库中暂无装备；会先使用职业默认装备。',
-                  onChanged: (next) =>
-                      setState(() => _replaceSet(_selectedItemRefs, next)),
-                ),
-                Card.filled(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '完成度',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            ),
-                            Text(
-                              '${review.completed}/${review.total} 已完成',
-                              style: Theme.of(context).textTheme.labelLarge,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        LinearProgressIndicator(value: review.progress),
-                        const SizedBox(height: 8),
-                        Text(review.isReady ? '创建前检查通过' : '仍有项目需要完成'),
-                        if (review.missing.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              for (final item in review.missing)
-                                InputChip(
-                                  avatar: const Icon(Icons.error_outline),
-                                  label: Text(item),
-                                ),
-                            ],
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                for (var i = 0; i < _steps.length; i++)
-                  Card.outlined(
-                    child: ListTile(
-                      leading: CircleAvatar(child: Text('${i + 1}')),
-                      title: Text(_steps[i]),
-                      subtitle: Text(_stepDescription(_steps[i])),
-                      trailing: i <= 2
-                          ? const Icon(Icons.check_circle_outline)
-                          : const Icon(Icons.radio_button_unchecked),
-                    ),
-                  ),
-                const SizedBox(height: 16),
-                Card.filled(
-                  child: Column(
-                    children: [
-                      ListTile(
-                        leading: const Icon(Icons.fact_check_outlined),
-                        title: const Text('审核摘要'),
-                        subtitle: Text(summary),
-                      ),
-                      const Divider(height: 1),
-                      for (final check in review.checks)
-                        ListTile(
-                          dense: true,
-                          leading: Icon(
-                            check.done
-                                ? Icons.check_circle_outline
-                                : Icons.radio_button_unchecked,
-                          ),
-                          title: Text(check.label),
-                          trailing: Text(check.done ? '完成' : '待完成'),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: widget.onContinueToFullSheet,
-                  icon: const Icon(Icons.edit_note_outlined),
-                  label: const Text('继续编辑完整角色卡'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: review.isReady
-                      ? () => widget.onSubmit(
-                          QuickBuildSelection(
-                            name: _nameController.text,
-                            className: _className,
-                            species: _species,
-                            background: _background,
-                            level: _level,
-                            spellRefs: _selectedSpellRefs.toList(),
-                            itemRefs: _selectedItemRefs.toList(),
-                            abilities: Map.unmodifiable(_abilityScores),
-                            skillProficiencies: _selectedSkillProficiencies
-                                .toList(),
-                          ),
-                        )
-                      : null,
-                  icon: const Icon(Icons.check),
-                  label: const Text('创建角色'),
+                  selectedSpells: _selectedSpellRefs.length,
+                  selectedItems: _selectedItemRefs.length,
+                  pendingChoices: activeRuleChoices.where((active) {
+                    final selected =
+                        _ruleChoices[active.key] ?? const <String>{};
+                    return selected.length < active.definition.minimum ||
+                        selected.length > active.definition.maximum;
+                  }).length,
                 ),
               ),
             ],
-          ),
+          );
+        },
+      ),
+      bottomNavigationBar: SafeArea(
+        child: _BuilderFooter(
+          currentStep: visibleStep,
+          lastStep: visibleStepIndexes.length - 1,
+          canCreate: review.isReady && ruleChoicesAreValid,
+          onPrevious: visibleStep == 0
+              ? null
+              : () => _selectStep(visibleStepIndexes[visibleStep - 1]),
+          onNext: visibleStep == visibleStepIndexes.length - 1
+              ? null
+              : () => _selectStep(visibleStepIndexes[visibleStep + 1]),
+          onContinueToFullSheet: widget.onContinueToFullSheet,
+          onCreate: () => widget.onSubmit(_selection()),
         ),
       ),
     );
   }
 
+  void _selectStep(int step) {
+    setState(() => _currentStep = step.clamp(0, _steps.length - 1));
+  }
+
+  QuickBuildSelection _selection() {
+    return QuickBuildSelection(
+      name: _nameController.text,
+      className: _className,
+      species: _species,
+      background: _background,
+      level: _level,
+      spellRefs: _selectedSpellRefs.toList(),
+      itemRefs: _selectedItemRefs.toList(),
+      abilities: Map.unmodifiable(_abilityScores),
+      skillProficiencies: _selectedSkillProficiencies.toList(),
+      classEntryId: _classEntryId,
+      speciesEntryId: _speciesEntryId,
+      backgroundEntryId: _backgroundEntryId,
+      ruleChoices: {
+        for (final entry in _ruleChoices.entries)
+          entry.key: entry.value.toList(growable: false),
+      },
+    );
+  }
+
+  Widget _buildStepContent({
+    required BuildContext context,
+    required List<String> classOptions,
+    required List<String> speciesOptions,
+    required List<String> backgroundOptions,
+    required List<String> spellOptions,
+    required List<String> itemOptions,
+    required List<_ActiveRuleChoice> activeRuleChoices,
+    required _StandardBuildReview review,
+    required String summary,
+  }) {
+    final choicesForCurrentStep = activeRuleChoices.where((choice) {
+      return choice.builderStep == _currentStep;
+    });
+    final ruleChoiceWidgets = [
+      for (final active in choicesForCurrentStep)
+        _RuleChoiceSection(
+          choice: active,
+          options: _choiceOptions(
+            active.definition,
+            sourceEntryId: active.sourceEntryId,
+          ),
+          allEntries: widget.contentEntries,
+          selected: _ruleChoices[active.key] ?? const <String>{},
+          onChanged: (next) => setState(() {
+            _ruleChoices[active.key] = next;
+            _applyRecommendedRuleChoices();
+          }),
+        ),
+    ];
+    return switch (_currentStep) {
+      0 => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _ChoiceSection(
+            title: '选择职业',
+            selected: _className,
+            options: classOptions,
+            sourceLabel: _hasContentChoices('class') ? '来自资料库' : null,
+            onOpenOption: (name) => _openEntryByTypeAndName('class', name),
+            onSelected: (value) => setState(() {
+              _className = value;
+              _classEntryId = _entryIdFor('class', value);
+              _resetAbilityScoresForClass(value);
+              _applyRecommendedRuleChoices();
+            }),
+          ),
+          _LevelProgressionSection(
+            level: _level,
+            className: _className,
+            abilities: _abilityScores,
+            onChanged: (value) => setState(() {
+              _level = value;
+              _applyRecommendedRuleChoices();
+            }),
+          ),
+          ...ruleChoiceWidgets,
+          _RuleGrantPreview(
+            entries: _ruleEntriesForStep(0, activeRuleChoices),
+            level: _level,
+          ),
+        ],
+      ),
+      1 => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _ChoiceSection(
+            title: '选择背景',
+            selected: _background,
+            options: backgroundOptions,
+            sourceLabel: _hasContentChoices('background') ? '来自资料库' : null,
+            onOpenOption: (name) => _openEntryByTypeAndName('background', name),
+            onSelected: (value) => setState(() {
+              _background = value;
+              _backgroundEntryId = _entryIdFor('background', value);
+              _selectedSkillProficiencies = _presetSkillsForBackground(value);
+              _applyRecommendedRuleChoices();
+            }),
+          ),
+          ...ruleChoiceWidgets,
+          _RuleGrantPreview(
+            entries: _ruleEntriesForStep(1, activeRuleChoices),
+            level: _level,
+          ),
+        ],
+      ),
+      2 => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _ChoiceSection(
+            title: '选择物种',
+            selected: _species,
+            options: speciesOptions,
+            sourceLabel: _hasContentChoices('species') ? '来自资料库' : null,
+            onOpenOption: (name) => _openEntryByTypeAndName('species', name),
+            onSelected: (value) => setState(() {
+              _species = value;
+              _speciesEntryId = _entryIdFor('species', value);
+              _applyRecommendedRuleChoices();
+            }),
+          ),
+          ...ruleChoiceWidgets,
+          _RuleGrantPreview(
+            entries: _ruleEntriesForStep(2, activeRuleChoices),
+            level: _level,
+          ),
+        ],
+      ),
+      3 => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('设置属性', style: Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height: 12),
+          _AbilityScoreSection(
+            scores: _abilityScores,
+            controllers: _abilityControllers,
+            onChanged: (ability, value) =>
+                setState(() => _abilityScores[ability] = value),
+          ),
+        ],
+      ),
+      4 => _SkillProficiencySection(
+        selected: _selectedSkillProficiencies,
+        onChanged: (next) => setState(() => _selectedSkillProficiencies = next),
+      ),
+      5 => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ...ruleChoiceWidgets,
+          if (ruleChoiceWidgets.isEmpty)
+            _MultiChoiceSection(
+              title: '选择装备',
+              selected: _selectedItemRefs,
+              options: itemOptions,
+              sourceLabel:
+                  _hasContentChoicesForTypes(const ['equipment', 'item'])
+                  ? '来自资料库'
+                  : null,
+              emptyLabel: '资料库中暂无装备；规则方案仍会自动应用。',
+              onOpenOption: (name) =>
+                  _openEntryByTypesAndName(const ['equipment', 'item'], name),
+              onChanged: (next) =>
+                  setState(() => _replaceSet(_selectedItemRefs, next)),
+            ),
+        ],
+      ),
+      6 => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ...ruleChoiceWidgets,
+          if (ruleChoiceWidgets.isEmpty)
+            _MultiChoiceSection(
+              title: '选择法术',
+              selected: _selectedSpellRefs,
+              options: spellOptions,
+              sourceLabel: _hasContentChoices('spell') ? '来自资料库' : null,
+              emptyLabel: '资料库中暂无法术；可先跳过。',
+              onOpenOption: (name) => _openEntryByTypeAndName('spell', name),
+              onChanged: (next) =>
+                  setState(() => _replaceSet(_selectedSpellRefs, next)),
+            ),
+        ],
+      ),
+      7 => _DetailsStep(name: _nameController.text),
+      8 => _BuilderReviewStep(
+        summary: summary,
+        review: review,
+        pendingRuleChoices: activeRuleChoices
+            .where((active) {
+              final selected = _ruleChoices[active.key] ?? const <String>{};
+              return selected.length < active.definition.minimum ||
+                  selected.length > active.definition.maximum;
+            })
+            .toList(growable: false),
+      ),
+      _ => const SizedBox.shrink(),
+    };
+  }
+
   static String _stepDescription(String step) {
     return switch (step) {
-      '来源' => '选择 D&D 2024、Legacy 或战役允许内容。',
       '职业' => '选择职业、等级和职业资源。',
-      '起源' => '选择物种、背景、语言和 Origin Feat。',
+      '背景' => '选择背景、技能与起源专长。',
+      '物种' => '选择物种与物种特性。',
       '属性' => '标准数组、购点、掷骰或自定义。',
       '熟练' => '技能、工具、武器、防具与豁免。',
       '装备' => '职业装备、金币购买或自定义装备。',
@@ -960,14 +1477,12 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     List<String> types,
     List<String> fallback,
   ) {
-    final labels =
-        widget.contentItems
-            .where((item) => types.contains(item.type))
-            .map((item) => item.name.trim())
-            .where((name) => name.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort();
+    final labels = <String>{
+      ...widget.contentEntries
+          .where((entry) => types.contains(entry.type))
+          .map((entry) => entry.name.trim())
+          .where((name) => name.isNotEmpty),
+    }.toList()..sort();
     return labels.isEmpty ? fallback : labels;
   }
 
@@ -976,9 +1491,168 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
   }
 
   bool _hasContentChoicesForTypes(List<String> types) {
-    return widget.contentItems.any(
-      (item) => types.contains(item.type) && item.name.trim().isNotEmpty,
+    return widget.contentEntries.any(
+      (entry) => types.contains(entry.type) && entry.name.trim().isNotEmpty,
     );
+  }
+
+  String? _entryIdFor(String type, String name) {
+    for (final entry in widget.contentEntries) {
+      if (entry.type == type && entry.name.trim() == name.trim()) {
+        return entry.id;
+      }
+    }
+    return null;
+  }
+
+  List<_ActiveRuleChoice> _activeRuleChoices() {
+    final queue = <({String entryId, int builderStep})>[
+      if (_classEntryId != null) (entryId: _classEntryId!, builderStep: 0),
+      if (_speciesEntryId != null) (entryId: _speciesEntryId!, builderStep: 2),
+      if (_backgroundEntryId != null)
+        (entryId: _backgroundEntryId!, builderStep: 1),
+    ];
+    final visited = <String>{};
+    final result = <_ActiveRuleChoice>[];
+    while (queue.isNotEmpty) {
+      final current = queue.removeAt(0);
+      if (!visited.add(current.entryId)) continue;
+      final entryId = current.entryId;
+      final entry = widget.contentEntries
+          .where((candidate) => candidate.id == entryId)
+          .firstOrNull;
+      final rules = entry?.rules;
+      if (entry == null || rules == null) continue;
+      for (final definition in rules.choices) {
+        final builderStep = _builderStepFor(
+          definition.builderStep,
+          current.builderStep,
+        );
+        result.add(
+          _ActiveRuleChoice(
+            key: '${entry.id}#${definition.id}',
+            sourceEntryId: entry.id,
+            sourceName: entry.name,
+            builderStep: builderStep,
+            definition: definition,
+          ),
+        );
+      }
+      for (final progression in rules.progression) {
+        if (progression.level > _level) continue;
+        for (final definition in progression.choices) {
+          final builderStep = _builderStepFor(
+            definition.builderStep,
+            current.builderStep,
+          );
+          result.add(
+            _ActiveRuleChoice(
+              key: '${entry.id}#${definition.id}',
+              sourceEntryId: entry.id,
+              sourceName: entry.name,
+              builderStep: builderStep,
+              level: progression.level,
+              definition: definition,
+            ),
+          );
+        }
+      }
+      for (final active in result.where(
+        (choice) => choice.sourceEntryId == entry.id,
+      )) {
+        final selected = _ruleChoices[active.key] ?? const <String>{};
+        queue.addAll(
+          selected.map(
+            (selectedId) =>
+                (entryId: selectedId, builderStep: active.builderStep),
+          ),
+        );
+      }
+    }
+    return result;
+  }
+
+  void _openEntryByTypeAndName(String type, String name) {
+    _openEntryByTypesAndName([type], name);
+  }
+
+  List<ContentEntry> _ruleEntriesForStep(
+    int step,
+    List<_ActiveRuleChoice> activeChoices,
+  ) {
+    final ids = <String>{
+      if (step == 0 && _classEntryId != null) _classEntryId!,
+      if (step == 2 && _speciesEntryId != null) _speciesEntryId!,
+      if (step == 1 && _backgroundEntryId != null) _backgroundEntryId!,
+      for (final choice in activeChoices.where(
+        (candidate) => candidate.builderStep == step,
+      ))
+        ...?_ruleChoices[choice.key],
+    };
+    return widget.contentEntries
+        .where((entry) => ids.contains(entry.id))
+        .toList(growable: false);
+  }
+
+  void _openEntryByTypesAndName(List<String> types, String name) {
+    final entry = widget.contentEntries
+        .where(
+          (candidate) =>
+              types.contains(candidate.type) &&
+              candidate.name.trim() == name.trim(),
+        )
+        .firstOrNull;
+    if (entry == null) return;
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) => ContentEntryPreviewPage(
+          entry: entry,
+          entries: widget.contentEntries,
+        ),
+      ),
+    );
+  }
+
+  List<ContentEntry> _choiceOptions(
+    RuleChoiceDefinition definition, {
+    required String sourceEntryId,
+  }) {
+    return RuleChoiceResolver(
+      entries: {for (final entry in widget.contentEntries) entry.id: entry},
+    ).optionsFor(definition, sourceEntryId: sourceEntryId);
+  }
+
+  int _builderStepFor(String? declaredStep, int inheritedStep) {
+    return switch (declaredStep) {
+      'class' => 0,
+      'origin' => inheritedStep,
+      'abilities' => 3,
+      'proficiencies' => 4,
+      'equipment' => 5,
+      'spells' => 6,
+      'details' => 7,
+      _ => inheritedStep,
+    };
+  }
+
+  void _applyRecommendedRuleChoices() {
+    final resolver = RuleChoiceResolver(
+      entries: {for (final entry in widget.contentEntries) entry.id: entry},
+    );
+    var changed = true;
+    while (changed) {
+      changed = false;
+      for (final active in _activeRuleChoices()) {
+        if ((_ruleChoices[active.key] ?? const <String>{}).isNotEmpty) continue;
+        final recommended = resolver.recommendedFor(
+          active.definition,
+          sourceEntryId: active.sourceEntryId,
+        );
+        if (recommended.isEmpty) continue;
+        _ruleChoices[active.key] = recommended.toSet();
+        changed = true;
+      }
+    }
   }
 
   void _replaceSet(Set<String> target, Set<String> next) {
@@ -1022,6 +1696,643 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       return {'洞悉', '宗教'};
     }
     return {'运动', '威吓'};
+  }
+}
+
+class _BuilderStepEditor extends StatelessWidget {
+  const _BuilderStepEditor({
+    required this.step,
+    required this.stepLabel,
+    required this.stepDescription,
+    required this.nameController,
+    required this.onNameChanged,
+    required this.child,
+  });
+
+  final int step;
+  final String stepLabel;
+  final String stepDescription;
+  final TextEditingController nameController;
+  final ValueChanged<String> onNameChanged;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '步骤 ${step + 1} · $stepLabel',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                stepDescription,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                key: const Key('standard-character-name-field'),
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: '角色名',
+                  hintText: '可以稍后修改',
+                  prefixIcon: Icon(Icons.badge_outlined),
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: onNameChanged,
+              ),
+              const SizedBox(height: 20),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                child: KeyedSubtree(key: ValueKey(step), child: child),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MobileBuilderStepSelector extends StatelessWidget {
+  const _MobileBuilderStepSelector({
+    required this.currentStep,
+    required this.steps,
+    required this.onSelected,
+  });
+
+  final int currentStep;
+  final List<String> steps;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<int>(
+                      key: const Key('builder-mobile-step-selector'),
+                      value: currentStep,
+                      isExpanded: true,
+                      icon: const Icon(Icons.expand_more),
+                      items: [
+                        for (var index = 0; index < steps.length; index++)
+                          DropdownMenuItem(
+                            value: index,
+                            child: Text('${index + 1}. ${steps[index]}'),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) onSelected(value);
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text('${currentStep + 1}/${steps.length}'),
+              ],
+            ),
+            LinearProgressIndicator(value: (currentStep + 1) / steps.length),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BuilderFooter extends StatelessWidget {
+  const _BuilderFooter({
+    required this.currentStep,
+    required this.lastStep,
+    required this.canCreate,
+    required this.onPrevious,
+    required this.onNext,
+    required this.onContinueToFullSheet,
+    required this.onCreate,
+  });
+
+  final int currentStep;
+  final int lastStep;
+  final bool canCreate;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+  final VoidCallback onContinueToFullSheet;
+  final VoidCallback onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 2,
+      color: Theme.of(context).colorScheme.surfaceContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 720;
+            final fullSheetButton = compact
+                ? IconButton(
+                    tooltip: '继续编辑完整角色卡',
+                    onPressed: onContinueToFullSheet,
+                    icon: const Icon(Icons.edit_note_outlined),
+                  )
+                : OutlinedButton.icon(
+                    onPressed: onContinueToFullSheet,
+                    icon: const Icon(Icons.edit_note_outlined),
+                    label: const Text('继续编辑完整角色卡'),
+                  );
+            final previousButton = compact
+                ? IconButton(
+                    tooltip: '上一步',
+                    onPressed: onPrevious,
+                    icon: const Icon(Icons.arrow_back),
+                  )
+                : OutlinedButton.icon(
+                    onPressed: onPrevious,
+                    icon: const Icon(Icons.arrow_back),
+                    label: const Text('上一步'),
+                  );
+            final primaryButton = currentStep == lastStep
+                ? FilledButton.icon(
+                    onPressed: canCreate ? onCreate : null,
+                    icon: const Icon(Icons.check),
+                    label: const Text('创建角色'),
+                  )
+                : FilledButton.icon(
+                    onPressed: onNext,
+                    icon: const Icon(Icons.arrow_forward),
+                    label: const Text('下一步'),
+                  );
+            return Row(
+              children: [
+                fullSheetButton,
+                const Spacer(),
+                previousButton,
+                const SizedBox(width: 12),
+                if (compact) Expanded(child: primaryButton) else primaryButton,
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _BuilderSummaryPanel extends StatelessWidget {
+  const _BuilderSummaryPanel({
+    required this.summary,
+    required this.review,
+    required this.level,
+    required this.className,
+    required this.abilities,
+    required this.selectedSpells,
+    required this.selectedItems,
+    required this.pendingChoices,
+  });
+
+  final String summary;
+  final _StandardBuildReview review;
+  final int level;
+  final String className;
+  final Map<String, int> abilities;
+  final int selectedSpells;
+  final int selectedItems;
+  final int pendingChoices;
+
+  @override
+  Widget build(BuildContext context) {
+    final hp = Dnd5eRules.averageHitPoints(
+      className: className,
+      level: level,
+      abilities: abilities,
+    );
+    final armorClass = Dnd5eRules.baseArmorClass(abilities);
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('角色摘要', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          Text(summary, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: _SummaryMetric(label: 'HP', value: '$hp'),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _SummaryMetric(label: 'AC', value: '$armorClass'),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _SummaryMetric(
+                  label: '熟练',
+                  value: '+${Dnd5eRules.proficiencyBonus(level)}',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text('完成度', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(value: review.progress),
+          const SizedBox(height: 6),
+          Text('${review.completed}/${review.total} 已完成'),
+          const SizedBox(height: 20),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.backpack_outlined),
+            title: const Text('装备'),
+            trailing: Text('$selectedItems'),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.auto_fix_high_outlined),
+            title: const Text('法术'),
+            trailing: Text('$selectedSpells'),
+          ),
+          if (pendingChoices > 0)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                Icons.pending_actions_outlined,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              title: const Text('待完成选择'),
+              trailing: Text('$pendingChoices'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryMetric extends StatelessWidget {
+  const _SummaryMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          Text(value, style: Theme.of(context).textTheme.titleMedium),
+          Text(label, style: Theme.of(context).textTheme.labelSmall),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailsStep extends StatelessWidget {
+  const _DetailsStep({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card.outlined(
+      child: ListTile(
+        leading: const Icon(Icons.person_outline),
+        title: Text(name.trim().isEmpty ? '角色名尚未填写' : name.trim()),
+        subtitle: const Text('角色名始终位于每个步骤顶部；头像、外貌和人物经历可在角色卡中继续完善。'),
+      ),
+    );
+  }
+}
+
+class _RuleGrantPreview extends StatelessWidget {
+  const _RuleGrantPreview({required this.entries, required this.level});
+
+  final List<ContentEntry> entries;
+  final int level;
+
+  @override
+  Widget build(BuildContext context) {
+    final grants =
+        <({ContentEntry entry, RuleGrantDefinition grant, int? level})>[];
+    for (final entry in entries) {
+      final rules = entry.rules;
+      if (rules == null) continue;
+      grants.addAll(
+        rules.grants.map((grant) => (entry: entry, grant: grant, level: null)),
+      );
+      for (final progression in rules.progression) {
+        if (progression.level > level) continue;
+        grants.addAll(
+          progression.grants.map(
+            (grant) => (entry: entry, grant: grant, level: progression.level),
+          ),
+        );
+      }
+    }
+    if (grants.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Card.filled(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.auto_awesome_outlined),
+                  const SizedBox(width: 8),
+                  Text('自动获得', style: Theme.of(context).textTheme.titleMedium),
+                ],
+              ),
+              const SizedBox(height: 8),
+              for (final item in grants)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(_grantIcon(item.grant.kind)),
+                  title: Text(item.grant.label),
+                  subtitle: Text(
+                    item.level == null
+                        ? item.entry.name
+                        : '${item.entry.name} · 等级 ${item.level}',
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  IconData _grantIcon(RuleGrantKind kind) {
+    return switch (kind) {
+      RuleGrantKind.feature => Icons.auto_awesome_outlined,
+      RuleGrantKind.proficiency => Icons.workspace_premium_outlined,
+      RuleGrantKind.spell => Icons.auto_fix_high_outlined,
+      RuleGrantKind.equipment => Icons.inventory_2_outlined,
+      RuleGrantKind.resource => Icons.battery_5_bar_outlined,
+      RuleGrantKind.action => Icons.bolt_outlined,
+      RuleGrantKind.conditionResistance => Icons.health_and_safety_outlined,
+      RuleGrantKind.speed => Icons.directions_run_outlined,
+      RuleGrantKind.armorClass => Icons.shield_outlined,
+      RuleGrantKind.hitPoints => Icons.favorite_outline,
+      RuleGrantKind.ability => Icons.hexagon_outlined,
+      RuleGrantKind.note => Icons.notes_outlined,
+    };
+  }
+}
+
+class _BuilderReviewStep extends StatelessWidget {
+  const _BuilderReviewStep({
+    required this.summary,
+    required this.review,
+    required this.pendingRuleChoices,
+  });
+
+  final String summary;
+  final _StandardBuildReview review;
+  final List<_ActiveRuleChoice> pendingRuleChoices;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('审核角色', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '完成度',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            Text('${review.completed}/${review.total} 已完成'),
+          ],
+        ),
+        const SizedBox(height: 8),
+        LinearProgressIndicator(value: review.progress),
+        const SizedBox(height: 12),
+        Card.filled(
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.fact_check_outlined),
+                title: const Text('审核摘要'),
+                subtitle: Text(summary),
+              ),
+              const Divider(height: 1),
+              for (final check in review.checks)
+                ListTile(
+                  dense: true,
+                  leading: Icon(
+                    check.done
+                        ? Icons.check_circle_outline
+                        : Icons.radio_button_unchecked,
+                  ),
+                  title: Text(check.label),
+                  trailing: Text(check.done ? '完成' : '待完成'),
+                ),
+            ],
+          ),
+        ),
+        if (!review.isReady || pendingRuleChoices.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Card.outlined(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '创建前仍需完成',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  for (final missing in review.missing)
+                    ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.error_outline),
+                      title: Text(missing),
+                    ),
+                  for (final choice in pendingRuleChoices)
+                    ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.pending_actions_outlined),
+                      title: Text(choice.definition.label),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ] else ...[
+          const SizedBox(height: 12),
+          Card.outlined(
+            child: const ListTile(
+              leading: Icon(Icons.check_circle_outline),
+              title: Text('创建前检查通过'),
+              subtitle: Text('角色会保存所选资料条目的稳定引用与当前规则授予结果。'),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ActiveRuleChoice {
+  const _ActiveRuleChoice({
+    required this.key,
+    required this.sourceEntryId,
+    required this.sourceName,
+    required this.builderStep,
+    required this.definition,
+    this.level,
+  });
+
+  final String key;
+  final String sourceEntryId;
+  final String sourceName;
+  final int builderStep;
+  final int? level;
+  final RuleChoiceDefinition definition;
+}
+
+class _RuleChoiceSection extends StatelessWidget {
+  const _RuleChoiceSection({
+    required this.choice,
+    required this.options,
+    required this.allEntries,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final _ActiveRuleChoice choice;
+  final List<ContentEntry> options;
+  final List<ContentEntry> allEntries;
+  final Set<String> selected;
+  final ValueChanged<Set<String>> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final definition = choice.definition;
+    final valid =
+        selected.length >= definition.minimum &&
+        selected.length <= definition.maximum;
+    final sourceLabel = choice.level == null
+        ? choice.sourceName
+        : '${choice.sourceName} · 等级 ${choice.level}';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Card.outlined(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      definition.label,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  Icon(
+                    valid ? Icons.check_circle : Icons.pending_outlined,
+                    color: valid
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.error,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '$sourceLabel · 选择 ${definition.minimum}-${definition.maximum} 项',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              if (options.isEmpty)
+                Text(
+                  '资料库中缺少 ${definition.optionType} 选项。',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                )
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final option in options)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          FilterChip(
+                            label: Text(option.name),
+                            selected: selected.contains(option.id),
+                            onSelected: (value) {
+                              final next = Set<String>.from(selected);
+                              if (value) {
+                                if (definition.maximum == 1) next.clear();
+                                if (next.length < definition.maximum) {
+                                  next.add(option.id);
+                                }
+                              } else {
+                                next.remove(option.id);
+                              }
+                              onChanged(next);
+                            },
+                          ),
+                          IconButton(
+                            key: Key('builder-open-entry-${option.id}'),
+                            tooltip: '查看 ${option.name}',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => Navigator.of(context).push<void>(
+                              MaterialPageRoute(
+                                builder: (context) => ContentEntryPreviewPage(
+                                  entry: option,
+                                  entries: allEntries,
+                                ),
+                              ),
+                            ),
+                            icon: const Icon(Icons.open_in_new, size: 18),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1110,6 +2421,7 @@ class _ChoiceSection extends StatelessWidget {
     required this.options,
     required this.onSelected,
     this.sourceLabel,
+    this.onOpenOption,
   });
 
   final String title;
@@ -1117,6 +2429,7 @@ class _ChoiceSection extends StatelessWidget {
   final List<String> options;
   final ValueChanged<String> onSelected;
   final String? sourceLabel;
+  final ValueChanged<String>? onOpenOption;
 
   @override
   Widget build(BuildContext context) {
@@ -1139,10 +2452,22 @@ class _ChoiceSection extends StatelessWidget {
             runSpacing: 8,
             children: [
               for (final option in options)
-                ChoiceChip(
-                  label: Text(option),
-                  selected: option == selected,
-                  onSelected: (_) => onSelected(option),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ChoiceChip(
+                      label: Text(option),
+                      selected: option == selected,
+                      onSelected: (_) => onSelected(option),
+                    ),
+                    if (onOpenOption != null)
+                      IconButton(
+                        tooltip: '查看 $option',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => onOpenOption!(option),
+                        icon: const Icon(Icons.open_in_new, size: 18),
+                      ),
+                  ],
                 ),
             ],
           ),
@@ -1403,6 +2728,7 @@ class _MultiChoiceSection extends StatelessWidget {
     required this.onChanged,
     required this.emptyLabel,
     this.sourceLabel,
+    this.onOpenOption,
   });
 
   final String title;
@@ -1411,6 +2737,7 @@ class _MultiChoiceSection extends StatelessWidget {
   final ValueChanged<Set<String>> onChanged;
   final String emptyLabel;
   final String? sourceLabel;
+  final ValueChanged<String>? onOpenOption;
 
   @override
   Widget build(BuildContext context) {
@@ -1436,18 +2763,30 @@ class _MultiChoiceSection extends StatelessWidget {
               runSpacing: 8,
               children: [
                 for (final option in options)
-                  FilterChip(
-                    label: Text(option),
-                    selected: selected.contains(option),
-                    onSelected: (isSelected) {
-                      final next = {...selected};
-                      if (isSelected) {
-                        next.add(option);
-                      } else {
-                        next.remove(option);
-                      }
-                      onChanged(next);
-                    },
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      FilterChip(
+                        label: Text(option),
+                        selected: selected.contains(option),
+                        onSelected: (isSelected) {
+                          final next = {...selected};
+                          if (isSelected) {
+                            next.add(option);
+                          } else {
+                            next.remove(option);
+                          }
+                          onChanged(next);
+                        },
+                      ),
+                      if (onOpenOption != null)
+                        IconButton(
+                          tooltip: '查看 $option',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => onOpenOption!(option),
+                          icon: const Icon(Icons.open_in_new, size: 18),
+                        ),
+                    ],
                   ),
               ],
             ),
@@ -1513,4 +2852,27 @@ String _inventoryToLines(List<Object?> inventory) {
         return '$item';
       })
       .join('\n');
+}
+
+List<Object?> _mergeInventory(List<Object?> current, List<Object?> generated) {
+  final result = <Object?>[...current];
+  final keys = {for (final item in current) _inventoryIdentity(item)}
+    ..removeWhere((key) => key.isEmpty);
+  for (final item in generated) {
+    final key = _inventoryIdentity(item);
+    if (key.isEmpty || !keys.add(key)) continue;
+    result.add(item);
+  }
+  return result;
+}
+
+String _inventoryIdentity(Object? item) {
+  if (item is Map) {
+    final entryId = item['entryId']?.toString().trim();
+    if (entryId != null && entryId.isNotEmpty) return 'id:$entryId';
+    final name = item['name']?.toString().trim().toLowerCase() ?? '';
+    return name.isEmpty ? '' : 'name:$name';
+  }
+  final name = '$item'.trim().toLowerCase();
+  return name.isEmpty ? '' : 'name:$name';
 }

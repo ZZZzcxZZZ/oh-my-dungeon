@@ -4,6 +4,7 @@ import '../../campaigns/data/local/campaign_cache_repository.dart';
 import '../../campaigns/domain/campaign_change.dart';
 import '../domain/content_entry.dart';
 import '../domain/content_package_manifest.dart';
+import '../../rules/domain/character_rule_definition.dart';
 import 'local/content_repository.dart';
 
 /// 组合 [ContentRepository] 与战役缓存，对外暴露统一的只读 Wiki 查询接口。
@@ -50,8 +51,9 @@ class CampaignAwareContentRepository implements ContentRepository {
 
     final campaignId = activeCampaignId();
     if (campaignId != null) {
-      final campaignEntries =
-          await campaign.watchContentEntries(campaignId).first;
+      final campaignEntries = await campaign
+          .watchContentEntries(campaignId)
+          .first;
       for (final summary in campaignEntries) {
         if (summary.deletedAt != null) continue;
         final entry = _toContentEntry(campaignId, summary);
@@ -122,13 +124,12 @@ class CampaignAwareContentRepository implements ContentRepository {
     required List<ContentEntry> entries,
     required String contentHash,
     Map<String, Uint8List> assets = const {},
-  }) =>
-      local.replacePackage(
-        manifest: manifest,
-        entries: entries,
-        contentHash: contentHash,
-        assets: assets,
-      );
+  }) => local.replacePackage(
+    manifest: manifest,
+    entries: entries,
+    contentHash: contentHash,
+    assets: assets,
+  );
 
   @override
   Future<void> setPackageEnabled(String packageId, bool enabled) =>
@@ -175,6 +176,18 @@ class CampaignAwareContentRepository implements ContentRepository {
       tags: source.tags,
       source: source.source,
       origin: origin,
+      relations: [
+        for (final relation in source.relations)
+          ContentRelation(
+            type: relation.type,
+            targetId: _localKey(relation.targetId),
+          ),
+      ],
+      rules: source.rules == null
+          ? null
+          : CharacterRuleDefinition.fromJson(
+              _rebaseRuleReferences(source.rules!.toJson(), _localKey),
+            ),
     );
   }
 
@@ -200,8 +213,25 @@ class CampaignAwareContentRepository implements ContentRepository {
     if (summaryText is String) {
       json['summary'] = summaryText;
     }
-    return ContentEntry.fromJson(json)
-        .withOrigin(ContentOrigin.campaign);
+    final relations = summary.entry['relations'];
+    if (relations is List) {
+      json['relations'] = [
+        for (final raw in relations.whereType<Map>())
+          {
+            ...Map<String, Object?>.from(raw),
+            if (raw['targetId'] is String)
+              'targetId': _campaignKey(campaignId, raw['targetId'] as String),
+          },
+      ];
+    }
+    final rules = summary.entry['rules'];
+    if (rules is Map) {
+      json['rules'] = _rebaseRuleReferences(
+        Map<String, Object?>.from(rules),
+        (entryId) => _campaignKey(campaignId, entryId),
+      );
+    }
+    return ContentEntry.fromJson(json).withOrigin(ContentOrigin.campaign);
   }
 
   bool _matchesQuery(ContentEntry entry, ContentQuery query) {
@@ -220,5 +250,75 @@ class CampaignAwareContentRepository implements ContentRepository {
       if (!hay.contains(needle)) return false;
     }
     return true;
+  }
+
+  Map<String, Object?> _rebaseRuleReferences(
+    Map<String, Object?> source,
+    String Function(String entryId) rebase,
+  ) {
+    String rebaseOnce(String entryId) {
+      if (entryId.startsWith(_localPrefix) ||
+          entryId.startsWith(_campaignPrefix)) {
+        return entryId;
+      }
+      return rebase(entryId);
+    }
+
+    Map<String, Object?> rewriteGrant(Object? raw) {
+      final grant = Map<String, Object?>.from(raw! as Map);
+      final entryId = grant['entryId'];
+      if (entryId is String) grant['entryId'] = rebaseOnce(entryId);
+      return grant;
+    }
+
+    Map<String, Object?> rewriteChoice(Object? raw) {
+      final choice = Map<String, Object?>.from(raw! as Map);
+      final optionIds = choice['optionEntryIds'];
+      if (optionIds is List) {
+        choice['optionEntryIds'] = [
+          for (final id in optionIds) rebaseOnce('$id'),
+        ];
+      }
+      final recommendedIds = choice['recommendedEntryIds'];
+      if (recommendedIds is List) {
+        choice['recommendedEntryIds'] = [
+          for (final id in recommendedIds) rebaseOnce('$id'),
+        ];
+      }
+      return choice;
+    }
+
+    List<Map<String, Object?>> rewriteList(
+      Object? raw,
+      Map<String, Object?> Function(Object? raw) rewrite,
+    ) {
+      if (raw is! List) return const [];
+      return raw.whereType<Map>().map(rewrite).toList(growable: false);
+    }
+
+    final result = Map<String, Object?>.from(source);
+    if (source['grants'] is List) {
+      result['grants'] = rewriteList(source['grants'], rewriteGrant);
+    }
+    if (source['choices'] is List) {
+      result['choices'] = rewriteList(source['choices'], rewriteChoice);
+    }
+    final progression = source['progression'];
+    if (progression is List) {
+      result['progression'] = [
+        for (final rawStep in progression.whereType<Map>())
+          () {
+            final step = Map<String, Object?>.from(rawStep);
+            if (step['grants'] is List) {
+              step['grants'] = rewriteList(step['grants'], rewriteGrant);
+            }
+            if (step['choices'] is List) {
+              step['choices'] = rewriteList(step['choices'], rewriteChoice);
+            }
+            return step;
+          }(),
+      ];
+    }
+    return result;
   }
 }

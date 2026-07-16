@@ -26,10 +26,10 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
   static const _defaultDiceKey = 'app_preferences.default_dice';
   static const _compactListsKey = 'app_preferences.compact_lists';
   static const _confirmBeforeRollKey = 'app_preferences.confirm_before_roll';
-  static const _rulesetKey = 'app_preferences.ruleset';
   static const _defaultCreationMethodKey =
       'app_preferences.default_creation_method';
-  static const _showLegacyContentKey = 'app_preferences.show_legacy_content';
+  static const _standardGuideMigrationKey =
+      'app_preferences.standard_guide_migrated';
   static const _showCharacterSourcesKey =
       'app_preferences.show_character_sources';
   static const _showEncumbranceKey = 'app_preferences.show_encumbrance';
@@ -43,6 +43,19 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
 
   @override
   Future<AppPreferences> load() async {
+    var defaultCreationMethod =
+        _preferences.getString(_defaultCreationMethodKey) ??
+        AppPreferences.defaults.defaultCreationMethod;
+    if (!(_preferences.getBool(_standardGuideMigrationKey) ?? false)) {
+      if (defaultCreationMethod == 'quick') {
+        defaultCreationMethod = 'standard';
+        await _preferences.setString(
+          _defaultCreationMethodKey,
+          defaultCreationMethod,
+        );
+      }
+      await _preferences.setBool(_standardGuideMigrationKey, true);
+    }
     return AppPreferences(
       themeMode: _themeModeFromString(_preferences.getString(_themeModeKey)),
       seedColorValue:
@@ -57,15 +70,7 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
       confirmBeforeRoll:
           _preferences.getBool(_confirmBeforeRollKey) ??
           AppPreferences.defaults.confirmBeforeRoll,
-      ruleset:
-          _preferences.getString(_rulesetKey) ??
-          AppPreferences.defaults.ruleset,
-      defaultCreationMethod:
-          _preferences.getString(_defaultCreationMethodKey) ??
-          AppPreferences.defaults.defaultCreationMethod,
-      showLegacyContent:
-          _preferences.getBool(_showLegacyContentKey) ??
-          AppPreferences.defaults.showLegacyContent,
+      defaultCreationMethod: defaultCreationMethod,
       showCharacterSources:
           _preferences.getBool(_showCharacterSourcesKey) ??
           AppPreferences.defaults.showCharacterSources,
@@ -97,14 +102,9 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
       _confirmBeforeRollKey,
       preferences.confirmBeforeRoll,
     );
-    await _preferences.setString(_rulesetKey, preferences.ruleset);
     await _preferences.setString(
       _defaultCreationMethodKey,
       preferences.defaultCreationMethod,
-    );
-    await _preferences.setBool(
-      _showLegacyContentKey,
-      preferences.showLegacyContent,
     );
     await _preferences.setBool(
       _showCharacterSourcesKey,
@@ -132,14 +132,16 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
     );
     final repo = syncRepository;
     if (repo != null) {
-      await repo.enqueue(SyncOperation(
-        id: 'vault:preferences:default:${DateTime.now().millisecondsSinceEpoch}',
-        scope: 'vault',
-        entityType: 'preferences',
-        entityId: 'default',
-        baseRevision: 0,
-        payloadJson: jsonEncode(preferences.toJson()),
-      ));
+      await repo.enqueue(
+        SyncOperation(
+          id: 'vault:preferences:default:${DateTime.now().millisecondsSinceEpoch}',
+          scope: 'vault',
+          entityType: 'preferences',
+          entityId: 'default',
+          baseRevision: 0,
+          payloadJson: jsonEncode(preferences.toJson()),
+        ),
+      );
     }
   }
 }

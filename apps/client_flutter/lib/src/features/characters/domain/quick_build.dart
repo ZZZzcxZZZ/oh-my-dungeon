@@ -12,6 +12,10 @@ class QuickBuildSelection {
     this.itemRefs = const [],
     this.abilities,
     this.skillProficiencies,
+    this.classEntryId,
+    this.speciesEntryId,
+    this.backgroundEntryId,
+    this.ruleChoices = const <String, List<String>>{},
   });
 
   final String name;
@@ -23,6 +27,10 @@ class QuickBuildSelection {
   final List<String> itemRefs;
   final Map<String, int>? abilities;
   final List<String>? skillProficiencies;
+  final String? classEntryId;
+  final String? speciesEntryId;
+  final String? backgroundEntryId;
+  final Map<String, List<String>> ruleChoices;
 }
 
 class QuickBuildService {

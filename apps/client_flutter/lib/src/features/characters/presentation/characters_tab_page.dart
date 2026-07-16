@@ -6,18 +6,23 @@ import '../../campaigns/presentation/actors/campaign_actor_directory_page.dart';
 import '../../campaigns/presentation/actors/publish_character_sheet.dart';
 import '../../campaigns/presentation/campaign_controller.dart';
 import '../../client_mode/domain/client_mode.dart';
-import '../../content/presentation/content_controller.dart';
+import '../../content/data/local/content_repository.dart';
+import '../../content/domain/content_entry.dart';
 import '../domain/character.dart';
+import '../domain/character_rule_projector.dart';
 import '../domain/dnd5e_rules.dart';
 import 'character_detail_page.dart';
 import 'character_controller.dart';
 import 'character_editor_page.dart';
+import 'character_upgrade_page.dart';
 
 class CharactersTabPage extends StatefulWidget {
   const CharactersTabPage({
     required this.controller,
     this.campaignController,
-    this.contentController,
+    this.contentRepository,
+    this.localContentRepository,
+    this.onCampaignContentSelected,
     this.appPreferencesController,
     this.modeController,
     this.actorController,
@@ -26,7 +31,9 @@ class CharactersTabPage extends StatefulWidget {
 
   final CharacterController controller;
   final CampaignController? campaignController;
-  final ContentController? contentController;
+  final ContentRepository? contentRepository;
+  final ContentRepository? localContentRepository;
+  final Future<void> Function(String campaignId)? onCampaignContentSelected;
   final AppPreferencesController? appPreferencesController;
   final ClientModeController? modeController;
   final CampaignActorController? actorController;
@@ -79,21 +86,11 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
       animation: Listenable.merge([
         widget.controller,
         widget.campaignController,
-        widget.contentController,
         widget.appPreferencesController,
       ]),
       builder: (context, _) {
         return Scaffold(
-          appBar: AppBar(
-            title: const Text('角色'),
-            actions: [
-              if (widget.modeController != null)
-                _ModeSwitchToggle(
-                  modeController: widget.modeController!,
-                  isDm: isDm,
-                ),
-            ],
-          ),
+          appBar: AppBar(title: const Text('角色')),
           floatingActionButton: isDm
               ? null
               : FloatingActionButton.extended(
@@ -153,8 +150,6 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     }
 
     final characters = widget.controller.characters;
-    final compact =
-        widget.appPreferencesController?.preferences.compactLists ?? false;
     if (characters.isEmpty) {
       return const Center(
         child: Padding(
@@ -164,29 +159,29 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
       );
     }
 
-    return ListView.separated(
-      padding: compact
-          ? const EdgeInsets.fromLTRB(12, 8, 12, 80)
-          : const EdgeInsets.fromLTRB(16, 16, 16, 96),
+    final list = ListView.separated(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
       itemCount: characters.length,
-      separatorBuilder: (context, index) => SizedBox(height: compact ? 4 : 8),
+      separatorBuilder: (context, index) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final character = characters[index];
         return _CharacterCard(
           character: character,
-          compact: compact,
           canPublish: widget.actorController != null,
           onOpen: () => _openDetailPage(character),
           onEdit: () => _openEditPage(character),
           onContentRefs: () => _showContentRefsDialog(character),
-          onBind: () => _showBindDialog(character),
           onPublish: widget.actorController == null
               ? null
               : () => _showPublishSheet(character),
           onHpDelta: (delta) => _adjustHp(character, delta),
+          onUpgrade: character.level >= 20
+              ? null
+              : () => _openUpgradePage(character),
         );
       },
     );
+    return list;
   }
 
   Future<void> _openCreatePage() async {
@@ -194,17 +189,18 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     widget.controller.takeLastCreatedCharacter();
     final campaignId = await _selectCampaignContentSource();
     if (!mounted) return;
-    if (campaignId != null && widget.contentController != null) {
-      await widget.contentController!.loadAvailableCampaignItems(
-        campaignId: campaignId,
-      );
-    } else if (widget.contentController != null) {
-      await widget.contentController!.loadItems();
+    final repository = campaignId == null
+        ? (widget.localContentRepository ?? widget.contentRepository)
+        : widget.contentRepository;
+    List<ContentEntry> contentEntries = const [];
+    if (repository != null) {
+      if (campaignId != null) {
+        await widget.onCampaignContentSelected?.call(campaignId);
+      }
+      if (!mounted) return;
+      contentEntries = await repository.search(const ContentQuery());
     }
     if (!mounted) return;
-    final contentItems = campaignId == null
-        ? (widget.contentController?.items ?? const [])
-        : (widget.contentController?.availableItems ?? const []);
     final defaultCreationMethod =
         widget.appPreferencesController?.preferences.defaultCreationMethod ??
         'fullSheet';
@@ -212,7 +208,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
       MaterialPageRoute(
         builder: (context) => CharacterEditorPage(
           defaultCreationMethod: defaultCreationMethod,
-          contentItems: contentItems,
+          contentEntries: contentEntries,
           onSubmit: (draft) async {
             final success = await widget.controller.createCharacter(draft);
             if (mounted) {
@@ -264,12 +260,29 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
   }
 
   Future<void> _openDetailPage(CharacterSheet character) async {
+    final repository =
+        widget.contentRepository ?? widget.localContentRepository;
+    final contentEntries = repository == null
+        ? const <ContentEntry>[]
+        : await repository.search(const ContentQuery());
+    if (!mounted) return;
+    final projectedCharacter = CharacterRuleProjector(
+      entries: {for (final entry in contentEntries) entry.id: entry},
+    ).project(character);
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (context) => CharacterDetailPage(
-          character: character,
+          character: projectedCharacter,
+          contentEntries: contentEntries,
+          onSaveCharacter: widget.controller.updateCharacter,
+          onUpgrade: projectedCharacter.level >= 20
+              ? null
+              : () => _openUpgradePage(projectedCharacter, contentEntries),
           initialTab:
-              widget.appPreferencesController?.preferences.defaultCharacterTab ??
+              widget
+                  .appPreferencesController
+                  ?.preferences
+                  .defaultCharacterTab ??
               'overview',
           onUpdateRuntime:
               ({
@@ -328,16 +341,25 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
 
   Future<void> _openEditPage(CharacterSheet character) async {
     final messenger = ScaffoldMessenger.of(context);
+    final repository =
+        widget.contentRepository ?? widget.localContentRepository;
+    final contentEntries = repository == null
+        ? const <ContentEntry>[]
+        : await repository.search(const ContentQuery());
+    if (!mounted) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (context) => CharacterEditorPage(
           initialCharacter: character,
+          contentEntries: contentEntries,
           onSubmit: (draft) async {
             final updated = character.copyWith(
               name: draft.name,
               level: draft.level,
-              classSummary: emptyToNull(draft.classSummary) ?? character.classSummary,
-              raceSummary: emptyToNull(draft.raceSummary) ?? character.raceSummary,
+              classSummary:
+                  emptyToNull(draft.classSummary) ?? character.classSummary,
+              raceSummary:
+                  emptyToNull(draft.raceSummary) ?? character.raceSummary,
               currentHp: draft.currentHp,
               maxHp: draft.maxHp,
               armorClass: draft.armorClass,
@@ -364,78 +386,27 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     );
   }
 
-  Future<void> _showBindDialog(CharacterSheet character) async {
-    if (widget.campaignController == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('暂无可绑定战役')),
-      );
-      return;
-    }
-    if (widget.campaignController!.campaigns.isEmpty) {
-      await widget.campaignController!.loadCampaigns();
-    }
-    if (!mounted) return;
-
-    final campaigns = widget.campaignController!.campaigns;
-    if (campaigns.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('暂无可绑定战役')));
-      return;
-    }
-
-    String selectedId = campaigns.first.id;
-    final messenger = ScaffoldMessenger.of(context);
-    final campaignId = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('绑定战役'),
-              content: DropdownButtonFormField<String>(
-                initialValue: selectedId,
-                decoration: const InputDecoration(
-                  labelText: '战役',
-                  border: OutlineInputBorder(),
-                ),
-                items: [
-                  for (final campaign in campaigns)
-                    DropdownMenuItem(
-                      value: campaign.id,
-                      child: Text(campaign.name),
-                    ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setDialogState(() => selectedId = value);
-                  }
-                },
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.of(context).pop(selectedId),
-                  child: const Text('绑定'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+  Future<CharacterSheet?> _openUpgradePage(
+    CharacterSheet character, [
+    List<ContentEntry>? loadedEntries,
+  ]) async {
+    final repository =
+        widget.contentRepository ?? widget.localContentRepository;
+    final contentEntries =
+        loadedEntries ??
+        (repository == null
+            ? const <ContentEntry>[]
+            : await repository.search(const ContentQuery()));
+    if (!mounted) return null;
+    return Navigator.of(context).push<CharacterSheet>(
+      MaterialPageRoute<CharacterSheet>(
+        builder: (context) => CharacterUpgradePage(
+          character: character,
+          contentEntries: contentEntries,
+          onApply: widget.controller.updateCharacter,
+        ),
+      ),
     );
-
-    if (campaignId == null) return;
-    // ignore: deprecated_member_use_from_same_package
-    final success = await widget.controller.bindCharacterToCampaign(
-      characterId: character.id,
-      campaignId: campaignId,
-    );
-    if (!mounted) return;
-    messenger.showSnackBar(SnackBar(content: Text(success ? '角色已绑定' : '绑定失败')));
   }
 
   Future<void> _showContentRefsDialog(CharacterSheet character) async {
@@ -530,173 +501,324 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
   }
 }
 
-/// Player <-> DM 模式切换按钮。Player 模式下显示“DM 视图”，反之亦然。
-class _ModeSwitchToggle extends StatelessWidget {
-  const _ModeSwitchToggle({required this.modeController, required this.isDm});
-
-  final ClientModeController modeController;
-  final bool isDm;
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      key: Key(isDm ? 'mode-switch-player' : 'mode-switch-dm'),
-      tooltip: isDm ? '切换为玩家视图' : '切换为 DM 视图',
-      icon: Icon(isDm ? Icons.person_outline : Icons.castle_outlined),
-      onPressed: () => modeController.setMode(
-        isDm ? ClientMode.player : ClientMode.dungeonMaster,
-      ),
-    );
-  }
-}
-
-class _CharacterCard extends StatelessWidget {
+class _CharacterCard extends StatefulWidget {
   const _CharacterCard({
     required this.character,
-    required this.compact,
     required this.canPublish,
     required this.onOpen,
     required this.onEdit,
     required this.onContentRefs,
-    required this.onBind,
     required this.onHpDelta,
+    this.onUpgrade,
     this.onPublish,
   });
 
   final CharacterSheet character;
-  final bool compact;
   final bool canPublish;
   final VoidCallback onOpen;
   final VoidCallback onEdit;
   final VoidCallback onContentRefs;
-  final VoidCallback onBind;
   final VoidCallback? onPublish;
   final ValueChanged<int> onHpDelta;
+  final VoidCallback? onUpgrade;
+
+  @override
+  State<_CharacterCard> createState() => _CharacterCardState();
+}
+
+class _CharacterCardState extends State<_CharacterCard> {
+  bool _expanded = false;
+
+  Future<void> _showHpAdjustmentDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _HpAdjustmentDialog(onAdjust: widget.onHpDelta),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final subtitle = [
-      if (character.raceSummary.isNotEmpty) character.raceSummary,
-      if (character.classSummary.isNotEmpty) character.classSummary,
-      'Lv.${character.level}',
+      if (widget.character.raceSummary.isNotEmpty) widget.character.raceSummary,
+      if (widget.character.classSummary.isNotEmpty)
+        widget.character.classSummary,
+      'Lv.${widget.character.level}',
     ].join(' / ');
 
+    final perceptionBonus = Dnd5eRules.skillBonus(
+      skillName: '察觉',
+      abilities: widget.character.abilityMap,
+      level: widget.character.level,
+      proficient: widget.character.skillMap['察觉'] == true,
+    );
+    final primaryResource = widget.character.classResources.firstOrNull;
+
     return Card.outlined(
+      key: Key('character-card-${widget.character.id}'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ListTile(
-            onTap: onOpen,
-            dense: compact,
-            visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+            onTap: widget.onOpen,
             leading: CircleAvatar(
-              child: Text(character.name.characters.first.toUpperCase()),
+              child: Text(widget.character.name.characters.first.toUpperCase()),
             ),
-            title: Text(character.name),
-            subtitle: compact
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('紧凑角色列表'),
-                      Text(subtitle),
-                      Text(
-                        'HP ${character.currentHp}/${character.maxHp} · AC ${character.armorClass} · 先攻 ${Dnd5eRules.formatModifier(character.initiativeBonus)}',
-                      ),
-                    ],
-                  )
-                : Padding(
-                    padding: const EdgeInsets.only(top: 6),
+            title: Text(widget.character.name),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(subtitle),
+            ),
+            trailing: IconButton(
+              key: Key('character-expand-${widget.character.id}'),
+              tooltip: _expanded ? '收起角色摘要' : '展开角色摘要',
+              onPressed: () => setState(() => _expanded = !_expanded),
+              icon: Icon(
+                _expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            alignment: Alignment.topCenter,
+            child: _expanded
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(subtitle),
+                        const Divider(),
+                        const SizedBox(height: 8),
+                        LayoutBuilder(
+                          builder: (context, constraints) => GridView.count(
+                            crossAxisCount: constraints.maxWidth >= 520 ? 3 : 2,
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            crossAxisSpacing: 8,
+                            mainAxisSpacing: 8,
+                            childAspectRatio: 2.5,
+                            children: [
+                              _CharacterSummaryTile(
+                                label: '生命值',
+                                value:
+                                    'HP ${widget.character.currentHp}/${widget.character.maxHp}',
+                                progress: widget.character.maxHp <= 0
+                                    ? 0
+                                    : (widget.character.currentHp /
+                                              widget.character.maxHp)
+                                          .clamp(0, 1),
+                              ),
+                              _CharacterSummaryTile(
+                                label: '护甲等级',
+                                value: '${widget.character.armorClass}',
+                              ),
+                              _CharacterSummaryTile(
+                                label: '先攻',
+                                value: Dnd5eRules.formatModifier(
+                                  widget.character.initiativeBonus,
+                                ),
+                              ),
+                              _CharacterSummaryTile(
+                                label: '被动察觉',
+                                value: '${10 + perceptionBonus}',
+                              ),
+                              if (primaryResource != null)
+                                _CharacterSummaryTile(
+                                  label: primaryResource.name,
+                                  value:
+                                      '${widget.character.classResourcesUsed[primaryResource.id] ?? 0}/${primaryResource.maximum} 已用',
+                                ),
+                            ],
+                          ),
+                        ),
+                        if (widget.character.conditions.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          Text(
+                            '状态',
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                          const SizedBox(height: 4),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              for (final condition
+                                  in widget.character.conditions)
+                                Chip(
+                                  avatar: const Icon(
+                                    Icons.warning_amber,
+                                    size: 16,
+                                  ),
+                                  label: Text(condition),
+                                ),
+                            ],
+                          ),
+                        ],
                         const SizedBox(height: 8),
                         Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
+                          spacing: 4,
+                          runSpacing: 4,
                           children: [
-                            Chip(
-                              label: Text(
-                                'HP ${character.currentHp}/${character.maxHp}',
+                            if (widget.onUpgrade != null)
+                              FilledButton.tonalIcon(
+                                onPressed: widget.onUpgrade,
+                                icon: const Icon(Icons.upgrade),
+                                label: const Text('升级'),
                               ),
+                            OutlinedButton.icon(
+                              onPressed: _showHpAdjustmentDialog,
+                              icon: const Icon(Icons.favorite_outline),
+                              label: const Text('调整 HP'),
                             ),
-                            Chip(label: Text('AC ${character.armorClass}')),
-                            Chip(
-                              label: Text(
-                                '先攻 ${Dnd5eRules.formatModifier(character.initiativeBonus)}',
-                              ),
-                            ),
-                            Chip(
-                              label: Text(
-                                '熟练 +${Dnd5eRules.proficiencyBonus(character.level)}',
-                              ),
+                            PopupMenuButton<_CharacterAction>(
+                              tooltip: '更多角色操作',
+                              onSelected: (action) {
+                                switch (action) {
+                                  case _CharacterAction.edit:
+                                    widget.onEdit();
+                                  case _CharacterAction.contentRefs:
+                                    widget.onContentRefs();
+                                }
+                              },
+                              itemBuilder: (context) => const [
+                                PopupMenuItem(
+                                  value: _CharacterAction.edit,
+                                  child: Text('编辑'),
+                                ),
+                                PopupMenuItem(
+                                  value: _CharacterAction.contentRefs,
+                                  child: Text('内容引用'),
+                                ),
+                              ],
                             ),
                           ],
                         ),
+                        if (widget.canPublish && widget.onPublish != null)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              key: Key(
+                                'publish-character-${widget.character.id}',
+                              ),
+                              onPressed: widget.onPublish,
+                              icon: const Icon(Icons.campaign_outlined),
+                              label: const Text('发布到战役'),
+                            ),
+                          ),
                       ],
                     ),
-                  ),
-            trailing: Wrap(
-              spacing: 2,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                IconButton(
-                  tooltip: 'HP -1',
-                  onPressed: () => onHpDelta(-1),
-                  icon: const Icon(Icons.remove_circle_outline),
-                ),
-                IconButton(
-                  tooltip: 'HP +1',
-                  onPressed: () => onHpDelta(1),
-                  icon: const Icon(Icons.add_circle_outline),
-                ),
-                PopupMenuButton<_CharacterAction>(
-                  tooltip: '角色操作',
-                  onSelected: (action) {
-                    switch (action) {
-                      case _CharacterAction.edit:
-                        onEdit();
-                      case _CharacterAction.contentRefs:
-                        onContentRefs();
-                      case _CharacterAction.bind:
-                        onBind();
-                    }
-                  },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: _CharacterAction.edit, child: Text('编辑')),
-                    PopupMenuItem(
-                      value: _CharacterAction.contentRefs,
-                      child: Text('内容引用'),
-                    ),
-                    PopupMenuItem(
-                      value: _CharacterAction.bind,
-                      child: Text('绑定战役'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                  )
+                : const SizedBox.shrink(),
           ),
-          if (canPublish && onPublish != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  key: Key('publish-character-${character.id}'),
-                  onPressed: onPublish,
-                  icon: const Icon(Icons.campaign_outlined),
-                  label: const Text('发布到战役'),
-                ),
-              ),
-            ),
         ],
       ),
     );
   }
 }
 
-enum _CharacterAction { edit, contentRefs, bind }
+class _HpAdjustmentDialog extends StatefulWidget {
+  const _HpAdjustmentDialog({required this.onAdjust});
+
+  final ValueChanged<int> onAdjust;
+
+  @override
+  State<_HpAdjustmentDialog> createState() => _HpAdjustmentDialogState();
+}
+
+class _HpAdjustmentDialogState extends State<_HpAdjustmentDialog> {
+  final _amountController = TextEditingController(text: '1');
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  void _apply(int direction) {
+    final amount = int.tryParse(_amountController.text) ?? 0;
+    if (amount <= 0) return;
+    widget.onAdjust(direction * amount);
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('调整 HP'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            key: const Key('character-card-hp-amount'),
+            controller: _amountController,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: '数值'),
+          ),
+          const SizedBox(height: 8),
+          const Text('一次输入本次伤害或治疗量'),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton.tonalIcon(
+          onPressed: () => _apply(-1),
+          icon: const Icon(Icons.heart_broken_outlined),
+          label: const Text('受到伤害'),
+        ),
+        FilledButton.icon(
+          onPressed: () => _apply(1),
+          icon: const Icon(Icons.healing_outlined),
+          label: const Text('恢复'),
+        ),
+      ],
+    );
+  }
+}
+
+class _CharacterSummaryTile extends StatelessWidget {
+  const _CharacterSummaryTile({
+    required this.label,
+    required this.value,
+    this.progress,
+  });
+
+  final String label;
+  final String value;
+  final double? progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.secondaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(label, style: Theme.of(context).textTheme.labelSmall),
+            Text(value, style: Theme.of(context).textTheme.titleSmall),
+            if (progress != null) ...[
+              const SizedBox(height: 4),
+              LinearProgressIndicator(value: progress),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+enum _CharacterAction { edit, contentRefs }
 
 String? emptyToNull(String? value) {
   if (value == null || value.isEmpty) return null;

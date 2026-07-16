@@ -82,6 +82,18 @@ final _campaignChatMessageJson = {
   'avatarUrl': null,
   'kind': 'action',
   'content': '推开吱呀作响的木门',
+  'actionSnapshot': {
+    'id': 'action-surge',
+    'name': '动作如潮',
+    'entryId': 'guide:feature/action-surge',
+    'formula': '1/use',
+    'actorRevision': 3,
+  },
+  'eventData': {
+    'targetActorId': 'actor-1',
+    'checkType': 'skill',
+    'checkKey': '察觉',
+  },
   'createdAt': '2026-07-09T00:00:00.000Z',
 };
 
@@ -94,6 +106,18 @@ final _campaignChatMessage = CampaignChatMessage(
   avatarUrl: null,
   kind: 'action',
   content: '推开吱呀作响的木门',
+  actionSnapshot: {
+    'id': 'action-surge',
+    'name': '动作如潮',
+    'entryId': 'guide:feature/action-surge',
+    'formula': '1/use',
+    'actorRevision': 3,
+  },
+  eventData: {
+    'targetActorId': 'actor-1',
+    'checkType': 'skill',
+    'checkKey': '察觉',
+  },
   createdAt: '2026-07-09T00:00:00.000Z',
 );
 
@@ -268,6 +292,167 @@ void main() {
     });
   });
 
+  group('CampaignApiClient.getWorkspaceContext', () {
+    test('loads the viewer-scoped campaign workspace context', () async {
+      http.Request? captured;
+      final client = CampaignApiClient(
+        httpClient: MockClient((request) async {
+          captured = request;
+          return http.Response(
+            jsonEncode({
+              'campaign': _campaignJson,
+              'membership': {
+                ..._membershipJson,
+                'boundActorId': 'actor-1',
+                'activeSpeakerActorId': 'actor-1',
+                'speakerMode': 'boundActor',
+                'lastReadAt': null,
+              },
+              'members': const [
+                {'userId': 'user-1', 'displayName': 'ranger', 'role': 'player'},
+              ],
+              'actors': const [
+                {
+                  'id': 'actor-1',
+                  'ownerUserId': 'user-1',
+                  'actorType': 'player',
+                  'status': 'active',
+                  'lifecycle': 'persistent',
+                  'displayName': 'Arannis',
+                  'avatarAssetId': null,
+                  'publicHealthState': 'healthy',
+                },
+              ],
+              'capabilities': const {
+                'canManageCampaign': false,
+                'canManageMembers': false,
+                'canCreateActors': false,
+                'canSpeakAsNarrator': false,
+              },
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+
+      final context = await client.getWorkspaceContext(
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: _accessToken,
+        campaignId: 'camp-1',
+      );
+
+      expect(captured?.method, 'GET');
+      expect(captured?.url.toString(), '$_apiBaseUrl/campaigns/camp-1/context');
+      expect(context.membership.boundActorId, 'actor-1');
+      expect(context.actors.single.publicHealthState, 'healthy');
+      expect(context.capabilities.canManageCampaign, isFalse);
+    });
+  });
+
+  group('CampaignApiClient.updateSpeaker', () {
+    test('persists the selected campaign speaker instead of trusting a message payload', () async {
+      http.Request? captured;
+      final client = CampaignApiClient(
+        httpClient: MockClient((request) async {
+          captured = request;
+          return http.Response(
+            jsonEncode({
+              ..._membershipJson,
+              'activeSpeakerActorId': 'npc-1',
+              'speakerMode': 'actor',
+              'lastReadAt': null,
+            }),
+            200,
+          );
+        }),
+      );
+
+      final membership = await client.updateSpeaker(
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: _accessToken,
+        campaignId: 'camp-1',
+        speakerMode: 'actor',
+        actorId: 'npc-1',
+      );
+
+      expect(captured?.method, 'PUT');
+      expect(captured?.url.toString(), '$_apiBaseUrl/campaigns/camp-1/speaker');
+      expect(jsonDecode(captured!.body), {
+        'speakerMode': 'actor',
+        'actorId': 'npc-1',
+      });
+      expect(membership.activeSpeakerActorId, 'npc-1');
+    });
+  });
+
+  group('CampaignApiClient archives', () {
+    test('lists archive entries and creates a clue with JSON payload', () async {
+      final requests = <http.Request>[];
+      final client = CampaignApiClient(
+        httpClient: MockClient((request) async {
+          requests.add(request);
+          if (request.method == 'GET') {
+            return http.Response(
+              jsonEncode([
+                {
+                  'id': 'archive-1',
+                  'campaignId': 'camp-1',
+                  'kind': 'clue',
+                  'title': 'The silver key',
+                  'summary': 'Found below the chapel.',
+                  'payload': {'location': 'chapel'},
+                  'pinned': false,
+                  'updatedAt': '2026-07-16T00:00:00.000Z',
+                },
+              ]),
+              200,
+            );
+          }
+          return http.Response(
+            jsonEncode({
+              'id': 'archive-2',
+              'campaignId': 'camp-1',
+              'kind': 'clue',
+              'title': 'The silver key',
+              'summary': 'Found below the chapel.',
+              'payload': {'location': 'chapel'},
+              'pinned': false,
+              'updatedAt': '2026-07-16T00:00:00.000Z',
+            }),
+            201,
+          );
+        }),
+      );
+
+      final entries = await client.listArchives(
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: _accessToken,
+        campaignId: 'camp-1',
+      );
+      final created = await client.createArchiveEntry(
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: _accessToken,
+        campaignId: 'camp-1',
+        kind: 'clue',
+        title: 'The silver key',
+        summary: 'Found below the chapel.',
+        payload: const {'location': 'chapel'},
+      );
+
+      expect(entries.single.title, 'The silver key');
+      expect(created.id, 'archive-2');
+      expect(requests[0].url.toString(), '$_apiBaseUrl/campaigns/camp-1/archives');
+      expect(requests[1].method, 'POST');
+      expect(jsonDecode(requests[1].body), {
+        'kind': 'clue',
+        'title': 'The silver key',
+        'summary': 'Found below the chapel.',
+        'payload': {'location': 'chapel'},
+      });
+    });
+  });
+
   group('CampaignApiClient.createInvite', () {
     test('posts to the invites endpoint and returns the invite', () async {
       http.Request? captured;
@@ -286,17 +471,13 @@ void main() {
         apiBaseUrl: _apiBaseUrl,
         accessToken: _accessToken,
         campaignId: 'camp-1',
-        roleOnJoin: 'player',
         maxUses: 1,
       );
 
       expect(captured?.method, 'POST');
       expect(captured?.url.toString(), '$_apiBaseUrl/campaigns/camp-1/invites');
       expect(captured?.headers['authorization'], 'Bearer $_accessToken');
-      expect(jsonDecode(captured!.body), {
-        'roleOnJoin': 'player',
-        'maxUses': 1,
-      });
+      expect(jsonDecode(captured!.body), {'maxUses': 1});
       expect(result, _invite);
     });
   });
@@ -435,6 +616,25 @@ void main() {
       expect(result, [_campaignChatMessage]);
     });
 
+    test('adds a trimmed query when searching campaign messages', () async {
+      http.Request? captured;
+      final client = CampaignApiClient(
+        httpClient: MockClient((request) async {
+          captured = request;
+          return http.Response('[]', 200);
+        }),
+      );
+
+      await client.listMessages(
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: _accessToken,
+        campaignId: 'camp-1',
+        query: ' chapel ',
+      );
+
+      expect(captured?.url.queryParameters, {'query': 'chapel'});
+    });
+
     test('sends action messages with campaign actor identity', () async {
       http.Request? captured;
       final client = CampaignApiClient(
@@ -455,6 +655,12 @@ void main() {
         kind: 'action',
         content: '推开吱呀作响的木门',
         campaignActorId: 'actor-1',
+        actionId: 'action-surge',
+        eventData: const {
+          'targetActorId': 'actor-1',
+          'checkType': 'skill',
+          'checkKey': '察觉',
+        },
       );
 
       expect(captured?.method, 'POST');
@@ -467,6 +673,12 @@ void main() {
         'kind': 'action',
         'content': '推开吱呀作响的木门',
         'campaignActorId': 'actor-1',
+        'actionId': 'action-surge',
+        'eventData': {
+          'targetActorId': 'actor-1',
+          'checkType': 'skill',
+          'checkKey': '察觉',
+        },
       });
       expect(result, _campaignChatMessage);
     });

@@ -13,6 +13,19 @@ void main() {
   );
 
   group('InMemoryAuthTokenStore', () {
+    test('enables auto-login by default', () async {
+      final store = InMemoryAuthTokenStore();
+      expect(await store.getAutoLoginEnabled('server-a'), isTrue);
+    });
+
+    test('stores auto-login preference per server', () async {
+      final store = InMemoryAuthTokenStore();
+      await store.setAutoLoginEnabled('server-a', false);
+
+      expect(await store.getAutoLoginEnabled('server-a'), isFalse);
+      expect(await store.getAutoLoginEnabled('server-b'), isTrue);
+    });
+
     test('returns null when no tokens have been saved for a server', () async {
       final store = InMemoryAuthTokenStore();
       expect(await store.getTokens('server-a'), isNull);
@@ -56,6 +69,29 @@ void main() {
   });
 
   group('SharedPreferencesAuthTokenStore', () {
+    test('enables auto-login by default', () async {
+      SharedPreferences.setMockInitialValues({});
+      final store = SharedPreferencesAuthTokenStore(
+        await SharedPreferences.getInstance(),
+      );
+
+      expect(await store.getAutoLoginEnabled('server-a'), isTrue);
+    });
+
+    test('persists auto-login preference across store instances', () async {
+      SharedPreferences.setMockInitialValues({});
+      final firstStore = SharedPreferencesAuthTokenStore(
+        await SharedPreferences.getInstance(),
+      );
+      await firstStore.setAutoLoginEnabled('server-a', false);
+
+      final secondStore = SharedPreferencesAuthTokenStore(
+        await SharedPreferences.getInstance(),
+      );
+      expect(await secondStore.getAutoLoginEnabled('server-a'), isFalse);
+      expect(await secondStore.getAutoLoginEnabled('server-b'), isTrue);
+    });
+
     test('persists tokens across store instances', () async {
       SharedPreferences.setMockInitialValues({});
       final firstStore = SharedPreferencesAuthTokenStore(

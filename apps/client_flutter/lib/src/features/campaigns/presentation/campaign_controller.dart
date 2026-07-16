@@ -6,6 +6,7 @@ import '../../auth/presentation/auth_controller.dart';
 import '../data/campaign_api_client.dart';
 import '../data/campaign_socket_service.dart';
 import '../domain/campaign.dart';
+import '../domain/campaign_archive_entry.dart';
 
 class CampaignController extends ChangeNotifier {
   CampaignController({
@@ -35,6 +36,12 @@ class CampaignController extends ChangeNotifier {
   List<CampaignChatMessage> _messages = [];
   bool _messagesLoading = false;
   String? _messagesError;
+  CampaignWorkspaceContext? _workspaceContext;
+  bool _workspaceContextLoading = false;
+  String? _workspaceContextError;
+  List<CampaignArchiveEntry> _archives = [];
+  bool _archivesLoading = false;
+  String? _archivesError;
 
   List<Campaign> get campaigns => _campaigns;
   bool get isLoading => _loading;
@@ -48,6 +55,12 @@ class CampaignController extends ChangeNotifier {
   List<CampaignChatMessage> get messages => _messages;
   bool get isMessagesLoading => _messagesLoading;
   String? get messagesError => _messagesError;
+  CampaignWorkspaceContext? get workspaceContext => _workspaceContext;
+  bool get isWorkspaceContextLoading => _workspaceContextLoading;
+  String? get workspaceContextError => _workspaceContextError;
+  List<CampaignArchiveEntry> get archives => _archives;
+  bool get isArchivesLoading => _archivesLoading;
+  String? get archivesError => _archivesError;
 
   void _onAuthChanged() {
     if (!authController.isLoggedIn) {
@@ -58,6 +71,10 @@ class CampaignController extends ChangeNotifier {
       _error = null;
       _detailError = null;
       _messagesError = null;
+      _workspaceContext = null;
+      _workspaceContextError = null;
+      _archives = [];
+      _archivesError = null;
       disconnectCampaignChat();
       notifyListeners();
     }
@@ -177,7 +194,6 @@ class CampaignController extends ChangeNotifier {
 
   Future<CampaignInvite?> createInvite({
     required String campaignId,
-    String? roleOnJoin,
     int? maxUses,
   }) async {
     final token = accessToken;
@@ -189,7 +205,6 @@ class CampaignController extends ChangeNotifier {
         apiBaseUrl: apiBaseUrl,
         accessToken: token,
         campaignId: campaignId,
-        roleOnJoin: roleOnJoin,
         maxUses: maxUses,
       );
       _invites = [..._invites, invite];
@@ -224,6 +239,217 @@ class CampaignController extends ChangeNotifier {
 
     _messagesLoading = false;
     notifyListeners();
+
+    // Marking read is intentionally best-effort; reading chat must still work
+    // when a self-hosted server is temporarily unreachable.
+    try {
+      await campaignClient.markCampaignRead(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        campaignId: campaignId,
+      );
+    } catch (_) {}
+  }
+
+  /// Searches the durable campaign history without replacing the live chat
+  /// timeline the player is currently reading.
+  Future<List<CampaignChatMessage>> searchMessages(
+    String campaignId, {
+    required String query,
+  }) async {
+    final token = accessToken;
+    final normalizedQuery = query.trim();
+    if (token == null || normalizedQuery.isEmpty) return const [];
+
+    try {
+      return await campaignClient.listMessages(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        campaignId: campaignId,
+        query: normalizedQuery,
+      );
+    } on CampaignApiException catch (error) {
+      _messagesError = error.message;
+      notifyListeners();
+      return const [];
+    } catch (_) {
+      _messagesError = 'Failed to search campaign messages';
+      notifyListeners();
+      return const [];
+    }
+  }
+
+  Future<void> loadWorkspaceContext(String campaignId) async {
+    final token = accessToken;
+    if (token == null) return;
+
+    _workspaceContextLoading = true;
+    _workspaceContextError = null;
+    notifyListeners();
+
+    try {
+      _workspaceContext = await campaignClient.getWorkspaceContext(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        campaignId: campaignId,
+      );
+    } on CampaignApiException catch (error) {
+      _workspaceContextError = error.message;
+    } catch (_) {
+      _workspaceContextError = 'Failed to load campaign workspace';
+    }
+
+    _workspaceContextLoading = false;
+    notifyListeners();
+  }
+
+  Future<bool> updateSpeaker({
+    required String campaignId,
+    required String speakerMode,
+    String? actorId,
+  }) async {
+    final token = accessToken;
+    if (token == null) return false;
+    _workspaceContextError = null;
+    try {
+      final membership = await campaignClient.updateSpeaker(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        campaignId: campaignId,
+        speakerMode: speakerMode,
+        actorId: actorId,
+      );
+      final context = _workspaceContext;
+      if (context != null) {
+        _workspaceContext = context.copyWith(membership: membership);
+      }
+      notifyListeners();
+      return true;
+    } on CampaignApiException catch (error) {
+      _workspaceContextError = error.message;
+    } catch (_) {
+      _workspaceContextError = 'Failed to update campaign speaker';
+    }
+    notifyListeners();
+    return false;
+  }
+
+  Future<void> loadArchives(String campaignId, {String? kind}) async {
+    final token = accessToken;
+    if (token == null) return;
+    _archivesLoading = true;
+    _archivesError = null;
+    notifyListeners();
+    try {
+      _archives = await campaignClient.listArchives(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        campaignId: campaignId,
+        kind: kind,
+      );
+    } on CampaignApiException catch (error) {
+      _archivesError = error.message;
+    } catch (_) {
+      _archivesError = 'Failed to load campaign archives';
+    }
+    _archivesLoading = false;
+    notifyListeners();
+  }
+
+  Future<CampaignArchiveEntry?> createArchiveEntry({
+    required String campaignId,
+    required String kind,
+    required String title,
+    String? summary,
+    Map<String, Object?>? payload,
+  }) async {
+    final token = accessToken;
+    if (token == null) return null;
+    _archivesError = null;
+    try {
+      final entry = await campaignClient.createArchiveEntry(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        campaignId: campaignId,
+        kind: kind,
+        title: title,
+        summary: summary,
+        payload: payload,
+      );
+      _archives = [entry, ..._archives];
+      notifyListeners();
+      return entry;
+    } on CampaignApiException catch (error) {
+      _archivesError = error.message;
+    } catch (_) {
+      _archivesError = 'Failed to create campaign archive entry';
+    }
+    notifyListeners();
+    return null;
+  }
+
+  Future<CampaignArchiveEntry?> updateArchiveEntry({
+    required String campaignId,
+    required String entryId,
+    String? kind,
+    String? title,
+    String? summary,
+    Map<String, Object?>? payload,
+    bool? pinned,
+  }) async {
+    final token = accessToken;
+    if (token == null) return null;
+    _archivesError = null;
+    try {
+      final entry = await campaignClient.updateArchiveEntry(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        campaignId: campaignId,
+        entryId: entryId,
+        kind: kind,
+        title: title,
+        summary: summary,
+        payload: payload,
+        pinned: pinned,
+      );
+      _archives = _archives
+          .map((existing) => existing.id == entry.id ? entry : existing)
+          .toList();
+      notifyListeners();
+      return entry;
+    } on CampaignApiException catch (error) {
+      _archivesError = error.message;
+    } catch (_) {
+      _archivesError = 'Failed to update campaign archive entry';
+    }
+    notifyListeners();
+    return null;
+  }
+
+  Future<bool> archiveEntry({
+    required String campaignId,
+    required String entryId,
+  }) async {
+    final token = accessToken;
+    if (token == null) return false;
+    _archivesError = null;
+    try {
+      await campaignClient.archiveEntry(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        campaignId: campaignId,
+        entryId: entryId,
+      );
+      _archives = _archives.where((entry) => entry.id != entryId).toList();
+      notifyListeners();
+      return true;
+    } on CampaignApiException catch (error) {
+      _archivesError = error.message;
+    } catch (_) {
+      _archivesError = 'Failed to archive campaign entry';
+    }
+    notifyListeners();
+    return false;
   }
 
   Future<bool> sendMessage({
@@ -231,6 +457,8 @@ class CampaignController extends ChangeNotifier {
     required String kind,
     required String content,
     String? campaignActorId,
+    String? actionId,
+    Map<String, Object?>? eventData,
   }) async {
     final token = accessToken;
     if (token == null) return false;
@@ -244,6 +472,8 @@ class CampaignController extends ChangeNotifier {
         kind: kind,
         content: content,
         campaignActorId: campaignActorId,
+        actionId: actionId,
+        eventData: eventData,
       );
       _appendMessage(message);
       notifyListeners();
@@ -299,6 +529,10 @@ class CampaignController extends ChangeNotifier {
     _detailError = null;
     _messages = [];
     _messagesError = null;
+    _workspaceContext = null;
+    _workspaceContextError = null;
+    _archives = [];
+    _archivesError = null;
     notifyListeners();
   }
 

@@ -7,9 +7,7 @@ class AppPreferences {
     required this.defaultDice,
     required this.compactLists,
     required this.confirmBeforeRoll,
-    required this.ruleset,
     required this.defaultCreationMethod,
-    required this.showLegacyContent,
     required this.showCharacterSources,
     required this.showEncumbrance,
     required this.defaultCharacterTab,
@@ -24,9 +22,7 @@ class AppPreferences {
     defaultDice: '1d20',
     compactLists: false,
     confirmBeforeRoll: false,
-    ruleset: 'dnd2024',
-    defaultCreationMethod: 'quick',
-    showLegacyContent: false,
+    defaultCreationMethod: 'standard',
     showCharacterSources: true,
     showEncumbrance: false,
     defaultCharacterTab: 'overview',
@@ -40,9 +36,7 @@ class AppPreferences {
   final String defaultDice;
   final bool compactLists;
   final bool confirmBeforeRoll;
-  final String ruleset;
   final String defaultCreationMethod;
-  final bool showLegacyContent;
   final bool showCharacterSources;
   final bool showEncumbrance;
   final String defaultCharacterTab;
@@ -53,21 +47,19 @@ class AppPreferences {
   Color get seedColor => Color(seedColorValue);
 
   Map<String, Object?> toJson() => {
-        'themeMode': themeMode.name,
-        'seedColorValue': seedColorValue,
-        'defaultDice': defaultDice,
-        'compactLists': compactLists,
-        'confirmBeforeRoll': confirmBeforeRoll,
-        'ruleset': ruleset,
-        'defaultCreationMethod': defaultCreationMethod,
-        'showLegacyContent': showLegacyContent,
-        'showCharacterSources': showCharacterSources,
-        'showEncumbrance': showEncumbrance,
-        'defaultCharacterTab': defaultCharacterTab,
-        'highContrastTheme': highContrastTheme,
-        'dynamicSchemeVariant': dynamicSchemeVariant,
-        'logCharacterRuntimeChanges': logCharacterRuntimeChanges,
-      };
+    'themeMode': themeMode.name,
+    'seedColorValue': seedColorValue,
+    'defaultDice': defaultDice,
+    'compactLists': compactLists,
+    'confirmBeforeRoll': confirmBeforeRoll,
+    'defaultCreationMethod': defaultCreationMethod,
+    'showCharacterSources': showCharacterSources,
+    'showEncumbrance': showEncumbrance,
+    'defaultCharacterTab': defaultCharacterTab,
+    'highContrastTheme': highContrastTheme,
+    'dynamicSchemeVariant': dynamicSchemeVariant,
+    'logCharacterRuntimeChanges': logCharacterRuntimeChanges,
+  };
 
   AppPreferences copyWith({
     ThemeMode? themeMode,
@@ -75,9 +67,7 @@ class AppPreferences {
     String? defaultDice,
     bool? compactLists,
     bool? confirmBeforeRoll,
-    String? ruleset,
     String? defaultCreationMethod,
-    bool? showLegacyContent,
     bool? showCharacterSources,
     bool? showEncumbrance,
     String? defaultCharacterTab,
@@ -91,10 +81,8 @@ class AppPreferences {
       defaultDice: defaultDice ?? this.defaultDice,
       compactLists: compactLists ?? this.compactLists,
       confirmBeforeRoll: confirmBeforeRoll ?? this.confirmBeforeRoll,
-      ruleset: ruleset ?? this.ruleset,
       defaultCreationMethod:
           defaultCreationMethod ?? this.defaultCreationMethod,
-      showLegacyContent: showLegacyContent ?? this.showLegacyContent,
       showCharacterSources: showCharacterSources ?? this.showCharacterSources,
       showEncumbrance: showEncumbrance ?? this.showEncumbrance,
       defaultCharacterTab: defaultCharacterTab ?? this.defaultCharacterTab,

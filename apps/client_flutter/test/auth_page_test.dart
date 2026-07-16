@@ -35,7 +35,166 @@ void main() {
 
     expect(find.widgetWithText(FilledButton, '登录'), findsOneWidget);
     expect(find.byType(TextField), findsNWidgets(2));
+    expect(find.widgetWithText(SwitchListTile, '自动登录'), findsOneWidget);
+    expect(
+      tester
+          .widget<SwitchListTile>(find.widgetWithText(SwitchListTile, '自动登录'))
+          .value,
+      isTrue,
+    );
     expect(find.text('没有账号？注册'), findsOneWidget);
+  });
+
+  test(
+    'initialize restores a saved session with the current access token',
+    () async {
+      final tokenStore = InMemoryAuthTokenStore();
+      await tokenStore.saveTokens(
+        'localhost',
+        const StoredAuthTokens(
+          accessToken: 'access-token',
+          refreshToken: 'refresh-token',
+        ),
+      );
+      final client = _FakeAuthClient(validAccessToken: 'access-token');
+      final controller = AuthController(
+        tokenStore: tokenStore,
+        authClient: client,
+        serverProfileId: 'localhost',
+        apiBaseUrl: apiBaseUrl,
+      );
+
+      await controller.initialize();
+
+      expect(controller.isLoggedIn, isTrue);
+      expect(client.meCalls, ['access-token']);
+      expect(client.refreshCalls, isEmpty);
+    },
+  );
+
+  test(
+    'initialize refreshes an expired access token and restores the session',
+    () async {
+      final tokenStore = InMemoryAuthTokenStore();
+      await tokenStore.saveTokens(
+        'localhost',
+        const StoredAuthTokens(
+          accessToken: 'expired-access',
+          refreshToken: 'refresh-token',
+        ),
+      );
+      final client = _FakeAuthClient(
+        validAccessToken: 'fresh-access',
+        refreshedAccessToken: 'fresh-access',
+      );
+      final controller = AuthController(
+        tokenStore: tokenStore,
+        authClient: client,
+        serverProfileId: 'localhost',
+        apiBaseUrl: apiBaseUrl,
+      );
+
+      await controller.initialize();
+
+      expect(controller.isLoggedIn, isTrue);
+      expect(client.meCalls, ['expired-access', 'fresh-access']);
+      expect(client.refreshCalls, ['refresh-token']);
+      expect(
+        await tokenStore.getTokens('localhost'),
+        const StoredAuthTokens(
+          accessToken: 'fresh-access',
+          refreshToken: 'refresh-token',
+        ),
+      );
+    },
+  );
+
+  test('initialize clears tokens when refresh is rejected', () async {
+    final tokenStore = InMemoryAuthTokenStore();
+    await tokenStore.saveTokens(
+      'localhost',
+      const StoredAuthTokens(
+        accessToken: 'expired-access',
+        refreshToken: 'invalid-refresh',
+      ),
+    );
+    final client = _FakeAuthClient(
+      refreshError: const AuthApiException('Unauthorized', statusCode: 401),
+    );
+    final controller = AuthController(
+      tokenStore: tokenStore,
+      authClient: client,
+      serverProfileId: 'localhost',
+      apiBaseUrl: apiBaseUrl,
+    );
+
+    await controller.initialize();
+
+    expect(controller.isLoggedIn, isFalse);
+    expect(await tokenStore.getTokens('localhost'), isNull);
+  });
+
+  test(
+    'disabling auto-login clears saved tokens but keeps the current session',
+    () async {
+      final client = _FakeAuthClient();
+      final tokenStore = InMemoryAuthTokenStore();
+      final controller = AuthController(
+        tokenStore: tokenStore,
+        authClient: client,
+        serverProfileId: 'localhost',
+        apiBaseUrl: apiBaseUrl,
+      );
+      await controller.initialize();
+      await controller.login(identifier: 'ranger', password: 'secret');
+
+      await controller.setAutoLoginEnabled(false);
+
+      expect(controller.autoLoginEnabled, isFalse);
+      expect(controller.isLoggedIn, isTrue);
+      expect(await tokenStore.getTokens('localhost'), isNull);
+    },
+  );
+
+  test('login does not persist tokens when auto-login is disabled', () async {
+    final client = _FakeAuthClient();
+    final tokenStore = InMemoryAuthTokenStore();
+    final controller = AuthController(
+      tokenStore: tokenStore,
+      authClient: client,
+      serverProfileId: 'localhost',
+      apiBaseUrl: apiBaseUrl,
+    );
+    await controller.initialize();
+    await controller.setAutoLoginEnabled(false);
+
+    await controller.login(identifier: 'ranger', password: 'secret');
+
+    expect(controller.isLoggedIn, isTrue);
+    expect(await tokenStore.getTokens('localhost'), isNull);
+  });
+
+  testWidgets('auto-login switch updates the server preference', (
+    tester,
+  ) async {
+    final controller = buildController(_FakeAuthClient());
+    await controller.initialize();
+
+    await tester.pumpWidget(
+      MaterialApp(home: AuthPage(authController: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(SwitchListTile, '自动登录'));
+    await tester.pumpAndSettle();
+
+    expect(controller.autoLoginEnabled, isFalse);
+    expect(
+      tester
+          .widget<SwitchListTile>(find.widgetWithText(SwitchListTile, '自动登录'))
+          .value,
+      isFalse,
+    );
   });
 
   testWidgets('login success shows the username', (tester) async {
@@ -176,6 +335,35 @@ void main() {
     expect(client.logoutCalls, ['refresh-token']);
   });
 
+  testWidgets(
+    'logged-in account can disable auto-login without ending the session',
+    (tester) async {
+      final client = _FakeAuthClient();
+      final tokenStore = InMemoryAuthTokenStore();
+      final controller = AuthController(
+        tokenStore: tokenStore,
+        authClient: client,
+        serverProfileId: 'localhost',
+        apiBaseUrl: apiBaseUrl,
+      );
+      await controller.initialize();
+      await controller.login(identifier: 'ranger', password: 'secret');
+
+      await tester.pumpWidget(
+        MaterialApp(home: AuthPage(authController: controller)),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(SwitchListTile, '自动登录'));
+      await tester.pumpAndSettle();
+
+      expect(controller.isLoggedIn, isTrue);
+      expect(controller.autoLoginEnabled, isFalse);
+      expect(find.text('ranger'), findsOneWidget);
+      expect(await tokenStore.getTokens('localhost'), isNull);
+    },
+  );
+
   testWidgets('login failure shows an error message', (tester) async {
     final client = _FakeAuthClient(
       loginError: AuthApiException('Invalid credentials', statusCode: 401),
@@ -199,16 +387,28 @@ void main() {
 }
 
 class _FakeAuthClient implements AuthClient {
-  _FakeAuthClient({this.loginSession, this.loginError, this.registerResult});
+  _FakeAuthClient({
+    this.loginSession,
+    this.loginError,
+    this.registerResult,
+    this.validAccessToken,
+    this.refreshedAccessToken,
+    this.refreshError,
+  });
 
   final AuthSession? loginSession;
   final AuthApiException? loginError;
   final RegisterResult? registerResult;
+  final String? validAccessToken;
+  final String? refreshedAccessToken;
+  final AuthApiException? refreshError;
 
   final List<({String identifier, String password})> loginCalls = [];
   final List<({String username, String email, String password})> registerCalls =
       [];
   final List<String> logoutCalls = [];
+  final List<String> meCalls = [];
+  final List<String> refreshCalls = [];
 
   @override
   Future<RegisterResult> register({
@@ -250,6 +450,14 @@ class _FakeAuthClient implements AuthClient {
     required String apiBaseUrl,
     required String accessToken,
   }) async {
+    meCalls.add(accessToken);
+    if (accessToken == validAccessToken) {
+      return const AuthUser(
+        id: 'user-1',
+        username: 'ranger',
+        email: 'ranger@example.com',
+      );
+    }
     throw AuthApiException('Unauthorized', statusCode: 401);
   }
 
@@ -258,6 +466,9 @@ class _FakeAuthClient implements AuthClient {
     required String apiBaseUrl,
     required String refreshToken,
   }) async {
+    refreshCalls.add(refreshToken);
+    if (refreshError != null) throw refreshError!;
+    if (refreshedAccessToken != null) return refreshedAccessToken!;
     throw AuthApiException('Unauthorized', statusCode: 401);
   }
 

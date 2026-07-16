@@ -5,6 +5,8 @@ import 'package:dnd_table_client/src/core/sync/sync_repository.dart';
 import 'package:dnd_table_client/src/features/content/data/local/content_repository.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_package_manifest.dart';
+import 'package:dnd_table_client/src/features/vault/data/drift_vault_change_applier.dart';
+import 'package:dnd_table_client/src/features/vault/domain/vault_models.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -255,6 +257,34 @@ void main() {
     final pending = await DriftSyncRepository(database).pending(scope: 'vault');
     final noteOp = pending.firstWhere((op) => op.entityType == 'note');
     expect(noteOp.entityId, 'example:class/fighter');
+    await database.close();
+  });
+
+  test('coalesces local favorite edits using the pulled vault revision', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    final repository = DriftContentRepository(database);
+    final applier = DriftVaultChangeApplier(database);
+    await applier.applyAll([
+      const VaultChange(
+        cursor: '1',
+        operation: 'upsert',
+        entityType: 'favorite',
+        entityId: 'example:class/fighter',
+        revision: 4,
+        payloadJson: '{"entryKey":"example:class/fighter","favorite":true}',
+      ),
+    ]);
+
+    await repository.setFavorite('example:class/fighter', false);
+    await repository.setFavorite('example:class/fighter', true);
+
+    final pending = await DriftSyncRepository(database).pending(scope: 'vault');
+    final favoriteOps = pending
+        .where((operation) => operation.entityType == 'favorite')
+        .toList();
+    expect(favoriteOps, hasLength(1));
+    expect(favoriteOps.single.baseRevision, 4);
+    expect(jsonDecode(favoriteOps.single.payloadJson)['favorite'], isTrue);
     await database.close();
   });
 

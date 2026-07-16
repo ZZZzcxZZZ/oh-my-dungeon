@@ -46,13 +46,24 @@ class DriftCharacterRepository implements CharacterRepository {
   Future<void> save(CharacterSheet character) async {
     final db = _database;
     await db.transaction(() async {
+      final existing = await (db.select(db.characters)
+            ..where((t) => t.id.equals(character.id)))
+          .getSingleOrNull();
       await _writeCharacter(character);
+      await (db.delete(db.syncOutbox)
+            ..where(
+              (t) =>
+                  t.scope.equals('vault') &
+                  t.entityType.equals('character') &
+                  t.entityId.equals(character.id),
+            ))
+          .go();
       await DriftSyncRepository(_database).enqueue(SyncOperation(
-        id: 'vault:character:${character.id}:${DateTime.now().millisecondsSinceEpoch}',
+        id: 'vault:character:${character.id}:${DateTime.now().microsecondsSinceEpoch}',
         scope: 'vault',
         entityType: 'character',
         entityId: character.id,
-        baseRevision: 0,
+        baseRevision: existing?.syncRevision ?? 0,
         payloadJson: jsonEncode(character.toJson()),
       ));
     });

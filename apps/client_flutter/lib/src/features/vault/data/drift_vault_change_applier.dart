@@ -17,6 +17,7 @@ class DriftVaultChangeApplier implements VaultChangeApplier {
   @override
   Future<void> applyAll(List<VaultChange> changes) async {
     for (final change in changes) {
+      var handled = true;
       switch (change.entityType) {
         case 'character':
           await _applyCharacter(change);
@@ -38,8 +39,10 @@ class DriftVaultChangeApplier implements VaultChangeApplier {
           break;
         default:
           // Ignore unknown entity types.
+          handled = false;
           break;
       }
+      if (handled) await _saveRevision(change);
     }
   }
 
@@ -55,9 +58,9 @@ class DriftVaultChangeApplier implements VaultChangeApplier {
   Future<void> _applyFavorite(VaultChange change) async {
     final payload = jsonDecode(change.payloadJson) as Map<String, Object?>;
     final entryKey = payload['entryKey'] as String;
-    final favorite = payload['favorite'] as bool;
+    final favorite = payload['favorite'] as bool? ?? false;
     final db = _database;
-    if (favorite) {
+    if (change.operation != 'delete' && favorite) {
       await db.into(db.contentFavorites).insertOnConflictUpdate(
             ContentFavoritesCompanion.insert(
               entryKey: entryKey,
@@ -76,10 +79,27 @@ class DriftVaultChangeApplier implements VaultChangeApplier {
     final entryKey = payload['entryKey'] as String;
     final markdown = payload['markdown'] as String? ?? '';
     final db = _database;
+    if (change.operation == 'delete') {
+      await (db.delete(db.contentNotes)
+            ..where((table) => table.entryKey.equals(entryKey)))
+          .go();
+      return;
+    }
     await db.into(db.contentNotes).insertOnConflictUpdate(
           ContentNotesCompanion.insert(
             entryKey: entryKey,
             markdown: markdown,
+            updatedAt: DateTime.now(),
+          ),
+        );
+  }
+
+  Future<void> _saveRevision(VaultChange change) async {
+    await _database.into(_database.vaultEntityRevisions).insertOnConflictUpdate(
+          VaultEntityRevisionsCompanion.insert(
+            entityType: change.entityType,
+            entityId: change.entityId,
+            revision: change.revision,
             updatedAt: DateTime.now(),
           ),
         );

@@ -50,3 +50,14 @@ class MigrationMarkers extends Table {
   @override
   Set<Column<Object>> get primaryKey => {key};
 }
+
+/// Last server revision observed for a personal Vault entity.
+class VaultEntityRevisions extends Table {
+  TextColumn get entityType => text()();
+  TextColumn get entityId => text()();
+  IntColumn get revision => integer()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {entityType, entityId};
+}

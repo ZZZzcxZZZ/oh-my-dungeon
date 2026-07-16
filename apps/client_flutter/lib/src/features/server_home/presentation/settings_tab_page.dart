@@ -97,19 +97,7 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _buildServerSection(context),
-                    const SizedBox(height: 24),
-                    _buildSyncSection(context),
-                    const SizedBox(height: 24),
-                    _buildContentSection(context),
-                    const SizedBox(height: 24),
-                    _buildVaultSection(context),
-                    const SizedBox(height: 24),
-                    _buildAccountSection(context),
-                    const SizedBox(height: 24),
                     _buildModeSection(context),
-                    const SizedBox(height: 24),
-                    _buildAppearanceSection(context),
                     const SizedBox(height: 24),
                     _buildRulesSection(context),
                     const SizedBox(height: 24),
@@ -117,7 +105,19 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
                     const SizedBox(height: 24),
                     _buildGameplaySection(context),
                     const SizedBox(height: 24),
+                    _buildAppearanceSection(context),
+                    const SizedBox(height: 24),
+                    _buildContentSection(context),
+                    const SizedBox(height: 24),
+                    _buildSyncSection(context),
+                    const SizedBox(height: 24),
+                    _buildVaultSection(context),
+                    const SizedBox(height: 24),
                     _buildDataSection(context),
+                    const SizedBox(height: 24),
+                    _buildAccountSection(context),
+                    const SizedBox(height: 24),
+                    _buildServerSection(context),
                   ],
                 ),
               ),
@@ -216,9 +216,7 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
   void _openServerProfilesPage(BuildContext context) {
     final builder = widget.serverProfilesPageBuilder;
     if (builder == null) return;
-    Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: builder),
-    );
+    Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: builder));
   }
 
   Widget _buildSyncSection(BuildContext context) {
@@ -357,7 +355,7 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('客户端模式', style: Theme.of(context).textTheme.titleMedium),
+        Text('使用模式', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         Card(
           child: Padding(
@@ -370,12 +368,12 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
                     ButtonSegment(
                       value: ClientMode.player,
                       icon: Icon(Icons.person_outline),
-                      label: Text('Player'),
+                      label: Text('玩家'),
                     ),
                     ButtonSegment(
                       value: ClientMode.dungeonMaster,
                       icon: Icon(Icons.shield_outlined),
-                      label: Text('DM'),
+                      label: Text('主持人'),
                     ),
                   ],
                   selected: {mode},
@@ -383,7 +381,11 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
                       widget.modeController.setMode(selection.single),
                 ),
                 const SizedBox(height: 12),
-                Text('当前模式：${mode.label}'),
+                Text(
+                  mode == ClientMode.dungeonMaster
+                      ? '主持人模式会显示战役角色、私有资料和控场工具。'
+                      : '玩家模式只显示自己的本地角色和可参与的战役。',
+                ),
               ],
             ),
           ),
@@ -434,34 +436,11 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
                   ],
                   selected: {preferences.themeMode},
                   onSelectionChanged: (selection) {
-                    widget.appPreferencesController.setThemeMode(selection.single);
+                    widget.appPreferencesController.setThemeMode(
+                      selection.single,
+                    );
                   },
                 ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  initialValue: preferences.dynamicSchemeVariant,
-                  decoration: const InputDecoration(
-                    labelText: '主题风格',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.palette_outlined),
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'tonalSpot',
-                      child: Text('标准 Material'),
-                    ),
-                    DropdownMenuItem(value: 'fidelity', child: Text('忠实取色')),
-                    DropdownMenuItem(value: 'expressive', child: Text('表现力')),
-                    DropdownMenuItem(value: 'vibrant', child: Text('鲜明')),
-                    DropdownMenuItem(value: 'neutral', child: Text('中性')),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      widget.appPreferencesController.setDynamicSchemeVariant(value);
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
                 Text(
                   'Material 3 主题色',
                   style: Theme.of(context).textTheme.labelLarge,
@@ -483,7 +462,9 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
                             entry.value.toARGB32(),
                         avatar: CircleAvatar(backgroundColor: entry.value),
                         onSelected: (_) {
-                          widget.appPreferencesController.setSeedColor(entry.value);
+                          widget.appPreferencesController.setSeedColor(
+                            entry.value,
+                          );
                         },
                       ),
                   ],
@@ -495,7 +476,8 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
                   title: const Text('高对比 Material 3'),
                   subtitle: const Text('提高前景与容器色差，适合长时间跑团和投屏。'),
                   value: preferences.highContrastTheme,
-                  onChanged: widget.appPreferencesController.setHighContrastTheme,
+                  onChanged:
+                      widget.appPreferencesController.setHighContrastTheme,
                 ),
               ],
             ),
@@ -518,20 +500,8 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
               ListTile(
                 leading: const Icon(Icons.auto_stories_outlined),
                 title: const Text('默认规则集'),
-                subtitle: const Text('决定新角色创建时优先使用的规则来源'),
-                trailing: DropdownButton<String>(
-                  value: preferences.ruleset,
-                  items: const [
-                    DropdownMenuItem(value: 'dnd2024', child: Text('D&D 2024')),
-                    DropdownMenuItem(value: 'dnd2014', child: Text('D&D 2014')),
-                    DropdownMenuItem(value: 'mixed', child: Text('混合')),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      widget.appPreferencesController.setRuleset(value);
-                    }
-                  },
-                ),
+                subtitle: const Text('角色创建、规则计算和资料联动统一使用 2024 规则'),
+                trailing: const Chip(label: Text('D&D 2024')),
               ),
               ListTile(
                 leading: const Icon(Icons.route_outlined),
@@ -550,13 +520,6 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
                   },
                 ),
               ),
-              SwitchListTile(
-                secondary: const Icon(Icons.history_edu_outlined),
-                title: const Text('显示 Legacy 内容'),
-                subtitle: const Text('允许在资料库和角色创建中显示旧版内容提示'),
-                value: preferences.showLegacyContent,
-                onChanged: widget.appPreferencesController.setShowLegacyContent,
-              ),
             ],
           ),
         ),
@@ -566,6 +529,11 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
 
   Widget _buildCharacterSheetSection(BuildContext context) {
     final preferences = widget.appPreferencesController.preferences;
+    final defaultTab = switch (preferences.defaultCharacterTab) {
+      'status' => 'overview',
+      'details' || 'notes' => 'profile',
+      final value => value,
+    };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -579,37 +547,24 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
                 title: const Text('默认角色卡标签'),
                 subtitle: const Text('打开角色详情时优先关注的页面'),
                 trailing: DropdownButton<String>(
-                  value: preferences.defaultCharacterTab,
+                  value: defaultTab,
                   items: const [
                     DropdownMenuItem(value: 'overview', child: Text('总览')),
                     DropdownMenuItem(value: 'actions', child: Text('动作')),
                     DropdownMenuItem(value: 'spells', child: Text('法术')),
                     DropdownMenuItem(value: 'equipment', child: Text('装备')),
-                    DropdownMenuItem(value: 'status', child: Text('状态')),
+                    DropdownMenuItem(value: 'resources', child: Text('资源')),
                     DropdownMenuItem(value: 'features', child: Text('特性')),
-                    DropdownMenuItem(value: 'details', child: Text('详情')),
-                    DropdownMenuItem(value: 'notes', child: Text('笔记')),
+                    DropdownMenuItem(value: 'profile', child: Text('角色资料')),
                   ],
                   onChanged: (value) {
                     if (value != null) {
-                      widget.appPreferencesController.setDefaultCharacterTab(value);
+                      widget.appPreferencesController.setDefaultCharacterTab(
+                        value,
+                      );
                     }
                   },
                 ),
-              ),
-              SwitchListTile(
-                secondary: const Icon(Icons.account_tree_outlined),
-                title: const Text('显示字段来源'),
-                subtitle: const Text('显示属性、熟练、特性来自职业、起源或手动覆盖'),
-                value: preferences.showCharacterSources,
-                onChanged: widget.appPreferencesController.setShowCharacterSources,
-              ),
-              SwitchListTile(
-                secondary: const Icon(Icons.inventory_2_outlined),
-                title: const Text('显示负重'),
-                subtitle: const Text('在装备页显示重量和负重相关信息'),
-                value: preferences.showEncumbrance,
-                onChanged: widget.appPreferencesController.setShowEncumbrance,
               ),
             ],
           ),
@@ -651,26 +606,11 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
                 ),
               ),
               SwitchListTile(
-                secondary: const Icon(Icons.view_agenda_outlined),
-                title: const Text('列表密度'),
-                subtitle: const Text('在角色、资料和战役列表中优先显示更多内容'),
-                value: preferences.compactLists,
-                onChanged: widget.appPreferencesController.setCompactLists,
-              ),
-              SwitchListTile(
                 secondary: const Icon(Icons.fact_check_outlined),
                 title: const Text('掷骰确认'),
                 subtitle: const Text('掷出默认骰子前先确认，避免误触'),
                 value: preferences.confirmBeforeRoll,
                 onChanged: widget.appPreferencesController.setConfirmBeforeRoll,
-              ),
-              SwitchListTile(
-                secondary: const Icon(Icons.receipt_long_outlined),
-                title: const Text('角色状态写入日志'),
-                subtitle: const Text('在线跑团时把 HP、休息和状态变化记录到当前场次日志'),
-                value: preferences.logCharacterRuntimeChanges,
-                onChanged:
-                    widget.appPreferencesController.setLogCharacterRuntimeChanges,
               ),
             ],
           ),

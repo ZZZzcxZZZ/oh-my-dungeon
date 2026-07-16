@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/backup/drift_local_data_archive_service.dart';
 import '../../../core/backup/local_backup_models.dart';
 import '../../../core/backup/local_data_archive_service.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/sync/sync_repository.dart';
 import '../../../core/sync/sync_status_controller.dart';
 import '../../../features/app_preferences/presentation/app_preferences_controller.dart';
 import '../../../features/auth/data/auth_api_client.dart';
@@ -16,31 +19,32 @@ import '../../../features/campaigns/data/campaign_socket_service.dart';
 import '../../../features/campaigns/data/local/campaign_cache_repository.dart';
 import '../../../features/campaigns/data/socket_io_campaign_socket_service.dart';
 import '../../../features/campaigns/data/sync/campaign_sync_api_client.dart';
+import '../../../features/campaigns/data/sync/campaign_actor_backlink_service.dart';
+import '../../../features/campaigns/data/sync/campaign_sync_service.dart';
 import '../../../features/campaigns/presentation/actors/campaign_actor_controller.dart';
+import '../../../features/campaigns/presentation/content/campaign_content_controller.dart';
 import '../../../features/campaigns/presentation/campaign_controller.dart';
 import '../../../features/campaigns/presentation/campaigns_tab_page.dart';
-import '../../../features/characters/data/character_api_client.dart';
 import '../../../features/characters/data/character_repository.dart';
 import '../../../features/characters/data/local/drift_character_repository.dart';
 import '../../../features/characters/presentation/character_controller.dart';
 import '../../../features/characters/presentation/characters_tab_page.dart';
-import '../../../features/check_requests/data/check_request_api_client.dart';
 import '../../../features/client_mode/domain/client_mode.dart';
-import '../../../features/content/data/content_api_client.dart';
 import '../../../features/content/data/import/content_package_importer.dart';
+import '../../../features/content/data/import/bundled_content_installer.dart';
+import '../../../features/content/data/campaign_aware_content_repository.dart';
 import '../../../features/content/data/local/content_repository.dart';
 import '../../../features/content/domain/content_file_picker.dart';
-import '../../../features/content/presentation/content_controller.dart';
 import '../../../features/content/presentation/content_library_controller.dart';
 import '../../../features/content/presentation/content_library_page.dart';
 import '../../../features/content/presentation/content_package_settings_page.dart';
-import '../../../features/encounters/data/encounter_api_client.dart';
-import '../../../features/rooms/data/room_api_client.dart';
-import '../../../features/rooms/domain/dice_roller.dart';
+import '../../../core/dice/dice_roller.dart';
 import '../../../features/server_profiles/domain/server_profile.dart';
 import '../../../features/server_profiles/data/server_profile_store.dart';
-import '../../../features/sessions/data/session_api_client.dart';
-import '../../../features/sessions/presentation/session_controller.dart';
+import '../../../features/vault/data/drift_vault_change_applier.dart';
+import '../../../features/vault/data/vault_api_client.dart';
+import '../../../features/vault/domain/vault_models.dart';
+import '../../../features/vault/presentation/vault_sync_controller.dart';
 import '../domain/active_server_session.dart';
 import 'home_dashboard_page.dart';
 import 'settings_tab_page.dart';
@@ -53,43 +57,33 @@ class MainShell extends StatefulWidget {
   const MainShell({
     required this.session,
     required this.modeController,
-    required this.roomClient,
     required this.authTokenStore,
     required this.authClient,
     required this.campaignClient,
     this.campaignSocketService,
-    required this.characterClient,
-    required this.checkRequestClient,
-    required this.contentClient,
-    required this.encounterClient,
-    required this.sessionClient,
     required this.appPreferencesController,
     this.database,
     this.diceRoller,
     this.serverProfileStore,
     this.serverProfilesPageBuilder,
     this.onSwitchToProfile,
+    this.enableBackgroundSync = true,
     super.key,
   });
 
   final ActiveServerSession session;
   final ClientModeController modeController;
-  final RoomClient roomClient;
   final AuthTokenStore authTokenStore;
   final AuthClient authClient;
   final CampaignClient campaignClient;
   final CampaignSocketService? campaignSocketService;
-  final CharacterClient characterClient;
-  final CheckRequestClient checkRequestClient;
-  final ContentClient contentClient;
-  final EncounterClient encounterClient;
-  final SessionClient sessionClient;
   final AppPreferencesController appPreferencesController;
   final AppDatabase? database;
   final DiceRoller? diceRoller;
   final ServerProfileStore? serverProfileStore;
   final WidgetBuilder? serverProfilesPageBuilder;
   final ValueChanged<ServerProfile>? onSwitchToProfile;
+  final bool enableBackgroundSync;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -100,17 +94,23 @@ class _MainShellState extends State<MainShell> {
   late final CampaignController _campaignController;
   late final CharacterController _characterController;
   late final CharacterRepository _characterRepository;
-  late final ContentController _contentController;
+  late final ContentRepository _localContentRepository;
   late final ContentRepository _contentRepository;
+  late final CampaignCacheRepository _campaignCacheRepository;
   late final ContentPackageImporter _contentImporter;
   late final ContentLibraryController _libraryController;
-  late final SessionController _sessionController;
   late final CampaignSocketService _campaignSocketService;
   late final CampaignActorController _actorController;
+  late final CampaignContentController _campaignContentController;
+  CampaignSyncService? _campaignSyncService;
+  VaultSyncController? _vaultSyncController;
   late final LocalDataArchiveService _archiveService;
   final SyncStatusController _syncStatusController = SyncStatusController();
-  final ContentFilePicker _contentFilePicker = const FilePickerContentFilePicker();
+  final ContentFilePicker _contentFilePicker =
+      const FilePickerContentFilePicker();
   int _currentIndex = 0;
+  String? _activeCampaignId;
+  String? _deviceId;
 
   @override
   void initState() {
@@ -137,54 +137,162 @@ class _MainShellState extends State<MainShell> {
     _characterController = CharacterController(
       repository: _characterRepository,
     );
-    _contentController = ContentController(
-      apiBaseUrl: profile?.apiBaseUrl ?? '',
-      authController: _authController,
-      contentClient: widget.contentClient,
-    );
-    _contentRepository = widget.database != null
+    _localContentRepository = widget.database != null
         ? DriftContentRepository(widget.database!)
         : EmptyContentRepository();
-    _contentImporter = ContentPackageImporter(_contentRepository);
+    _campaignCacheRepository = widget.database != null
+        ? DriftCampaignCacheRepository(widget.database!)
+        : EmptyCampaignCacheRepository();
+    _contentRepository = CampaignAwareContentRepository(
+      local: _localContentRepository,
+      campaign: _campaignCacheRepository,
+      activeCampaignId: () => _activeCampaignId,
+    );
+    _contentImporter = ContentPackageImporter(_localContentRepository);
     _libraryController = ContentLibraryController(
       repository: _contentRepository,
     );
-    _sessionController = SessionController(
-      apiBaseUrl: profile?.apiBaseUrl ?? '',
-      authController: _authController,
-      sessionClient: widget.sessionClient,
-    );
-    final CampaignCacheRepository cacheRepository = widget.database != null
-        ? DriftCampaignCacheRepository(widget.database!)
-        : EmptyCampaignCacheRepository();
+    unawaited(_installBundledContent());
     _actorController = CampaignActorController(
-      cacheRepository: cacheRepository,
+      cacheRepository: _campaignCacheRepository,
       apiClient: HttpCampaignSyncApiClient(),
       apiBaseUrl: profile?.apiBaseUrl ?? '',
       accessToken: _authController.accessToken ?? '',
       currentUserId: _authController.user?.id ?? '',
+      accessTokenProvider: () => _authController.accessToken ?? '',
+      currentUserIdProvider: () => _authController.user?.id ?? '',
     );
+    _campaignContentController = CampaignContentController(
+      cacheRepository: _campaignCacheRepository,
+      apiClient: HttpCampaignSyncApiClient(),
+      apiBaseUrl: profile?.apiBaseUrl ?? '',
+      accessToken: _authController.accessToken ?? '',
+      currentUserId: _authController.user?.id ?? '',
+      accessTokenProvider: () => _authController.accessToken ?? '',
+      currentUserIdProvider: () => _authController.user?.id ?? '',
+    );
+    if (widget.database != null && widget.enableBackgroundSync) {
+      _campaignSyncService = CampaignSyncService(
+        cacheRepository: _campaignCacheRepository,
+        apiClient: HttpCampaignSyncApiClient(),
+        backlinkService: CampaignActorBacklinkService(
+          characterRepository: _characterRepository,
+          database: widget.database!,
+        ),
+      );
+      _vaultSyncController = VaultSyncController(
+        syncRepository: DriftSyncRepository(widget.database!),
+        apiClient: HttpVaultApiClient(),
+        changeApplier: DriftVaultChangeApplier(widget.database!),
+      );
+    }
     _archiveService = widget.database != null
         ? DriftLocalDataArchiveService(widget.database!)
         : _NullLocalDataArchiveService();
+    _authController.addListener(_onAuthChanged);
+    _initializeDeviceIdentity();
   }
 
   @override
   void dispose() {
     widget.modeController.removeListener(_onModeChanged);
+    _authController.removeListener(_onAuthChanged);
     _campaignSocketService.disconnect();
     _actorController.dispose();
-    _sessionController.dispose();
+    _campaignContentController.dispose();
     _libraryController.dispose();
-    _contentController.dispose();
     _characterController.dispose();
     _campaignController.dispose();
     _authController.dispose();
     _syncStatusController.dispose();
+    _vaultSyncController?.dispose();
     super.dispose();
   }
 
   void _onModeChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onAuthChanged() {
+    _configureVault();
+  }
+
+  Future<void> _initializeDeviceIdentity() async {
+    final preferences = await SharedPreferences.getInstance();
+    const key = 'dnd_table.device_id';
+    final existing = preferences.getString(key);
+    _deviceId =
+        existing ??
+        'device-${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}';
+    if (existing == null) {
+      await preferences.setString(key, _deviceId!);
+    }
+    _configureVault();
+  }
+
+  void _configureVault() {
+    final controller = _vaultSyncController;
+    final profile = widget.session.profile;
+    final user = _authController.user;
+    final token = _authController.accessToken;
+    final deviceId = _deviceId;
+    if (controller == null ||
+        profile == null ||
+        user == null ||
+        token == null ||
+        deviceId == null) {
+      controller?.configure(null);
+      return;
+    }
+    controller.configure(
+      VaultSession(
+        remoteUserId: user.id,
+        deviceId: deviceId,
+        baseUrl: profile.baseUrl,
+        accessToken: token,
+      ),
+    );
+    controller.refresh();
+  }
+
+  Future<void> _installBundledContent() async {
+    if (widget.database == null) return;
+    final installed = await BundledContentInstaller(
+      repository: _localContentRepository,
+    ).installIfAvailable();
+    if (installed && mounted) {
+      await _libraryController.refresh();
+    }
+  }
+
+  Future<void> _activateCampaign(String campaignId) async {
+    _activeCampaignId = campaignId;
+    if (widget.enableBackgroundSync) {
+      await Future.wait([
+        _actorController.selectCampaign(campaignId),
+        _campaignContentController.selectCampaign(campaignId),
+      ]);
+    }
+
+    final profile = widget.session.profile;
+    final token = _authController.accessToken;
+    final user = _authController.user;
+    final service = _campaignSyncService;
+    if (widget.enableBackgroundSync &&
+        profile != null &&
+        token != null &&
+        user != null &&
+        service != null) {
+      await service.pullUntilCurrent(
+        apiBaseUrl: profile.apiBaseUrl,
+        accessToken: token,
+        deviceId: _deviceId ?? '',
+        campaignId: campaignId,
+        userId: user.id,
+      );
+    } else {
+      await _actorController.pullUntilCurrent();
+    }
     if (mounted) setState(() {});
   }
 
@@ -209,7 +317,6 @@ class _MainShellState extends State<MainShell> {
         authController: _authController,
         campaignController: _campaignController,
         characterController: _characterController,
-        sessionController: _sessionController,
         onNavigateToTab: (index) => setState(() => _currentIndex = index),
       ),
       CampaignsTabPage(
@@ -217,15 +324,20 @@ class _MainShellState extends State<MainShell> {
         authController: _authController,
         campaignController: _campaignController,
         characterController: _characterController,
-        contentController: _contentController,
+        contentRepository: _contentRepository,
         modeController: widget.modeController,
         appPreferencesController: widget.appPreferencesController,
         diceRoller: widget.diceRoller,
+        onCampaignOpened: _activateCampaign,
+        campaignContentController: _campaignContentController,
+        actorController: _actorController,
       ),
       CharactersTabPage(
         controller: _characterController,
         campaignController: _campaignController,
-        contentController: _contentController,
+        contentRepository: _contentRepository,
+        localContentRepository: _localContentRepository,
+        onCampaignContentSelected: _activateCampaign,
         appPreferencesController: widget.appPreferencesController,
         modeController: widget.modeController,
         actorController: _actorController,
@@ -246,6 +358,7 @@ class _MainShellState extends State<MainShell> {
         contentRepository: _contentRepository,
         contentImporter: _contentImporter,
         contentFilePicker: _contentFilePicker,
+        vaultSyncActions: _vaultSyncController,
         archiveService: _archiveService,
       ),
     ];

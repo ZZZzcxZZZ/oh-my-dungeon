@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/sync/campaign_sync_api_client.dart';
@@ -25,6 +28,9 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
   void initState() {
     super.initState();
     widget.controller.addListener(_onControllerChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.controller.loadActorAudits(widget.actorId);
+    });
   }
 
   @override
@@ -101,9 +107,12 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
           SliverList(
             delegate: SliverChildListDelegate([
               _buildSummaryCard(context, actor, sheet),
+              _buildRuntimeSection(context, sheet),
+              _buildRuleLedgerSection(context, sheet),
               _buildHpSection(context, actor, sheet),
               _buildBuildFields(context, actor, sheet),
               _buildNotesSection(context, actor, sheet),
+              _buildAuditSection(context, actor),
               const SizedBox(height: 32),
             ]),
           ),
@@ -130,7 +139,24 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('生命值 $currentHp/$maxHp', style: Theme.of(context).textTheme.titleLarge),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '生命值 $currentHp/$maxHp',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                IconButton(
+                  key: const Key('campaign-actor-avatar-picker'),
+                  tooltip: '更换头像',
+                  icon: const Icon(Icons.add_a_photo_outlined),
+                  onPressed: actor.status == 'archived'
+                      ? null
+                      : () => _pickAvatar(actor, sheet),
+                ),
+              ],
+            ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 6,
@@ -192,6 +218,137 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
     );
   }
 
+  Widget _buildRuntimeSection(
+    BuildContext context,
+    Map<String, Object?> sheet,
+  ) {
+    final data = _asMap(sheet['data']);
+    final runtime = _asMap(data['runtime']);
+    final conditions = (runtime['conditions'] as List<Object?>? ?? const [])
+        .map((condition) => condition.toString())
+        .where((condition) => condition.isNotEmpty)
+        .toList(growable: false);
+    final resources = _asMap(runtime['classResourcesUsed']);
+    final temporaryHp = _asInt(runtime['temporaryHp']);
+    return _SheetSection(
+      title: '运行时状态',
+      icon: Icons.monitor_heart_outlined,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          Chip(label: Text('临时 HP $temporaryHp')),
+          if (runtime['inspiration'] == true) const Chip(label: Text('有灵感')),
+          for (final condition in conditions)
+            Chip(
+              avatar: const Icon(Icons.warning_amber_outlined, size: 18),
+              label: Text(condition),
+            ),
+          for (final resource in resources.entries)
+            Chip(label: Text('${resource.key} 已用 ${resource.value}')),
+          if (conditions.isEmpty && resources.isEmpty && temporaryHp == 0)
+            Text(
+              '当前没有额外状态',
+              style: TextStyle(color: Theme.of(context).colorScheme.outline),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRuleLedgerSection(
+    BuildContext context,
+    Map<String, Object?> sheet,
+  ) {
+    final data = _asMap(sheet['data']);
+    final grants = (data['resolvedGrants'] as List<Object?>? ?? const [])
+        .whereType<Map>()
+        .map((grant) => Map<String, Object?>.from(grant))
+        .toList(growable: false);
+    return _SheetSection(
+      title: '规则账本',
+      icon: Icons.account_tree_outlined,
+      child: grants.isEmpty
+          ? Text(
+              '该 Actor 还没有规则授予快照',
+              style: TextStyle(color: Theme.of(context).colorScheme.outline),
+            )
+          : Column(
+              children: [
+                for (final grant in grants)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.auto_awesome_outlined),
+                    title: Text(
+                      grant['label']?.toString() ??
+                          grant['id']?.toString() ??
+                          '未命名授予',
+                    ),
+                    subtitle: Text(_grantSource(grant)),
+                  ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildAuditSection(BuildContext context, CampaignActor actor) {
+    final loading = widget.controller.isLoadingAudits(actor.id);
+    final error = widget.controller.auditErrorFor(actor.id);
+    final audits = widget.controller.auditsFor(actor.id).reversed.toList();
+    return _SheetSection(
+      title: '编辑历史',
+      icon: Icons.history_outlined,
+      trailing: IconButton(
+        tooltip: '刷新编辑历史',
+        onPressed: loading
+            ? null
+            : () => widget.controller.loadActorAudits(actor.id),
+        icon: const Icon(Icons.refresh),
+      ),
+      child: loading && audits.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : error != null
+          ? Text(
+              error,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            )
+          : audits.isEmpty
+          ? Text(
+              '暂无编辑记录',
+              style: TextStyle(color: Theme.of(context).colorScheme.outline),
+            )
+          : Column(
+              children: [
+                for (final audit in audits)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.manage_history_outlined),
+                    title: Text(
+                      '版本 ${audit.baseRevision} → ${audit.resultRevision}',
+                    ),
+                    subtitle: Text(
+                      '${audit.changedPaths.join(', ')}\n操作人 ${audit.actorUserId}',
+                    ),
+                    isThreeLine: true,
+                  ),
+              ],
+            ),
+    );
+  }
+
+  String _grantSource(Map<String, Object?> grant) {
+    final parts = <String>[
+      if (grant['kind'] != null) grant['kind'].toString(),
+      if (grant['entryId'] != null) '来源 ${grant['entryId']}',
+      if (grant['sourceLevel'] != null) '等级 ${grant['sourceLevel']}',
+    ];
+    return parts.isEmpty ? '无来源信息' : parts.join(' · ');
+  }
+
+  Map<String, Object?> _asMap(Object? value) => value is Map
+      ? Map<String, Object?>.from(value)
+      : const <String, Object?>{};
+
   Widget _buildBuildFields(
     BuildContext context,
     CampaignActor actor,
@@ -229,12 +386,12 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
                   onPressed: actor.status == 'archived'
                       ? null
                       : () => _editNumericField(
-                            actor,
-                            sheet,
-                            'armorClass',
-                            'AC',
-                            armorClass,
-                          ),
+                          actor,
+                          sheet,
+                          'armorClass',
+                          'AC',
+                          armorClass,
+                        ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -245,12 +402,12 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
                   onPressed: actor.status == 'archived'
                       ? null
                       : () => _editNumericField(
-                            actor,
-                            sheet,
-                            'speed',
-                            '速度',
-                            speed,
-                          ),
+                          actor,
+                          sheet,
+                          'speed',
+                          '速度',
+                          speed,
+                        ),
                 ),
               ),
             ],
@@ -274,8 +431,10 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
           Text('备注', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           TextField(
-            controller: TextEditingController(text: notes)..selection =
-                TextSelection.fromPosition(TextPosition(offset: notes.length)),
+            controller: TextEditingController(text: notes)
+              ..selection = TextSelection.fromPosition(
+                TextPosition(offset: notes.length),
+              ),
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
               hintText: 'DM 备注，仅战役主持人可见',
@@ -295,6 +454,35 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
   ) async {
     final updated = Map<String, Object?>.from(sheet);
     updated['currentHp'] = newHp;
+    await widget.controller.updateActor(actor, updated);
+  }
+
+  Future<void> _pickAvatar(
+    CampaignActor actor,
+    Map<String, Object?> sheet,
+  ) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['png', 'jpg', 'jpeg', 'webp'],
+      withData: true,
+    );
+    final file = result?.files.singleOrNull;
+    final bytes = file?.bytes;
+    if (bytes == null || bytes.isEmpty || !mounted) return;
+    if (bytes.length > 2 * 1024 * 1024) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('头像图片不能超过 2 MB')),
+      );
+      return;
+    }
+    final extension = (file?.extension ?? 'png').toLowerCase();
+    final mimeType = switch (extension) {
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'webp' => 'image/webp',
+      _ => 'image/png',
+    };
+    final updated = Map<String, Object?>.from(sheet);
+    updated['avatarUrl'] = 'data:$mimeType;base64,${base64Encode(bytes)}';
     await widget.controller.updateActor(actor, updated);
   }
 
@@ -381,6 +569,47 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
   }
 }
 
+class _SheetSection extends StatelessWidget {
+  const _SheetSection({
+    required this.title,
+    required this.icon,
+    required this.child,
+    this.trailing,
+  });
+
+  final String title;
+  final IconData icon;
+  final Widget child;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              ?trailing,
+            ],
+          ),
+          const SizedBox(height: 8),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
 class _ActorConflictDialog extends StatelessWidget {
   const _ActorConflictDialog({
     required this.conflict,
@@ -423,14 +652,8 @@ class _ActorConflictDialog extends StatelessWidget {
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: onKeepLocal,
-          child: const Text('保留本地'),
-        ),
-        FilledButton(
-          onPressed: onReload,
-          child: const Text('重新加载'),
-        ),
+        TextButton(onPressed: onKeepLocal, child: const Text('保留本地')),
+        FilledButton(onPressed: onReload, child: const Text('重新加载')),
       ],
     );
   }

@@ -1,6 +1,8 @@
 import 'package:dnd_table_client/src/features/campaigns/data/sync/campaign_sync_api_client.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_actor.dart';
+import 'package:dnd_table_client/src/features/campaigns/domain/campaign_actor_audit.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_controller.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_sheet_page.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_controller.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/characters_tab_page.dart';
@@ -17,6 +19,57 @@ void main() {
     await Future.microtask(() {});
   }
 
+  test('uses credentials that become available after construction', () async {
+    var accessToken = '';
+    var userId = '';
+    final apiClient = MemoryCampaignSyncApiClient();
+    final controller = CampaignActorController(
+      cacheRepository: MemoryCampaignCacheRepository(),
+      apiClient: apiClient,
+      apiBaseUrl: 'https://example.test',
+      accessToken: '',
+      currentUserId: '',
+      accessTokenProvider: () => accessToken,
+      currentUserIdProvider: () => userId,
+    );
+    await controller.selectCampaign('campaign-1');
+
+    accessToken = 'token-after-login';
+    userId = 'user-after-login';
+    final published = await controller.publishCharacter(_sampleCharacter);
+
+    expect(published, isTrue);
+    expect(apiClient.publishCalls.single['accessToken'], 'token-after-login');
+    expect(controller.currentUserId, 'user-after-login');
+    controller.dispose();
+  });
+
+  test('creates a temporary NPC with a minimal usable combat sheet', () async {
+    final apiClient = MemoryCampaignSyncApiClient();
+    final controller = CampaignActorController(
+      cacheRepository: MemoryCampaignCacheRepository(),
+      apiClient: apiClient,
+      apiBaseUrl: 'https://example.test',
+      accessToken: 'access-token',
+      currentUserId: 'dm-1',
+    );
+    await controller.selectCampaign('campaign-1');
+
+    final created = await controller.createTemporaryNpc(
+      name: 'Street informant',
+      maxHp: 9,
+    );
+
+    expect(created, isTrue);
+    expect(apiClient.createActorCalls.single['lifecycle'], 'temporary');
+    expect(apiClient.createActorCalls.single['sheet'], {
+      'name': 'Street informant',
+      'currentHp': 9,
+      'maxHp': 9,
+    });
+    controller.dispose();
+  });
+
   testWidgets(
     'player mode shows local characters and dm mode shows actor directory',
     (tester) async {
@@ -29,11 +82,7 @@ void main() {
       await drainStream();
 
       final cacheRepository = MemoryCampaignCacheRepository(
-        actors: [
-          _sampleActor,
-          _sampleNpc,
-          _archivedActor,
-        ],
+        actors: [_sampleActor, _sampleNpc, _archivedActor],
       );
       final apiClient = MemoryCampaignSyncApiClient();
       final modeController = ClientModeController();
@@ -59,20 +108,26 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Player mode: shows local characters list with publish action.
+      // Player mode: publishing lives in the character's expandable summary.
       expect(find.byKey(const Key('player-local-characters')), findsOneWidget);
       expect(find.text('Mira'), findsOneWidget);
+      expect(find.text('发布到战役'), findsNothing);
+      await tester.tap(find.byKey(const Key('character-expand-char-1')));
+      await tester.pumpAndSettle();
       expect(find.text('发布到战役'), findsWidgets);
 
-      // Switch to DM mode via the dedicated switch.
-      await tester.tap(find.byKey(const Key('mode-switch-dm')));
+      // Only the settings flow changes the mode; the role page has no toggle.
+      expect(find.byKey(const Key('mode-switch-dm')), findsNothing);
+      await modeController.setMode(ClientMode.dungeonMaster);
       await tester.pumpAndSettle();
 
-      // DM mode: shows campaign actor directory; publish action is hidden.
+      // DM mode hides local player characters and shows the actor directory.
       expect(find.byKey(const Key('campaign-actor-directory')), findsOneWidget);
+      expect(find.byKey(const Key('player-local-characters')), findsNothing);
       expect(find.text('发布到战役'), findsNothing);
       expect(find.text('Test Hero'), findsOneWidget);
       expect(find.text('Goblin Boss'), findsOneWidget);
+      expect(find.byKey(const Key('create-temporary-actor')), findsOneWidget);
       // Archived actor is hidden by default.
       expect(find.text('Old Villain'), findsNothing);
 
@@ -82,247 +137,321 @@ void main() {
     },
   );
 
-  testWidgets(
-    'dm mode actor directory supports search and status filters',
-    (tester) async {
-      final cacheRepository = MemoryCampaignCacheRepository(
-        actors: [
-          _sampleActor,
-          _sampleNpc,
-          _archivedActor,
-        ],
-      );
-      final apiClient = MemoryCampaignSyncApiClient();
-      final modeController = ClientModeController(
-        initialMode: ClientMode.dungeonMaster,
-      );
-      final actorController = CampaignActorController(
-        cacheRepository: cacheRepository,
-        apiClient: apiClient,
-        apiBaseUrl: 'https://example.test',
-        accessToken: 'access-token',
-        currentUserId: 'user-1',
-      );
-      await drainStream();
-      await actorController.selectCampaign('campaign-1');
-      await drainStream();
+  testWidgets('dm mode actor directory supports search and status filters', (
+    tester,
+  ) async {
+    final cacheRepository = MemoryCampaignCacheRepository(
+      actors: [_sampleActor, _sampleNpc, _archivedActor],
+    );
+    final apiClient = MemoryCampaignSyncApiClient();
+    final modeController = ClientModeController(
+      initialMode: ClientMode.dungeonMaster,
+    );
+    final actorController = CampaignActorController(
+      cacheRepository: cacheRepository,
+      apiClient: apiClient,
+      apiBaseUrl: 'https://example.test',
+      accessToken: 'access-token',
+      currentUserId: 'user-1',
+    );
+    await drainStream();
+    await actorController.selectCampaign('campaign-1');
+    await drainStream();
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: CharactersTabPage(
-            controller: CharacterController(
-              repository: MemoryCharacterRepository(),
-            ),
-            modeController: modeController,
-            actorController: actorController,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharactersTabPage(
+          controller: CharacterController(
+            repository: MemoryCharacterRepository(),
           ),
+          modeController: modeController,
+          actorController: actorController,
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      // Default: player + npc visible, archived hidden.
-      expect(find.text('Test Hero'), findsOneWidget);
-      expect(find.text('Goblin Boss'), findsOneWidget);
-      expect(find.text('Old Villain'), findsNothing);
+    // Default: player + npc visible, archived hidden.
+    expect(find.text('Test Hero'), findsOneWidget);
+    expect(find.text('Goblin Boss'), findsOneWidget);
+    expect(find.text('Old Villain'), findsNothing);
 
-      // Search narrows by name.
-      await tester.enterText(
-        find.byKey(const Key('actor-directory-search')),
-        'Goblin',
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('Test Hero'), findsNothing);
-      expect(find.text('Goblin Boss'), findsOneWidget);
+    // Search narrows by name.
+    await tester.enterText(
+      find.byKey(const Key('actor-directory-search')),
+      'Goblin',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Test Hero'), findsNothing);
+    expect(find.text('Goblin Boss'), findsOneWidget);
 
-      // Clear search and toggle to archived-only filter.
-      await tester.enterText(
-        find.byKey(const Key('actor-directory-search')),
-        '',
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('filter-chip-archived')));
-      await tester.pumpAndSettle();
-      expect(find.text('Test Hero'), findsNothing);
-      expect(find.text('Goblin Boss'), findsNothing);
-      expect(find.text('Old Villain'), findsOneWidget);
+    // Clear search and toggle to archived-only filter.
+    await tester.enterText(find.byKey(const Key('actor-directory-search')), '');
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('filter-chip-archived')));
+    await tester.pumpAndSettle();
+    expect(find.text('Test Hero'), findsNothing);
+    expect(find.text('Goblin Boss'), findsNothing);
+    expect(find.text('Old Villain'), findsOneWidget);
 
-      actorController.dispose();
-      modeController.dispose();
-    },
-  );
+    actorController.dispose();
+    modeController.dispose();
+  });
 
-  testWidgets(
-    'dm opens actor sheet and updates hp with base revision',
-    (tester) async {
-      final cacheRepository = MemoryCampaignCacheRepository(
-        actors: [_sampleActor],
-      );
-      final apiClient = MemoryCampaignSyncApiClient();
-      final modeController = ClientModeController(
-        initialMode: ClientMode.dungeonMaster,
-      );
-      final actorController = CampaignActorController(
-        cacheRepository: cacheRepository,
-        apiClient: apiClient,
-        apiBaseUrl: 'https://example.test',
-        accessToken: 'access-token',
-        currentUserId: 'user-1',
-      );
-      await drainStream();
-      await actorController.selectCampaign('campaign-1');
-      await drainStream();
+  testWidgets('dm opens actor sheet and updates hp with base revision', (
+    tester,
+  ) async {
+    final cacheRepository = MemoryCampaignCacheRepository(
+      actors: [_sampleActor],
+    );
+    final apiClient = MemoryCampaignSyncApiClient();
+    final modeController = ClientModeController(
+      initialMode: ClientMode.dungeonMaster,
+    );
+    final actorController = CampaignActorController(
+      cacheRepository: cacheRepository,
+      apiClient: apiClient,
+      apiBaseUrl: 'https://example.test',
+      accessToken: 'access-token',
+      currentUserId: 'user-1',
+    );
+    await drainStream();
+    await actorController.selectCampaign('campaign-1');
+    await drainStream();
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: CharactersTabPage(
-            controller: CharacterController(
-              repository: MemoryCharacterRepository(),
-            ),
-            modeController: modeController,
-            actorController: actorController,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharactersTabPage(
+          controller: CharacterController(
+            repository: MemoryCharacterRepository(),
           ),
+          modeController: modeController,
+          actorController: actorController,
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Test Hero'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('Test Hero'));
+    await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('campaign-actor-sheet')), findsOneWidget);
-      expect(find.textContaining('HP 10/20'), findsOneWidget);
+    expect(find.byKey(const Key('campaign-actor-sheet')), findsOneWidget);
+    expect(find.textContaining('HP 10/20'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('受到 1 点伤害'));
-      await tester.pumpAndSettle();
-      await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('受到 1 点伤害'));
+    await tester.pumpAndSettle();
+    await tester.pumpAndSettle();
 
-      expect(apiClient.updateActorCalls, hasLength(1));
-      expect(apiClient.updateActorCalls.last['baseRevision'], 1);
-      expect(apiClient.updateActorCalls.last['actorId'], 'actor-1');
-      final sheet = apiClient.updateActorCalls.last['sheet']!
-          as Map<String, Object?>;
-      expect(sheet['currentHp'], 9);
+    expect(apiClient.updateActorCalls, hasLength(1));
+    expect(apiClient.updateActorCalls.last['baseRevision'], 1);
+    expect(apiClient.updateActorCalls.last['actorId'], 'actor-1');
+    final sheet =
+        apiClient.updateActorCalls.last['sheet']! as Map<String, Object?>;
+    expect(sheet['currentHp'], 9);
 
-      actorController.dispose();
-      modeController.dispose();
-    },
-  );
+    actorController.dispose();
+    modeController.dispose();
+  });
 
-  testWidgets(
-    'publish character sheet submits to api with base revision 0',
-    (tester) async {
-      final characterRepository = MemoryCharacterRepository(
-        initial: [_sampleCharacter],
-      );
-      final characterController = CharacterController(
-        repository: characterRepository,
-      );
-      await drainStream();
+  testWidgets('publish character sheet submits to api with base revision 0', (
+    tester,
+  ) async {
+    final characterRepository = MemoryCharacterRepository(
+      initial: [_sampleCharacter],
+    );
+    final characterController = CharacterController(
+      repository: characterRepository,
+    );
+    await drainStream();
 
-      final cacheRepository = MemoryCampaignCacheRepository();
-      final apiClient = MemoryCampaignSyncApiClient();
-      final modeController = ClientModeController();
-      final actorController = CampaignActorController(
-        cacheRepository: cacheRepository,
-        apiClient: apiClient,
-        apiBaseUrl: 'https://example.test',
-        accessToken: 'access-token',
-        currentUserId: 'user-1',
-      );
-      await actorController.selectCampaign('campaign-1');
-      await drainStream();
+    final cacheRepository = MemoryCampaignCacheRepository();
+    final apiClient = MemoryCampaignSyncApiClient();
+    final modeController = ClientModeController();
+    final actorController = CampaignActorController(
+      cacheRepository: cacheRepository,
+      apiClient: apiClient,
+      apiBaseUrl: 'https://example.test',
+      accessToken: 'access-token',
+      currentUserId: 'user-1',
+    );
+    await actorController.selectCampaign('campaign-1');
+    await drainStream();
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: CharactersTabPage(
-            controller: characterController,
-            modeController: modeController,
-            actorController: actorController,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharactersTabPage(
+          controller: characterController,
+          modeController: modeController,
+          actorController: actorController,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('character-expand-char-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('publish-character-char-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('publish-character-sheet')), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, '发布'));
+    await tester.pumpAndSettle();
+
+    expect(apiClient.publishCalls, hasLength(1));
+    expect(apiClient.publishCalls.last['sourceCharacterId'], 'char-1');
+    expect(apiClient.publishCalls.last['actorType'], 'player');
+    expect(apiClient.publishCalls.last['baseRevision'], 0);
+
+    characterController.dispose();
+    actorController.dispose();
+    modeController.dispose();
+  });
+
+  testWidgets('actor update conflict shows comparison and reload action', (
+    tester,
+  ) async {
+    final cacheRepository = MemoryCampaignCacheRepository(
+      actors: [_sampleActor],
+    );
+    final apiClient = MemoryCampaignSyncApiClient();
+    apiClient.nextUpdateActorException = const CampaignConflictException({
+      'id': 'actor-1',
+      'campaignId': 'campaign-1',
+      'actorType': 'player',
+      'status': 'active',
+      'sheet': {'name': 'Test Hero', 'currentHp': 5, 'maxHp': 20},
+      'revision': 7,
+      'updatedBy': 'dm-user',
+      'createdAt': '2026-01-01T00:00:00.000Z',
+      'updatedAt': '2026-07-14T00:00:00.000Z',
+    });
+    final modeController = ClientModeController(
+      initialMode: ClientMode.dungeonMaster,
+    );
+    final actorController = CampaignActorController(
+      cacheRepository: cacheRepository,
+      apiClient: apiClient,
+      apiBaseUrl: 'https://example.test',
+      accessToken: 'access-token',
+      currentUserId: 'user-1',
+    );
+    await drainStream();
+    await actorController.selectCampaign('campaign-1');
+    await drainStream();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharactersTabPage(
+          controller: CharacterController(
+            repository: MemoryCharacterRepository(),
           ),
+          modeController: modeController,
+          actorController: actorController,
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('publish-character-char-1')));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('Test Hero'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('受到 1 点伤害'));
+    await tester.pumpAndSettle();
+    await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('publish-character-sheet')), findsOneWidget);
-      await tester.tap(find.widgetWithText(FilledButton, '发布'));
-      await tester.pumpAndSettle();
+    expect(find.byKey(const Key('actor-conflict-dialog')), findsOneWidget);
+    expect(find.textContaining('已被其他主持人修改'), findsOneWidget);
+    expect(find.textContaining('当前 HP 5'), findsOneWidget);
 
-      expect(apiClient.publishCalls, hasLength(1));
-      expect(apiClient.publishCalls.last['sourceCharacterId'], 'char-1');
-      expect(apiClient.publishCalls.last['actorType'], 'player');
-      expect(apiClient.publishCalls.last['baseRevision'], 0);
+    await tester.tap(find.widgetWithText(FilledButton, '重新加载'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('actor-conflict-dialog')), findsNothing);
 
-      characterController.dispose();
-      actorController.dispose();
-      modeController.dispose();
-    },
-  );
+    actorController.dispose();
+    modeController.dispose();
+  });
 
-  testWidgets(
-    'actor update conflict shows comparison and reload action',
-    (tester) async {
-      final cacheRepository = MemoryCampaignCacheRepository(
-        actors: [_sampleActor],
-      );
-      final apiClient = MemoryCampaignSyncApiClient();
-      apiClient.nextUpdateActorException = const CampaignConflictException({
-        'id': 'actor-1',
-        'campaignId': 'campaign-1',
-        'actorType': 'player',
-        'status': 'active',
-        'sheet': {'name': 'Test Hero', 'currentHp': 5, 'maxHp': 20},
-        'revision': 7,
-        'updatedBy': 'dm-user',
-        'createdAt': '2026-01-01T00:00:00.000Z',
-        'updatedAt': '2026-07-14T00:00:00.000Z',
-      });
-      final modeController = ClientModeController(
-        initialMode: ClientMode.dungeonMaster,
-      );
-      final actorController = CampaignActorController(
-        cacheRepository: cacheRepository,
-        apiClient: apiClient,
-        apiBaseUrl: 'https://example.test',
-        accessToken: 'access-token',
-        currentUserId: 'user-1',
-      );
-      await drainStream();
-      await actorController.selectCampaign('campaign-1');
-      await drainStream();
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: CharactersTabPage(
-            controller: CharacterController(
-              repository: MemoryCharacterRepository(),
-            ),
-            modeController: modeController,
-            actorController: actorController,
-          ),
+  testWidgets('dm actor sheet shows runtime ledger and edit history', (
+    tester,
+  ) async {
+    final actor = testCampaignActor(
+      id: 'actor-audit',
+      campaignId: 'campaign-1',
+      sheet: const {
+        'name': 'Audit Hero',
+        'currentHp': 8,
+        'maxHp': 12,
+        'armorClass': 14,
+        'speed': 30,
+        'data': {
+          'runtime': {
+            'temporaryHp': 4,
+            'conditions': ['中毒'],
+            'classResourcesUsed': {'second-wind': 1},
+          },
+          'resolvedGrants': [
+            {
+              'id': 'second-wind',
+              'kind': 'feature',
+              'label': '第二气息',
+              'entryId': 'guide:feature/second-wind',
+              'sourceLevel': 1,
+            },
+          ],
+        },
+      },
+      revision: 2,
+    );
+    final apiClient = MemoryCampaignSyncApiClient(
+      actorAudits: const [
+        CampaignActorAudit(
+          id: 'audit-1',
+          campaignActorId: 'actor-audit',
+          campaignId: 'campaign-1',
+          actorUserId: 'dm-user',
+          baseRevision: 1,
+          resultRevision: 2,
+          changedPaths: ['currentHp', 'data.runtime.conditions'],
+          beforeSheet: {'currentHp': 12},
+          afterSheet: {'currentHp': 8},
+          createdAt: '2026-07-15T01:00:00.000Z',
         ),
-      );
-      await tester.pumpAndSettle();
+      ],
+    );
+    final controller = CampaignActorController(
+      cacheRepository: MemoryCampaignCacheRepository(actors: [actor]),
+      apiClient: apiClient,
+      apiBaseUrl: 'https://example.test',
+      accessToken: 'access-token',
+      currentUserId: 'dm-user',
+    );
+    await controller.selectCampaign('campaign-1');
+    await drainStream();
 
-      await tester.tap(find.text('Test Hero'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('受到 1 点伤害'));
-      await tester.pumpAndSettle();
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CampaignActorSheetPage(controller: controller, actorId: actor.id),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('actor-conflict-dialog')), findsOneWidget);
-      expect(find.textContaining('已被其他主持人修改'), findsOneWidget);
-      expect(find.textContaining('当前 HP 5'), findsOneWidget);
+    expect(find.text('运行时状态'), findsOneWidget);
+    expect(find.textContaining('临时 HP 4'), findsOneWidget);
+    expect(find.textContaining('中毒'), findsOneWidget);
+    expect(find.text('规则账本'), findsOneWidget);
+    expect(find.text('第二气息'), findsOneWidget);
 
-      await tester.tap(find.widgetWithText(FilledButton, '重新加载'));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('actor-conflict-dialog')), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('编辑历史'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('编辑历史'), findsOneWidget);
+    expect(find.textContaining('1 → 2'), findsOneWidget);
+    expect(find.textContaining('currentHp'), findsOneWidget);
+    expect(apiClient.listActorAuditCalls, ['actor-audit']);
 
-      actorController.dispose();
-      modeController.dispose();
-    },
-  );
+    controller.dispose();
+  });
 }
 
 const _sampleCharacter = CharacterSheet(

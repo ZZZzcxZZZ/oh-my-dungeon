@@ -18,6 +18,7 @@ class ContentTypeRegistry {
     'feat': _FeatDefinition(),
     'spell': _SpellDefinition(),
     'equipment': _EquipmentDefinition(),
+    'equipmentBundle': _EquipmentBundleDefinition(),
     'item': _ItemDefinition(),
     'condition': _ConditionDefinition(),
     'rule': _RuleDefinition(),
@@ -80,10 +81,7 @@ Widget _metadataRows(
     );
   }
   if (rows.isEmpty) return const SizedBox.shrink();
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: rows,
-  );
+  return Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows);
 }
 
 String? _formatValue(Object? value) {
@@ -114,10 +112,10 @@ class _ClassDefinition extends _BaseDefinition {
 
   @override
   List<ContentFieldDefinition> get searchableFields => const [
-        ContentFieldDefinition(key: 'hitDie', label: '生命骰'),
-        ContentFieldDefinition(key: 'primaryAbility', label: '主属性'),
-        ContentFieldDefinition(key: 'proficiencies', label: '熟练'),
-      ];
+    ContentFieldDefinition(key: 'hitDie', label: '生命骰'),
+    ContentFieldDefinition(key: 'primaryAbility', label: '主属性'),
+    ContentFieldDefinition(key: 'proficiencies', label: '熟练'),
+  ];
 
   @override
   Widget buildMetadata(BuildContext context, ContentEntry entry) {
@@ -139,9 +137,9 @@ class _SubclassDefinition extends _BaseDefinition {
 
   @override
   List<ContentFieldDefinition> get searchableFields => const [
-        ContentFieldDefinition(key: 'parentClass', label: '父职业'),
-        ContentFieldDefinition(key: 'level', label: '等级'),
-      ];
+    ContentFieldDefinition(key: 'parentClass', label: '父职业'),
+    ContentFieldDefinition(key: 'level', label: '等级'),
+  ];
 
   @override
   Widget buildMetadata(BuildContext context, ContentEntry entry) {
@@ -163,9 +161,9 @@ class _ClassFeatureDefinition extends _BaseDefinition {
 
   @override
   List<ContentFieldDefinition> get searchableFields => const [
-        ContentFieldDefinition(key: 'class', label: '职业'),
-        ContentFieldDefinition(key: 'level', label: '等级'),
-      ];
+    ContentFieldDefinition(key: 'class', label: '职业'),
+    ContentFieldDefinition(key: 'level', label: '等级'),
+  ];
 
   @override
   Widget buildMetadata(BuildContext context, ContentEntry entry) {
@@ -187,10 +185,10 @@ class _SpeciesDefinition extends _BaseDefinition {
 
   @override
   List<ContentFieldDefinition> get searchableFields => const [
-        ContentFieldDefinition(key: 'size', label: '体型'),
-        ContentFieldDefinition(key: 'speed', label: '速度'),
-        ContentFieldDefinition(key: 'creatureType', label: '生物类型'),
-      ];
+    ContentFieldDefinition(key: 'size', label: '体型'),
+    ContentFieldDefinition(key: 'speed', label: '速度'),
+    ContentFieldDefinition(key: 'creatureType', label: '生物类型'),
+  ];
 
   @override
   Widget buildMetadata(BuildContext context, ContentEntry entry) {
@@ -212,9 +210,9 @@ class _BackgroundDefinition extends _BaseDefinition {
 
   @override
   List<ContentFieldDefinition> get searchableFields => const [
-        ContentFieldDefinition(key: 'skills', label: '技能'),
-        ContentFieldDefinition(key: 'feature', label: '特性'),
-      ];
+    ContentFieldDefinition(key: 'skills', label: '技能'),
+    ContentFieldDefinition(key: 'feature', label: '特性'),
+  ];
 
   @override
   Widget buildMetadata(BuildContext context, ContentEntry entry) {
@@ -236,9 +234,9 @@ class _FeatDefinition extends _BaseDefinition {
 
   @override
   List<ContentFieldDefinition> get searchableFields => const [
-        ContentFieldDefinition(key: 'category', label: '类别'),
-        ContentFieldDefinition(key: 'prerequisite', label: '先决'),
-      ];
+    ContentFieldDefinition(key: 'category', label: '类别'),
+    ContentFieldDefinition(key: 'prerequisite', label: '先决'),
+  ];
 
   @override
   Widget buildMetadata(BuildContext context, ContentEntry entry) {
@@ -260,13 +258,13 @@ class _SpellDefinition extends _BaseDefinition {
 
   @override
   List<ContentFieldDefinition> get searchableFields => const [
-        ContentFieldDefinition(key: 'level', label: '环阶'),
-        ContentFieldDefinition(key: 'school', label: '学派'),
-        ContentFieldDefinition(key: 'castingTime', label: '施法时间'),
-        ContentFieldDefinition(key: 'range', label: '距离'),
-        ContentFieldDefinition(key: 'components', label: '成分'),
-        ContentFieldDefinition(key: 'duration', label: '持续时间'),
-      ];
+    ContentFieldDefinition(key: 'level', label: '环阶'),
+    ContentFieldDefinition(key: 'school', label: '学派'),
+    ContentFieldDefinition(key: 'castingTime', label: '施法时间'),
+    ContentFieldDefinition(key: 'range', label: '距离'),
+    ContentFieldDefinition(key: 'components', label: '成分'),
+    ContentFieldDefinition(key: 'duration', label: '持续时间'),
+  ];
 
   @override
   Widget buildMetadata(BuildContext context, ContentEntry entry) {
@@ -288,12 +286,12 @@ class _EquipmentDefinition extends _BaseDefinition {
 
   @override
   List<ContentFieldDefinition> get searchableFields => const [
-        ContentFieldDefinition(key: 'category', label: '类别'),
-        ContentFieldDefinition(key: 'cost', label: '价格'),
-        ContentFieldDefinition(key: 'weight', label: '重量'),
-        ContentFieldDefinition(key: 'damage', label: '伤害'),
-        ContentFieldDefinition(key: 'armorClass', label: 'AC'),
-      ];
+    ContentFieldDefinition(key: 'category', label: '类别'),
+    ContentFieldDefinition(key: 'cost', label: '价格'),
+    ContentFieldDefinition(key: 'weight', label: '重量'),
+    ContentFieldDefinition(key: 'damage', label: '伤害'),
+    ContentFieldDefinition(key: 'armorClass', label: 'AC'),
+  ];
 
   @override
   Widget buildMetadata(BuildContext context, ContentEntry entry) {
@@ -315,9 +313,32 @@ class _ItemDefinition extends _BaseDefinition {
 
   @override
   List<ContentFieldDefinition> get searchableFields => const [
-        ContentFieldDefinition(key: 'rarity', label: '稀有度'),
-        ContentFieldDefinition(key: 'attunement', label: '同调'),
-      ];
+    ContentFieldDefinition(key: 'rarity', label: '稀有度'),
+    ContentFieldDefinition(key: 'attunement', label: '同调'),
+  ];
+
+  @override
+  Widget buildMetadata(BuildContext context, ContentEntry entry) {
+    return _metadataRows(context, entry, searchableFields);
+  }
+}
+
+class _EquipmentBundleDefinition extends _BaseDefinition {
+  const _EquipmentBundleDefinition();
+
+  @override
+  String get type => 'equipmentBundle';
+
+  @override
+  String get label => '装备方案';
+
+  @override
+  IconData get icon => Icons.inventory_outlined;
+
+  @override
+  List<ContentFieldDefinition> get searchableFields => const [
+    ContentFieldDefinition(key: 'source', label: '来源'),
+  ];
 
   @override
   Widget buildMetadata(BuildContext context, ContentEntry entry) {
@@ -339,8 +360,8 @@ class _ConditionDefinition extends _BaseDefinition {
 
   @override
   List<ContentFieldDefinition> get searchableFields => const [
-        ContentFieldDefinition(key: 'duration', label: '持续时间'),
-      ];
+    ContentFieldDefinition(key: 'duration', label: '持续时间'),
+  ];
 
   @override
   Widget buildMetadata(BuildContext context, ContentEntry entry) {
@@ -378,10 +399,10 @@ class _MonsterDefinition extends _BaseDefinition {
 
   @override
   List<ContentFieldDefinition> get searchableFields => const [
-        ContentFieldDefinition(key: 'challengeRating', label: 'CR'),
-        ContentFieldDefinition(key: 'type', label: '类型'),
-        ContentFieldDefinition(key: 'alignment', label: '阵营'),
-      ];
+    ContentFieldDefinition(key: 'challengeRating', label: 'CR'),
+    ContentFieldDefinition(key: 'type', label: '类型'),
+    ContentFieldDefinition(key: 'alignment', label: '阵营'),
+  ];
 
   @override
   Widget buildMetadata(BuildContext context, ContentEntry entry) {

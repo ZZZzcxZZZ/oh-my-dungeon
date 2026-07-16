@@ -42,16 +42,8 @@ class AppPreferencesController extends ChangeNotifier {
     return _save(_preferences.copyWith(confirmBeforeRoll: value));
   }
 
-  Future<void> setRuleset(String value) {
-    return _save(_preferences.copyWith(ruleset: value));
-  }
-
   Future<void> setDefaultCreationMethod(String value) {
     return _save(_preferences.copyWith(defaultCreationMethod: value));
-  }
-
-  Future<void> setShowLegacyContent(bool value) {
-    return _save(_preferences.copyWith(showLegacyContent: value));
   }
 
   Future<void> setShowCharacterSources(bool value) {

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dnd_table_client/src/features/campaigns/data/local/campaign_cache_repository.dart';
 import 'package:dnd_table_client/src/features/campaigns/data/sync/campaign_sync_api_client.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_actor.dart';
+import 'package:dnd_table_client/src/features/campaigns/domain/campaign_actor_audit.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_change.dart';
 
 CampaignActor testCampaignActor({
@@ -14,20 +15,19 @@ CampaignActor testCampaignActor({
   String status = 'active',
   Map<String, Object?>? sheet,
   int revision = 1,
-}) =>
-    CampaignActor(
-      id: id,
-      campaignId: campaignId,
-      ownerUserId: ownerUserId,
-      sourceCharacterId: sourceCharacterId,
-      actorType: actorType,
-      status: status,
-      sheet: sheet ?? {'name': 'Test Hero', 'currentHp': 10, 'maxHp': 20},
-      revision: revision,
-      updatedBy: 'user-1',
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-    );
+}) => CampaignActor(
+  id: id,
+  campaignId: campaignId,
+  ownerUserId: ownerUserId,
+  sourceCharacterId: sourceCharacterId,
+  actorType: actorType,
+  status: status,
+  sheet: sheet ?? {'name': 'Test Hero', 'currentHp': 10, 'maxHp': 20},
+  revision: revision,
+  updatedBy: 'user-1',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+);
 
 CampaignContentEntrySummary testContentEntry({
   String id = 'entry-1',
@@ -37,30 +37,29 @@ CampaignContentEntrySummary testContentEntry({
   String name = '月港',
   Map<String, Object?>? entry,
   int revision = 1,
-}) =>
-    CampaignContentEntrySummary(
-      id: id,
-      campaignId: campaignId,
-      type: type,
-      slug: slug,
-      name: name,
-      entry: entry ?? {'body': <Map<String, Object?>>[]},
-      revision: revision,
-      createdBy: 'user-1',
-      updatedBy: 'user-1',
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-      deletedAt: null,
-    );
+}) => CampaignContentEntrySummary(
+  id: id,
+  campaignId: campaignId,
+  type: type,
+  slug: slug,
+  name: name,
+  entry: entry ?? {'body': <Map<String, Object?>>[]},
+  revision: revision,
+  createdBy: 'user-1',
+  updatedBy: 'user-1',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+  deletedAt: null,
+);
 
 class MemoryCampaignCacheRepository implements CampaignCacheRepository {
   MemoryCampaignCacheRepository({
     List<CampaignActor> actors = const [],
     List<CampaignContentEntrySummary> entries = const [],
     Map<String, String> cursors = const {},
-  })  : _actors = {for (final a in actors) a.id: a},
-        _entries = {for (final e in entries) e.id: e},
-        _cursors = Map.of(cursors);
+  }) : _actors = {for (final a in actors) a.id: a},
+       _entries = {for (final e in entries) e.id: e},
+       _cursors = Map.of(cursors);
 
   final Map<String, CampaignActor> _actors;
   final Map<String, CampaignContentEntrySummary> _entries;
@@ -90,9 +89,13 @@ class MemoryCampaignCacheRepository implements CampaignCacheRepository {
   @override
   Stream<List<CampaignActor>> watchActors(String campaignId) {
     final controller = StreamController<List<CampaignActor>>.broadcast();
-    scheduleMicrotask(() => controller.add(_actors.values
-        .where((actor) => actor.campaignId == campaignId)
-        .toList(growable: false)));
+    scheduleMicrotask(
+      () => controller.add(
+        _actors.values
+            .where((actor) => actor.campaignId == campaignId)
+            .toList(growable: false),
+      ),
+    );
     _controller.stream.listen(controller.add);
     return controller.stream;
   }
@@ -103,9 +106,13 @@ class MemoryCampaignCacheRepository implements CampaignCacheRepository {
   ) {
     final controller =
         StreamController<List<CampaignContentEntrySummary>>.broadcast();
-    scheduleMicrotask(() => controller.add(_entries.values
-        .where((entry) => entry.campaignId == campaignId)
-        .toList(growable: false)));
+    scheduleMicrotask(
+      () => controller.add(
+        _entries.values
+            .where((entry) => entry.campaignId == campaignId)
+            .toList(growable: false),
+      ),
+    );
     _entryController.stream.listen(controller.add);
     return controller.stream;
   }
@@ -166,10 +173,13 @@ class MemoryCampaignCacheRepository implements CampaignCacheRepository {
 class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
   MemoryCampaignSyncApiClient({
     List<CampaignChangePage> changePages = const [],
+    List<CampaignActorAudit> actorAudits = const [],
     this.listChangesException,
-  }) : _changePages = List.of(changePages);
+  }) : _changePages = List.of(changePages),
+       _actorAudits = List.of(actorAudits);
 
   final List<CampaignChangePage> _changePages;
+  final List<CampaignActorAudit> _actorAudits;
   int _changePageIndex = 0;
   final Object? listChangesException;
 
@@ -183,6 +193,7 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
   final List<Map<String, Object?>> createEntryCalls = [];
   final List<Map<String, Object?>> updateEntryCalls = [];
   final List<String> deleteEntryCalls = [];
+  final List<String> listActorAuditCalls = [];
 
   @override
   Future<CampaignChangePage> listChanges({
@@ -210,6 +221,8 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
     required Map<String, Object?> sheet,
   }) async {
     publishCalls.add({
+      'apiBaseUrl': apiBaseUrl,
+      'accessToken': accessToken,
       'campaignId': campaignId,
       'sourceCharacterId': sourceCharacterId,
       'actorType': actorType,
@@ -231,12 +244,14 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
     required String campaignId,
     required String actorType,
     String? ownerUserId,
+    String lifecycle = 'persistent',
     required Map<String, Object?> sheet,
   }) async {
     createActorCalls.add({
       'campaignId': campaignId,
       'actorType': actorType,
       'ownerUserId': ownerUserId,
+      'lifecycle': lifecycle,
       'sheet': sheet,
     });
     return testCampaignActor(
@@ -252,8 +267,7 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-  }) async =>
-      [testCampaignActor(campaignId: campaignId)];
+  }) async => [testCampaignActor(campaignId: campaignId)];
 
   @override
   Future<CampaignActor> getActor({
@@ -261,8 +275,18 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
     required String accessToken,
     required String campaignId,
     required String actorId,
-  }) async =>
-      testCampaignActor(id: actorId, campaignId: campaignId);
+  }) async => testCampaignActor(id: actorId, campaignId: campaignId);
+
+  @override
+  Future<List<CampaignActorAudit>> listActorAudits({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String actorId,
+  }) async {
+    listActorAuditCalls.add(actorId);
+    return List.unmodifiable(_actorAudits);
+  }
 
   @override
   Future<CampaignActor> updateActor({
@@ -318,6 +342,8 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
     required Map<String, Object?> entry,
   }) async {
     createEntryCalls.add({
+      'apiBaseUrl': apiBaseUrl,
+      'accessToken': accessToken,
       'campaignId': campaignId,
       'type': type,
       'slug': slug,
@@ -348,11 +374,7 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
       'baseRevision': baseRevision,
       'entry': entry,
     });
-    return testContentEntry(
-      id: entryId,
-      campaignId: campaignId,
-      entry: entry,
-    );
+    return testContentEntry(id: entryId, campaignId: campaignId, entry: entry);
   }
 
   @override
@@ -374,6 +396,5 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
     required String slug,
     required String name,
     required Map<String, Object?> entry,
-  }) async =>
-      {'valid': true, 'errors': <String>[]};
+  }) async => {'valid': true, 'errors': <String>[]};
 }

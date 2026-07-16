@@ -3,8 +3,6 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 
 import '../../../../core/database/app_database.dart';
-import '../../../../core/sync/sync_models.dart';
-import '../../../../core/sync/sync_repository.dart';
 import '../../domain/content_block.dart';
 import '../../domain/content_entry.dart';
 import '../../domain/content_package_manifest.dart';
@@ -234,6 +232,7 @@ class DriftContentRepository implements ContentRepository {
                   jsonEncode(entry.body.map((b) => b.toJson()).toList()),
                 ),
                 structuredJson: Value(jsonEncode(entry.structured)),
+                rulesJson: Value(jsonEncode(entry.rules?.toJson() ?? const {})),
                 tagsJson: Value(jsonEncode(entry.tags)),
                 sourceLabel: Value(entry.source.label),
                 revision: entry.revision,
@@ -266,12 +265,9 @@ class DriftContentRepository implements ContentRepository {
             );
       }
 
-      await DriftSyncRepository(_database).enqueue(SyncOperation(
-        id: 'vault:installedPackageManifest:$packageId',
-        scope: 'vault',
+      await _enqueueVaultOperation(
         entityType: 'installedPackageManifest',
         entityId: packageId,
-        baseRevision: 0,
         payloadJson: jsonEncode({
           'id': manifest.id,
           'version': manifest.version,
@@ -279,7 +275,7 @@ class DriftContentRepository implements ContentRepository {
           'system': manifest.system,
           'contentHash': contentHash,
         }),
-      ));
+      );
     });
   }
 
@@ -398,14 +394,11 @@ class DriftContentRepository implements ContentRepository {
               ..where((t) => t.entryKey.equals(entryKey)))
             .go();
       }
-      await DriftSyncRepository(_database).enqueue(SyncOperation(
-        id: 'vault:favorite:$entryKey',
-        scope: 'vault',
+      await _enqueueVaultOperation(
         entityType: 'favorite',
         entityId: entryKey,
-        baseRevision: 0,
         payloadJson: jsonEncode({'entryKey': entryKey, 'favorite': favorite}),
-      ));
+      );
     });
   }
 
@@ -429,15 +422,42 @@ class DriftContentRepository implements ContentRepository {
               updatedAt: DateTime.now(),
             ),
           );
-      await DriftSyncRepository(_database).enqueue(SyncOperation(
-        id: 'vault:note:$entryKey',
-        scope: 'vault',
+      await _enqueueVaultOperation(
         entityType: 'note',
         entityId: entryKey,
-        baseRevision: 0,
         payloadJson: jsonEncode({'entryKey': entryKey, 'markdown': markdown}),
-      ));
+      );
     });
+  }
+
+  Future<void> _enqueueVaultOperation({
+    required String entityType,
+    required String entityId,
+    required String payloadJson,
+  }) async {
+    final db = _database;
+    final revision = await (db.select(db.vaultEntityRevisions)
+          ..where((row) =>
+              row.entityType.equals(entityType) & row.entityId.equals(entityId)))
+        .getSingleOrNull();
+    await (db.delete(db.syncOutbox)
+          ..where((row) =>
+              row.scope.equals('vault') &
+              row.entityType.equals(entityType) &
+              row.entityId.equals(entityId)))
+        .go();
+    final now = DateTime.now();
+    await db.into(db.syncOutbox).insert(
+          SyncOutboxCompanion.insert(
+            id: 'vault:$entityType:$entityId:${now.microsecondsSinceEpoch}',
+            scope: 'vault',
+            entityType: entityType,
+            entityId: entityId,
+            baseRevision: Value(revision?.revision ?? 0),
+            payloadJson: payloadJson,
+            createdAt: now,
+          ),
+        );
   }
 
   ContentPackageManifest _mapPackage(LocalContentPackageRow row) {
@@ -465,6 +485,10 @@ class DriftContentRepository implements ContentRepository {
       'structured': jsonDecode(row.structuredJson),
       'tags': jsonDecode(row.tagsJson) as List<Object?>,
     };
+    final rules = jsonDecode(row.rulesJson);
+    if (rules is Map && rules.isNotEmpty) {
+      json['rules'] = rules;
+    }
     if (row.sourceLabel.isNotEmpty) {
       json['source'] = {'label': row.sourceLabel};
     }

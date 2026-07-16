@@ -198,12 +198,14 @@ class Dnd5eRules {
           id: 'second_wind',
           name: '第二气息',
           maximum: _secondWindUses(clampedLevel),
+          recovery: 'shortRest',
         ),
         if (clampedLevel >= 2)
           const Dnd5eClassResource(
             id: 'action_surge',
             name: '动作如潮',
             maximum: 1,
+            recovery: 'shortRest',
           ),
       ];
     }
@@ -213,6 +215,7 @@ class Dnd5eRules {
           id: 'rage',
           name: '狂暴',
           maximum: _rageUses(clampedLevel),
+          recovery: 'longRest',
         ),
       ];
     }
@@ -464,11 +467,13 @@ class Dnd5eClassResource {
     required this.id,
     required this.name,
     required this.maximum,
+    this.recovery = 'longRest',
   });
 
   final String id;
   final String name;
   final int maximum;
+  final String recovery;
 }
 
 enum _CasterProgression { full, half, third }

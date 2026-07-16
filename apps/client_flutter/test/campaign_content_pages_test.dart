@@ -13,6 +13,32 @@ void main() {
     await Future.microtask(() {});
   }
 
+  test('uses credentials that become available after construction', () async {
+    var accessToken = '';
+    final apiClient = MemoryCampaignSyncApiClient();
+    final controller = CampaignContentController(
+      cacheRepository: MemoryCampaignCacheRepository(),
+      apiClient: apiClient,
+      apiBaseUrl: 'https://example.test',
+      accessToken: '',
+      currentUserId: '',
+      accessTokenProvider: () => accessToken,
+    );
+    await controller.selectCampaign('campaign-1');
+
+    accessToken = 'token-after-login';
+    final created = await controller.createEntry(
+      type: 'note',
+      slug: 'after-login',
+      name: 'After login',
+      entry: const {'body': []},
+    );
+
+    expect(created, isTrue);
+    expect(apiClient.createEntryCalls.single['accessToken'], 'token-after-login');
+    controller.dispose();
+  });
+
   testWidgets(
     'content page lists entries from cache and supports offline reading',
     (tester) async {

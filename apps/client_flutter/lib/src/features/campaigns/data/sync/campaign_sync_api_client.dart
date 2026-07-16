@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../domain/campaign_actor.dart';
+import '../../domain/campaign_actor_audit.dart';
 import '../../domain/campaign_change.dart';
 
 /// 战役同步 HTTP 接口的通用错误。
@@ -53,6 +54,7 @@ abstract interface class CampaignSyncApiClient {
     required String campaignId,
     required String actorType,
     String? ownerUserId,
+    String lifecycle = 'persistent',
     required Map<String, Object?> sheet,
   });
 
@@ -63,6 +65,13 @@ abstract interface class CampaignSyncApiClient {
   });
 
   Future<CampaignActor> getActor({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String actorId,
+  });
+
+  Future<List<CampaignActorAudit>> listActorAudits({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
@@ -126,7 +135,7 @@ abstract interface class CampaignSyncApiClient {
 /// 基于 `package:http` 的实现。构造时注入 [client] 以便测试用 MockClient 替换。
 class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
   HttpCampaignSyncApiClient({http.Client? client})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
 
   final http.Client _client;
 
@@ -143,10 +152,7 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
     final uri = Uri.parse(
       '${_normalize(apiBaseUrl)}/campaigns/$campaignId/changes',
     ).replace(queryParameters: query);
-    final response = await _client.get(
-      uri,
-      headers: _headers(accessToken),
-    );
+    final response = await _client.get(uri, headers: _headers(accessToken));
     if (response.statusCode != 200) {
       throw _toException(response);
     }
@@ -195,13 +201,12 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
     required String campaignId,
     required String actorType,
     String? ownerUserId,
+    String lifecycle = 'persistent',
     required Map<String, Object?> sheet,
   }) async {
-    final body = <String, Object?>{
-      'actorType': actorType,
-      'sheet': sheet,
-    };
+    final body = <String, Object?>{'actorType': actorType, 'sheet': sheet};
     if (ownerUserId != null) body['ownerUserId'] = ownerUserId;
+    if (lifecycle != 'persistent') body['lifecycle'] = lifecycle;
     final response = await _client.post(
       Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/actors'),
       headers: _headers(accessToken),
@@ -259,6 +264,32 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
   }
 
   @override
+  Future<List<CampaignActorAudit>> listActorAudits({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String actorId,
+  }) async {
+    final response = await _client.get(
+      Uri.parse(
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/actors/$actorId/audits',
+      ),
+      headers: _headers(accessToken),
+    );
+    if (response.statusCode != 200) {
+      throw _toException(response);
+    }
+    final decoded = jsonDecode(response.body) as List<Object?>;
+    return decoded
+        .whereType<Map>()
+        .map(
+          (item) =>
+              CampaignActorAudit.fromJson(Map<String, Object?>.from(item)),
+        )
+        .toList(growable: false);
+  }
+
+  @override
   Future<CampaignActor> updateActor({
     required String apiBaseUrl,
     required String accessToken,
@@ -272,10 +303,7 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
         '${_normalize(apiBaseUrl)}/campaigns/$campaignId/actors/$actorId',
       ),
       headers: _headers(accessToken),
-      body: jsonEncode({
-        'baseRevision': baseRevision,
-        'sheet': sheet,
-      }),
+      body: jsonEncode({'baseRevision': baseRevision, 'sheet': sheet}),
     );
     if (response.statusCode == 409) {
       throw CampaignConflictException(_decodeConflict(response));
@@ -361,10 +389,7 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
         '${_normalize(apiBaseUrl)}/campaigns/$campaignId/content/entries/$entryId',
       ),
       headers: _headers(accessToken),
-      body: jsonEncode({
-        'baseRevision': baseRevision,
-        'entry': entry,
-      }),
+      body: jsonEncode({'baseRevision': baseRevision, 'entry': entry}),
     );
     if (response.statusCode == 409) {
       throw CampaignConflictException(_decodeConflict(response));
@@ -420,15 +445,13 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
     if (response.statusCode != 200) {
       throw _toException(response);
     }
-    return Map<String, Object?>.from(
-      jsonDecode(response.body) as Map,
-    );
+    return Map<String, Object?>.from(jsonDecode(response.body) as Map);
   }
 
   Map<String, String> _headers(String accessToken) => {
-        'authorization': 'Bearer $accessToken',
-        'content-type': 'application/json',
-      };
+    'authorization': 'Bearer $accessToken',
+    'content-type': 'application/json',
+  };
 
   String _normalize(String apiBaseUrl) {
     return apiBaseUrl.replaceFirst(RegExp(r'/+$'), '');
@@ -450,7 +473,8 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
     String message;
     try {
       final decoded = jsonDecode(response.body) as Map<String, Object?>;
-      message = decoded['message']?.toString() ??
+      message =
+          decoded['message']?.toString() ??
           'Campaign sync request failed with HTTP ${response.statusCode}.';
     } catch (_) {
       message =

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../data/local/campaign_cache_repository.dart';
 import '../../data/sync/campaign_sync_api_client.dart';
 import '../../domain/campaign_actor.dart';
+import '../../domain/campaign_actor_audit.dart';
 import '../../domain/campaign_change.dart';
 import '../../../characters/domain/character.dart';
 
@@ -18,17 +19,28 @@ class CampaignActorController extends ChangeNotifier {
     required String apiBaseUrl,
     required String accessToken,
     required String currentUserId,
-  })  : _cacheRepository = cacheRepository,
-        _apiClient = apiClient,
-        _apiBaseUrl = apiBaseUrl,
-        _accessToken = accessToken,
-        _currentUserId = currentUserId;
+    String Function()? accessTokenProvider,
+    String Function()? currentUserIdProvider,
+  }) : _cacheRepository = cacheRepository,
+       _apiClient = apiClient,
+       _apiBaseUrl = apiBaseUrl,
+       _initialAccessToken = accessToken,
+       _initialCurrentUserId = currentUserId,
+       _accessTokenProvider = accessTokenProvider,
+       _currentUserIdProvider = currentUserIdProvider;
 
   final CampaignCacheRepository _cacheRepository;
   final CampaignSyncApiClient _apiClient;
   final String _apiBaseUrl;
-  final String _accessToken;
-  final String _currentUserId;
+  final String _initialAccessToken;
+  final String _initialCurrentUserId;
+  final String Function()? _accessTokenProvider;
+  final String Function()? _currentUserIdProvider;
+
+  String get _accessToken =>
+      _accessTokenProvider?.call() ?? _initialAccessToken;
+  String get _currentUserId =>
+      _currentUserIdProvider?.call() ?? _initialCurrentUserId;
 
   String? _selectedCampaignId;
   StreamSubscription<List<CampaignActor>>? _subscription;
@@ -39,6 +51,9 @@ class CampaignActorController extends ChangeNotifier {
   bool _loading = false;
   String? _error;
   CampaignConflictException? _conflict;
+  final Map<String, List<CampaignActorAudit>> _audits = {};
+  final Set<String> _loadingAudits = {};
+  final Map<String, String> _auditErrors = {};
 
   String? get selectedCampaignId => _selectedCampaignId;
   List<CampaignActor> get actors => _actors;
@@ -48,16 +63,22 @@ class CampaignActorController extends ChangeNotifier {
   String? get error => _error;
   CampaignConflictException? get conflict => _conflict;
   String get currentUserId => _currentUserId;
+  List<CampaignActorAudit> auditsFor(String actorId) =>
+      List.unmodifiable(_audits[actorId] ?? const []);
+  bool isLoadingAudits(String actorId) => _loadingAudits.contains(actorId);
+  String? auditErrorFor(String actorId) => _auditErrors[actorId];
 
   /// 根据当前查询和筛选条件过滤后的角色列表。
   List<CampaignActor> get filteredActors {
     final query = _query.trim().toLowerCase();
-    return _actors.where((actor) {
-      if (!_matchesFilters(actor)) return false;
-      if (query.isEmpty) return true;
-      final name = actor.sheet['name']?.toString().toLowerCase() ?? '';
-      return name.contains(query);
-    }).toList(growable: false);
+    return _actors
+        .where((actor) {
+          if (!_matchesFilters(actor)) return false;
+          if (query.isEmpty) return true;
+          final name = actor.sheet['name']?.toString().toLowerCase() ?? '';
+          return name.contains(query);
+        })
+        .toList(growable: false);
   }
 
   bool _matchesFilters(CampaignActor actor) {
@@ -83,6 +104,9 @@ class CampaignActorController extends ChangeNotifier {
     if (_selectedCampaignId == campaignId) return;
     _selectedCampaignId = campaignId;
     _actors = [];
+    _audits.clear();
+    _loadingAudits.clear();
+    _auditErrors.clear();
     _error = null;
     notifyListeners();
     await _subscription?.cancel();
@@ -150,6 +174,26 @@ class CampaignActorController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> loadActorAudits(String actorId) async {
+    final campaignId = _selectedCampaignId;
+    if (campaignId == null || _loadingAudits.contains(actorId)) return;
+    _loadingAudits.add(actorId);
+    _auditErrors.remove(actorId);
+    notifyListeners();
+    try {
+      _audits[actorId] = await _apiClient.listActorAudits(
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: _accessToken,
+        campaignId: campaignId,
+        actorId: actorId,
+      );
+    } catch (_) {
+      _auditErrors[actorId] = '加载编辑历史失败';
+    }
+    _loadingAudits.remove(actorId);
+    notifyListeners();
+  }
+
   Future<bool> publishCharacter(
     CharacterSheet character, {
     String actorType = 'player',
@@ -188,7 +232,47 @@ class CampaignActorController extends ChangeNotifier {
     }
   }
 
-  Future<bool> updateActor(CampaignActor actor, Map<String, Object?> sheet) async {
+  /// Creates a throwaway DM persona with enough state to be used in chat and
+  /// later added to an encounter without opening the full character editor.
+  Future<bool> createTemporaryNpc({
+    required String name,
+    int maxHp = 1,
+  }) async {
+    final campaignId = _selectedCampaignId;
+    final normalizedName = name.trim();
+    if (campaignId == null || normalizedName.isEmpty) return false;
+
+    _error = null;
+    try {
+      final hp = maxHp < 0 ? 0 : maxHp;
+      final created = await _apiClient.createActor(
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: _accessToken,
+        campaignId: campaignId,
+        actorType: 'npc',
+        lifecycle: 'temporary',
+        sheet: {'name': normalizedName, 'currentHp': hp, 'maxHp': hp},
+      );
+      await _cacheRepository.applyPage(
+        campaignId,
+        _singleChangePage(created, 'upsert'),
+      );
+      return true;
+    } on CampaignConflictException catch (error) {
+      _conflict = error;
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _error = '创建临时角色失败';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> updateActor(
+    CampaignActor actor,
+    Map<String, Object?> sheet,
+  ) async {
     final campaignId = _selectedCampaignId;
     if (campaignId == null) return false;
     _error = null;
@@ -206,6 +290,7 @@ class CampaignActorController extends ChangeNotifier {
         campaignId,
         _singleChangePage(updated, 'upsert'),
       );
+      await loadActorAudits(actor.id);
       return true;
     } on CampaignConflictException catch (e) {
       _conflict = e;

@@ -39,4 +39,17 @@ void main() {
     expect(profile.name, 'Home Table');
     expect(profile.websocketUrl, 'wss://table.example.com/realtime');
   });
+
+  test('repairs legacy profiles that stored the server origin as the API URL', () {
+    final profile = ServerProfile.fromJson({
+      'id': '127.0.0.1',
+      'name': 'Local preview',
+      'baseUrl': 'http://127.0.0.1:5174',
+      'apiBaseUrl': 'http://127.0.0.1:5174',
+      'websocketUrl': 'ws://127.0.0.1:3000/realtime',
+      'lastKnownVersion': '0.1.0',
+    });
+
+    expect(profile.apiBaseUrl, 'http://127.0.0.1:5174/api');
+  });
 }

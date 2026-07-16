@@ -17,17 +17,27 @@ class CampaignContentController extends ChangeNotifier {
     required String apiBaseUrl,
     required String accessToken,
     required String currentUserId,
+    String Function()? accessTokenProvider,
+    String Function()? currentUserIdProvider,
   })  : _cacheRepository = cacheRepository,
         _apiClient = apiClient,
         _apiBaseUrl = apiBaseUrl,
-        _accessToken = accessToken,
-        _currentUserId = currentUserId;
+        _initialAccessToken = accessToken,
+        _initialCurrentUserId = currentUserId,
+        _accessTokenProvider = accessTokenProvider,
+        _currentUserIdProvider = currentUserIdProvider;
 
   final CampaignCacheRepository _cacheRepository;
   final CampaignSyncApiClient _apiClient;
   final String _apiBaseUrl;
-  final String _accessToken;
-  final String _currentUserId;
+  final String _initialAccessToken;
+  final String _initialCurrentUserId;
+  final String Function()? _accessTokenProvider;
+  final String Function()? _currentUserIdProvider;
+
+  String get _accessToken => _accessTokenProvider?.call() ?? _initialAccessToken;
+  String get _currentUserId =>
+      _currentUserIdProvider?.call() ?? _initialCurrentUserId;
 
   String? _selectedCampaignId;
   StreamSubscription<List<CampaignContentEntrySummary>>? _subscription;

@@ -16,6 +16,7 @@ part 'app_database.g.dart';
   SyncOutbox,
   SyncCursors,
   MigrationMarkers,
+  VaultEntityRevisions,
   LocalContentPackages,
   LocalContentEntries,
   LocalContentAssets,
@@ -36,10 +37,15 @@ class AppDatabase extends _$AppDatabase {
 
   /// 测试与内存数据库构造器。
   @visibleForTesting
-  AppDatabase.forTesting(super.executor);
+  AppDatabase.forTesting(super.executor) {
+    // Widget suites intentionally create isolated in-memory databases in one
+    // process. They never share an executor, so Drift's production warning is
+    // noise in this constructor only.
+    driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+  }
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -64,6 +70,12 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(campaignContentCache);
             await m.createTable(campaignSyncCursors);
             await m.createTable(characterSyncConflicts);
+          }
+          if (from < 5) {
+            await m.createTable(vaultEntityRevisions);
+          }
+          if (from < 6) {
+            await m.addColumn(localContentEntries, localContentEntries.rulesJson);
           }
         },
       );

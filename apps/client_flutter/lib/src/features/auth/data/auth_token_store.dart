@@ -38,10 +38,13 @@ abstract class AuthTokenStore {
   Future<StoredAuthTokens?> getTokens(String serverProfileId);
   Future<void> saveTokens(String serverProfileId, StoredAuthTokens tokens);
   Future<void> clearTokens(String serverProfileId);
+  Future<bool> getAutoLoginEnabled(String serverProfileId);
+  Future<void> setAutoLoginEnabled(String serverProfileId, bool enabled);
 }
 
 class InMemoryAuthTokenStore implements AuthTokenStore {
   final Map<String, StoredAuthTokens> _tokens = {};
+  final Map<String, bool> _autoLoginPreferences = {};
 
   @override
   Future<StoredAuthTokens?> getTokens(String serverProfileId) async {
@@ -60,12 +63,23 @@ class InMemoryAuthTokenStore implements AuthTokenStore {
   Future<void> clearTokens(String serverProfileId) async {
     _tokens.remove(serverProfileId);
   }
+
+  @override
+  Future<bool> getAutoLoginEnabled(String serverProfileId) async {
+    return _autoLoginPreferences[serverProfileId] ?? true;
+  }
+
+  @override
+  Future<void> setAutoLoginEnabled(String serverProfileId, bool enabled) async {
+    _autoLoginPreferences[serverProfileId] = enabled;
+  }
 }
 
 class SharedPreferencesAuthTokenStore implements AuthTokenStore {
   SharedPreferencesAuthTokenStore(this._preferences);
 
   static const _tokensKey = 'auth.tokens.v1';
+  static const _autoLoginKeyPrefix = 'auth.autoLogin.v1.';
 
   final SharedPreferences _preferences;
 
@@ -96,6 +110,16 @@ class SharedPreferencesAuthTokenStore implements AuthTokenStore {
       return;
     }
     await _writeTokenMap(map);
+  }
+
+  @override
+  Future<bool> getAutoLoginEnabled(String serverProfileId) async {
+    return _preferences.getBool('$_autoLoginKeyPrefix$serverProfileId') ?? true;
+  }
+
+  @override
+  Future<void> setAutoLoginEnabled(String serverProfileId, bool enabled) async {
+    await _preferences.setBool('$_autoLoginKeyPrefix$serverProfileId', enabled);
   }
 
   Future<Map<String, Map<String, Object?>>> _readTokenMap() async {

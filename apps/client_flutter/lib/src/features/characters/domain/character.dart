@@ -1,5 +1,6 @@
 import 'character_content_reference.dart';
 import 'dnd5e_rules.dart';
+import '../../rules/domain/character_build.dart';
 
 class CharacterSheet {
   const CharacterSheet({
@@ -32,8 +33,8 @@ class CharacterSheet {
     required String id,
     required String name,
     required int level,
-    List<CharacterContentReference> contentReferences = const <
-        CharacterContentReference>[],
+    List<CharacterContentReference> contentReferences =
+        const <CharacterContentReference>[],
     String notes = '',
     String classSummary = '',
     String raceSummary = '',
@@ -97,6 +98,8 @@ class CharacterSheet {
   List<Object?> get inventoryList => _asList(inventory);
   Map<String, Object?> get dataMap => _asMap(data);
   Map<String, Object?> get runtimeMap => _asMap(dataMap['runtime']);
+  CharacterRuntime get runtime =>
+      CharacterRuntime.fromJson({...runtimeMap, 'currentHp': currentHp});
   int get temporaryHp => _intValue(runtimeMap['temporaryHp']);
   bool get inspiration => runtimeMap['inspiration'] == true;
   List<String> get conditions => _asList(
@@ -133,6 +136,7 @@ class CharacterSheet {
             id: '${item['id']}',
             name: '${item['name']}',
             maximum: _intValue(item['maximum']),
+            recovery: _resourceRecovery(item['recovery']),
           ),
         )
         .where((item) => item.maximum > 0)
@@ -144,6 +148,7 @@ class CharacterSheet {
             id: item.id,
             name: item.name,
             maximum: item.maximum,
+            recovery: item.recovery,
           ),
         )
         .toList(growable: false);
@@ -159,10 +164,12 @@ class CharacterSheet {
     final refsRaw = json['contentReferences'];
     final contentReferences = refsRaw is List
         ? refsRaw
-            .map((item) => CharacterContentReference.fromJson(
+              .map(
+                (item) => CharacterContentReference.fromJson(
                   Map<String, Object?>.from(item as Map),
-                ))
-            .toList(growable: false)
+                ),
+              )
+              .toList(growable: false)
         : const <CharacterContentReference>[];
     return CharacterSheet(
       id: json['id']! as String,
@@ -192,31 +199,30 @@ class CharacterSheet {
   }
 
   Map<String, Object?> toJson() => {
-        'id': id,
-        'ownerUserId': ownerUserId,
-        'name': name,
-        'avatarUrl': avatarUrl,
-        'system': system,
-        'level': level,
-        'classSummary': classSummary,
-        'raceSummary': raceSummary,
-        'currentHp': currentHp,
-        'maxHp': maxHp,
-        'armorClass': armorClass,
-        'speed': speed,
-        'initiativeBonus': initiativeBonus,
-        'abilities': abilities,
-        'saves': saves,
-        'skills': skills,
-        'inventory': inventory,
-        'currency': currency,
-        'notes': notes,
-        'data': data,
-        'createdAt': createdAt,
-        'updatedAt': updatedAt,
-        'contentReferences':
-            contentReferences.map((ref) => ref.toJson()).toList(),
-      };
+    'id': id,
+    'ownerUserId': ownerUserId,
+    'name': name,
+    'avatarUrl': avatarUrl,
+    'system': system,
+    'level': level,
+    'classSummary': classSummary,
+    'raceSummary': raceSummary,
+    'currentHp': currentHp,
+    'maxHp': maxHp,
+    'armorClass': armorClass,
+    'speed': speed,
+    'initiativeBonus': initiativeBonus,
+    'abilities': abilities,
+    'saves': saves,
+    'skills': skills,
+    'inventory': inventory,
+    'currency': currency,
+    'notes': notes,
+    'data': data,
+    'createdAt': createdAt,
+    'updatedAt': updatedAt,
+    'contentReferences': contentReferences.map((ref) => ref.toJson()).toList(),
+  };
 
   CharacterSheet copyWith({
     String? name,
@@ -314,11 +320,20 @@ class CharacterClassResource {
     required this.id,
     required this.name,
     required this.maximum,
+    this.recovery = 'longRest',
   });
 
   final String id;
   final String name;
   final int maximum;
+  final String recovery;
+}
+
+String _resourceRecovery(Object? value) {
+  return switch (value) {
+    'shortRest' || 'longRest' || 'none' => value as String,
+    _ => 'longRest',
+  };
 }
 
 Map<String, Object?> _asMap(Object? value) {

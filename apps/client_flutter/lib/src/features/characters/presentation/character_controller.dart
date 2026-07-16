@@ -8,7 +8,7 @@ import '../domain/character_edit_draft.dart';
 
 class CharacterController extends ChangeNotifier {
   CharacterController({required CharacterRepository repository})
-      : _repository = repository {
+    : _repository = repository {
     loadLocalCharacters();
   }
 
@@ -17,17 +17,11 @@ class CharacterController extends ChangeNotifier {
 
   List<CharacterSheet> _characters = [];
 
-  @Deprecated('Campaign character bindings will move to CampaignActorController in Plan 4.')
-  final List<CharacterCampaignBinding> _campaignCharacters = [];
-
   CharacterSheet? _lastCreatedCharacter;
   bool _loading = false;
   String? _error;
 
   List<CharacterSheet> get characters => _characters;
-
-  @Deprecated('Campaign character bindings will move to CampaignActorController in Plan 4.')
-  List<CharacterCampaignBinding> get campaignCharacters => _campaignCharacters;
 
   CharacterSheet? get lastCreatedCharacter => _lastCreatedCharacter;
   bool get isLoading => _loading;
@@ -161,23 +155,6 @@ class CharacterController extends ChangeNotifier {
       character.copyWith(inventory: inventory, currency: currency),
     );
   }
-
-  @Deprecated('Campaign character loading will move to CampaignActorController in Plan 4.')
-  Future<void> loadCampaignCharacters(String campaignId) async {}
-
-  @Deprecated('Campaign HP adjustment will move to CampaignActorController in Plan 4.')
-  Future<bool> adjustCampaignCharacterHp({
-    required String campaignId,
-    required String characterId,
-    int? delta,
-    int? currentHp,
-  }) async => false;
-
-  @Deprecated('Campaign binding will move to CampaignActorController in Plan 4.')
-  Future<bool> bindCharacterToCampaign({
-    required String characterId,
-    required String campaignId,
-  }) async => false;
 
   @override
   void dispose() {

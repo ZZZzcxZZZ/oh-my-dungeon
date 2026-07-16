@@ -7,6 +7,7 @@ import 'package:dnd_table_client/src/features/auth/presentation/auth_controller.
 import 'package:dnd_table_client/src/features/campaigns/data/campaign_api_client.dart';
 import 'package:dnd_table_client/src/features/campaigns/data/campaign_socket_service.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign.dart';
+import 'package:dnd_table_client/src/features/campaigns/domain/campaign_archive_entry.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -59,6 +60,63 @@ void main() {
     controller.dispose();
     authController.dispose();
   });
+
+  test('loads workspace capabilities from the server context', () async {
+    final authController = await buildLoggedInAuthController();
+    final controller = CampaignController(
+      apiBaseUrl: apiBaseUrl,
+      authController: authController,
+      campaignClient: _FakeCampaignClient(),
+    );
+
+    await controller.loadWorkspaceContext('camp-1');
+
+    expect(controller.workspaceContext?.membership.boundActorId, 'actor-1');
+    expect(
+      controller.workspaceContext?.capabilities.canManageCampaign,
+      isFalse,
+    );
+
+    controller.dispose();
+    authController.dispose();
+  });
+
+  test('loads campaign archives independently from the chat stream', () async {
+    final authController = await buildLoggedInAuthController();
+    final controller = CampaignController(
+      apiBaseUrl: apiBaseUrl,
+      authController: authController,
+      campaignClient: _FakeCampaignClient(),
+    );
+
+    await controller.loadArchives('camp-1');
+
+    expect(controller.archives, hasLength(1));
+    expect(controller.archives.single.kind, 'clue');
+    expect(controller.archives.single.title, 'The silver key');
+
+    controller.dispose();
+    authController.dispose();
+  });
+
+  test('searches campaign records through the server without replacing chat', () async {
+    final authController = await buildLoggedInAuthController();
+    final client = _FakeCampaignClient();
+    final controller = CampaignController(
+      apiBaseUrl: apiBaseUrl,
+      authController: authController,
+      campaignClient: client,
+    );
+
+    final results = await controller.searchMessages('camp-1', query: 'chapel');
+
+    expect(client.lastMessageQuery, 'chapel');
+    expect(results, [_remoteMessage]);
+    expect(controller.messages, isEmpty);
+
+    controller.dispose();
+    authController.dispose();
+  });
 }
 
 const _remoteMessage = CampaignChatMessage(
@@ -75,13 +133,7 @@ const _remoteMessage = CampaignChatMessage(
 
 class _FakeCampaignSocketService implements CampaignSocketService {
   final _messageController = StreamController<CampaignChatMessage>.broadcast();
-  final List<
-    ({
-      String serverOrigin,
-      String accessToken,
-      String campaignId,
-    })
-  >
+  final List<({String serverOrigin, String accessToken, String campaignId})>
   connectCalls = [];
   int disconnectCount = 0;
 
@@ -115,6 +167,68 @@ class _FakeCampaignSocketService implements CampaignSocketService {
 }
 
 class _FakeCampaignClient implements CampaignClient {
+  String? lastMessageQuery;
+  @override
+  Future<void> markCampaignRead({required String apiBaseUrl, required String accessToken, required String campaignId}) async {}
+  @override
+  Future<CampaignMembership> updateSpeaker({required String apiBaseUrl, required String accessToken, required String campaignId, required String speakerMode, String? actorId}) => throw UnimplementedError();
+  @override
+  Future<List<CampaignArchiveEntry>> listArchives({required String apiBaseUrl, required String accessToken, required String campaignId, String? kind}) async => const [
+    CampaignArchiveEntry(
+      id: 'archive-1',
+      campaignId: 'camp-1',
+      kind: 'clue',
+      title: 'The silver key',
+      summary: '',
+      payload: {},
+      pinned: false,
+      updatedAt: '2026-07-16T00:00:00.000Z',
+    ),
+  ];
+  @override
+  Future<CampaignArchiveEntry> createArchiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String kind, required String title, String? summary, Map<String, Object?>? payload}) => throw UnimplementedError();
+  @override
+  Future<CampaignArchiveEntry> updateArchiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String entryId, String? kind, String? title, String? summary, Map<String, Object?>? payload, bool? pinned}) => throw UnimplementedError();
+  @override
+  Future<void> archiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String entryId}) => throw UnimplementedError();
+  @override
+  Future<CampaignWorkspaceContext> getWorkspaceContext({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+  }) async {
+    return CampaignWorkspaceContext(
+      campaign: const Campaign(
+        id: 'camp-1',
+        name: 'Curse of Strahd',
+        description: '',
+        system: 'dnd5e',
+        ownerId: 'user-1',
+        status: 'active',
+        createdAt: '2026-07-09T00:00:00.000Z',
+        updatedAt: '2026-07-09T00:00:00.000Z',
+      ),
+      membership: const CampaignMembership(
+        id: 'member-1',
+        campaignId: 'camp-1',
+        userId: 'user-1',
+        role: 'player',
+        displayName: 'ranger',
+        joinedAt: '2026-07-09T00:00:00.000Z',
+        boundActorId: 'actor-1',
+        activeSpeakerActorId: 'actor-1',
+      ),
+      members: const [],
+      actors: const [],
+      capabilities: const CampaignCapabilities(
+        canManageCampaign: false,
+        canManageMembers: false,
+        canCreateActors: false,
+        canSpeakAsNarrator: false,
+      ),
+    );
+  }
+
   @override
   Future<Campaign> createCampaign({
     required String apiBaseUrl,
@@ -148,7 +262,6 @@ class _FakeCampaignClient implements CampaignClient {
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    String? roleOnJoin,
     int? maxUses,
   }) {
     throw UnimplementedError();
@@ -177,8 +290,10 @@ class _FakeCampaignClient implements CampaignClient {
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
+    String? query,
   }) async {
-    return const [];
+    lastMessageQuery = query;
+    return query == null ? const [] : const [_remoteMessage];
   }
 
   @override
@@ -189,6 +304,8 @@ class _FakeCampaignClient implements CampaignClient {
     required String kind,
     required String content,
     String? campaignActorId,
+    String? actionId,
+    Map<String, Object?>? eventData,
   }) {
     throw UnimplementedError();
   }

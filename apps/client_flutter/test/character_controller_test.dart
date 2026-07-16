@@ -26,7 +26,14 @@ void main() {
       armorClass: 12,
       speed: 30,
       initiativeBonus: 0,
-      abilities: {'str': 8, 'dex': 14, 'con': 12, 'int': 16, 'wis': 10, 'cha': 10},
+      abilities: {
+        'str': 8,
+        'dex': 14,
+        'con': 12,
+        'int': 16,
+        'wis': 10,
+        'cha': 10,
+      },
       saves: {'int': true, 'wis': true},
       skills: {'奥秘': true, '调查': true},
       inventory: [],
@@ -88,118 +95,78 @@ void main() {
     controller.dispose();
   });
 
-  test('updates runtime state without dropping existing character data', () async {
-    final character = _character.copyWith(
-      data: const {
-        'contentRefs': {
-          'spells': ['spell-1'],
+  test(
+    'updates runtime state without dropping existing character data',
+    () async {
+      final character = _character.copyWith(
+        data: const {
+          'contentRefs': {
+            'spells': ['spell-1'],
+          },
         },
-      },
-    );
-    final repository = MemoryCharacterRepository(initial: [character]);
-    final controller = CharacterController(repository: repository);
-    await drainStream();
+      );
+      final repository = MemoryCharacterRepository(initial: [character]);
+      final controller = CharacterController(repository: repository);
+      await drainStream();
 
-    final ok = await controller.updateRuntimeState(
-      characterId: 'char-1',
-      temporaryHp: 6,
-      inspiration: true,
-      conditions: const ['中毒', '倒地'],
-      deathSaveSuccesses: 1,
-      deathSaveFailures: 2,
-      spellSlotsUsed: const {'1': 2, '2': 0},
-      classResourcesUsed: const {'second_wind': 1},
-    );
+      final ok = await controller.updateRuntimeState(
+        characterId: 'char-1',
+        temporaryHp: 6,
+        inspiration: true,
+        conditions: const ['中毒', '倒地'],
+        deathSaveSuccesses: 1,
+        deathSaveFailures: 2,
+        spellSlotsUsed: const {'1': 2, '2': 0},
+        classResourcesUsed: const {'second_wind': 1},
+      );
 
-    expect(ok, isTrue);
-    final stored = await repository.getById('char-1');
-    expect(stored?.dataMap['contentRefs'], {
-      'spells': ['spell-1'],
-    });
-    expect(stored?.dataMap['runtime'], {
-      'temporaryHp': 6,
-      'inspiration': true,
-      'conditions': ['中毒', '倒地'],
-      'deathSaves': {'successes': 1, 'failures': 2},
-      'spellSlotsUsed': {'1': 2, '2': 0},
-      'classResourcesUsed': {'second_wind': 1},
-    });
+      expect(ok, isTrue);
+      final stored = await repository.getById('char-1');
+      expect(stored?.dataMap['contentRefs'], {
+        'spells': ['spell-1'],
+      });
+      expect(stored?.dataMap['runtime'], {
+        'temporaryHp': 6,
+        'inspiration': true,
+        'conditions': ['中毒', '倒地'],
+        'deathSaves': {'successes': 1, 'failures': 2},
+        'spellSlotsUsed': {'1': 2, '2': 0},
+        'classResourcesUsed': {'second_wind': 1},
+      });
 
-    controller.dispose();
-  });
+      controller.dispose();
+    },
+  );
 
-  test('updates character inventory and currency from sheet quick actions', () async {
-    final repository = MemoryCharacterRepository(initial: [_character]);
-    final controller = CharacterController(repository: repository);
-    await drainStream();
+  test(
+    'updates character inventory and currency from sheet quick actions',
+    () async {
+      final repository = MemoryCharacterRepository(initial: [_character]);
+      final controller = CharacterController(repository: repository);
+      await drainStream();
 
-    final ok = await controller.updateInventoryAndCurrency(
-      characterId: 'char-1',
-      inventory: const [
+      final ok = await controller.updateInventoryAndCurrency(
+        characterId: 'char-1',
+        inventory: const [
+          {'name': '长弓', 'quantity': 2},
+          {'name': '治疗药水', 'quantity': 1},
+        ],
+        currency: const {'gp': 11},
+      );
+
+      expect(ok, isTrue);
+      final stored = await repository.getById('char-1');
+      expect(stored?.inventoryList, [
         {'name': '长弓', 'quantity': 2},
         {'name': '治疗药水', 'quantity': 1},
-      ],
-      currency: const {'gp': 11},
-    );
+      ]);
+      expect(stored?.currencyMap, {'gp': 11});
 
-    expect(ok, isTrue);
-    final stored = await repository.getById('char-1');
-    expect(stored?.inventoryList, [
-      {'name': '长弓', 'quantity': 2},
-      {'name': '治疗药水', 'quantity': 1},
-    ]);
-    expect(stored?.currencyMap, {'gp': 11});
-
-    controller.dispose();
-  });
+      controller.dispose();
+    },
+  );
 
   // ignore: deprecated_member_use_from_same_package
-  test('bindCharacterToCampaign stub returns false', () async {
-    final repository = MemoryCharacterRepository();
-    final controller = CharacterController(repository: repository);
-    await drainStream();
-
-    // ignore: deprecated_member_use_from_same_package
-    final ok = await controller.bindCharacterToCampaign(
-      characterId: 'char-1',
-      campaignId: 'camp-1',
-    );
-
-    expect(ok, isFalse);
-
-    controller.dispose();
-  });
-
-  test('adjustCampaignCharacterHp stub returns false', () async {
-    final repository = MemoryCharacterRepository();
-    final controller = CharacterController(repository: repository);
-    await drainStream();
-
-    // ignore: deprecated_member_use_from_same_package
-    final ok = await controller.adjustCampaignCharacterHp(
-      campaignId: 'camp-1',
-      characterId: 'char-1',
-      delta: -6,
-    );
-
-    expect(ok, isFalse);
-
-    controller.dispose();
-  });
-
-  test('loadCampaignCharacters stub leaves campaignCharacters empty', () async {
-    final repository = MemoryCharacterRepository();
-    final controller = CharacterController(repository: repository);
-    await drainStream();
-
-    // ignore: deprecated_member_use_from_same_package
-    await controller.loadCampaignCharacters('camp-1');
-
-    // ignore: deprecated_member_use_from_same_package
-    expect(controller.campaignCharacters, isEmpty);
-
-    controller.dispose();
-  });
 }
 
 const _character = CharacterSheet(

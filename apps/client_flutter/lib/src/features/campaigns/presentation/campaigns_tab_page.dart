@@ -5,12 +5,14 @@ import '../../auth/presentation/auth_controller.dart';
 import '../../characters/domain/character.dart';
 import '../../characters/presentation/character_controller.dart';
 import '../../client_mode/domain/client_mode.dart';
-import '../../content/presentation/content_controller.dart';
-import '../../rooms/domain/dice_roller.dart';
+import '../../content/data/local/content_repository.dart';
+import '../../../core/dice/dice_roller.dart';
 import '../../server_home/domain/active_server_session.dart';
 import '../domain/campaign.dart';
+import 'actors/campaign_actor_controller.dart';
 import 'campaign_chat_page.dart';
 import 'campaign_controller.dart';
+import 'content/campaign_content_controller.dart';
 
 /// Top-level "战役" tab.
 ///
@@ -22,10 +24,13 @@ class CampaignsTabPage extends StatefulWidget {
     required this.authController,
     required this.campaignController,
     required this.characterController,
-    required this.contentController,
+    required this.contentRepository,
     required this.modeController,
     required this.appPreferencesController,
     this.diceRoller,
+    this.onCampaignOpened,
+    this.campaignContentController,
+    this.actorController,
     super.key,
   });
 
@@ -33,10 +38,13 @@ class CampaignsTabPage extends StatefulWidget {
   final AuthController authController;
   final CampaignController campaignController;
   final CharacterController characterController;
-  final ContentController contentController;
+  final ContentRepository contentRepository;
   final ClientModeController modeController;
   final AppPreferencesController appPreferencesController;
   final DiceRoller? diceRoller;
+  final Future<void> Function(String campaignId)? onCampaignOpened;
+  final CampaignContentController? campaignContentController;
+  final CampaignActorController? actorController;
 
   @override
   State<CampaignsTabPage> createState() => _CampaignsTabPageState();
@@ -75,7 +83,6 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
         }
 
         final campaigns = widget.campaignController.campaigns;
-        final isDm = widget.modeController.mode == ClientMode.dungeonMaster;
         return Scaffold(
           appBar: AppBar(
             title: const Text('战役'),
@@ -92,14 +99,12 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
               ),
             ],
           ),
-          floatingActionButton: isDm
-              ? FloatingActionButton.extended(
-                  heroTag: 'create_campaign',
-                  onPressed: _showCreateDialog,
-                  icon: const Icon(Icons.add),
-                  label: const Text('创建战役'),
-                )
-              : null,
+          floatingActionButton: FloatingActionButton.extended(
+            heroTag: 'create_campaign',
+            onPressed: _showCreateDialog,
+            icon: const Icon(Icons.add),
+            label: const Text('创建战役'),
+          ),
           body: _buildCampaignList(context, campaigns),
         );
       },
@@ -123,10 +128,7 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  '未连接服务器',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
+                Text('未连接服务器', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
                 const Text(
                   '在设置中添加跑团服务器后，可以创建和加入在线战役。',
@@ -205,10 +207,8 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
           ? const EdgeInsets.fromLTRB(8, 4, 8, 80)
           : const EdgeInsets.fromLTRB(12, 8, 12, 96),
       itemCount: campaigns.length,
-      separatorBuilder: (context, index) => Divider(
-        height: compact ? 1 : 6,
-        indent: 72,
-      ),
+      separatorBuilder: (context, index) =>
+          Divider(height: compact ? 1 : 6, indent: 72),
       itemBuilder: (context, index) {
         final campaign = campaigns[index];
         final isOwner = campaign.ownerId == currentUserId;
@@ -230,16 +230,22 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
     return characters.first;
   }
 
-  void _openCampaignChat(Campaign campaign, CharacterSheet? character) {
+  Future<void> _openCampaignChat(
+    Campaign campaign,
+    CharacterSheet? character,
+  ) async {
+    await widget.onCampaignOpened?.call(campaign.id);
+    if (!mounted) return;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => CampaignChatPage(
           campaign: campaign,
           character: character,
           campaignController: widget.campaignController,
-          characterController: widget.characterController,
-          contentController: widget.contentController,
-          isDm: widget.modeController.mode == ClientMode.dungeonMaster,
+          contentRepository: widget.contentRepository,
+          campaignContentController: widget.campaignContentController,
+          actorController: widget.actorController,
+          isDm: campaign.ownerId == widget.authController.user?.id,
           campaignActorId: null,
           diceRoller: widget.diceRoller,
         ),
@@ -248,57 +254,19 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
   }
 
   Future<void> _showCreateDialog() async {
-    final nameController = TextEditingController();
-    final descController = TextEditingController();
     final messenger = ScaffoldMessenger.of(context);
 
-    final result = await showDialog<Map<String, String?>>(
+    final result = await showDialog<_CampaignCreationDraft>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('创建战役'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: '战役名称'),
-                autofocus: true,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: descController,
-                decoration: const InputDecoration(labelText: '描述（可选）'),
-                maxLines: 2,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop({
-                'name': nameController.text.trim(),
-                'description': descController.text.trim(),
-              }),
-              child: const Text('创建'),
-            ),
-          ],
-        );
-      },
+      builder: (context) => const _CampaignCreationGuide(),
     );
 
     if (result == null) return;
-    final name = result['name'];
-    if (name == null || name.isEmpty) return;
 
     final success = await widget.campaignController.createCampaign(
-      name: name,
-      description: result['description']?.isEmpty == true
-          ? null
-          : result['description'],
+      name: result.name,
+      description: result.description.isEmpty ? null : result.description,
+      system: 'dnd5e-2024',
     );
 
     if (!mounted) return;
@@ -357,6 +325,225 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
       );
     }
   }
+}
+
+class _CampaignCreationGuide extends StatefulWidget {
+  const _CampaignCreationGuide();
+
+  @override
+  State<_CampaignCreationGuide> createState() => _CampaignCreationGuideState();
+}
+
+class _CampaignCreationGuideState extends State<_CampaignCreationGuide> {
+  final _nameController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  int _step = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController.addListener(_onDraftChanged);
+    _descriptionController.addListener(_onDraftChanged);
+  }
+
+  @override
+  void dispose() {
+    _nameController
+      ..removeListener(_onDraftChanged)
+      ..dispose();
+    _descriptionController
+      ..removeListener(_onDraftChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _onDraftChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final titles = ['基本信息', '规则与资料', '确认创建'];
+    return Dialog(
+      key: const Key('campaign-creation-guide'),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 620),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '创建战役',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).closeButtonTooltip,
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              LinearProgressIndicator(value: (_step + 1) / 3),
+              const SizedBox(height: 12),
+              Text(
+                '第 ${_step + 1} 步，共 3 步',
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                titles[_step],
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 20),
+              Flexible(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  child: KeyedSubtree(
+                    key: ValueKey(_step),
+                    child: switch (_step) {
+                      0 => _buildBasics(),
+                      1 => _buildRules(),
+                      _ => _buildReview(),
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('取消'),
+                  ),
+                  const Spacer(),
+                  if (_step > 0)
+                    TextButton(
+                      onPressed: () => setState(() => _step -= 1),
+                      child: const Text('上一步'),
+                    ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: _canContinue ? _continue : null,
+                    child: Text(_step == 2 ? '创建战役' : '下一步'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBasics() {
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          TextField(
+            key: const Key('campaign-name-field'),
+            controller: _nameController,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: '战役名称',
+              hintText: '例如：失落矿坑周末团',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _descriptionController,
+            decoration: const InputDecoration(
+              labelText: '战役简介（可选）',
+              hintText: '团期、风格和玩家需要提前知道的内容',
+              border: OutlineInputBorder(),
+            ),
+            minLines: 3,
+            maxLines: 5,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRules() {
+    return ListView(
+      shrinkWrap: true,
+      children: const [
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(Icons.auto_stories_outlined),
+          title: Text('D&D 2024'),
+          subtitle: Text('当前版本仅支持 2024 规则结构'),
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(Icons.inventory_2_outlined),
+          title: Text('资料包稍后管理'),
+          subtitle: Text('战役创建成功后，DM 可在战役信息页启用并同步自定义条目'),
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(Icons.offline_bolt_outlined),
+          title: Text('本地功能保持离线'),
+          subtitle: Text('角色、资料库与规则计算继续保存在客户端；聊天室和战役协作连接服务器'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReview() {
+    final description = _descriptionController.text.trim();
+    return ListView(
+      shrinkWrap: true,
+      children: [
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.castle_outlined),
+          title: Text(_nameController.text.trim()),
+          subtitle: Text(description.isEmpty ? '未填写简介' : description),
+        ),
+        const ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(Icons.shield_outlined),
+          title: Text('你将成为战役 DM'),
+          subtitle: Text('其他成员通过邀请码加入后固定为玩家身份'),
+        ),
+      ],
+    );
+  }
+
+  bool get _canContinue {
+    return _step > 0 || _nameController.text.trim().isNotEmpty;
+  }
+
+  void _continue() {
+    if (_step < 2) {
+      setState(() => _step += 1);
+      return;
+    }
+    Navigator.of(context).pop(
+      _CampaignCreationDraft(
+        name: _nameController.text.trim(),
+        description: _descriptionController.text.trim(),
+      ),
+    );
+  }
+}
+
+class _CampaignCreationDraft {
+  const _CampaignCreationDraft({required this.name, required this.description});
+
+  final String name;
+  final String description;
 }
 
 /// 群聊式战役列表条目。
@@ -426,16 +613,14 @@ class _CampaignChatListItem extends StatelessWidget {
     final leadingAvatar = hasCharacterAvatar
         ? CircleAvatar(
             radius: 22,
-            backgroundImage:
-                avatarUrl == null || avatarUrl.isEmpty ? null : NetworkImage(avatarUrl),
+            backgroundImage: avatarUrl == null || avatarUrl.isEmpty
+                ? null
+                : NetworkImage(avatarUrl),
             child: avatarUrl == null || avatarUrl.isEmpty
                 ? Text(_avatarText(character.name))
                 : null,
           )
-        : const CircleAvatar(
-            radius: 22,
-            child: Icon(Icons.castle_outlined),
-          );
+        : const CircleAvatar(radius: 22, child: Icon(Icons.castle_outlined));
 
     final extraMembers = campaign.memberPreview
         .where((m) => m.userId != character?.id)
@@ -461,20 +646,14 @@ class _CampaignChatListItem extends StatelessWidget {
               child: Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white,
-                    width: 1.5,
-                  ),
+                  border: Border.all(color: Colors.white, width: 1.5),
                 ),
                 child: CircleAvatar(
                   radius: _memberAvatarSize / 2,
                   backgroundColor: Colors.grey.shade400,
                   child: Text(
                     _avatarText(member.displayName),
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: Colors.white,
-                    ),
+                    style: const TextStyle(fontSize: 10, color: Colors.white),
                   ),
                 ),
               ),
@@ -558,14 +737,27 @@ class _CampaignChatListItem extends StatelessWidget {
 
   Widget _buildTrailing(ThemeData theme, CampaignChatMessage? lastMessage) {
     final timeText = _formatListTime(lastMessage?.createdAt);
-    if (timeText == null) {
+    if (timeText == null && campaign.unreadCount == 0) {
       return const SizedBox(width: 0);
     }
-    return Text(
-      timeText,
-      style: theme.textTheme.labelSmall?.copyWith(
-        color: theme.colorScheme.onSurfaceVariant,
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        if (timeText != null)
+          Text(
+            timeText,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        if (campaign.unreadCount > 0) ...[
+          const SizedBox(height: 4),
+          Badge(
+            label: Text(campaign.unreadCount > 99 ? '99+' : '${campaign.unreadCount}'),
+          ),
+        ],
+      ],
     );
   }
 }

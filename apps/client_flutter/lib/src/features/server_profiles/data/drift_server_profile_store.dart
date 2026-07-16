@@ -71,7 +71,7 @@ class DriftServerProfileStore implements ServerProfileStore {
       id: row.id,
       name: row.name,
       baseUrl: row.baseUrl,
-      apiBaseUrl: row.apiBaseUrl,
+      apiBaseUrl: ServerProfile.normalizeApiBaseUrl(row.apiBaseUrl),
       websocketUrl: row.websocketUrl,
       lastKnownVersion: row.lastKnownVersion,
     );

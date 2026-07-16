@@ -99,4 +99,20 @@ void main() {
     expect(pending.single.entityId, arannis.id);
     await database.close();
   });
+
+  test('uses the last remote revision and coalesces pending character edits', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    final repository = DriftCharacterRepository(database);
+    final remote = testCharacter(id: 'character-1', notes: 'remote');
+    await repository.saveRemote(remote, 7);
+
+    await repository.save(remote.copyWith(notes: 'first local edit'));
+    await repository.save(remote.copyWith(notes: 'latest local edit'));
+
+    final pending = await DriftSyncRepository(database).pending(scope: 'vault');
+    expect(pending, hasLength(1));
+    expect(pending.single.baseRevision, 7);
+    expect(pending.single.payloadJson, contains('latest local edit'));
+    await database.close();
+  });
 }

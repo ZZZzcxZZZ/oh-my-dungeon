@@ -13,6 +13,7 @@ void main() {
       'feat',
       'spell',
       'equipment',
+      'equipmentBundle',
       'item',
       'condition',
       'rule',
@@ -38,6 +39,7 @@ void main() {
     expect(registry.definitionFor('feat').label, '专长');
     expect(registry.definitionFor('spell').label, '法术');
     expect(registry.definitionFor('equipment').label, '装备');
+    expect(registry.definitionFor('equipmentBundle').label, '装备方案');
     expect(registry.definitionFor('item').label, '物品');
     expect(registry.definitionFor('condition').label, '状态');
     expect(registry.definitionFor('rule').label, '规则');

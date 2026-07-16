@@ -9,20 +9,14 @@ import '../features/auth/data/auth_api_client.dart';
 import '../features/auth/data/auth_token_store.dart';
 import '../features/campaigns/data/campaign_api_client.dart';
 import '../features/campaigns/data/campaign_socket_service.dart';
-import '../features/characters/data/character_api_client.dart';
-import '../features/check_requests/data/check_request_api_client.dart';
 import '../features/client_mode/domain/client_mode.dart';
-import '../features/content/data/content_api_client.dart';
-import '../features/encounters/data/encounter_api_client.dart';
-import '../features/rooms/data/room_api_client.dart';
-import '../features/rooms/domain/dice_roller.dart';
+import '../core/dice/dice_roller.dart';
 import '../features/server_home/domain/active_server_session.dart';
 import '../features/server_profiles/data/drift_server_profile_store.dart';
 import '../features/server_profiles/data/server_discovery_client.dart';
 import '../features/server_profiles/data/server_profile_migrator.dart';
 import '../features/server_profiles/data/server_profile_store.dart';
 import '../features/server_profiles/presentation/server_profiles_page.dart';
-import '../features/sessions/data/session_api_client.dart';
 import '../features/server_home/presentation/main_shell.dart';
 
 class DndTableApp extends StatefulWidget {
@@ -31,18 +25,13 @@ class DndTableApp extends StatefulWidget {
     this.serverProfileStore,
     this.authTokenStore,
     this.discoveryClient,
-    this.roomClient,
     this.authClient,
     this.campaignClient,
     this.campaignSocketService,
-    this.characterClient,
-    this.checkRequestClient,
-    this.contentClient,
-    this.encounterClient,
-    this.sessionClient,
     this.modeController,
     this.appPreferencesController,
     this.diceRoller,
+    this.enableBackgroundSync = true,
     super.key,
   });
 
@@ -50,18 +39,13 @@ class DndTableApp extends StatefulWidget {
   final ServerProfileStore? serverProfileStore;
   final AuthTokenStore? authTokenStore;
   final ServerDiscoveryClient? discoveryClient;
-  final RoomClient? roomClient;
   final AuthClient? authClient;
   final CampaignClient? campaignClient;
   final CampaignSocketService? campaignSocketService;
-  final CharacterClient? characterClient;
-  final CheckRequestClient? checkRequestClient;
-  final ContentClient? contentClient;
-  final EncounterClient? encounterClient;
-  final SessionClient? sessionClient;
   final ClientModeController? modeController;
   final AppPreferencesController? appPreferencesController;
   final DiceRoller? diceRoller;
+  final bool enableBackgroundSync;
 
   @override
   State<DndTableApp> createState() => _DndTableAppState();
@@ -129,12 +113,6 @@ class _DndTableAppState extends State<DndTableApp> {
 
     final authClient = widget.authClient ?? AuthApiClient();
     final campaignClient = widget.campaignClient ?? CampaignApiClient();
-    final characterClient = widget.characterClient ?? CharacterApiClient();
-    final checkRequestClient =
-        widget.checkRequestClient ?? CheckRequestApiClient();
-    final contentClient = widget.contentClient ?? ContentApiClient();
-    final encounterClient = widget.encounterClient ?? EncounterApiClient();
-    final sessionClient = widget.sessionClient ?? SessionApiClient();
 
     if (injectedStore != null && injectedTokenStore != null) {
       return _AppDeps(
@@ -144,11 +122,6 @@ class _DndTableAppState extends State<DndTableApp> {
         appPreferencesController: appPreferencesController,
         authClient: authClient,
         campaignClient: campaignClient,
-        characterClient: characterClient,
-        checkRequestClient: checkRequestClient,
-        contentClient: contentClient,
-        encounterClient: encounterClient,
-        sessionClient: sessionClient,
       );
     }
 
@@ -179,11 +152,6 @@ class _DndTableAppState extends State<DndTableApp> {
       appPreferencesController: appPreferencesController,
       authClient: authClient,
       campaignClient: campaignClient,
-      characterClient: characterClient,
-      checkRequestClient: checkRequestClient,
-      contentClient: contentClient,
-      encounterClient: encounterClient,
-      sessionClient: sessionClient,
     );
   }
 
@@ -228,39 +196,21 @@ class _DndTableAppState extends State<DndTableApp> {
   /// 离线优先：始终进入 MainShell，服务器会话可选。
   Widget _buildHome(_AppDeps deps) {
     return MainShell(
+      key: ValueKey(_session.profile?.id),
       session: _session,
       modeController: _modeController,
-      roomClient: widget.roomClient ?? RoomApiClient(),
       authTokenStore: deps.authTokenStore,
       authClient: deps.authClient,
       campaignClient: deps.campaignClient,
       campaignSocketService: widget.campaignSocketService,
-      characterClient: deps.characterClient,
-      checkRequestClient: deps.checkRequestClient,
-      contentClient: deps.contentClient,
-      encounterClient: deps.encounterClient,
-      sessionClient: deps.sessionClient,
       appPreferencesController: deps.appPreferencesController,
       database: deps.database,
       diceRoller: widget.diceRoller,
+      enableBackgroundSync: widget.enableBackgroundSync,
       serverProfileStore: deps.serverProfileStore,
       serverProfilesPageBuilder: (context) => ServerProfilesPage(
         store: deps.serverProfileStore,
-        authTokenStore: deps.authTokenStore,
-        discoveryClient:
-            widget.discoveryClient ?? ServerDiscoveryClient(),
-        roomClient: widget.roomClient ?? RoomApiClient(),
-        authClient: deps.authClient,
-        campaignClient: deps.campaignClient,
-        campaignSocketService: widget.campaignSocketService,
-        characterClient: deps.characterClient,
-        checkRequestClient: deps.checkRequestClient,
-        contentClient: deps.contentClient,
-        encounterClient: deps.encounterClient,
-        sessionClient: deps.sessionClient,
-        modeController: _modeController,
-        appPreferencesController: deps.appPreferencesController,
-        diceRoller: widget.diceRoller,
+        discoveryClient: widget.discoveryClient ?? ServerDiscoveryClient(),
         onProfileActivated: (activated) async {
           await deps.serverProfileStore.setDefaultProfileId(activated.id);
           _session.activate(activated);
@@ -372,11 +322,6 @@ class _AppDeps {
     required this.appPreferencesController,
     required this.authClient,
     required this.campaignClient,
-    required this.characterClient,
-    required this.checkRequestClient,
-    required this.contentClient,
-    required this.encounterClient,
-    required this.sessionClient,
   });
 
   final AppDatabase? database;
@@ -385,9 +330,4 @@ class _AppDeps {
   final AppPreferencesController appPreferencesController;
   final AuthClient authClient;
   final CampaignClient campaignClient;
-  final CharacterClient characterClient;
-  final CheckRequestClient checkRequestClient;
-  final ContentClient contentClient;
-  final EncounterClient encounterClient;
-  final SessionClient sessionClient;
 }

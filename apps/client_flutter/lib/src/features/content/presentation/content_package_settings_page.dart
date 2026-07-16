@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../data/import/content_package_importer.dart';
 import '../data/local/content_repository.dart';
 import '../domain/content_file_picker.dart';
+import '../domain/content_import_report.dart';
 import '../domain/content_package_manifest.dart';
 import 'content_import_preview_dialog.dart';
 
@@ -59,15 +60,25 @@ class _ContentPackageSettingsPageState
   Future<void> _pickAndPreview() async {
     final file = await widget.filePicker.pick();
     if (file == null) return;
-    final content = utf8.decode(file.bytes);
-    final report = await widget.importer.previewJson(content);
+    ContentImportReport report;
+    try {
+      report = file.name.toLowerCase().endsWith('.dndpack')
+          ? await widget.importer.previewDndPack(file.bytes)
+          : await widget.importer.previewJson(utf8.decode(file.bytes));
+    } on FormatException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to read package: $error')),
+      );
+      return;
+    }
     if (!mounted) return;
     await showDialog<void>(
       context: context,
       builder: (_) => ContentImportPreviewDialog(
         report: report,
-        onConfirm: () {
-          widget.importer.importReport(report);
+        onConfirm: () async {
+          await widget.importer.importReport(report);
         },
       ),
     );

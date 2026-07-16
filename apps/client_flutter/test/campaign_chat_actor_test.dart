@@ -5,17 +5,20 @@ import 'package:dnd_table_client/src/features/auth/presentation/auth_controller.
 import 'package:dnd_table_client/src/features/campaigns/data/campaign_api_client.dart';
 import 'package:dnd_table_client/src/features/campaigns/data/campaign_socket_service.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign.dart';
+import 'package:dnd_table_client/src/features/campaigns/domain/campaign_archive_entry.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_controller.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_chat_page.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_controller.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_controller.dart';
-import 'package:dnd_table_client/src/features/content/data/content_api_client.dart';
-import 'package:dnd_table_client/src/features/content/domain/content.dart';
-import 'package:dnd_table_client/src/features/content/presentation/content_controller.dart';
+import 'package:dnd_table_client/src/features/content/data/local/content_repository.dart';
+import 'package:dnd_table_client/src/core/dice/dice_roller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/character_test_support.dart';
+import 'support/campaign_test_support.dart';
+import 'support/content_test_support.dart';
 
 const _apiBaseUrl = 'http://localhost:3000/api';
 
@@ -28,20 +31,41 @@ const _campaign = Campaign(
   status: 'active',
   createdAt: '2026-07-09T00:00:00.000Z',
   updatedAt: '2026-07-09T00:00:00.000Z',
+  memberPreview: [
+    CampaignMemberPreview(
+      userId: 'user-1',
+      displayName: 'Dungeon Master',
+      role: 'owner',
+    ),
+    CampaignMemberPreview(
+      userId: 'user-2',
+      displayName: 'Player Two',
+      role: 'player',
+    ),
+  ],
 );
 
-final _character = CharacterSheet.local(
-  id: 'char-1',
-  name: 'Arannis',
-  level: 3,
-);
+final _character = CharacterSheet.fromJson({
+  ...CharacterSheet.local(id: 'char-1', name: 'Arannis', level: 3).toJson(),
+  'data': {
+    'actions': [
+      {
+        'id': 'action-surge',
+        'name': '动作如潮',
+        'entryId': 'guide:feature/action-surge',
+        'formula': '1/use',
+      },
+    ],
+  },
+});
 
 void main() {
   late AuthController authController;
   late CampaignController campaignController;
   late CharacterController characterController;
-  late ContentController contentController;
+  late ContentRepository contentRepository;
   late _RecordingCampaignClient campaignClient;
+  late CampaignActorController actorController;
 
   setUp(() async {
     final tokenStore = InMemoryAuthTokenStore();
@@ -72,17 +96,34 @@ void main() {
       repository: MemoryCharacterRepository(initial: [_character]),
     );
 
-    contentController = ContentController(
-      apiBaseUrl: _apiBaseUrl,
-      authController: authController,
-      contentClient: _FakeContentClient(),
+    contentRepository = MemoryContentRepository(
+      initialEntries: [testFighterEntry()],
     );
+    actorController = CampaignActorController(
+      cacheRepository: MemoryCampaignCacheRepository(
+        actors: [
+          testCampaignActor(
+            id: 'actor-player',
+            campaignId: _campaign.id,
+            ownerUserId: 'user-2',
+            sourceCharacterId: _character.id,
+            sheet: _character.toJson(),
+          ),
+        ],
+      ),
+      apiClient: MemoryCampaignSyncApiClient(),
+      apiBaseUrl: _apiBaseUrl,
+      accessToken: 'access-token',
+      currentUserId: 'user-1',
+    );
+    await actorController.selectCampaign(_campaign.id);
+    await Future<void>.delayed(Duration.zero);
   });
 
   tearDown(() {
     campaignController.dispose();
     characterController.dispose();
-    contentController.dispose();
+    actorController.dispose();
     authController.dispose();
   });
 
@@ -90,7 +131,9 @@ void main() {
     WidgetTester tester, {
     String? campaignActorId,
     bool isDm = false,
+    DiceRoller? diceRoller,
   }) async {
+    campaignClient.canManageCampaign = isDm;
     await tester.pumpWidget(
       MaterialApp(
         home: CampaignChatPage(
@@ -98,9 +141,10 @@ void main() {
           character: _character,
           campaignActorId: campaignActorId,
           campaignController: campaignController,
-          characterController: characterController,
-          contentController: contentController,
+          contentRepository: contentRepository,
           isDm: isDm,
+          actorController: actorController,
+          diceRoller: diceRoller,
         ),
       ),
     );
@@ -123,6 +167,62 @@ void main() {
     expect(find.byKey(const Key('action-message')), findsOneWidget);
     final actionText = tester.widget<Text>(find.text('拔出长剑'));
     expect(actionText.style?.fontStyle, FontStyle.italic);
+    expect(find.text('Arannis'), findsWidgets);
+  });
+
+  testWidgets('system messages use emphasized event styling', (tester) async {
+    campaignClient.messages = const [
+      CampaignChatMessage(
+        id: 'system-1',
+        campaignId: 'camp-1',
+        senderId: 'user-1',
+        campaignActorId: null,
+        displayName: 'ranger',
+        avatarUrl: null,
+        kind: 'system',
+        content: 'Arannis 获得长剑',
+        createdAt: '2026-07-09T00:00:00.000Z',
+      ),
+    ];
+
+    await pumpChatPage(tester, isDm: true);
+
+    final text = tester.widget<Text>(find.text('Arannis 获得长剑'));
+    expect(text.style?.fontWeight, FontWeight.bold);
+  });
+
+  testWidgets('chat avatars expose a health ring only when the server shares a state', (tester) async {
+    campaignClient.messages = const [
+      CampaignChatMessage(
+        id: 'health-1',
+        campaignId: 'camp-1',
+        senderId: 'user-2',
+        campaignActorId: 'actor-player',
+        displayName: 'Arannis',
+        avatarUrl: null,
+        publicHealthState: 'injured',
+        kind: 'say',
+        content: 'Still standing.',
+        createdAt: '2026-07-09T00:00:00.000Z',
+      ),
+    ];
+
+    await pumpChatPage(tester);
+
+    expect(find.byKey(const Key('campaign-avatar-ring-injured')), findsOneWidget);
+  });
+
+  testWidgets('content tool reads the offline campaign-aware repository', (
+    tester,
+  ) async {
+    await pumpChatPage(tester);
+
+    await tester.tap(find.byTooltip('更多跑团功能'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('资料库'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('战士'), findsOneWidget);
   });
 
   testWidgets('say mode sends a bubble message', (tester) async {
@@ -142,35 +242,57 @@ void main() {
     expect(find.text('向酒馆老板打听消息'), findsOneWidget);
   });
 
-  testWidgets('sendMessage uses campaignActorId not characterId or displayName',
-      (tester) async {
+  testWidgets('character action tool sends a stable action id', (tester) async {
     await pumpChatPage(tester, campaignActorId: 'actor-1');
 
-    await tester.tap(find.byKey(const Key('chat-mode-action')));
+    await tester.tap(find.byTooltip('更多跑团功能'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('角色动作'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(
-      find.byKey(const Key('campaign-chat-input')),
-      '推开大门',
-    );
-    await tester.tap(find.byKey(const Key('campaign-chat-send')));
+    expect(find.text('动作如潮'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('character-action-action-surge')));
     await tester.pumpAndSettle();
 
     expect(campaignClient.sendMessageCalls, hasLength(1));
     final call = campaignClient.sendMessageCalls.single;
-    expect(call.campaignActorId, 'actor-1');
     expect(call.kind, 'action');
-    expect(call.content, '推开大门');
+    expect(call.content, '动作如潮');
+    expect(call.campaignActorId, 'actor-1');
+    expect(call.actionId, 'action-surge');
+    expect(find.byKey(const Key('rules-action-message')), findsOneWidget);
+    expect(find.textContaining('guide:feature/action-surge'), findsOneWidget);
   });
 
-  testWidgets('sendMessage sends null campaignActorId when no actor is bound',
-      (tester) async {
+  testWidgets(
+    'sendMessage uses campaignActorId not characterId or displayName',
+    (tester) async {
+      await pumpChatPage(tester, campaignActorId: 'actor-1');
+
+      await tester.tap(find.byKey(const Key('chat-mode-action')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('campaign-chat-input')),
+        '推开大门',
+      );
+      await tester.tap(find.byKey(const Key('campaign-chat-send')));
+      await tester.pumpAndSettle();
+
+      expect(campaignClient.sendMessageCalls, hasLength(1));
+      final call = campaignClient.sendMessageCalls.single;
+      expect(call.campaignActorId, 'actor-1');
+      expect(call.kind, 'action');
+      expect(call.content, '推开大门');
+    },
+  );
+
+  testWidgets('sendMessage sends null campaignActorId when no actor is bound', (
+    tester,
+  ) async {
     await pumpChatPage(tester);
 
-    await tester.enterText(
-      find.byKey(const Key('campaign-chat-input')),
-      '你好',
-    );
+    await tester.enterText(find.byKey(const Key('campaign-chat-input')), '你好');
     await tester.tap(find.byKey(const Key('campaign-chat-send')));
     await tester.pumpAndSettle();
 
@@ -178,15 +300,165 @@ void main() {
     expect(campaignClient.sendMessageCalls.single.campaignActorId, isNull);
   });
 
-  testWidgets('shows identity bar with character info', (tester) async {
+  testWidgets('opens character information from the composer identity button', (
+    tester,
+  ) async {
     await pumpChatPage(tester, campaignActorId: 'actor-1');
 
+    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+    await tester.pumpAndSettle();
+
     expect(find.textContaining('Arannis'), findsWidgets);
+  });
+
+  testWidgets('keeps identity in the composer instead of a tall chat header', (
+    tester,
+  ) async {
+    await pumpChatPage(tester, campaignActorId: 'actor-1');
+
+    expect(find.byKey(const Key('campaign-chat-identity')), findsOneWidget);
+    expect(find.byKey(const Key('campaign-chat-identity-bar')), findsNothing);
+  });
+
+  testWidgets('campaign chat stays focused and does not expose the retired swipe hub', (
+    tester,
+  ) async {
+    await pumpChatPage(tester, isDm: true);
+
+    expect(find.byKey(const Key('campaign-chat-page')), findsOneWidget);
+    expect(find.byKey(const Key('campaign-hub-page')), findsNothing);
+    expect(find.byKey(const Key('campaign-workspace')), findsNothing);
+  });
+
+  testWidgets('member sheet joins campaign membership with actor status', (
+    tester,
+  ) async {
+    await pumpChatPage(tester, isDm: true);
+
+    await tester.tap(find.byKey(const Key('campaign-open-center')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Tab).at(1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dungeon Master'), findsOneWidget);
+    expect(find.text('Player Two'), findsOneWidget);
+    expect(find.textContaining('Arannis'), findsWidgets);
+  });
+
+  testWidgets('dm requests a player skill check directly from chat tools', (
+    tester,
+  ) async {
+    await pumpChatPage(tester, isDm: true);
+
+    await tester.tap(find.byTooltip('更多跑团功能'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('检定请求'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('campaign-actor-actor-player')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('check-type-skill')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('send-check-request')));
+    await tester.pumpAndSettle();
+
+    final call = campaignClient.sendMessageCalls.single;
+    expect(call.kind, 'checkRequest');
+    expect(call.eventData, {
+      'targetActorId': 'actor-player',
+      'checkType': 'skill',
+      'checkKey': '杂技',
+      'label': '杂技技能检定',
+      'rollMode': 'normal',
+    });
+  });
+
+  testWidgets('target player answers a check request with a linked roll', (
+    tester,
+  ) async {
+    campaignClient.messages = const [
+      CampaignChatMessage(
+        id: 'request-1',
+        campaignId: 'camp-1',
+        senderId: 'user-1',
+        campaignActorId: null,
+        displayName: 'DM',
+        avatarUrl: null,
+        kind: 'checkRequest',
+        content: '要求 Arannis 进行杂技技能检定',
+        createdAt: '2026-07-09T00:00:00.000Z',
+        eventData: {
+          'targetActorId': 'actor-1',
+          'checkType': 'skill',
+          'checkKey': '杂技',
+          'label': '杂技技能检定',
+          'rollMode': 'normal',
+        },
+      ),
+    ];
+
+    await pumpChatPage(
+      tester,
+      campaignActorId: 'actor-1',
+      diceRoller: DiceRoller(nextInt: (_) => 9),
+    );
+    await tester.tap(find.byKey(const Key('respond-check-request')));
+    await tester.pumpAndSettle();
+
+    final call = campaignClient.sendMessageCalls.single;
+    expect(call.kind, 'roll');
+    expect(call.campaignActorId, 'actor-1');
+    expect(call.eventData, {
+      'requestId': 'request-1',
+      'notation': 'd20',
+      'label': '杂技技能检定',
+      'total': 10,
+    });
   });
 }
 
 class _RecordingCampaignClient implements CampaignClient {
+  @override
+  Future<void> markCampaignRead({required String apiBaseUrl, required String accessToken, required String campaignId}) async {}
+  @override
+  Future<CampaignMembership> updateSpeaker({required String apiBaseUrl, required String accessToken, required String campaignId, required String speakerMode, String? actorId}) => throw UnimplementedError();
+  @override
+  Future<List<CampaignArchiveEntry>> listArchives({required String apiBaseUrl, required String accessToken, required String campaignId, String? kind}) async => const [];
+  @override
+  Future<CampaignArchiveEntry> createArchiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String kind, required String title, String? summary, Map<String, Object?>? payload}) => throw UnimplementedError();
+  @override
+  Future<CampaignArchiveEntry> updateArchiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String entryId, String? kind, String? title, String? summary, Map<String, Object?>? payload, bool? pinned}) => throw UnimplementedError();
+  @override
+  Future<void> archiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String entryId}) => throw UnimplementedError();
   final List<_SentMessageCall> sendMessageCalls = [];
+  List<CampaignChatMessage> messages = [];
+  bool canManageCampaign = false;
+
+  @override
+  Future<CampaignWorkspaceContext> getWorkspaceContext({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+  }) async {
+    return CampaignWorkspaceContext(
+      campaign: _campaign,
+      membership: const CampaignMembership(
+        id: 'member-1',
+        campaignId: 'camp-1',
+        userId: 'user-1',
+        role: 'player',
+        displayName: 'Dungeon Master',
+        joinedAt: '2026-07-09T00:00:00.000Z',
+      ),
+      members: _campaign.memberPreview,
+      actors: const [],
+      capabilities: CampaignCapabilities(
+        canManageCampaign: canManageCampaign,
+        canManageMembers: canManageCampaign,
+        canCreateActors: canManageCampaign,
+        canSpeakAsNarrator: canManageCampaign,
+      ),
+    );
+  }
 
   @override
   Future<Campaign> createCampaign({
@@ -221,7 +493,6 @@ class _RecordingCampaignClient implements CampaignClient {
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    String? roleOnJoin,
     int? maxUses,
   }) {
     throw UnimplementedError();
@@ -250,9 +521,8 @@ class _RecordingCampaignClient implements CampaignClient {
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-  }) async {
-    return const [];
-  }
+    String? query,
+  }) async => messages;
 
   @override
   Future<CampaignChatMessage> sendMessage({
@@ -262,12 +532,16 @@ class _RecordingCampaignClient implements CampaignClient {
     required String kind,
     required String content,
     String? campaignActorId,
+    String? actionId,
+    Map<String, Object?>? eventData,
   }) async {
     sendMessageCalls.add(
       _SentMessageCall(
         kind: kind,
         content: content,
         campaignActorId: campaignActorId,
+        actionId: actionId,
+        eventData: eventData,
       ),
     );
     return CampaignChatMessage(
@@ -280,6 +554,16 @@ class _RecordingCampaignClient implements CampaignClient {
       kind: kind,
       content: content,
       createdAt: '2026-07-09T00:00:00.000Z',
+      actionSnapshot: actionId == null
+          ? null
+          : {
+              'id': actionId,
+              'name': content,
+              'entryId': 'guide:feature/action-surge',
+              'formula': '1/use',
+              'actorRevision': 3,
+            },
+      eventData: eventData,
     );
   }
 }
@@ -289,11 +573,15 @@ class _SentMessageCall {
     required this.kind,
     required this.content,
     required this.campaignActorId,
+    required this.actionId,
+    required this.eventData,
   });
 
   final String kind;
   final String content;
   final String? campaignActorId;
+  final String? actionId;
+  final Map<String, Object?>? eventData;
 }
 
 class _FakeAuthClient implements AuthClient {
@@ -338,106 +626,6 @@ class _FakeAuthClient implements AuthClient {
     required String username,
     required String email,
     required String password,
-  }) {
-    throw UnimplementedError();
-  }
-}
-
-class _FakeContentClient implements ContentClient {
-  @override
-  Future<ImportContentPackageResult> importCampaignPackage({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String campaignId,
-    required Object package,
-    bool dryRun = false,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<ImportContentPackageResult> importPackage({
-    required String apiBaseUrl,
-    required String accessToken,
-    required Object package,
-    bool dryRun = false,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<List<ContentPackage>> listPackages({
-    required String apiBaseUrl,
-    required String accessToken,
-  }) async {
-    return const [];
-  }
-
-  @override
-  Future<Map<String, Object?>> exportPackage({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String packageId,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<List<ContentItem>> listItems({
-    required String apiBaseUrl,
-    required String accessToken,
-    String? type,
-    String? query,
-    String? packageId,
-  }) async {
-    return const [];
-  }
-
-  @override
-  Future<List<ContentItem>> listAvailableCampaignItems({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String campaignId,
-    String? type,
-    String? query,
-    bool favoriteOnly = false,
-  }) async {
-    return const [];
-  }
-
-  @override
-  Future<void> setCampaignPackage({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String campaignId,
-    required String packageId,
-    required bool enabled,
-  }) async {}
-
-  @override
-  Future<void> disableCampaignItem({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String campaignId,
-    required String itemId,
-    String? reason,
-  }) async {}
-
-  @override
-  Future<void> setCampaignItemFavorite({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String campaignId,
-    required String itemId,
-    required bool favorite,
-  }) async {}
-
-  @override
-  Future<ContentItemDetail> getCampaignItem({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String campaignId,
-    required String itemId,
   }) {
     throw UnimplementedError();
   }

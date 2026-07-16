@@ -2,8 +2,9 @@ import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character_edit_draft.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_detail_page.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_editor_page.dart';
-import 'package:dnd_table_client/src/features/content/domain/content.dart';
-import 'package:dnd_table_client/src/features/rooms/domain/dice_roller.dart';
+import 'package:dnd_table_client/src/features/content/domain/content_block.dart';
+import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
+import 'package:dnd_table_client/src/core/dice/dice_roller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -20,14 +21,20 @@ void main() {
     expect(find.text('HP 24/24'), findsOneWidget);
     expect(find.text('AC 15'), findsOneWidget);
     expect(find.text('先攻 +2'), findsOneWidget);
-    expect(find.text('属性'), findsWidgets);
+    expect(find.text('总览'), findsOneWidget);
+    expect(find.text('属性'), findsOneWidget);
     expect(find.text('动作'), findsOneWidget);
     expect(find.text('法术'), findsOneWidget);
     expect(find.text('装备'), findsOneWidget);
-    expect(find.text('状态'), findsOneWidget);
+    expect(find.text('资源'), findsOneWidget);
     expect(find.text('特性'), findsOneWidget);
-    expect(find.text('详情'), findsWidgets);
-    expect(find.text('笔记'), findsOneWidget);
+    expect(find.text('角色资料'), findsOneWidget);
+    expect(find.text('豁免'), findsNothing);
+    expect(find.text('技能'), findsNothing);
+
+    await tester.tap(find.text('属性'));
+    await tester.pumpAndSettle();
+
     expect(find.text('豁免'), findsOneWidget);
     expect(find.text('技能'), findsOneWidget);
 
@@ -37,7 +44,7 @@ void main() {
     expect(find.text('长弓 x1'), findsOneWidget);
     expect(find.text('gp 10'), findsOneWidget);
 
-    await tester.tap(find.text('状态'));
+    await tester.tap(find.text('总览'));
     await tester.pumpAndSettle();
 
     expect(find.text('临时 HP 5'), findsOneWidget);
@@ -45,11 +52,57 @@ void main() {
     expect(find.text('中毒'), findsOneWidget);
     expect(find.text('倒地'), findsOneWidget);
     expect(find.text('死亡豁免 1/2'), findsOneWidget);
+    expect(find.byKey(const Key('runtime-hp-panel')), findsOneWidget);
+    expect(find.byKey(const Key('runtime-temporary-hp-panel')), findsOneWidget);
+    expect(find.byKey(const Key('runtime-inspiration-panel')), findsOneWidget);
+    expect(find.byKey(const Key('runtime-death-saves-panel')), findsOneWidget);
 
-    await tester.tap(find.text('笔记'));
+    await tester.tap(find.text('角色资料'));
     await tester.pumpAndSettle();
 
-    expect(find.text('来自旧林地的游侠。'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '私人笔记'), findsOneWidget);
+  });
+
+  testWidgets('character resources can be added with a rest recovery rule', (
+    tester,
+  ) async {
+    CharacterSheet? saved;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterDetailPage(
+          character: _character,
+          onSaveCharacter: (character) async {
+            saved = character;
+            return true;
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('资源'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('添加资源'));
+    await tester.tap(find.text('添加资源'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('resource-name-field')), '幸运点');
+    await tester.enterText(
+      find.byKey(const Key('resource-maximum-field')),
+      '3',
+    );
+    await tester.tap(find.byKey(const Key('resource-recovery-field')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('短休恢复').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '添加'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('幸运点 3/3'), findsOneWidget);
+    final resources = saved!.dataMap['classResources']! as List;
+    final luckyPoints = resources.cast<Map>().singleWhere(
+      (resource) => resource['name'] == '幸运点',
+    );
+    expect(luckyPoints['maximum'], 3);
+    expect(luckyPoints['recovery'], 'shortRest');
   });
 
   testWidgets('character detail page opens the configured initial tab', (
@@ -66,6 +119,279 @@ void main() {
 
     expect(find.text('长弓 x1'), findsOneWidget);
     expect(find.text('gp 10'), findsOneWidget);
+  });
+
+  testWidgets('character profile autosaves backstory and private notes', (
+    tester,
+  ) async {
+    CharacterSheet? saved;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterDetailPage(
+          character: _character,
+          initialTab: 'profile',
+          onSaveCharacter: (character) async {
+            saved = character;
+            return true;
+          },
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('character-profile-backstory')),
+      '守护边境的游侠。',
+    );
+    await tester.enterText(
+      find.byKey(const Key('character-profile-privateNotes')),
+      '寻找失踪的导师。',
+    );
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pumpAndSettle();
+
+    expect(saved, isNotNull);
+    expect(saved!.notes, '寻找失踪的导师。');
+    expect((saved!.dataMap['profile'] as Map)['backstory'], '守护边境的游侠。');
+  });
+
+  testWidgets('character detail presents rule grants with their source', (
+    tester,
+  ) async {
+    final character = _character.copyWith(
+      data: {
+        'resolvedGrants': [
+          {
+            'id': 'second-wind',
+            'kind': 'feature',
+            'label': '回气',
+            'sourceEntryId': 'guide:class/fighter',
+            'sourceEntryName': '战士',
+            'sourceLevel': 1,
+          },
+          {
+            'id': 'defense-ac',
+            'kind': 'armorClass',
+            'label': '防御加值',
+            'sourceEntryId': 'guide:class-feature/defense',
+            'sourceLevel': 1,
+            'value': 1,
+          },
+        ],
+      },
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterDetailPage(character: character, initialTab: 'features'),
+      ),
+    );
+
+    expect(find.text('自动获得的特性'), findsOneWidget);
+    expect(find.text('回气'), findsOneWidget);
+    expect(find.text('战士 · 1 级获得'), findsOneWidget);
+    expect(find.text('防御加值'), findsNothing);
+  });
+
+  testWidgets('character actions include rules-driven actions', (tester) async {
+    final character = _character.copyWith(
+      data: {
+        'actions': [
+          {
+            'id': 'riposte',
+            'name': '还击',
+            'entryId': 'guide:feature/riposte',
+            'formula': '1d8+2',
+          },
+        ],
+      },
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterDetailPage(character: character, initialTab: 'actions'),
+      ),
+    );
+
+    expect(find.text('资料动作'), findsOneWidget);
+    expect(find.text('还击'), findsOneWidget);
+    expect(find.text('1d8+2 · guide:feature/riposte'), findsOneWidget);
+  });
+
+  testWidgets('editing a level creates and applies a rules upgrade queue', (
+    tester,
+  ) async {
+    CharacterEditDraft? submitted;
+    final character = _character.copyWith(
+      level: 1,
+      classSummary: '战士',
+      data: {
+        'build': {
+          'level': 1,
+          'selections': {'class': 'guide:class/fighter'},
+          'choices': <String, List<String>>{},
+        },
+        'runtime': {'temporaryHp': 5},
+      },
+    );
+    final fighter = ContentEntry.fromJson({
+      'id': 'guide:class/fighter',
+      'type': 'class',
+      'slug': 'fighter',
+      'name': '战士',
+      'body': <Map<String, Object?>>[],
+      'revision': 1,
+      'structured': {'hitDie': 'd10'},
+      'rules': {
+        'progression': [
+          {
+            'level': 2,
+            'grants': [
+              {'id': 'action-surge', 'kind': 'action', 'label': '动作如潮'},
+            ],
+          },
+        ],
+      },
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          initialCharacter: character,
+          contentEntries: [fighter],
+          onSubmit: (draft) async {
+            submitted = draft;
+            return true;
+          },
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byKey(const Key('character-level-field')), '2');
+    await tester.pumpAndSettle();
+    expect(find.text('升级队列'), findsOneWidget);
+    expect(find.text('新增：动作如潮'), findsOneWidget);
+
+    await tester.drag(
+      find.byType(SingleChildScrollView),
+      const Offset(0, -160),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '应用等级规则'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '保存角色'));
+    await tester.pumpAndSettle();
+
+    expect(submitted, isNotNull);
+    expect((submitted!.data['build'] as Map)['level'], 2);
+    expect(submitted!.data['runtime'], {'temporaryHp': 5});
+    expect(
+      submitted!.data['resolvedGrants'],
+      contains(predicate<Map>((grant) => grant['id'] == 'action-surge')),
+    );
+  });
+
+  testWidgets('level-up queue resolves newly unlocked rule choices', (
+    tester,
+  ) async {
+    CharacterEditDraft? submitted;
+    final character = _character.copyWith(
+      level: 1,
+      classSummary: 'Guardian',
+      data: {
+        'build': {
+          'level': 1,
+          'selections': {'class': 'guide:class/guardian'},
+          'choices': <String, List<String>>{},
+        },
+      },
+    );
+    final guardian = ContentEntry.fromJson({
+      'id': 'guide:class/guardian',
+      'type': 'class',
+      'slug': 'guardian',
+      'name': 'Guardian',
+      'body': <Map<String, Object?>>[],
+      'revision': 1,
+      'structured': {'hitDie': 'd10'},
+      'rules': {
+        'progression': [
+          {
+            'level': 2,
+            'choices': [
+              {
+                'id': 'technique',
+                'label': 'Choose a technique',
+                'optionType': 'classFeature',
+                'minimum': 1,
+                'maximum': 1,
+                'optionEntryIds': ['guide:class-feature/battle-focus'],
+              },
+            ],
+          },
+        ],
+      },
+    });
+    final technique = ContentEntry.fromJson({
+      'id': 'guide:class-feature/battle-focus',
+      'type': 'classFeature',
+      'slug': 'battle-focus',
+      'name': 'Battle Focus',
+      'body': <Map<String, Object?>>[],
+      'revision': 1,
+      'rules': {
+        'grants': [
+          {'id': 'focus-action', 'kind': 'action', 'label': 'Focus'},
+        ],
+      },
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          initialCharacter: character,
+          contentEntries: [guardian, technique],
+          onSubmit: (draft) async {
+            submitted = draft;
+            return true;
+          },
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byKey(const Key('character-level-field')), '2');
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a technique'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, '应用等级规则'))
+          .onPressed,
+      isNull,
+    );
+
+    await tester.ensureVisible(find.widgetWithText(FilterChip, 'Battle Focus'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilterChip, 'Battle Focus'));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, '应用等级规则'))
+          .onPressed,
+      isNotNull,
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '应用等级规则'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '保存角色'));
+    await tester.pumpAndSettle();
+
+    expect(submitted, isNotNull);
+    final build = submitted!.data['build'] as Map<String, Object?>;
+    expect(build['choices'], {
+      'guide:class/guardian#technique': ['guide:class-feature/battle-focus'],
+    });
+    expect(
+      submitted!.data['resolvedGrants'],
+      contains(predicate<Map>((grant) => grant['id'] == 'focus-action')),
+    );
   });
 
   testWidgets('character detail runtime tab sends quick state updates', (
@@ -99,9 +425,6 @@ void main() {
         ),
       ),
     );
-
-    await tester.tap(find.text('状态'));
-    await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('+1 临时 HP'));
     await tester.pumpAndSettle();
@@ -163,28 +486,79 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('状态'));
+    await tester.tap(find.text('资源'));
     await tester.pumpAndSettle();
 
-    expect(find.text('第二气息 1/2 已用'), findsOneWidget);
-    expect(find.text('动作如潮 0/1 已用'), findsOneWidget);
+    expect(find.text('第二气息 1/2'), findsOneWidget);
+    expect(find.text('动作如潮 1/1'), findsOneWidget);
 
-    await tester.ensureVisible(find.byTooltip('消耗第二气息'));
-    await tester.tap(find.byTooltip('消耗第二气息'));
+    await tester.ensureVisible(
+      find.byKey(const Key('resource-pip-second_wind-1')),
+    );
+    await tester.tap(find.byKey(const Key('resource-pip-second_wind-1')));
     await tester.pumpAndSettle();
-    expect(find.text('第二气息 2/2 已用'), findsOneWidget);
+    expect(find.text('第二气息 2/2'), findsOneWidget);
     expect(updates.last['classResourcesUsed'], {
-      'second_wind': 2,
+      'second_wind': 0,
       'action_surge': 0,
     });
 
-    await tester.ensureVisible(find.byTooltip('恢复第二气息'));
-    await tester.tap(find.byTooltip('恢复第二气息'));
+    await tester.tap(find.byKey(const Key('resource-pip-second_wind-1')));
     await tester.pumpAndSettle();
     expect(updates.last['classResourcesUsed'], {
       'second_wind': 1,
       'action_surge': 0,
     });
+  });
+
+  testWidgets('rest changes are visible in the independent resources tab', (
+    tester,
+  ) async {
+    final character = _character.copyWith(
+      data: {
+        ..._character.dataMap,
+        'classResources': [
+          {
+            'id': 'second_wind',
+            'name': '第二气息',
+            'maximum': 2,
+            'recovery': 'shortRest',
+          },
+        ],
+        'runtime': {
+          ..._character.runtimeMap,
+          'classResourcesUsed': {'second_wind': 1},
+        },
+      },
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterDetailPage(
+          character: character,
+          onUpdateRuntime:
+              ({
+                int? currentHp,
+                int? temporaryHp,
+                bool? inspiration,
+                List<String>? conditions,
+                int? deathSaveSuccesses,
+                int? deathSaveFailures,
+                Map<String, int>? spellSlotsUsed,
+                Map<String, int>? classResourcesUsed,
+              }) async {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('资源'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.widgetWithText(FilledButton, '恢复短休资源'));
+    await tester.tap(find.widgetWithText(FilledButton, '恢复短休资源'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('第二气息 2/2'), findsOneWidget);
+    expect(find.text('短休恢复'), findsOneWidget);
   });
 
   testWidgets('character detail runtime tab edits current hp and death saves', (
@@ -224,12 +598,18 @@ void main() {
 
     expect(find.text('当前 HP 24/24'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('受到 1 点伤害'));
+    await tester.tap(find.byKey(const Key('runtime-hp-panel')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('hp-quick-value-field')), '1');
+    await tester.tap(find.widgetWithText(FilledButton, '受到伤害'));
     await tester.pumpAndSettle();
     expect(find.text('当前 HP 23/24'), findsOneWidget);
     expect(updates.last['currentHp'], 23);
 
-    await tester.tap(find.byTooltip('恢复 1 点 HP'));
+    await tester.tap(find.byKey(const Key('runtime-hp-panel')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('hp-quick-value-field')), '1');
+    await tester.tap(find.widgetWithText(FilledButton, '恢复 HP'));
     await tester.pumpAndSettle();
     expect(find.text('当前 HP 24/24'), findsOneWidget);
     expect(updates.last['currentHp'], 24);
@@ -280,13 +660,23 @@ void main() {
       await tester.tap(find.text('状态'));
       await tester.pumpAndSettle();
 
-      await tester.enterText(find.byKey(const Key('hp-delta-field')), '7');
+      await tester.tap(find.byKey(const Key('runtime-hp-panel')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('hp-quick-value-field')),
+        '7',
+      );
       await tester.tap(find.widgetWithText(FilledButton, '受到伤害'));
       await tester.pumpAndSettle();
       expect(find.text('当前 HP 17/24'), findsOneWidget);
       expect(updates.last['currentHp'], 17);
 
-      await tester.enterText(find.byKey(const Key('hp-delta-field')), '5');
+      await tester.tap(find.byKey(const Key('runtime-hp-panel')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('hp-quick-value-field')),
+        '5',
+      );
       await tester.tap(find.widgetWithText(FilledButton, '恢复 HP'));
       await tester.pumpAndSettle();
       expect(find.text('当前 HP 22/24'), findsOneWidget);
@@ -302,6 +692,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('死亡豁免 0/1'), findsOneWidget);
 
+      await tester.ensureVisible(find.widgetWithText(FilledButton, '短休'));
       await tester.tap(find.widgetWithText(FilledButton, '短休'));
       await tester.pumpAndSettle();
       expect(find.text('死亡豁免 0/0'), findsOneWidget);
@@ -488,6 +879,7 @@ void main() {
 
     await tester.tap(find.text('动作'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('长弓'));
     await tester.tap(find.text('长弓'));
     await tester.pumpAndSettle();
 
@@ -561,6 +953,124 @@ void main() {
     expect(updates.last['spellSlotsUsed'], {'1': 1, '2': 0});
   });
 
+  testWidgets('character spell panel prefers rules-derived caster data', (
+    tester,
+  ) async {
+    final arcanist = _character.copyWith(
+      classSummary: 'Arcanist',
+      level: 1,
+      abilities: {..._character.abilityMap, 'int': 16},
+      data: {
+        ..._character.dataMap,
+        'spellcastingAbility': 'int',
+        'spellSlots': {'1': 2},
+        'contentRefs': {
+          'spells': ['test:spell/spark'],
+          'items': <String>[],
+          'features': <String>[],
+        },
+      },
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterDetailPage(character: arcanist, initialTab: 'spells'),
+      ),
+    );
+
+    expect(find.text('施法属性 智力'), findsOneWidget);
+    expect(find.text('法术豁免 DC 13'), findsOneWidget);
+    expect(find.text('一环 0/2 已用'), findsOneWidget);
+    expect(find.text('test:spell/spark'), findsOneWidget);
+  });
+
+  testWidgets('character sheet opens referenced spells in a floating reader', (
+    tester,
+  ) async {
+    const spell = ContentEntry(
+      id: 'test:spell/spark',
+      type: 'spell',
+      slug: 'spark',
+      name: 'Spark',
+      summary: 'A compact rules reference.',
+      body: [],
+      revision: 1,
+      structured: {'level': 1},
+    );
+    final caster = _character.copyWith(
+      classSummary: 'Arcanist',
+      data: {
+        ..._character.dataMap,
+        'spellcastingAbility': 'int',
+        'spellSlots': {'1': 2},
+        'contentRefs': {
+          'spells': ['test:spell/spark'],
+          'items': <String>[],
+          'features': <String>[],
+        },
+      },
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterDetailPage(
+          character: caster,
+          initialTab: 'spells',
+          contentEntries: const [spell],
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Spark'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.text('A compact rules reference.'), findsOneWidget);
+    expect(find.byTooltip('关闭详情'), findsOneWidget);
+  });
+
+  testWidgets('spell reader does not repeat a summary copied into the body', (
+    tester,
+  ) async {
+    const repeatedText = 'The spell creates a brief shower of sparks.';
+    const spell = ContentEntry(
+      id: 'test:spell/spark',
+      type: 'spell',
+      slug: 'spark',
+      name: 'Spark',
+      summary: repeatedText,
+      body: [ParagraphBlock(text: repeatedText)],
+      revision: 1,
+      structured: {'level': 1},
+    );
+    final caster = _character.copyWith(
+      data: {
+        ..._character.dataMap,
+        'contentRefs': {
+          'spells': ['test:spell/spark'],
+          'items': <String>[],
+          'features': <String>[],
+        },
+      },
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterDetailPage(
+          character: caster,
+          initialTab: 'spells',
+          contentEntries: const [spell],
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Spark'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.text(repeatedText), findsOneWidget);
+  });
+
   testWidgets('character detail equipment tab sends quick inventory updates', (
     tester,
   ) async {
@@ -591,6 +1101,7 @@ void main() {
       {'name': '治疗药水', 'quantity': 2},
     ]);
 
+    await tester.ensureVisible(find.widgetWithText(OutlinedButton, '消耗治疗药水'));
     await tester.tap(find.widgetWithText(OutlinedButton, '消耗治疗药水'));
     await tester.pumpAndSettle();
     expect(find.text('治疗药水 x1'), findsOneWidget);
@@ -599,6 +1110,8 @@ void main() {
       {'name': '治疗药水', 'quantity': 1},
     ]);
 
+    await tester.ensureVisible(find.byTooltip('gp +1'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('gp +1'));
     await tester.pumpAndSettle();
     expect(find.text('gp 11'), findsOneWidget);
@@ -625,10 +1138,7 @@ void main() {
     await tester.tap(find.widgetWithText(OutlinedButton, '继续编辑完整角色卡'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(
-      find.byKey(const Key('character-name')),
-      'Mira',
-    );
+    await tester.enterText(find.byKey(const Key('character-name')), 'Mira');
     await tester.enterText(
       find.byKey(const Key('character-class-field')),
       '法师',
@@ -768,6 +1278,11 @@ void main() {
   testWidgets('standard build exposes the full guided step outline', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(
       MaterialApp(home: CharacterEditorPage(onSubmit: (_) async => true)),
     );
@@ -776,9 +1291,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('标准创建角色'), findsOneWidget);
-    for (final step in ['来源', '职业', '起源', '属性', '熟练', '装备', '法术', '详情', '审核']) {
+    for (final step in ['职业', '背景', '物种', '属性', '熟练', '详情', '审核']) {
       expect(find.text(step), findsWidgets);
     }
+    expect(find.byKey(const Key('builder-step-5')), findsNothing);
+    expect(find.byKey(const Key('builder-step-6')), findsNothing);
     expect(find.text('完成度'), findsOneWidget);
     expect(find.text('继续编辑完整角色卡'), findsOneWidget);
   });
@@ -792,6 +1309,8 @@ void main() {
 
     await tester.tap(find.widgetWithText(FilledButton, '标准创建'));
     await tester.pumpAndSettle();
+
+    await _goToBuilderStep(tester, 8, '审核');
 
     expect(find.text('4/5 已完成'), findsOneWidget);
     expect(find.text('缺少角色名'), findsOneWidget);
@@ -843,12 +1362,14 @@ void main() {
     await tester.tap(
       find.ancestor(of: find.text('法师'), matching: find.byType(ChoiceChip)),
     );
+    await _goToBuilderStep(tester, 2, '物种');
     final elfChip = find.ancestor(
       of: find.text('精灵'),
       matching: find.byType(ChoiceChip),
     );
     await tester.ensureVisible(elfChip);
     await tester.tap(elfChip);
+    await _goToBuilderStep(tester, 1, '背景');
     final sageChip = find.ancestor(
       of: find.text('贤者'),
       matching: find.byType(ChoiceChip),
@@ -856,6 +1377,8 @@ void main() {
     await tester.ensureVisible(sageChip);
     await tester.tap(sageChip);
     await tester.pumpAndSettle();
+
+    await _goToBuilderStep(tester, 8, '审核');
 
     expect(find.text('审核摘要'), findsOneWidget);
     expect(find.text('Mira / 精灵 / 贤者 / 法师 / Lv.1'), findsOneWidget);
@@ -895,6 +1418,7 @@ void main() {
       find.byKey(const Key('standard-character-name-field')),
       'Tamsin',
     );
+    await _goToBuilderStep(tester, 3, '属性');
     await tester.enterText(
       find.byKey(const Key('standard-ability-str-field')),
       '15',
@@ -923,6 +1447,7 @@ void main() {
 
     expect(find.text('属性已完成'), findsOneWidget);
 
+    await _goToBuilderStep(tester, 8, '审核');
     await tester.tap(find.widgetWithText(FilledButton, '创建角色'));
     await tester.pumpAndSettle();
 
@@ -978,6 +1503,7 @@ void main() {
     expect(find.text('法术位 一环 4 / 二环 2'), findsOneWidget);
     expect(find.text('Mira / 人类 / 士兵 / 法师 / Lv.3'), findsOneWidget);
 
+    await _goToBuilderStep(tester, 8, '审核');
     await tester.tap(find.widgetWithText(FilledButton, '创建角色'));
     await tester.pumpAndSettle();
 
@@ -1009,6 +1535,7 @@ void main() {
       find.byKey(const Key('standard-character-name-field')),
       'Nia',
     );
+    await _goToBuilderStep(tester, 4, '熟练');
     await tester.tap(find.byKey(const Key('standard-skill-运动-chip')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('standard-skill-察觉-chip')));
@@ -1018,6 +1545,7 @@ void main() {
 
     expect(find.text('熟练 3 项'), findsOneWidget);
 
+    await _goToBuilderStep(tester, 8, '审核');
     await tester.tap(find.widgetWithText(FilledButton, '创建角色'));
     await tester.pumpAndSettle();
 
@@ -1039,7 +1567,7 @@ void main() {
       MaterialApp(
         home: CharacterEditorPage(
           defaultCreationMethod: 'standard',
-          contentItems: const [
+          contentEntries: const [
             _fighterContent,
             _aasimarContent,
             _acolyteContent,
@@ -1053,14 +1581,15 @@ void main() {
     );
 
     expect(find.text('战士 / Fighter'), findsOneWidget);
-    expect(find.text('阿斯莫 / Aasimar'), findsOneWidget);
-    expect(find.text('侍僧 / Acolyte'), findsOneWidget);
-    expect(find.text('来自资料库'), findsWidgets);
+    expect(find.text('来自资料库'), findsOneWidget);
 
     await tester.enterText(
       find.byKey(const Key('standard-character-name-field')),
       'Lia',
     );
+    await _goToBuilderStep(tester, 2, '物种');
+    expect(find.text('阿斯莫 / Aasimar'), findsOneWidget);
+    expect(find.text('来自资料库'), findsWidgets);
     final aasimarChip = find.ancestor(
       of: find.text('阿斯莫 / Aasimar'),
       matching: find.byType(ChoiceChip),
@@ -1068,6 +1597,8 @@ void main() {
     await tester.ensureVisible(aasimarChip);
     await tester.pumpAndSettle();
     await tester.tap(aasimarChip);
+    await _goToBuilderStep(tester, 1, '背景');
+    expect(find.text('侍僧 / Acolyte'), findsOneWidget);
     final acolyteChip = find.ancestor(
       of: find.text('侍僧 / Acolyte'),
       matching: find.byType(ChoiceChip),
@@ -1077,9 +1608,10 @@ void main() {
     await tester.tap(acolyteChip);
     await tester.pumpAndSettle();
 
+    await _goToBuilderStep(tester, 8, '审核');
     expect(
       find.text('Lia / 阿斯莫 / Aasimar / 侍僧 / Acolyte / 战士 / Fighter / Lv.1'),
-      findsOneWidget,
+      findsWidgets,
     );
 
     await tester.tap(find.widgetWithText(FilledButton, '创建角色'));
@@ -1104,7 +1636,7 @@ void main() {
       MaterialApp(
         home: CharacterEditorPage(
           defaultCreationMethod: 'standard',
-          contentItems: const [
+          contentEntries: const [
             _fighterContent,
             _aasimarContent,
             _acolyteContent,
@@ -1124,9 +1656,11 @@ void main() {
       find.byKey(const Key('standard-character-name-field')),
       'Lia',
     );
+    await _goToBuilderStep(tester, 6, '法术');
     await tester.ensureVisible(find.text('魔法飞弹 / Magic Missile'));
     await tester.tap(find.text('魔法飞弹 / Magic Missile'));
     await tester.pumpAndSettle();
+    await _goToBuilderStep(tester, 5, '装备');
     await tester.ensureVisible(find.text('长剑 / Longsword'));
     await tester.tap(find.text('长剑 / Longsword'));
     await tester.pumpAndSettle();
@@ -1134,6 +1668,7 @@ void main() {
     await tester.tap(find.text('治疗药水 / Potion of Healing'));
     await tester.pumpAndSettle();
 
+    await _goToBuilderStep(tester, 8, '审核');
     await tester.tap(find.widgetWithText(FilledButton, '创建角色'));
     await tester.pumpAndSettle();
 
@@ -1163,6 +1698,28 @@ void main() {
       ),
     );
   });
+}
+
+Future<void> _goToBuilderStep(
+  WidgetTester tester,
+  int index,
+  String label,
+) async {
+  if (find.byType(NavigationRail).evaluate().isNotEmpty) {
+    final destination = find.byKey(Key('builder-step-$index'));
+    final selectedDestination = find.byKey(Key('builder-step-$index-selected'));
+    await tester.tap(
+      destination.evaluate().isNotEmpty ? destination : selectedDestination,
+    );
+  } else {
+    await tester.tap(find.byKey(const Key('builder-mobile-step-selector')));
+    await tester.pumpAndSettle();
+    final option = find.byWidgetPredicate(
+      (widget) => widget is Text && widget.data?.endsWith('. $label') == true,
+    );
+    await tester.tap(option);
+  }
+  await tester.pumpAndSettle();
 }
 
 const _character = CharacterSheet(
@@ -1200,92 +1757,74 @@ const _character = CharacterSheet(
   updatedAt: '2026-07-09T00:00:00.000Z',
 );
 
-const _fighterContent = ContentItem(
+const _fighterContent = ContentEntry(
   id: 'content-class-fighter',
-  packageId: 'pkg-phb',
   type: 'class',
   slug: 'class-fighter',
   name: '战士 / Fighter',
-  description: '',
+  body: [],
+  revision: 1,
   structured: {'page': 60},
   tags: ['private-phb-2024-index', 'class'],
-  sourceLabel: 'Private PHB 2024 PDF Index',
-  schemaVersion: 1,
-  createdAt: '2026-07-09T00:00:00.000Z',
-  updatedAt: '2026-07-09T00:00:00.000Z',
+  source: ContentSource(label: 'Private PHB 2024 PDF Index'),
 );
 
-const _aasimarContent = ContentItem(
+const _aasimarContent = ContentEntry(
   id: 'content-species-aasimar',
-  packageId: 'pkg-phb',
   type: 'species',
   slug: 'species-aasimar',
   name: '阿斯莫 / Aasimar',
-  description: '',
+  body: [],
+  revision: 1,
   structured: {'page': 113},
   tags: ['private-phb-2024-index', 'species'],
-  sourceLabel: 'Private PHB 2024 PDF Index',
-  schemaVersion: 1,
-  createdAt: '2026-07-09T00:00:00.000Z',
-  updatedAt: '2026-07-09T00:00:00.000Z',
+  source: ContentSource(label: 'Private PHB 2024 PDF Index'),
 );
 
-const _acolyteContent = ContentItem(
+const _acolyteContent = ContentEntry(
   id: 'content-background-acolyte',
-  packageId: 'pkg-phb',
   type: 'background',
   slug: 'background-acolyte',
   name: '侍僧 / Acolyte',
-  description: '',
+  body: [],
+  revision: 1,
   structured: {'page': 111},
   tags: ['private-phb-2024-index', 'background'],
-  sourceLabel: 'Private PHB 2024 PDF Index',
-  schemaVersion: 1,
-  createdAt: '2026-07-09T00:00:00.000Z',
-  updatedAt: '2026-07-09T00:00:00.000Z',
+  source: ContentSource(label: 'Private PHB 2024 PDF Index'),
 );
 
-const _magicMissileContent = ContentItem(
+const _magicMissileContent = ContentEntry(
   id: 'content-spell-magic-missile',
-  packageId: 'pkg-phb',
   type: 'spell',
   slug: 'spell-magic-missile',
   name: '魔法飞弹 / Magic Missile',
-  description: '',
+  body: [],
+  revision: 1,
   structured: {'page': 290},
   tags: ['private-phb-2024-index', 'spell'],
-  sourceLabel: 'Private PHB 2024 PDF Index',
-  schemaVersion: 1,
-  createdAt: '2026-07-09T00:00:00.000Z',
-  updatedAt: '2026-07-09T00:00:00.000Z',
+  source: ContentSource(label: 'Private PHB 2024 PDF Index'),
 );
 
-const _longswordContent = ContentItem(
+const _longswordContent = ContentEntry(
   id: 'content-equipment-longsword',
-  packageId: 'pkg-phb',
   type: 'equipment',
   slug: 'equipment-longsword',
   name: '长剑 / Longsword',
-  description: '',
+  body: [],
+  revision: 1,
   structured: {'page': 215},
   tags: ['private-phb-2024-index', 'equipment'],
-  sourceLabel: 'Private PHB 2024 PDF Index',
-  schemaVersion: 1,
-  createdAt: '2026-07-09T00:00:00.000Z',
-  updatedAt: '2026-07-09T00:00:00.000Z',
+  source: ContentSource(label: 'Private PHB 2024 PDF Index'),
 );
 
-const _healingPotionContent = ContentItem(
+const _healingPotionContent = ContentEntry(
   id: 'content-item-healing-potion',
-  packageId: 'pkg-phb',
   type: 'item',
   slug: 'item-healing-potion',
   name: '治疗药水 / Potion of Healing',
-  description: '',
+  body: [],
+  revision: 1,
   structured: {'page': 228},
   tags: ['private-phb-2024-index', 'item'],
-  sourceLabel: 'Private PHB 2024 PDF Index',
-  schemaVersion: 1,
-  createdAt: '2026-07-09T00:00:00.000Z',
-  updatedAt: '2026-07-09T00:00:00.000Z',
+  source: ContentSource(label: 'Private PHB 2024 PDF Index'),
 );

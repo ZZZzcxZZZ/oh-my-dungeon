@@ -3,9 +3,9 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('opens an empty schema at version four', () async {
+  test('opens an empty schema at version six', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
-    expect(database.schemaVersion, 4);
+    expect(database.schemaVersion, 6);
     expect(await database.select(database.serverProfiles).get(), isEmpty);
     expect(await database.select(database.syncOutbox).get(), isEmpty);
     expect(await database.select(database.localContentPackages).get(), isEmpty);
@@ -16,6 +16,7 @@ void main() {
     expect(await database.select(database.campaignContentCache).get(), isEmpty);
     expect(await database.select(database.campaignSyncCursors).get(), isEmpty);
     expect(await database.select(database.characterSyncConflicts).get(), isEmpty);
+    expect(await database.select(database.vaultEntityRevisions).get(), isEmpty);
     await database.close();
   });
 }

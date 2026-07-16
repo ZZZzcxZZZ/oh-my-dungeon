@@ -1587,6 +1587,330 @@ class MigrationMarkersCompanion extends UpdateCompanion<MigrationMarker> {
   }
 }
 
+class $VaultEntityRevisionsTable extends VaultEntityRevisions
+    with TableInfo<$VaultEntityRevisionsTable, VaultEntityRevision> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $VaultEntityRevisionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _entityTypeMeta = const VerificationMeta(
+    'entityType',
+  );
+  @override
+  late final GeneratedColumn<String> entityType = GeneratedColumn<String>(
+    'entity_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _entityIdMeta = const VerificationMeta(
+    'entityId',
+  );
+  @override
+  late final GeneratedColumn<String> entityId = GeneratedColumn<String>(
+    'entity_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _revisionMeta = const VerificationMeta(
+    'revision',
+  );
+  @override
+  late final GeneratedColumn<int> revision = GeneratedColumn<int>(
+    'revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    entityType,
+    entityId,
+    revision,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'vault_entity_revisions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<VaultEntityRevision> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('entity_type')) {
+      context.handle(
+        _entityTypeMeta,
+        entityType.isAcceptableOrUnknown(data['entity_type']!, _entityTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityTypeMeta);
+    }
+    if (data.containsKey('entity_id')) {
+      context.handle(
+        _entityIdMeta,
+        entityId.isAcceptableOrUnknown(data['entity_id']!, _entityIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityIdMeta);
+    }
+    if (data.containsKey('revision')) {
+      context.handle(
+        _revisionMeta,
+        revision.isAcceptableOrUnknown(data['revision']!, _revisionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_revisionMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {entityType, entityId};
+  @override
+  VaultEntityRevision map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return VaultEntityRevision(
+      entityType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity_type'],
+      )!,
+      entityId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity_id'],
+      )!,
+      revision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}revision'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $VaultEntityRevisionsTable createAlias(String alias) {
+    return $VaultEntityRevisionsTable(attachedDatabase, alias);
+  }
+}
+
+class VaultEntityRevision extends DataClass
+    implements Insertable<VaultEntityRevision> {
+  final String entityType;
+  final String entityId;
+  final int revision;
+  final DateTime updatedAt;
+  const VaultEntityRevision({
+    required this.entityType,
+    required this.entityId,
+    required this.revision,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['entity_type'] = Variable<String>(entityType);
+    map['entity_id'] = Variable<String>(entityId);
+    map['revision'] = Variable<int>(revision);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  VaultEntityRevisionsCompanion toCompanion(bool nullToAbsent) {
+    return VaultEntityRevisionsCompanion(
+      entityType: Value(entityType),
+      entityId: Value(entityId),
+      revision: Value(revision),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory VaultEntityRevision.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return VaultEntityRevision(
+      entityType: serializer.fromJson<String>(json['entityType']),
+      entityId: serializer.fromJson<String>(json['entityId']),
+      revision: serializer.fromJson<int>(json['revision']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'entityType': serializer.toJson<String>(entityType),
+      'entityId': serializer.toJson<String>(entityId),
+      'revision': serializer.toJson<int>(revision),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  VaultEntityRevision copyWith({
+    String? entityType,
+    String? entityId,
+    int? revision,
+    DateTime? updatedAt,
+  }) => VaultEntityRevision(
+    entityType: entityType ?? this.entityType,
+    entityId: entityId ?? this.entityId,
+    revision: revision ?? this.revision,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  VaultEntityRevision copyWithCompanion(VaultEntityRevisionsCompanion data) {
+    return VaultEntityRevision(
+      entityType: data.entityType.present
+          ? data.entityType.value
+          : this.entityType,
+      entityId: data.entityId.present ? data.entityId.value : this.entityId,
+      revision: data.revision.present ? data.revision.value : this.revision,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('VaultEntityRevision(')
+          ..write('entityType: $entityType, ')
+          ..write('entityId: $entityId, ')
+          ..write('revision: $revision, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(entityType, entityId, revision, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is VaultEntityRevision &&
+          other.entityType == this.entityType &&
+          other.entityId == this.entityId &&
+          other.revision == this.revision &&
+          other.updatedAt == this.updatedAt);
+}
+
+class VaultEntityRevisionsCompanion
+    extends UpdateCompanion<VaultEntityRevision> {
+  final Value<String> entityType;
+  final Value<String> entityId;
+  final Value<int> revision;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const VaultEntityRevisionsCompanion({
+    this.entityType = const Value.absent(),
+    this.entityId = const Value.absent(),
+    this.revision = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  VaultEntityRevisionsCompanion.insert({
+    required String entityType,
+    required String entityId,
+    required int revision,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : entityType = Value(entityType),
+       entityId = Value(entityId),
+       revision = Value(revision),
+       updatedAt = Value(updatedAt);
+  static Insertable<VaultEntityRevision> custom({
+    Expression<String>? entityType,
+    Expression<String>? entityId,
+    Expression<int>? revision,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (entityType != null) 'entity_type': entityType,
+      if (entityId != null) 'entity_id': entityId,
+      if (revision != null) 'revision': revision,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  VaultEntityRevisionsCompanion copyWith({
+    Value<String>? entityType,
+    Value<String>? entityId,
+    Value<int>? revision,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return VaultEntityRevisionsCompanion(
+      entityType: entityType ?? this.entityType,
+      entityId: entityId ?? this.entityId,
+      revision: revision ?? this.revision,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (entityType.present) {
+      map['entity_type'] = Variable<String>(entityType.value);
+    }
+    if (entityId.present) {
+      map['entity_id'] = Variable<String>(entityId.value);
+    }
+    if (revision.present) {
+      map['revision'] = Variable<int>(revision.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('VaultEntityRevisionsCompanion(')
+          ..write('entityType: $entityType, ')
+          ..write('entityId: $entityId, ')
+          ..write('revision: $revision, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $LocalContentPackagesTable extends LocalContentPackages
     with TableInfo<$LocalContentPackagesTable, LocalContentPackageRow> {
   @override
@@ -2312,6 +2636,18 @@ class $LocalContentEntriesTable extends LocalContentEntries
     requiredDuringInsert: false,
     defaultValue: const Constant('{}'),
   );
+  static const VerificationMeta _rulesJsonMeta = const VerificationMeta(
+    'rulesJson',
+  );
+  @override
+  late final GeneratedColumn<String> rulesJson = GeneratedColumn<String>(
+    'rules_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('{}'),
+  );
   static const VerificationMeta _tagsJsonMeta = const VerificationMeta(
     'tagsJson',
   );
@@ -2358,6 +2694,7 @@ class $LocalContentEntriesTable extends LocalContentEntries
     summary,
     bodyJson,
     structuredJson,
+    rulesJson,
     tagsJson,
     sourceLabel,
     revision,
@@ -2444,6 +2781,12 @@ class $LocalContentEntriesTable extends LocalContentEntries
         ),
       );
     }
+    if (data.containsKey('rules_json')) {
+      context.handle(
+        _rulesJsonMeta,
+        rulesJson.isAcceptableOrUnknown(data['rules_json']!, _rulesJsonMeta),
+      );
+    }
     if (data.containsKey('tags_json')) {
       context.handle(
         _tagsJsonMeta,
@@ -2512,6 +2855,10 @@ class $LocalContentEntriesTable extends LocalContentEntries
         DriftSqlType.string,
         data['${effectivePrefix}structured_json'],
       )!,
+      rulesJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}rules_json'],
+      )!,
       tagsJson: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}tags_json'],
@@ -2544,6 +2891,7 @@ class LocalContentEntryRow extends DataClass
   final String summary;
   final String bodyJson;
   final String structuredJson;
+  final String rulesJson;
   final String tagsJson;
   final String sourceLabel;
   final int revision;
@@ -2557,6 +2905,7 @@ class LocalContentEntryRow extends DataClass
     required this.summary,
     required this.bodyJson,
     required this.structuredJson,
+    required this.rulesJson,
     required this.tagsJson,
     required this.sourceLabel,
     required this.revision,
@@ -2573,6 +2922,7 @@ class LocalContentEntryRow extends DataClass
     map['summary'] = Variable<String>(summary);
     map['body_json'] = Variable<String>(bodyJson);
     map['structured_json'] = Variable<String>(structuredJson);
+    map['rules_json'] = Variable<String>(rulesJson);
     map['tags_json'] = Variable<String>(tagsJson);
     map['source_label'] = Variable<String>(sourceLabel);
     map['revision'] = Variable<int>(revision);
@@ -2590,6 +2940,7 @@ class LocalContentEntryRow extends DataClass
       summary: Value(summary),
       bodyJson: Value(bodyJson),
       structuredJson: Value(structuredJson),
+      rulesJson: Value(rulesJson),
       tagsJson: Value(tagsJson),
       sourceLabel: Value(sourceLabel),
       revision: Value(revision),
@@ -2611,6 +2962,7 @@ class LocalContentEntryRow extends DataClass
       summary: serializer.fromJson<String>(json['summary']),
       bodyJson: serializer.fromJson<String>(json['bodyJson']),
       structuredJson: serializer.fromJson<String>(json['structuredJson']),
+      rulesJson: serializer.fromJson<String>(json['rulesJson']),
       tagsJson: serializer.fromJson<String>(json['tagsJson']),
       sourceLabel: serializer.fromJson<String>(json['sourceLabel']),
       revision: serializer.fromJson<int>(json['revision']),
@@ -2629,6 +2981,7 @@ class LocalContentEntryRow extends DataClass
       'summary': serializer.toJson<String>(summary),
       'bodyJson': serializer.toJson<String>(bodyJson),
       'structuredJson': serializer.toJson<String>(structuredJson),
+      'rulesJson': serializer.toJson<String>(rulesJson),
       'tagsJson': serializer.toJson<String>(tagsJson),
       'sourceLabel': serializer.toJson<String>(sourceLabel),
       'revision': serializer.toJson<int>(revision),
@@ -2645,6 +2998,7 @@ class LocalContentEntryRow extends DataClass
     String? summary,
     String? bodyJson,
     String? structuredJson,
+    String? rulesJson,
     String? tagsJson,
     String? sourceLabel,
     int? revision,
@@ -2658,6 +3012,7 @@ class LocalContentEntryRow extends DataClass
     summary: summary ?? this.summary,
     bodyJson: bodyJson ?? this.bodyJson,
     structuredJson: structuredJson ?? this.structuredJson,
+    rulesJson: rulesJson ?? this.rulesJson,
     tagsJson: tagsJson ?? this.tagsJson,
     sourceLabel: sourceLabel ?? this.sourceLabel,
     revision: revision ?? this.revision,
@@ -2677,6 +3032,7 @@ class LocalContentEntryRow extends DataClass
       structuredJson: data.structuredJson.present
           ? data.structuredJson.value
           : this.structuredJson,
+      rulesJson: data.rulesJson.present ? data.rulesJson.value : this.rulesJson,
       tagsJson: data.tagsJson.present ? data.tagsJson.value : this.tagsJson,
       sourceLabel: data.sourceLabel.present
           ? data.sourceLabel.value
@@ -2697,6 +3053,7 @@ class LocalContentEntryRow extends DataClass
           ..write('summary: $summary, ')
           ..write('bodyJson: $bodyJson, ')
           ..write('structuredJson: $structuredJson, ')
+          ..write('rulesJson: $rulesJson, ')
           ..write('tagsJson: $tagsJson, ')
           ..write('sourceLabel: $sourceLabel, ')
           ..write('revision: $revision')
@@ -2715,6 +3072,7 @@ class LocalContentEntryRow extends DataClass
     summary,
     bodyJson,
     structuredJson,
+    rulesJson,
     tagsJson,
     sourceLabel,
     revision,
@@ -2732,6 +3090,7 @@ class LocalContentEntryRow extends DataClass
           other.summary == this.summary &&
           other.bodyJson == this.bodyJson &&
           other.structuredJson == this.structuredJson &&
+          other.rulesJson == this.rulesJson &&
           other.tagsJson == this.tagsJson &&
           other.sourceLabel == this.sourceLabel &&
           other.revision == this.revision);
@@ -2748,6 +3107,7 @@ class LocalContentEntriesCompanion
   final Value<String> summary;
   final Value<String> bodyJson;
   final Value<String> structuredJson;
+  final Value<String> rulesJson;
   final Value<String> tagsJson;
   final Value<String> sourceLabel;
   final Value<int> revision;
@@ -2762,6 +3122,7 @@ class LocalContentEntriesCompanion
     this.summary = const Value.absent(),
     this.bodyJson = const Value.absent(),
     this.structuredJson = const Value.absent(),
+    this.rulesJson = const Value.absent(),
     this.tagsJson = const Value.absent(),
     this.sourceLabel = const Value.absent(),
     this.revision = const Value.absent(),
@@ -2777,6 +3138,7 @@ class LocalContentEntriesCompanion
     this.summary = const Value.absent(),
     this.bodyJson = const Value.absent(),
     this.structuredJson = const Value.absent(),
+    this.rulesJson = const Value.absent(),
     this.tagsJson = const Value.absent(),
     this.sourceLabel = const Value.absent(),
     required int revision,
@@ -2797,6 +3159,7 @@ class LocalContentEntriesCompanion
     Expression<String>? summary,
     Expression<String>? bodyJson,
     Expression<String>? structuredJson,
+    Expression<String>? rulesJson,
     Expression<String>? tagsJson,
     Expression<String>? sourceLabel,
     Expression<int>? revision,
@@ -2812,6 +3175,7 @@ class LocalContentEntriesCompanion
       if (summary != null) 'summary': summary,
       if (bodyJson != null) 'body_json': bodyJson,
       if (structuredJson != null) 'structured_json': structuredJson,
+      if (rulesJson != null) 'rules_json': rulesJson,
       if (tagsJson != null) 'tags_json': tagsJson,
       if (sourceLabel != null) 'source_label': sourceLabel,
       if (revision != null) 'revision': revision,
@@ -2829,6 +3193,7 @@ class LocalContentEntriesCompanion
     Value<String>? summary,
     Value<String>? bodyJson,
     Value<String>? structuredJson,
+    Value<String>? rulesJson,
     Value<String>? tagsJson,
     Value<String>? sourceLabel,
     Value<int>? revision,
@@ -2844,6 +3209,7 @@ class LocalContentEntriesCompanion
       summary: summary ?? this.summary,
       bodyJson: bodyJson ?? this.bodyJson,
       structuredJson: structuredJson ?? this.structuredJson,
+      rulesJson: rulesJson ?? this.rulesJson,
       tagsJson: tagsJson ?? this.tagsJson,
       sourceLabel: sourceLabel ?? this.sourceLabel,
       revision: revision ?? this.revision,
@@ -2881,6 +3247,9 @@ class LocalContentEntriesCompanion
     if (structuredJson.present) {
       map['structured_json'] = Variable<String>(structuredJson.value);
     }
+    if (rulesJson.present) {
+      map['rules_json'] = Variable<String>(rulesJson.value);
+    }
     if (tagsJson.present) {
       map['tags_json'] = Variable<String>(tagsJson.value);
     }
@@ -2908,6 +3277,7 @@ class LocalContentEntriesCompanion
           ..write('summary: $summary, ')
           ..write('bodyJson: $bodyJson, ')
           ..write('structuredJson: $structuredJson, ')
+          ..write('rulesJson: $rulesJson, ')
           ..write('tagsJson: $tagsJson, ')
           ..write('sourceLabel: $sourceLabel, ')
           ..write('revision: $revision, ')
@@ -7775,6 +8145,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $MigrationMarkersTable migrationMarkers = $MigrationMarkersTable(
     this,
   );
+  late final $VaultEntityRevisionsTable vaultEntityRevisions =
+      $VaultEntityRevisionsTable(this);
   late final $LocalContentPackagesTable localContentPackages =
       $LocalContentPackagesTable(this);
   late final $LocalContentEntriesTable localContentEntries =
@@ -7822,6 +8194,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     syncOutbox,
     syncCursors,
     migrationMarkers,
+    vaultEntityRevisions,
     localContentPackages,
     localContentEntries,
     localContentAssets,
@@ -8708,6 +9081,205 @@ typedef $$MigrationMarkersTableProcessedTableManager =
       MigrationMarker,
       PrefetchHooks Function()
     >;
+typedef $$VaultEntityRevisionsTableCreateCompanionBuilder =
+    VaultEntityRevisionsCompanion Function({
+      required String entityType,
+      required String entityId,
+      required int revision,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$VaultEntityRevisionsTableUpdateCompanionBuilder =
+    VaultEntityRevisionsCompanion Function({
+      Value<String> entityType,
+      Value<String> entityId,
+      Value<int> revision,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$VaultEntityRevisionsTableFilterComposer
+    extends Composer<_$AppDatabase, $VaultEntityRevisionsTable> {
+  $$VaultEntityRevisionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entityId => $composableBuilder(
+    column: $table.entityId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$VaultEntityRevisionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $VaultEntityRevisionsTable> {
+  $$VaultEntityRevisionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entityId => $composableBuilder(
+    column: $table.entityId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$VaultEntityRevisionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $VaultEntityRevisionsTable> {
+  $$VaultEntityRevisionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get entityId =>
+      $composableBuilder(column: $table.entityId, builder: (column) => column);
+
+  GeneratedColumn<int> get revision =>
+      $composableBuilder(column: $table.revision, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$VaultEntityRevisionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $VaultEntityRevisionsTable,
+          VaultEntityRevision,
+          $$VaultEntityRevisionsTableFilterComposer,
+          $$VaultEntityRevisionsTableOrderingComposer,
+          $$VaultEntityRevisionsTableAnnotationComposer,
+          $$VaultEntityRevisionsTableCreateCompanionBuilder,
+          $$VaultEntityRevisionsTableUpdateCompanionBuilder,
+          (
+            VaultEntityRevision,
+            BaseReferences<
+              _$AppDatabase,
+              $VaultEntityRevisionsTable,
+              VaultEntityRevision
+            >,
+          ),
+          VaultEntityRevision,
+          PrefetchHooks Function()
+        > {
+  $$VaultEntityRevisionsTableTableManager(
+    _$AppDatabase db,
+    $VaultEntityRevisionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$VaultEntityRevisionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$VaultEntityRevisionsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$VaultEntityRevisionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> entityType = const Value.absent(),
+                Value<String> entityId = const Value.absent(),
+                Value<int> revision = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => VaultEntityRevisionsCompanion(
+                entityType: entityType,
+                entityId: entityId,
+                revision: revision,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String entityType,
+                required String entityId,
+                required int revision,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => VaultEntityRevisionsCompanion.insert(
+                entityType: entityType,
+                entityId: entityId,
+                revision: revision,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$VaultEntityRevisionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $VaultEntityRevisionsTable,
+      VaultEntityRevision,
+      $$VaultEntityRevisionsTableFilterComposer,
+      $$VaultEntityRevisionsTableOrderingComposer,
+      $$VaultEntityRevisionsTableAnnotationComposer,
+      $$VaultEntityRevisionsTableCreateCompanionBuilder,
+      $$VaultEntityRevisionsTableUpdateCompanionBuilder,
+      (
+        VaultEntityRevision,
+        BaseReferences<
+          _$AppDatabase,
+          $VaultEntityRevisionsTable,
+          VaultEntityRevision
+        >,
+      ),
+      VaultEntityRevision,
+      PrefetchHooks Function()
+    >;
 typedef $$LocalContentPackagesTableCreateCompanionBuilder =
     LocalContentPackagesCompanion Function({
       required String id,
@@ -9038,6 +9610,7 @@ typedef $$LocalContentEntriesTableCreateCompanionBuilder =
       Value<String> summary,
       Value<String> bodyJson,
       Value<String> structuredJson,
+      Value<String> rulesJson,
       Value<String> tagsJson,
       Value<String> sourceLabel,
       required int revision,
@@ -9054,6 +9627,7 @@ typedef $$LocalContentEntriesTableUpdateCompanionBuilder =
       Value<String> summary,
       Value<String> bodyJson,
       Value<String> structuredJson,
+      Value<String> rulesJson,
       Value<String> tagsJson,
       Value<String> sourceLabel,
       Value<int> revision,
@@ -9111,6 +9685,11 @@ class $$LocalContentEntriesTableFilterComposer
 
   ColumnFilters<String> get structuredJson => $composableBuilder(
     column: $table.structuredJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get rulesJson => $composableBuilder(
+    column: $table.rulesJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9184,6 +9763,11 @@ class $$LocalContentEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get rulesJson => $composableBuilder(
+    column: $table.rulesJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get tagsJson => $composableBuilder(
     column: $table.tagsJson,
     builder: (column) => ColumnOrderings(column),
@@ -9239,6 +9823,9 @@ class $$LocalContentEntriesTableAnnotationComposer
     column: $table.structuredJson,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get rulesJson =>
+      $composableBuilder(column: $table.rulesJson, builder: (column) => column);
 
   GeneratedColumn<String> get tagsJson =>
       $composableBuilder(column: $table.tagsJson, builder: (column) => column);
@@ -9304,6 +9891,7 @@ class $$LocalContentEntriesTableTableManager
                 Value<String> summary = const Value.absent(),
                 Value<String> bodyJson = const Value.absent(),
                 Value<String> structuredJson = const Value.absent(),
+                Value<String> rulesJson = const Value.absent(),
                 Value<String> tagsJson = const Value.absent(),
                 Value<String> sourceLabel = const Value.absent(),
                 Value<int> revision = const Value.absent(),
@@ -9318,6 +9906,7 @@ class $$LocalContentEntriesTableTableManager
                 summary: summary,
                 bodyJson: bodyJson,
                 structuredJson: structuredJson,
+                rulesJson: rulesJson,
                 tagsJson: tagsJson,
                 sourceLabel: sourceLabel,
                 revision: revision,
@@ -9334,6 +9923,7 @@ class $$LocalContentEntriesTableTableManager
                 Value<String> summary = const Value.absent(),
                 Value<String> bodyJson = const Value.absent(),
                 Value<String> structuredJson = const Value.absent(),
+                Value<String> rulesJson = const Value.absent(),
                 Value<String> tagsJson = const Value.absent(),
                 Value<String> sourceLabel = const Value.absent(),
                 required int revision,
@@ -9348,6 +9938,7 @@ class $$LocalContentEntriesTableTableManager
                 summary: summary,
                 bodyJson: bodyJson,
                 structuredJson: structuredJson,
+                rulesJson: rulesJson,
                 tagsJson: tagsJson,
                 sourceLabel: sourceLabel,
                 revision: revision,
@@ -12109,6 +12700,8 @@ class $AppDatabaseManager {
       $$SyncCursorsTableTableManager(_db, _db.syncCursors);
   $$MigrationMarkersTableTableManager get migrationMarkers =>
       $$MigrationMarkersTableTableManager(_db, _db.migrationMarkers);
+  $$VaultEntityRevisionsTableTableManager get vaultEntityRevisions =>
+      $$VaultEntityRevisionsTableTableManager(_db, _db.vaultEntityRevisions);
   $$LocalContentPackagesTableTableManager get localContentPackages =>
       $$LocalContentPackagesTableTableManager(_db, _db.localContentPackages);
   $$LocalContentEntriesTableTableManager get localContentEntries =>

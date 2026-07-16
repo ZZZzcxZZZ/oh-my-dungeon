@@ -8,42 +8,44 @@ import 'support/content_test_support.dart';
 
 void main() {
   group('CampaignAwareContentRepository', () {
-    test('searches local packages and current campaign cache without overriding',
-        () async {
-      final localEntry = ContentEntry.fromJson({
-        'id': 'example:location/moon-harbor',
-        'type': 'location',
-        'slug': 'moon-harbor',
-        'name': '月港',
-        'body': <Map<String, Object?>>[],
-        'revision': 1,
-      });
-      final campaignEntry = testContentEntry(
-        id: 'campaign-entry-1',
-        campaignId: 'campaign-1',
-        type: 'location',
-        slug: 'moon-harbor-homebrew',
-        name: '月港',
-      );
-      final localRepo = MemoryContentRepository(initialEntries: [localEntry]);
-      final campaignCache = MemoryCampaignCacheRepository(
-        entries: [campaignEntry],
-      );
-      final repo = CampaignAwareContentRepository(
-        local: localRepo,
-        campaign: campaignCache,
-        activeCampaignId: () => 'campaign-1',
-      );
+    test(
+      'searches local packages and current campaign cache without overriding',
+      () async {
+        final localEntry = ContentEntry.fromJson({
+          'id': 'example:location/moon-harbor',
+          'type': 'location',
+          'slug': 'moon-harbor',
+          'name': '月港',
+          'body': <Map<String, Object?>>[],
+          'revision': 1,
+        });
+        final campaignEntry = testContentEntry(
+          id: 'campaign-entry-1',
+          campaignId: 'campaign-1',
+          type: 'location',
+          slug: 'moon-harbor-homebrew',
+          name: '月港',
+        );
+        final localRepo = MemoryContentRepository(initialEntries: [localEntry]);
+        final campaignCache = MemoryCampaignCacheRepository(
+          entries: [campaignEntry],
+        );
+        final repo = CampaignAwareContentRepository(
+          local: localRepo,
+          campaign: campaignCache,
+          activeCampaignId: () => 'campaign-1',
+        );
 
-      final results = await repo.search(const ContentQuery(text: '月港'));
+        final results = await repo.search(const ContentQuery(text: '月港'));
 
-      expect(
-        results.map((entry) => entry.origin),
-        containsAll([ContentOrigin.local, ContentOrigin.campaign]),
-      );
-      // 同名条目都应保留，不互相覆盖。
-      expect(results.where((e) => e.name == '月港'), hasLength(2));
-    });
+        expect(
+          results.map((entry) => entry.origin),
+          containsAll([ContentOrigin.local, ContentOrigin.campaign]),
+        );
+        // 同名条目都应保留，不互相覆盖。
+        expect(results.where((e) => e.name == '月港'), hasLength(2));
+      },
+    );
 
     test('returns only local entries when no active campaign', () async {
       final localEntry = ContentEntry.fromJson({
@@ -118,12 +120,92 @@ void main() {
         activeCampaignId: () => 'campaign-1',
       );
 
-      final entry =
-          await repo.getByKey('campaign:campaign-1:entry-1');
+      final entry = await repo.getByKey('campaign:campaign-1:entry-1');
 
       expect(entry, isNotNull);
       expect(entry!.origin, ContentOrigin.campaign);
       expect(entry.name, '月港');
+    });
+
+    test('preserves rules when rebasing local and campaign entries', () async {
+      final localEntry = ContentEntry.fromJson({
+        'id': 'example:class/fighter',
+        'type': 'class',
+        'slug': 'fighter',
+        'name': '战士',
+        'body': <Map<String, Object?>>[],
+        'revision': 1,
+        'rules': {
+          'grants': [
+            {'id': 'local-speed', 'kind': 'speed', 'value': 30, 'label': '速度'},
+          ],
+        },
+      });
+      final campaignEntry = testContentEntry(
+        id: 'campaign-class',
+        campaignId: 'campaign-1',
+        type: 'class',
+        slug: 'warden',
+        name: '守望者',
+        entry: {
+          'body': <Map<String, Object?>>[],
+          'rules': {
+            'grants': [
+              {
+                'id': 'campaign-ac',
+                'kind': 'feature',
+                'entryId': 'feature-defense',
+                'label': '防御特性',
+              },
+            ],
+            'choices': [
+              {
+                'id': 'style',
+                'label': '战斗风格',
+                'optionType': 'classFeature',
+                'minimum': 1,
+                'maximum': 1,
+                'optionEntryIds': ['feature-defense'],
+                'recommendedEntryIds': ['feature-defense'],
+              },
+            ],
+          },
+        },
+      );
+      final repo = CampaignAwareContentRepository(
+        local: MemoryContentRepository(initialEntries: [localEntry]),
+        campaign: MemoryCampaignCacheRepository(entries: [campaignEntry]),
+        activeCampaignId: () => 'campaign-1',
+      );
+
+      final entries = await repo.search(const ContentQuery(type: 'class'));
+
+      expect(entries, hasLength(2));
+      expect(
+        entries
+            .firstWhere((entry) => entry.origin == ContentOrigin.local)
+            .rules,
+        isNotNull,
+      );
+      expect(
+        entries
+            .firstWhere((entry) => entry.origin == ContentOrigin.campaign)
+            .rules,
+        isNotNull,
+      );
+      final campaignRules = entries
+          .firstWhere((entry) => entry.origin == ContentOrigin.campaign)
+          .rules!;
+      expect(
+        campaignRules.grants.single.entryId,
+        'campaign:campaign-1:feature-defense',
+      );
+      expect(campaignRules.choices.single.optionEntryIds, [
+        'campaign:campaign-1:feature-defense',
+      ]);
+      expect(campaignRules.choices.single.recommendedEntryIds, [
+        'campaign:campaign-1:feature-defense',
+      ]);
     });
 
     test('getByKey returns null for unknown key', () async {
@@ -167,11 +249,7 @@ void main() {
       final localRepo = MemoryContentRepository();
       final campaignCache = MemoryCampaignCacheRepository(
         entries: [
-          testContentEntry(
-            id: 'entry-1',
-            campaignId: 'campaign-1',
-            name: '月港',
-          ),
+          testContentEntry(id: 'entry-1', campaignId: 'campaign-1', name: '月港'),
         ],
       );
       final repo = CampaignAwareContentRepository(
@@ -184,7 +262,9 @@ void main() {
       await repo.saveNote('campaign:campaign-1:entry-1', 'note');
 
       // 通过 favoritesOnly 查询验证收藏已写入本地 Vault。
-      final favorites = await repo.search(const ContentQuery(favoritesOnly: true));
+      final favorites = await repo.search(
+        const ContentQuery(favoritesOnly: true),
+      );
       expect(
         favorites.any((e) => e.id == 'campaign:campaign-1:entry-1'),
         isTrue,

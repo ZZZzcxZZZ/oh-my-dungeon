@@ -43,6 +43,25 @@ class StaticPreviewServerTest(unittest.TestCase):
         self.assertEqual(sent_responses, [302])
         self.assertIn(("Location", "http://127.0.0.1:5173/characters?tab=all"), sent_headers)
 
+    def test_routes_api_and_discovery_requests_to_the_backend(self):
+        self.assertTrue(NoCacheRequestHandler._is_backend_path("/api/auth/login"))
+        self.assertTrue(
+            NoCacheRequestHandler._is_backend_path(
+                "/.well-known/dnd-tool-server"
+            )
+        )
+        self.assertFalse(NoCacheRequestHandler._is_backend_path("/main.dart.js"))
+
+    def test_upgrades_legacy_auth_requests_to_the_api_prefix(self):
+        self.assertEqual(
+            NoCacheRequestHandler._backend_path("/auth/register"),
+            "/api/auth/register",
+        )
+        self.assertEqual(
+            NoCacheRequestHandler._backend_path("/api/auth/register"),
+            "/api/auth/register",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

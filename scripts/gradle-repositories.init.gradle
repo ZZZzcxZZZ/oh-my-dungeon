@@ -1,0 +1,35 @@
+// Applied only by the private APK builder. It lets Gradle resolve both the
+// app build and Flutter's included build where direct Maven access is blocked.
+settingsEvaluated { settings ->
+    settings.pluginManagement.repositories {
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+
+    settings.dependencyResolutionManagement.repositories {
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        google()
+        mavenCentral()
+    }
+}
+
+def addMirrors = { repositories ->
+    repositories.maven { url 'https://maven.aliyun.com/repository/google' }
+    repositories.maven { url 'https://maven.aliyun.com/repository/public' }
+    repositories.maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+}
+
+// Flutter plugins are independent Gradle projects and can declare their own
+// buildscript repositories. Add the mirrors before each plugin is evaluated.
+gradle.beforeProject { project ->
+    addMirrors(project.buildscript.repositories)
+    def repositoryMode = project.gradle.settings.dependencyResolutionManagement.repositoriesMode
+    if (!repositoryMode.present || repositoryMode.get() != RepositoriesMode.FAIL_ON_PROJECT_REPOS) {
+        addMirrors(project.repositories)
+    }
+}

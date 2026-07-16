@@ -42,7 +42,17 @@
 - 服务端战役协作 API：CampaignActor CRUD 与审计、CampaignContentEntry CRUD（DM 独立 JSON 条目）、CampaignChange cursor 增量推送、CampaignSyncState 游标管理
 - 客户端战役缓存：5 张本地 Drift 表缓存当前战役的 Actor / ContentEntry / Backlinks / SyncCursors / SyncConflicts，离线可读，联网时按 cursor 增量更新
 - Wiki 同时检索本地资料包和当前战役缓存，同名条目不覆盖，来源 chip 标注「本地」/「战役」
+- 资料包 v2 规则内核与分步角色创建：稳定条目 ID、等级授予、递归选择、类型 / 标签 / 环阶资格、推荐值、装备方案、桌面步骤导航和窄屏进度导航
+- 角色卡规则联动：响应式总览、资料库 / 自定义快速编辑、人物资料自动保存、自动规则与手动覆盖分层；法术按环位分组，装备、法术和特性可直接打开本地资料详情，货币优先显示
+- 角色资源可由玩家新增、编辑或删除，并为每项设置短休恢复、长休恢复或不自动恢复；角色列表默认紧凑，点小三角展开战斗摘要，点角色主体进入完整角色卡
+- DM 模式只可在设置中切换；玩家模式只显示本地角色，DM 模式只显示当前战役的 Actor 管理页与主持人专属工具
 - 战役聊天身份绑定 CampaignActor：消息持久化 `campaignActorId`，不信任客户端 displayName；支持说/做两种格式、头像角色卡、资料引用快照
+- 战役聊天升级为双页工作区：默认聊天，右滑进入战役信息；owner 可查看和完整编辑玩家 Actor、发起属性 / 豁免 / 技能检定，目标玩家可直接回应并发送关联骰点
+- 战役权限以 owner / membership 为准，不读取客户端全局 DM / Player 显示模式；公开邀请码只能加入为玩家，任何已登录用户均可创建自己的战役
+- 创建战役提供三步 Material 3 引导；账号支持按服务器独立设置的正式自动登录，access token 失效时使用 refresh token 恢复会话
+- 内容包 v2 支持 `subclassOf` 等稳定关系，子职业按所属职业和等级自动进入创建、升级及角色卡投影
+- 角色规则动作可从战役聊天 `+` 菜单直接发送；服务端根据 Actor 校验稳定动作 ID，并保存条目来源、公式和 Actor 修订号快照
+- DM 战役角色页显示 Actor 运行时状态、规则授予来源账本和服务端编辑审计历史，保留修订冲突对比与重新加载
 - 服务端 Personal Vault API：push / changes / devices，按用户隔离、operation ID 幂等、cursor 单调分页、设备撤销与 tombstone
 - 客户端 Vault 同步：push → pull → apply → save cursor 固定顺序，409 转为冲突态，网络异常保留 Outbox 并重试
 - 客户端本地备份与恢复：`.dndtable-backup` ZIP、SHA-256 校验、单事务原子替换、战役缓存清理、资料索引重建
@@ -90,8 +100,13 @@ npm run lint:server
 npm run analyze:client
 npm run test
 npm run check
+npm run validate:phb-private
 npm run docker:config
 ```
+
+登录页和已登录账号页均提供「自动登录」开关，按服务器 profile 独立保存且默认开启。开启后客户端保存会话 token，并在 access token 失效时使用 refresh token 自动恢复；关闭会删除持久 token，但不会结束当前运行中的会话。客户端不会保存用户名或密码。
+
+本地存在 `private-imports/phb-2024-v2-bundle.json` 时，可运行 `npm run validate:phb-private`。该命令先执行 Python schema / 引用 / 规则完整性校验，再由 Flutter 的真实 `ContentPackageImporter.previewJson()` 验证客户端可导入性。`private-imports/` 被 `.gitignore` 排除，资料正文不会进入仓库或客户端构建产物。
 
 ## 自托管部署草案
 

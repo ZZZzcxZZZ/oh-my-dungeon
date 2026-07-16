@@ -32,3 +32,10 @@ uploads/
 private-imports/
 *.content.private.json
 phb-2024-content-bundle.json
+apps/client_flutter/assets/private/
+
+# Local brainstorming prototypes.
+.superpowers/
+
+# WorkBuddy workspace memory (agent-local, not project source).
+.workbuddy/

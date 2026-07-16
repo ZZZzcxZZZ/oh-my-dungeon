@@ -1,0 +1,26 @@
+ALTER TABLE "User"
+ADD COLUMN IF NOT EXISTS "avatarAssetId" TEXT;
+
+ALTER TABLE "Campaign"
+ADD COLUMN IF NOT EXISTS "avatarAssetId" TEXT;
+
+ALTER TABLE "CampaignActor"
+ADD COLUMN IF NOT EXISTS "lifecycle" TEXT NOT NULL DEFAULT 'persistent',
+ADD COLUMN IF NOT EXISTS "avatarAssetId" TEXT,
+ADD COLUMN IF NOT EXISTS "healthVisibility" TEXT NOT NULL DEFAULT 'ownerAndDm';
+
+ALTER TABLE "CampaignMember"
+ADD COLUMN IF NOT EXISTS "boundActorId" TEXT,
+ADD COLUMN IF NOT EXISTS "activeSpeakerActorId" TEXT,
+ADD COLUMN IF NOT EXISTS "speakerMode" TEXT NOT NULL DEFAULT 'boundActor',
+ADD COLUMN IF NOT EXISTS "lastReadAt" TIMESTAMP(3);
+
+ALTER TABLE "CampaignChatMessage"
+ADD COLUMN IF NOT EXISTS "speakerMode" TEXT NOT NULL DEFAULT 'actor',
+ADD COLUMN IF NOT EXISTS "delegatedByUserId" TEXT,
+ADD COLUMN IF NOT EXISTS "speakerAvatarAssetId" TEXT,
+ADD COLUMN IF NOT EXISTS "publicHealthState" TEXT,
+ADD COLUMN IF NOT EXISTS "ooc" BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE INDEX IF NOT EXISTS "CampaignMember_campaignId_boundActorId_idx"
+ON "CampaignMember"("campaignId", "boundActorId");

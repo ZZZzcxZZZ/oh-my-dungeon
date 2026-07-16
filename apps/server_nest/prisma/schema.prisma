@@ -26,6 +26,7 @@ model User {
   passwordHash        String
   displayName         String?
   avatarUrl           String?
+  avatarAssetId       String?
   defaultClientMode   String                     @default("player")
   createdAt           DateTime                   @default(now())
   updatedAt           DateTime                   @updatedAt
@@ -70,10 +71,11 @@ model VaultChange {
 }
 
 model VaultOperation {
-  operationId String   @id
+  operationId String
   userId      String
   createdAt   DateTime @default(now())
 
+  @@id([userId, operationId])
   @@index([userId])
 }
 
@@ -117,6 +119,7 @@ model Campaign {
   system            String                     @default("dnd5e")
   ownerId           String
   status            String                     @default("active")
+  avatarAssetId     String?
   createdAt         DateTime                   @default(now())
   updatedAt         DateTime                   @updatedAt
   owner             User                       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -148,6 +151,9 @@ model CampaignActor {
   sourceCharacterId String?
   actorType         String              @default("player")
   status            String              @default("active")
+  lifecycle         String              @default("persistent")
+  avatarAssetId     String?
+  healthVisibility  String              @default("ownerAndDm")
   sheetJson         Json
   revision          Int                 @default(1)
   updatedBy         String
@@ -219,8 +225,15 @@ model CampaignChatMessage {
   campaignActorId  String?
   displayName      String         @default("")
   avatarUrl        String?
+  speakerMode      String         @default("actor")
+  delegatedByUserId String?
+  speakerAvatarAssetId String?
+  publicHealthState String?
+  ooc              Boolean        @default(false)
   kind             String         @default("say")
   content          String
+  actionSnapshot   Json?
+  eventData        Json?
   createdAt        DateTime       @default(now())
   campaign         Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   campaignActor    CampaignActor? @relation(fields: [campaignActorId], references: [id], onDelete: SetNull)
@@ -236,6 +249,10 @@ model CampaignMember {
   userId      String
   role        String   @default("player")
   displayName String   @default("")
+  boundActorId String?
+  activeSpeakerActorId String?
+  speakerMode String   @default("boundActor")
+  lastReadAt DateTime?
   joinedAt    DateTime @default(now())
   updatedAt   DateTime @updatedAt
   campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)

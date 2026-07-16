@@ -379,4 +379,65 @@ describe('CampaignPolicy', () => {
       ).toThrow(ForbiddenException);
     });
   });
+
+  describe('campaign workspace identities', () => {
+    const campaignCtx = {
+      campaignId: 'c-1',
+      ownerId: 'user-1',
+      members: [
+        { userId: 'user-1', role: 'owner' },
+        { userId: 'user-2', role: 'player' }
+      ]
+    };
+
+    it('allows a player to bind only their own active player actor', () => {
+      expect(() =>
+        policy.canBindActor(
+          { userId: 'user-2', username: 'bard' },
+          campaignCtx,
+          'user-2',
+          {
+            ownerUserId: 'user-2',
+            actorType: 'player',
+            status: 'active'
+          }
+        )
+      ).not.toThrow();
+    });
+
+    it('rejects a player binding another member actor', () => {
+      expect(() =>
+        policy.canBindActor(
+          { userId: 'user-2', username: 'bard' },
+          campaignCtx,
+          'user-2',
+          {
+            ownerUserId: 'user-1',
+            actorType: 'player',
+            status: 'active'
+          }
+        )
+      ).toThrow(ForbiddenException);
+    });
+
+    it('allows a DM to speak as an active temporary NPC', () => {
+      expect(() =>
+        policy.canSpeakAsActor(
+          { userId: 'user-1', username: 'dm' },
+          campaignCtx,
+          { ownerUserId: null, actorType: 'npc', status: 'active' }
+        )
+      ).not.toThrow();
+    });
+
+    it('rejects speaking through an archived actor', () => {
+      expect(() =>
+        policy.canSpeakAsActor(
+          { userId: 'user-1', username: 'dm' },
+          campaignCtx,
+          { ownerUserId: null, actorType: 'npc', status: 'archived' }
+        )
+      ).toThrow(ForbiddenException);
+    });
+  });
 });

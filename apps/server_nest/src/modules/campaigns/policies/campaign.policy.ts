@@ -42,6 +42,19 @@ export interface CampaignActorContext {
   actorRevision: number;
 }
 
+export interface CampaignActorIdentity {
+  ownerUserId: string | null;
+  actorType: string;
+  status: string;
+}
+
+export interface CampaignCapabilities {
+  canManageCampaign: boolean;
+  canManageMembers: boolean;
+  canCreateActors: boolean;
+  canSpeakAsNarrator: boolean;
+}
+
 const MANAGE_ROLES = new Set(['owner', 'dm']);
 const VIEW_ROLES = new Set(['owner', 'dm', 'player', 'spectator']);
 
@@ -51,6 +64,19 @@ export class CampaignPolicy {
     if (!actor.userId) {
       throw new ForbiddenException('Authenticated user required');
     }
+  }
+
+  capabilitiesFor(
+    actor: AccessTokenPayload,
+    campaign: CampaignContext,
+  ): CampaignCapabilities {
+    const isManager = this.isManager(actor, campaign);
+    return {
+      canManageCampaign: isManager,
+      canManageMembers: isManager,
+      canCreateActors: isManager,
+      canSpeakAsNarrator: isManager,
+    };
   }
 
   canViewCampaign(
@@ -153,6 +179,67 @@ export class CampaignPolicy {
     campaign: CampaignContext
   ): void {
     this.canViewCampaign(actor, campaign);
+  }
+
+  /**
+   * A membership binding is the player-facing identity for a campaign. A
+   * player can only bind their own active player actor; managers can repair
+   * bindings for any member.
+   */
+  canBindActor(
+    actor: AccessTokenPayload,
+    campaign: CampaignContext,
+    targetUserId: string,
+    candidate: CampaignActorIdentity,
+  ): void {
+    this.canViewCampaign(actor, campaign);
+    if (candidate.status !== "active" || candidate.actorType !== "player") {
+      throw new ForbiddenException(
+        "Only active player actors can be bound to a campaign member",
+      );
+    }
+    if (this.isManager(actor, campaign)) return;
+    if (actor.userId !== targetUserId || candidate.ownerUserId !== actor.userId) {
+      throw new ForbiddenException(
+        "Players can only bind their own player actor",
+      );
+    }
+  }
+
+  canManageMembershipBinding(
+    actor: AccessTokenPayload,
+    campaign: CampaignContext,
+    targetUserId: string,
+    hasExistingBinding: boolean,
+  ): void {
+    if (this.isManager(actor, campaign)) return;
+    if (actor.userId !== targetUserId || hasExistingBinding) {
+      throw new ForbiddenException(
+        "Only a DM can replace or clear a campaign character binding",
+      );
+    }
+  }
+
+  /**
+   * Chat speakers are server-authorized. Managers may puppeteer any active
+   * campaign actor; a player can speak only as their own active player actor.
+   */
+  canSpeakAsActor(
+    actor: AccessTokenPayload,
+    campaign: CampaignContext,
+    candidate: CampaignActorIdentity,
+  ): void {
+    this.canViewCampaign(actor, campaign);
+    if (candidate.status !== "active") {
+      throw new ForbiddenException("Archived actors cannot speak");
+    }
+    if (this.isManager(actor, campaign)) return;
+    if (
+      candidate.actorType !== "player" ||
+      candidate.ownerUserId !== actor.userId
+    ) {
+      throw new ForbiddenException("You can only speak as your own actor");
+    }
   }
 
   private isManager(

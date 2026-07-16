@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Post,
+  Put,
   UseGuards,
 } from "@nestjs/common";
 import { CurrentUser } from "../auth/current-user.decorator";
@@ -13,6 +14,7 @@ import type { AccessTokenPayload } from "../auth/auth.types";
 import { CampaignsService } from "./campaigns.service";
 import type {
   CampaignChatMessageView,
+  CampaignWorkspaceContextView,
   CampaignView,
   InviteView,
   MembershipView,
@@ -25,7 +27,6 @@ interface CreateCampaignBody {
 }
 
 interface CreateInviteBody {
-  roleOnJoin?: unknown;
   maxUses?: unknown;
 }
 
@@ -37,6 +38,17 @@ interface CreateCampaignChatMessageBody {
   kind?: unknown;
   content?: unknown;
   campaignActorId?: unknown;
+  actionId?: unknown;
+  eventData?: unknown;
+}
+
+interface UpdateMemberBindingBody {
+  actorId?: unknown;
+}
+
+interface UpdateSpeakerBody {
+  speakerMode?: unknown;
+  actorId?: unknown;
 }
 
 @Controller("campaigns")
@@ -90,9 +102,9 @@ export class CampaignsController {
       kind: typeof body.kind === "string" ? body.kind : undefined,
       content: body.content,
       campaignActorId:
-        typeof body.campaignActorId === "string"
-          ? body.campaignActorId
-          : null,
+        typeof body.campaignActorId === "string" ? body.campaignActorId : null,
+      actionId: typeof body.actionId === "string" ? body.actionId : null,
+      eventData: isRecord(body.eventData) ? body.eventData : null,
     });
   }
 
@@ -104,6 +116,55 @@ export class CampaignsController {
     return this.campaignsService.getCampaign(user, id);
   }
 
+  @Get(":id/context")
+  getWorkspaceContext(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param("id") campaignId: string,
+  ): Promise<CampaignWorkspaceContextView> {
+    return this.campaignsService.getWorkspaceContext(user, campaignId);
+  }
+
+  @Put(":id/members/:userId/binding")
+  updateMemberBinding(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param("id") campaignId: string,
+    @Param("userId") userId: string,
+    @Body() body: UpdateMemberBindingBody,
+  ): Promise<MembershipView> {
+    if (body.actorId !== null && typeof body.actorId !== "string") {
+      throw new BadRequestException("actorId must be a string or null");
+    }
+    return this.campaignsService.updateMemberBinding(
+      user,
+      campaignId,
+      userId,
+      body.actorId ?? null,
+    );
+  }
+
+  @Put(":id/speaker")
+  updateSpeaker(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param("id") campaignId: string,
+    @Body() body: UpdateSpeakerBody,
+  ): Promise<MembershipView> {
+    if (
+      body.speakerMode !== "boundActor" &&
+      body.speakerMode !== "actor" &&
+      body.speakerMode !== "narrator" &&
+      body.speakerMode !== "ooc"
+    ) {
+      throw new BadRequestException("Unsupported speakerMode");
+    }
+    if (body.actorId !== undefined && typeof body.actorId !== "string") {
+      throw new BadRequestException("actorId must be a string when provided");
+    }
+    return this.campaignsService.updateSpeaker(user, campaignId, {
+      speakerMode: body.speakerMode,
+      actorId: typeof body.actorId === "string" ? body.actorId : null,
+    });
+  }
+
   @Post(":id/invites")
   createInvite(
     @CurrentUser() user: AccessTokenPayload,
@@ -112,8 +173,6 @@ export class CampaignsController {
   ): Promise<InviteView> {
     return this.campaignsService.createInvite(user, {
       campaignId,
-      roleOnJoin:
-        typeof body.roleOnJoin === "string" ? body.roleOnJoin : undefined,
       maxUses: typeof body.maxUses === "number" ? body.maxUses : undefined,
     });
   }
@@ -140,4 +199,8 @@ export class CampaignsController {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
 }

@@ -4,9 +4,10 @@ services:
     environment:
       POSTGRES_DB: dnd_table
       POSTGRES_USER: dnd
-      POSTGRES_PASSWORD: dnd
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dnd}
+    # 仅绑定本机回环，避免公网暴露；本机调试可用 docker compose exec postgres psql
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -16,21 +17,21 @@ services:
       retries: 5
 
   server:
-    image: node:22-alpine
-    working_dir: /app/apps/server_nest
-    command: sh -c "npm install && npx prisma generate && npx prisma db push && npm run start:dev"
+    build:
+      context: .
+      dockerfile: apps/server_nest/Dockerfile
     environment:
       SERVER_NAME: ${SERVER_NAME:-D&D Table Tool}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
-      DATABASE_URL: postgresql://dnd:dnd@postgres:5432/dnd_table
+      DATABASE_URL: postgresql://dnd:${POSTGRES_PASSWORD:-dnd}@postgres:5432/dnd_table
       JWT_SECRET: ${JWT_SECRET:-change-me}
       REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
       DEFAULT_LOCALE: ${DEFAULT_LOCALE:-zh-CN}
       UPLOAD_DIR: /data/uploads
+      MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-20}
     ports:
       - "3000:3000"
     volumes:
-      - .:/app
       - uploads:/data/uploads
     depends_on:
       postgres:

@@ -1,6 +1,6 @@
 # 离线数据与同步边界
 
-更新时间：2026-07-14
+更新时间：2026-07-16
 
 本文档定义 `0.1` 开发线下客户端、Personal Vault 与战役协作三条数据流的边界。所有跨端同步实现都必须遵守本文约定，不得在公开仓库、默认数据库或客户端安装包中内置 SRD/PHB 或任何受版权保护的官方规则正文。
 
@@ -8,13 +8,14 @@
 
 - **离线优先**：客户端基于 Drift 的本地数据库是唯一事实来源。未配置服务器、未登录或断网时，资料库、角色、收藏、笔记、设置、规则计算和本地备份必须完整可用。
 - **服务器可选**：服务器只承担跨设备同步和战役联机，不作为本地功能的门禁。`MainShell` 始终打开，未登录时显示「同步可选」提示。
+- **私有资料显式导入**：客户端不声明、编译或自动加载 `assets/private/`。用户持有的商业规则资料包只能从「设置 → 资料包」手动导入 Drift；新安装的资料库默认为空。
 - **正文永不上传**：本地资料包正文与 assets 永远不进入 Vault payload，也不进入战役同步。Vault 只同步个人实体和资料包 manifest（`id/version/locale/system/contentHash`），战役只同步 DM 创建的独立 JSON 条目。
 - **不信任客户端身份**：聊天身份必须绑定 `CampaignActor`，服务器以 `campaignActorId` 为准，不接受客户端 displayName 作为权威来源。
 - **WebSocket 仅广播游标**：实时通道只推送最新 cursor 和 entityType，完整实体通过 HTTP `changes` 端点拉取，避免信任客户端增量。
 
 ## 2. 本地数据层（Drift）
 
-`AppDatabase` 的 `schemaVersion = 4`，跨平台（Native SQLite + Web WASM）。表分为三组：
+`AppDatabase` 的 `schemaVersion = 6`，跨平台（Native SQLite + Web WASM）。表分为三组：
 
 ### 2.1 个人数据（10 张表）
 

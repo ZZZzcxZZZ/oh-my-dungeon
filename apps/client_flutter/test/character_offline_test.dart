@@ -35,4 +35,52 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Existing Hero'), findsOneWidget);
   });
+
+  // Spec §头像来源: 角色列表卡片应优先显示头像图片，无头像时退回首字母。
+  testWidgets(
+    'character list card shows avatar image when avatarUrl is set',
+    (tester) async {
+      const avatarBytes = [9, 8, 7, 6];
+      final avatarUrl = Uri.dataFromBytes(
+        avatarBytes,
+        mimeType: 'image/png',
+      ).toString();
+      final repository = MemoryCharacterRepository(
+        initial: [
+          testCharacter(id: 'c1', name: 'Hero').copyWith(avatarUrl: avatarUrl),
+        ],
+      );
+      await tester.pumpWidget(buildOfflineCharacterApp(repository));
+      await tester.pumpAndSettle();
+
+      final avatar = tester.widget<CircleAvatar>(
+        find.ancestor(
+          of: find.text('Hero'),
+          matching: find.byType(CircleAvatar),
+        ),
+      );
+      expect(avatar.backgroundImage, isNotNull);
+      expect(avatar.child, isNull);
+    },
+  );
+
+  testWidgets(
+    'character list card falls back to initial when no avatar',
+    (tester) async {
+      final repository = MemoryCharacterRepository(
+        initial: [testCharacter(id: 'c1', name: 'Hero')],
+      );
+      await tester.pumpWidget(buildOfflineCharacterApp(repository));
+      await tester.pumpAndSettle();
+
+      final avatar = tester.widget<CircleAvatar>(
+        find.ancestor(
+          of: find.text('Hero'),
+          matching: find.byType(CircleAvatar),
+        ),
+      );
+      expect(avatar.backgroundImage, isNull);
+      expect(avatar.child, isNotNull);
+    },
+  );
 }

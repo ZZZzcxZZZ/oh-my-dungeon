@@ -582,7 +582,7 @@ void main() {
       // DM-only entries must NOT appear for a player.
       await tester.tap(find.byKey(const Key('campaign-chat-identity')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('draft-identity-entry')), findsNothing);
+      expect(find.byKey(const Key('identity-temporary-entry')), findsNothing);
 
       // DM control panel entry (in more actions) must also be hidden.
       await tester.tap(find.byTooltip('更多跑团功能'));
@@ -590,6 +590,109 @@ void main() {
       // Per spec: interface does not show disabled DM features.
       // The DM control ListTile must not be rendered for players.
       expect(find.byKey(const Key('campaign-dm-control-entry')), findsNothing);
+    },
+  );
+
+  // Spec §发言身份 DM: DM uses 旁白/DM, 场外, 常驻 NPC/怪物/同伴, 临时角色,
+  // 代管玩家角色. DM must NOT be asked to "绑定角色" — that path is for players.
+  testWidgets(
+    'DM identity panel shows narrator/ooc/persistent actors/temp/proxy sections and no bound-character entry',
+    (tester) async {
+      campaignClient.canManageCampaign = true;
+      campaignClient.workspaceActors = [
+        const CampaignWorkspaceActor(
+          id: 'actor-npc-1',
+          ownerUserId: 'user-1',
+          actorType: 'npc',
+          status: 'active',
+          lifecycle: 'persistent',
+          displayName: '酒馆老板',
+          avatarAssetId: null,
+          publicHealthState: 'unknown',
+        ),
+        const CampaignWorkspaceActor(
+          id: 'actor-monster-1',
+          ownerUserId: 'user-1',
+          actorType: 'monster',
+          status: 'active',
+          lifecycle: 'persistent',
+          displayName: '哥布林',
+          avatarAssetId: null,
+          publicHealthState: 'unknown',
+        ),
+        const CampaignWorkspaceActor(
+          id: 'actor-player-2',
+          ownerUserId: 'user-2',
+          actorType: 'player',
+          status: 'active',
+          lifecycle: 'persistent',
+          displayName: 'Arannis',
+          avatarAssetId: null,
+          publicHealthState: 'injured',
+        ),
+      ];
+
+      await pumpChatPage(tester, isDm: true);
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+
+      // DM-only entries — all required by spec §发言身份 DM.
+      expect(find.byKey(const Key('identity-narrator-entry')), findsOneWidget);
+      expect(find.byKey(const Key('identity-ooc-entry')), findsOneWidget);
+      expect(
+        find.byKey(const Key('identity-actor-actor-npc-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('identity-actor-actor-monster-1')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('identity-temporary-entry')), findsOneWidget);
+      // Proxy entry for player-owned actor (ownerUserId != current user).
+      expect(
+        find.byKey(const Key('identity-actor-actor-player-2')),
+        findsOneWidget,
+      );
+
+      // The "绑定角色" entry is player-only and must NOT appear for DM.
+      expect(
+        find.byKey(const Key('identity-bound-character-entry')),
+        findsNothing,
+      );
+    },
+  );
+
+  // Spec §发言身份 玩家: player can switch between 绑定角色 and 场外 only.
+  // Player must NOT see DM-only entries (narrator, temporary, NPC list, proxy).
+  testWidgets(
+    'unbound player identity panel shows only bound-character and ooc entries',
+    (tester) async {
+      campaignClient.canManageCampaign = false;
+      campaignClient.workspaceActors = const [];
+      // Membership has no boundActorId — simulates unbound player.
+      campaignClient.workspaceMembership = const CampaignMembership(
+        id: 'member-1',
+        campaignId: 'camp-1',
+        userId: 'user-1',
+        role: 'player',
+        displayName: 'Player One',
+        joinedAt: '2026-07-09T00:00:00.000Z',
+      );
+
+      await pumpChatPage(tester, isDm: false);
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+
+      // Player-only entries — required by spec.
+      expect(
+        find.byKey(const Key('identity-bound-character-entry')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('identity-ooc-entry')), findsOneWidget);
+
+      // DM-only entries must NOT appear for player.
+      expect(find.byKey(const Key('identity-narrator-entry')), findsNothing);
+      expect(find.byKey(const Key('identity-temporary-entry')), findsNothing);
     },
   );
 }
@@ -612,6 +715,14 @@ class _RecordingCampaignClient implements CampaignClient {
   bool canManageCampaign = false;
   CampaignApiException? sendMessageException;
 
+  /// Test-only injection: workspace actors returned by getWorkspaceContext.
+  /// Used by spec compliance tests for DM identity switching panel.
+  List<CampaignWorkspaceActor> workspaceActors = const [];
+
+  /// Test-only injection: membership returned by getWorkspaceContext.
+  /// Allows tests to vary speakerMode / boundActorId per scenario.
+  CampaignMembership? workspaceMembership;
+
   @override
   Future<CampaignWorkspaceContext> getWorkspaceContext({
     required String apiBaseUrl,
@@ -620,16 +731,17 @@ class _RecordingCampaignClient implements CampaignClient {
   }) async {
     return CampaignWorkspaceContext(
       campaign: _campaign,
-      membership: const CampaignMembership(
-        id: 'member-1',
-        campaignId: 'camp-1',
-        userId: 'user-1',
-        role: 'player',
-        displayName: 'Dungeon Master',
-        joinedAt: '2026-07-09T00:00:00.000Z',
-      ),
+      membership: workspaceMembership ??
+          const CampaignMembership(
+            id: 'member-1',
+            campaignId: 'camp-1',
+            userId: 'user-1',
+            role: 'player',
+            displayName: 'Dungeon Master',
+            joinedAt: '2026-07-09T00:00:00.000Z',
+          ),
       members: _campaign.memberPreview,
-      actors: const [],
+      actors: workspaceActors,
       capabilities: CampaignCapabilities(
         canManageCampaign: canManageCampaign,
         canManageMembers: canManageCampaign,

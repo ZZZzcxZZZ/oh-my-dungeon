@@ -575,6 +575,45 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
   Future<void> _showIdentitySheet() {
     final character = widget.character;
     final workspace = widget.campaignController.workspaceContext;
+    final membership = workspace?.membership;
+    final currentSpeakerMode = membership?.speakerMode ?? 'boundActor';
+    final activeActorId = membership?.activeSpeakerActorId ?? widget.campaignActorId;
+    final currentUserId = membership?.userId;
+
+    // Per spec §发言身份 DM, DM speakers are: 旁白/DM, 场外, 常驻 NPC/怪物/同伴,
+    // 临时角色, 代管玩家角色. The "绑定角色" entry is player-only and must not
+    // appear for DM.
+    //
+    // Per spec §发言身份 玩家, player speakers are: 绑定角色, 场外 only. Player
+    // must not see narrator/temporary/proxy entries.
+    final activeActors = (workspace?.actors ?? const <CampaignWorkspaceActor>[])
+        .where((actor) => actor.status == 'active')
+        .toList(growable: false);
+
+    // DM-owned persistent NPC/怪物/同伴 actors. Per spec these are the DM's
+    // own actor pool.
+    final dmPersistentActors = activeActors
+        .where(
+          (actor) =>
+              actor.lifecycle != 'temporary' &&
+              actor.ownerUserId == currentUserId &&
+              (actor.actorType == 'npc' ||
+                  actor.actorType == 'monster' ||
+                  actor.actorType == 'companion'),
+        )
+        .toList(growable: false);
+
+    // Player-owned actors the DM can proxy. Per spec §发言身份 DM the DM can
+    // "明确开启的玩家角色临时代管" — proxy with explicit opt-in.
+    final proxyActors = activeActors
+        .where(
+          (actor) =>
+              actor.ownerUserId != null &&
+              actor.ownerUserId != currentUserId &&
+              actor.actorType == 'player',
+        )
+        .toList(growable: false);
+
     return showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -582,6 +621,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         child: ListView(
           shrinkWrap: true,
           children: [
+            // Current identity summary at top.
             ListTile(
               leading: ChatAvatar(
                 name: character?.name ?? '?',
@@ -600,10 +640,49 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                       _openCharacterSheet();
                     },
             ),
+            const Divider(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Text(
+                '切换身份',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+            ),
             if (_canManageCampaign) ...[
-              const Divider(),
+              ListTile(
+                key: const Key('identity-narrator-entry'),
+                leading: const Icon(Icons.auto_stories_outlined),
+                title: const Text('旁白 / DM'),
+                selected: currentSpeakerMode == 'narrator',
+                onTap: () => _selectCampaignSpeaker('narrator'),
+              ),
+              ListTile(
+                key: const Key('identity-ooc-entry'),
+                leading: const Icon(Icons.forum_outlined),
+                title: const Text('场外'),
+                selected: currentSpeakerMode == 'ooc',
+                onTap: () => _selectCampaignSpeaker('ooc'),
+              ),
+              if (dmPersistentActors.isNotEmpty) ...[
+                _IdentitySectionHeader(label: '常驻 NPC / 怪物 / 同伴'),
+                for (final actor in dmPersistentActors)
+                  ListTile(
+                    key: Key('identity-actor-${actor.id}'),
+                    leading: ChatAvatar(
+                      name: actor.displayName,
+                      avatarUrl: null,
+                      healthState: actor.publicHealthState,
+                    ),
+                    title: Text(actor.displayName),
+                    subtitle: Text(_actorTypeLabel(actor.actorType)),
+                    selected:
+                        currentSpeakerMode == 'actor' && activeActorId == actor.id,
+                    onTap: () => _selectCampaignSpeaker('actor', actor.id),
+                  ),
+              ],
               if (_draftIdentity != null)
                 ListTile(
+                  key: const Key('identity-temporary-entry'),
                   leading: const Icon(Icons.person_add_alt_1_outlined),
                   title: Text('草稿：${_draftIdentity!.displayName}'),
                   subtitle: const Text('首次发送消息后将自动创建临时身份'),
@@ -619,7 +698,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                 )
               else
                 ListTile(
-                  key: const Key('draft-identity-entry'),
+                  key: const Key('identity-temporary-entry'),
                   leading: const Icon(Icons.person_add_alt_1_outlined),
                   title: const Text('快速临时身份'),
                   subtitle: const Text('只输入显示名称即可发言，首次发送时由服务器创建临时角色'),
@@ -628,24 +707,50 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                     _showDraftIdentityForm();
                   },
                 ),
-              ListTile(
-                leading: const Icon(Icons.auto_stories_outlined),
-                title: const Text('旁白'),
-                selected: workspace?.membership.speakerMode == 'narrator',
-                onTap: () => _selectCampaignSpeaker('narrator'),
-              ),
-              for (final actor in workspace?.actors.where((actor) => actor.status == 'active') ?? const <CampaignWorkspaceActor>[])
-                ListTile(
-                  leading: ChatAvatar(
-                    name: actor.displayName,
-                    avatarUrl: null,
-                    healthState: actor.publicHealthState,
+              if (proxyActors.isNotEmpty) ...[
+                _IdentitySectionHeader(label: '代管玩家角色'),
+                for (final actor in proxyActors)
+                  ListTile(
+                    key: Key('identity-actor-${actor.id}'),
+                    leading: ChatAvatar(
+                      name: actor.displayName,
+                      avatarUrl: null,
+                      healthState: actor.publicHealthState,
+                    ),
+                    title: Text(actor.displayName),
+                    subtitle: const Text('DM 代管'),
+                    selected:
+                        currentSpeakerMode == 'actor' && activeActorId == actor.id,
+                    onTap: () => _selectCampaignSpeaker('actor', actor.id),
                   ),
-                  title: Text(actor.displayName),
-                  subtitle: Text(actor.actorType == 'npc' ? 'NPC' : '角色'),
-                  selected: workspace?.membership.activeSpeakerActorId == actor.id,
-                  onTap: () => _selectCampaignSpeaker('actor', actor.id),
-                ),
+              ],
+            ] else ...[
+              ListTile(
+                key: const Key('identity-bound-character-entry'),
+                leading: const Icon(Icons.person_outline),
+                title: const Text('绑定角色'),
+                subtitle: character == null
+                    ? const Text('未绑定，前往战役中心绑定角色')
+                    : null,
+                selected: currentSpeakerMode == 'boundActor',
+                onTap: () {
+                  if (character == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('请前往战役中心绑定角色')),
+                    );
+                    return;
+                  }
+                  Navigator.of(context).pop();
+                  _openCharacterSheet();
+                },
+              ),
+              ListTile(
+                key: const Key('identity-ooc-entry'),
+                leading: const Icon(Icons.forum_outlined),
+                title: const Text('场外'),
+                selected: currentSpeakerMode == 'ooc',
+                onTap: () => _selectCampaignSpeaker('ooc'),
+              ),
             ],
           ],
         ),
@@ -1405,3 +1510,32 @@ class _DraftIdentityFormSheetState extends State<_DraftIdentityFormSheet> {
     );
   }
 }
+
+/// Section header inside the identity switching sheet.
+class _IdentitySectionHeader extends StatelessWidget {
+  const _IdentitySectionHeader({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+      ),
+    );
+  }
+}
+
+/// Display label for a CampaignActor.actorType value.
+String _actorTypeLabel(String actorType) => switch (actorType) {
+      'npc' => 'NPC',
+      'monster' => '怪物',
+      'companion' => '同伴',
+      'player' => '玩家角色',
+      _ => actorType,
+    };

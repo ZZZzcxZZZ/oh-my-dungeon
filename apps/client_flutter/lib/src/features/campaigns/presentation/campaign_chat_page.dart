@@ -185,24 +185,37 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                 key: const Key('campaign-chat-more-menu'),
                 icon: const Icon(Icons.more_vert),
                 onSelected: _onGlobalSettingSelected,
-                itemBuilder: (context) => const [
-                  PopupMenuItem(
-                    value: 'editDetails',
-                    child: Text('战役名称、封面和简介'),
-                  ),
-                  PopupMenuItem(
-                    value: 'transferOwnership',
-                    child: Text('所有权转移'),
-                  ),
-                  PopupMenuItem(
-                    value: 'archive',
-                    child: Text('战役归档'),
-                  ),
-                  PopupMenuItem(
-                    value: 'leave',
-                    child: Text('离开战役'),
-                  ),
-                ],
+                itemBuilder: (context) {
+                  // Spec §全局设置 / §客户端工作模式: 战役名称、所有权转移、
+                  // 战役归档都是 owner/dm 才能使用的低频操作；普通玩家即使
+                  // 切换到 DM 模式也只有 player 权限，菜单里只保留"离开战役"。
+                  if (!_canManageCampaign) {
+                    return const [
+                      PopupMenuItem(
+                        value: 'leave',
+                        child: Text('离开战役'),
+                      ),
+                    ];
+                  }
+                  return const [
+                    PopupMenuItem(
+                      value: 'editDetails',
+                      child: Text('战役名称、封面和简介'),
+                    ),
+                    PopupMenuItem(
+                      value: 'transferOwnership',
+                      child: Text('所有权转移'),
+                    ),
+                    PopupMenuItem(
+                      value: 'archive',
+                      child: Text('战役归档'),
+                    ),
+                    PopupMenuItem(
+                      value: 'leave',
+                      child: Text('离开战役'),
+                    ),
+                  ];
+                },
               ),
             ],
           ),

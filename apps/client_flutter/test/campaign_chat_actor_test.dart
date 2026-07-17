@@ -1098,6 +1098,60 @@ void main() {
       expect(subtitle.data, isNot('战役聊天室'));
     },
   );
+
+  // Spec §全局设置 / §客户端工作模式: 战役名称、所有权转移、战役归档都是
+  // owner/dm 才能使用的低频操作；普通玩家即使切换到 DM 模式也只有 player
+  // 权限，菜单里只保留"离开战役"。
+  testWidgets(
+    'DM more-menu shows all four global setting entries',
+    (tester) async {
+      await pumpChatPage(tester, isDm: true);
+
+      await tester.tap(find.byKey(const Key('campaign-chat-more-menu')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('战役名称、封面和简介'), findsOneWidget);
+      expect(find.text('所有权转移'), findsOneWidget);
+      expect(find.text('战役归档'), findsOneWidget);
+      expect(find.text('离开战役'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'player more-menu only shows leave campaign entry',
+    (tester) async {
+      await pumpChatPage(tester, isDm: false);
+
+      await tester.tap(find.byKey(const Key('campaign-chat-more-menu')));
+      await tester.pumpAndSettle();
+
+      // Owner-only entries must NOT appear for non-managers.
+      expect(find.text('战役名称、封面和简介'), findsNothing);
+      expect(find.text('所有权转移'), findsNothing);
+      expect(find.text('战役归档'), findsNothing);
+      // Leave campaign remains available to any member.
+      expect(find.text('离开战役'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'player with DM app preference still only sees leave campaign entry',
+    (tester) async {
+      // Spec §客户端工作模式: 普通玩家即使切换到 DM 模式，仍然只拥有
+      // 该战役的 player 权限。canManageCampaign 由服务端能力集决定,
+      // 不受客户端模式开关影响。
+      campaignClient.canManageCampaign = false;
+      await pumpChatPage(tester, isDm: true);
+
+      await tester.tap(find.byKey(const Key('campaign-chat-more-menu')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('战役名称、封面和简介'), findsNothing);
+      expect(find.text('所有权转移'), findsNothing);
+      expect(find.text('战役归档'), findsNothing);
+      expect(find.text('离开战役'), findsOneWidget);
+    },
+  );
 }
 
 class _RecordingCampaignClient implements CampaignClient {

@@ -222,9 +222,9 @@ void main() {
   ) async {
     await pumpChatPage(tester);
 
-    await tester.tap(find.byTooltip('更多跑团功能'));
+    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('资料库'));
+    await tester.tap(find.text('资料条目'));
     await tester.pumpAndSettle();
 
     expect(find.text('战士'), findsOneWidget);
@@ -250,7 +250,7 @@ void main() {
   testWidgets('character action tool sends a stable action id', (tester) async {
     await pumpChatPage(tester, campaignActorId: 'actor-1');
 
-    await tester.tap(find.byTooltip('更多跑团功能'));
+    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('角色动作'));
     await tester.pumpAndSettle();
@@ -356,9 +356,9 @@ void main() {
   ) async {
     await pumpChatPage(tester, isDm: true);
 
-    await tester.tap(find.byTooltip('更多跑团功能'));
+    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('检定请求'));
+    await tester.tap(find.text('技能检定'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('campaign-actor-actor-player')));
     await tester.pumpAndSettle();
@@ -493,7 +493,7 @@ void main() {
       await tester.tap(find.byKey(const Key('campaign-chat-identity')));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('draft-identity-entry')));
+      await tester.tap(find.byKey(const Key('identity-temporary-entry')));
       await tester.pumpAndSettle();
 
       await tester.enterText(
@@ -532,7 +532,7 @@ void main() {
 
       await tester.tap(find.byKey(const Key('campaign-chat-identity')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('draft-identity-entry')));
+      await tester.tap(find.byKey(const Key('identity-temporary-entry')));
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const Key('draft-identity-name')),
@@ -579,17 +579,18 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // DM-only entries must NOT appear for a player.
+      // Merged tool panel opens on avatar tap (spec §输入栏).
       await tester.tap(find.byKey(const Key('campaign-chat-identity')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('identity-temporary-entry')), findsNothing);
 
-      // DM control panel entry (in more actions) must also be hidden.
-      await tester.tap(find.byTooltip('更多跑团功能'));
-      await tester.pumpAndSettle();
+      // DM-only entries must NOT appear for a player.
       // Per spec: interface does not show disabled DM features.
-      // The DM control ListTile must not be rendered for players.
+      expect(find.byKey(const Key('identity-temporary-entry')), findsNothing);
       expect(find.byKey(const Key('campaign-dm-control-entry')), findsNothing);
+      expect(
+        find.byKey(const Key('tool-dm-identity-switch')),
+        findsNothing,
+      );
     },
   );
 
@@ -636,6 +637,13 @@ void main() {
       await tester.tap(find.byKey(const Key('campaign-chat-identity')));
       await tester.pumpAndSettle();
 
+      // 快速临时身份 lives in the merged tool panel per spec §输入栏.
+      expect(find.byKey(const Key('identity-temporary-entry')), findsOneWidget);
+
+      // Open the DM identity sub-panel via the "DM 身份切换" entry.
+      await tester.tap(find.byKey(const Key('tool-dm-identity-switch')));
+      await tester.pumpAndSettle();
+
       // DM-only entries — all required by spec §发言身份 DM.
       expect(find.byKey(const Key('identity-narrator-entry')), findsOneWidget);
       expect(find.byKey(const Key('identity-ooc-entry')), findsOneWidget);
@@ -647,7 +655,6 @@ void main() {
         find.byKey(const Key('identity-actor-actor-monster-1')),
         findsOneWidget,
       );
-      expect(find.byKey(const Key('identity-temporary-entry')), findsOneWidget);
       // Proxy entry for player-owned actor (ownerUserId != current user).
       expect(
         find.byKey(const Key('identity-actor-actor-player-2')),
@@ -683,7 +690,18 @@ void main() {
       await tester.tap(find.byKey(const Key('campaign-chat-identity')));
       await tester.pumpAndSettle();
 
-      // Player-only entries — required by spec.
+      // DM-only entries must NOT appear for player in the merged tool panel.
+      expect(find.byKey(const Key('identity-temporary-entry')), findsNothing);
+      expect(
+        find.byKey(const Key('tool-dm-identity-switch')),
+        findsNothing,
+      );
+
+      // Open the player identity sub-panel via "切换发言身份".
+      await tester.tap(find.byKey(const Key('tool-player-identity-switch')));
+      await tester.pumpAndSettle();
+
+      // Player-only entries — required by spec §发言身份 玩家.
       expect(
         find.byKey(const Key('identity-bound-character-entry')),
         findsOneWidget,
@@ -692,7 +710,93 @@ void main() {
 
       // DM-only entries must NOT appear for player.
       expect(find.byKey(const Key('identity-narrator-entry')), findsNothing);
+    },
+  );
+
+  // Spec §输入栏: 当前身份头像取代原有独立 `+` 按钮. The separate `+` button
+  // must be removed from the composer; the avatar tap opens the merged panel
+  // with 11 spec-defined tools.
+  testWidgets(
+    'merged tool panel shows 11 spec entries and removes the + button',
+    (tester) async {
+      campaignClient.canManageCampaign = true;
+      campaignClient.workspaceActors = const [];
+      await pumpChatPage(tester, isDm: true, campaignActorId: 'actor-1');
+
+      // The separate `+` button (tooltip 更多跑团功能) must NOT exist.
+      expect(find.byTooltip('更多跑团功能'), findsNothing);
+
+      // Avatar tap opens the merged tool panel.
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+
+      // Spec §输入栏 11 tools (DM sees all):
+      // 1. 当前身份精确信息 (header)
+      expect(find.byKey(const Key('tool-current-identity')), findsOneWidget);
+      // 2. 打开角色卡
+      expect(find.byKey(const Key('tool-open-character-sheet')), findsOneWidget);
+      // 3. 掷骰
+      expect(find.byKey(const Key('tool-roll-dice')), findsOneWidget);
+      // 4. 技能检定
+      expect(find.byKey(const Key('tool-skill-check')), findsOneWidget);
+      // 5. HP 与状态
+      expect(find.byKey(const Key('tool-hp-status')), findsOneWidget);
+      // 6. 资料条目
+      expect(find.byKey(const Key('tool-content-entries')), findsOneWidget);
+      // 7. 记录线索
+      expect(find.byKey(const Key('tool-record-clue')), findsOneWidget);
+      // 8. 分享地点
+      expect(find.byKey(const Key('tool-share-location')), findsOneWidget);
+      // 9. 群文件
+      expect(find.byKey(const Key('tool-group-files')), findsOneWidget);
+      // 10. DM 身份切换 (DM only)
+      expect(find.byKey(const Key('tool-dm-identity-switch')), findsOneWidget);
+      // 11. 快速临时身份 (DM only)
+      expect(find.byKey(const Key('identity-temporary-entry')), findsOneWidget);
+
+      // Player-only entry must NOT appear for DM.
+      expect(
+        find.byKey(const Key('tool-player-identity-switch')),
+        findsNothing,
+      );
+    },
+  );
+
+  // Spec §输入栏: 界面不显示不可用的 DM 工具. Player must see only the
+  // player-applicable tools, with DM-only entries hidden.
+  testWidgets(
+    'player merged tool panel hides DM-only entries and shows player identity switch',
+    (tester) async {
+      campaignClient.canManageCampaign = false;
+      campaignClient.workspaceActors = const [];
+      await pumpChatPage(tester, isDm: false, campaignActorId: 'actor-1');
+
+      expect(find.byTooltip('更多跑团功能'), findsNothing);
+
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+
+      // Player-visible tools (spec §输入栏):
+      expect(find.byKey(const Key('tool-current-identity')), findsOneWidget);
+      expect(find.byKey(const Key('tool-open-character-sheet')), findsOneWidget);
+      expect(find.byKey(const Key('tool-roll-dice')), findsOneWidget);
+      expect(find.byKey(const Key('tool-skill-check')), findsOneWidget);
+      expect(find.byKey(const Key('tool-hp-status')), findsOneWidget);
+      expect(find.byKey(const Key('tool-content-entries')), findsOneWidget);
+      expect(find.byKey(const Key('tool-record-clue')), findsOneWidget);
+      expect(find.byKey(const Key('tool-share-location')), findsOneWidget);
+      expect(find.byKey(const Key('tool-group-files')), findsOneWidget);
+
+      // Player gets "切换发言身份" instead of "DM 身份切换".
+      expect(
+        find.byKey(const Key('tool-player-identity-switch')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('tool-dm-identity-switch')), findsNothing);
+
+      // DM-only entries must NOT appear for player.
       expect(find.byKey(const Key('identity-temporary-entry')), findsNothing);
+      expect(find.byKey(const Key('campaign-dm-control-entry')), findsNothing);
     },
   );
 }

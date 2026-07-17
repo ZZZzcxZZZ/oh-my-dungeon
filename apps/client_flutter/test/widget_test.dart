@@ -731,7 +731,8 @@ void main() {
     expect(find.text('做'), findsOneWidget);
     expect(find.byKey(const Key('chat-mode-say')), findsOneWidget);
     expect(find.byKey(const Key('chat-mode-action')), findsOneWidget);
-    expect(find.byTooltip('更多跑团功能'), findsOneWidget);
+    // Spec §输入栏: separate `+` button is removed; avatar opens merged panel.
+    expect(find.byTooltip('更多跑团功能'), findsNothing);
 
     await tester.tap(find.byTooltip('成员'));
     await tester.pumpAndSettle();
@@ -761,13 +762,13 @@ void main() {
     expect(campaignClient.sentMessages.last.kind, 'action');
     expect(campaignClient.sentMessages.last.campaignActorId, isNull);
 
-    await tester.tap(find.byTooltip('更多跑团功能'));
+    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
-    expect(find.text('桌面工具'), findsOneWidget);
-    expect(find.text('检定请求'), findsOneWidget);
+    // Spec §输入栏 merged tool panel: 桌面工具 entry removed; labels follow spec.
+    expect(find.text('技能检定'), findsOneWidget);
     expect(find.text('掷骰'), findsOneWidget);
-    expect(find.text('角色卡'), findsOneWidget);
-    expect(find.text('资料库'), findsOneWidget);
+    expect(find.text('打开角色卡'), findsOneWidget);
+    expect(find.text('资料条目'), findsOneWidget);
 
     await tester.tap(find.text('掷骰'));
     await tester.pumpAndSettle();
@@ -778,11 +779,11 @@ void main() {
     expect(campaignClient.sentMessages.last.kind, 'roll');
     expect(campaignClient.sentMessages.last.content, 'd20 = 20');
 
-    await tester.tap(find.byTooltip('更多跑团功能'));
+    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
 
     await tester.tap(
-      find.ancestor(of: find.text('资料库'), matching: find.byType(ListTile)),
+      find.ancestor(of: find.text('资料条目'), matching: find.byType(ListTile)),
     );
     for (var i = 0; i < 10 && find.text('战役资料库').evaluate().isEmpty; i++) {
       await tester.runAsync(
@@ -801,9 +802,9 @@ void main() {
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('更多跑团功能'));
+    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('角色卡'));
+    await tester.tap(find.text('打开角色卡'));
     await tester.pumpAndSettle();
     expect(find.text('Elf / Ranger / Lv.3'), findsOneWidget);
     expect(find.text('属性'), findsWidgets);
@@ -916,11 +917,16 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Starter Campaign'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('更多跑团功能'));
+    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
 
-    expect(find.text('桌面工具'), findsOneWidget);
-    expect(find.text('检定、日志和战役现场工具'), findsOneWidget);
+    // Spec §输入栏: 桌面工具 entry removed; merged panel exposes the
+    // spec-defined 11 tools directly. Verify a few key tools are present.
+    expect(find.text('掷骰'), findsOneWidget);
+    expect(find.text('技能检定'), findsOneWidget);
+    expect(find.text('资料条目'), findsOneWidget);
+    // 桌面工具 info-only sheet is gone.
+    expect(find.text('桌面工具'), findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());
     preferencesController.dispose();
@@ -1116,7 +1122,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Starter Campaign'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('更多跑团功能'));
+    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('DM 控场'),
@@ -1158,11 +1164,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Starter Campaign'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('更多跑团功能'));
+    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
 
     expect(find.text('DM 控场'), findsNothing);
-    expect(find.text('检定请求'), findsOneWidget);
+    // Spec §输入栏: 检定请求 entry is now labeled 技能检定 in the merged panel.
+    expect(find.text('技能检定'), findsOneWidget);
   });
 
   testWidgets('offline settings exposes servers and sync status', (

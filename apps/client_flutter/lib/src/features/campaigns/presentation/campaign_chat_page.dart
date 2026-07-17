@@ -417,18 +417,12 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                 IconButton.filledTonal(
                   key: const Key('campaign-chat-identity'),
                   tooltip: chatText('characterSheet'),
-                  onPressed: _showIdentitySheet,
+                  onPressed: _showToolPanel,
                   icon: ChatAvatar(
                     name: widget.character?.name ?? '?',
                     avatarUrl: widget.character?.avatarUrl,
                     size: 24,
                   ),
-                ),
-                const SizedBox(width: 6),
-                IconButton.filledTonal(
-                  tooltip: chatText('moreTableTools'),
-                  onPressed: _showMoreActions,
-                  icon: const Icon(Icons.add),
                 ),
                 const SizedBox(width: 6),
                 SizedBox(
@@ -504,71 +498,210 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     }
   }
 
-  Future<void> _showMoreActions() {
+  /// Spec §输入栏: 当前身份头像取代原有独立 `+` 按钮。点击后打开底部快捷面板，
+  /// 包含 11 项工具。工具按成员能力和当前上下文动态出现，界面不显示不可用的
+  /// DM 工具。
+  Future<void> _showToolPanel() {
+    final character = widget.character;
     return showModalBottomSheet<void>(
       context: context,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.casino_outlined),
-                  title: Text(chatText('rollDice')),
-                  onTap: _showRollSheet,
-                ),
-                if (_characterActions.isNotEmpty &&
-                    widget.campaignActorId != null)
-                  ListTile(
-                    leading: const Icon(Icons.bolt_outlined),
-                    title: const Text('角色动作'),
-                    subtitle: Text('${_characterActions.length} 个可用动作'),
-                    onTap: _showCharacterActions,
-                  ),
-                ListTile(
-                  leading: const Icon(Icons.badge_outlined),
-                  title: Text(chatText('characterSheet')),
-                  onTap: _openCharacterSheet,
-                ),
-                ListTile(
-                  leading: const Icon(Icons.menu_book_outlined),
-                  title: Text(chatText('contentLibrary')),
-                  onTap: _showContentLibrary,
-                ),
-                ListTile(
-                  leading: const Icon(Icons.table_restaurant_outlined),
-                  title: Text(chatText('tableTools')),
-                  subtitle: Text(chatText('tableToolsHint')),
-                  onTap: _showTableTools,
-                ),
-                ListTile(
-                  leading: const Icon(Icons.fact_check_outlined),
-                  title: Text(chatText('checkRequest')),
-                  subtitle: _canManageCampaign
-                      ? const Text('从战役角色中选择检定项目')
-                      : const Text('DM 发起的检定会显示在聊天室'),
-                  onTap: _canManageCampaign
-                      ? () {
-                          Navigator.of(context).pop();
-                          _showCheckRequestTargetPicker();
-                        }
-                      : null,
-                ),
-                if (_canManageCampaign)
-                  ListTile(
-                    key: const Key('campaign-dm-control-entry'),
-                    leading: const Icon(Icons.shield_outlined),
-                    title: Text(chatText('dmControl')),
-                    subtitle: Text(chatText('dmControlHint')),
-                    onTap: _showDmControl,
-                  ),
-              ],
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+          children: [
+            // 1. 当前身份精确信息 (header)
+            ListTile(
+              key: const Key('tool-current-identity'),
+              leading: ChatAvatar(
+                name: character?.name ?? '?',
+                avatarUrl: character?.avatarUrl,
+              ),
+              title: Text(character?.name ?? chatText('unboundCharacter')),
+              subtitle: character == null
+                  ? null
+                  : Text(
+                      'HP ${character.currentHp}/${character.maxHp} · AC ${character.armorClass}',
+                    ),
+              onTap: character == null
+                  ? null
+                  : () {
+                      Navigator.of(sheetContext).pop();
+                      _openCharacterSheet();
+                    },
             ),
-          ),
-        );
-      },
+            const Divider(height: 1),
+            // 2. 打开角色卡
+            ListTile(
+              key: const Key('tool-open-character-sheet'),
+              leading: const Icon(Icons.badge_outlined),
+              title: const Text('打开角色卡'),
+              enabled: character != null,
+              onTap: character == null
+                  ? null
+                  : () {
+                      Navigator.of(sheetContext).pop();
+                      _openCharacterSheet();
+                    },
+            ),
+            // 3. 掷骰
+            ListTile(
+              key: const Key('tool-roll-dice'),
+              leading: const Icon(Icons.casino_outlined),
+              title: Text(chatText('rollDice')),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _showRollSheet();
+              },
+            ),
+            // 4. 技能检定
+            ListTile(
+              key: const Key('tool-skill-check'),
+              leading: const Icon(Icons.fact_check_outlined),
+              title: const Text('技能检定'),
+              subtitle: _canManageCampaign
+                  ? const Text('从战役角色中选择检定项目')
+                  : const Text('DM 发起的检定会显示在聊天室'),
+              onTap: _canManageCampaign
+                  ? () {
+                      Navigator.of(sheetContext).pop();
+                      _showCheckRequestTargetPicker();
+                    }
+                  : null,
+            ),
+            // 5. HP 与状态
+            ListTile(
+              key: const Key('tool-hp-status'),
+              leading: const Icon(Icons.favorite_outline),
+              title: const Text('HP 与状态'),
+              enabled: character != null,
+              onTap: character == null
+                  ? null
+                  : () {
+                      Navigator.of(sheetContext).pop();
+                      _openCharacterSheet();
+                    },
+            ),
+            // 6. 资料条目
+            ListTile(
+              key: const Key('tool-content-entries'),
+              leading: const Icon(Icons.menu_book_outlined),
+              title: const Text('资料条目'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _showContentLibrary();
+              },
+            ),
+            // 7. 记录线索 (Phase 5 will implement)
+            ListTile(
+              key: const Key('tool-record-clue'),
+              leading: const Icon(Icons.lightbulb_outline),
+              title: const Text('记录线索'),
+              subtitle: const Text('敬请期待'),
+              enabled: false,
+            ),
+            // 8. 分享地点 (Phase 5 will implement)
+            ListTile(
+              key: const Key('tool-share-location'),
+              leading: const Icon(Icons.place_outlined),
+              title: const Text('分享地点'),
+              subtitle: const Text('敬请期待'),
+              enabled: false,
+            ),
+            // 9. 群文件 (Phase 5 will implement)
+            ListTile(
+              key: const Key('tool-group-files'),
+              leading: const Icon(Icons.folder_outlined),
+              title: const Text('群文件'),
+              subtitle: const Text('敬请期待'),
+              enabled: false,
+            ),
+            // 角色动作 (dynamic — when character has actions and is bound)
+            if (_characterActions.isNotEmpty &&
+                widget.campaignActorId != null)
+              ListTile(
+                key: const Key('tool-character-actions'),
+                leading: const Icon(Icons.bolt_outlined),
+                title: const Text('角色动作'),
+                subtitle: Text('${_characterActions.length} 个可用动作'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _showCharacterActions();
+                },
+              ),
+            // 10. DM 身份切换 (DM only — opens identity sheet sub-panel)
+            if (_canManageCampaign)
+              ListTile(
+                key: const Key('tool-dm-identity-switch'),
+                leading: const Icon(Icons.shield_outlined),
+                title: const Text('DM 身份切换'),
+                subtitle: const Text('旁白、场外、NPC、怪物、同伴、代管'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _showIdentitySheet();
+                },
+              ),
+            // 切换发言身份 (player only — spec §发言身份 玩家: 绑定角色 + 场外)
+            // Per spec §输入栏 "工具按成员能力和当前上下文动态出现", this entry
+            // appears for players who need to switch between bound character
+            // and OOC. DM uses the "DM 身份切换" entry above instead.
+            if (!_canManageCampaign)
+              ListTile(
+                key: const Key('tool-player-identity-switch'),
+                leading: const Icon(Icons.shield_outlined),
+                title: const Text('切换发言身份'),
+                subtitle: const Text('绑定角色、场外'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _showIdentitySheet();
+                },
+              ),
+            // 11. 快速临时身份 (DM only — opens draft form)
+            if (_canManageCampaign)
+              ListTile(
+                key: const Key('identity-temporary-entry'),
+                leading: const Icon(Icons.person_add_alt_1_outlined),
+                title: _draftIdentity != null
+                    ? Text('草稿：${_draftIdentity!.displayName}')
+                    : const Text('快速临时身份'),
+                subtitle: _draftIdentity != null
+                    ? const Text('首次发送消息后将自动创建临时身份')
+                    : const Text('只输入显示名称即可发言，首次发送时由服务器创建临时角色'),
+                trailing: _draftIdentity != null
+                    ? IconButton(
+                        tooltip: '放弃草稿',
+                        onPressed: () {
+                          setState(() => _draftIdentity = null);
+                          Navigator.of(sheetContext).pop();
+                        },
+                        icon: const Icon(Icons.close),
+                      )
+                    : null,
+                onTap: _draftIdentity != null
+                    ? null
+                    : () {
+                        Navigator.of(sheetContext).pop();
+                        _showDraftIdentityForm();
+                      },
+              ),
+            // DM 控场 (DM only, transitional — Phase 4 Task 4.2 will migrate
+            // encounter control to 战役中心 → 队伍 panel per spec)
+            if (_canManageCampaign)
+              ListTile(
+                key: const Key('campaign-dm-control-entry'),
+                leading: const Icon(Icons.admin_panel_settings_outlined),
+                title: Text(chatText('dmControl')),
+                subtitle: Text(chatText('dmControlHint')),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _showDmControl();
+                },
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -680,33 +813,9 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                     onTap: () => _selectCampaignSpeaker('actor', actor.id),
                   ),
               ],
-              if (_draftIdentity != null)
-                ListTile(
-                  key: const Key('identity-temporary-entry'),
-                  leading: const Icon(Icons.person_add_alt_1_outlined),
-                  title: Text('草稿：${_draftIdentity!.displayName}'),
-                  subtitle: const Text('首次发送消息后将自动创建临时身份'),
-                  trailing: IconButton(
-                    tooltip: '放弃草稿',
-                    onPressed: () {
-                      setState(() => _draftIdentity = null);
-                      Navigator.of(context).pop();
-                    },
-                    icon: const Icon(Icons.close),
-                  ),
-                  onTap: () => Navigator.of(context).pop(),
-                )
-              else
-                ListTile(
-                  key: const Key('identity-temporary-entry'),
-                  leading: const Icon(Icons.person_add_alt_1_outlined),
-                  title: const Text('快速临时身份'),
-                  subtitle: const Text('只输入显示名称即可发言，首次发送时由服务器创建临时角色'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _showDraftIdentityForm();
-                  },
-                ),
+              // 快速临时身份 entry has been moved to the merged tool panel
+              // per spec §输入栏 (11 项工具之一). The identity sheet now focuses
+              // on switching between existing speaker modes only.
               if (proxyActors.isNotEmpty) ...[
                 _IdentitySectionHeader(label: '代管玩家角色'),
                 for (final actor in proxyActors)
@@ -792,44 +901,6 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         ),
       );
     }
-  }
-
-  Future<void> _showTableTools() {
-    Navigator.of(context).pop();
-    return showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  chatText('tableTools'),
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 8),
-                Text(chatText('tableToolsDescription')),
-                const SizedBox(height: 12),
-                ListTile(
-                  leading: const Icon(Icons.fact_check_outlined),
-                  title: Text(chatText('checkRequest')),
-                  subtitle: Text(chatText('checkRequestHint')),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.history_edu_outlined),
-                  title: Text(chatText('tableLog')),
-                  subtitle: Text(chatText('tableLogHint')),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 
   Future<void> _showDmControl() {

@@ -337,7 +337,8 @@ void main() {
 
     await tester.tap(find.byKey(const Key('campaign-open-center')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(Tab).at(1));
+    // Center now uses NavigationBar; tap the 队伍 destination label.
+    await tester.tap(find.text('队伍').last);
     await tester.pumpAndSettle();
 
     expect(find.text('Dungeon Master'), findsOneWidget);

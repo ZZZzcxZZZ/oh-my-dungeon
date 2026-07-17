@@ -216,6 +216,72 @@ void main() {
     dmAuth.dispose();
   });
 
+  // Spec §概览: "DM 在相同位置额外看到控场摘要、群体检定和遭遇准备入口。"
+  // The DM control entry is migrated from the chat toolbar to the overview
+  // panel — DM sees it, player does not, and tapping opens the control sheet.
+  testWidgets(
+    'overview panel shows DM control entry only when canManageCampaign is true',
+    (tester) async {
+      // Player: no DM control entry.
+      final playerAuth = await buildLoggedInAuthController();
+      final playerController = await buildCampaignController(
+        authController: playerAuth,
+        canManage: false,
+      );
+      await pumpCenterPage(tester, playerController);
+      expect(
+        find.byKey(const Key('campaign-overview-dm-control-entry')),
+        findsNothing,
+      );
+      playerController.dispose();
+      playerAuth.dispose();
+
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+
+      // DM: DM control entry appears on the overview panel.
+      final dmAuth = await buildLoggedInAuthController();
+      final dmController = await buildCampaignController(
+        authController: dmAuth,
+        canManage: true,
+      );
+      await pumpCenterPage(tester, dmController);
+      expect(
+        find.byKey(const Key('campaign-overview-dm-control-entry')),
+        findsOneWidget,
+      );
+
+      dmController.dispose();
+      dmAuth.dispose();
+    },
+  );
+
+  testWidgets(
+    'tapping DM control entry opens the DM control bottom sheet',
+    (tester) async {
+      final dmAuth = await buildLoggedInAuthController();
+      final dmController = await buildCampaignController(
+        authController: dmAuth,
+        canManage: true,
+      );
+      await pumpCenterPage(tester, dmController);
+
+      await tester.tap(
+        find.byKey(const Key('campaign-overview-dm-control-entry')),
+      );
+      await tester.pumpAndSettle();
+
+      // DM control sheet should appear with its characteristic title and
+      // submenu entries (遭遇控场 / 成员状态).
+      expect(find.text('DM 控场'), findsWidgets);
+      expect(find.text('遭遇控场'), findsOneWidget);
+      expect(find.text('成员状态'), findsOneWidget);
+
+      dmController.dispose();
+      dmAuth.dispose();
+    },
+  );
+
   // Spec §档案: 新建条目 FAB 只在档案面板出现, 概览/队伍/记录面板都不显示。
   testWidgets(
     'create archive FAB only appears on the archive panel, not on overview/team/records',

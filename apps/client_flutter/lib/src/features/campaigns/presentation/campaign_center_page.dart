@@ -220,6 +220,7 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
         return CampaignOverviewPanel(
           campaign: widget.campaign,
           canManage: _canManage,
+          onOpenDmControl: _canManage ? _showDmControlSheet : null,
         );
       case 1:
         return CampaignTeamPanel(
@@ -388,6 +389,45 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
     if (!mounted || entry != null) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(widget.controller.archivesError ?? '创建失败')),
+    );
+  }
+
+  /// Spec §概览: DM 在概览面板看到控场摘要、群体检定和遭遇准备入口。
+  /// 控场入口从聊天工具栏迁移到战役中心 → 概览, 与 spec 一致。
+  Future<void> _showDmControlSheet() {
+    return showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'DM 控场',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                const Text('这里会继续整合遭遇、成员状态和隐藏信息。'),
+                const SizedBox(height: 12),
+                const ListTile(
+                  leading: Icon(Icons.shield_outlined),
+                  title: Text('遭遇控场'),
+                  subtitle: Text('管理先攻、回合、敌人生命值和状态'),
+                ),
+                const ListTile(
+                  leading: Icon(Icons.group_outlined),
+                  title: Text('成员状态'),
+                  subtitle: Text('查看角色 HP、AC、状态和可见信息'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

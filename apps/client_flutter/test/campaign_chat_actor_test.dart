@@ -589,6 +589,8 @@ void main() {
 
       // DM-only entries must NOT appear for a player.
       // Per spec: interface does not show disabled DM features.
+      // Note: campaign-dm-control-entry has been migrated to 战役中心 → 概览
+      // per spec §概览, so it must not appear in chat for anyone.
       expect(find.byKey(const Key('identity-temporary-entry')), findsNothing);
       expect(find.byKey(const Key('campaign-dm-control-entry')), findsNothing);
       expect(
@@ -1043,25 +1045,6 @@ void main() {
       // 关闭掷骰 sheet 后, 聊天页应仍然可见。
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
-      expect(
-        find.byKey(const Key('campaign-chat-input')),
-        findsOneWidget,
-      );
-    },
-  );
-
-  testWidgets(
-    'tool panel dm control keeps chat page on stage after sheet closes',
-    (tester) async {
-      await pumpChatPage(tester, isDm: true);
-
-      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byKey(const Key('campaign-dm-control-entry')));
-      await tester.pumpAndSettle();
-
-      // DM 控场 sheet 出现, 聊天页输入框仍在。
       expect(
         find.byKey(const Key('campaign-chat-input')),
         findsOneWidget,

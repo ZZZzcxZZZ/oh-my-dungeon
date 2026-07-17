@@ -7,15 +7,22 @@ import '../../domain/campaign.dart';
 ///
 /// Plan 3 task 2 — extracted from the legacy `_OverviewTab` so the new
 /// `CampaignCenterPage` shell can compose it behind adaptive navigation.
+///
+/// Spec §概览: "DM 在相同位置额外看到控场摘要、群体检定和遭遇准备入口。"
+/// The DM control entry lives here, not in the chat toolbar.
 class CampaignOverviewPanel extends StatelessWidget {
   const CampaignOverviewPanel({
     required this.campaign,
     required this.canManage,
+    this.onOpenDmControl,
     super.key,
   });
 
   final Campaign campaign;
   final bool canManage;
+
+  /// Spec §概览: DM 控场入口。仅 DM 可见, 点击后由父组件展示控场 sheet。
+  final VoidCallback? onOpenDmControl;
 
   @override
   Widget build(BuildContext context) {
@@ -37,6 +44,18 @@ class CampaignOverviewPanel extends StatelessWidget {
             title: Text(canManage ? '地下城主' : '玩家'),
             subtitle: Text('系统：${campaign.system}'),
           ),
+          // Spec §概览: DM 在相同位置额外看到控场摘要、群体检定和遭遇准备入口。
+          if (canManage && onOpenDmControl != null) ...[
+            const Divider(),
+            ListTile(
+              key: const Key('campaign-overview-dm-control-entry'),
+              leading: const Icon(Icons.admin_panel_settings_outlined),
+              title: const Text('DM 控场'),
+              subtitle: const Text('遭遇、成员状态和 DM 私有工具'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: onOpenDmControl,
+            ),
+          ],
         ],
       ),
     );

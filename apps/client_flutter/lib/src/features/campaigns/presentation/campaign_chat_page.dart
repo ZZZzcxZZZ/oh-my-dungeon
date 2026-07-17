@@ -751,19 +751,8 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                         _showDraftIdentityForm();
                       },
               ),
-            // DM 控场 (DM only, transitional — Phase 4 Task 4.2 will migrate
-            // encounter control to 战役中心 → 队伍 panel per spec)
-            if (_canManageCampaign)
-              ListTile(
-                key: const Key('campaign-dm-control-entry'),
-                leading: const Icon(Icons.admin_panel_settings_outlined),
-                title: Text(chatText('dmControl')),
-                subtitle: Text(chatText('dmControlHint')),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  _showDmControl();
-                },
-              ),
+            // DM 控场已按 spec §概览 迁移到 战役中心 → 概览 面板, 聊天工具栏
+            // 不再保留入口。DM 通过战役中心顶栏 dashboard 图标进入概览。
           ],
         ),
       ),
@@ -988,44 +977,6 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         ),
       );
     }
-  }
-
-  Future<void> _showDmControl() {
-    // Spec §输入栏: 关闭工具 sheet 由调用方负责, helper 不应自行 pop。
-    return showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  chatText('dmControl'),
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 8),
-                Text(chatText('dmControlDescription')),
-                const SizedBox(height: 12),
-                ListTile(
-                  leading: const Icon(Icons.shield_outlined),
-                  title: Text(chatText('encounterControl')),
-                  subtitle: Text(chatText('encounterControlHint')),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.group_outlined),
-                  title: Text(chatText('memberStatus')),
-                  subtitle: Text(chatText('memberStatusHint')),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 
   /// Spec §档案: 资料、地点、线索和文件统一属于战役档案。聊天工具栏的

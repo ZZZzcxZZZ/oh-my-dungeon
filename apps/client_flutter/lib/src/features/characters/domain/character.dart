@@ -226,6 +226,7 @@ class CharacterSheet {
 
   CharacterSheet copyWith({
     String? name,
+    String? avatarUrl,
     int? level,
     String? classSummary,
     String? raceSummary,
@@ -247,7 +248,7 @@ class CharacterSheet {
       id: id,
       ownerUserId: ownerUserId,
       name: name ?? this.name,
-      avatarUrl: avatarUrl,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
       system: system,
       level: level ?? this.level,
       classSummary: classSummary ?? this.classSummary,

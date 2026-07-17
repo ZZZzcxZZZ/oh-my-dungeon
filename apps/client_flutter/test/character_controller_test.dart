@@ -166,6 +166,26 @@ void main() {
     },
   );
 
+  test(
+    'copyWith exposes avatarUrl so callers can update the character avatar',
+    () {
+      // Spec §头像来源: 本地角色头像离线保存在客户端；战役角色头像在本地角色
+      // 绑定战役后自动上传。copyWith 必须暴露 avatarUrl 字段，否则上层只能
+      // 通过 sheetOverride 绕路，导致发布到战役时丢失头像。
+      final updated = _character.copyWith(avatarUrl: 'file:///avatars/1.png');
+      expect(updated.avatarUrl, 'file:///avatars/1.png');
+      // 其他字段保持不变。
+      expect(updated.id, _character.id);
+      expect(updated.name, _character.name);
+      expect(updated.level, _character.level);
+
+      // 不传 avatarUrl 时保留原值。
+      final kept = _character.copyWith(level: 5);
+      expect(kept.avatarUrl, _character.avatarUrl);
+      expect(kept.level, 5);
+    },
+  );
+
   // ignore: deprecated_member_use_from_same_package
 }
 

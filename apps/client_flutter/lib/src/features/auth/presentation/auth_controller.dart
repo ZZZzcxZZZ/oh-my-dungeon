@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 
 import '../data/auth_api_client.dart';
@@ -29,6 +32,100 @@ class AuthController extends ChangeNotifier {
   bool get autoLoginEnabled => _autoLoginEnabled;
   String? get error => _error;
   String? get accessToken => _tokens?.accessToken;
+
+  /// Access token 主动预刷新阈值（秒）。若距过期小于此值，下次
+  /// [ensureValidAccessToken] 会先调 `/auth/refresh` 再返回新 token。
+  /// 设 60s 是为了在正常网络下留出足够窗口完成刷新 + 重试。
+  static const int _tokenRefreshSkewSeconds = 60;
+
+  /// 业务 controller 在调 API 前应调用此方法获取 access token。
+  ///
+  /// 服务端 access token TTL 为 15 分钟，过去客户端只在启动时刷新一次，
+  /// 导致 15 分钟后所有受 JwtAuthGuard 保护的端点全部 401
+  /// (`Invalid access token`)，错误信息原样塞进 UI。
+  ///
+  /// 本方法基于 JWT `exp` claim 主动预刷新：
+  ///   - 无 token / refresh 失败：返回 null（业务层应中止请求）
+  ///   - 距过期 > 60s：直接返回当前 token
+  ///   - 距过期 ≤ 60s：先调 `/auth/refresh`，成功则返回新 token，失败则
+  ///     清空会话并返回 null
+  ///
+  /// 并发调用时通过 [_refreshing] 串行化，避免多个并发请求触发重复刷新。
+  Future<String?> ensureValidAccessToken() async {
+    final tokens = _tokens;
+    if (tokens == null) return null;
+
+    // 解析 exp；解析失败时（非标准 JWT）保守返回当前 token，避免破坏
+    // 测试桩或本地开发 token。
+    final exp = _decodeAccessTokenExp(tokens.accessToken);
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    if (exp == null || exp - now > _tokenRefreshSkewSeconds) {
+      return tokens.accessToken;
+    }
+
+    // 已经在刷新中：等待结果复用
+    final inflight = _refreshing;
+    if (inflight != null) {
+      try {
+        await inflight.future;
+      } catch (_) {}
+      return _tokens?.accessToken;
+    }
+
+    final completer = Completer<void>();
+    _refreshing = completer;
+    try {
+      final newAccessToken = await authClient.refresh(
+        apiBaseUrl: apiBaseUrl,
+        refreshToken: tokens.refreshToken,
+      );
+      final refreshedTokens = StoredAuthTokens(
+        accessToken: newAccessToken,
+        refreshToken: tokens.refreshToken,
+      );
+      _tokens = refreshedTokens;
+      if (_autoLoginEnabled) {
+        await tokenStore.saveTokens(serverProfileId, refreshedTokens);
+      }
+      completer.complete();
+      notifyListeners();
+      return newAccessToken;
+    } catch (_) {
+      // refresh 失败（refresh token 也过期 / 网络问题）：清空会话，
+      // 让 UI 退回登录页。不抛出，避免业务层 try/catch 误判。
+      await tokenStore.clearTokens(serverProfileId);
+      _user = null;
+      _tokens = null;
+      _error = null;
+      completer.complete();
+      notifyListeners();
+      return null;
+    } finally {
+      _refreshing = null;
+    }
+  }
+
+  Completer<void>? _refreshing;
+
+  /// 从 JWT access token 的 payload 中解析 `exp` claim（Unix 秒）。
+  /// 解析失败返回 null。
+  static int? _decodeAccessTokenExp(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return null;
+      // JWT base64url，需补齐 padding。
+      final payload = parts[1];
+      final normalized = base64Url.normalize(payload);
+      final decoded = utf8.decode(base64Url.decode(normalized));
+      final payloadMap = jsonDecode(decoded) as Map<String, Object?>;
+      final exp = payloadMap['exp'];
+      if (exp is int) return exp;
+      if (exp is num) return exp.toInt();
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
 
   Future<void> initialize() async {
     _loading = true;

@@ -261,6 +261,12 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
                   int? maxHp,
                   String? avatarUrl,
                 }) async {
+                  // AuthController.ensureValidAccessToken 会基于 JWT exp
+                  // 主动预刷新；actor controller 的同步 accessTokenProvider
+                  // 会读到刷新后的 token。
+                  final token = await widget.controller.authController
+                      .ensureValidAccessToken();
+                  if (token == null) return '登录已过期，请重新登录';
                   final success = await widget.actorController!.createDmActor(
                     actorType: actorType,
                     lifecycle: 'persistent',
@@ -278,6 +284,9 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
               : null,
           onConvertToPersistent: _canManage && widget.actorController != null
               ? ({required CampaignActor actor}) async {
+                  final token = await widget.controller.authController
+                      .ensureValidAccessToken();
+                  if (token == null) return '登录已过期，请重新登录';
                   final success =
                       await widget.actorController!.convertToPersistent(actor);
                   return success
@@ -287,6 +296,9 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
               : null,
           onBatchArchive: _canManage && widget.actorController != null
               ? ({required List<String> actorIds}) async {
+                  final token = await widget.controller.authController
+                      .ensureValidAccessToken();
+                  if (token == null) return '登录已过期，请重新登录';
                   var lastError = '归档失败';
                   for (final id in actorIds) {
                     final actor = _actors.firstWhere(

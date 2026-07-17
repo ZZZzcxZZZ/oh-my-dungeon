@@ -44,7 +44,7 @@ class CampaignContextController extends ChangeNotifier {
   String? get accessToken => authController.accessToken;
 
   Future<void> loadWorkspaceContext(String campaignId) async {
-    final token = accessToken;
+    final token = await authController.ensureValidAccessToken();
     if (token == null) return;
 
     _workspaceContextLoading = true;
@@ -72,7 +72,7 @@ class CampaignContextController extends ChangeNotifier {
     required String speakerMode,
     String? actorId,
   }) async {
-    final token = accessToken;
+    final token = await authController.ensureValidAccessToken();
     if (token == null) return false;
     _workspaceContextError = null;
     try {
@@ -99,7 +99,7 @@ class CampaignContextController extends ChangeNotifier {
   }
 
   Future<void> loadArchives(String campaignId, {String? kind}) async {
-    final token = accessToken;
+    final token = await authController.ensureValidAccessToken();
     if (token == null) return;
     _archivesLoading = true;
     _archivesError = null;
@@ -127,7 +127,7 @@ class CampaignContextController extends ChangeNotifier {
     String? summary,
     Map<String, Object?>? payload,
   }) async {
-    final token = accessToken;
+    final token = await authController.ensureValidAccessToken();
     if (token == null) return null;
     _archivesError = null;
     try {
@@ -161,7 +161,7 @@ class CampaignContextController extends ChangeNotifier {
     Map<String, Object?>? payload,
     bool? pinned,
   }) async {
-    final token = accessToken;
+    final token = await authController.ensureValidAccessToken();
     if (token == null) return null;
     _archivesError = null;
     try {
@@ -194,7 +194,7 @@ class CampaignContextController extends ChangeNotifier {
     required String campaignId,
     required String entryId,
   }) async {
-    final token = accessToken;
+    final token = await authController.ensureValidAccessToken();
     if (token == null) return false;
     _archivesError = null;
     try {

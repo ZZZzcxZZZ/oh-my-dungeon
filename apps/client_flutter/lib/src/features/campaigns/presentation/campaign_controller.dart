@@ -92,7 +92,7 @@ class CampaignController extends ChangeNotifier {
   }
 
   Future<void> loadCampaigns() async {
-    final token = accessToken;
+    final token = await authController.ensureValidAccessToken();
     if (token == null) return;
 
     _loading = true;
@@ -119,7 +119,7 @@ class CampaignController extends ChangeNotifier {
     String? description,
     String? system,
   }) async {
-    final token = accessToken;
+    final token = await authController.ensureValidAccessToken();
     if (token == null) return false;
 
     _error = null;
@@ -142,7 +142,7 @@ class CampaignController extends ChangeNotifier {
   }
 
   Future<bool> joinCampaign({required String code}) async {
-    final token = accessToken;
+    final token = await authController.ensureValidAccessToken();
     if (token == null) return false;
 
     _error = null;
@@ -162,7 +162,7 @@ class CampaignController extends ChangeNotifier {
   }
 
   Future<void> loadCampaignDetail(String campaignId) async {
-    final token = accessToken;
+    final token = await authController.ensureValidAccessToken();
     if (token == null) return;
 
     _detailLoading = true;
@@ -188,6 +188,8 @@ class CampaignController extends ChangeNotifier {
     }
 
     // Invites may be inaccessible for non-managers (403) — that's expected.
+    // 其他错误（401 token 问题、500 等）应冒泡到 detailError，而不是
+    // 静默吞掉让 DM 以为"自己是普通玩家"。
     _invites = [];
     try {
       _invites = await campaignClient.listInvites(
@@ -195,8 +197,12 @@ class CampaignController extends ChangeNotifier {
         accessToken: token,
         campaignId: campaignId,
       );
-    } on CampaignApiException catch (_) {
-      // Non-managers cannot view invites; leave _invites empty.
+    } on CampaignApiException catch (e) {
+      // 403 = 非 manager，符合预期，保持 _invites 为空。
+      // 其他状态码（如 401）记录到 detailError 让用户感知。
+      if (e.statusCode != 403) {
+        _detailError = e.message;
+      }
     }
 
     _detailLoading = false;
@@ -207,7 +213,7 @@ class CampaignController extends ChangeNotifier {
     required String campaignId,
     int? maxUses,
   }) async {
-    final token = accessToken;
+    final token = await authController.ensureValidAccessToken();
     if (token == null) return null;
 
     _detailError = null;
@@ -229,7 +235,7 @@ class CampaignController extends ChangeNotifier {
   }
 
   Future<void> loadMessages(String campaignId) async {
-    final token = accessToken;
+    final token = await authController.ensureValidAccessToken();
     if (token == null) return;
 
     _messagesLoading = true;
@@ -268,7 +274,7 @@ class CampaignController extends ChangeNotifier {
     String campaignId, {
     required String query,
   }) async {
-    final token = accessToken;
+    final token = await authController.ensureValidAccessToken();
     final normalizedQuery = query.trim();
     if (token == null || normalizedQuery.isEmpty) return const [];
 
@@ -364,7 +370,7 @@ class CampaignController extends ChangeNotifier {
     Map<String, Object?>? eventData,
     Map<String, Object?>? draftActor,
   }) async {
-    final token = accessToken;
+    final token = await authController.ensureValidAccessToken();
     if (token == null) return false;
 
     _messagesError = null;
@@ -395,7 +401,7 @@ class CampaignController extends ChangeNotifier {
   }
 
   Future<void> connectCampaignChat(String campaignId) async {
-    final token = accessToken;
+    final token = await authController.ensureValidAccessToken();
     if (token == null) return;
 
     if (_connectedCampaignId == campaignId && _socketService.isConnected) {

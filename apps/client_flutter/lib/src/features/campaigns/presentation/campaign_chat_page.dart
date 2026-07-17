@@ -23,6 +23,7 @@ import 'chat/chat_mode_picker.dart';
 import 'chat/check_request_sheet.dart';
 import 'content/campaign_content_controller.dart';
 import 'content/campaign_content_page.dart';
+import 'widgets/campaign_actor_quick_sheet.dart';
 
 class CampaignChatPage extends StatefulWidget {
   const CampaignChatPage({
@@ -168,6 +169,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                       onRespondCheckRequest: _canRespondToCheck(message)
                           ? () => _respondToCheckRequest(message)
                           : null,
+                      onAvatarTap: _resolveAvatarTap(message),
                     );
                   },
                 ),
@@ -184,6 +186,46 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
           ?.capabilities
           .canManageCampaign ??
       false;
+
+  /// 解析消息头像点击：当消息绑定的 campaignActorId 能在 actorController 中
+  /// 找到 active 角色时，返回弹出 CampaignActorQuickSheet 的回调；否则返回
+  /// null，头像保持静默（避免点击无 actor 的陌生人头像时出现空弹窗）。
+  VoidCallback? _resolveAvatarTap(CampaignChatMessage message) {
+    final actorId = message.campaignActorId;
+    if (actorId == null || actorId.isEmpty) return null;
+    final controller = widget.actorController;
+    if (controller == null) return null;
+    final actor = controller.actors.cast<CampaignActor?>().firstWhere(
+          (a) => a?.id == actorId,
+          orElse: () => null,
+        );
+    if (actor == null) return null;
+    return () => _showActorQuickSheet(actor);
+  }
+
+  Future<void> _showActorQuickSheet(CampaignActor actor) {
+    return showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => CampaignActorQuickSheet(
+        actor: actor,
+        isManager: _canManageCampaign,
+        onOpenSheet: widget.actorController == null
+            ? null
+            : () {
+                Navigator.of(sheetContext).pop();
+                Navigator.of(context).push<void>(
+                  MaterialPageRoute<void>(
+                    builder: (_) => CampaignActorSheetPage(
+                      controller: widget.actorController!,
+                      actorId: actor.id,
+                    ),
+                  ),
+                );
+              },
+      ),
+    );
+  }
 
   // Kept as a composable overview for a future embedded desktop workspace;
   // mobile and web chat intentionally use the explicit campaign center route.

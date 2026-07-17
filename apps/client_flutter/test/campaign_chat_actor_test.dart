@@ -9,6 +9,9 @@ import 'package:dnd_table_client/src/features/campaigns/domain/campaign_archive_
 import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_controller.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_chat_page.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_controller.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/chat/campaign_chat_bubble.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/chat/chat_avatar.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/widgets/campaign_actor_quick_sheet.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_controller.dart';
 import 'package:dnd_table_client/src/features/content/data/local/content_repository.dart';
@@ -415,6 +418,70 @@ void main() {
       'total': 10,
     });
   });
+
+  testWidgets(
+    'tapping a chat bubble avatar opens the CampaignActorQuickSheet',
+    (tester) async {
+      campaignClient.messages = const [
+        CampaignChatMessage(
+          id: 'avatar-1',
+          campaignId: 'camp-1',
+          senderId: 'user-2',
+          campaignActorId: 'actor-player',
+          displayName: 'Arannis',
+          avatarUrl: null,
+          kind: 'say',
+          content: 'Hello',
+          createdAt: '2026-07-09T00:00:00.000Z',
+        ),
+      ];
+
+      await pumpChatPage(tester);
+
+      final bubbleAvatar = find.descendant(
+        of: find.byType(CampaignChatBubble),
+        matching: find.byType(ChatAvatar),
+      );
+      expect(bubbleAvatar, findsOneWidget);
+      await tester.tap(bubbleAvatar);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CampaignActorQuickSheet), findsOneWidget);
+      expect(find.text('Arannis'), findsWidgets);
+      expect(find.text('打开角色卡'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'avatar without a resolvable actor stays silent on tap',
+    (tester) async {
+      campaignClient.messages = const [
+        CampaignChatMessage(
+          id: 'avatar-2',
+          campaignId: 'camp-1',
+          senderId: 'user-2',
+          campaignActorId: null,
+          displayName: 'Stranger',
+          avatarUrl: null,
+          kind: 'say',
+          content: 'Hello',
+          createdAt: '2026-07-09T00:00:00.000Z',
+        ),
+      ];
+
+      await pumpChatPage(tester);
+
+      final bubbleAvatar = find.descendant(
+        of: find.byType(CampaignChatBubble),
+        matching: find.byType(ChatAvatar),
+      );
+      expect(bubbleAvatar, findsOneWidget);
+      await tester.tap(bubbleAvatar);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CampaignActorQuickSheet), findsNothing);
+    },
+  );
 }
 
 class _RecordingCampaignClient implements CampaignClient {

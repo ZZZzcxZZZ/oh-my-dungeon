@@ -650,29 +650,38 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                 }
               },
             ),
-            // 7. 记录线索 (Phase 5 will implement)
+            // 7. 记录线索 — Spec §档案: 线索统一进入战役档案, 从聊天跳转。
             ListTile(
               key: const Key('tool-record-clue'),
               leading: const Icon(Icons.lightbulb_outline),
               title: const Text('记录线索'),
-              subtitle: const Text('敬请期待'),
-              enabled: false,
+              subtitle: const Text('保存到战役档案 · 线索'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _showArchiveCreationForm(initialKind: 'clue');
+              },
             ),
-            // 8. 分享地点 (Phase 5 will implement)
+            // 8. 分享地点 — Spec §档案: 地点统一进入战役档案, 从聊天跳转。
             ListTile(
               key: const Key('tool-share-location'),
               leading: const Icon(Icons.place_outlined),
               title: const Text('分享地点'),
-              subtitle: const Text('敬请期待'),
-              enabled: false,
+              subtitle: const Text('保存到战役档案 · 地点'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _showArchiveCreationForm(initialKind: 'location');
+              },
             ),
-            // 9. 群文件 (Phase 5 will implement)
+            // 9. 群文件 — Spec §档案: 文件统一进入战役档案, 从聊天跳转。
             ListTile(
               key: const Key('tool-group-files'),
               leading: const Icon(Icons.folder_outlined),
               title: const Text('群文件'),
-              subtitle: const Text('敬请期待'),
-              enabled: false,
+              subtitle: const Text('保存到战役档案 · 文件'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _showArchiveCreationForm(initialKind: 'file');
+              },
             ),
             // 角色动作 (dynamic — when character has actions and is bound)
             if (_characterActions.isNotEmpty &&
@@ -1016,6 +1025,90 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
           ),
         );
       },
+    );
+  }
+
+  /// Spec §档案: 资料、地点、线索和文件统一属于战役档案。聊天工具栏的
+  /// 记录线索/分享地点/群文件 项跳转到档案创建表单, 预填入对应类型。
+  Future<void> _showArchiveCreationForm({
+    required String initialKind,
+  }) async {
+    var kind = initialKind;
+    final title = TextEditingController();
+    final summary = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final create = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('新建战役条目'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: kind,
+                decoration: const InputDecoration(labelText: '类型'),
+                items: const [
+                  DropdownMenuItem(value: 'clue', child: Text('线索')),
+                  DropdownMenuItem(value: 'location', child: Text('地点')),
+                  DropdownMenuItem(value: 'document', child: Text('文档')),
+                  DropdownMenuItem(value: 'file', child: Text('文件')),
+                ],
+                onChanged: (value) => kind = value ?? kind,
+              ),
+              TextFormField(
+                controller: title,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: '名称'),
+                validator: (value) =>
+                    value == null || value.trim().isEmpty ? '请输入名称' : null,
+              ),
+              TextField(
+                controller: summary,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(labelText: '说明（可选）'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.of(context).pop(true);
+              }
+            },
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
+    if (create != true || !mounted) return;
+    final entry = await widget.campaignController.createArchiveEntry(
+      campaignId: widget.campaign.id,
+      kind: kind,
+      title: title.text,
+      summary: summary.text,
+    );
+    title.dispose();
+    summary.dispose();
+    if (!mounted) return;
+    if (entry != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已保存到战役档案')),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(widget.campaignController.archivesError ?? '创建失败'),
+      ),
     );
   }
 

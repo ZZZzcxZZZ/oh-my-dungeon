@@ -854,6 +854,111 @@ void main() {
     },
   );
 
+  // Spec §档案: 资料、地点、线索和文件统一属于战役档案, 可从聊天跳转。
+  // The 3 previously-disabled toolbar items (记录线索/分享地点/群文件) must
+  // now be enabled and route to the archive creation form pre-filled with the
+  // corresponding kind.
+  testWidgets(
+    'record clue tool opens archive creation form with kind=clue',
+    (tester) async {
+      await pumpChatPage(tester, isDm: true);
+
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+
+      final clueTile = tester.widget<ListTile>(
+        find.byKey(const Key('tool-record-clue')),
+      );
+      expect(clueTile.enabled, isTrue);
+
+      await tester.tap(find.byKey(const Key('tool-record-clue')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('新建战役条目'), findsOneWidget);
+      // Initial kind should be 线索.
+      expect(find.text('线索'), findsWidgets);
+
+      await tester.enterText(
+        find.byType(TextFormField).first,
+        '神秘符文',
+      );
+      await tester.tap(find.text('创建'));
+      await tester.pumpAndSettle();
+
+      expect(campaignClient.createArchiveEntryCalls, hasLength(1));
+      final call = campaignClient.createArchiveEntryCalls.single;
+      expect(call.campaignId, _campaign.id);
+      expect(call.kind, 'clue');
+      expect(call.title, '神秘符文');
+    },
+  );
+
+  testWidgets(
+    'share location tool opens archive creation form with kind=location',
+    (tester) async {
+      await pumpChatPage(tester, isDm: true);
+
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+
+      final locationTile = tester.widget<ListTile>(
+        find.byKey(const Key('tool-share-location')),
+      );
+      expect(locationTile.enabled, isTrue);
+
+      await tester.tap(find.byKey(const Key('tool-share-location')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('新建战役条目'), findsOneWidget);
+      expect(find.text('地点'), findsWidgets);
+
+      await tester.enterText(
+        find.byType(TextFormField).first,
+        '老橡树酒馆',
+      );
+      await tester.tap(find.text('创建'));
+      await tester.pumpAndSettle();
+
+      expect(campaignClient.createArchiveEntryCalls, hasLength(1));
+      final call = campaignClient.createArchiveEntryCalls.single;
+      expect(call.kind, 'location');
+      expect(call.title, '老橡树酒馆');
+    },
+  );
+
+  testWidgets(
+    'group files tool opens archive creation form with kind=file',
+    (tester) async {
+      await pumpChatPage(tester, isDm: true);
+
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+
+      final fileTile = tester.widget<ListTile>(
+        find.byKey(const Key('tool-group-files')),
+      );
+      expect(fileTile.enabled, isTrue);
+
+      await tester.tap(find.byKey(const Key('tool-group-files')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('新建战役条目'), findsOneWidget);
+      expect(find.text('文件'), findsWidgets);
+
+      await tester.enterText(
+        find.byType(TextFormField).first,
+        'NPC关系图',
+      );
+      await tester.tap(find.text('创建'));
+      await tester.pumpAndSettle();
+
+      expect(campaignClient.createArchiveEntryCalls, hasLength(1));
+      final call = campaignClient.createArchiveEntryCalls.single;
+      expect(call.kind, 'file');
+      expect(call.title, 'NPC关系图');
+    },
+  );
+
   // Spec §顶部: 聊天顶部只显示返回、战役名称+在线状态、搜索、战役中心。
   testWidgets(
     'chat AppBar only exposes search and campaign center actions',
@@ -1161,8 +1266,27 @@ class _RecordingCampaignClient implements CampaignClient {
   Future<CampaignMembership> updateSpeaker({required String apiBaseUrl, required String accessToken, required String campaignId, required String speakerMode, String? actorId}) => throw UnimplementedError();
   @override
   Future<List<CampaignArchiveEntry>> listArchives({required String apiBaseUrl, required String accessToken, required String campaignId, String? kind}) async => const [];
+  final List<_CreatedArchiveCall> createArchiveEntryCalls = [];
   @override
-  Future<CampaignArchiveEntry> createArchiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String kind, required String title, String? summary, Map<String, Object?>? payload}) => throw UnimplementedError();
+  Future<CampaignArchiveEntry> createArchiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String kind, required String title, String? summary, Map<String, Object?>? payload}) async {
+    createArchiveEntryCalls.add(_CreatedArchiveCall(
+      campaignId: campaignId,
+      kind: kind,
+      title: title,
+      summary: summary,
+      payload: payload,
+    ));
+    return CampaignArchiveEntry(
+      id: 'archive-${createArchiveEntryCalls.length}',
+      campaignId: campaignId,
+      kind: kind,
+      title: title,
+      summary: summary ?? '',
+      payload: payload ?? const {},
+      pinned: false,
+      updatedAt: '2026-07-17T00:00:00.000Z',
+    );
+  }
   @override
   Future<CampaignArchiveEntry> updateArchiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String entryId, String? kind, String? title, String? summary, Map<String, Object?>? payload, bool? pinned}) => throw UnimplementedError();
   @override
@@ -1338,6 +1462,22 @@ class _SentMessageCall {
   final String? actionId;
   final Map<String, Object?>? eventData;
   final Map<String, Object?>? draftActor;
+}
+
+class _CreatedArchiveCall {
+  const _CreatedArchiveCall({
+    required this.campaignId,
+    required this.kind,
+    required this.title,
+    required this.summary,
+    required this.payload,
+  });
+
+  final String campaignId;
+  final String kind;
+  final String title;
+  final String? summary;
+  final Map<String, Object?>? payload;
 }
 
 class _FakeAuthClient implements AuthClient {

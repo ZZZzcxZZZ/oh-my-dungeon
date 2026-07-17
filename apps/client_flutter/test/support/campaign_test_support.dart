@@ -186,6 +186,12 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
   /// 注入下一次 `updateActor` 调用要抛出的异常；用于 409 冲突场景测试。
   Object? nextUpdateActorException;
 
+  /// 注入下一次 `publishActor` 调用要抛出的异常；用于 400/403 错误路径测试。
+  Object? nextPublishActorException;
+
+  /// 注入下一次 `createActor` 调用要抛出的异常；用于 400/403 错误路径测试。
+  Object? nextCreateActorException;
+
   final List<Map<String, Object?>> publishCalls = [];
   final List<Map<String, Object?>> createActorCalls = [];
   final List<Map<String, Object?>> updateActorCalls = [];
@@ -229,6 +235,11 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
       'baseRevision': baseRevision,
       'sheet': sheet,
     });
+    final exception = nextPublishActorException;
+    if (exception != null) {
+      nextPublishActorException = null;
+      throw exception;
+    }
     return testCampaignActor(
       campaignId: campaignId,
       sourceCharacterId: sourceCharacterId,
@@ -254,6 +265,11 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
       'lifecycle': lifecycle,
       'sheet': sheet,
     });
+    final exception = nextCreateActorException;
+    if (exception != null) {
+      nextCreateActorException = null;
+      throw exception;
+    }
     return testCampaignActor(
       campaignId: campaignId,
       actorType: actorType,

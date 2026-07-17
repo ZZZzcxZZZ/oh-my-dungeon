@@ -93,6 +93,11 @@ class _PublishCharacterSheetState extends State<PublishCharacterSheet> {
                   onSelected: (_) => setState(() => _actorType = 'npc'),
                 ),
                 ChoiceChip(
+                  label: const Text('怪物'),
+                  selected: _actorType == 'monster',
+                  onSelected: (_) => setState(() => _actorType = 'monster'),
+                ),
+                ChoiceChip(
                   label: const Text('同伴'),
                   selected: _actorType == 'companion',
                   onSelected: (_) => setState(() => _actorType = 'companion'),
@@ -166,11 +171,23 @@ class _PublishCharacterSheetState extends State<PublishCharacterSheet> {
       // 没有选择头像时显式移除 null 占位，避免污染服务端字段。
       sheet.remove('avatarUrl');
     }
-    final success = await widget.controller.publishCharacter(
-      widget.character,
-      actorType: _actorType,
-      sheetOverride: sheet,
-    );
+    // 玩家角色走 /actors/publish 自发布端点；NPC / 怪物 / 同伴走 /actors
+    // DM 创建端点（lifecycle=persistent）。两个端点权限和数据约束不同，
+    // 不能混用：服务端会拒绝 player 类型走 createActor，也拒绝非 player
+    // 类型走 publishActor。
+    final bool success;
+    if (_actorType == 'player') {
+      success = await widget.controller.publishCharacter(
+        widget.character,
+        actorType: _actorType,
+        sheetOverride: sheet,
+      );
+    } else {
+      success = await widget.controller.createDmActor(
+        actorType: _actorType,
+        sheet: sheet,
+      );
+    }
     if (!mounted) return;
     setState(() => _submitting = false);
     if (success) {

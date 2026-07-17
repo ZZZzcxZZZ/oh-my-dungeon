@@ -9,6 +9,24 @@ import '../../domain/campaign_actor_audit.dart';
 import '../../domain/campaign_change.dart';
 import '../../../characters/domain/character.dart';
 
+/// Human-readable error string for a [CampaignSyncException] with status code.
+String _describeSyncException(CampaignSyncException exception) {
+  switch (exception.statusCode) {
+    case 400:
+      return '请求无效：${exception.message}';
+    case 401:
+      return '登录已过期，请重新登录';
+    case 403:
+      return '无权执行此操作：${exception.message}';
+    case 404:
+      return '资源不存在：${exception.message}';
+    case 409:
+      return '数据已被其他端修改，请刷新后重试';
+    default:
+      return exception.message;
+  }
+}
+
 /// 战役角色管理状态。Player 模式用于发布本地角色到战役；DM 模式用于浏览、
 /// 编辑、归档所有 CampaignActor。所有写操作通过 [CampaignSyncApiClient] 提交，
 /// 成功后立即写本地缓存以避免 UI 等待拉取循环。
@@ -226,8 +244,65 @@ class CampaignActorController extends ChangeNotifier {
       _conflict = e;
       notifyListeners();
       return false;
+    } on CampaignSyncException catch (e) {
+      _error = _describeSyncException(e);
+      notifyListeners();
+      return false;
     } catch (_) {
-      _error = '发布角色失败';
+      _error = '发布角色失败：网络错误，请检查服务器连接';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// DM 创建常驻 NPC / 怪物 / 同伴角色。
+  ///
+  /// 走 `/actors`（DM create）端点，不走 `/actors/publish`（玩家自发布）。
+  /// 服务端会校验调用者拥有 `canManageCampaign` 能力，并拒绝 `actorType ==
+  /// 'player'`（玩家角色必须自发布）。
+  ///
+  /// 见 spec §发言身份 DM 与 §DM角色生命周期：常驻角色 lifecycle=persistent。
+  Future<bool> createDmActor({
+    required String actorType,
+    required Map<String, Object?> sheet,
+    String lifecycle = 'persistent',
+  }) async {
+    final campaignId = _selectedCampaignId;
+    if (campaignId == null) {
+      _error = '请先选择战役';
+      notifyListeners();
+      return false;
+    }
+    if (actorType == 'player') {
+      _error = '玩家角色请使用发布到战役功能';
+      notifyListeners();
+      return false;
+    }
+    _error = null;
+    try {
+      final created = await _apiClient.createActor(
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: _accessToken,
+        campaignId: campaignId,
+        actorType: actorType,
+        lifecycle: lifecycle,
+        sheet: sheet,
+      );
+      await _cacheRepository.applyPage(
+        campaignId,
+        _singleChangePage(created, 'upsert'),
+      );
+      return true;
+    } on CampaignConflictException catch (e) {
+      _conflict = e;
+      notifyListeners();
+      return false;
+    } on CampaignSyncException catch (e) {
+      _error = _describeSyncException(e);
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _error = '创建角色失败：网络错误，请检查服务器连接';
       notifyListeners();
       return false;
     }
@@ -263,8 +338,12 @@ class CampaignActorController extends ChangeNotifier {
       _conflict = error;
       notifyListeners();
       return false;
+    } on CampaignSyncException catch (e) {
+      _error = _describeSyncException(e);
+      notifyListeners();
+      return false;
     } catch (_) {
-      _error = '创建临时角色失败';
+      _error = '创建临时角色失败：网络错误，请检查服务器连接';
       notifyListeners();
       return false;
     }
@@ -297,8 +376,12 @@ class CampaignActorController extends ChangeNotifier {
       _conflict = e;
       notifyListeners();
       return false;
+    } on CampaignSyncException catch (e) {
+      _error = _describeSyncException(e);
+      notifyListeners();
+      return false;
     } catch (_) {
-      _error = '保存角色失败';
+      _error = '保存角色失败：网络错误，请检查服务器连接';
       notifyListeners();
       return false;
     }
@@ -326,8 +409,12 @@ class CampaignActorController extends ChangeNotifier {
       _conflict = e;
       notifyListeners();
       return false;
+    } on CampaignSyncException catch (e) {
+      _error = _describeSyncException(e);
+      notifyListeners();
+      return false;
     } catch (_) {
-      _error = '归档角色失败';
+      _error = '归档角色失败：网络错误，请检查服务器连接';
       notifyListeners();
       return false;
     }

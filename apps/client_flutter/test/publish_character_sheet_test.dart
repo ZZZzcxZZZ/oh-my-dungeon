@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:dnd_table_client/src/features/campaigns/data/sync/campaign_sync_api_client.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_controller.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/actors/publish_character_sheet.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/widgets/avatar_picker.dart';
@@ -140,4 +141,111 @@ void main() {
 
     controller.dispose();
   });
+
+  // Spec compliance: DM must be able to create persistent NPC/monster/companion
+  // actors. The previous sheet routed ALL actor types through the player-only
+  // /actors/publish endpoint, which rejects non-player types with HTTP 400.
+  // Now selecting NPC/companion/monster routes through /actors (DM create).
+  testWidgets(
+    'selecting NPC routes through createActor (DM endpoint), not publishActor',
+    (tester) async {
+      final apiClient = MemoryCampaignSyncApiClient();
+      final controller = CampaignActorController(
+        cacheRepository: MemoryCampaignCacheRepository(),
+        apiClient: apiClient,
+        apiBaseUrl: 'https://example.test',
+        accessToken: 'access-token',
+        currentUserId: 'dm-1',
+      );
+      await controller.selectCampaign('campaign-1');
+
+      await pumpSheet(
+        tester,
+        controller,
+        onPickImage: () async => null,
+      );
+
+      await tester.tap(find.text('NPC'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '发布'));
+      await tester.pumpAndSettle();
+
+      expect(apiClient.publishCalls, isEmpty,
+          reason: 'NPC creation must go through the DM create endpoint');
+      expect(apiClient.createActorCalls, hasLength(1));
+      expect(apiClient.createActorCalls.single['actorType'], 'npc');
+      expect(
+        apiClient.createActorCalls.single['lifecycle'],
+        'persistent',
+        reason: 'DM-created actors are persistent by spec §DM角色生命周期',
+      );
+
+      controller.dispose();
+    },
+  );
+
+  testWidgets(
+    'selecting monster routes through createActor with persistent lifecycle',
+    (tester) async {
+      final apiClient = MemoryCampaignSyncApiClient();
+      final controller = CampaignActorController(
+        cacheRepository: MemoryCampaignCacheRepository(),
+        apiClient: apiClient,
+        apiBaseUrl: 'https://example.test',
+        accessToken: 'access-token',
+        currentUserId: 'dm-1',
+      );
+      await controller.selectCampaign('campaign-1');
+
+      await pumpSheet(
+        tester,
+        controller,
+        onPickImage: () async => null,
+      );
+
+      await tester.tap(find.text('怪物'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '发布'));
+      await tester.pumpAndSettle();
+
+      expect(apiClient.publishCalls, isEmpty);
+      expect(apiClient.createActorCalls.single['actorType'], 'monster');
+      expect(apiClient.createActorCalls.single['lifecycle'], 'persistent');
+
+      controller.dispose();
+    },
+  );
+
+  // Spec compliance: error path must surface server-provided message.
+  testWidgets(
+    'surfaces server error message in SnackBar instead of generic failure',
+    (tester) async {
+      final apiClient = MemoryCampaignSyncApiClient();
+      apiClient.nextPublishActorException = const CampaignSyncException(
+        'sourceCharacterId is required',
+        statusCode: 400,
+      );
+      final controller = CampaignActorController(
+        cacheRepository: MemoryCampaignCacheRepository(),
+        apiClient: apiClient,
+        apiBaseUrl: 'https://example.test',
+        accessToken: 'access-token',
+        currentUserId: 'user-1',
+      );
+      await controller.selectCampaign('campaign-1');
+
+      await pumpSheet(
+        tester,
+        controller,
+        onPickImage: () async => null,
+      );
+
+      await tester.tap(find.widgetWithText(FilledButton, '发布'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('sourceCharacterId is required'), findsOneWidget);
+
+      controller.dispose();
+    },
+  );
 }

@@ -70,6 +70,110 @@ void main() {
     controller.dispose();
   });
 
+  // Spec compliance: DM must be able to create persistent NPC/monster/companion
+  // actors via the DM create endpoint (/actors), not the self-publish endpoint
+  // (/actors/publish) which rejects non-player types. See
+  // docs/superpowers/plans/2026-07-17-workspace-spec-compliance-fixes.md Task 1.3.
+  test('createDmActor creates a persistent NPC via the DM create endpoint',
+      () async {
+    final apiClient = MemoryCampaignSyncApiClient();
+    final controller = CampaignActorController(
+      cacheRepository: MemoryCampaignCacheRepository(),
+      apiClient: apiClient,
+      apiBaseUrl: 'https://example.test',
+      accessToken: 'access-token',
+      currentUserId: 'dm-1',
+    );
+    await controller.selectCampaign('campaign-1');
+
+    final created = await controller.createDmActor(
+      actorType: 'npc',
+      sheet: {'name': '酒馆老板', 'currentHp': 12, 'maxHp': 12},
+    );
+
+    expect(created, isTrue);
+    expect(apiClient.createActorCalls, hasLength(1));
+    expect(apiClient.createActorCalls.single['actorType'], 'npc');
+    expect(apiClient.createActorCalls.single['lifecycle'], 'persistent');
+    expect(apiClient.publishCalls, isEmpty);
+    controller.dispose();
+  });
+
+  test('createDmActor creates a persistent monster via the DM create endpoint',
+      () async {
+    final apiClient = MemoryCampaignSyncApiClient();
+    final controller = CampaignActorController(
+      cacheRepository: MemoryCampaignCacheRepository(),
+      apiClient: apiClient,
+      apiBaseUrl: 'https://example.test',
+      accessToken: 'access-token',
+      currentUserId: 'dm-1',
+    );
+    await controller.selectCampaign('campaign-1');
+
+    final created = await controller.createDmActor(
+      actorType: 'monster',
+      sheet: {'name': '哥布林', 'currentHp': 7, 'maxHp': 7},
+    );
+
+    expect(created, isTrue);
+    expect(apiClient.createActorCalls.single['actorType'], 'monster');
+    expect(apiClient.createActorCalls.single['lifecycle'], 'persistent');
+    controller.dispose();
+  });
+
+  // Spec compliance: error path must surface server-provided message instead
+  // of a generic "发布角色失败" string. The previous catch-all discarded the
+  // CampaignSyncException and its statusCode, hiding actionable details like
+  // "Only player actors can be self-published; use the DM create endpoint".
+  test('publishCharacter surfaces server error message on 400', () async {
+    final apiClient = MemoryCampaignSyncApiClient();
+    apiClient.nextPublishActorException = const CampaignSyncException(
+      'Only player actors can be self-published; use the DM create endpoint',
+      statusCode: 400,
+    );
+    final controller = CampaignActorController(
+      cacheRepository: MemoryCampaignCacheRepository(),
+      apiClient: apiClient,
+      apiBaseUrl: 'https://example.test',
+      accessToken: 'access-token',
+      currentUserId: 'dm-1',
+    );
+    await controller.selectCampaign('campaign-1');
+
+    final published = await controller.publishCharacter(_sampleCharacter);
+
+    expect(published, isFalse);
+    expect(controller.error, isNotNull);
+    expect(
+      controller.error,
+      contains('Only player actors can be self-published'),
+    );
+    controller.dispose();
+  });
+
+  test('publishCharacter surfaces 403 forbidden message', () async {
+    final apiClient = MemoryCampaignSyncApiClient();
+    apiClient.nextPublishActorException = const CampaignSyncException(
+      'Forbidden',
+      statusCode: 403,
+    );
+    final controller = CampaignActorController(
+      cacheRepository: MemoryCampaignCacheRepository(),
+      apiClient: apiClient,
+      apiBaseUrl: 'https://example.test',
+      accessToken: 'access-token',
+      currentUserId: 'dm-1',
+    );
+    await controller.selectCampaign('campaign-1');
+
+    final published = await controller.publishCharacter(_sampleCharacter);
+
+    expect(published, isFalse);
+    expect(controller.error, contains('Forbidden'));
+    controller.dispose();
+  });
+
   testWidgets(
     'player mode shows local characters and dm mode shows actor directory',
     (tester) async {

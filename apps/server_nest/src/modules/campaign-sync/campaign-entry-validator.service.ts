@@ -92,8 +92,13 @@ export class CampaignEntryValidatorService {
     if (!isNonEmptyString(input.type)) {
       errors.push({ path: "$.type", message: "type must be a non-empty string" });
     }
-    if (!isNonEmptyString(input.slug)) {
-      errors.push({ path: "$.slug", message: "slug must be a non-empty string" });
+    // slug is optional: when omitted or empty, the service auto-generates one
+    // from `name` so users never have to think about slugs. When provided, it
+    // must still be a non-empty string to avoid stale "" values sneaking in.
+    if (input.slug !== undefined && input.slug !== null && input.slug !== "") {
+      if (!isNonEmptyString(input.slug)) {
+        errors.push({ path: "$.slug", message: "slug must be a non-empty string" });
+      }
     }
     if (!isNonEmptyString(input.name)) {
       errors.push({ path: "$.name", message: "name must be a non-empty string" });

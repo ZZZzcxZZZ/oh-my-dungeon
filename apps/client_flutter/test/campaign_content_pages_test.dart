@@ -114,10 +114,6 @@ void main() {
         find.byKey(const Key('editor-field-name')),
         '黑塔',
       );
-      await tester.enterText(
-        find.byKey(const Key('editor-field-slug')),
-        'black-tower',
-      );
       await tester.tap(find.byKey(const Key('editor-type-dropdown')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('地点').last);
@@ -260,10 +256,6 @@ void main() {
       await tester.enterText(
         find.byKey(const Key('editor-field-name')),
         '失败条目',
-      );
-      await tester.enterText(
-        find.byKey(const Key('editor-field-slug')),
-        'fail-entry',
       );
       await tester.tap(find.widgetWithText(FilledButton, '保存'));
       await tester.pumpAndSettle();

@@ -75,7 +75,7 @@ class _CampaignContentPageState extends State<CampaignContentPage> {
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.search),
                 border: OutlineInputBorder(),
-                hintText: '搜索条目名称、slug 或类型',
+                hintText: '搜索条目名称或类型',
                 isDense: true,
               ),
               onChanged: widget.controller.setQuery,
@@ -217,7 +217,7 @@ class _ContentEntryTile extends StatelessWidget {
         ),
         title: Text(entry.name),
         subtitle: Text(
-          '${entry.type} · ${entry.slug}',
+          _typeLabel(entry.type),
           style: TextStyle(color: colorScheme.onSurfaceVariant),
         ),
         trailing: canEdit
@@ -239,6 +239,19 @@ class _ContentEntryTile extends StatelessWidget {
       'item' => Icons.inventory_2_outlined,
       'quest' => Icons.assignment_outlined,
       _ => Icons.article_outlined,
+    };
+  }
+
+  /// Spec §档案: 不暴露工程概念给用户。把 type 代码转成中文标签显示。
+  static String _typeLabel(String type) {
+    return switch (type) {
+      'location' => '地点',
+      'npc' => 'NPC',
+      'monster' => '怪物',
+      'item' => '物品',
+      'quest' => '任务',
+      'note' => '笔记',
+      _ => type,
     };
   }
 }

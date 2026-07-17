@@ -59,7 +59,6 @@ class _CampaignJsonImportDialogState extends State<CampaignJsonImportDialog> {
     for (final entry in entries) {
       final success = await widget.controller.createEntry(
         type: entry['type']?.toString() ?? '',
-        slug: entry['slug']?.toString() ?? '',
         name: entry['name']?.toString() ?? '',
         entry: entry['entry'] is Map
             ? Map<String, Object?>.from(entry['entry'] as Map)

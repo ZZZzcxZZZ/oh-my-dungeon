@@ -95,9 +95,9 @@ class CampaignContentController extends ChangeNotifier {
 
   Future<bool> createEntry({
     required String type,
-    required String slug,
     required String name,
     required Map<String, Object?> entry,
+    String slug = '',
   }) async {
     final campaignId = _selectedCampaignId;
     if (campaignId == null) {
@@ -202,9 +202,9 @@ class CampaignContentController extends ChangeNotifier {
 
   Future<Map<String, Object?>> validateEntry({
     required String type,
-    required String slug,
     required String name,
     required Map<String, Object?> entry,
+    String slug = '',
   }) async {
     final campaignId = _selectedCampaignId;
     if (campaignId == null) {
@@ -248,7 +248,6 @@ class CampaignContentController extends ChangeNotifier {
     final map = Map<String, Object?>.from(raw);
     return {
       'type': map['type']?.toString() ?? '',
-      'slug': map['slug']?.toString() ?? '',
       'name': map['name']?.toString() ?? '',
       'entry': map['entry'] is Map
           ? Map<String, Object?>.from(map['entry'] as Map)

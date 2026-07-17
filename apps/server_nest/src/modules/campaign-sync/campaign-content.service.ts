@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
+import { randomBytes } from "node:crypto";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AccessTokenPayload } from "../auth/auth.types";
 import {
@@ -124,10 +125,20 @@ export class CampaignContentService {
 
     const input: CreateContentEntryInput = {
       type: body.type as string,
-      slug: body.slug as string,
+      slug:
+        typeof body.slug === "string" && body.slug.trim().length > 0
+          ? body.slug
+          : "",
       name: body.name as string,
       entry: body.entry as Record<string, unknown>,
     };
+
+    // Spec §档案: slug is an internal reference key, never user-facing.
+    // When the client omits it, auto-generate from name and ensure uniqueness
+    // inside this campaign. The generated slug is opaque to users.
+    if (!input.slug) {
+      input.slug = await this.generateUniqueSlug(campaignId, input.name);
+    }
 
     const existing = await this.prismaService.campaignContentEntry.findUnique({
       where: {
@@ -378,6 +389,42 @@ export class CampaignContentService {
     cursor: string,
   ): void {
     this.gateway.broadcastChange({ campaignId, entityType, cursor });
+  }
+
+  /**
+   * Spec §档案: slug is internal, never user-facing. Generate a unique slug
+   * inside the campaign from `name` by ASCII-folding, replacing non-alphanum
+   * with `-`, trimming dashes, and appending a short random suffix to avoid
+   * collisions. Non-ASCII names (e.g. 中文) fall back to a pure random slug.
+   */
+  private async generateUniqueSlug(
+    campaignId: string,
+    name: string,
+  ): Promise<string> {
+    const base = this.slugifyName(name);
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const suffix = randomBytes(3).toString("hex");
+      const candidate = base ? `${base}-${suffix}` : suffix;
+      const existing = await this.prismaService.campaignContentEntry.findUnique({
+        where: { campaignId_slug: { campaignId, slug: candidate } },
+      });
+      if (!existing || existing.deletedAt) {
+        return candidate;
+      }
+    }
+    // Extremely unlikely: 5 collisions in a row. Fall back to a longer random.
+    return randomBytes(8).toString("hex");
+  }
+
+  private slugifyName(name: string): string {
+    const trimmed = name.trim().toLowerCase();
+    if (!trimmed) return "";
+    // ASCII-fold: keep a-z, 0-9; replace everything else (including CJK) with -
+    const folded = trimmed.normalize("NFKD").replace(/[^a-z0-9]+/g, "-");
+    const cleaned = folded.replace(/^-+|-+$/g, "");
+    // If the name had no ASCII alphanumerics (e.g. pure 中文), return empty
+    // so the caller falls back to a pure random slug.
+    return cleaned;
   }
 }
 

@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'campaign_content_controller.dart';
 
-/// 战役资料条目编辑器。只展示类型、名称、slug 和摘要，不展示 package、
-/// dependency、overlay 或 patch 概念。保存时调用 [CampaignContentController.createEntry]。
+/// 战役资料条目编辑器。只展示类型、名称和摘要，不展示 package、
+/// dependency、overlay、patch 或 slug 等工程概念。slug 由服务端自动生成。
+/// 保存时调用 [CampaignContentController.createEntry]。
 class CampaignContentEditor extends StatefulWidget {
   const CampaignContentEditor({
     required this.controller,
@@ -18,7 +19,6 @@ class CampaignContentEditor extends StatefulWidget {
 
 class _CampaignContentEditorState extends State<CampaignContentEditor> {
   final _nameController = TextEditingController();
-  final _slugController = TextEditingController();
   final _summaryController = TextEditingController();
   String _type = 'location';
   bool _saving = false;
@@ -35,15 +35,13 @@ class _CampaignContentEditorState extends State<CampaignContentEditor> {
   @override
   void dispose() {
     _nameController.dispose();
-    _slugController.dispose();
     _summaryController.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
     final name = _nameController.text.trim();
-    final slug = _slugController.text.trim();
-    if (name.isEmpty || slug.isEmpty) return;
+    if (name.isEmpty) return;
     setState(() => _saving = true);
     final entry = <String, Object?>{
       'body': <Map<String, Object?>>[
@@ -52,7 +50,6 @@ class _CampaignContentEditorState extends State<CampaignContentEditor> {
     };
     final success = await widget.controller.createEntry(
       type: _type,
-      slug: slug,
       name: name,
       entry: entry,
     );
@@ -102,17 +99,6 @@ class _CampaignContentEditorState extends State<CampaignContentEditor> {
                 labelText: '名称',
                 border: OutlineInputBorder(),
                 isDense: true,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              key: const Key('editor-field-slug'),
-              controller: _slugController,
-              decoration: const InputDecoration(
-                labelText: 'Slug（唯一标识）',
-                border: OutlineInputBorder(),
-                isDense: true,
-                hintText: '如 moon-harbor',
               ),
             ),
             const SizedBox(height: 12),

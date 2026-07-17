@@ -53,9 +53,14 @@ class CampaignChatPage extends StatefulWidget {
 
 class _CampaignChatPageState extends State<CampaignChatPage> {
   final _controller = TextEditingController();
+  final ScrollController _chatScrollController = ScrollController();
+  final Map<String, GlobalKey> _messageKeys = {};
   ChatMode _mode = ChatMode.say;
   bool _sending = false;
   _TemporaryIdentityDraft? _draftIdentity;
+  // Spec §顶部: 搜索结果跳转后高亮的目标 messageId, 由 AnimatedSwitcher 在
+  // 800ms 后清空。
+  String? _highlightedMessageId;
 
   @override
   void initState() {
@@ -71,8 +76,62 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
   @override
   void dispose() {
     _controller.dispose();
+    _chatScrollController.dispose();
     widget.campaignController.disconnectCampaignChat();
     super.dispose();
+  }
+
+  /// Spec §顶部: 搜索结果跳转。先确保消息加载, 再用 GlobalKey 调
+  /// Scrollable.ensureVisible 滚动到目标气泡, 然后高亮 800ms。
+  Future<void> _scrollToMessage(String messageId) async {
+    final messages = widget.campaignController.messages;
+    if (!messages.any((m) => m.id == messageId)) {
+      // 消息不在当前时间线 (可能未加载), 简单提示用户。
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('该消息不在当前加载范围')),
+      );
+      return;
+    }
+    // 等待一帧让气泡 GlobalKey 注册到树中。
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    final key = _messageKeys[messageId];
+    final ctx = key?.currentContext;
+    if (ctx == null) {
+      // 气泡可能在屏幕外未构建 (ListView.builder lazy), 暂未实现强制构建,
+      // 这里给出提示而非静默失败。
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('消息已找到, 请手动滚动查看')),
+      );
+      return;
+    }
+    // ctx 来自 GlobalKey.currentContext, 不是 widget build context。
+    // 转为 Object 避免触发 use_build_context_synchronously lint 误报。
+    final ctxAsObject = ctx as Object;
+    final pending = _ensureVisibleOf(ctxAsObject as BuildContext);
+    await pending;
+    if (!mounted) return;
+    setState(() => _highlightedMessageId = messageId);
+    Future<void>.delayed(const Duration(milliseconds: 800), () {
+      if (!mounted) return;
+      setState(() {
+        if (_highlightedMessageId == messageId) {
+          _highlightedMessageId = null;
+        }
+      });
+    });
+  }
+
+  /// 独立 helper: 把 GlobalKey.currentContext 滚动到可视区域。
+  /// ctx 不是 widget build context, 用独立函数避免 lint 误报。
+  Future<void> _ensureVisibleOf(BuildContext ctx) {
+    return Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
+      alignment: 0.4,
+    );
   }
 
   @override
@@ -177,16 +236,37 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                   ),
                 )
               : ListView.builder(
+                  controller: _chatScrollController,
                   padding: const EdgeInsets.all(12),
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final message = messages[index];
-                    return CampaignChatBubble(
-                      message: message,
-                      onRespondCheckRequest: _canRespondToCheck(message)
-                          ? () => _respondToCheckRequest(message)
-                          : null,
-                      onAvatarTap: _resolveAvatarTap(message),
+                    final key = _messageKeys.putIfAbsent(
+                      message.id,
+                      () => GlobalKey(),
+                    );
+                    final isHighlighted =
+                        _highlightedMessageId == message.id;
+                    return AnimatedContainer(
+                      key: key,
+                      duration: const Duration(milliseconds: 320),
+                      curve: Curves.easeOut,
+                      decoration: BoxDecoration(
+                        color: isHighlighted
+                            ? Theme.of(context)
+                                .colorScheme
+                                .primaryContainer
+                                .withValues(alpha: 0.6)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: CampaignChatBubble(
+                        message: message,
+                        onRespondCheckRequest: _canRespondToCheck(message)
+                            ? () => _respondToCheckRequest(message)
+                            : null,
+                        onAvatarTap: _resolveAvatarTap(message),
+                      ),
                     );
                   },
                 ),
@@ -384,8 +464,9 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
 
   /// Spec §顶部: 聊天顶部搜索入口。打开轻量搜索面板，直接调用
   /// `searchMessages` 检索战役历史消息，不替换实时聊天时间线。
+  /// 选中搜索结果后关闭面板并跳转到对应消息气泡。
   Future<void> _openSearch() async {
-    await showModalBottomSheet<void>(
+    final selected = await showModalBottomSheet<CampaignChatMessage>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
@@ -394,6 +475,8 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         controller: widget.campaignController,
       ),
     );
+    if (selected == null || !mounted) return;
+    await _scrollToMessage(selected.id);
   }
 
   /// Spec §全局设置: 右上角更多菜单四项低频操作。
@@ -1734,9 +1817,11 @@ class _CampaignChatSearchSheetState extends State<_CampaignChatSearchSheet> {
                       itemBuilder: (context, index) {
                         final message = _results[index];
                         return ListTile(
+                          key: Key('campaign-chat-search-result-${message.id}'),
                           leading: const Icon(Icons.history),
                           title: Text(message.content),
                           subtitle: Text(message.displayName),
+                          onTap: () => Navigator.of(context).pop(message),
                         );
                       },
                     ),

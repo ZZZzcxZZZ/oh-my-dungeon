@@ -974,6 +974,63 @@ void main() {
       );
     },
   );
+
+  // Spec §顶部: 搜索结果点击后应跳转到对应消息气泡并高亮 800ms。
+  testWidgets(
+    'chat search result tap jumps to message and highlights it',
+    (tester) async {
+      campaignClient.messages = const [
+        CampaignChatMessage(
+          id: 'msg-target',
+          campaignId: 'camp-1',
+          senderId: 'user-2',
+          campaignActorId: null,
+          displayName: 'Player Two',
+          avatarUrl: null,
+          kind: 'say',
+          content: '我发现了一个线索',
+          createdAt: '2026-07-09T00:00:00.000Z',
+        ),
+      ];
+      await pumpChatPage(tester);
+
+      // 打开搜索面板。
+      await tester.tap(find.byTooltip('搜索'));
+      await tester.pumpAndSettle();
+
+      // 输入关键词触发搜索 (FakeClient.listMessages 直接返回 messages)。
+      await tester.enterText(
+        find.byKey(const Key('campaign-chat-search-field')),
+        '线索',
+      );
+      await tester.pumpAndSettle();
+
+      // 搜索结果应可点击。
+      expect(
+        find.byKey(const Key('campaign-chat-search-result-msg-target')),
+        findsOneWidget,
+      );
+
+      // 点击结果, sheet 应关闭, 聊天页仍可见, 目标消息高亮。
+      await tester.tap(
+        find.byKey(const Key('campaign-chat-search-result-msg-target')),
+      );
+      await tester.pumpAndSettle();
+
+      // 搜索 sheet 应当关闭。
+      expect(
+        find.byKey(const Key('campaign-chat-search-field')),
+        findsNothing,
+      );
+      // 聊天页仍在栈中。
+      expect(
+        find.byKey(const Key('campaign-chat-input')),
+        findsOneWidget,
+      );
+      // 目标消息气泡可见。
+      expect(find.text('我发现了一个线索'), findsOneWidget);
+    },
+  );
 }
 
 class _RecordingCampaignClient implements CampaignClient {

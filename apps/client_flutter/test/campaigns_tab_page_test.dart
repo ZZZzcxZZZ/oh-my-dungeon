@@ -279,6 +279,333 @@ void main() {
       session.dispose();
     },
   );
+
+  // Spec §客户端工作模式: owner 在 Player 模式打开战役时, 客户端显示一次
+  // "一键切换主持人模式"提示.
+  testWidgets(
+    'owner entering campaign in Player mode sees switch-to-DM prompt',
+    (tester) async {
+      final auth = await buildLoggedInAuthController();
+      // _campaign.ownerId == 'user-1' == current user → owner.
+      final campaignController = await buildCampaignController(auth);
+      final modeController = ClientModeController(
+        initialMode: ClientMode.player,
+      );
+      final prefs = buildAppPreferencesController();
+      await prefs.initialize();
+      final session = buildActiveServerSession();
+
+      await pumpCampaignsTab(
+        tester,
+        authController: auth,
+        campaignController: campaignController,
+        modeController: modeController,
+        appPreferencesController: prefs,
+        session: session,
+      );
+
+      await tester.tap(find.text('Curse of Strahd'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('mode-switch-to-dm-dialog')),
+        findsOneWidget,
+      );
+      expect(find.text('切换到主持人模式？'), findsOneWidget);
+
+      modeController.dispose();
+      prefs.dispose();
+      campaignController.dispose();
+      auth.dispose();
+      session.dispose();
+    },
+  );
+
+  testWidgets(
+    'owner accepting switch-to-DM prompt flips mode to dungeonMaster',
+    (tester) async {
+      final auth = await buildLoggedInAuthController();
+      final campaignController = await buildCampaignController(auth);
+      final modeController = ClientModeController(
+        initialMode: ClientMode.player,
+      );
+      final prefs = buildAppPreferencesController();
+      await prefs.initialize();
+      final session = buildActiveServerSession();
+
+      await pumpCampaignsTab(
+        tester,
+        authController: auth,
+        campaignController: campaignController,
+        modeController: modeController,
+        appPreferencesController: prefs,
+        session: session,
+      );
+
+      await tester.tap(find.text('Curse of Strahd'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('mode-switch-confirm-dm')));
+      await tester.pumpAndSettle();
+
+      expect(modeController.mode, ClientMode.dungeonMaster);
+
+      modeController.dispose();
+      prefs.dispose();
+      campaignController.dispose();
+      auth.dispose();
+      session.dispose();
+    },
+  );
+
+  testWidgets(
+    'owner declining switch-to-DM prompt stays in Player mode and proceeds',
+    (tester) async {
+      final auth = await buildLoggedInAuthController();
+      final campaignController = await buildCampaignController(auth);
+      final modeController = ClientModeController(
+        initialMode: ClientMode.player,
+      );
+      final prefs = buildAppPreferencesController();
+      await prefs.initialize();
+      final session = buildActiveServerSession();
+
+      await pumpCampaignsTab(
+        tester,
+        authController: auth,
+        campaignController: campaignController,
+        modeController: modeController,
+        appPreferencesController: prefs,
+        session: session,
+      );
+
+      await tester.tap(find.text('Curse of Strahd'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('mode-switch-stay-player')));
+      await tester.pumpAndSettle();
+
+      expect(modeController.mode, ClientMode.player);
+      // Campaign chat page is pushed.
+      expect(find.byType(MaterialPageRoute), findsWidgets);
+
+      modeController.dispose();
+      prefs.dispose();
+      campaignController.dispose();
+      auth.dispose();
+      session.dispose();
+    },
+  );
+
+  testWidgets(
+    'owner entering in DM mode sees no prompt',
+    (tester) async {
+      final auth = await buildLoggedInAuthController();
+      final campaignController = await buildCampaignController(auth);
+      final modeController = ClientModeController(
+        initialMode: ClientMode.dungeonMaster,
+      );
+      final prefs = buildAppPreferencesController();
+      await prefs.initialize();
+      final session = buildActiveServerSession();
+
+      await pumpCampaignsTab(
+        tester,
+        authController: auth,
+        campaignController: campaignController,
+        modeController: modeController,
+        appPreferencesController: prefs,
+        session: session,
+      );
+
+      await tester.tap(find.text('Curse of Strahd'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('mode-switch-to-dm-dialog')),
+        findsNothing,
+      );
+      expect(find.byKey(const Key('mode-player-only-dialog')), findsNothing);
+
+      modeController.dispose();
+      prefs.dispose();
+      campaignController.dispose();
+      auth.dispose();
+      session.dispose();
+    },
+  );
+
+  testWidgets(
+    'non-owner in DM mode sees player-only prompt',
+    (tester) async {
+      final auth = await buildLoggedInAuthController();
+      // Use a campaign where someone else is the owner, and the current user
+      // is a player member.
+      final otherOwnerCampaign = Campaign(
+        id: 'camp-other',
+        name: 'Friend Campaign',
+        description: '',
+        system: 'dnd5e',
+        ownerId: 'other-user',
+        status: 'active',
+        createdAt: '2026-07-09T00:00:00.000Z',
+        updatedAt: '2026-07-09T00:00:00.000Z',
+        memberPreview: const [
+          CampaignMemberPreview(
+            userId: 'user-1',
+            displayName: 'ranger',
+            role: 'player',
+          ),
+        ],
+      );
+      final campaignController = CampaignController(
+        apiBaseUrl: apiBaseUrl,
+        authController: auth,
+        campaignClient: _FakeCampaignClient(campaigns: [otherOwnerCampaign]),
+      );
+      await campaignController.loadCampaigns();
+      final modeController = ClientModeController(
+        initialMode: ClientMode.dungeonMaster,
+      );
+      final prefs = buildAppPreferencesController();
+      await prefs.initialize();
+      final session = buildActiveServerSession();
+
+      await pumpCampaignsTab(
+        tester,
+        authController: auth,
+        campaignController: campaignController,
+        modeController: modeController,
+        appPreferencesController: prefs,
+        session: session,
+      );
+
+      await tester.tap(find.text('Friend Campaign'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('mode-player-only-dialog')),
+        findsOneWidget,
+      );
+      expect(find.text('以玩家身份参与'), findsOneWidget);
+
+      modeController.dispose();
+      prefs.dispose();
+      campaignController.dispose();
+      auth.dispose();
+      session.dispose();
+    },
+  );
+
+  testWidgets(
+    'non-owner in Player mode sees no prompt',
+    (tester) async {
+      final auth = await buildLoggedInAuthController();
+      final otherOwnerCampaign = Campaign(
+        id: 'camp-other',
+        name: 'Friend Campaign',
+        description: '',
+        system: 'dnd5e',
+        ownerId: 'other-user',
+        status: 'active',
+        createdAt: '2026-07-09T00:00:00.000Z',
+        updatedAt: '2026-07-09T00:00:00.000Z',
+        memberPreview: const [
+          CampaignMemberPreview(
+            userId: 'user-1',
+            displayName: 'ranger',
+            role: 'player',
+          ),
+        ],
+      );
+      final campaignController = CampaignController(
+        apiBaseUrl: apiBaseUrl,
+        authController: auth,
+        campaignClient: _FakeCampaignClient(campaigns: [otherOwnerCampaign]),
+      );
+      await campaignController.loadCampaigns();
+      final modeController = ClientModeController(
+        initialMode: ClientMode.player,
+      );
+      final prefs = buildAppPreferencesController();
+      await prefs.initialize();
+      final session = buildActiveServerSession();
+
+      await pumpCampaignsTab(
+        tester,
+        authController: auth,
+        campaignController: campaignController,
+        modeController: modeController,
+        appPreferencesController: prefs,
+        session: session,
+      );
+
+      await tester.tap(find.text('Friend Campaign'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('mode-switch-to-dm-dialog')), findsNothing);
+      expect(find.byKey(const Key('mode-player-only-dialog')), findsNothing);
+
+      modeController.dispose();
+      prefs.dispose();
+      campaignController.dispose();
+      auth.dispose();
+      session.dispose();
+    },
+  );
+
+  testWidgets(
+    'mode prompt is shown only once per campaign per session',
+    (tester) async {
+      final auth = await buildLoggedInAuthController();
+      final campaignController = await buildCampaignController(auth);
+      final modeController = ClientModeController(
+        initialMode: ClientMode.player,
+      );
+      final prefs = buildAppPreferencesController();
+      await prefs.initialize();
+      final session = buildActiveServerSession();
+
+      await pumpCampaignsTab(
+        tester,
+        authController: auth,
+        campaignController: campaignController,
+        modeController: modeController,
+        appPreferencesController: prefs,
+        session: session,
+      );
+
+      // First entry: prompt shown.
+      await tester.tap(find.text('Curse of Strahd'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('mode-switch-to-dm-dialog')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('mode-switch-stay-player')));
+      await tester.pumpAndSettle();
+      // Wait for the chat page to settle, then pop back to the list.
+      await tester.pumpAndSettle();
+      // Pop the pushed chat page.
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator).first);
+      navigator.pop();
+      await tester.pumpAndSettle();
+
+      // Second entry: prompt must NOT be shown again.
+      await tester.tap(find.text('Curse of Strahd'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('mode-switch-to-dm-dialog')),
+        findsNothing,
+      );
+
+      modeController.dispose();
+      prefs.dispose();
+      campaignController.dispose();
+      auth.dispose();
+      session.dispose();
+    },
+  );
 }
 
 const _user = AuthUser(

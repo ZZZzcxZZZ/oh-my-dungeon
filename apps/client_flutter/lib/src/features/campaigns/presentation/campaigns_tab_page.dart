@@ -51,6 +51,10 @@ class CampaignsTabPage extends StatefulWidget {
 }
 
 class _CampaignsTabPageState extends State<CampaignsTabPage> {
+  /// Spec §客户端工作模式: 模式提示每个战役每会话只显示一次。已提示过
+  /// 的战役 ID 加入此集合后不再弹窗，避免反复打扰用户。
+  final Set<String> _modePromptShownCampaignIds = <String>{};
+
   @override
   void initState() {
     super.initState();
@@ -248,6 +252,13 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
     Campaign campaign,
     CharacterSheet? character,
   ) async {
+    // Spec §客户端工作模式: 进入战役前根据用户角色与当前模式给出提示。
+    // - owner/dm 在 Player 模式：提示一键切换 DM 模式
+    // - 非 owner 在 DM 模式：提示只能以玩家身份参与
+    // 每个战役每会话只提示一次，用户取消后不再打扰。
+    await _maybeShowModePrompt(campaign);
+    if (!mounted) return;
+
     await widget.onCampaignOpened?.call(campaign.id);
     if (!mounted) return;
     Navigator.of(context).push(
@@ -262,6 +273,93 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
           campaignActorId: null,
           diceRoller: widget.diceRoller,
         ),
+      ),
+    );
+  }
+
+  /// 根据当前用户在战役中的角色与客户端模式显示一次性提示。
+  ///
+  /// 返回 true 表示用户已确认继续（或无需提示），返回 false 表示用户
+  /// 取消进入战役（仅在非 owner 误入 DM 模式时给用户机会退回）。
+  Future<void> _maybeShowModePrompt(Campaign campaign) async {
+    if (_modePromptShownCampaignIds.contains(campaign.id)) return;
+    final currentUserId = widget.authController.user?.id;
+    if (currentUserId == null) return;
+
+    final membership = campaign.memberPreview
+        .where((m) => m.userId == currentUserId)
+        .firstOrNull;
+    final isOwnerOrDm = campaign.ownerId == currentUserId ||
+        membership?.role == 'owner' ||
+        membership?.role == 'dm';
+    final currentMode = widget.modeController.mode;
+
+    // Spec §客户端工作模式: owner/dm 在 Player 模式提示一键切换 DM 模式。
+    if (isOwnerOrDm && currentMode == ClientMode.player) {
+      _modePromptShownCampaignIds.add(campaign.id);
+      final switchToDm = await _showSwitchToDmDialog(campaign);
+      if (switchToDm && mounted) {
+        await widget.modeController.setMode(ClientMode.dungeonMaster);
+      }
+      return;
+    }
+
+    // Spec §客户端工作模式: 普通玩家即使切换到 DM 模式，仍然只拥有
+    // 该战役的 player 权限。提示用户当前模式不影响其权限。
+    if (!isOwnerOrDm && currentMode == ClientMode.dungeonMaster) {
+      _modePromptShownCampaignIds.add(campaign.id);
+      await _showPlayerOnlyDialog(campaign);
+      return;
+    }
+  }
+
+  Future<bool> _showSwitchToDmDialog(Campaign campaign) async {
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            key: const Key('mode-switch-to-dm-dialog'),
+            title: const Text('切换到主持人模式？'),
+            content: Text(
+              '你是战役「${campaign.name}」的主持人。当前处于玩家模式，'
+              '切换到主持人模式后才能使用 DM 工具（创建 NPC、管理档案、'
+              '邀请成员等）。',
+            ),
+            actions: [
+              TextButton(
+                key: const Key('mode-switch-stay-player'),
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('继续以玩家身份'),
+              ),
+              FilledButton(
+                key: const Key('mode-switch-confirm-dm'),
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('切换到主持人模式'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Future<void> _showPlayerOnlyDialog(Campaign campaign) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) => AlertDialog(
+        key: const Key('mode-player-only-dialog'),
+        title: const Text('以玩家身份参与'),
+        content: Text(
+          '你在战役「${campaign.name}」中是玩家。主持人模式是应用偏好，'
+          '不会改变你在该战役中的权限；只有战役主持人才能使用 DM 工具。',
+        ),
+        actions: [
+          FilledButton(
+            key: const Key('mode-player-only-ack'),
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('知道了'),
+          ),
+        ],
       ),
     );
   }

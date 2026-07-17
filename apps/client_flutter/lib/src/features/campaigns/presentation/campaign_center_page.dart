@@ -256,6 +256,34 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
                       : (widget.actorController!.error ?? '创建失败');
                 }
               : null,
+          onConvertToPersistent: _canManage && widget.actorController != null
+              ? ({required CampaignActor actor}) async {
+                  final success =
+                      await widget.actorController!.convertToPersistent(actor);
+                  return success
+                      ? null
+                      : (widget.actorController!.error ?? '转为常驻失败');
+                }
+              : null,
+          onBatchArchive: _canManage && widget.actorController != null
+              ? ({required List<String> actorIds}) async {
+                  var lastError = '归档失败';
+                  for (final id in actorIds) {
+                    final actor = _actors.firstWhere(
+                      (a) => a.id == id,
+                      orElse: () => _actors.first,
+                    );
+                    final success =
+                        await widget.actorController!.archiveActor(actor);
+                    if (!success) {
+                      lastError = widget.actorController!.error ?? lastError;
+                    }
+                  }
+                  return lastError == '归档失败' && actorIds.isNotEmpty
+                      ? null
+                      : lastError;
+                }
+              : null,
         );
       case 2:
         return CampaignArchivePanel(

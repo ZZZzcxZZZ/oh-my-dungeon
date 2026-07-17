@@ -10,12 +10,13 @@ import '../widgets/invite_share.dart';
 /// Team panel: lists campaign members with their bound actor avatars and
 /// opens the quick sheet on tap.
 ///
-/// Spec §队伍: 邀请和管理成员在 `战役中心 → 队伍`，DM 就地操作。
-/// 当 `isManager` 为 true 时，面板顶部显示"邀请成员"按钮，点击后
-/// 调用 [onCreateInvite] 创建邀请码并弹出分享对话框。
-///
-/// Plan 3 task 2 — extracted from the legacy `_MembersTab`.
-class CampaignTeamPanel extends StatelessWidget {
+/// Spec §队伍 / §完整管理: 邀请和管理成员在 `战役中心 → 队伍`，DM 就地操作。
+/// 当 `isManager` 为 true 时：
+/// - 顶部显示"邀请成员"按钮（[onCreateInvite]）。
+/// - 顶部显示"创建常驻角色"按钮（[onCreatePersistentActor]）。
+/// - 底部显示"DM 角色管理"区块，列出 DM 创建的 NPC/怪物/同伴，支持
+///   转为常驻（[onConvertToPersistent]）和批量归档（[onBatchArchive]）。
+class CampaignTeamPanel extends StatefulWidget {
   const CampaignTeamPanel({
     required this.members,
     required this.actors,
@@ -24,6 +25,8 @@ class CampaignTeamPanel extends StatelessWidget {
     this.campaignName,
     this.serverUrl,
     this.onCreatePersistentActor,
+    this.onConvertToPersistent,
+    this.onBatchArchive,
     super.key,
   });
 
@@ -50,59 +53,219 @@ class CampaignTeamPanel extends StatelessWidget {
     String? avatarUrl,
   })? onCreatePersistentActor;
 
+  /// Spec §完整管理: 转为常驻 — DM 把 temporary 角色升级为 persistent。
+  /// 返回 null 表示成功，非 null 字符串表示错误消息。
+  final Future<String?> Function({required CampaignActor actor})?
+      onConvertToPersistent;
+
+  /// Spec §完整管理: 单个或批量归档 — DM 选中多个角色后一键归档。
+  /// 返回 null 表示成功，非 null 字符串表示错误消息。
+  final Future<String?> Function({required List<String> actorIds})?
+      onBatchArchive;
+
+  @override
+  State<CampaignTeamPanel> createState() => _CampaignTeamPanelState();
+}
+
+class _CampaignTeamPanelState extends State<CampaignTeamPanel> {
+  /// Spec §完整管理: 多选模式状态。开启后每个 DM 角色显示复选框，
+  /// 底部出现"批量归档"按钮。关闭后恢复单条管理模式。
+  bool _selectMode = false;
+  final Set<String> _selectedActorIds = <String>{};
+
+  /// DM 管理的角色：ownerUserId 为空且 actorType 不是 player（即 NPC/怪物/同伴）。
+  /// 已归档的角色不进入管理列表。
+  List<CampaignActor> get _managedActors => widget.actors
+      .where(
+        (actor) =>
+            actor.ownerUserId == null &&
+            actor.actorType != 'player' &&
+            actor.status != 'archived',
+      )
+      .toList(growable: false);
+
   @override
   Widget build(BuildContext context) {
-    final hasInviteHeader = isManager && onCreateInvite != null;
-    final hasCreateActorHeader = isManager && onCreatePersistentActor != null;
-    final headerCount = (hasInviteHeader ? 1 : 0) + (hasCreateActorHeader ? 1 : 0);
+    final hasInviteHeader = widget.isManager && widget.onCreateInvite != null;
+    final hasCreateActorHeader =
+        widget.isManager && widget.onCreatePersistentActor != null;
+    final headerCount =
+        (hasInviteHeader ? 1 : 0) + (hasCreateActorHeader ? 1 : 0);
+    final managedActors = _managedActors;
+    final showManagedSection =
+        widget.isManager && managedActors.isNotEmpty;
+
     return KeyedSubtree(
-      key: key ?? const Key('campaign-team-panel'),
+      key: widget.key ?? const Key('campaign-team-panel'),
       child: ListView.separated(
         padding: const EdgeInsets.all(12),
-        itemCount: members.length + headerCount,
+        itemCount:
+            widget.members.length + headerCount + (showManagedSection ? 1 : 0),
         separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (context, index) {
           if (hasInviteHeader && index == 0) {
             return _InviteButton(
-              campaignName: campaignName,
-              serverUrl: serverUrl,
-              onCreateInvite: onCreateInvite!,
+              campaignName: widget.campaignName,
+              serverUrl: widget.serverUrl,
+              onCreateInvite: widget.onCreateInvite!,
             );
           }
           if (hasCreateActorHeader && index == (hasInviteHeader ? 1 : 0)) {
             return _CreatePersistentActorButton(
-              onCreatePersistentActor: onCreatePersistentActor!,
+              onCreatePersistentActor: widget.onCreatePersistentActor!,
             );
           }
-          final memberIndex = index - headerCount;
-          final member = members[memberIndex];
-          final actor = actors
-              .where((item) => item.ownerUserId == member.userId)
-              .firstOrNull;
-          final name = actor?.sheet['name']?.toString().trim();
-          return ListTile(
-            onTap:
-                actor == null ? null : () => _showQuickSheet(context, actor),
-            leading: CampaignAvatar(
-              initials: (name?.isNotEmpty ?? false)
-                  ? name!
-                  : member.displayName,
-              imageUrl: actor?.sheet['avatarUrl'] as String?,
-              health: CampaignAvatar.healthFromHp(
-                actor?.sheet['currentHp'] as num?,
-                actor?.sheet['maxHp'] as num?,
-              ),
-              size: 40,
-            ),
-            title: Text(member.displayName),
-            subtitle: Text(
-              name?.isNotEmpty ?? false ? name! : _roleLabel(member.role),
-            ),
-            trailing:
-                actor == null ? null : const Icon(Icons.chevron_right),
-          );
+          final memberStart = headerCount;
+          if (index < memberStart + widget.members.length) {
+            final memberIndex = index - headerCount;
+            final member = widget.members[memberIndex];
+            return _buildMemberTile(member);
+          }
+          // Last slot: DM 角色管理 section.
+          return _buildManagedSection(managedActors);
         },
       ),
+    );
+  }
+
+  Widget _buildMemberTile(CampaignMemberPreview member) {
+    final actor = widget.actors
+        .where((item) => item.ownerUserId == member.userId)
+        .firstOrNull;
+    final name = actor?.sheet['name']?.toString().trim();
+    return ListTile(
+      onTap:
+          actor == null ? null : () => _showQuickSheet(context, actor),
+      leading: CampaignAvatar(
+        initials: (name?.isNotEmpty ?? false) ? name! : member.displayName,
+        imageUrl: actor?.sheet['avatarUrl'] as String?,
+        health: CampaignAvatar.healthFromHp(
+          actor?.sheet['currentHp'] as num?,
+          actor?.sheet['maxHp'] as num?,
+        ),
+        size: 40,
+      ),
+      title: Text(member.displayName),
+      subtitle: Text(
+        name?.isNotEmpty ?? false ? name! : _roleLabel(member.role),
+      ),
+      trailing: actor == null ? null : const Icon(Icons.chevron_right),
+    );
+  }
+
+  /// Spec §完整管理: DM 角色管理区块。列出 NPC/怪物/同伴，支持：
+  /// - 临时角色显示"转为常驻"按钮（[onConvertToPersistent]）
+  /// - "管理"切换进入多选模式，显示"批量归档"按钮（[onBatchArchive]）
+  Widget _buildManagedSection(List<CampaignActor> managedActors) {
+    return Card(
+      key: const Key('team-managed-section'),
+      margin: const EdgeInsets.only(top: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'DM 角色管理',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                if (_selectMode && _selectedActorIds.isNotEmpty)
+                  FilledButton.tonalIcon(
+                    key: const Key('team-batch-archive-button'),
+                    onPressed: _onBatchArchive,
+                    icon: const Icon(Icons.archive_outlined),
+                    label: const Text('批量归档'),
+                  ),
+                IconButton(
+                  key: const Key('team-managed-toggle-select'),
+                  onPressed: () => setState(() {
+                    _selectMode = !_selectMode;
+                    if (!_selectMode) _selectedActorIds.clear();
+                  }),
+                  icon: Icon(_selectMode ? Icons.close : Icons.checklist),
+                  tooltip: _selectMode ? '退出管理' : '管理',
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            for (final actor in managedActors)
+              _buildManagedActorTile(actor),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildManagedActorTile(CampaignActor actor) {
+    final name = actor.sheet['name']?.toString().trim() ?? '未命名';
+    final isTemporary = actor.lifecycle == 'temporary';
+    final isSelected = _selectedActorIds.contains(actor.id);
+    return ListTile(
+      dense: true,
+      leading: _selectMode
+          ? Checkbox(
+              key: Key('team-actor-checkbox-${actor.id}'),
+              value: isSelected,
+              onChanged: (value) => setState(() {
+                if (value == true) {
+                  _selectedActorIds.add(actor.id);
+                } else {
+                  _selectedActorIds.remove(actor.id);
+                }
+              }),
+            )
+          : CampaignAvatar(
+              initials: name,
+              imageUrl: actor.sheet['avatarUrl'] as String?,
+              size: 32,
+            ),
+      title: Text(name),
+      subtitle: Row(
+        children: [
+          _ActorTypeBadge(actorType: actor.actorType),
+          const SizedBox(width: 6),
+          if (isTemporary) const _LifecycleBadge(lifecycle: 'temporary'),
+        ],
+      ),
+      trailing: _selectMode
+          ? null
+          : (isTemporary && widget.onConvertToPersistent != null
+                ? IconButton(
+                    key: Key('team-convert-persistent-${actor.id}'),
+                    tooltip: '转为常驻',
+                    onPressed: () => _onConvertToPersistent(actor),
+                    icon: const Icon(Icons.push_pin_outlined),
+                  )
+                : null),
+    );
+  }
+
+  Future<void> _onConvertToPersistent(CampaignActor actor) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final error = await widget.onConvertToPersistent!(actor: actor);
+    if (!mounted) return;
+    messenger.showSnackBar(
+      SnackBar(content: Text(error ?? '已转为常驻角色')),
+    );
+  }
+
+  Future<void> _onBatchArchive() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ids = List<String>.of(_selectedActorIds);
+    final error = await widget.onBatchArchive!(actorIds: ids);
+    if (!mounted) return;
+    if (error == null) {
+      setState(() {
+        _selectMode = false;
+        _selectedActorIds.clear();
+      });
+    }
+    messenger.showSnackBar(
+      SnackBar(content: Text(error ?? '已归档 ${ids.length} 个角色')),
     );
   }
 
@@ -112,7 +275,56 @@ class CampaignTeamPanel extends StatelessWidget {
       showDragHandle: true,
       builder: (_) => CampaignActorQuickSheet(
         actor: actor,
-        isManager: isManager,
+        isManager: widget.isManager,
+      ),
+    );
+  }
+}
+
+class _ActorTypeBadge extends StatelessWidget {
+  const _ActorTypeBadge({required this.actorType});
+
+  final String actorType;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final label = switch (actorType) {
+      'npc' => 'NPC',
+      'monster' => '怪物',
+      'companion' => '同伴',
+      'unclaimed' => '未认领',
+      _ => actorType,
+    };
+    return Text(
+      label,
+      style: theme.textTheme.labelSmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+    );
+  }
+}
+
+class _LifecycleBadge extends StatelessWidget {
+  const _LifecycleBadge({required this.lifecycle});
+
+  final String lifecycle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (lifecycle != 'temporary') return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        '临时',
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.onSecondaryContainer,
+        ),
       ),
     );
   }

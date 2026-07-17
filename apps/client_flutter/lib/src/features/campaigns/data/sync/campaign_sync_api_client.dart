@@ -85,6 +85,7 @@ abstract interface class CampaignSyncApiClient {
     required String actorId,
     required int baseRevision,
     required Map<String, Object?> sheet,
+    String? lifecycle,
   });
 
   Future<CampaignActor> archiveActor({
@@ -297,13 +298,19 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
     required String actorId,
     required int baseRevision,
     required Map<String, Object?> sheet,
+    String? lifecycle,
   }) async {
+    final body = <String, Object?>{
+      'baseRevision': baseRevision,
+      'sheet': sheet,
+      'lifecycle': ?lifecycle,
+    };
     final response = await _client.put(
       Uri.parse(
         '${_normalize(apiBaseUrl)}/campaigns/$campaignId/actors/$actorId',
       ),
       headers: _headers(accessToken),
-      body: jsonEncode({'baseRevision': baseRevision, 'sheet': sheet}),
+      body: jsonEncode(body),
     );
     if (response.statusCode == 409) {
       throw CampaignConflictException(_decodeConflict(response));

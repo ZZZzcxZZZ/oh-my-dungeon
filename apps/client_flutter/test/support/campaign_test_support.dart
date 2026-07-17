@@ -13,6 +13,7 @@ CampaignActor testCampaignActor({
   String? sourceCharacterId,
   String actorType = 'player',
   String status = 'active',
+  String lifecycle = 'persistent',
   Map<String, Object?>? sheet,
   int revision = 1,
 }) => CampaignActor(
@@ -22,6 +23,7 @@ CampaignActor testCampaignActor({
   sourceCharacterId: sourceCharacterId,
   actorType: actorType,
   status: status,
+  lifecycle: lifecycle,
   sheet: sheet ?? {'name': 'Test Hero', 'currentHp': 10, 'maxHp': 20},
   revision: revision,
   updatedBy: 'user-1',
@@ -312,19 +314,26 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
     required String actorId,
     required int baseRevision,
     required Map<String, Object?> sheet,
+    String? lifecycle,
   }) async {
     updateActorCalls.add({
       'campaignId': campaignId,
       'actorId': actorId,
       'baseRevision': baseRevision,
       'sheet': sheet,
+      'lifecycle': ?lifecycle,
     });
     final exception = nextUpdateActorException;
     if (exception != null) {
       nextUpdateActorException = null;
       throw exception;
     }
-    return testCampaignActor(id: actorId, campaignId: campaignId, sheet: sheet);
+    return testCampaignActor(
+      id: actorId,
+      campaignId: campaignId,
+      sheet: sheet,
+      lifecycle: lifecycle ?? 'persistent',
+    );
   }
 
   @override

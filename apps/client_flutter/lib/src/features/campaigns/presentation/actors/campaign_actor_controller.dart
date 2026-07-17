@@ -351,8 +351,9 @@ class CampaignActorController extends ChangeNotifier {
 
   Future<bool> updateActor(
     CampaignActor actor,
-    Map<String, Object?> sheet,
-  ) async {
+    Map<String, Object?> sheet, {
+    String? lifecycle,
+  }) async {
     final campaignId = _selectedCampaignId;
     if (campaignId == null) return false;
     _error = null;
@@ -365,6 +366,7 @@ class CampaignActorController extends ChangeNotifier {
         actorId: actor.id,
         baseRevision: actor.revision,
         sheet: sheet,
+        lifecycle: lifecycle,
       );
       await _cacheRepository.applyPage(
         campaignId,
@@ -385,6 +387,16 @@ class CampaignActorController extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  /// Spec §完整管理: 转为常驻 — DM 把 temporary 角色升级为 persistent。
+  /// 仅发送 lifecycle 变更，sheet 保持原样。服务端要求 canManageCampaign。
+  Future<bool> convertToPersistent(CampaignActor actor) {
+    return updateActor(
+      actor,
+      Map<String, Object?>.from(actor.sheet),
+      lifecycle: 'persistent',
+    );
   }
 
   Future<bool> archiveActor(CampaignActor actor) async {

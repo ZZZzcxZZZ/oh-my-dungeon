@@ -115,35 +115,188 @@ class CampaignArchivePanel extends StatelessWidget {
   }
 }
 
-void _showArchiveDetail(BuildContext context, CampaignArchiveEntry entry) {
-  showModalBottomSheet<void>(
+/// Spec §档案: 点击档案条目后用更丰富的卡片浮窗展示完整信息：
+/// 标题、类型、正文、来源消息、关联角色、关联地点、相关条目。
+Future<void> _showArchiveDetail(
+  BuildContext context,
+  CampaignArchiveEntry entry,
+) {
+  final colorScheme = Theme.of(context).colorScheme;
+  final payload = entry.payload;
+  final body = payload['body'] as String?;
+  final sourceMessageId = payload['sourceMessageId'] as String?;
+  final relatedActorId = payload['relatedActorId'] as String?;
+  final relatedLocationId = payload['relatedLocationId'] as String?;
+  final relatedEntryIds = payload['relatedEntryIds'];
+
+  return showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
-    builder: (context) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              entry.title,
-              style: Theme.of(context).textTheme.titleLarge,
+    isScrollControlled: true,
+    builder: (sheetContext) {
+      return SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.8,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Top type banner — colored container with kind label and
+                  // optional pinned indicator.
+                  Container(
+                    key: const Key('archive-detail-banner'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(_archiveIcon(entry.kind), size: 18),
+                        const SizedBox(width: 6),
+                        Text(
+                          _archiveKindLabel(entry.kind),
+                          style: Theme.of(sheetContext)
+                              .textTheme
+                              .labelLarge
+                              ?.copyWith(
+                                color: colorScheme.onSurface,
+                              ),
+                        ),
+                        const Spacer(),
+                        if (entry.pinned)
+                          Icon(
+                            Icons.push_pin,
+                            size: 16,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Title.
+                  Text(
+                    entry.title,
+                    style: Theme.of(sheetContext).textTheme.titleLarge,
+                  ),
+                  // Summary (if present).
+                  if (entry.summary.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      entry.summary,
+                      style: Theme.of(sheetContext)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                  // Body content (from payload.body).
+                  if (body != null && body.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      '正文',
+                      style: Theme.of(sheetContext).textTheme.labelLarge,
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      key: const Key('archive-detail-body'),
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(body),
+                    ),
+                  ],
+                  // Related metadata chips.
+                  if (sourceMessageId != null ||
+                      relatedActorId != null ||
+                      relatedLocationId != null ||
+                      relatedEntryIds != null) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      '关联',
+                      style: Theme.of(sheetContext).textTheme.labelLarge,
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        if (sourceMessageId != null)
+                          _ArchiveMetaChip(
+                            icon: Icons.forum_outlined,
+                            label: '来源消息：$sourceMessageId',
+                          ),
+                        if (relatedActorId != null)
+                          _ArchiveMetaChip(
+                            icon: Icons.person_outline,
+                            label: '关联角色：$relatedActorId',
+                          ),
+                        if (relatedLocationId != null)
+                          _ArchiveMetaChip(
+                            icon: Icons.place_outlined,
+                            label: '关联地点：$relatedLocationId',
+                          ),
+                        if (relatedEntryIds != null)
+                          _ArchiveMetaChip(
+                            icon: Icons.link,
+                            label: '相关条目：$relatedEntryIds',
+                          ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  // Last updated timestamp.
+                  Text(
+                    '更新于 ${entry.updatedAt}',
+                    style: Theme.of(sheetContext).textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              _archiveKindLabel(entry.kind),
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            if (entry.summary.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text(entry.summary),
-            ],
-          ],
+          ),
         ),
-      ),
-    ),
+      );
+    },
   );
+}
+
+class _ArchiveMetaChip extends StatelessWidget {
+  const _ArchiveMetaChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+      ],
+    );
+  }
 }
 
 IconData _archiveIcon(String kind) => switch (kind) {

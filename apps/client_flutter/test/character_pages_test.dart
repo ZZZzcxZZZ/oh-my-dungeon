@@ -65,6 +65,51 @@ void main() {
     expect(find.widgetWithText(TextField, '私人笔记'), findsOneWidget);
   });
 
+  // Spec §头像来源: 角色卡头部应优先显示头像图片，无头像时退回首字母。
+  testWidgets(
+    'character detail header shows avatar image when avatarUrl is set',
+    (tester) async {
+      const avatarBytes = [1, 2, 3, 4];
+      final avatarChar = _character.copyWith(
+        avatarUrl: Uri.dataFromBytes(
+          avatarBytes,
+          mimeType: 'image/png',
+        ).toString(),
+      );
+      await tester.pumpWidget(
+        MaterialApp(home: CharacterDetailPage(character: avatarChar)),
+      );
+
+      // 头部的 CircleAvatar 应当配置了 backgroundImage（而非首字母 fallback）。
+      final avatar = tester.widget<CircleAvatar>(
+        find.ancestor(
+          of: find.text('Arannis'),
+          matching: find.byType(CircleAvatar),
+        ),
+      );
+      expect(avatar.backgroundImage, isNotNull);
+      expect(avatar.child, isNull);
+    },
+  );
+
+  testWidgets(
+    'character detail header falls back to initial when no avatar',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(home: CharacterDetailPage(character: _character)),
+      );
+
+      final avatar = tester.widget<CircleAvatar>(
+        find.ancestor(
+          of: find.text('Arannis'),
+          matching: find.byType(CircleAvatar),
+        ),
+      );
+      expect(avatar.backgroundImage, isNull);
+      expect(avatar.child, isNotNull);
+    },
+  );
+
   testWidgets('character resources can be added with a rest recovery rule', (
     tester,
   ) async {

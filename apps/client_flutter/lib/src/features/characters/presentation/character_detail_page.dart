@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
@@ -295,7 +296,10 @@ class _CharacterHeader extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 18,
-            child: Text(character.name.characters.first.toUpperCase()),
+            backgroundImage: _avatarImage(character.avatarUrl),
+            child: character.avatarUrl == null || character.avatarUrl!.isEmpty
+                ? Text(character.name.characters.first.toUpperCase())
+                : null,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -340,6 +344,22 @@ class _CharacterHeader extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  // 规范 §头像来源：本地角色头像以 data URL 离线保存，战役角色头像为网络 URL。
+  // 这里同时支持两种格式，无头像时返回 null 让 CircleAvatar 退回首字母。
+  ImageProvider<Object>? _avatarImage(String? url) {
+    if (url == null || url.isEmpty) return null;
+    if (url.startsWith('data:image/')) {
+      final separator = url.indexOf(',');
+      if (separator < 0) return null;
+      try {
+        return MemoryImage(base64Decode(url.substring(separator + 1)));
+      } on FormatException {
+        return null;
+      }
+    }
+    return NetworkImage(url);
   }
 }
 

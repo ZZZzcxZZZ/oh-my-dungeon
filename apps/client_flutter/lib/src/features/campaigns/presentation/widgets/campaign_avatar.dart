@@ -26,6 +26,19 @@ class CampaignAvatar extends StatelessWidget {
   final double size;
   final VoidCallback? onTap;
 
+  /// 按 HP 比例计算健康分级：>50% 健康、>25% 受伤、>0 危险、0 倒地、
+  /// 无 maxHp 未知。供 viewer-aware 投影后的客户端渲染复用。
+  static CampaignAvatarHealth healthFromHp(num? current, num? max) {
+    final m = max ?? 0;
+    if (m <= 0) return CampaignAvatarHealth.unknown;
+    final c = current ?? 0;
+    if (c <= 0) return CampaignAvatarHealth.down;
+    final ratio = c / m;
+    if (ratio > 0.5) return CampaignAvatarHealth.healthy;
+    if (ratio > 0.25) return CampaignAvatarHealth.injured;
+    return CampaignAvatarHealth.critical;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);

@@ -3,6 +3,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('healthFromHp', () {
+    test('maps HP ratio to health grade', () {
+      expect(CampaignAvatar.healthFromHp(20, 20), CampaignAvatarHealth.healthy);
+      expect(CampaignAvatar.healthFromHp(11, 20), CampaignAvatarHealth.healthy);
+      expect(CampaignAvatar.healthFromHp(10, 20), CampaignAvatarHealth.injured);
+      expect(CampaignAvatar.healthFromHp(5, 20), CampaignAvatarHealth.injured);
+      expect(CampaignAvatar.healthFromHp(3, 20), CampaignAvatarHealth.critical);
+      expect(CampaignAvatar.healthFromHp(0, 20), CampaignAvatarHealth.down);
+    });
+
+    test('returns unknown when maxHp missing or zero', () {
+      expect(CampaignAvatar.healthFromHp(10, 0), CampaignAvatarHealth.unknown);
+      expect(CampaignAvatar.healthFromHp(null, null),
+          CampaignAvatarHealth.unknown);
+    });
+  });
+
   testWidgets('shows first initial when no image is provided', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(

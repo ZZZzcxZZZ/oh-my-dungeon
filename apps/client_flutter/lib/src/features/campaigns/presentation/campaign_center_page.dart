@@ -5,6 +5,7 @@ import '../domain/campaign_actor.dart';
 import '../domain/campaign_archive_entry.dart';
 import 'actors/campaign_actor_controller.dart';
 import 'campaign_controller.dart';
+import 'widgets/campaign_avatar.dart';
 
 /// The campaign's non-chat workspace. Chat stays fast and focused; durable
 /// information lives here behind a compact Material 3 tab bar.
@@ -218,7 +219,15 @@ class _MembersTab extends StatelessWidget {
           final actor = actors.where((item) => item.ownerUserId == member.userId).firstOrNull;
           final name = actor?.sheet['name']?.toString().trim();
           return ListTile(
-            leading: CircleAvatar(child: Text((name?.isNotEmpty ?? false) ? name!.characters.first : member.displayName.characters.first)),
+            leading: CampaignAvatar(
+              initials: (name?.isNotEmpty ?? false) ? name! : member.displayName,
+              imageUrl: actor?.sheet['avatarUrl'] as String?,
+              health: CampaignAvatar.healthFromHp(
+                actor?.sheet['currentHp'] as num?,
+                actor?.sheet['maxHp'] as num?,
+              ),
+              size: 40,
+            ),
             title: Text(member.displayName),
             subtitle: Text(name?.isNotEmpty ?? false ? name! : _roleLabel(member.role)),
             trailing: actor == null ? null : const Icon(Icons.chevron_right),

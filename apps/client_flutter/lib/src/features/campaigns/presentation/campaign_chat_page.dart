@@ -16,7 +16,6 @@ import 'campaign_controller.dart';
 import 'campaign_center_page.dart';
 import 'campaign_detail_page.dart';
 import 'chat/campaign_chat_bubble.dart';
-import 'chat/campaign_member_tile.dart';
 import 'chat/chat_avatar.dart';
 import 'chat/chat_helpers.dart';
 import 'chat/chat_mode_picker.dart';
@@ -143,6 +142,11 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       ]),
       builder: (context, _) {
         final messages = widget.campaignController.messages;
+        final workspace = widget.campaignController.workspaceContext;
+        final memberCount = workspace?.members.length ??
+            widget.campaign.memberPreview.length;
+        final speakerMode = workspace?.membership.speakerMode;
+        final subtitle = _onlineStatusLine(memberCount, speakerMode);
         return Scaffold(
           appBar: AppBar(
             title: Column(
@@ -150,7 +154,8 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
               children: [
                 Text(widget.campaign.name),
                 Text(
-                  chatText('campaignChatRoom'),
+                  subtitle,
+                  key: const Key('campaign-chat-subtitle'),
                   style: Theme.of(context).textTheme.labelSmall,
                 ),
               ],
@@ -284,6 +289,19 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
           .canManageCampaign ??
       false;
 
+  /// Spec §顶部: AppBar 副标题显示简要在线状态 — 成员数 + 当前发言身份。
+  String _onlineStatusLine(int memberCount, String? speakerMode) {
+    final memberPart = '$memberCount 位成员';
+    final speakerPart = switch (speakerMode) {
+      'narrator' => ' · 旁白',
+      'ooc' => ' · 场外',
+      'actor' => ' · 角色发言',
+      'boundActor' => ' · 绑定角色',
+      _ => '',
+    };
+    return '$memberPart$speakerPart';
+  }
+
   /// 解析消息头像点击：当消息绑定的 campaignActorId 能在 actorController 中
   /// 找到 active 角色时，返回弹出 CampaignActorQuickSheet 的回调；否则返回
   /// null，头像保持静默（避免点击无 actor 的陌生人头像时出现空弹窗）。
@@ -321,119 +339,6 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                 );
               },
       ),
-    );
-  }
-
-  // Kept as a composable overview for a future embedded desktop workspace;
-  // mobile and web chat intentionally use the explicit campaign center route.
-  Widget buildCampaignHub() {
-    final actors = widget.actorController?.actors ?? const <CampaignActor>[];
-    final colorScheme = Theme.of(context).colorScheme;
-    return CustomScrollView(
-      key: const Key('campaign-hub-page'),
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          sliver: SliverToBoxAdapter(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '战役信息',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                    ),
-                    Chip(
-                      avatar: Icon(
-                        _canManageCampaign
-                            ? Icons.shield_outlined
-                            : Icons.person_outline,
-                        size: 18,
-                      ),
-                      label: Text(_canManageCampaign ? 'DM' : '玩家'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  widget.campaign.description.trim().isEmpty
-                      ? '尚未填写战役简介'
-                      : widget.campaign.description,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    FilledButton.tonalIcon(
-                      onPressed: _showMembers,
-                      icon: const Icon(Icons.people_outline),
-                      label: const Text('成员'),
-                    ),
-                    if (widget.campaignContentController != null)
-                      FilledButton.tonalIcon(
-                        onPressed: _openCampaignContent,
-                        icon: const Icon(Icons.library_books_outlined),
-                        label: const Text('共享资料'),
-                      ),
-                    if (_canManageCampaign)
-                      FilledButton.tonalIcon(
-                        onPressed: _openCampaignManagement,
-                        icon: const Icon(Icons.admin_panel_settings_outlined),
-                        label: const Text('战役管理'),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-        SliverToBoxAdapter(child: Divider(color: colorScheme.outlineVariant)),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          sliver: SliverToBoxAdapter(
-            child: Text('战役角色', style: Theme.of(context).textTheme.titleMedium),
-          ),
-        ),
-        if (actors.isEmpty)
-          const SliverToBoxAdapter(
-            child: ListTile(
-              leading: Icon(Icons.person_off_outlined),
-              title: Text('尚未同步战役角色'),
-              subtitle: Text('玩家发布角色后会显示在这里'),
-            ),
-          )
-        else
-          SliverList.builder(
-            itemCount: actors.length,
-            itemBuilder: (context, index) {
-              final actor = actors[index];
-              final name = actor.sheet['name']?.toString().trim();
-              return ListTile(
-                key: Key('campaign-actor-${actor.id}'),
-                leading: ChatAvatar(
-                  name: name == null || name.isEmpty ? '?' : name,
-                  avatarUrl: actor.sheet['avatarUrl'] as String?,
-                ),
-                title: Text(name == null || name.isEmpty ? '未命名角色' : name),
-                subtitle: Text(actorStatusLine(actor)),
-                trailing: _canManageCampaign
-                    ? const Icon(Icons.chevron_right)
-                    : null,
-                onTap: _canManageCampaign
-                    ? () => _showActorActions(actor)
-                    : null,
-              );
-            },
-          ),
-        const SliverToBoxAdapter(child: SizedBox(height: 32)),
-      ],
     );
   }
 
@@ -1434,56 +1339,6 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     if (selected != null && mounted) await _showCheckRequestSheet(selected);
   }
 
-  Future<void> _showActorActions(CampaignActor actor) {
-    final name = actor.sheet['name']?.toString().trim();
-    return showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        return SafeArea(
-          child: ListView(
-            shrinkWrap: true,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            children: [
-              Text(
-                name == null || name.isEmpty ? '未命名角色' : name,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              ListTile(
-                leading: const Icon(Icons.badge_outlined),
-                title: const Text('查看并编辑角色'),
-                subtitle: const Text('DM 拥有该战役角色的完整编辑权'),
-                onTap: widget.actorController == null
-                    ? null
-                    : () {
-                        Navigator.of(sheetContext).pop();
-                        Navigator.of(context).push<void>(
-                          MaterialPageRoute<void>(
-                            builder: (_) => CampaignActorSheetPage(
-                              controller: widget.actorController!,
-                              actorId: actor.id,
-                            ),
-                          ),
-                        );
-                      },
-              ),
-              ListTile(
-                leading: const Icon(Icons.fact_check_outlined),
-                title: const Text('发起检定'),
-                subtitle: const Text('选择属性、豁免或技能并发送到聊天室'),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  _showCheckRequestSheet(actor);
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   Future<void> _showCheckRequestSheet(CampaignActor actor) async {
     final draft = await showModalBottomSheet<CheckRequestDraft>(
       context: context,
@@ -1575,61 +1430,6 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         context,
       ).showSnackBar(SnackBar(content: Text(chatText('sendFailed'))));
     }
-  }
-
-  Future<void> _showMembers() {
-    final members = widget.campaign.memberPreview;
-    final actors = widget.actorController?.actors ?? const <CampaignActor>[];
-    return showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        chatText('campaignMembers'),
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: MaterialLocalizations.of(
-                        context,
-                      ).closeButtonTooltip,
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-                if (members.isEmpty && actors.isEmpty)
-                  ListTile(
-                    leading: const CircleAvatar(child: Icon(Icons.person_off)),
-                    title: Text(chatText('emptyMembers')),
-                  )
-                else if (members.isNotEmpty)
-                  for (final member in members)
-                    CampaignMemberTile(
-                      member: member,
-                      actor: actors
-                          .where((actor) => actor.ownerUserId == member.userId)
-                          .firstOrNull,
-                    )
-                else
-                  for (final actor in actors)
-                    ActorOnlyMemberTile(actor: actor),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 }
 

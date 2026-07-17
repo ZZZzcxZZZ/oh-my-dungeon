@@ -1031,6 +1031,23 @@ void main() {
       expect(find.text('我发现了一个线索'), findsOneWidget);
     },
   );
+
+  // Spec §顶部: AppBar 副标题应显示简要在线状态 (成员数 + 当前发言身份),
+  // 而不是静态 "战役聊天室" 文案。
+  testWidgets(
+    'chat AppBar subtitle shows online status instead of static label',
+    (tester) async {
+      await pumpChatPage(tester);
+
+      // 副标题 widget 应当存在, 且文本包含 "位成员"。
+      final subtitle = tester.widget<Text>(
+        find.byKey(const Key('campaign-chat-subtitle')),
+      );
+      expect(subtitle.data, contains('位成员'));
+      // 不应再是旧的静态文案。
+      expect(subtitle.data, isNot('战役聊天室'));
+    },
+  );
 }
 
 class _RecordingCampaignClient implements CampaignClient {

@@ -493,7 +493,6 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
       builder: (context) => PublishCharacterSheet(
         controller: actorController,
         character: character,
-        onPickImage: _pickAvatarImage,
       ),
     );
   }

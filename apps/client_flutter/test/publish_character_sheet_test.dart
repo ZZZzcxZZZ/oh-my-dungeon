@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:dnd_table_client/src/features/campaigns/data/sync/campaign_sync_api_client.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_controller.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/actors/publish_character_sheet.dart';
@@ -11,11 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'support/campaign_test_support.dart';
 
-/// Plan 2 task 5 follow-up: wire the AvatarPicker widget into the publish
-/// dialog so players can attach an avatar when publishing a local character
-/// to a campaign. The file_picker platform call is abstracted behind
-/// [PublishCharacterSheet.onPickImage] so tests can drive the flow without
-/// touching native plugins.
+/// Spec §头像来源: 战役角色头像由本地角色绑定战役后自动上传，发布对话框
+/// 不再暴露手动头像选择入口。头像 URL 直接随 sheet 提交，无需用户干预。
 void main() {
   final sampleCharacter = CharacterSheet.local(
     id: 'char-1',
@@ -25,21 +19,17 @@ void main() {
     raceSummary: '人类',
   );
 
-  // 1x1 transparent PNG.
-  final pngBytes = Uint8List.fromList(
-    base64Decode(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
-    ),
-  );
-
-  Future<CampaignActorController> buildController() async {
-    final apiClient = MemoryCampaignSyncApiClient();
+  Future<CampaignActorController> buildController({
+    MemoryCampaignSyncApiClient? apiClient,
+    String currentUserId = 'user-1',
+  }) async {
+    final client = apiClient ?? MemoryCampaignSyncApiClient();
     final controller = CampaignActorController(
       cacheRepository: MemoryCampaignCacheRepository(),
-      apiClient: apiClient,
+      apiClient: client,
       apiBaseUrl: 'https://example.test',
       accessToken: 'access-token',
-      currentUserId: 'user-1',
+      currentUserId: currentUserId,
     );
     await controller.selectCampaign('campaign-1');
     return controller;
@@ -48,15 +38,14 @@ void main() {
   Future<void> pumpSheet(
     WidgetTester tester,
     CampaignActorController controller, {
-    required Future<({Uint8List bytes, String mimeType})?> Function() onPickImage,
+    CharacterSheet? character,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: PublishCharacterSheet(
             controller: controller,
-            character: sampleCharacter,
-            onPickImage: onPickImage,
+            character: character ?? sampleCharacter,
           ),
         ),
       ),
@@ -64,80 +53,55 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('shows AvatarPicker in the publish dialog', (tester) async {
+  // Spec §头像来源: 发布对话框不再包含手动头像选择入口。
+  testWidgets('publish dialog does not expose avatar picker', (tester) async {
     final controller = await buildController();
-    await pumpSheet(
-      tester,
-      controller,
-      onPickImage: () async => null,
-    );
+    await pumpSheet(tester, controller);
 
-    expect(find.byType(AvatarPicker), findsOneWidget);
-    expect(find.text('选择图片'), findsOneWidget);
+    expect(find.byType(AvatarPicker), findsNothing);
+    expect(find.text('选择图片'), findsNothing);
 
     controller.dispose();
   });
 
+  // Spec §头像来源: 本地角色头像随发布自动上传到战役，无需用户干预。
   testWidgets(
-      'picking an image attaches the avatar data URI when publishing',
+    'automatically uploads character avatar URL when publishing',
+    (tester) async {
+      final apiClient = MemoryCampaignSyncApiClient();
+      final controller = await buildController(apiClient: apiClient);
+      const avatarUrl = 'data:image/png;base64,SGVsbG8=';
+      final characterWithAvatar = sampleCharacter.copyWith(
+        avatarUrl: avatarUrl,
+      );
+
+      await pumpSheet(tester, controller, character: characterWithAvatar);
+      await tester.tap(find.widgetWithText(FilledButton, '发布'));
+      await tester.pumpAndSettle();
+
+      expect(apiClient.publishCalls, hasLength(1));
+      final sheet =
+          apiClient.publishCalls.single['sheet']! as Map<String, Object?>;
+      expect(sheet['avatarUrl'], avatarUrl);
+
+      controller.dispose();
+    },
+  );
+
+  // Spec §头像来源: 本地角色未设置头像时，sheet 不携带 avatarUrl 字段。
+  testWidgets('publishes without avatarUrl when character has none',
       (tester) async {
     final apiClient = MemoryCampaignSyncApiClient();
-    final controller = CampaignActorController(
-      cacheRepository: MemoryCampaignCacheRepository(),
-      apiClient: apiClient,
-      apiBaseUrl: 'https://example.test',
-      accessToken: 'access-token',
-      currentUserId: 'user-1',
-    );
-    await controller.selectCampaign('campaign-1');
+    final controller = await buildController(apiClient: apiClient);
 
-    await pumpSheet(
-      tester,
-      controller,
-      onPickImage: () async => (bytes: pngBytes, mimeType: 'image/png'),
-    );
-
-    // Pick the image — this should populate the preview.
-    await tester.tap(find.text('选择图片'));
-    await tester.pumpAndSettle();
-
-    // Publish — the avatar data URI should be merged into the sheet.
+    await pumpSheet(tester, controller);
     await tester.tap(find.widgetWithText(FilledButton, '发布'));
     await tester.pumpAndSettle();
 
     expect(apiClient.publishCalls, hasLength(1));
     final sheet =
         apiClient.publishCalls.single['sheet']! as Map<String, Object?>;
-    expect(sheet['avatarUrl'] as String?, startsWith('data:image/png;base64,'));
-
-    controller.dispose();
-  });
-
-  testWidgets('publishes without avatar when no image is picked',
-      (tester) async {
-    final apiClient = MemoryCampaignSyncApiClient();
-    final controller = CampaignActorController(
-      cacheRepository: MemoryCampaignCacheRepository(),
-      apiClient: apiClient,
-      apiBaseUrl: 'https://example.test',
-      accessToken: 'access-token',
-      currentUserId: 'user-1',
-    );
-    await controller.selectCampaign('campaign-1');
-
-    await pumpSheet(
-      tester,
-      controller,
-      onPickImage: () async => null,
-    );
-
-    await tester.tap(find.widgetWithText(FilledButton, '发布'));
-    await tester.pumpAndSettle();
-
-    expect(apiClient.publishCalls, hasLength(1));
-    final sheet =
-        apiClient.publishCalls.single['sheet']! as Map<String, Object?>;
-    expect(sheet.containsKey('avatarUrl'), isFalse);
+    expect(sheet['avatarUrl'], isNull);
 
     controller.dispose();
   });
@@ -150,20 +114,12 @@ void main() {
     'selecting NPC routes through createActor (DM endpoint), not publishActor',
     (tester) async {
       final apiClient = MemoryCampaignSyncApiClient();
-      final controller = CampaignActorController(
-        cacheRepository: MemoryCampaignCacheRepository(),
+      final controller = await buildController(
         apiClient: apiClient,
-        apiBaseUrl: 'https://example.test',
-        accessToken: 'access-token',
         currentUserId: 'dm-1',
       );
-      await controller.selectCampaign('campaign-1');
 
-      await pumpSheet(
-        tester,
-        controller,
-        onPickImage: () async => null,
-      );
+      await pumpSheet(tester, controller);
 
       await tester.tap(find.text('NPC'));
       await tester.pumpAndSettle();
@@ -188,20 +144,12 @@ void main() {
     'selecting monster routes through createActor with persistent lifecycle',
     (tester) async {
       final apiClient = MemoryCampaignSyncApiClient();
-      final controller = CampaignActorController(
-        cacheRepository: MemoryCampaignCacheRepository(),
+      final controller = await buildController(
         apiClient: apiClient,
-        apiBaseUrl: 'https://example.test',
-        accessToken: 'access-token',
         currentUserId: 'dm-1',
       );
-      await controller.selectCampaign('campaign-1');
 
-      await pumpSheet(
-        tester,
-        controller,
-        onPickImage: () async => null,
-      );
+      await pumpSheet(tester, controller);
 
       await tester.tap(find.text('怪物'));
       await tester.pumpAndSettle();
@@ -225,20 +173,9 @@ void main() {
         'sourceCharacterId is required',
         statusCode: 400,
       );
-      final controller = CampaignActorController(
-        cacheRepository: MemoryCampaignCacheRepository(),
-        apiClient: apiClient,
-        apiBaseUrl: 'https://example.test',
-        accessToken: 'access-token',
-        currentUserId: 'user-1',
-      );
-      await controller.selectCampaign('campaign-1');
+      final controller = await buildController(apiClient: apiClient);
 
-      await pumpSheet(
-        tester,
-        controller,
-        onPickImage: () async => null,
-      );
+      await pumpSheet(tester, controller);
 
       await tester.tap(find.widgetWithText(FilledButton, '发布'));
       await tester.pumpAndSettle();

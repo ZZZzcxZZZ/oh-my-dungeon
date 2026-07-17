@@ -227,6 +227,42 @@ def main() -> int:
                 f"{entry_id}.rules.progression[3]: missing subclass choice"
             )
 
+    # Subclass 规则完整性：每个 subclass 必须声明 subclassOf 关系并至少
+    # 提供一条 progression（子职业特性在 3/7/10/15/18 等级解锁）。
+    # 这是 v2 包规则介入正确性的硬性要求，缺失会让角色构建器无法解析子职特性。
+    for entry in entries:
+        if not isinstance(entry, dict) or entry.get("type") != "subclass":
+            continue
+        entry_id = entry.get("id", "")
+
+        relations = entry.get("relations", [])
+        if not isinstance(relations, list) or not relations:
+            errors.append(
+                f"{entry_id}.relations: subclass must declare subclassOf relation"
+            )
+        else:
+            subclass_of = [
+                rel
+                for rel in relations
+                if isinstance(rel, dict) and rel.get("type") == "subclassOf"
+            ]
+            if not subclass_of:
+                errors.append(
+                    f"{entry_id}.relations: missing subclassOf relation"
+                )
+            else:
+                target = subclass_of[0].get("targetId", "")
+                if target not in entry_ids:
+                    errors.append(
+                        f"{entry_id}.relations.subclassOf: '{target}' does not exist"
+                    )
+
+        sub_progression = entry.get("rules", {}).get("progression", [])
+        if not sub_progression:
+            errors.append(
+                f"{entry_id}.rules.progression: subclass must declare at least one level"
+            )
+
     # ---- 统计报告 ----
     by_type: Counter[str] = Counter()
     for entry in entries:

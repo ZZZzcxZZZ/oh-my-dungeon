@@ -309,6 +309,7 @@ def make_entry(
     aliases: list[str] | None = None,
     summary: str = "",
     rules: dict[str, Any] | None = None,
+    relations: list[dict[str, Any]] | None = None,
     source_path: str = "",
 ) -> dict[str, Any]:
     entry: dict[str, Any] = {
@@ -326,6 +327,8 @@ def make_entry(
     }
     if rules:
         entry["rules"] = rules
+    if relations:
+        entry["relations"] = relations
     if source_path:
         entry["_sourcePath"] = source_path
     return entry
@@ -617,9 +620,13 @@ def extract_class(cls_name: str) -> tuple[dict[str, Any] | None,
             continue
         if _is_non_subclass_reference_page(sub_path.stem):
             continue
-        sub_entry = extract_subclass(sub_path, slug, name)
-        if sub_entry:
-            subclass_entries.append(sub_entry)
+        sub_result = extract_subclass(sub_path, slug, name)
+        if sub_result is None:
+            continue
+        sub_entry, sub_feature_entries = sub_result
+        subclass_entries.append(sub_entry)
+        # 子职业特性并入 classFeature 列表，统一写入资料包
+        class_feature_entries.extend(sub_feature_entries)
 
     return class_entry, class_feature_entries, subclass_entries
 
@@ -720,7 +727,20 @@ def _build_spell_slot_progression(cls_name: str, class_slug: str,
 
 
 def extract_subclass(sub_path: Path, parent_class_slug: str,
-                     parent_class_name: str) -> dict[str, Any] | None:
+                     parent_class_name: str
+                     ) -> tuple[dict[str, Any], list[dict[str, Any]]] | None:
+    """提取子职业，返回 (subclass_entry, subclass_feature_entries)。
+
+    生成的子职业条目具备：
+    - relations: [{type: "subclassOf", targetId: <parent class entryId>}]
+    - structured.parentClass: 父职业显示名（仅用于 UI 展示，非关系引用）
+    - rules.progression: 仅包含子职业实际解锁特性的等级（3/7/10/15/18 等），
+      每个等级的 grants 指向 subclass classFeature 条目。
+
+    子职业特性段落格式与父职业一致："N级：特性名 EnglishName 描述..."。
+    每个特性生成一条 classFeature 条目，structured.featureOf 指向子职业 entryId，
+    与父职业 classFeature 保持一致的结构。
+    """
     html = read_html(sub_path)
     soup = BeautifulSoup(html, "html.parser")
     # 子职业标题可能是 h1 或 h2
@@ -738,22 +758,90 @@ def extract_subclass(sub_path: Path, parent_class_slug: str,
     if not name:
         return None
     slug = slugify(name, en_name)
+    subclass_entry_id = entry_id("subclass", slug)
 
-    # 提取描述
+    # 提取子职业特性段落 "N级：特性名 EnglishName"
+    feature_paragraphs: list[tuple[int, str, str, str]] = []
+    feature_slug_map: dict[str, str] = {}
+    for p in soup.find_all("p"):
+        ptext = clean_text(p.get_text())
+        m = re.match(r"^(\d+)级[：:](.+)", ptext)
+        if m:
+            level = int(m.group(1))
+            rest = m.group(2).strip()
+            feat_name, feat_en = split_feature_name(rest)
+            desc = ptext
+            feature_paragraphs.append((level, feat_name, feat_en, desc))
+            if feat_name not in feature_slug_map:
+                feat_slug = slugify(feat_name, feat_en)
+                feature_slug_map[feat_name] = feat_slug
+
+    # 生成 subclass classFeature 条目（同名特性只生成一个条目）
+    subclass_feature_entries: list[dict[str, Any]] = []
+    seen_feature_names: set[str] = set()
+    for level, feat_name, feat_en, desc in feature_paragraphs:
+        if feat_name in seen_feature_names:
+            continue
+        seen_feature_names.add(feat_name)
+        feat_slug = feature_slug_map[feat_name]
+        body = [{"type": "paragraph", "text": desc}]
+        cf_entry = make_entry(
+            "classFeature", feat_slug, feat_name, body,
+            structured={
+                "level": level,
+                "classSlug": parent_class_slug,
+                "subclassName": name,
+                "featureOf": subclass_entry_id,
+            },
+            tags=[parent_class_slug, slug, f"level-{level}", "subclass"],
+            aliases=[feat_en] if feat_en else [],
+            summary=f"{level}级 {name} 特性",
+            source_path=str(sub_path),
+        )
+        subclass_feature_entries.append(cf_entry)
+
+    # 生成 progression：仅包含子职业实际解锁特性的等级
+    progression: list[dict[str, Any]] = []
+    # 按等级聚合 grants
+    level_to_features: dict[int, list[tuple[str, str]]] = {}
+    for level, feat_name, _feat_en, _desc in feature_paragraphs:
+        level_to_features.setdefault(level, []).append(
+            (feat_name, feature_slug_map[feat_name])
+        )
+    for level in sorted(level_to_features.keys()):
+        grants: list[dict[str, Any]] = []
+        for feat_name, feat_slug in level_to_features[level]:
+            grants.append({
+                "id": f"level-{level}-{feat_slug}",
+                "kind": "feature",
+                "label": feat_name,
+                "entryId": entry_id("classFeature", feat_slug),
+            })
+        prog_entry: dict[str, Any] = {"level": level}
+        if grants:
+            prog_entry["grants"] = grants
+        progression.append(prog_entry)
+
+    # 提取背景描述（跳过特性段落和摘要）
     desc_text = ""
     for p in soup.find_all("p"):
         ptext = clean_text(p.get_text())
-        if len(ptext) > 50:
+        if not ptext or re.match(r"^\d+级[：:]", ptext):
+            continue
+        if len(ptext) > 50 and "核心特质" not in ptext and "特性表" not in ptext:
             desc_text = ptext
             break
 
+    # 构造 body：背景描述 + 非特性段落/列表/表格
     body_blocks: list[dict[str, Any]] = []
     if desc_text:
         body_blocks.append({"type": "paragraph", "text": desc_text})
-    # 收集其他段落和列表
     for el in soup.find_all(["p", "ul", "table"]):
         text = clean_text(el.get_text())
         if not text or text == desc_text:
+            continue
+        # 跳过特性段落（已转为 classFeature 条目）
+        if el.name == "p" and re.match(r"^\d+级[：:]", text):
             continue
         if el.name == "ul":
             items = [clean_text(li.get_text()) for li in el.find_all("li", recursive=False)]
@@ -765,19 +853,27 @@ def extract_subclass(sub_path: Path, parent_class_slug: str,
         else:
             body_blocks.append({"type": "paragraph", "text": text})
 
-    structured = {
-        "subclassOf": entry_id("class", parent_class_slug),
+    structured: dict[str, Any] = {
         "parentClass": parent_class_name,
     }
+    relations: list[dict[str, Any]] = [
+        {"type": "subclassOf", "targetId": entry_id("class", parent_class_slug)},
+    ]
+    rules: dict[str, Any] = {}
+    if progression:
+        rules["progression"] = progression
 
-    return make_entry(
+    subclass_entry = make_entry(
         "subclass", slug, name, body_blocks,
         structured=structured,
         tags=[parent_class_slug, "subclass"],
         aliases=[en_name] if en_name else [],
         summary=f"{parent_class_name}子职业：{name}",
+        rules=rules if rules else None,
+        relations=relations,
         source_path=str(sub_path),
     )
+    return subclass_entry, subclass_feature_entries
 
 
 # --------------------------------------------------------------------------- #

@@ -86,10 +86,57 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
     if (!_canManage) return null;
     return FloatingActionButton.extended(
       key: const Key('campaign-create-archive-button'),
-      onPressed: _showCreateArchiveDialog,
+      onPressed: _showCreateArchiveTypeMenu,
       icon: const Icon(Icons.add),
       label: const Text('新建条目'),
     );
+  }
+
+  /// Spec §档案: 新建条目按钮按类型区分。FAB 点击后先弹出类型选择菜单，
+  /// 选好类型后再进入对应的创建表单（类型已预填）。
+  Future<void> _showCreateArchiveTypeMenu() async {
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('新建条目'),
+        children: [
+          SimpleDialogOption(
+            key: const Key('archive-type-document'),
+            onPressed: () => Navigator.of(context).pop('document'),
+            child: const ListTile(
+              leading: Icon(Icons.description_outlined),
+              title: Text('新建资料'),
+            ),
+          ),
+          SimpleDialogOption(
+            key: const Key('archive-type-location'),
+            onPressed: () => Navigator.of(context).pop('location'),
+            child: const ListTile(
+              leading: Icon(Icons.place_outlined),
+              title: Text('新建地点'),
+            ),
+          ),
+          SimpleDialogOption(
+            key: const Key('archive-type-clue'),
+            onPressed: () => Navigator.of(context).pop('clue'),
+            child: const ListTile(
+              leading: Icon(Icons.lightbulb_outline),
+              title: Text('新建线索'),
+            ),
+          ),
+          SimpleDialogOption(
+            key: const Key('archive-type-file'),
+            onPressed: () => Navigator.of(context).pop('file'),
+            child: const ListTile(
+              leading: Icon(Icons.attach_file_outlined),
+              title: Text('新建文件'),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (selected == null || !mounted) return;
+    await _showCreateArchiveDialog(initialKind: selected);
   }
 
   Widget _buildNarrowLayout(BuildContext context) {
@@ -220,8 +267,8 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
     }
   }
 
-  Future<void> _showCreateArchiveDialog() async {
-    var kind = 'clue';
+  Future<void> _showCreateArchiveDialog({String initialKind = 'clue'}) async {
+    var kind = initialKind;
     final title = TextEditingController();
     final summary = TextEditingController();
     final formKey = GlobalKey<FormState>();

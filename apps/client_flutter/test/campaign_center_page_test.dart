@@ -245,6 +245,56 @@ void main() {
       dmAuth.dispose();
     },
   );
+
+  // Spec §档案: 新建条目按钮按类型区分。FAB 点击后弹出类型选择菜单。
+  testWidgets(
+    'DM archive FAB opens a type selection menu with the four kinds',
+    (tester) async {
+      final dmAuth = await buildLoggedInAuthController();
+      final dmController = await buildCampaignController(
+        authController: dmAuth,
+        canManage: true,
+      );
+      await pumpCenterPage(tester, dmController);
+
+      await tester.tap(find.byKey(const Key('campaign-create-archive-button')));
+      await tester.pumpAndSettle();
+
+      // Type menu should show all four kinds.
+      expect(find.text('新建资料'), findsOneWidget);
+      expect(find.text('新建地点'), findsOneWidget);
+      expect(find.text('新建线索'), findsOneWidget);
+      expect(find.text('新建文件'), findsOneWidget);
+
+      dmController.dispose();
+      dmAuth.dispose();
+    },
+  );
+
+  testWidgets(
+    'selecting a type from the FAB menu opens the create form pre-filled with that kind',
+    (tester) async {
+      final dmAuth = await buildLoggedInAuthController();
+      final dmController = await buildCampaignController(
+        authController: dmAuth,
+        canManage: true,
+      );
+      await pumpCenterPage(tester, dmController);
+
+      await tester.tap(find.byKey(const Key('campaign-create-archive-button')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('新建地点'));
+      await tester.pumpAndSettle();
+
+      // Create form should be open with kind pre-filled.
+      expect(find.text('新建战役条目'), findsOneWidget);
+      expect(find.text('地点'), findsOneWidget);
+
+      dmController.dispose();
+      dmAuth.dispose();
+    },
+  );
 }
 
 const _campaign = Campaign(

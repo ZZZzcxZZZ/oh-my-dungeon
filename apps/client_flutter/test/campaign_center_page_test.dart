@@ -190,13 +190,23 @@ void main() {
     tester.view.resetPhysicalSize();
     tester.view.resetDevicePixelRatio();
 
-    // DM: manage affordance appears.
+    // DM: manage affordance appears — but only on the archive panel per
+    // spec §档案 (new-entry FAB lives inside the archive panel, not the
+    // overview/team/records panels).
     final dmAuth = await buildLoggedInAuthController();
     final dmController = await buildCampaignController(
       authController: dmAuth,
       canManage: true,
     );
     await pumpCenterPage(tester, dmController);
+    // FAB must NOT appear on the default overview panel.
+    expect(
+      find.byKey(const Key('campaign-create-archive-button')),
+      findsNothing,
+    );
+    // Navigate to the archive panel — FAB appears here.
+    await tester.tap(find.text('档案').last);
+    await tester.pumpAndSettle();
     expect(
       find.byKey(const Key('campaign-create-archive-button')),
       findsOneWidget,
@@ -205,6 +215,52 @@ void main() {
     dmController.dispose();
     dmAuth.dispose();
   });
+
+  // Spec §档案: 新建条目 FAB 只在档案面板出现, 概览/队伍/记录面板都不显示。
+  testWidgets(
+    'create archive FAB only appears on the archive panel, not on overview/team/records',
+    (tester) async {
+      final dmAuth = await buildLoggedInAuthController();
+      final dmController = await buildCampaignController(
+        authController: dmAuth,
+        canManage: true,
+      );
+      await pumpCenterPage(tester, dmController);
+
+      // Overview (default) — no FAB.
+      expect(
+        find.byKey(const Key('campaign-create-archive-button')),
+        findsNothing,
+      );
+
+      // Team panel — no FAB.
+      await tester.tap(find.text('队伍').last);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('campaign-create-archive-button')),
+        findsNothing,
+      );
+
+      // Archive panel — FAB appears.
+      await tester.tap(find.text('档案').last);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('campaign-create-archive-button')),
+        findsOneWidget,
+      );
+
+      // Records panel — no FAB.
+      await tester.tap(find.text('记录').last);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('campaign-create-archive-button')),
+        findsNothing,
+      );
+
+      dmController.dispose();
+      dmAuth.dispose();
+    },
+  );
 
   // Spec §队伍: 邀请和管理成员在 战役中心 → 队伍，DM 就地操作。
   testWidgets(
@@ -276,6 +332,9 @@ void main() {
         canManage: true,
       );
       await pumpCenterPage(tester, dmController);
+      // FAB lives on the archive panel per spec §档案.
+      await tester.tap(find.text('档案').last);
+      await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const Key('campaign-create-archive-button')));
       await tester.pumpAndSettle();
@@ -300,6 +359,9 @@ void main() {
         canManage: true,
       );
       await pumpCenterPage(tester, dmController);
+      // FAB lives on the archive panel per spec §档案.
+      await tester.tap(find.text('档案').last);
+      await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const Key('campaign-create-archive-button')));
       await tester.pumpAndSettle();

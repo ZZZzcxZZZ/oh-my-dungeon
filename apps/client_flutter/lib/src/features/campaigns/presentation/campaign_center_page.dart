@@ -83,7 +83,9 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
   }
 
   Widget? _buildManageFab() {
+    // Spec §档案: 新建条目 FAB 只在档案面板出现, 概览/队伍/记录面板不显示。
     if (!_canManage) return null;
+    if (_currentIndex != 2) return null;
     return FloatingActionButton.extended(
       key: const Key('campaign-create-archive-button'),
       onPressed: _showCreateArchiveTypeMenu,

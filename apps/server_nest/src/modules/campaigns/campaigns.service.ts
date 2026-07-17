@@ -23,6 +23,7 @@ import type {
   CreateCampaignChatMessageInput,
   CreateCampaignInput,
   CreateInviteInput,
+  DraftActorInput,
   InviteView,
   MembershipView,
 } from "./campaigns.types";
@@ -335,6 +336,21 @@ export class CampaignsService {
     const capabilities = this.policy.capabilitiesFor(actor, campaign.context);
     const requestedActorId = input.campaignActorId ?? null;
 
+    if (input.draftActor) {
+      return this.sendDraftActorMessage(
+        actor,
+        campaignId,
+        {
+          kind,
+          content,
+          eventData,
+          draftActor: input.draftActor,
+          membership,
+          capabilities,
+        },
+      );
+    }
+
     if (MANAGER_MESSAGE_KINDS.has(kind)) {
       this.policy.canManageCampaign(actor, campaign.context);
     }
@@ -459,6 +475,98 @@ export class CampaignsService {
     const view = toCampaignChatMessageView(created);
     this.gateway.broadcastToCampaign(campaignId, "campaign:message:new", view);
 
+    return view;
+  }
+
+  /**
+   * DM-only atomic path: creates a temporary CampaignActor, updates the DM's
+   * active speaker, and writes the first message — all inside one transaction.
+   * If any step fails, nothing persists (no orphan actor). Spec:
+   * docs/superpowers/specs/2026-07-16-campaign-workspace-refactor-design.md
+   * §快速临时身份.
+   */
+  private async sendDraftActorMessage(
+    actor: AccessTokenPayload,
+    campaignId: string,
+    input: {
+      kind: string;
+      content: string;
+      eventData: Record<string, unknown> | null;
+      draftActor: DraftActorInput;
+      membership: { id: string };
+      capabilities: { canManageCampaign: boolean };
+    },
+  ): Promise<CampaignChatMessageView> {
+    if (!input.capabilities.canManageCampaign) {
+      throw new ForbiddenException(
+        "Only managers may create temporary identities",
+      );
+    }
+    if (input.kind === "ooc") {
+      throw new BadRequestException(
+        "Temporary identity cannot be used for out-of-character messages",
+      );
+    }
+    const displayName = input.draftActor.displayName.trim();
+    if (!displayName) {
+      throw new BadRequestException("draftActor.displayName is required");
+    }
+    const avatarUrl = input.draftActor.avatarUrl ?? null;
+    const sheet: Record<string, unknown> = {
+      name: displayName,
+      currentHp: 1,
+      maxHp: 1,
+      avatarUrl,
+    };
+    const publicHealthState = resolvePublicHealthState(sheet);
+
+    const created = await this.prismaService.$transaction(async (tx) => {
+      const tempActor = await tx.campaignActor.create({
+        data: {
+          campaignId,
+          ownerUserId: null,
+          sourceCharacterId: null,
+          actorType: "npc",
+          status: "active",
+          lifecycle: "temporary",
+          avatarAssetId: null,
+          healthVisibility: "ownerAndDm",
+          sheetJson: sheet as unknown as Prisma.InputJsonValue,
+          revision: 1,
+          updatedBy: actor.userId,
+        },
+      });
+      await tx.campaignMember.update({
+        where: { id: input.membership.id },
+        data: {
+          activeSpeakerActorId: tempActor.id,
+          speakerMode: "actor",
+        },
+      });
+      const message = await tx.campaignChatMessage.create({
+        data: {
+          campaignId,
+          senderId: actor.userId,
+          campaignActorId: tempActor.id,
+          displayName,
+          avatarUrl,
+          speakerMode: "actor",
+          delegatedByUserId: null,
+          speakerAvatarAssetId: null,
+          publicHealthState,
+          ooc: false,
+          kind: input.kind,
+          content: input.content,
+          ...(input.eventData
+            ? { eventData: input.eventData as Prisma.InputJsonValue }
+            : {}),
+        },
+      });
+      return message;
+    });
+
+    const view = toCampaignChatMessageView(created);
+    this.gateway.broadcastToCampaign(campaignId, "campaign:message:new", view);
     return view;
   }
 

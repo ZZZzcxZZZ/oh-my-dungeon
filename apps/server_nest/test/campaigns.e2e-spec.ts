@@ -56,6 +56,7 @@ describe("campaigns endpoints", () => {
     campaignActor: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
+      create: jest.fn(),
     },
     campaignArchiveEntry: {
       create: jest.fn(),
@@ -115,6 +116,8 @@ describe("campaigns endpoints", () => {
     prismaService.campaignActor.findUnique.mockReset();
     prismaService.campaignActor.findUnique.mockResolvedValue(null);
     prismaService.campaignActor.findMany.mockResolvedValue([]);
+    prismaService.campaignActor.create.mockReset();
+    prismaService.campaignActor.create.mockResolvedValue({});
     prismaService.$queryRaw.mockResolvedValue([{ health_check: 1 }]);
     prismaService.serverSetting.findFirst.mockResolvedValue({
       registrationEnabled: true,
@@ -1156,6 +1159,157 @@ describe("campaigns endpoints", () => {
         .get("/api/campaigns/camp-1/messages")
         .set("Authorization", `Bearer ${token}`)
         .expect(403);
+    });
+
+    it("atomically creates a temporary actor with the first draft message", async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce({
+        ...campaignWithOwner,
+        members: [
+          {
+            userId: "user-1",
+            role: "owner",
+            boundActorId: null,
+            activeSpeakerActorId: null,
+            speakerMode: "ooc",
+          },
+        ],
+      });
+      const createdActorRow = {
+        id: "temp-actor-1",
+        campaignId: "camp-1",
+        ownerUserId: null,
+        sourceCharacterId: null,
+        actorType: "npc",
+        status: "active",
+        lifecycle: "temporary",
+        avatarAssetId: null,
+        healthVisibility: "ownerAndDm",
+        sheetJson: { name: "旅店老板", currentHp: 1, maxHp: 1, avatarUrl: null },
+        revision: 1,
+        updatedBy: "user-1",
+      };
+      prismaService.campaignActor.create.mockResolvedValueOnce(createdActorRow);
+      prismaService.campaignMember.update.mockResolvedValueOnce({
+        userId: "user-1",
+        activeSpeakerActorId: "temp-actor-1",
+        speakerMode: "actor",
+      });
+      prismaService.campaignChatMessage.create.mockResolvedValueOnce({
+        id: "msg-draft-1",
+        campaignId: "camp-1",
+        senderId: "user-1",
+        campaignActorId: "temp-actor-1",
+        displayName: "旅店老板",
+        avatarUrl: null,
+        speakerMode: "actor",
+        delegatedByUserId: null,
+        speakerAvatarAssetId: null,
+        publicHealthState: "healthy",
+        ooc: false,
+        kind: "say",
+        content: "欢迎光临",
+        actionSnapshot: null,
+        eventData: null,
+        createdAt: "2026-07-17T00:00:00.000Z",
+      });
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/messages")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          kind: "say",
+          content: "欢迎光临",
+          draftActor: { displayName: "旅店老板" },
+        })
+        .expect(201)
+        .expect(({ body }) => {
+          expect(body.campaignActorId).toBe("temp-actor-1");
+          expect(body.displayName).toBe("旅店老板");
+          expect(body.speakerMode).toBe("actor");
+          expect(body.publicHealthState).toBe("healthy");
+        });
+
+      const actorCreateArgs = prismaService.campaignActor.create.mock.calls[0][0];
+      expect(actorCreateArgs.data.lifecycle).toBe("temporary");
+      expect(actorCreateArgs.data.actorType).toBe("npc");
+      expect(actorCreateArgs.data.sheetJson.name).toBe("旅店老板");
+      expect(actorCreateArgs.data.status).toBe("active");
+
+      const memberUpdateArgs =
+        prismaService.campaignMember.update.mock.calls[0][0];
+      expect(memberUpdateArgs.data.activeSpeakerActorId).toBe("temp-actor-1");
+      expect(memberUpdateArgs.data.speakerMode).toBe("actor");
+
+      const messageCreateArgs =
+        prismaService.campaignChatMessage.create.mock.calls[0][0];
+      expect(messageCreateArgs.data.campaignActorId).toBe("temp-actor-1");
+      expect(messageCreateArgs.data.displayName).toBe("旅店老板");
+      expect(messageCreateArgs.data.kind).toBe("say");
+    });
+
+    it("rejects draftActor from non-managers", async () => {
+      const token = await loginAs(storedPlayerUser);
+      prismaService.campaign.findUnique.mockResolvedValueOnce({
+        ...campaignWithOwner,
+        members: [
+          {
+            userId: "user-1",
+            role: "owner",
+          },
+          {
+            userId: "user-2",
+            role: "player",
+            boundActorId: null,
+            activeSpeakerActorId: null,
+            speakerMode: "ooc",
+          },
+        ],
+      });
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/messages")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          kind: "say",
+          content: "测试",
+          draftActor: { displayName: "伪装者" },
+        })
+        .expect(403);
+
+      expect(prismaService.campaignActor.create).not.toHaveBeenCalled();
+      expect(prismaService.campaignChatMessage.create).not.toHaveBeenCalled();
+    });
+
+    it("leaves no orphan actor when the draft transaction fails", async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce({
+        ...campaignWithOwner,
+        members: [
+          {
+            userId: "user-1",
+            role: "owner",
+            boundActorId: null,
+            activeSpeakerActorId: null,
+            speakerMode: "ooc",
+          },
+        ],
+      });
+      prismaService.campaignActor.create.mockRejectedValueOnce(
+        new Error("db write failure"),
+      );
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/messages")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          kind: "say",
+          content: "欢迎光临",
+          draftActor: { displayName: "旅店老板" },
+        })
+        .expect(500);
+
+      expect(prismaService.campaignChatMessage.create).not.toHaveBeenCalled();
     });
   });
 

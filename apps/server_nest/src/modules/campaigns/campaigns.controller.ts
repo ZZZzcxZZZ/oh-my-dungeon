@@ -17,6 +17,7 @@ import type {
   CampaignChatMessageView,
   CampaignWorkspaceContextView,
   CampaignView,
+  DraftActorInput,
   InviteView,
   MembershipView,
 } from "./campaigns.types";
@@ -41,6 +42,7 @@ interface CreateCampaignChatMessageBody {
   campaignActorId?: unknown;
   actionId?: unknown;
   eventData?: unknown;
+  draftActor?: unknown;
 }
 
 interface UpdateMemberBindingBody {
@@ -107,6 +109,7 @@ export class CampaignsController {
         typeof body.campaignActorId === "string" ? body.campaignActorId : null,
       actionId: typeof body.actionId === "string" ? body.actionId : null,
       eventData: isRecord(body.eventData) ? body.eventData : null,
+      draftActor: parseDraftActor(body.draftActor),
     });
   }
 
@@ -213,4 +216,15 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseDraftActor(value: unknown): DraftActorInput | null {
+  if (!isRecord(value)) return null;
+  const displayName = value.displayName;
+  if (!isNonEmptyString(displayName)) {
+    throw new BadRequestException("draftActor.displayName is required");
+  }
+  const avatarUrl =
+    typeof value.avatarUrl === "string" ? value.avatarUrl : null;
+  return { displayName: displayName.trim(), avatarUrl };
 }

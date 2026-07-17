@@ -37,12 +37,18 @@ export interface CampaignChatMessageView {
   createdAt: string;
 }
 
+export interface DraftActorInput {
+  displayName: string;
+  avatarUrl?: string | null;
+}
+
 export interface CreateCampaignChatMessageInput {
   kind?: string;
   content: string;
   campaignActorId?: string | null;
   actionId?: string | null;
   eventData?: Record<string, unknown> | null;
+  draftActor?: DraftActorInput | null;
 }
 
 export interface CreateCampaignInput {

@@ -429,7 +429,13 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
             final success = await widget.controller.createCharacter(draft);
             if (mounted) {
               messenger.showSnackBar(
-                SnackBar(content: Text(success ? '角色已创建' : '创建失败')),
+                SnackBar(
+                  content: Text(
+                    success
+                        ? '角色已创建'
+                        : (widget.controller.error ?? '创建失败'),
+                  ),
+                ),
               );
             }
             return success;
@@ -594,7 +600,13 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
             final success = await widget.controller.updateCharacter(updated);
             if (mounted) {
               messenger.showSnackBar(
-                SnackBar(content: Text(success ? '角色已保存' : '保存失败')),
+                SnackBar(
+                  content: Text(
+                    success
+                        ? '角色已保存'
+                        : (widget.controller.error ?? '保存失败'),
+                  ),
+                ),
               );
             }
             return success;

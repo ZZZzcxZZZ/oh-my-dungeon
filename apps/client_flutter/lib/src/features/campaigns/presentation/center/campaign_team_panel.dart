@@ -42,7 +42,8 @@ class CampaignTeamPanel extends StatelessWidget {
 
   /// Spec §DM 角色生命周期: DM 创建常驻 NPC/怪物/同伴的回调。
   /// 仅 `isManager` 为 true 时显示入口；为 null 时不显示。
-  final Future<bool> Function({
+  /// 返回 null 表示成功，非 null 字符串表示错误消息。
+  final Future<String?> Function({
     required String actorType,
     required String displayName,
     int? maxHp,
@@ -217,7 +218,7 @@ String _roleLabel(String role) => switch (role) {
 class _CreatePersistentActorButton extends StatelessWidget {
   const _CreatePersistentActorButton({required this.onCreatePersistentActor});
 
-  final Future<bool> Function({
+  final Future<String?> Function({
     required String actorType,
     required String displayName,
     int? maxHp,
@@ -329,7 +330,7 @@ class _CreatePersistentActorButton extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
 
     final maxHpText = hpController.text.trim();
-    final success = await onCreatePersistentActor(
+    final error = await onCreatePersistentActor(
       actorType: actorType,
       displayName: nameController.text.trim(),
       maxHp: maxHpText.isEmpty ? null : int.tryParse(maxHpText),
@@ -340,7 +341,7 @@ class _CreatePersistentActorButton extends StatelessWidget {
 
     if (!context.mounted) return;
     messenger.showSnackBar(
-      SnackBar(content: Text(success ? '已创建常驻角色' : '创建失败')),
+      SnackBar(content: Text(error ?? '已创建常驻角色')),
     );
   }
 }

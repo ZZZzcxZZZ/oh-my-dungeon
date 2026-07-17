@@ -711,11 +711,10 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
     setState(() => _saving = false);
     if (ok) {
       Navigator.of(context).maybePop();
-    } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('创建角色失败')));
     }
+    // On failure, the caller (onSubmit) is responsible for showing the
+    // specific error SnackBar — the editor does not have access to the
+    // controller's error message.
   }
 
   CharacterEditDraft _draft(String name) {

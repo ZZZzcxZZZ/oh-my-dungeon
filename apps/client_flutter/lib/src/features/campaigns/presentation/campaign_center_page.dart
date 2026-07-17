@@ -240,8 +240,8 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
                   required String displayName,
                   int? maxHp,
                   String? avatarUrl,
-                }) =>
-                  widget.actorController!.createDmActor(
+                }) async {
+                  final success = await widget.actorController!.createDmActor(
                     actorType: actorType,
                     lifecycle: 'persistent',
                     sheet: {
@@ -250,7 +250,11 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
                       'currentHp': ?maxHp,
                       'avatarUrl': ?avatarUrl,
                     },
-                  )
+                  );
+                  return success
+                      ? null
+                      : (widget.actorController!.error ?? '创建失败');
+                }
               : null,
         );
       case 2:

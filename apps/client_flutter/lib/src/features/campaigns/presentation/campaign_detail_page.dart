@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../domain/campaign.dart';
 import 'campaign_controller.dart';
+import 'widgets/campaign_invite_tile.dart';
 
 class CampaignDetailPage extends StatefulWidget {
   const CampaignDetailPage({
@@ -175,21 +176,24 @@ class _CampaignDetailPageState extends State<CampaignDetailPage> {
         const Text('暂无邀请码')
       else
         for (final invite in invites)
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.confirmation_number),
-              title: SelectableText(
-                invite.code,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1,
+          CampaignInviteTile(
+            invite: invite,
+            onCopy: () {
+              Clipboard.setData(ClipboardData(text: invite.code));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('邀请码已复制')),
+              );
+            },
+            onShare: () {
+              Clipboard.setData(
+                ClipboardData(
+                  text: '邀请你加入我的 D&D 战役！邀请码：${invite.code}',
                 ),
-              ),
-              subtitle: Text(
-                '角色：${invite.roleOnJoin} | '
-                '已用：${invite.usedCount}/${invite.maxUses}',
-              ),
-            ),
+              );
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('分享文本已复制，可粘贴到聊天工具')),
+              );
+            },
           ),
     ];
   }

@@ -60,6 +60,9 @@ abstract interface class ContentRepository {
   Future<bool> isPackageEnabled(String packageId);
   Future<ContentDeletionImpact> deletionImpact(String packageId);
   Future<void> deletePackage(String packageId);
+  /// Spec §资料包: 一键清除所有本地资料包及其条目、收藏、笔记和资源。
+  /// 用于旧版数据污染时重置；返回受影响的条目数。
+  Future<int> clearAllPackages();
   Future<void> setFavorite(String entryKey, bool favorite);
   Future<bool> isFavorite(String entryKey);
   Future<void> saveNote(String entryKey, String markdown);
@@ -379,6 +382,27 @@ class DriftContentRepository implements ContentRepository {
   }
 
   @override
+  Future<int> clearAllPackages() async {
+    final db = _database;
+    return db.transaction(() async {
+      final entryCount = await (db.selectOnly(db.localContentEntries)
+            ..addColumns([db.localContentEntries.entryKey.count()]))
+          .map((row) => row.read(db.localContentEntries.entryKey.count()) ?? 0)
+          .getSingle();
+      // Order matters: child tables (links/favorites/notes/history/assets)
+      // reference entries/packages, so clear them first.
+      await db.delete(db.contentLinks).go();
+      await db.delete(db.contentFavorites).go();
+      await db.delete(db.contentNotes).go();
+      await db.delete(db.contentReadHistory).go();
+      await db.delete(db.localContentAssets).go();
+      await db.delete(db.localContentEntries).go();
+      await db.delete(db.localContentPackages).go();
+      return entryCount;
+    });
+  }
+
+  @override
   Future<void> setFavorite(String entryKey, bool favorite) async {
     final db = _database;
     await db.transaction(() async {
@@ -535,6 +559,8 @@ class EmptyContentRepository implements ContentRepository {
       );
   @override
   Future<void> deletePackage(String packageId) async {}
+  @override
+  Future<int> clearAllPackages() async => 0;
   @override
   Future<void> setFavorite(String entryKey, bool favorite) async {}
   @override

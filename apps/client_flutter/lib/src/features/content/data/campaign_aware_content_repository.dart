@@ -148,6 +148,9 @@ class CampaignAwareContentRepository implements ContentRepository {
       local.deletePackage(packageId);
 
   @override
+  Future<int> clearAllPackages() => local.clearAllPackages();
+
+  @override
   Future<void> setFavorite(String entryKey, bool favorite) =>
       local.setFavorite(entryKey, favorite);
 

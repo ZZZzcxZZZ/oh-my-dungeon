@@ -131,4 +131,82 @@ void main() {
     expect(find.textContaining('entryCount'), findsWidgets);
     expect(await repository.search(const ContentQuery()), isEmpty);
   });
+
+  // Spec §资料包: 提供"清除所有本地资料包"入口，让用户在旧版数据污染时
+  // 一键重置；删除前必须二次确认并显示影响范围。
+  testWidgets('clears all local packages after confirmation', (tester) async {
+    final repository = MemoryContentRepository();
+    final importer = ContentPackageImporter(repository);
+    for (final packageId in ['alpha', 'beta']) {
+      final report = await importer.previewJson(jsonEncode({
+        'formatVersion': 1,
+        'id': packageId,
+        'name': packageId,
+        'version': '1.0.0',
+        'locale': 'zh-CN',
+        'system': 'dnd5e-2024',
+        'entryCount': 1,
+        'entries': [testFighterEntry().toJson()],
+      }));
+      await importer.importReport(report);
+    }
+    expect(await repository.watchPackages().first, hasLength(2));
+
+    await tester.pumpWidget(MaterialApp(
+      home: ContentPackageSettingsPage(
+        repository: repository,
+        importer: importer,
+        filePicker: MemoryContentFilePicker(),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // "清除所有本地资料包" 入口可见。
+    expect(find.text('清除所有本地资料包'), findsOneWidget);
+    await tester.tap(find.text('清除所有本地资料包'));
+    await tester.pumpAndSettle();
+
+    // 二次确认对话框显示影响范围 (2 个资料包)。
+    expect(find.textContaining('2'), findsWidgets);
+    expect(find.widgetWithText(TextButton, '取消'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, '清除'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, '清除'));
+    await tester.pumpAndSettle();
+
+    expect(await repository.watchPackages().first, isEmpty);
+    expect(await repository.search(const ContentQuery()), isEmpty);
+  });
+
+  testWidgets('cancel clear-all preserves installed packages', (tester) async {
+    final repository = MemoryContentRepository();
+    final importer = ContentPackageImporter(repository);
+    final report = await importer.previewJson(jsonEncode({
+      'formatVersion': 1,
+      'id': 'example',
+      'name': 'Example',
+      'version': '1.0.0',
+      'locale': 'zh-CN',
+      'system': 'dnd5e-2024',
+      'entryCount': 1,
+      'entries': [testFighterEntry().toJson()],
+    }));
+    await importer.importReport(report);
+
+    await tester.pumpWidget(MaterialApp(
+      home: ContentPackageSettingsPage(
+        repository: repository,
+        importer: importer,
+        filePicker: MemoryContentFilePicker(),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('清除所有本地资料包'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, '取消'));
+    await tester.pumpAndSettle();
+
+    expect(await repository.watchPackages().first, hasLength(1));
+  });
 }

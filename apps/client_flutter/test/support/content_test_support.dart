@@ -205,6 +205,20 @@ class MemoryContentRepository implements ContentRepository {
   }
 
   @override
+  Future<int> clearAllPackages() async {
+    final count = _entries.length;
+    _entries.clear();
+    _favorites.clear();
+    _notes.clear();
+    _links.clear();
+    _assets.clear();
+    _packages.clear();
+    _enabled.clear();
+    _emit();
+    return count;
+  }
+
+  @override
   Future<void> setFavorite(String entryKey, bool favorite) async {
     if (favorite) {
       _favorites.add(entryKey);

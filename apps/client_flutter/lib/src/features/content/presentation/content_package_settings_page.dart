@@ -111,8 +111,44 @@ class _ContentPackageSettingsPageState
     );
   }
 
+  /// Spec §资料包: 一键清除所有本地资料包。删除前必须二次确认并显示
+  /// 影响范围 (资料包数量)。仅当本地存在资料包时显示入口。
+  Future<void> _confirmClearAll() async {
+    final packageCount = _packages.length;
+    if (packageCount == 0) return;
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('清除所有本地资料包'),
+        content: Text(
+          '将删除 $packageCount 个资料包及其全部条目、收藏、笔记和资源。'
+          '此操作不可撤销。私有资料包需要重新导入才能恢复。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('清除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final entryCount = await widget.repository.clearAllPackages();
+    if (!mounted) return;
+    messenger.showSnackBar(
+      SnackBar(content: Text('已清除 $entryCount 个条目')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('资料包管理')),
       body: SingleChildScrollView(
@@ -155,6 +191,20 @@ class _ContentPackageSettingsPageState
                   ),
                 ),
               ),
+            // Spec §资料包: 一键清除所有本地资料包入口；仅在本地存在
+            // 资料包时显示，避免空状态误操作。
+            if (_packages.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                key: const Key('content-clear-all-packages-button'),
+                onPressed: _confirmClearAll,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: theme.colorScheme.error,
+                ),
+                icon: const Icon(Icons.delete_sweep_outlined),
+                label: const Text('清除所有本地资料包'),
+              ),
+            ],
           ],
         ),
       ),

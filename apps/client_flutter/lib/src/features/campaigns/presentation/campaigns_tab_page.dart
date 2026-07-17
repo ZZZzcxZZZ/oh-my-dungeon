@@ -83,6 +83,11 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
         }
 
         final campaigns = widget.campaignController.campaigns;
+        // Spec §客户端工作模式: 战役创建入口只在 DM 模式显示。Player 模式
+        // 下隐藏 FAB，仅保留加入/刷新入口；owner 在 Player 模式进入战役
+        // 时会收到一键切换 DM 模式的提示（见 Task 4.2）。
+        final isDmMode =
+            widget.modeController.mode == ClientMode.dungeonMaster;
         return Scaffold(
           appBar: AppBar(
             title: const Text('战役'),
@@ -99,12 +104,15 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
               ),
             ],
           ),
-          floatingActionButton: FloatingActionButton.extended(
-            heroTag: 'create_campaign',
-            onPressed: _showCreateDialog,
-            icon: const Icon(Icons.add),
-            label: const Text('创建战役'),
-          ),
+          floatingActionButton: isDmMode
+              ? FloatingActionButton.extended(
+                  key: const Key('campaign-create-button'),
+                  heroTag: 'create_campaign',
+                  onPressed: _showCreateDialog,
+                  icon: const Icon(Icons.add),
+                  label: const Text('创建战役'),
+                )
+              : null,
           body: _buildCampaignList(context, campaigns),
         );
       },
@@ -192,10 +200,16 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
     }
 
     if (campaigns.isEmpty) {
-      return const Center(
+      // Spec §客户端工作模式: 创建入口只在 DM 模式显示，空态文案随模式调整。
+      final isDmMode =
+          widget.modeController.mode == ClientMode.dungeonMaster;
+      final message = isDmMode
+          ? '暂无战役\n点击右下角创建，或使用邀请码加入'
+          : '暂无战役\n使用上方邀请码入口加入朋友的团';
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text('暂无战役\n点击右下角创建或加入', textAlign: TextAlign.center),
+          padding: const EdgeInsets.all(24),
+          child: Text(message, textAlign: TextAlign.center),
         ),
       );
     }

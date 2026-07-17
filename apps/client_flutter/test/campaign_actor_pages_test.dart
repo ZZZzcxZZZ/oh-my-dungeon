@@ -2,6 +2,7 @@ import 'package:dnd_table_client/src/features/campaigns/data/sync/campaign_sync_
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_actor.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_actor_audit.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_controller.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_directory_page.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_sheet_page.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_controller.dart';
@@ -175,7 +176,7 @@ void main() {
   });
 
   testWidgets(
-    'player mode shows local characters and dm mode shows actor directory',
+    'player and dm modes both show local characters with create FAB',
     (tester) async {
       final characterRepository = MemoryCharacterRepository(
         initial: [_sampleCharacter],
@@ -225,15 +226,15 @@ void main() {
       await modeController.setMode(ClientMode.dungeonMaster);
       await tester.pumpAndSettle();
 
-      // DM mode hides local player characters and shows the actor directory.
-      expect(find.byKey(const Key('campaign-actor-directory')), findsOneWidget);
-      expect(find.byKey(const Key('player-local-characters')), findsNothing);
-      expect(find.text('发布到战役'), findsNothing);
-      expect(find.text('Test Hero'), findsOneWidget);
-      expect(find.text('Goblin Boss'), findsOneWidget);
-      expect(find.byKey(const Key('create-temporary-actor')), findsOneWidget);
-      // Archived actor is hidden by default.
-      expect(find.text('Old Villain'), findsNothing);
+      // Spec §DM 角色生命周期 / Plan Task 6.2: DM 模式下"角色"tab 仍显示
+      // 本地角色列表和"新角色" FAB，不被 CampaignActorDirectoryPage 替代。
+      // 战役角色目录作为独立入口在战役中心队伍面板里访问。
+      expect(find.byKey(const Key('player-local-characters')), findsOneWidget);
+      expect(find.text('Mira'), findsOneWidget);
+      expect(find.byKey(const Key('create_character')), findsOneWidget);
+      expect(find.byKey(const Key('campaign-actor-directory')), findsNothing);
+      expect(find.text('Test Hero'), findsNothing);
+      expect(find.text('Goblin Boss'), findsNothing);
 
       characterController.dispose();
       actorController.dispose();
@@ -248,9 +249,6 @@ void main() {
       actors: [_sampleActor, _sampleNpc, _archivedActor],
     );
     final apiClient = MemoryCampaignSyncApiClient();
-    final modeController = ClientModeController(
-      initialMode: ClientMode.dungeonMaster,
-    );
     final actorController = CampaignActorController(
       cacheRepository: cacheRepository,
       apiClient: apiClient,
@@ -264,12 +262,11 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: CharactersTabPage(
-          controller: CharacterController(
-            repository: MemoryCharacterRepository(),
+        home: Scaffold(
+          body: CampaignActorDirectoryPage(
+            controller: actorController,
+            campaigns: const [],
           ),
-          modeController: modeController,
-          actorController: actorController,
         ),
       ),
     );
@@ -299,7 +296,6 @@ void main() {
     expect(find.text('Old Villain'), findsOneWidget);
 
     actorController.dispose();
-    modeController.dispose();
   });
 
   testWidgets('dm opens actor sheet and updates hp with base revision', (
@@ -309,9 +305,6 @@ void main() {
       actors: [_sampleActor],
     );
     final apiClient = MemoryCampaignSyncApiClient();
-    final modeController = ClientModeController(
-      initialMode: ClientMode.dungeonMaster,
-    );
     final actorController = CampaignActorController(
       cacheRepository: cacheRepository,
       apiClient: apiClient,
@@ -325,12 +318,11 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: CharactersTabPage(
-          controller: CharacterController(
-            repository: MemoryCharacterRepository(),
+        home: Scaffold(
+          body: CampaignActorDirectoryPage(
+            controller: actorController,
+            campaigns: const [],
           ),
-          modeController: modeController,
-          actorController: actorController,
         ),
       ),
     );
@@ -354,7 +346,6 @@ void main() {
     expect(sheet['currentHp'], 9);
 
     actorController.dispose();
-    modeController.dispose();
   });
 
   testWidgets('publish character sheet submits to api with base revision 0', (
@@ -429,9 +420,6 @@ void main() {
       'createdAt': '2026-01-01T00:00:00.000Z',
       'updatedAt': '2026-07-14T00:00:00.000Z',
     });
-    final modeController = ClientModeController(
-      initialMode: ClientMode.dungeonMaster,
-    );
     final actorController = CampaignActorController(
       cacheRepository: cacheRepository,
       apiClient: apiClient,
@@ -445,12 +433,11 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: CharactersTabPage(
-          controller: CharacterController(
-            repository: MemoryCharacterRepository(),
+        home: Scaffold(
+          body: CampaignActorDirectoryPage(
+            controller: actorController,
+            campaigns: const [],
           ),
-          modeController: modeController,
-          actorController: actorController,
         ),
       ),
     );
@@ -471,7 +458,6 @@ void main() {
     expect(find.byKey(const Key('actor-conflict-dialog')), findsNothing);
 
     actorController.dispose();
-    modeController.dispose();
   });
 
   testWidgets('dm actor sheet shows runtime ledger and edit history', (

@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 
 import '../../app_preferences/presentation/app_preferences_controller.dart';
 import '../../campaigns/presentation/actors/campaign_actor_controller.dart';
-import '../../campaigns/presentation/actors/campaign_actor_directory_page.dart';
 import '../../campaigns/presentation/actors/publish_character_sheet.dart';
 import '../../campaigns/presentation/campaign_controller.dart';
 import '../../client_mode/domain/client_mode.dart';
@@ -84,8 +83,6 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
 
   @override
   Widget build(BuildContext context) {
-    final mode = widget.modeController?.mode ?? ClientMode.player;
-    final isDm = mode == ClientMode.dungeonMaster;
     return AnimatedBuilder(
       animation: Listenable.merge([
         widget.controller,
@@ -95,43 +92,18 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
       builder: (context, _) {
         return Scaffold(
           appBar: AppBar(title: const Text('角色')),
-          floatingActionButton: isDm
-              ? null
-              : FloatingActionButton.extended(
-                  heroTag: 'create_character',
-                  onPressed: _openCreatePage,
-                  icon: const Icon(Icons.person_add_alt_1),
-                  label: const Text('新角色'),
-                ),
-          body: isDm ? _buildDmBody(context) : _buildPlayerBody(context),
+          floatingActionButton: FloatingActionButton.extended(
+            heroTag: 'create_character',
+            onPressed: _openCreatePage,
+            icon: const Icon(Icons.person_add_alt_1),
+            label: const Text('新角色'),
+          ),
+          body: KeyedSubtree(
+            key: const Key('player-local-characters'),
+            child: _buildCharacterList(context),
+          ),
         );
       },
-    );
-  }
-
-  Widget _buildPlayerBody(BuildContext context) {
-    return KeyedSubtree(
-      key: const Key('player-local-characters'),
-      child: _buildCharacterList(context),
-    );
-  }
-
-  Widget _buildDmBody(BuildContext context) {
-    final actorController = widget.actorController;
-    if (actorController == null) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text('DM 模式不可用：未连接战役同步。'),
-        ),
-      );
-    }
-    final campaigns = (widget.campaignController?.campaigns ?? const [])
-        .map((campaign) => CampaignOption(id: campaign.id, name: campaign.name))
-        .toList(growable: false);
-    return CampaignActorDirectoryPage(
-      controller: actorController,
-      campaigns: campaigns,
     );
   }
 

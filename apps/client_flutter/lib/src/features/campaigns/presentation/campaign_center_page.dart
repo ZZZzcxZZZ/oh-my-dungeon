@@ -46,6 +46,9 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.controller.loadWorkspaceContext(widget.campaign.id);
       widget.controller.loadArchives(widget.campaign.id);
+      // Spec §队伍: 邀请码列表在队伍面板就地展示, 需要拉取战役详情
+      // (含 invites)。非 manager 调用会被服务端 403 忽略, 不影响普通玩家。
+      widget.controller.loadCampaignDetail(widget.campaign.id);
     });
   }
 
@@ -59,6 +62,11 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
   List<CampaignMemberPreview> get _members =>
       widget.controller.workspaceContext?.members ??
       widget.campaign.memberPreview;
+
+  /// Spec §完整管理: 当前发言身份 actorId, 从服务端 workspaceContext 读取,
+  /// 用于在队伍面板高亮"使用中"的 actor。
+  String? get _activeSpeakerActorId =>
+      widget.controller.workspaceContext?.membership.activeSpeakerActorId;
 
   @override
   Widget build(BuildContext context) {
@@ -227,6 +235,8 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
           members: _members,
           actors: _actors,
           isManager: _canManage,
+          invites: _canManage ? widget.controller.invites : const [],
+          activeSpeakerActorId: _activeSpeakerActorId,
           onCreateInvite: _canManage
               ? () => widget.controller.createInvite(
                     campaignId: widget.campaign.id,
@@ -283,6 +293,18 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
                   return lastError == '归档失败' && actorIds.isNotEmpty
                       ? null
                       : lastError;
+                }
+              : null,
+          onSetActiveSpeaker: _canManage
+              ? ({required CampaignActor actor}) async {
+                  final success = await widget.controller.updateSpeaker(
+                    campaignId: widget.campaign.id,
+                    speakerMode: 'actor',
+                    actorId: actor.id,
+                  );
+                  return success
+                      ? null
+                      : (widget.controller.workspaceContextError ?? '切换发言身份失败');
                 }
               : null,
         );

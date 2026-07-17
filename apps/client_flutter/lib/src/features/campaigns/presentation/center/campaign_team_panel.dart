@@ -5,6 +5,7 @@ import '../../domain/campaign.dart';
 import '../../domain/campaign_actor.dart';
 import '../widgets/campaign_avatar.dart';
 import '../widgets/campaign_actor_quick_sheet.dart';
+import '../widgets/campaign_invite_tile.dart';
 import '../widgets/invite_share.dart';
 
 /// Team panel: lists campaign members with their bound actor avatars and
@@ -12,27 +13,35 @@ import '../widgets/invite_share.dart';
 ///
 /// Spec §队伍 / §完整管理: 邀请和管理成员在 `战役中心 → 队伍`，DM 就地操作。
 /// 当 `isManager` 为 true 时：
-/// - 顶部显示"邀请成员"按钮（[onCreateInvite]）。
+/// - 顶部显示已有邀请码列表（[invites]）+ "邀请成员"按钮（[onCreateInvite]）。
 /// - 顶部显示"创建常驻角色"按钮（[onCreatePersistentActor]）。
 /// - 底部显示"DM 角色管理"区块，列出 DM 创建的 NPC/怪物/同伴，支持
-///   转为常驻（[onConvertToPersistent]）和批量归档（[onBatchArchive]）。
+///   转为常驻（[onConvertToPersistent]）、切换为当前发言身份
+///   （[onSetActiveSpeaker]）和批量归档（[onBatchArchive]）。
 class CampaignTeamPanel extends StatefulWidget {
   const CampaignTeamPanel({
     required this.members,
     required this.actors,
     required this.isManager,
+    this.invites = const [],
     this.onCreateInvite,
     this.campaignName,
     this.serverUrl,
     this.onCreatePersistentActor,
     this.onConvertToPersistent,
     this.onBatchArchive,
+    this.onSetActiveSpeaker,
+    this.activeSpeakerActorId,
     super.key,
   });
 
   final List<CampaignMemberPreview> members;
   final List<CampaignActor> actors;
   final bool isManager;
+
+  /// Spec §队伍: 已有邀请码列表。DM 在队伍面板就地查看和分享，
+  /// 不必绕到战役详情页。
+  final List<CampaignInvite> invites;
 
   /// 创建邀请码的回调。仅 DM 调用；返回邀请码对象或 null（失败时）。
   final Future<CampaignInvite?> Function()? onCreateInvite;
@@ -63,6 +72,14 @@ class CampaignTeamPanel extends StatefulWidget {
   final Future<String?> Function({required List<String> actorIds})?
       onBatchArchive;
 
+  /// Spec §完整管理: 切换为当前发言身份 — DM 把发言身份切到指定 actor。
+  /// 返回 null 表示成功，非 null 字符串表示错误消息。
+  final Future<String?> Function({required CampaignActor actor})?
+      onSetActiveSpeaker;
+
+  /// 当前发言身份 actorId，用于高亮"正在使用"的 actor。
+  final String? activeSpeakerActorId;
+
   @override
   State<CampaignTeamPanel> createState() => _CampaignTeamPanelState();
 }
@@ -89,8 +106,12 @@ class _CampaignTeamPanelState extends State<CampaignTeamPanel> {
     final hasInviteHeader = widget.isManager && widget.onCreateInvite != null;
     final hasCreateActorHeader =
         widget.isManager && widget.onCreatePersistentActor != null;
+    final hasInviteList =
+        widget.isManager && widget.invites.isNotEmpty;
     final headerCount =
-        (hasInviteHeader ? 1 : 0) + (hasCreateActorHeader ? 1 : 0);
+        (hasInviteHeader ? 1 : 0) +
+        (hasCreateActorHeader ? 1 : 0) +
+        (hasInviteList ? 1 : 0);
     final managedActors = _managedActors;
     final showManagedSection =
         widget.isManager && managedActors.isNotEmpty;
@@ -103,21 +124,31 @@ class _CampaignTeamPanelState extends State<CampaignTeamPanel> {
             widget.members.length + headerCount + (showManagedSection ? 1 : 0),
         separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (context, index) {
-          if (hasInviteHeader && index == 0) {
+          var slot = 0;
+          if (hasInviteHeader && index == slot) {
             return _InviteButton(
               campaignName: widget.campaignName,
               serverUrl: widget.serverUrl,
               onCreateInvite: widget.onCreateInvite!,
             );
           }
-          if (hasCreateActorHeader && index == (hasInviteHeader ? 1 : 0)) {
+          if (hasInviteHeader) slot += 1;
+          if (hasInviteList && index == slot) {
+            return _InviteListSection(
+              invites: widget.invites,
+              campaignName: widget.campaignName,
+              serverUrl: widget.serverUrl,
+            );
+          }
+          if (hasInviteList) slot += 1;
+          if (hasCreateActorHeader && index == slot) {
             return _CreatePersistentActorButton(
               onCreatePersistentActor: widget.onCreatePersistentActor!,
             );
           }
-          final memberStart = headerCount;
-          if (index < memberStart + widget.members.length) {
-            final memberIndex = index - headerCount;
+          if (hasCreateActorHeader) slot += 1;
+          if (index < slot + widget.members.length) {
+            final memberIndex = index - slot;
             final member = widget.members[memberIndex];
             return _buildMemberTile(member);
           }
@@ -204,6 +235,8 @@ class _CampaignTeamPanelState extends State<CampaignTeamPanel> {
     final name = actor.sheet['name']?.toString().trim() ?? '未命名';
     final isTemporary = actor.lifecycle == 'temporary';
     final isSelected = _selectedActorIds.contains(actor.id);
+    final isActive =
+        widget.activeSpeakerActorId == actor.id;
     return ListTile(
       dense: true,
       leading: _selectMode
@@ -229,18 +262,43 @@ class _CampaignTeamPanelState extends State<CampaignTeamPanel> {
           _ActorTypeBadge(actorType: actor.actorType),
           const SizedBox(width: 6),
           if (isTemporary) const _LifecycleBadge(lifecycle: 'temporary'),
+          if (isActive)
+            Padding(
+              padding: const EdgeInsets.only(left: 6),
+              child: _ActiveSpeakerBadge(),
+            ),
         ],
       ),
       trailing: _selectMode
           ? null
-          : (isTemporary && widget.onConvertToPersistent != null
-                ? IconButton(
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.onSetActiveSpeaker != null && !isActive)
+                  IconButton(
+                    key: Key('team-set-active-speaker-${actor.id}'),
+                    tooltip: '切换为当前发言身份',
+                    onPressed: () => _onSetActiveSpeaker(actor),
+                    icon: const Icon(Icons.record_voice_over_outlined),
+                  ),
+                if (isTemporary && widget.onConvertToPersistent != null)
+                  IconButton(
                     key: Key('team-convert-persistent-${actor.id}'),
                     tooltip: '转为常驻',
                     onPressed: () => _onConvertToPersistent(actor),
                     icon: const Icon(Icons.push_pin_outlined),
-                  )
-                : null),
+                  ),
+              ],
+            ),
+    );
+  }
+
+  Future<void> _onSetActiveSpeaker(CampaignActor actor) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final error = await widget.onSetActiveSpeaker!(actor: actor);
+    if (!mounted) return;
+    messenger.showSnackBar(
+      SnackBar(content: Text(error ?? '已切换发言身份为「${actor.sheet['name'] ?? '未命名'}」')),
     );
   }
 
@@ -324,6 +382,84 @@ class _LifecycleBadge extends StatelessWidget {
         '临时',
         style: theme.textTheme.labelSmall?.copyWith(
           color: theme.colorScheme.onSecondaryContainer,
+        ),
+      ),
+    );
+  }
+}
+
+class _ActiveSpeakerBadge extends StatelessWidget {
+  const _ActiveSpeakerBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        '使用中',
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.onPrimaryContainer,
+        ),
+      ),
+    );
+  }
+}
+
+/// Spec §队伍: 已有邀请码列表区块。DM 在队伍面板就地查看和分享所有邀请码，
+/// 不必绕到战役详情页。复用 [CampaignInviteTile] 渲染每条邀请码。
+class _InviteListSection extends StatelessWidget {
+  const _InviteListSection({
+    required this.invites,
+    required this.campaignName,
+    required this.serverUrl,
+  });
+
+  final List<CampaignInvite> invites;
+  final String? campaignName;
+  final String? serverUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      key: const Key('team-invite-list-section'),
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '邀请码',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            for (final invite in invites)
+              CampaignInviteTile(
+                invite: invite,
+                onCopy: () {
+                  Clipboard.setData(ClipboardData(text: invite.code));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('邀请码已复制')),
+                  );
+                },
+                onShare: () async {
+                  await copyInviteToClipboard(
+                    code: invite.code,
+                    campaignName: campaignName,
+                    serverUrl: serverUrl,
+                  );
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('分享文本已复制，可粘贴到聊天工具')),
+                  );
+                },
+              ),
+          ],
         ),
       ),
     );

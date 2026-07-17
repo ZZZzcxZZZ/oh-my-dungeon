@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../app_preferences/presentation/app_preferences_controller.dart';
@@ -486,8 +489,27 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
       builder: (context) => PublishCharacterSheet(
         controller: actorController,
         character: character,
+        onPickImage: _pickAvatarImage,
       ),
     );
+  }
+
+  Future<({Uint8List bytes, String mimeType})?> _pickAvatarImage() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['png', 'jpg', 'jpeg', 'webp'],
+      withData: true,
+    );
+    final file = result?.files.singleOrNull;
+    final bytes = file?.bytes;
+    if (bytes == null || bytes.isEmpty) return null;
+    final extension = (file?.extension ?? 'png').toLowerCase();
+    final mimeType = switch (extension) {
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'webp' => 'image/webp',
+      _ => 'image/png',
+    };
+    return (bytes: bytes, mimeType: mimeType);
   }
 
   Future<void> _adjustHp(CharacterSheet character, int delta) async {

@@ -197,6 +197,7 @@ class CampaignActorController extends ChangeNotifier {
   Future<bool> publishCharacter(
     CharacterSheet character, {
     String actorType = 'player',
+    Map<String, Object?>? sheetOverride,
   }) async {
     final campaignId = _selectedCampaignId;
     if (campaignId == null) {
@@ -213,7 +214,7 @@ class CampaignActorController extends ChangeNotifier {
         sourceCharacterId: character.id,
         actorType: actorType,
         baseRevision: 0,
-        sheet: character.toJson(),
+        sheet: sheetOverride ?? character.toJson(),
       );
       // 立即写本地缓存，避免等待拉取循环。
       await _cacheRepository.applyPage(

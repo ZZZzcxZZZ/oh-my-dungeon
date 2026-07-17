@@ -1,19 +1,30 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../../../characters/domain/character.dart';
+import '../widgets/avatar_picker.dart';
 import 'campaign_actor_controller.dart';
 
 /// 把本地角色卡发布为 CampaignActor 的对话框。
 /// 玩家模式可见；调用 [CampaignActorController.publishCharacter] 提交到战役。
+///
+/// 图片选择调用通过 [onPickImage] 注入，便于测试时替换为内存 fake，无需触及
+/// file_picker 原生插件。
 class PublishCharacterSheet extends StatefulWidget {
   const PublishCharacterSheet({
     required this.controller,
     required this.character,
+    required this.onPickImage,
     super.key,
   });
 
   final CampaignActorController controller;
   final CharacterSheet character;
+
+  /// 选择图片的回调。返回 `(bytes, mimeType)` 或 `null`（用户取消）。
+  final Future<({Uint8List bytes, String mimeType})?> Function() onPickImage;
 
   @override
   State<PublishCharacterSheet> createState() => _PublishCharacterSheetState();
@@ -22,6 +33,10 @@ class PublishCharacterSheet extends StatefulWidget {
 class _PublishCharacterSheetState extends State<PublishCharacterSheet> {
   String _actorType = 'player';
   bool _submitting = false;
+  bool _picking = false;
+  String? _pickError;
+  Uint8List? _avatarBytes;
+  String? _avatarMimeType;
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +50,14 @@ class _PublishCharacterSheetState extends State<PublishCharacterSheet> {
           children: [
             Text(
               '将“${widget.character.name}”发布为战役角色，DM 可在战役中查看和编辑。',
+            ),
+            const SizedBox(height: 12),
+            AvatarPicker(
+              currentAvatarUrl: widget.character.avatarUrl,
+              previewBytes: _avatarBytes,
+              isUploading: _picking,
+              error: _pickError,
+              onPick: _pickImage,
             ),
             const SizedBox(height: 12),
             Text('角色概要', style: Theme.of(context).textTheme.labelLarge),
@@ -99,11 +122,54 @@ class _PublishCharacterSheetState extends State<PublishCharacterSheet> {
     );
   }
 
+  Future<void> _pickImage() async {
+    setState(() {
+      _picking = true;
+      _pickError = null;
+    });
+    try {
+      final result = await widget.onPickImage();
+      if (!mounted) return;
+      if (result == null) {
+        setState(() => _picking = false);
+        return;
+      }
+      if (result.bytes.length > 2 * 1024 * 1024) {
+        setState(() {
+          _picking = false;
+          _pickError = '头像图片不能超过 2 MB';
+        });
+        return;
+      }
+      setState(() {
+        _avatarBytes = result.bytes;
+        _avatarMimeType = result.mimeType;
+        _picking = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _picking = false;
+        _pickError = '选择图片失败';
+      });
+    }
+  }
+
   Future<void> _submit() async {
     setState(() => _submitting = true);
+    final sheet = Map<String, Object?>.from(widget.character.toJson());
+    final bytes = _avatarBytes;
+    final mimeType = _avatarMimeType;
+    if (bytes != null && mimeType != null) {
+      sheet['avatarUrl'] = 'data:$mimeType;base64,${base64Encode(bytes)}';
+    } else {
+      // 没有选择头像时显式移除 null 占位，避免污染服务端字段。
+      sheet.remove('avatarUrl');
+    }
     final success = await widget.controller.publishCharacter(
       widget.character,
       actorType: _actorType,
+      sheetOverride: sheet,
     );
     if (!mounted) return;
     setState(() => _submitting = false);

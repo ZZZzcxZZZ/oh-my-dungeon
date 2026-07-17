@@ -1423,6 +1423,7 @@ class _FakeCampaignClient implements CampaignClient {
     String? campaignActorId,
     String? actionId,
     Map<String, Object?>? eventData,
+    Map<String, Object?>? draftActor,
   }) async {
     sentMessages.add(
       _SentCampaignMessage(

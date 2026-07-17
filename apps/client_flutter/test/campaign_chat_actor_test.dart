@@ -482,6 +482,78 @@ void main() {
       expect(find.byType(CampaignActorQuickSheet), findsNothing);
     },
   );
+
+  testWidgets(
+    'DM creates a temporary identity draft and sends the first message atomically',
+    (tester) async {
+      await pumpChatPage(tester, isDm: true);
+
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('draft-identity-entry')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('draft-identity-name')),
+        '旅店老板',
+      );
+      await tester.tap(find.byKey(const Key('draft-identity-confirm')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('campaign-chat-input')),
+        '欢迎光临',
+      );
+      await tester.tap(find.byKey(const Key('campaign-chat-send')));
+      await tester.pumpAndSettle();
+
+      expect(campaignClient.sendMessageCalls, hasLength(1));
+      final call = campaignClient.sendMessageCalls.single;
+      expect(call.draftActor, isNotNull);
+      expect(call.draftActor!['displayName'], '旅店老板');
+      expect(call.campaignActorId, isNull);
+      expect(call.kind, anyOf('say', 'action'));
+      expect(call.content, '欢迎光临');
+    },
+  );
+
+  testWidgets(
+    'failed draft send keeps the draft and shows the spec error string',
+    (tester) async {
+      campaignClient.sendMessageException = const CampaignApiException(
+        '临时角色创建失败',
+        statusCode: 500,
+      );
+
+      await pumpChatPage(tester, isDm: true);
+
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('draft-identity-entry')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('draft-identity-name')),
+        '神秘人',
+      );
+      await tester.tap(find.byKey(const Key('draft-identity-confirm')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('campaign-chat-input')),
+        '你好',
+      );
+      await tester.tap(find.byKey(const Key('campaign-chat-send')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('临时角色创建失败，消息尚未发送。'), findsOneWidget);
+      expect(campaignClient.sendMessageCalls, hasLength(1));
+      expect(
+        campaignClient.sendMessageCalls.single.draftActor?['displayName'],
+        '神秘人',
+      );
+    },
+  );
 }
 
 class _RecordingCampaignClient implements CampaignClient {
@@ -500,6 +572,7 @@ class _RecordingCampaignClient implements CampaignClient {
   final List<_SentMessageCall> sendMessageCalls = [];
   List<CampaignChatMessage> messages = [];
   bool canManageCampaign = false;
+  CampaignApiException? sendMessageException;
 
   @override
   Future<CampaignWorkspaceContext> getWorkspaceContext({
@@ -602,6 +675,7 @@ class _RecordingCampaignClient implements CampaignClient {
     String? campaignActorId,
     String? actionId,
     Map<String, Object?>? eventData,
+    Map<String, Object?>? draftActor,
   }) async {
     sendMessageCalls.add(
       _SentMessageCall(
@@ -610,8 +684,13 @@ class _RecordingCampaignClient implements CampaignClient {
         campaignActorId: campaignActorId,
         actionId: actionId,
         eventData: eventData,
+        draftActor: draftActor,
       ),
     );
+    final exception = sendMessageException;
+    if (exception != null) {
+      throw exception;
+    }
     return CampaignChatMessage(
       id: 'msg-${sendMessageCalls.length}',
       campaignId: campaignId,
@@ -643,6 +722,7 @@ class _SentMessageCall {
     required this.campaignActorId,
     required this.actionId,
     required this.eventData,
+    required this.draftActor,
   });
 
   final String kind;
@@ -650,6 +730,7 @@ class _SentMessageCall {
   final String? campaignActorId;
   final String? actionId;
   final Map<String, Object?>? eventData;
+  final Map<String, Object?>? draftActor;
 }
 
 class _FakeAuthClient implements AuthClient {

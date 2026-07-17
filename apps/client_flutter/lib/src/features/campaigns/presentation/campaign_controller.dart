@@ -362,6 +362,7 @@ class CampaignController extends ChangeNotifier {
     String? campaignActorId,
     String? actionId,
     Map<String, Object?>? eventData,
+    Map<String, Object?>? draftActor,
   }) async {
     final token = accessToken;
     if (token == null) return false;
@@ -377,6 +378,7 @@ class CampaignController extends ChangeNotifier {
         campaignActorId: campaignActorId,
         actionId: actionId,
         eventData: eventData,
+        draftActor: draftActor,
       );
       _appendMessage(message);
       notifyListeners();

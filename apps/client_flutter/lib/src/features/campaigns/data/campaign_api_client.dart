@@ -80,6 +80,7 @@ abstract class CampaignClient {
     String? campaignActorId,
     String? actionId,
     Map<String, Object?>? eventData,
+    Map<String, Object?>? draftActor,
   });
 
   Future<List<CampaignArchiveEntry>> listArchives({
@@ -451,6 +452,7 @@ class CampaignApiClient implements CampaignClient {
     String? campaignActorId,
     String? actionId,
     Map<String, Object?>? eventData,
+    Map<String, Object?>? draftActor,
   }) async {
     final body = <String, Object?>{
       'kind': kind,
@@ -459,6 +461,7 @@ class CampaignApiClient implements CampaignClient {
     };
     if (actionId != null) body['actionId'] = actionId;
     if (eventData != null) body['eventData'] = eventData;
+    if (draftActor != null) body['draftActor'] = draftActor;
     final response = await _httpClient.post(
       Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/messages'),
       headers: {

@@ -57,6 +57,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
   final _controller = TextEditingController();
   ChatMode _mode = ChatMode.say;
   bool _sending = false;
+  _TemporaryIdentityDraft? _draftIdentity;
 
   @override
   void initState() {
@@ -366,60 +367,108 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
   }
 
   Widget _buildInputBar() {
+    final draft = _draftIdentity;
+    final colorScheme = Theme.of(context).colorScheme;
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-        child: Row(
-          children: [
-            IconButton.filledTonal(
-              key: const Key('campaign-chat-identity'),
-              tooltip: chatText('characterSheet'),
-              onPressed: _showIdentitySheet,
-              icon: ChatAvatar(
-                name: widget.character?.name ?? '?',
-                avatarUrl: widget.character?.avatarUrl,
-                size: 24,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (draft != null)
+            Container(
+              key: const Key('draft-identity-banner'),
+              margin: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: colorScheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.person_add_alt_1_outlined,
+                    size: 18,
+                    color: colorScheme.onSecondaryContainer,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '临时身份草稿：${draft.displayName}',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: colorScheme.onSecondaryContainer,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '放弃草稿',
+                    onPressed: _sending
+                        ? null
+                        : () => setState(() => _draftIdentity = null),
+                    icon: Icon(
+                      Icons.close,
+                      size: 18,
+                      color: colorScheme.onSecondaryContainer,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 6),
-            IconButton.filledTonal(
-              tooltip: chatText('moreTableTools'),
-              onPressed: _showMoreActions,
-              icon: const Icon(Icons.add),
-            ),
-            const SizedBox(width: 6),
-            SizedBox(
-              width: 104,
-              child: ChatModePicker(
-                mode: _mode,
-                enabled: !_sending,
-                onChanged: (mode) => setState(() => _mode = mode),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: TextField(
-                key: const Key('campaign-chat-input'),
-                controller: _controller,
-                enabled: !_sending,
-                decoration: InputDecoration(
-                  hintText: _mode == ChatMode.say
-                      ? chatText('sayHint')
-                      : chatText('actHint'),
-                  border: const OutlineInputBorder(),
-                  isDense: true,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+            child: Row(
+              children: [
+                IconButton.filledTonal(
+                  key: const Key('campaign-chat-identity'),
+                  tooltip: chatText('characterSheet'),
+                  onPressed: _showIdentitySheet,
+                  icon: ChatAvatar(
+                    name: widget.character?.name ?? '?',
+                    avatarUrl: widget.character?.avatarUrl,
+                    size: 24,
+                  ),
                 ),
-                onSubmitted: _sending ? null : (_) => _send(),
-              ),
+                const SizedBox(width: 6),
+                IconButton.filledTonal(
+                  tooltip: chatText('moreTableTools'),
+                  onPressed: _showMoreActions,
+                  icon: const Icon(Icons.add),
+                ),
+                const SizedBox(width: 6),
+                SizedBox(
+                  width: 104,
+                  child: ChatModePicker(
+                    mode: _mode,
+                    enabled: !_sending,
+                    onChanged: (mode) => setState(() => _mode = mode),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: TextField(
+                    key: const Key('campaign-chat-input'),
+                    controller: _controller,
+                    enabled: !_sending,
+                    decoration: InputDecoration(
+                      hintText: draft != null
+                          ? '以 ${draft.displayName} 发言'
+                          : (_mode == ChatMode.say
+                              ? chatText('sayHint')
+                              : chatText('actHint')),
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    onSubmitted: _sending ? null : (_) => _send(),
+                  ),
+                ),
+                IconButton.filled(
+                  key: const Key('campaign-chat-send'),
+                  tooltip: chatText('send'),
+                  onPressed: _sending ? null : _send,
+                  icon: const Icon(Icons.send_rounded),
+                ),
+              ],
             ),
-            IconButton.filled(
-              key: const Key('campaign-chat-send'),
-              tooltip: chatText('send'),
-              onPressed: _sending ? null : _send,
-              icon: const Icon(Icons.send_rounded),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -428,17 +477,32 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     final content = _controller.text.trim();
     if (content.isEmpty || _sending) return;
 
+    final draft = _draftIdentity;
     setState(() => _sending = true);
     final sent = await widget.campaignController.sendMessage(
       campaignId: widget.campaign.id,
       kind: _mode == ChatMode.act ? 'action' : 'say',
       content: content,
-      campaignActorId: _activeSpeakerActorId,
+      campaignActorId: draft == null ? _activeSpeakerActorId : null,
+      draftActor: draft == null
+          ? null
+          : <String, Object?>{'displayName': draft.displayName},
     );
     if (!mounted) return;
     setState(() => _sending = false);
     if (sent) {
       _controller.clear();
+      if (draft != null) {
+        // First message of a draft identity creates the temporary actor on
+        // the server; refresh workspace context so the new actor shows up.
+        _draftIdentity = null;
+        await widget.campaignController.loadWorkspaceContext(widget.campaign.id);
+      }
+    } else if (draft != null) {
+      // Spec: failed draft send keeps the draft and shows the spec error.
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('临时角色创建失败，消息尚未发送。')),
+      );
     }
   }
 
@@ -539,6 +603,32 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
             ),
             if (_canManageCampaign) ...[
               const Divider(),
+              if (_draftIdentity != null)
+                ListTile(
+                  leading: const Icon(Icons.person_add_alt_1_outlined),
+                  title: Text('草稿：${_draftIdentity!.displayName}'),
+                  subtitle: const Text('首次发送消息后将自动创建临时身份'),
+                  trailing: IconButton(
+                    tooltip: '放弃草稿',
+                    onPressed: () {
+                      setState(() => _draftIdentity = null);
+                      Navigator.of(context).pop();
+                    },
+                    icon: const Icon(Icons.close),
+                  ),
+                  onTap: () => Navigator.of(context).pop(),
+                )
+              else
+                ListTile(
+                  key: const Key('draft-identity-entry'),
+                  leading: const Icon(Icons.person_add_alt_1_outlined),
+                  title: const Text('快速临时身份'),
+                  subtitle: const Text('只输入显示名称即可发言，首次发送时由服务器创建临时角色'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showDraftIdentityForm();
+                  },
+                ),
               ListTile(
                 leading: const Icon(Icons.auto_stories_outlined),
                 title: const Text('旁白'),
@@ -560,6 +650,20 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _showDraftIdentityForm() {
+    return showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => _DraftIdentityFormSheet(
+        onConfirm: (name) {
+          setState(() => _draftIdentity = _TemporaryIdentityDraft(displayName: name));
+          Navigator.of(sheetContext).pop();
+        },
       ),
     );
   }
@@ -1212,6 +1316,93 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Local-only draft for a DM "快速临时身份".
+///
+/// Per `2026-07-16-campaign-workspace-refactor-design.md` §快速临时身份:
+/// the DM only needs to enter a display name. The draft lives locally in the
+/// composer until the first message is sent; the server then atomically
+/// creates a temporary CampaignActor + message in a single transaction.
+/// Unsent drafts never reach the server.
+class _TemporaryIdentityDraft {
+  const _TemporaryIdentityDraft({required this.displayName});
+
+  final String displayName;
+}
+
+/// Bottom sheet form for collecting the display name of a temporary identity.
+///
+/// Manages its own [TextEditingController] so the controller is disposed only
+/// when the widget leaves the tree (after the sheet's close animation), not
+/// when [Navigator.pop] is called.
+class _DraftIdentityFormSheet extends StatefulWidget {
+  const _DraftIdentityFormSheet({required this.onConfirm});
+
+  final ValueChanged<String> onConfirm;
+
+  @override
+  State<_DraftIdentityFormSheet> createState() =>
+      _DraftIdentityFormSheetState();
+}
+
+class _DraftIdentityFormSheetState extends State<_DraftIdentityFormSheet> {
+  final _nameController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) return;
+    widget.onConfirm(name);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '快速临时身份',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '只需填写显示名称即可。发送第一条消息时，服务器会在一个事务中创建临时角色并写入消息。',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              key: const Key('draft-identity-name'),
+              controller: _nameController,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: '显示名称',
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              key: const Key('draft-identity-confirm'),
+              onPressed: _submit,
+              child: const Text('确认使用此身份'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

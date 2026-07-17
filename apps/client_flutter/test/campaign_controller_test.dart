@@ -306,6 +306,7 @@ class _FakeCampaignClient implements CampaignClient {
     String? campaignActorId,
     String? actionId,
     Map<String, Object?>? eventData,
+    Map<String, Object?>? draftActor,
   }) {
     throw UnimplementedError();
   }

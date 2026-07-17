@@ -1,0 +1,242 @@
+import 'package:flutter/foundation.dart';
+
+import '../../auth/presentation/auth_controller.dart';
+import '../data/campaign_api_client.dart';
+import '../domain/campaign.dart';
+import '../domain/campaign_archive_entry.dart';
+
+/// Owns the per-campaign workspace context: server-provided capabilities,
+/// membership speaker state, and campaign archive entries.
+///
+/// Extracted from [CampaignController] so the campaign center page can depend
+/// on a small, focused controller that is easy to subclass for widget tests.
+/// [CampaignController] composes an instance of this class and forwards the
+/// workspace/archive APIs to keep existing callers working.
+class CampaignContextController extends ChangeNotifier {
+  CampaignContextController({
+    required this.apiBaseUrl,
+    required this.authController,
+    required this.campaignClient,
+  }) {
+    authController.addListener(_onAuthChanged);
+  }
+
+  final String apiBaseUrl;
+  final AuthController authController;
+  final CampaignClient campaignClient;
+
+  CampaignWorkspaceContext? _workspaceContext;
+  bool _workspaceContextLoading = false;
+  String? _workspaceContextError;
+
+  List<CampaignArchiveEntry> _archives = [];
+  bool _archivesLoading = false;
+  String? _archivesError;
+
+  CampaignWorkspaceContext? get workspaceContext => _workspaceContext;
+  bool get isWorkspaceContextLoading => _workspaceContextLoading;
+  String? get workspaceContextError => _workspaceContextError;
+
+  List<CampaignArchiveEntry> get archives => _archives;
+  bool get isArchivesLoading => _archivesLoading;
+  String? get archivesError => _archivesError;
+
+  String? get accessToken => authController.accessToken;
+
+  Future<void> loadWorkspaceContext(String campaignId) async {
+    final token = accessToken;
+    if (token == null) return;
+
+    _workspaceContextLoading = true;
+    _workspaceContextError = null;
+    notifyListeners();
+
+    try {
+      _workspaceContext = await campaignClient.getWorkspaceContext(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        campaignId: campaignId,
+      );
+    } on CampaignApiException catch (error) {
+      _workspaceContextError = error.message;
+    } catch (_) {
+      _workspaceContextError = 'Failed to load campaign workspace';
+    }
+
+    _workspaceContextLoading = false;
+    notifyListeners();
+  }
+
+  Future<bool> updateSpeaker({
+    required String campaignId,
+    required String speakerMode,
+    String? actorId,
+  }) async {
+    final token = accessToken;
+    if (token == null) return false;
+    _workspaceContextError = null;
+    try {
+      final membership = await campaignClient.updateSpeaker(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        campaignId: campaignId,
+        speakerMode: speakerMode,
+        actorId: actorId,
+      );
+      final context = _workspaceContext;
+      if (context != null) {
+        _workspaceContext = context.copyWith(membership: membership);
+      }
+      notifyListeners();
+      return true;
+    } on CampaignApiException catch (error) {
+      _workspaceContextError = error.message;
+    } catch (_) {
+      _workspaceContextError = 'Failed to update campaign speaker';
+    }
+    notifyListeners();
+    return false;
+  }
+
+  Future<void> loadArchives(String campaignId, {String? kind}) async {
+    final token = accessToken;
+    if (token == null) return;
+    _archivesLoading = true;
+    _archivesError = null;
+    notifyListeners();
+    try {
+      _archives = await campaignClient.listArchives(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        campaignId: campaignId,
+        kind: kind,
+      );
+    } on CampaignApiException catch (error) {
+      _archivesError = error.message;
+    } catch (_) {
+      _archivesError = 'Failed to load campaign archives';
+    }
+    _archivesLoading = false;
+    notifyListeners();
+  }
+
+  Future<CampaignArchiveEntry?> createArchiveEntry({
+    required String campaignId,
+    required String kind,
+    required String title,
+    String? summary,
+    Map<String, Object?>? payload,
+  }) async {
+    final token = accessToken;
+    if (token == null) return null;
+    _archivesError = null;
+    try {
+      final entry = await campaignClient.createArchiveEntry(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        campaignId: campaignId,
+        kind: kind,
+        title: title,
+        summary: summary,
+        payload: payload,
+      );
+      _archives = [entry, ..._archives];
+      notifyListeners();
+      return entry;
+    } on CampaignApiException catch (error) {
+      _archivesError = error.message;
+    } catch (_) {
+      _archivesError = 'Failed to create campaign archive entry';
+    }
+    notifyListeners();
+    return null;
+  }
+
+  Future<CampaignArchiveEntry?> updateArchiveEntry({
+    required String campaignId,
+    required String entryId,
+    String? kind,
+    String? title,
+    String? summary,
+    Map<String, Object?>? payload,
+    bool? pinned,
+  }) async {
+    final token = accessToken;
+    if (token == null) return null;
+    _archivesError = null;
+    try {
+      final entry = await campaignClient.updateArchiveEntry(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        campaignId: campaignId,
+        entryId: entryId,
+        kind: kind,
+        title: title,
+        summary: summary,
+        payload: payload,
+        pinned: pinned,
+      );
+      _archives = _archives
+          .map((existing) => existing.id == entry.id ? entry : existing)
+          .toList();
+      notifyListeners();
+      return entry;
+    } on CampaignApiException catch (error) {
+      _archivesError = error.message;
+    } catch (_) {
+      _archivesError = 'Failed to update campaign archive entry';
+    }
+    notifyListeners();
+    return null;
+  }
+
+  Future<bool> archiveEntry({
+    required String campaignId,
+    required String entryId,
+  }) async {
+    final token = accessToken;
+    if (token == null) return false;
+    _archivesError = null;
+    try {
+      await campaignClient.archiveEntry(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        campaignId: campaignId,
+        entryId: entryId,
+      );
+      _archives = _archives.where((entry) => entry.id != entryId).toList();
+      notifyListeners();
+      return true;
+    } on CampaignApiException catch (error) {
+      _archivesError = error.message;
+    } catch (_) {
+      _archivesError = 'Failed to archive campaign entry';
+    }
+    notifyListeners();
+    return false;
+  }
+
+  /// Resets workspace context and archive state.
+  ///
+  /// Called by [CampaignController.clearSelection] and on auth logout. Does
+  /// notify listeners so composed controllers can forward the change.
+  void clearSelection() {
+    _workspaceContext = null;
+    _workspaceContextError = null;
+    _archives = [];
+    _archivesError = null;
+    notifyListeners();
+  }
+
+  void _onAuthChanged() {
+    if (!authController.isLoggedIn) {
+      clearSelection();
+    }
+  }
+
+  @override
+  void dispose() {
+    authController.removeListener(_onAuthChanged);
+    super.dispose();
+  }
+}

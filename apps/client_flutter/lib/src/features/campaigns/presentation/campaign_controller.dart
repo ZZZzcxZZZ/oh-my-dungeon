@@ -7,6 +7,7 @@ import '../data/campaign_api_client.dart';
 import '../data/campaign_socket_service.dart';
 import '../domain/campaign.dart';
 import '../domain/campaign_archive_entry.dart';
+import 'campaign_context_controller.dart';
 
 class CampaignController extends ChangeNotifier {
   CampaignController({
@@ -14,14 +15,23 @@ class CampaignController extends ChangeNotifier {
     required this.authController,
     required this.campaignClient,
     CampaignSocketService? campaignSocketService,
-  }) : _socketService = campaignSocketService ?? NoopCampaignSocketService() {
+  })  : _socketService = campaignSocketService ?? NoopCampaignSocketService(),
+        contextController = CampaignContextController(
+          apiBaseUrl: apiBaseUrl,
+          authController: authController,
+          campaignClient: campaignClient,
+        ) {
     authController.addListener(_onAuthChanged);
+    // Forward context controller notifications so existing listeners on
+    // CampaignController keep seeing workspace/archive state changes.
+    contextController.addListener(_onContextChanged);
   }
 
   final String apiBaseUrl;
   final AuthController authController;
   final CampaignClient campaignClient;
   final CampaignSocketService _socketService;
+  final CampaignContextController contextController;
   StreamSubscription<CampaignChatMessage>? _messageSubscription;
   String? _connectedCampaignId;
 
@@ -36,12 +46,6 @@ class CampaignController extends ChangeNotifier {
   List<CampaignChatMessage> _messages = [];
   bool _messagesLoading = false;
   String? _messagesError;
-  CampaignWorkspaceContext? _workspaceContext;
-  bool _workspaceContextLoading = false;
-  String? _workspaceContextError;
-  List<CampaignArchiveEntry> _archives = [];
-  bool _archivesLoading = false;
-  String? _archivesError;
 
   List<Campaign> get campaigns => _campaigns;
   bool get isLoading => _loading;
@@ -55,12 +59,21 @@ class CampaignController extends ChangeNotifier {
   List<CampaignChatMessage> get messages => _messages;
   bool get isMessagesLoading => _messagesLoading;
   String? get messagesError => _messagesError;
-  CampaignWorkspaceContext? get workspaceContext => _workspaceContext;
-  bool get isWorkspaceContextLoading => _workspaceContextLoading;
-  String? get workspaceContextError => _workspaceContextError;
-  List<CampaignArchiveEntry> get archives => _archives;
-  bool get isArchivesLoading => _archivesLoading;
-  String? get archivesError => _archivesError;
+
+  // Workspace/archive state lives in [contextController]; these getters
+  // forward to keep the existing CampaignController API surface stable.
+  CampaignWorkspaceContext? get workspaceContext =>
+      contextController.workspaceContext;
+  bool get isWorkspaceContextLoading =>
+      contextController.isWorkspaceContextLoading;
+  String? get workspaceContextError => contextController.workspaceContextError;
+  List<CampaignArchiveEntry> get archives => contextController.archives;
+  bool get isArchivesLoading => contextController.isArchivesLoading;
+  String? get archivesError => contextController.archivesError;
+
+  void _onContextChanged() {
+    notifyListeners();
+  }
 
   void _onAuthChanged() {
     if (!authController.isLoggedIn) {
@@ -71,10 +84,8 @@ class CampaignController extends ChangeNotifier {
       _error = null;
       _detailError = null;
       _messagesError = null;
-      _workspaceContext = null;
-      _workspaceContextError = null;
-      _archives = [];
-      _archivesError = null;
+      // Context controller listens to authController itself and will reset
+      // its own state; we only need to reset chat-specific state here.
       disconnectCampaignChat();
       notifyListeners();
     }
@@ -279,82 +290,27 @@ class CampaignController extends ChangeNotifier {
     }
   }
 
-  Future<void> loadWorkspaceContext(String campaignId) async {
-    final token = accessToken;
-    if (token == null) return;
+  // Workspace context + archives + speaker methods delegate to
+  // [contextController]. Notifications from contextController are forwarded
+  // via [_onContextChanged], so callers that listen to CampaignController
+  // continue to observe state changes.
 
-    _workspaceContextLoading = true;
-    _workspaceContextError = null;
-    notifyListeners();
-
-    try {
-      _workspaceContext = await campaignClient.getWorkspaceContext(
-        apiBaseUrl: apiBaseUrl,
-        accessToken: token,
-        campaignId: campaignId,
-      );
-    } on CampaignApiException catch (error) {
-      _workspaceContextError = error.message;
-    } catch (_) {
-      _workspaceContextError = 'Failed to load campaign workspace';
-    }
-
-    _workspaceContextLoading = false;
-    notifyListeners();
-  }
+  Future<void> loadWorkspaceContext(String campaignId) =>
+      contextController.loadWorkspaceContext(campaignId);
 
   Future<bool> updateSpeaker({
     required String campaignId,
     required String speakerMode,
     String? actorId,
-  }) async {
-    final token = accessToken;
-    if (token == null) return false;
-    _workspaceContextError = null;
-    try {
-      final membership = await campaignClient.updateSpeaker(
-        apiBaseUrl: apiBaseUrl,
-        accessToken: token,
+  }) =>
+      contextController.updateSpeaker(
         campaignId: campaignId,
         speakerMode: speakerMode,
         actorId: actorId,
       );
-      final context = _workspaceContext;
-      if (context != null) {
-        _workspaceContext = context.copyWith(membership: membership);
-      }
-      notifyListeners();
-      return true;
-    } on CampaignApiException catch (error) {
-      _workspaceContextError = error.message;
-    } catch (_) {
-      _workspaceContextError = 'Failed to update campaign speaker';
-    }
-    notifyListeners();
-    return false;
-  }
 
-  Future<void> loadArchives(String campaignId, {String? kind}) async {
-    final token = accessToken;
-    if (token == null) return;
-    _archivesLoading = true;
-    _archivesError = null;
-    notifyListeners();
-    try {
-      _archives = await campaignClient.listArchives(
-        apiBaseUrl: apiBaseUrl,
-        accessToken: token,
-        campaignId: campaignId,
-        kind: kind,
-      );
-    } on CampaignApiException catch (error) {
-      _archivesError = error.message;
-    } catch (_) {
-      _archivesError = 'Failed to load campaign archives';
-    }
-    _archivesLoading = false;
-    notifyListeners();
-  }
+  Future<void> loadArchives(String campaignId, {String? kind}) =>
+      contextController.loadArchives(campaignId, kind: kind);
 
   Future<CampaignArchiveEntry?> createArchiveEntry({
     required String campaignId,
@@ -362,31 +318,14 @@ class CampaignController extends ChangeNotifier {
     required String title,
     String? summary,
     Map<String, Object?>? payload,
-  }) async {
-    final token = accessToken;
-    if (token == null) return null;
-    _archivesError = null;
-    try {
-      final entry = await campaignClient.createArchiveEntry(
-        apiBaseUrl: apiBaseUrl,
-        accessToken: token,
+  }) =>
+      contextController.createArchiveEntry(
         campaignId: campaignId,
         kind: kind,
         title: title,
         summary: summary,
         payload: payload,
       );
-      _archives = [entry, ..._archives];
-      notifyListeners();
-      return entry;
-    } on CampaignApiException catch (error) {
-      _archivesError = error.message;
-    } catch (_) {
-      _archivesError = 'Failed to create campaign archive entry';
-    }
-    notifyListeners();
-    return null;
-  }
 
   Future<CampaignArchiveEntry?> updateArchiveEntry({
     required String campaignId,
@@ -396,14 +335,8 @@ class CampaignController extends ChangeNotifier {
     String? summary,
     Map<String, Object?>? payload,
     bool? pinned,
-  }) async {
-    final token = accessToken;
-    if (token == null) return null;
-    _archivesError = null;
-    try {
-      final entry = await campaignClient.updateArchiveEntry(
-        apiBaseUrl: apiBaseUrl,
-        accessToken: token,
+  }) =>
+      contextController.updateArchiveEntry(
         campaignId: campaignId,
         entryId: entryId,
         kind: kind,
@@ -412,45 +345,15 @@ class CampaignController extends ChangeNotifier {
         payload: payload,
         pinned: pinned,
       );
-      _archives = _archives
-          .map((existing) => existing.id == entry.id ? entry : existing)
-          .toList();
-      notifyListeners();
-      return entry;
-    } on CampaignApiException catch (error) {
-      _archivesError = error.message;
-    } catch (_) {
-      _archivesError = 'Failed to update campaign archive entry';
-    }
-    notifyListeners();
-    return null;
-  }
 
   Future<bool> archiveEntry({
     required String campaignId,
     required String entryId,
-  }) async {
-    final token = accessToken;
-    if (token == null) return false;
-    _archivesError = null;
-    try {
-      await campaignClient.archiveEntry(
-        apiBaseUrl: apiBaseUrl,
-        accessToken: token,
+  }) =>
+      contextController.archiveEntry(
         campaignId: campaignId,
         entryId: entryId,
       );
-      _archives = _archives.where((entry) => entry.id != entryId).toList();
-      notifyListeners();
-      return true;
-    } on CampaignApiException catch (error) {
-      _archivesError = error.message;
-    } catch (_) {
-      _archivesError = 'Failed to archive campaign entry';
-    }
-    notifyListeners();
-    return false;
-  }
 
   Future<bool> sendMessage({
     required String campaignId,
@@ -529,10 +432,9 @@ class CampaignController extends ChangeNotifier {
     _detailError = null;
     _messages = [];
     _messagesError = null;
-    _workspaceContext = null;
-    _workspaceContextError = null;
-    _archives = [];
-    _archivesError = null;
+    // Context controller clears workspace/archive state and notifies its
+    // own listeners; the forwarding listener calls notifyListeners() here.
+    contextController.clearSelection();
     notifyListeners();
   }
 
@@ -540,6 +442,8 @@ class CampaignController extends ChangeNotifier {
   void dispose() {
     _messageSubscription?.cancel();
     _socketService.disconnect();
+    contextController.removeListener(_onContextChanged);
+    contextController.dispose();
     authController.removeListener(_onAuthChanged);
     super.dispose();
   }

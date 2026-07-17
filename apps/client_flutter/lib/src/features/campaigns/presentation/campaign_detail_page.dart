@@ -5,6 +5,7 @@ import '../../auth/presentation/auth_controller.dart';
 import '../domain/campaign.dart';
 import 'campaign_controller.dart';
 import 'widgets/campaign_invite_tile.dart';
+import 'widgets/invite_share.dart';
 
 class CampaignDetailPage extends StatefulWidget {
   const CampaignDetailPage({
@@ -72,15 +73,36 @@ class _CampaignDetailPageState extends State<CampaignDetailPage> {
               const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: invite.code));
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(const SnackBar(content: Text('已复制到剪贴板')));
-                  },
-                  icon: const Icon(Icons.copy),
-                  label: const Text('复制'),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: invite.code));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('邀请码已复制')),
+                        );
+                      },
+                      icon: const Icon(Icons.copy),
+                      label: const Text('复制'),
+                    ),
+                    FilledButton.icon(
+                      onPressed: () async {
+                        await copyInviteToClipboard(
+                          code: invite.code,
+                          campaignName: campaign.name,
+                          serverUrl: widget.controller.apiBaseUrl,
+                        );
+                        if (!context.mounted) return;
+                        Navigator.of(context).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('分享文本已复制，可粘贴到聊天工具')),
+                        );
+                      },
+                      icon: const Icon(Icons.share),
+                      label: const Text('分享'),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -163,6 +185,8 @@ class _CampaignDetailPageState extends State<CampaignDetailPage> {
 
   List<Widget> _buildInviteSection(BuildContext context) {
     final invites = widget.controller.invites;
+    final campaign = widget.controller.selectedCampaign;
+    final campaignName = campaign?.name;
     return [
       Text('邀请码', style: Theme.of(context).textTheme.titleLarge),
       const SizedBox(height: 8),
@@ -184,13 +208,15 @@ class _CampaignDetailPageState extends State<CampaignDetailPage> {
                 const SnackBar(content: Text('邀请码已复制')),
               );
             },
-            onShare: () {
-              Clipboard.setData(
-                ClipboardData(
-                  text: '邀请你加入我的 D&D 战役！邀请码：${invite.code}',
-                ),
+            onShare: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              await copyInviteToClipboard(
+                code: invite.code,
+                campaignName: campaignName,
+                serverUrl: widget.controller.apiBaseUrl,
               );
-              ScaffoldMessenger.of(context).showSnackBar(
+              if (!mounted) return;
+              messenger.showSnackBar(
                 const SnackBar(content: Text('分享文本已复制，可粘贴到聊天工具')),
               );
             },

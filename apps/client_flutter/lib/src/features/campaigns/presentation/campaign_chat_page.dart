@@ -959,7 +959,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
   }
 
   Future<void> _showDmControl() {
-    Navigator.of(context).pop();
+    // Spec §输入栏: 关闭工具 sheet 由调用方负责, helper 不应自行 pop。
     return showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -997,7 +997,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
   }
 
   Future<void> _showRollSheet() {
-    Navigator.of(context).pop();
+    // Spec §输入栏: 关闭工具 sheet 由调用方负责, helper 不应自行 pop。
     return showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -1053,7 +1053,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
   }
 
   Future<void> _showCharacterActions() {
-    Navigator.of(context).pop();
+    // Spec §输入栏: 关闭工具 sheet 由调用方负责, helper 不应自行 pop。
     return showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -1131,7 +1131,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
   }
 
   Future<void> _showContentLibrary() async {
-    Navigator.of(context).pop();
+    // Spec §输入栏: 关闭工具 sheet 由调用方负责, helper 不应自行 pop。
     final searchController = TextEditingController();
     var selectedType = 'all';
     var items = <ContentEntry>[];
@@ -1297,7 +1297,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
   }
 
   void _openCharacterSheet() {
-    Navigator.of(context).pop();
+    // Spec §输入栏: 关闭工具 sheet / 身份 sheet 由调用方负责, helper 不应自行 pop。
     final character = widget.character;
     if (character == null) {
       ScaffoldMessenger.of(

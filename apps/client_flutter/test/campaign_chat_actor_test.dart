@@ -864,6 +864,116 @@ void main() {
       contentController.dispose();
     },
   );
+
+  // Spec §输入栏: 工具面板条目点击后只关闭工具面板, 不应 double-pop
+  // 把聊天页弹走。Helper 方法不应自行 Navigator.pop, 关闭 sheet 是调用方职责。
+  testWidgets(
+    'tool panel roll dice keeps chat page on stage after sheet closes',
+    (tester) async {
+      await pumpChatPage(tester, isDm: true);
+
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('tool-roll-dice')));
+      await tester.pumpAndSettle();
+
+      // 掷骰 sheet 应当出现, 聊天页仍应保留在栈中 (输入框可见)。
+      expect(find.text('快速掷骰'), findsOneWidget);
+      expect(
+        find.byKey(const Key('campaign-chat-input')),
+        findsOneWidget,
+      );
+
+      // 关闭掷骰 sheet 后, 聊天页应仍然可见。
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('campaign-chat-input')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'tool panel dm control keeps chat page on stage after sheet closes',
+    (tester) async {
+      await pumpChatPage(tester, isDm: true);
+
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('campaign-dm-control-entry')));
+      await tester.pumpAndSettle();
+
+      // DM 控场 sheet 出现, 聊天页输入框仍在。
+      expect(
+        find.byKey(const Key('campaign-chat-input')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'tool panel character actions keeps chat page on stage',
+    (tester) async {
+      // 角色动作条目仅在 _characterActions 非空且 campaignActorId 非空时出现。
+      await pumpChatPage(tester, isDm: true, campaignActorId: 'actor-1');
+
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+
+      final actionsEntry = find.byKey(const Key('tool-character-actions'));
+      if (actionsEntry.evaluate().isNotEmpty) {
+        await tester.tap(actionsEntry);
+        await tester.pumpAndSettle();
+
+        // 角色动作 sheet 出现时聊天页输入框仍在。
+        expect(
+          find.byKey(const Key('campaign-chat-input')),
+          findsOneWidget,
+        );
+      }
+    },
+  );
+
+  testWidgets(
+    'tool panel open character sheet keeps chat page on stage',
+    (tester) async {
+      await pumpChatPage(tester, isDm: true);
+
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('tool-open-character-sheet')));
+      await tester.pumpAndSettle();
+
+      // 角色详情页应通过 push 进入, 聊天页仍应在栈中 (返回后会回到聊天)。
+      expect(find.byType(BackButton), findsOneWidget);
+      // 角色详情页应可见。
+      expect(find.text('Arannis'), findsWidgets);
+    },
+  );
+
+  testWidgets(
+    'tool panel content library fallback keeps chat page on stage',
+    (tester) async {
+      // 不传 campaignContentController, 走 _showContentLibrary 回退分支。
+      await pumpChatPage(tester, isDm: true);
+
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('tool-content-entries')));
+      await tester.pumpAndSettle();
+
+      // 资料库 sheet 出现时聊天页输入框仍应在栈中。
+      expect(
+        find.byKey(const Key('campaign-chat-input')),
+        findsOneWidget,
+      );
+    },
+  );
 }
 
 class _RecordingCampaignClient implements CampaignClient {

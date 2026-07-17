@@ -8,7 +8,8 @@ void main() {
       expect(CampaignAvatar.healthFromHp(20, 20), CampaignAvatarHealth.healthy);
       expect(CampaignAvatar.healthFromHp(11, 20), CampaignAvatarHealth.healthy);
       expect(CampaignAvatar.healthFromHp(10, 20), CampaignAvatarHealth.injured);
-      expect(CampaignAvatar.healthFromHp(5, 20), CampaignAvatarHealth.injured);
+      expect(CampaignAvatar.healthFromHp(6, 20), CampaignAvatarHealth.injured);
+      expect(CampaignAvatar.healthFromHp(5, 20), CampaignAvatarHealth.critical);
       expect(CampaignAvatar.healthFromHp(3, 20), CampaignAvatarHealth.critical);
       expect(CampaignAvatar.healthFromHp(0, 20), CampaignAvatarHealth.down);
     });

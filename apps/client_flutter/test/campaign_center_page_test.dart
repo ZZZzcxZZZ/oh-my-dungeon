@@ -5,10 +5,13 @@ import 'package:dnd_table_client/src/features/auth/presentation/auth_controller.
 import 'package:dnd_table_client/src/features/campaigns/data/campaign_api_client.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_archive_entry.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_controller.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_center_page.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/campaign_test_support.dart';
 
 /// Plan 3 task 2: narrow screens render `NavigationBar`, wide screens render
 /// `NavigationRail`, all four panels (overview/team/archive/records) are
@@ -51,10 +54,26 @@ void main() {
     return controller;
   }
 
+  /// Spec §DM 角色生命周期: DM 在队伍面板创建常驻 NPC/怪物/同伴需要
+  /// `CampaignActorController` 走 `/actors` 端点。这里构造一个内存版本，
+  /// 预先 selectCampaign 以便 DM 写操作能拿到 campaignId。
+  Future<CampaignActorController> buildActorController() async {
+    final controller = CampaignActorController(
+      cacheRepository: MemoryCampaignCacheRepository(),
+      apiClient: MemoryCampaignSyncApiClient(),
+      apiBaseUrl: apiBaseUrl,
+      accessToken: 'access-token',
+      currentUserId: 'user-1',
+    );
+    await controller.selectCampaign('camp-1');
+    return controller;
+  }
+
   Future<void> pumpCenterPage(
     WidgetTester tester,
     CampaignController controller, {
     Size size = const Size(390, 844),
+    CampaignActorController? actorController,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -66,6 +85,7 @@ void main() {
         home: CampaignCenterPage(
           campaign: _campaign,
           controller: controller,
+          actorController: actorController,
         ),
       ),
     );
@@ -291,6 +311,98 @@ void main() {
       expect(find.text('新建战役条目'), findsOneWidget);
       expect(find.text('地点'), findsOneWidget);
 
+      dmController.dispose();
+      dmAuth.dispose();
+    },
+  );
+
+  // Spec §DM 角色生命周期: DM 可在 战役中心 → 队伍 创建常驻
+  // NPC/怪物/同伴（actorType: npc/monster/companion，lifecycle: persistent）。
+  testWidgets(
+    'DM team panel shows create persistent actor button',
+    (tester) async {
+      final dmAuth = await buildLoggedInAuthController();
+      final dmController = await buildCampaignController(
+        authController: dmAuth,
+        canManage: true,
+      );
+      final actorController = await buildActorController();
+      await pumpCenterPage(
+        tester,
+        dmController,
+        actorController: actorController,
+      );
+      await tester.tap(find.text('队伍').last);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('team-create-persistent-actor-button')),
+        findsOneWidget,
+      );
+
+      actorController.dispose();
+      dmController.dispose();
+      dmAuth.dispose();
+    },
+  );
+
+  testWidgets(
+    'player team panel does not show create persistent actor button',
+    (tester) async {
+      final playerAuth = await buildLoggedInAuthController();
+      final playerController = await buildCampaignController(
+        authController: playerAuth,
+        canManage: false,
+      );
+      final actorController = await buildActorController();
+      await pumpCenterPage(
+        tester,
+        playerController,
+        actorController: actorController,
+      );
+      await tester.tap(find.text('队伍').last);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('team-create-persistent-actor-button')),
+        findsNothing,
+      );
+
+      actorController.dispose();
+      playerController.dispose();
+      playerAuth.dispose();
+    },
+  );
+
+  testWidgets(
+    'tapping create persistent actor button opens form with actor type choices',
+    (tester) async {
+      final dmAuth = await buildLoggedInAuthController();
+      final dmController = await buildCampaignController(
+        authController: dmAuth,
+        canManage: true,
+      );
+      final actorController = await buildActorController();
+      await pumpCenterPage(
+        tester,
+        dmController,
+        actorController: actorController,
+      );
+      await tester.tap(find.text('队伍').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const Key('team-create-persistent-actor-button')),
+      );
+      await tester.pumpAndSettle();
+
+      // Form should show NPC / 怪物 / 同伴 options.
+      expect(find.text('创建常驻角色'), findsOneWidget);
+      expect(find.text('NPC'), findsOneWidget);
+      expect(find.text('怪物'), findsOneWidget);
+      expect(find.text('同伴'), findsOneWidget);
+
+      actorController.dispose();
       dmController.dispose();
       dmAuth.dispose();
     },

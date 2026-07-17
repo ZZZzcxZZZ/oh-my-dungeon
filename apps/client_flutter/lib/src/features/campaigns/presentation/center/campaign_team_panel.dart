@@ -23,6 +23,7 @@ class CampaignTeamPanel extends StatelessWidget {
     this.onCreateInvite,
     this.campaignName,
     this.serverUrl,
+    this.onCreatePersistentActor,
     super.key,
   });
 
@@ -39,25 +40,40 @@ class CampaignTeamPanel extends StatelessWidget {
   /// 服务器地址，用于格式化分享文本。
   final String? serverUrl;
 
+  /// Spec §DM 角色生命周期: DM 创建常驻 NPC/怪物/同伴的回调。
+  /// 仅 `isManager` 为 true 时显示入口；为 null 时不显示。
+  final Future<bool> Function({
+    required String actorType,
+    required String displayName,
+    int? maxHp,
+    String? avatarUrl,
+  })? onCreatePersistentActor;
+
   @override
   Widget build(BuildContext context) {
+    final hasInviteHeader = isManager && onCreateInvite != null;
+    final hasCreateActorHeader = isManager && onCreatePersistentActor != null;
+    final headerCount = (hasInviteHeader ? 1 : 0) + (hasCreateActorHeader ? 1 : 0);
     return KeyedSubtree(
       key: key ?? const Key('campaign-team-panel'),
       child: ListView.separated(
         padding: const EdgeInsets.all(12),
-        itemCount: members.length + (isManager && onCreateInvite != null ? 1 : 0),
+        itemCount: members.length + headerCount,
         separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (context, index) {
-          if (isManager && onCreateInvite != null && index == 0) {
+          if (hasInviteHeader && index == 0) {
             return _InviteButton(
               campaignName: campaignName,
               serverUrl: serverUrl,
               onCreateInvite: onCreateInvite!,
             );
           }
-          final memberIndex = isManager && onCreateInvite != null
-              ? index - 1
-              : index;
+          if (hasCreateActorHeader && index == (hasInviteHeader ? 1 : 0)) {
+            return _CreatePersistentActorButton(
+              onCreatePersistentActor: onCreatePersistentActor!,
+            );
+          }
+          final memberIndex = index - headerCount;
           final member = members[memberIndex];
           final actor = actors
               .where((item) => item.ownerUserId == member.userId)
@@ -194,3 +210,137 @@ String _roleLabel(String role) => switch (role) {
       'spectator' => '旁观者',
       _ => '玩家',
     };
+
+/// Spec §DM 角色生命周期: DM 创建常驻 NPC/怪物/同伴入口。
+/// 点击后弹出表单：显示名称、actorType 选择、初始 HP，调用
+/// [onCreatePersistentActor] 提交到 `/actors` 端点（lifecycle=persistent）。
+class _CreatePersistentActorButton extends StatelessWidget {
+  const _CreatePersistentActorButton({required this.onCreatePersistentActor});
+
+  final Future<bool> Function({
+    required String actorType,
+    required String displayName,
+    int? maxHp,
+    String? avatarUrl,
+  }) onCreatePersistentActor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: FilledButton.tonalIcon(
+        key: const Key('team-create-persistent-actor-button'),
+        onPressed: () => _showCreateForm(context),
+        icon: const Icon(Icons.smart_toy_outlined),
+        label: const Text('创建常驻角色'),
+      ),
+    );
+  }
+
+  Future<void> _showCreateForm(BuildContext context) async {
+    final nameController = TextEditingController();
+    final hpController = TextEditingController();
+    var actorType = 'npc';
+    final formKey = GlobalKey<FormState>();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('创建常驻角色'),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('NPC'),
+                        selected: actorType == 'npc',
+                        onSelected: (_) =>
+                            setDialogState(() => actorType = 'npc'),
+                      ),
+                      ChoiceChip(
+                        label: const Text('怪物'),
+                        selected: actorType == 'monster',
+                        onSelected: (_) =>
+                            setDialogState(() => actorType = 'monster'),
+                      ),
+                      ChoiceChip(
+                        label: const Text('同伴'),
+                        selected: actorType == 'companion',
+                        onSelected: (_) =>
+                            setDialogState(() => actorType = 'companion'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: nameController,
+                    autofocus: true,
+                    decoration: const InputDecoration(labelText: '显示名称'),
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? '请输入名称'
+                        : null,
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: hpController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: '初始最大 HP（可选）'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  Navigator.of(context).pop(true);
+                }
+              },
+              child: const Text('创建'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true) {
+      nameController.dispose();
+      hpController.dispose();
+      return;
+    }
+
+    if (!context.mounted) {
+      nameController.dispose();
+      hpController.dispose();
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+
+    final maxHpText = hpController.text.trim();
+    final success = await onCreatePersistentActor(
+      actorType: actorType,
+      displayName: nameController.text.trim(),
+      maxHp: maxHpText.isEmpty ? null : int.tryParse(maxHpText),
+    );
+
+    nameController.dispose();
+    hpController.dispose();
+
+    if (!context.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(content: Text(success ? '已创建常驻角色' : '创建失败')),
+    );
+  }
+}

@@ -232,6 +232,24 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
               : null,
           campaignName: widget.campaign.name,
           serverUrl: widget.controller.apiBaseUrl,
+          onCreatePersistentActor: _canManage && widget.actorController != null
+              ? ({
+                  required String actorType,
+                  required String displayName,
+                  int? maxHp,
+                  String? avatarUrl,
+                }) =>
+                  widget.actorController!.createDmActor(
+                    actorType: actorType,
+                    lifecycle: 'persistent',
+                    sheet: {
+                      'name': displayName,
+                      'maxHp': ?maxHp,
+                      'currentHp': ?maxHp,
+                      'avatarUrl': ?avatarUrl,
+                    },
+                  )
+              : null,
         );
       case 2:
         return CampaignArchivePanel(

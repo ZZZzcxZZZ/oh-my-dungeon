@@ -633,14 +633,20 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                       _openCharacterSheet();
                     },
             ),
-            // 6. 资料条目
+            // 6. 资料条目 — Spec §输入栏: 战役资料入口迁移到头像快捷面板。
+            // 当 campaignContentController 可用时进入 CampaignContentPage；
+            // 否则回退到本地资料库浏览（_showContentLibrary）。
             ListTile(
               key: const Key('tool-content-entries'),
               leading: const Icon(Icons.menu_book_outlined),
               title: const Text('资料条目'),
               onTap: () {
                 Navigator.of(sheetContext).pop();
-                _showContentLibrary();
+                if (widget.campaignContentController != null) {
+                  _openCampaignContent();
+                } else {
+                  _showContentLibrary();
+                }
               },
             ),
             // 7. 记录线索 (Phase 5 will implement)

@@ -20,6 +20,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/character_test_support.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/content/campaign_content_controller.dart';
+
 import 'support/campaign_test_support.dart';
 import 'support/content_test_support.dart';
 
@@ -135,6 +137,7 @@ void main() {
     String? campaignActorId,
     bool isDm = false,
     DiceRoller? diceRoller,
+    CampaignContentController? campaignContentController,
   }) async {
     // Per spec §客户端工作模式: client mode must not grant campaign rights.
     // canManageCampaign is the only authority for DM UI; isDm is the app
@@ -150,6 +153,7 @@ void main() {
           contentRepository: contentRepository,
           actorController: actorController,
           diceRoller: diceRoller,
+          campaignContentController: campaignContentController,
         ),
       ),
     );
@@ -830,6 +834,34 @@ void main() {
       expect(find.text('所有权转移'), findsOneWidget);
       expect(find.text('战役归档'), findsOneWidget);
       expect(find.text('离开战役'), findsOneWidget);
+    },
+  );
+
+  // Spec §输入栏: 战役资料入口迁移到头像快捷面板第 6 项"资料条目"，
+  // 不在 AppBar 单独入口。
+  testWidgets(
+    'tool panel content entry opens CampaignContentPage when controller is available',
+    (tester) async {
+      final contentController = CampaignContentController(
+        cacheRepository: MemoryCampaignCacheRepository(),
+        apiClient: MemoryCampaignSyncApiClient(),
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: 'access-token',
+        currentUserId: 'user-1',
+      );
+      await pumpChatPage(tester, campaignContentController: contentController);
+
+      // Open the tool panel by tapping the identity avatar.
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+
+      // Tap "资料条目" — should navigate to CampaignContentPage.
+      await tester.tap(find.byKey(const Key('tool-content-entries')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('campaign-content-page')), findsOneWidget);
+
+      contentController.dispose();
     },
   );
 }

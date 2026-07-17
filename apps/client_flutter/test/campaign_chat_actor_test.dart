@@ -673,6 +673,56 @@ void main() {
     },
   );
 
+  // Spec §快速临时身份: DM identity switch panel must retain a 快速临时身份
+  // entry so DMs can start a one-off speaker without leaving the identity
+  // sheet. The entry is shared with the merged tool panel via the same
+  // _draftIdentity state.
+  testWidgets(
+    'DM identity panel exposes the quick temporary identity entry',
+    (tester) async {
+      campaignClient.canManageCampaign = true;
+      campaignClient.workspaceActors = const [];
+
+      await pumpChatPage(tester, isDm: true);
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('tool-dm-identity-switch')));
+      await tester.pumpAndSettle();
+
+      // The quick temporary identity entry is part of the DM identity panel.
+      expect(
+        find.byKey(const Key('identity-quick-temporary-entry')),
+        findsOneWidget,
+      );
+      expect(find.text('快速临时身份'), findsOneWidget);
+
+      // Tapping the entry opens the draft form sheet on top.
+      await tester.tap(find.byKey(const Key('identity-quick-temporary-entry')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('draft-identity-name')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'player identity panel does not expose the quick temporary identity entry',
+    (tester) async {
+      campaignClient.canManageCampaign = false;
+      campaignClient.workspaceActors = const [];
+
+      await pumpChatPage(tester, isDm: false);
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('tool-player-identity-switch')));
+      await tester.pumpAndSettle();
+
+      // The quick temporary identity entry is DM-only.
+      expect(
+        find.byKey(const Key('identity-quick-temporary-entry')),
+        findsNothing,
+      );
+    },
+  );
+
   // Spec §发言身份 玩家: player can switch between 绑定角色 and 场外 only.
   // Player must NOT see DM-only entries (narrator, temporary, NPC list, proxy).
   testWidgets(

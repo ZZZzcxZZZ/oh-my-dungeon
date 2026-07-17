@@ -856,9 +856,31 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                     onTap: () => _selectCampaignSpeaker('actor', actor.id),
                   ),
               ],
-              // 快速临时身份 entry has been moved to the merged tool panel
-              // per spec §输入栏 (11 项工具之一). The identity sheet now focuses
-              // on switching between existing speaker modes only.
+              // Spec §快速临时身份: DM 可以直接在身份切换面板里发起快速临时
+              // 身份草稿。该入口同时存在于输入栏工具面板 (identity-temporary-
+              // entry), 两处共享同一份 _draftIdentity 状态。
+              ListTile(
+                key: const Key('identity-quick-temporary-entry'),
+                leading: const Icon(Icons.person_add_alt_1_outlined),
+                title: _draftIdentity != null
+                    ? Text('草稿：${_draftIdentity!.displayName}')
+                    : const Text('快速临时身份'),
+                subtitle: _draftIdentity != null
+                    ? const Text('首次发送消息后将自动创建临时身份')
+                    : const Text('只输入显示名称即可发言'),
+                trailing: _draftIdentity != null
+                    ? IconButton(
+                        tooltip: '放弃草稿',
+                        onPressed: () {
+                          setState(() => _draftIdentity = null);
+                        },
+                        icon: const Icon(Icons.close),
+                      )
+                    : null,
+                onTap: _draftIdentity != null
+                    ? null
+                    : () => _showDraftIdentityForm(),
+              ),
               if (proxyActors.isNotEmpty) ...[
                 _IdentitySectionHeader(label: '代管玩家角色'),
                 for (final actor in proxyActors)

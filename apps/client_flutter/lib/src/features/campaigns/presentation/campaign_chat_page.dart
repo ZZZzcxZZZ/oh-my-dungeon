@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 
 import '../../characters/domain/character.dart';
@@ -17,6 +15,12 @@ import 'actors/campaign_actor_sheet_page.dart';
 import 'campaign_controller.dart';
 import 'campaign_center_page.dart';
 import 'campaign_detail_page.dart';
+import 'chat/campaign_chat_bubble.dart';
+import 'chat/campaign_member_tile.dart';
+import 'chat/chat_avatar.dart';
+import 'chat/chat_helpers.dart';
+import 'chat/chat_mode_picker.dart';
+import 'chat/check_request_sheet.dart';
 import 'content/campaign_content_controller.dart';
 import 'content/campaign_content_page.dart';
 
@@ -50,7 +54,7 @@ class CampaignChatPage extends StatefulWidget {
 
 class _CampaignChatPageState extends State<CampaignChatPage> {
   final _controller = TextEditingController();
-  _ChatMode _mode = _ChatMode.say;
+  ChatMode _mode = ChatMode.say;
   bool _sending = false;
 
   @override
@@ -87,7 +91,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
               children: [
                 Text(widget.campaign.name),
                 Text(
-                  _t('campaignChatRoom'),
+                  chatText('campaignChatRoom'),
                   style: Theme.of(context).textTheme.labelSmall,
                 ),
               ],
@@ -114,7 +118,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                   icon: const Icon(Icons.library_books_outlined),
                 ),
               IconButton(
-                tooltip: _t('members'),
+                tooltip: chatText('members'),
                 onPressed: _showMembers,
                 icon: const Icon(Icons.people_outline),
               ),
@@ -137,7 +141,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
               TextButton(
                 onPressed: () =>
                     widget.campaignController.loadMessages(widget.campaign.id),
-                child: Text(_t('retry')),
+                child: Text(chatText('retry')),
               ),
             ],
           ),
@@ -147,7 +151,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
               : messages.isEmpty
               ? Center(
                   child: Text(
-                    _t('emptyChat'),
+                    chatText('emptyChat'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.outline,
@@ -159,7 +163,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final message = messages[index];
-                    return _CampaignChatBubble(
+                    return CampaignChatBubble(
                       message: message,
                       onRespondCheckRequest: _canRespondToCheck(message)
                           ? () => _respondToCheckRequest(message)
@@ -274,12 +278,12 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
               final name = actor.sheet['name']?.toString().trim();
               return ListTile(
                 key: Key('campaign-actor-${actor.id}'),
-                leading: _ChatAvatar(
+                leading: ChatAvatar(
                   name: name == null || name.isEmpty ? '?' : name,
                   avatarUrl: actor.sheet['avatarUrl'] as String?,
                 ),
                 title: Text(name == null || name.isEmpty ? '未命名角色' : name),
-                subtitle: Text(_actorStatusLine(actor)),
+                subtitle: Text(actorStatusLine(actor)),
                 trailing: _canManageCampaign
                     ? const Icon(Icons.chevron_right)
                     : null,
@@ -327,9 +331,9 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
           children: [
             IconButton.filledTonal(
               key: const Key('campaign-chat-identity'),
-              tooltip: _t('characterSheet'),
+              tooltip: chatText('characterSheet'),
               onPressed: _showIdentitySheet,
-              icon: _ChatAvatar(
+              icon: ChatAvatar(
                 name: widget.character?.name ?? '?',
                 avatarUrl: widget.character?.avatarUrl,
                 size: 24,
@@ -337,14 +341,14 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
             ),
             const SizedBox(width: 6),
             IconButton.filledTonal(
-              tooltip: _t('moreTableTools'),
+              tooltip: chatText('moreTableTools'),
               onPressed: _showMoreActions,
               icon: const Icon(Icons.add),
             ),
             const SizedBox(width: 6),
             SizedBox(
               width: 104,
-              child: _ChatModePicker(
+              child: ChatModePicker(
                 mode: _mode,
                 enabled: !_sending,
                 onChanged: (mode) => setState(() => _mode = mode),
@@ -357,9 +361,9 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                 controller: _controller,
                 enabled: !_sending,
                 decoration: InputDecoration(
-                  hintText: _mode == _ChatMode.say
-                      ? _t('sayHint')
-                      : _t('actHint'),
+                  hintText: _mode == ChatMode.say
+                      ? chatText('sayHint')
+                      : chatText('actHint'),
                   border: const OutlineInputBorder(),
                   isDense: true,
                 ),
@@ -368,7 +372,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
             ),
             IconButton.filled(
               key: const Key('campaign-chat-send'),
-              tooltip: _t('send'),
+              tooltip: chatText('send'),
               onPressed: _sending ? null : _send,
               icon: const Icon(Icons.send_rounded),
             ),
@@ -385,7 +389,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     setState(() => _sending = true);
     final sent = await widget.campaignController.sendMessage(
       campaignId: widget.campaign.id,
-      kind: _mode == _ChatMode.act ? 'action' : 'say',
+      kind: _mode == ChatMode.act ? 'action' : 'say',
       content: content,
       campaignActorId: _activeSpeakerActorId,
     );
@@ -408,7 +412,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
               children: [
                 ListTile(
                   leading: const Icon(Icons.casino_outlined),
-                  title: Text(_t('rollDice')),
+                  title: Text(chatText('rollDice')),
                   onTap: _showRollSheet,
                 ),
                 if (_characterActions.isNotEmpty &&
@@ -421,23 +425,23 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                   ),
                 ListTile(
                   leading: const Icon(Icons.badge_outlined),
-                  title: Text(_t('characterSheet')),
+                  title: Text(chatText('characterSheet')),
                   onTap: _openCharacterSheet,
                 ),
                 ListTile(
                   leading: const Icon(Icons.menu_book_outlined),
-                  title: Text(_t('contentLibrary')),
+                  title: Text(chatText('contentLibrary')),
                   onTap: _showContentLibrary,
                 ),
                 ListTile(
                   leading: const Icon(Icons.table_restaurant_outlined),
-                  title: Text(_t('tableTools')),
-                  subtitle: Text(_t('tableToolsHint')),
+                  title: Text(chatText('tableTools')),
+                  subtitle: Text(chatText('tableToolsHint')),
                   onTap: _showTableTools,
                 ),
                 ListTile(
                   leading: const Icon(Icons.fact_check_outlined),
-                  title: Text(_t('checkRequest')),
+                  title: Text(chatText('checkRequest')),
                   subtitle: _canManageCampaign
                       ? const Text('从战役角色中选择检定项目')
                       : const Text('DM 发起的检定会显示在聊天室'),
@@ -451,8 +455,8 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                 if (_canManageCampaign)
                   ListTile(
                     leading: const Icon(Icons.shield_outlined),
-                    title: Text(_t('dmControl')),
-                    subtitle: Text(_t('dmControlHint')),
+                    title: Text(chatText('dmControl')),
+                    subtitle: Text(chatText('dmControlHint')),
                     onTap: _showDmControl,
                   ),
               ],
@@ -474,11 +478,11 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
           shrinkWrap: true,
           children: [
             ListTile(
-              leading: _ChatAvatar(
+              leading: ChatAvatar(
                 name: character?.name ?? '?',
                 avatarUrl: character?.avatarUrl,
               ),
-              title: Text(character?.name ?? _t('unboundCharacter')),
+              title: Text(character?.name ?? chatText('unboundCharacter')),
               subtitle: character == null
                   ? null
                   : Text(
@@ -501,7 +505,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
               ),
               for (final actor in workspace?.actors.where((actor) => actor.status == 'active') ?? const <CampaignWorkspaceActor>[])
                 ListTile(
-                  leading: _ChatAvatar(
+                  leading: ChatAvatar(
                     name: actor.displayName,
                     avatarUrl: null,
                     healthState: actor.publicHealthState,
@@ -554,21 +558,21 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _t('tableTools'),
+                  chatText('tableTools'),
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 8),
-                Text(_t('tableToolsDescription')),
+                Text(chatText('tableToolsDescription')),
                 const SizedBox(height: 12),
                 ListTile(
                   leading: const Icon(Icons.fact_check_outlined),
-                  title: Text(_t('checkRequest')),
-                  subtitle: Text(_t('checkRequestHint')),
+                  title: Text(chatText('checkRequest')),
+                  subtitle: Text(chatText('checkRequestHint')),
                 ),
                 ListTile(
                   leading: const Icon(Icons.history_edu_outlined),
-                  title: Text(_t('tableLog')),
-                  subtitle: Text(_t('tableLogHint')),
+                  title: Text(chatText('tableLog')),
+                  subtitle: Text(chatText('tableLogHint')),
                 ),
               ],
             ),
@@ -592,21 +596,21 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _t('dmControl'),
+                  chatText('dmControl'),
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 8),
-                Text(_t('dmControlDescription')),
+                Text(chatText('dmControlDescription')),
                 const SizedBox(height: 12),
                 ListTile(
                   leading: const Icon(Icons.shield_outlined),
-                  title: Text(_t('encounterControl')),
-                  subtitle: Text(_t('encounterControlHint')),
+                  title: Text(chatText('encounterControl')),
+                  subtitle: Text(chatText('encounterControlHint')),
                 ),
                 ListTile(
                   leading: const Icon(Icons.group_outlined),
-                  title: Text(_t('memberStatus')),
-                  subtitle: Text(_t('memberStatusHint')),
+                  title: Text(chatText('memberStatus')),
+                  subtitle: Text(chatText('memberStatusHint')),
                 ),
               ],
             ),
@@ -630,7 +634,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _t('quickRoll'),
+                  chatText('quickRoll'),
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 12),
@@ -638,7 +642,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    for (final notation in _quickDice)
+                    for (final notation in quickDice)
                       FilledButton.tonalIcon(
                         onPressed: _sending
                             ? null
@@ -721,7 +725,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     if (!sent) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(_t('sendFailed'))));
+      ).showSnackBar(SnackBar(content: Text(chatText('sendFailed'))));
     }
   }
 
@@ -740,12 +744,12 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       if (!mounted) return;
       setState(() => _sending = false);
       if (!sent) {
-        messenger.showSnackBar(SnackBar(content: Text(_t('sendFailed'))));
+        messenger.showSnackBar(SnackBar(content: Text(chatText('sendFailed'))));
       }
     } on DiceRollException catch (error) {
       Navigator.of(context).pop();
       messenger.showSnackBar(
-        SnackBar(content: Text('${_t('invalidDice')}$error')),
+        SnackBar(content: Text('${chatText('invalidDice')}$error')),
       );
     }
   }
@@ -807,7 +811,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                         children: [
                           Expanded(
                             child: Text(
-                              _t('campaignContentLibrary'),
+                              chatText('campaignContentLibrary'),
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
                           ),
@@ -824,10 +828,10 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                       TextField(
                         controller: searchController,
                         decoration: InputDecoration(
-                          labelText: _t('searchContent'),
+                          labelText: chatText('searchContent'),
                           prefixIcon: const Icon(Icons.search),
                           suffixIcon: IconButton(
-                            tooltip: _t('search'),
+                            tooltip: chatText('search'),
                             onPressed: refreshItems,
                             icon: const Icon(Icons.arrow_forward),
                           ),
@@ -837,15 +841,15 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                       ),
                       const SizedBox(height: 12),
                       DropdownMenu<String>(
-                        label: Text(_t('contentType')),
+                        label: Text(chatText('contentType')),
                         initialSelection: selectedType,
                         expandedInsets: EdgeInsets.zero,
                         dropdownMenuEntries: [
-                          DropdownMenuEntry(value: 'all', label: _t('all')),
-                          for (final type in _contentTypeFilters)
+                          DropdownMenuEntry(value: 'all', label: chatText('all')),
+                          for (final type in contentTypeFilters)
                             DropdownMenuEntry(
                               value: type,
-                              label: _contentTypeLabel(type),
+                              label: contentTypeLabel(type),
                             ),
                         ],
                         onSelected: (value) async {
@@ -861,7 +865,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                             : error != null
                             ? Center(child: Text(error!))
                             : items.isEmpty
-                            ? Center(child: Text(_t('emptyContent')))
+                            ? Center(child: Text(chatText('emptyContent')))
                             : ListView.separated(
                                 itemCount: items.length,
                                 separatorBuilder: (context, index) =>
@@ -876,8 +880,8 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                                     title: Text(item.name),
                                     subtitle: Text(
                                       source.isEmpty
-                                          ? _contentTypeLabel(item.type)
-                                          : '${_contentTypeLabel(item.type)} · $source',
+                                          ? contentTypeLabel(item.type)
+                                          : '${contentTypeLabel(item.type)} · $source',
                                     ),
                                     trailing: const Icon(Icons.chevron_right),
                                     onTap: () => _openContentEntry(item.id),
@@ -922,7 +926,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     if (character == null) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(_t('noBoundCharacter'))));
+      ).showSnackBar(SnackBar(content: Text(chatText('noBoundCharacter'))));
       return;
     }
 
@@ -957,7 +961,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
             for (final actor in actors)
               ListTile(
                 key: Key('campaign-actor-${actor.id}'),
-                leading: _ChatAvatar(
+                leading: ChatAvatar(
                   name: actor.sheet['name']?.toString() ?? '?',
                   avatarUrl: actor.sheet['avatarUrl'] as String?,
                 ),
@@ -1022,11 +1026,11 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
   }
 
   Future<void> _showCheckRequestSheet(CampaignActor actor) async {
-    final draft = await showModalBottomSheet<_CheckRequestDraft>(
+    final draft = await showModalBottomSheet<CheckRequestDraft>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (context) => _CheckRequestSheet(actor: actor),
+      builder: (context) => CheckRequestSheet(actor: actor),
     );
     if (draft == null || !mounted) return;
 
@@ -1049,7 +1053,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     if (!mounted || sent) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(_t('sendFailed'))));
+    ).showSnackBar(SnackBar(content: Text(chatText('sendFailed'))));
   }
 
   bool _canRespondToCheck(CampaignChatMessage message) {
@@ -1110,7 +1114,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     if (!sent) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(_t('sendFailed'))));
+      ).showSnackBar(SnackBar(content: Text(chatText('sendFailed'))));
     }
   }
 
@@ -1132,7 +1136,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                   children: [
                     Expanded(
                       child: Text(
-                        _t('campaignMembers'),
+                        chatText('campaignMembers'),
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                     ),
@@ -1148,11 +1152,11 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                 if (members.isEmpty && actors.isEmpty)
                   ListTile(
                     leading: const CircleAvatar(child: Icon(Icons.person_off)),
-                    title: Text(_t('emptyMembers')),
+                    title: Text(chatText('emptyMembers')),
                   )
                 else if (members.isNotEmpty)
                   for (final member in members)
-                    _CampaignMemberTile(
+                    CampaignMemberTile(
                       member: member,
                       actor: actors
                           .where((actor) => actor.ownerUserId == member.userId)
@@ -1160,7 +1164,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                     )
                 else
                   for (final actor in actors)
-                    _ActorOnlyMemberTile(actor: actor),
+                    ActorOnlyMemberTile(actor: actor),
               ],
             ),
           ),
@@ -1169,685 +1173,3 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     );
   }
 }
-
-class _CheckRequestSheet extends StatefulWidget {
-  const _CheckRequestSheet({required this.actor});
-
-  final CampaignActor actor;
-
-  @override
-  State<_CheckRequestSheet> createState() => _CheckRequestSheetState();
-}
-
-class _CheckRequestSheetState extends State<_CheckRequestSheet> {
-  final _dcController = TextEditingController();
-  String _type = 'ability';
-  String _key = 'str';
-  String _rollMode = 'normal';
-
-  @override
-  void dispose() {
-    _dcController.dispose();
-    super.dispose();
-  }
-
-  List<MapEntry<String, String>> get _options {
-    if (_type == 'skill') {
-      return [
-        for (final skill in Dnd5eRules.skills) MapEntry(skill.name, skill.name),
-      ];
-    }
-    return Dnd5eRules.abilityLabels.entries.toList(growable: false);
-  }
-
-  void _setType(String type) {
-    setState(() {
-      _type = type;
-      _key = type == 'skill' ? Dnd5eRules.skills.first.name : 'str';
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final name = widget.actor.sheet['name']?.toString().trim();
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(
-          16,
-          0,
-          16,
-          16 + MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '向 ${name == null || name.isEmpty ? '该角色' : name} 发起检定',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(
-                  value: 'ability',
-                  label: Text('属性', key: Key('check-type-ability')),
-                ),
-                ButtonSegment(
-                  value: 'save',
-                  label: Text('豁免', key: Key('check-type-save')),
-                ),
-                ButtonSegment(
-                  value: 'skill',
-                  label: Text('技能', key: Key('check-type-skill')),
-                ),
-              ],
-              selected: {_type},
-              onSelectionChanged: (selection) => _setType(selection.single),
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              key: ValueKey('check-key-$_type'),
-              initialValue: _key,
-              decoration: const InputDecoration(
-                labelText: '检定项目',
-                border: OutlineInputBorder(),
-              ),
-              items: [
-                for (final option in _options)
-                  DropdownMenuItem(
-                    value: option.key,
-                    child: Text(option.value),
-                  ),
-              ],
-              onChanged: (value) {
-                if (value != null) setState(() => _key = value);
-              },
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _dcController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: '难度等级 DC（可选）',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'normal', label: Text('普通')),
-                ButtonSegment(value: 'advantage', label: Text('优势')),
-                ButtonSegment(value: 'disadvantage', label: Text('劣势')),
-              ],
-              selected: {_rollMode},
-              onSelectionChanged: (selection) {
-                setState(() => _rollMode = selection.single);
-              },
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                key: const Key('send-check-request'),
-                onPressed: _submit,
-                icon: const Icon(Icons.send_outlined),
-                label: const Text('发送检定请求'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _submit() {
-    final dc = int.tryParse(_dcController.text.trim());
-    final option = _options.firstWhere((item) => item.key == _key);
-    final suffix = switch (_type) {
-      'skill' => '技能检定',
-      'save' => '豁免检定',
-      _ => '属性检定',
-    };
-    Navigator.of(context).pop(
-      _CheckRequestDraft(
-        type: _type,
-        key: _key,
-        label: '${option.value}$suffix',
-        dc: dc,
-        rollMode: _rollMode,
-      ),
-    );
-  }
-}
-
-class _CheckRequestDraft {
-  const _CheckRequestDraft({
-    required this.type,
-    required this.key,
-    required this.label,
-    required this.dc,
-    required this.rollMode,
-  });
-
-  final String type;
-  final String key;
-  final String label;
-  final int? dc;
-  final String rollMode;
-}
-
-class _CampaignMemberTile extends StatelessWidget {
-  const _CampaignMemberTile({required this.member, this.actor});
-
-  final CampaignMemberPreview member;
-  final CampaignActor? actor;
-
-  @override
-  Widget build(BuildContext context) {
-    final actorName = actor?.sheet['name']?.toString().trim();
-    final subtitle = [
-      if (actorName != null && actorName.isNotEmpty) actorName,
-      if (actor != null) _actorStatusLine(actor!),
-    ].where((item) => item.isNotEmpty).join(' · ');
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: _ChatAvatar(
-        name: actorName == null || actorName.isEmpty
-            ? member.displayName
-            : actorName,
-        avatarUrl: actor?.sheet['avatarUrl'] as String?,
-      ),
-      title: Text(member.displayName),
-      subtitle: subtitle.isEmpty ? null : Text(subtitle),
-      trailing: Chip(label: Text(_campaignRoleLabel(member.role))),
-    );
-  }
-}
-
-class _ActorOnlyMemberTile extends StatelessWidget {
-  const _ActorOnlyMemberTile({required this.actor});
-
-  final CampaignActor actor;
-
-  @override
-  Widget build(BuildContext context) {
-    final name = actor.sheet['name']?.toString().trim();
-    final displayName = name == null || name.isEmpty ? '未命名角色' : name;
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: _ChatAvatar(
-        name: displayName,
-        avatarUrl: actor.sheet['avatarUrl'] as String?,
-      ),
-      title: Text(displayName),
-      subtitle: Text(_actorStatusLine(actor)),
-      trailing: const Chip(label: Text('角色')),
-    );
-  }
-}
-
-class _ChatModePicker extends StatelessWidget {
-  const _ChatModePicker({
-    required this.mode,
-    required this.enabled,
-    required this.onChanged,
-  });
-
-  final _ChatMode mode;
-  final bool enabled;
-  final ValueChanged<_ChatMode> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.all(2),
-        child: Row(
-          children: [
-            Expanded(
-              child: _ChatModeHalf(
-                key: const Key('chat-mode-say'),
-                selected: mode == _ChatMode.say,
-                enabled: enabled,
-                icon: Icons.chat_bubble_outline,
-                label: _t('say'),
-                onTap: () => onChanged(_ChatMode.say),
-              ),
-            ),
-            Expanded(
-              child: _ChatModeHalf(
-                key: const Key('chat-mode-action'),
-                selected: mode == _ChatMode.act,
-                enabled: enabled,
-                icon: Icons.directions_run_outlined,
-                label: _t('act'),
-                onTap: () => onChanged(_ChatMode.act),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ChatModeHalf extends StatelessWidget {
-  const _ChatModeHalf({
-    super.key,
-    required this.selected,
-    required this.enabled,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final bool selected;
-  final bool enabled;
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final foreground = selected
-        ? colorScheme.onSecondaryContainer
-        : colorScheme.onSurfaceVariant;
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: enabled ? onTap : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? colorScheme.secondaryContainer : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 18, color: foreground),
-            if (MediaQuery.sizeOf(context).width >= 420) ...[
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: Theme.of(
-                  context,
-                ).textTheme.labelSmall?.copyWith(color: foreground),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CampaignChatBubble extends StatelessWidget {
-  const _CampaignChatBubble({
-    required this.message,
-    this.onRespondCheckRequest,
-  });
-
-  final CampaignChatMessage message;
-  final VoidCallback? onRespondCheckRequest;
-
-  @override
-  Widget build(BuildContext context) {
-    final displayName = message.displayName.trim().isEmpty
-        ? _t('unknownSpeaker')
-        : message.displayName;
-    if (message.kind == 'system') {
-      return Padding(
-        key: const Key('system-message'),
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-        child: Center(
-          child: Text(
-            message.content,
-            textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-        ),
-      );
-    }
-
-    if (message.kind == 'checkRequest') {
-      final data = message.eventData;
-      final dc = data?['dc'];
-      return Card.filled(
-        key: const Key('check-request-message'),
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        child: ListTile(
-          leading: const Icon(Icons.fact_check_outlined),
-          title: Text(
-            message.content,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-          subtitle: dc == null ? null : Text('DC $dc'),
-          trailing: onRespondCheckRequest == null
-              ? null
-              : FilledButton.tonal(
-                  key: const Key('respond-check-request'),
-                  onPressed: onRespondCheckRequest,
-                  child: const Text('进行检定'),
-                ),
-        ),
-      );
-    }
-
-    if (message.kind == 'roll') {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _ChatAvatar(
-              name: displayName,
-              avatarUrl: message.avatarUrl,
-              healthState: message.publicHealthState,
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    displayName,
-                    style: Theme.of(context).textTheme.labelMedium,
-                  ),
-                  Chip(
-                    avatar: const Icon(Icons.casino_outlined, size: 18),
-                    label: Text(message.content),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (message.kind == 'action') {
-      final snapshot = message.actionSnapshot;
-      return Padding(
-        key: snapshot == null
-            ? const Key('action-message')
-            : const Key('rules-action-message'),
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _ChatAvatar(
-              name: displayName,
-              avatarUrl: message.avatarUrl,
-              healthState: message.publicHealthState,
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    displayName,
-                    style: Theme.of(context).textTheme.labelMedium,
-                  ),
-                  Card(
-                    margin: const EdgeInsets.only(top: 4),
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerHighest,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            message.content,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(fontStyle: FontStyle.italic),
-                          ),
-                          if (snapshot != null &&
-                              (snapshot['formula'] != null ||
-                                  snapshot['entryId'] != null)) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              [
-                                if (snapshot['formula'] != null)
-                                  '${snapshot['formula']}',
-                                if (snapshot['entryId'] != null)
-                                  '来源 ${snapshot['entryId']}',
-                              ].join(' · '),
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      key: const Key('say-message'),
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _ChatAvatar(
-            name: displayName,
-            avatarUrl: message.avatarUrl,
-            healthState: message.publicHealthState,
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  displayName,
-                  style: Theme.of(context).textTheme.labelMedium,
-                ),
-                Card(
-                  margin: const EdgeInsets.only(top: 4),
-                  color: colorScheme.primaryContainer,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    child: Text(message.content),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ChatAvatar extends StatelessWidget {
-  const _ChatAvatar({
-    required this.name,
-    required this.avatarUrl,
-    this.size = 40,
-    this.healthState,
-  });
-
-  final String name;
-  final String? avatarUrl;
-  final double size;
-  final String? healthState;
-
-  @override
-  Widget build(BuildContext context) {
-    final url = avatarUrl?.trim();
-    final image = _avatarImage(url);
-    final color = _healthRingColor(context, healthState);
-    return SizedBox.square(
-      dimension: size,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          CircleAvatar(
-            backgroundImage: image,
-            child: image == null ? Text(_avatarText(name)) : null,
-          ),
-          if (color != null)
-            IgnorePointer(
-              child: DecoratedBox(
-                key: Key('campaign-avatar-ring-$healthState'),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: color, width: 3),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  ImageProvider<Object>? _avatarImage(String? url) {
-    if (url == null || url.isEmpty) return null;
-    if (url.startsWith('data:image/')) {
-      final separator = url.indexOf(',');
-      if (separator < 0) return null;
-      try {
-        return MemoryImage(base64Decode(url.substring(separator + 1)));
-      } on FormatException {
-        return null;
-      }
-    }
-    return NetworkImage(url);
-  }
-}
-
-Color? _healthRingColor(BuildContext context, String? state) {
-  final colors = Theme.of(context).colorScheme;
-  return switch (state) {
-    'healthy' => colors.primary,
-    'injured' => colors.tertiary,
-    'critical' || 'down' => colors.error,
-    _ => null,
-  };
-}
-
-enum _ChatMode { say, act }
-
-const _quickDice = ['d20', 'd12', 'd10', 'd8', 'd6', 'd4', 'd100'];
-const _contentTypeFilters = [
-  'spell',
-  'equipment',
-  'item',
-  'species',
-  'class',
-  'background',
-  'feat',
-  'condition',
-  'monster',
-];
-
-String _avatarText(String value) {
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) return '?';
-  return trimmed.characters.first;
-}
-
-String _actorStatusLine(CampaignActor actor) {
-  final currentHp = actor.sheet['currentHp'];
-  final maxHp = actor.sheet['maxHp'];
-  final armorClass = actor.sheet['armorClass'];
-  final classSummary = actor.sheet['classSummary']?.toString().trim();
-  final level = actor.sheet['level'];
-  return [
-    if (classSummary != null && classSummary.isNotEmpty)
-      level is num ? '$classSummary ${level.toInt()}级' : classSummary,
-    if (currentHp is num && maxHp is num)
-      'HP ${currentHp.toInt()}/${maxHp.toInt()}',
-    if (armorClass is num) 'AC ${armorClass.toInt()}',
-  ].join(' · ');
-}
-
-String _campaignRoleLabel(String role) => switch (role) {
-  'owner' => '创建者',
-  'dm' || 'manager' => 'DM',
-  'spectator' => '旁观',
-  _ => '玩家',
-};
-
-String _contentTypeLabel(String type) => switch (type) {
-  'background' => '\u80cc\u666f',
-  'class' => '\u804c\u4e1a',
-  'condition' => '\u72b6\u6001',
-  'equipment' => '\u88c5\u5907',
-  'feat' => '\u4e13\u957f',
-  'item' => '\u7269\u54c1',
-  'monster' => '\u602a\u7269',
-  'species' => '\u79cd\u65cf',
-  'spell' => '\u6cd5\u672f',
-  _ => type,
-};
-
-String _t(String key) => switch (key) {
-  'act' => '\u505a',
-  'actHint' => '\u63cf\u8ff0\u52a8\u4f5c...',
-  'all' => '\u5168\u90e8',
-  'campaignChatRoom' => '\u6218\u5f79\u804a\u5929\u5ba4',
-  'campaignContentLibrary' => '\u6218\u5f79\u8d44\u6599\u5e93',
-  'campaignMembers' => '\u6218\u5f79\u6210\u5458',
-  'characterSheet' => '\u89d2\u8272\u5361',
-  'checkRequest' => '\u68c0\u5b9a\u8bf7\u6c42',
-  'checkRequestHint' => '向玩家发起属性、技能或豁免检定',
-  'contentLibrary' => '\u8d44\u6599\u5e93',
-  'contentType' => '\u8d44\u6599\u7c7b\u578b',
-  'dmControl' => 'DM 控场',
-  'dmControlDescription' => '这里会继续整合遭遇、成员状态和隐藏信息。',
-  'dmControlHint' => '遭遇、成员状态和 DM 私有工具',
-  'emptyMembers' => '\u8fd8\u6ca1\u6709\u7ed1\u5b9a\u89d2\u8272',
-  'emptyContent' => '\u6ca1\u6709\u627e\u5230\u53ef\u7528\u8d44\u6599',
-  'emptyChat' =>
-    '\u8fd8\u6ca1\u6709\u6d88\u606f\n\u4ece\u4e0b\u65b9\u5f00\u59cb\u8bf4\u8bdd\u6216\u505a\u52a8\u4f5c',
-  'encounterControl' => '遭遇控场',
-  'encounterControlHint' => '管理先攻、回合、敌人生命值和状态',
-  'members' => '\u6210\u5458',
-  'memberStatus' => '成员状态',
-  'memberStatusHint' => '查看角色 HP、AC、状态和可见信息',
-  'moreTableTools' => '\u66f4\u591a\u8dd1\u56e2\u529f\u80fd',
-  'noBoundCharacter' =>
-    '\u8bf7\u5148\u5728\u6218\u5f79\u4e2d\u7ed1\u5b9a\u89d2\u8272',
-  'invalidDice' => '\u63b7\u9ab0\u8868\u8fbe\u5f0f\u65e0\u6548\uff1a',
-  'quickRoll' => '\u5feb\u901f\u63b7\u9ab0',
-  'retry' => '\u91cd\u8bd5',
-  'rollDice' => '\u63b7\u9ab0',
-  'say' => '\u8bf4',
-  'sayHint' => '\u8bf4\u4e9b\u4ec0\u4e48...',
-  'search' => '\u641c\u7d22',
-  'searchContent' => '\u641c\u7d22\u8d44\u6599',
-  'sendFailed' => '\u53d1\u9001\u5931\u8d25',
-  'send' => '\u53d1\u9001',
-  'tableLog' => '跑团日志',
-  'tableLogHint' => '查看聊天、掷骰、状态变化和关键事件',
-  'tableTools' => '桌面工具',
-  'tableToolsDescription' => '桌面能力已经并入战役聊天室；常用操作从这里打开。',
-  'tableToolsHint' => '检定、日志和战役现场工具',
-  'unknownSpeaker' => '\u672a\u77e5\u53d1\u8a00\u8005',
-  'unboundCharacter' => '\u672a\u7ed1\u5b9a\u89d2\u8272',
-  _ => key,
-};

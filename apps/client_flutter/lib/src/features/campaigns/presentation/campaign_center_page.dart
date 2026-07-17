@@ -177,6 +177,14 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
           members: _members,
           actors: _actors,
           isManager: _canManage,
+          onCreateInvite: _canManage
+              ? () => widget.controller.createInvite(
+                    campaignId: widget.campaign.id,
+                    maxUses: 1,
+                  )
+              : null,
+          campaignName: widget.campaign.name,
+          serverUrl: widget.controller.apiBaseUrl,
         );
       case 2:
         return CampaignArchivePanel(

@@ -185,6 +185,66 @@ void main() {
     dmController.dispose();
     dmAuth.dispose();
   });
+
+  // Spec §队伍: 邀请和管理成员在 战役中心 → 队伍，DM 就地操作。
+  testWidgets(
+    'team panel shows invite button only when canManageCampaign is true',
+    (tester) async {
+      // Player: no invite button.
+      final playerAuth = await buildLoggedInAuthController();
+      final playerController = await buildCampaignController(
+        authController: playerAuth,
+        canManage: false,
+      );
+      await pumpCenterPage(tester, playerController);
+      await tester.tap(find.text('队伍').last);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('team-invite-button')), findsNothing);
+      playerController.dispose();
+      playerAuth.dispose();
+
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+
+      // DM: invite button appears.
+      final dmAuth = await buildLoggedInAuthController();
+      final dmController = await buildCampaignController(
+        authController: dmAuth,
+        canManage: true,
+      );
+      await pumpCenterPage(tester, dmController);
+      await tester.tap(find.text('队伍').last);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('team-invite-button')), findsOneWidget);
+
+      dmController.dispose();
+      dmAuth.dispose();
+    },
+  );
+
+  testWidgets(
+    'tapping invite button creates an invite and shows the code dialog',
+    (tester) async {
+      final dmAuth = await buildLoggedInAuthController();
+      final dmController = await buildCampaignController(
+        authController: dmAuth,
+        canManage: true,
+      );
+      await pumpCenterPage(tester, dmController);
+      await tester.tap(find.text('队伍').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('team-invite-button')));
+      await tester.pumpAndSettle();
+
+      // The invite code should appear in a dialog.
+      expect(find.textContaining('JOIN1234'), findsOneWidget);
+      expect(find.text('邀请码已创建'), findsOneWidget);
+
+      dmController.dispose();
+      dmAuth.dispose();
+    },
+  );
 }
 
 const _campaign = Campaign(
@@ -361,8 +421,18 @@ class _FakeCampaignClient implements CampaignClient {
     required String accessToken,
     required String campaignId,
     int? maxUses,
-  }) =>
-      throw UnimplementedError();
+  }) async =>
+      const CampaignInvite(
+        id: 'invite-1',
+        campaignId: 'camp-1',
+        code: 'JOIN1234',
+        roleOnJoin: 'player',
+        expiresAt: null,
+        maxUses: 1,
+        usedCount: 0,
+        requireApproval: false,
+        createdAt: '2026-07-17T00:00:00.000Z',
+      );
 
   @override
   Future<CampaignMembership> joinCampaign({

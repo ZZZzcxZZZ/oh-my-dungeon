@@ -4,6 +4,7 @@ import '../domain/campaign.dart';
 import '../domain/campaign_actor.dart';
 import 'actors/campaign_actor_controller.dart';
 import 'campaign_controller.dart';
+import 'campaign_detail_page.dart';
 import 'center/campaign_archive_panel.dart';
 import 'center/campaign_overview_panel.dart';
 import 'center/campaign_records_panel.dart';
@@ -229,6 +230,14 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
           campaign: widget.campaign,
           canManage: _canManage,
           onOpenDmControl: _canManage ? _showDmControlSheet : null,
+          // Spec §全局设置: 4 项低频操作整合到概览面板, DM 可见全部 4 项,
+          // 普通玩家只见"离开战役"。
+          onEditDetails: _canManage ? _openCampaignManagement : null,
+          onTransferOwnership:
+              _canManage ? _showNotImplemented : null,
+          onArchiveCampaign:
+              _canManage ? _showNotImplemented : null,
+          onLeaveCampaign: _showNotImplemented,
         );
       case 1:
         return CampaignTeamPanel(
@@ -450,6 +459,26 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
           ),
         );
       },
+    );
+  }
+
+  /// Spec §全局设置: 打开战役详情编辑页（名称、封面、简介）。
+  Future<void> _openCampaignManagement() {
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => CampaignDetailPage(
+          controller: widget.controller,
+          campaignId: widget.campaign.id,
+        ),
+      ),
+    );
+  }
+
+  /// Spec §全局设置: 所有权转移、战役归档、离开战役三项暂未实现的服务端
+  /// 操作，统一显示"开发中"提示，避免静默无反馈。
+  void _showNotImplemented() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('该功能正在开发中')),
     );
   }
 }

@@ -535,6 +535,98 @@ void main() {
       dmAuth.dispose();
     },
   );
+
+  // Spec §全局设置: 战役名称/所有权转移/战役归档/离开战役四项低频操作整合到
+  // 概览面板"战役设置"区块。DM 可见全部 4 项, 普通玩家只见"离开战役"。
+  // 这些操作原来藏在聊天页右上角三点菜单里, 用户要求完全去除三点菜单并
+  // 迁移到战役中心, 与 spec 一致。
+  testWidgets(
+    'DM overview panel shows all four global setting entries',
+    (tester) async {
+      final dmAuth = await buildLoggedInAuthController();
+      final dmController = await buildCampaignController(
+        authController: dmAuth,
+        canManage: true,
+      );
+      await pumpCenterPage(tester, dmController);
+
+      expect(
+        find.byKey(const Key('campaign-overview-edit-details')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('campaign-overview-transfer-ownership')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('campaign-overview-archive-campaign')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('campaign-overview-leave-campaign')),
+        findsOneWidget,
+      );
+
+      dmController.dispose();
+      dmAuth.dispose();
+    },
+  );
+
+  testWidgets(
+    'player overview panel only shows leave campaign entry',
+    (tester) async {
+      final playerAuth = await buildLoggedInAuthController();
+      final playerController = await buildCampaignController(
+        authController: playerAuth,
+        canManage: false,
+      );
+      await pumpCenterPage(tester, playerController);
+
+      // Owner-only entries must NOT appear for non-managers.
+      expect(
+        find.byKey(const Key('campaign-overview-edit-details')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('campaign-overview-transfer-ownership')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('campaign-overview-archive-campaign')),
+        findsNothing,
+      );
+      // Leave campaign remains available to any member.
+      expect(
+        find.byKey(const Key('campaign-overview-leave-campaign')),
+        findsOneWidget,
+      );
+
+      playerController.dispose();
+      playerAuth.dispose();
+    },
+  );
+
+  testWidgets(
+    'tapping leave campaign shows the developing snackbar',
+    (tester) async {
+      final playerAuth = await buildLoggedInAuthController();
+      final playerController = await buildCampaignController(
+        authController: playerAuth,
+        canManage: false,
+      );
+      await pumpCenterPage(tester, playerController);
+
+      await tester.tap(
+        find.byKey(const Key('campaign-overview-leave-campaign')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('该功能正在开发中'), findsOneWidget);
+
+      playerController.dispose();
+      playerAuth.dispose();
+    },
+  );
 }
 
 const _campaign = Campaign(

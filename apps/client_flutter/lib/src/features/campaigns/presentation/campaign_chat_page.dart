@@ -14,7 +14,6 @@ import 'actors/campaign_actor_controller.dart';
 import 'actors/campaign_actor_sheet_page.dart';
 import 'campaign_controller.dart';
 import 'campaign_center_page.dart';
-import 'campaign_detail_page.dart';
 import 'chat/campaign_chat_bubble.dart';
 import 'chat/chat_avatar.dart';
 import 'chat/chat_helpers.dart';
@@ -181,42 +180,6 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                 ),
                 icon: const Icon(Icons.dashboard_outlined),
               ),
-              PopupMenuButton<String>(
-                key: const Key('campaign-chat-more-menu'),
-                icon: const Icon(Icons.more_vert),
-                onSelected: _onGlobalSettingSelected,
-                itemBuilder: (context) {
-                  // Spec §全局设置 / §客户端工作模式: 战役名称、所有权转移、
-                  // 战役归档都是 owner/dm 才能使用的低频操作；普通玩家即使
-                  // 切换到 DM 模式也只有 player 权限，菜单里只保留"离开战役"。
-                  if (!_canManageCampaign) {
-                    return const [
-                      PopupMenuItem(
-                        value: 'leave',
-                        child: Text('离开战役'),
-                      ),
-                    ];
-                  }
-                  return const [
-                    PopupMenuItem(
-                      value: 'editDetails',
-                      child: Text('战役名称、封面和简介'),
-                    ),
-                    PopupMenuItem(
-                      value: 'transferOwnership',
-                      child: Text('所有权转移'),
-                    ),
-                    PopupMenuItem(
-                      value: 'archive',
-                      child: Text('战役归档'),
-                    ),
-                    PopupMenuItem(
-                      value: 'leave',
-                      child: Text('离开战役'),
-                    ),
-                  ];
-                },
-              ),
             ],
           ),
           body: _buildChat(messages),
@@ -355,17 +318,6 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     );
   }
 
-  Future<void> _openCampaignManagement() {
-    return Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => CampaignDetailPage(
-          controller: widget.campaignController,
-          campaignId: widget.campaign.id,
-        ),
-      ),
-    );
-  }
-
   Future<void> _openCampaignContent() async {
     final controller = widget.campaignContentController;
     if (controller == null) return;
@@ -395,23 +347,6 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     );
     if (selected == null || !mounted) return;
     await _scrollToMessage(selected.id);
-  }
-
-  /// Spec §全局设置: 右上角更多菜单四项低频操作。
-  void _onGlobalSettingSelected(String value) {
-    final messenger = ScaffoldMessenger.of(context);
-    switch (value) {
-      case 'editDetails':
-        _openCampaignManagement();
-        break;
-      case 'transferOwnership':
-      case 'archive':
-      case 'leave':
-        messenger.showSnackBar(
-          const SnackBar(content: Text('该功能正在开发中')),
-        );
-        break;
-    }
   }
 
   Widget _buildInputBar() {

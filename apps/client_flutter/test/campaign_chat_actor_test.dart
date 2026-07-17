@@ -799,6 +799,39 @@ void main() {
       expect(find.byKey(const Key('campaign-dm-control-entry')), findsNothing);
     },
   );
+
+  // Spec §顶部: 聊天顶部只显示返回、战役名称+在线状态、搜索、战役中心。
+  testWidgets(
+    'chat AppBar only exposes search and campaign center actions',
+    (tester) async {
+      await pumpChatPage(tester);
+
+      // Must have search and campaign center entries.
+      expect(find.byTooltip('搜索'), findsOneWidget);
+      expect(find.byKey(const Key('campaign-open-center')), findsOneWidget);
+
+      // Must NOT expose 战役资料 or 成员 as direct AppBar buttons.
+      expect(find.byTooltip('战役资料'), findsNothing);
+      expect(find.byTooltip('成员'), findsNothing);
+    },
+  );
+
+  // Spec §全局设置: 右上角更多菜单只有战役名称/封面/简介、所有权转移、
+  // 战役归档、离开战役四项。
+  testWidgets(
+    'chat AppBar more menu contains only the four global settings',
+    (tester) async {
+      await pumpChatPage(tester);
+
+      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.pumpAndSettle();
+
+      expect(find.text('战役名称、封面和简介'), findsOneWidget);
+      expect(find.text('所有权转移'), findsOneWidget);
+      expect(find.text('战役归档'), findsOneWidget);
+      expect(find.text('离开战役'), findsOneWidget);
+    },
+  );
 }
 
 class _RecordingCampaignClient implements CampaignClient {

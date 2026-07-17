@@ -98,6 +98,12 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
             ),
             actions: [
               IconButton(
+                key: const Key('campaign-chat-search'),
+                tooltip: chatText('search'),
+                onPressed: _openSearch,
+                icon: const Icon(Icons.search),
+              ),
+              IconButton(
                 key: const Key('campaign-open-center'),
                 tooltip: '战役中心',
                 onPressed: () => Navigator.of(context).push<void>(
@@ -111,16 +117,28 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                 ),
                 icon: const Icon(Icons.dashboard_outlined),
               ),
-              if (widget.campaignContentController != null)
-                IconButton(
-                  tooltip: '战役资料',
-                  onPressed: _openCampaignContent,
-                  icon: const Icon(Icons.library_books_outlined),
-                ),
-              IconButton(
-                tooltip: chatText('members'),
-                onPressed: _showMembers,
-                icon: const Icon(Icons.people_outline),
+              PopupMenuButton<String>(
+                key: const Key('campaign-chat-more-menu'),
+                icon: const Icon(Icons.more_vert),
+                onSelected: _onGlobalSettingSelected,
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: 'editDetails',
+                    child: Text('战役名称、封面和简介'),
+                  ),
+                  PopupMenuItem(
+                    value: 'transferOwnership',
+                    child: Text('所有权转移'),
+                  ),
+                  PopupMenuItem(
+                    value: 'archive',
+                    child: Text('战役归档'),
+                  ),
+                  PopupMenuItem(
+                    value: 'leave',
+                    child: Text('离开战役'),
+                  ),
+                ],
               ),
             ],
           ),
@@ -362,6 +380,37 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         ),
       ),
     );
+  }
+
+  /// Spec §顶部: 聊天顶部搜索入口。打开轻量搜索面板，直接调用
+  /// `searchMessages` 检索战役历史消息，不替换实时聊天时间线。
+  Future<void> _openSearch() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => _CampaignChatSearchSheet(
+        campaignId: widget.campaign.id,
+        controller: widget.campaignController,
+      ),
+    );
+  }
+
+  /// Spec §全局设置: 右上角更多菜单四项低频操作。
+  void _onGlobalSettingSelected(String value) {
+    final messenger = ScaffoldMessenger.of(context);
+    switch (value) {
+      case 'editDetails':
+        _openCampaignManagement();
+        break;
+      case 'transferOwnership':
+      case 'archive':
+      case 'leave':
+        messenger.showSnackBar(
+          const SnackBar(content: Text('该功能正在开发中')),
+        );
+        break;
+    }
   }
 
   Widget _buildInputBar() {
@@ -1597,6 +1646,97 @@ class _IdentitySectionHeader extends StatelessWidget {
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
+      ),
+    );
+  }
+}
+
+/// Spec §顶部: 聊天搜索面板。从聊天页 AppBar 搜索入口打开，调用
+/// `CampaignController.searchMessages` 检索战役历史消息，不替换
+/// 实时聊天时间线。
+class _CampaignChatSearchSheet extends StatefulWidget {
+  const _CampaignChatSearchSheet({
+    required this.campaignId,
+    required this.controller,
+  });
+
+  final String campaignId;
+  final CampaignController controller;
+
+  @override
+  State<_CampaignChatSearchSheet> createState() =>
+      _CampaignChatSearchSheetState();
+}
+
+class _CampaignChatSearchSheetState extends State<_CampaignChatSearchSheet> {
+  final _searchController = TextEditingController();
+  List<CampaignChatMessage> _results = const [];
+  bool _searching = false;
+  int _request = 0;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _onChanged(String value) async {
+    final query = value.trim();
+    final request = ++_request;
+    setState(() {
+      _searching = query.isNotEmpty;
+      if (query.isEmpty) _results = const [];
+    });
+    if (query.isEmpty) return;
+    final results = await widget.controller.searchMessages(
+      widget.campaignId,
+      query: query,
+    );
+    if (!mounted || request != _request) return;
+    setState(() {
+      _results = results;
+      _searching = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: SearchBar(
+                key: const Key('campaign-chat-search-field'),
+                hintText: '搜索发言者、消息内容',
+                leading: const Icon(Icons.search),
+                controller: _searchController,
+                onChanged: _onChanged,
+              ),
+            ),
+            SizedBox(
+              height: 320,
+              child: _searching
+                  ? const Center(child: CircularProgressIndicator())
+                  : _results.isEmpty
+                  ? const Center(child: Text('输入关键词搜索战役消息'))
+                  : ListView.builder(
+                      itemCount: _results.length,
+                      itemBuilder: (context, index) {
+                        final message = _results[index];
+                        return ListTile(
+                          leading: const Icon(Icons.history),
+                          title: Text(message.content),
+                          subtitle: Text(message.displayName),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

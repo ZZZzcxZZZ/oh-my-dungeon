@@ -189,11 +189,12 @@ function parseActorType(value: unknown): CampaignActorType {
     value === "player" ||
     value === "npc" ||
     value === "unclaimed" ||
-    value === "companion"
+    value === "companion" ||
+    value === "monster"
   ) {
     return value;
   }
-  throw new BadRequestException("actorType must be one of player|npc|unclaimed|companion");
+  throw new BadRequestException("actorType must be one of player|npc|unclaimed|companion|monster");
 }
 
 function parseLifecycle(value: unknown): "persistent" | "temporary" {

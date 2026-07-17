@@ -93,8 +93,9 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
         return Scaffold(
           appBar: AppBar(title: const Text('角色')),
           floatingActionButton: FloatingActionButton.extended(
+            key: const Key('create_character'),
             heroTag: 'create_character',
-            onPressed: _openCreatePage,
+            onPressed: _isDmModeWithCampaign ? _showDmCreateMenu : _openCreatePage,
             icon: const Icon(Icons.person_add_alt_1),
             label: const Text('新角色'),
           ),
@@ -158,6 +159,244 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
       },
     );
     return list;
+  }
+
+  /// Spec §DM 角色生命周期: DM 模式下角色栏 FAB 弹出菜单, 提供:
+  /// 1. 快速创建 NPC (常驻, name + HP + type)
+  /// 2. 快速创建一次性角色 (临时, name only)
+  /// 3. 完整创建角色 (existing full character editor)
+  /// 仅当 DM 模式且已选中战役时启用。
+  bool get _isDmModeWithCampaign {
+    final isDm = widget.modeController?.mode == ClientMode.dungeonMaster;
+    final campaignId = widget.actorController?.selectedCampaignId;
+    return isDm && campaignId != null && campaignId.isNotEmpty;
+  }
+
+  Future<void> _showDmCreateMenu() async {
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('创建角色'),
+        children: [
+          SimpleDialogOption(
+            key: const Key('dm-create-quick-npc'),
+            onPressed: () => Navigator.of(context).pop('quickNpc'),
+            child: const ListTile(
+              leading: Icon(Icons.smart_toy_outlined),
+              title: Text('快速创建 NPC'),
+              subtitle: Text('输入名称和 HP，创建常驻 NPC/怪物/同伴'),
+            ),
+          ),
+          SimpleDialogOption(
+            key: const Key('dm-create-quick-temporary'),
+            onPressed: () => Navigator.of(context).pop('quickTemporary'),
+            child: const ListTile(
+              leading: Icon(Icons.flash_on_outlined),
+              title: Text('快速创建一次性角色'),
+              subtitle: Text('只输入名称，创建临时角色'),
+            ),
+          ),
+          SimpleDialogOption(
+            key: const Key('dm-create-full'),
+            onPressed: () => Navigator.of(context).pop('full'),
+            child: const ListTile(
+              leading: Icon(Icons.edit_note),
+              title: Text('完整创建角色'),
+              subtitle: Text('打开完整角色编辑器'),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (selected == null || !mounted) return;
+    switch (selected) {
+      case 'quickNpc':
+        await _showQuickNpcForm();
+      case 'quickTemporary':
+        await _showQuickTemporaryForm();
+      case 'full':
+        await _openCreatePage();
+    }
+  }
+
+  Future<void> _showQuickNpcForm() async {
+    final actorController = widget.actorController;
+    if (actorController == null) return;
+
+    final nameController = TextEditingController();
+    final hpController = TextEditingController();
+    var actorType = 'npc';
+    final formKey = GlobalKey<FormState>();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('快速创建 NPC'),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('NPC'),
+                        selected: actorType == 'npc',
+                        onSelected: (_) =>
+                            setDialogState(() => actorType = 'npc'),
+                      ),
+                      ChoiceChip(
+                        label: const Text('怪物'),
+                        selected: actorType == 'monster',
+                        onSelected: (_) =>
+                            setDialogState(() => actorType = 'monster'),
+                      ),
+                      ChoiceChip(
+                        label: const Text('同伴'),
+                        selected: actorType == 'companion',
+                        onSelected: (_) =>
+                            setDialogState(() => actorType = 'companion'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    key: const Key('quick-npc-name'),
+                    controller: nameController,
+                    autofocus: true,
+                    decoration: const InputDecoration(labelText: '显示名称'),
+                    validator: (value) =>
+                        value == null || value.trim().isEmpty ? '请输入名称' : null,
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    key: const Key('quick-npc-hp'),
+                    controller: hpController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: '初始最大 HP（可选）'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              key: const Key('quick-npc-confirm'),
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  Navigator.of(context).pop(true);
+                }
+              },
+              child: const Text('创建'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true) {
+      nameController.dispose();
+      hpController.dispose();
+      return;
+    }
+    if (!mounted) {
+      nameController.dispose();
+      hpController.dispose();
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    final maxHpText = hpController.text.trim();
+    final maxHp = maxHpText.isEmpty ? null : int.tryParse(maxHpText);
+    final success = await actorController.createDmActor(
+      actorType: actorType,
+      lifecycle: 'persistent',
+      sheet: {
+        'name': nameController.text.trim(),
+        'maxHp': ?maxHp,
+        'currentHp': ?maxHp,
+      },
+    );
+    nameController.dispose();
+    hpController.dispose();
+    if (!mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          success ? '已创建常驻 NPC' : (actorController.error ?? '创建失败'),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showQuickTemporaryForm() async {
+    final actorController = widget.actorController;
+    if (actorController == null) return;
+
+    final nameController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('快速创建一次性角色'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            key: const Key('quick-temporary-name'),
+            controller: nameController,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: '显示名称'),
+            validator: (value) =>
+                value == null || value.trim().isEmpty ? '请输入名称' : null,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            key: const Key('quick-temporary-confirm'),
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.of(context).pop(true);
+              }
+            },
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      nameController.dispose();
+      return;
+    }
+    if (!mounted) {
+      nameController.dispose();
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    final success = await actorController.createTemporaryNpc(
+      name: nameController.text.trim(),
+    );
+    nameController.dispose();
+    if (!mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          success ? '已创建临时角色' : (actorController.error ?? '创建失败'),
+        ),
+      ),
+    );
   }
 
   Future<void> _openCreatePage() async {

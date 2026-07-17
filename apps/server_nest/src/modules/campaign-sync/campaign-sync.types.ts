@@ -69,7 +69,12 @@ export interface CampaignChangedEvent {
   entityType: CampaignEntityType;
 }
 
-export type CampaignActorType = "player" | "npc" | "unclaimed" | "companion";
+export type CampaignActorType =
+  | "player"
+  | "npc"
+  | "unclaimed"
+  | "companion"
+  | "monster";
 
 export type CampaignActorStatus = "active" | "archived";
 

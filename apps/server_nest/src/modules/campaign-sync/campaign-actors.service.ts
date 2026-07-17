@@ -33,6 +33,7 @@ const ALLOWED_ACTOR_TYPES: ReadonlySet<CampaignActorType> = new Set([
   "npc",
   "unclaimed",
   "companion",
+  "monster",
 ]);
 
 const RUNTIME_COMMAND_TYPES: ReadonlySet<string> = new Set([

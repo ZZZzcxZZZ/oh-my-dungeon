@@ -294,6 +294,36 @@ describe("campaign actors endpoints", () => {
       expect(res.body.ownerUserId).toBeNull();
     });
 
+    it("lets the DM create a monster actor", async () => {
+      const token = await loginAs(storedDm);
+      const created = {
+        id: "actor-monster",
+        campaignId: "camp-1",
+        ownerUserId: null,
+        sourceCharacterId: null,
+        actorType: "monster",
+        status: "active",
+        sheetJson: { name: "Goblin Boss", currentHp: 21, maxHp: 21 },
+        revision: 1,
+        updatedBy: "dm-1",
+        createdAt: new Date("2026-07-14T00:00:00.000Z"),
+        updatedAt: new Date("2026-07-14T00:00:00.000Z"),
+      };
+      prismaService.campaignActor.create.mockResolvedValueOnce(created);
+
+      const res = await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/actors")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          actorType: "monster",
+          sheet: { name: "Goblin Boss", currentHp: 21, maxHp: 21 },
+        })
+        .expect(201);
+
+      expect(res.body.id).toBe("actor-monster");
+      expect(res.body.actorType).toBe("monster");
+    });
+
     it("keeps an explicitly temporary NPC distinct from persistent actors", async () => {
       const token = await loginAs(storedDm);
       prismaService.campaignActor.create.mockResolvedValueOnce({

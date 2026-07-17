@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character_edit_draft.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_detail_page.dart';
@@ -1698,6 +1700,169 @@ void main() {
       ),
     );
   });
+
+  // Spec §头像来源: 本地角色头像离线保存在客户端；战役角色头像在绑定战役后自动上传。
+  // 头像选择必须出现在角色创建/编辑流程里，而不是发布对话框。
+  testWidgets(
+    'full sheet character editor exposes avatar picker and saves avatar data url',
+    (tester) async {
+      CharacterEditDraft? submitted;
+      final fakeBytes = Uint8List.fromList([1, 2, 3, 4]);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterEditorPage(
+            onPickImage: () async =>
+                (bytes: fakeBytes, mimeType: 'image/png'),
+            onSubmit: (draft) async {
+              submitted = draft;
+              return true;
+            },
+          ),
+        ),
+      );
+
+      // 直接进入 fullSheet：选 quick → 继续编辑完整角色卡。
+      await tester.tap(find.widgetWithText(FilledButton, '快速创建'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, '继续编辑完整角色卡'));
+      await tester.pumpAndSettle();
+
+      // 基础区出现头像选择器。
+      final avatarPicker = find.byKey(const Key('character-avatar-picker'));
+      expect(avatarPicker, findsOneWidget);
+
+      // 点击选择图片。
+      await tester.tap(find.widgetWithText(OutlinedButton, '选择图片'));
+      await tester.pumpAndSettle();
+
+      // 填名字后保存。
+      await tester.enterText(find.byKey(const Key('character-name')), 'Mira');
+      await tester.tap(find.widgetWithText(FilledButton, '保存角色'));
+      await tester.pumpAndSettle();
+
+      expect(submitted, isNotNull);
+      expect(submitted!.avatarUrl, isNotNull);
+      expect(
+        submitted!.avatarUrl!.startsWith('data:image/png;base64,'),
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets(
+    'edit character editor preserves existing avatar url when not changed',
+    (tester) async {
+      CharacterEditDraft? submitted;
+      const existing = CharacterSheet(
+        id: 'char-avatar',
+        ownerUserId: 'user-1',
+        name: 'Elara',
+        avatarUrl: 'data:image/png;base64,AAAA',
+        system: 'dnd5e',
+        level: 1,
+        classSummary: '法师',
+        raceSummary: '精灵',
+        currentHp: 6,
+        maxHp: 6,
+        armorClass: 10,
+        speed: 30,
+        initiativeBonus: 0,
+        abilities: {
+          'str': 10,
+          'dex': 14,
+          'con': 12,
+          'int': 16,
+          'wis': 10,
+          'cha': 10,
+        },
+        saves: {'int': true, 'wis': true},
+        skills: {'奥秘': true},
+        inventory: [],
+        currency: {},
+        notes: '',
+        data: {},
+        createdAt: '2026-07-01T00:00:00.000Z',
+        updatedAt: '2026-07-01T00:00:00.000Z',
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterEditorPage(
+            initialCharacter: existing,
+            onSubmit: (draft) async {
+              submitted = draft;
+              return true;
+            },
+          ),
+        ),
+      );
+
+      // 编辑模式直接进入 fullSheet。
+      expect(find.byKey(const Key('character-avatar-picker')), findsOneWidget);
+      expect(find.text('编辑角色'), findsOneWidget);
+
+      await tester.enterText(find.byKey(const Key('character-name')), 'Elara');
+      await tester.tap(find.widgetWithText(FilledButton, '保存角色'));
+      await tester.pumpAndSettle();
+
+      expect(submitted, isNotNull);
+      // 未重新选图时保留原有头像。
+      expect(submitted!.avatarUrl, existing.avatarUrl);
+    },
+  );
+
+  testWidgets(
+    'standard build details step exposes avatar picker',
+    (tester) async {
+      final fakeBytes = Uint8List.fromList([9, 9, 9]);
+      CharacterEditDraft? submitted;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterEditorPage(
+            defaultCreationMethod: 'standard',
+            onPickImage: () async =>
+                (bytes: fakeBytes, mimeType: 'image/jpeg'),
+            onSubmit: (draft) async {
+              submitted = draft;
+              return true;
+            },
+          ),
+        ),
+      );
+
+      expect(find.text('标准创建角色'), findsOneWidget);
+
+      // 跳到"详情"步骤（step 7）。
+      await _goToBuilderStep(tester, 7, '详情');
+      await tester.pumpAndSettle();
+
+      // 详情步骤出现头像选择器。
+      expect(
+        find.byKey(const Key('standard-character-avatar-picker')),
+        findsOneWidget,
+      );
+      await tester.tap(find.widgetWithText(OutlinedButton, '选择图片'));
+      await tester.pumpAndSettle();
+
+      // 回到职业步骤填名字并提交。
+      await _goToBuilderStep(tester, 0, '职业');
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('standard-character-name-field')),
+        'StandardAvatar',
+      );
+      await _goToBuilderStep(tester, 8, '审核');
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '创建角色'));
+      await tester.pumpAndSettle();
+
+      expect(submitted, isNotNull);
+      expect(submitted!.avatarUrl, isNotNull);
+      expect(
+        submitted!.avatarUrl!.startsWith('data:image/jpeg;base64,'),
+        isTrue,
+      );
+    },
+  );
 }
 
 Future<void> _goToBuilderStep(

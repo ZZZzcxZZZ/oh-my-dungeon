@@ -16,6 +16,7 @@ class QuickBuildSelection {
     this.speciesEntryId,
     this.backgroundEntryId,
     this.ruleChoices = const <String, List<String>>{},
+    this.avatarUrl,
   });
 
   final String name;
@@ -31,6 +32,10 @@ class QuickBuildSelection {
   final String? speciesEntryId;
   final String? backgroundEntryId;
   final Map<String, List<String>> ruleChoices;
+
+  /// 角色头像（data URL 或本地文件路径）。规范 §头像来源：本地角色头像
+  /// 离线保存在客户端，绑定战役后自动上传。
+  final String? avatarUrl;
 }
 
 class QuickBuildService {
@@ -72,6 +77,7 @@ class QuickBuildService {
       currency: const {'cp': 0, 'sp': 0, 'ep': 0, 'gp': 10, 'pp': 0},
       notes:
           'D&D 2024 快速创建：${selection.species} / ${selection.background} / ${selection.className}。',
+      avatarUrl: selection.avatarUrl,
       data: {
         'contentRefs': {
           'spells': [

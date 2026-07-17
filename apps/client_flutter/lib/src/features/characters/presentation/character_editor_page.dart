@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../domain/character.dart';
@@ -7,6 +10,7 @@ import '../domain/quick_build.dart';
 import '../domain/rules_driven_character_builder.dart';
 import '../../content/domain/content_entry.dart';
 import '../../content/presentation/content_entry_preview_page.dart';
+import '../../campaigns/presentation/widgets/avatar_picker.dart';
 import '../../rules/domain/character_build.dart';
 import '../../rules/domain/character_rule_definition.dart';
 import '../../rules/domain/character_rules_engine.dart';
@@ -18,6 +22,7 @@ class CharacterEditorPage extends StatefulWidget {
     this.initialCharacter,
     this.defaultCreationMethod = 'choose',
     this.contentEntries = const [],
+    this.onPickImage,
     super.key,
   });
 
@@ -25,6 +30,10 @@ class CharacterEditorPage extends StatefulWidget {
   final String defaultCreationMethod;
   final List<ContentEntry> contentEntries;
   final Future<bool> Function(CharacterEditDraft draft) onSubmit;
+
+  /// 选择头像图片的回调。返回 `(bytes, mimeType)` 或 `null`（用户取消）。
+  /// 注入式以便测试时替换为内存 fake，不触发原生 file_picker。
+  final Future<({Uint8List bytes, String mimeType})?> Function()? onPickImage;
 
   @override
   State<CharacterEditorPage> createState() => _CharacterEditorPageState();
@@ -50,6 +59,58 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
   Map<String, Object?>? _appliedRulesData;
   final Map<String, Set<String>> _upgradeRuleChoices = {};
   bool _saving = false;
+
+  // 头像选择状态（规范 §头像来源：本地角色头像离线保存在客户端）。
+  Uint8List? _avatarBytes;
+  String? _avatarMimeType;
+  bool _pickingAvatar = false;
+  String? _avatarPickError;
+
+  String? get _currentAvatarUrl => widget.initialCharacter?.avatarUrl;
+
+  /// 把当前已选/已存在的头像序列化为可存入 CharacterEditDraft.avatarUrl
+  /// 的字符串。新选图片编码为 data URL；未选则保留初始头像或 null。
+  String? get _effectiveAvatarUrl {
+    if (_avatarBytes != null && _avatarMimeType != null) {
+      return 'data:$_avatarMimeType;base64,${base64Encode(_avatarBytes!)}';
+    }
+    return _currentAvatarUrl;
+  }
+
+  Future<void> _pickAvatarImage() async {
+    final picker = widget.onPickImage;
+    if (picker == null) return;
+    setState(() {
+      _pickingAvatar = true;
+      _avatarPickError = null;
+    });
+    try {
+      final result = await picker();
+      if (!mounted) return;
+      if (result == null) {
+        setState(() => _pickingAvatar = false);
+        return;
+      }
+      if (result.bytes.length > 2 * 1024 * 1024) {
+        setState(() {
+          _pickingAvatar = false;
+          _avatarPickError = '头像图片不能超过 2 MB';
+        });
+        return;
+      }
+      setState(() {
+        _avatarBytes = result.bytes;
+        _avatarMimeType = result.mimeType;
+        _pickingAvatar = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _pickingAvatar = false;
+        _avatarPickError = '选择图片失败';
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -133,6 +194,7 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
       return _StandardBuildPage(
         contentEntries: widget.contentEntries,
         onSubmit: _submitQuickBuild,
+        onPickImage: widget.onPickImage,
         onContinueToFullSheet: () {
           setState(() => _flow = _CreationFlow.fullSheet);
         },
@@ -150,6 +212,15 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
               title: '基础',
               child: Column(
                 children: [
+                  AvatarPicker(
+                    key: const Key('character-avatar-picker'),
+                    currentAvatarUrl: _currentAvatarUrl,
+                    previewBytes: _avatarBytes,
+                    isUploading: _pickingAvatar,
+                    error: _avatarPickError,
+                    onPick: _pickAvatarImage,
+                  ),
+                  const SizedBox(height: 12),
                   TextField(
                     key: const Key('character-name'),
                     controller: _nameController,
@@ -613,10 +684,28 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
               choices: quickDraft.ruleChoices,
             ),
             abilities: quickDraft.abilities ?? Dnd5eRules.defaultAbilities,
+            avatarUrl: quickDraft.avatarUrl ?? _effectiveAvatarUrl,
             extraSpellRefs: quickDraft.spellRefs,
             extraItemRefs: quickDraft.itemRefs,
           )
-        : QuickBuildService.build(quickDraft);
+        : QuickBuildService.build(
+            QuickBuildSelection(
+              name: quickDraft.name,
+              className: quickDraft.className,
+              species: quickDraft.species,
+              background: quickDraft.background,
+              level: quickDraft.level,
+              spellRefs: quickDraft.spellRefs,
+              itemRefs: quickDraft.itemRefs,
+              abilities: quickDraft.abilities,
+              skillProficiencies: quickDraft.skillProficiencies,
+              classEntryId: quickDraft.classEntryId,
+              speciesEntryId: quickDraft.speciesEntryId,
+              backgroundEntryId: quickDraft.backgroundEntryId,
+              ruleChoices: quickDraft.ruleChoices,
+              avatarUrl: quickDraft.avatarUrl ?? _effectiveAvatarUrl,
+            ),
+          );
     final ok = await widget.onSubmit(draft);
     if (!mounted) return;
     setState(() => _saving = false);
@@ -661,6 +750,7 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
           entry.key: int.tryParse(entry.value.text.trim()) ?? 0,
       },
       notes: _notesController.text.trim(),
+      avatarUrl: _effectiveAvatarUrl,
       data: _appliedRulesData ?? widget.initialCharacter?.dataMap ?? const {},
     );
   }
@@ -1023,11 +1113,13 @@ class _StandardBuildPage extends StatefulWidget {
     required this.contentEntries,
     required this.onSubmit,
     required this.onContinueToFullSheet,
+    this.onPickImage,
   });
 
   final List<ContentEntry> contentEntries;
   final Future<void> Function(QuickBuildSelection draft) onSubmit;
   final VoidCallback onContinueToFullSheet;
+  final Future<({Uint8List bytes, String mimeType})?> Function()? onPickImage;
 
   @override
   State<_StandardBuildPage> createState() => _StandardBuildPageState();
@@ -1062,6 +1154,54 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
   late Set<String> _selectedSkillProficiencies;
   late Map<String, int> _abilityScores;
   late Map<String, TextEditingController> _abilityControllers;
+
+  // 头像选择状态（规范 §头像来源：本地角色头像离线保存在客户端）。
+  Uint8List? _avatarBytes;
+  String? _avatarMimeType;
+  bool _pickingAvatar = false;
+  String? _avatarPickError;
+
+  String? get _avatarDataUrl {
+    if (_avatarBytes != null && _avatarMimeType != null) {
+      return 'data:$_avatarMimeType;base64,${base64Encode(_avatarBytes!)}';
+    }
+    return null;
+  }
+
+  Future<void> _pickAvatarImage() async {
+    final picker = widget.onPickImage;
+    if (picker == null) return;
+    setState(() {
+      _pickingAvatar = true;
+      _avatarPickError = null;
+    });
+    try {
+      final result = await picker();
+      if (!mounted) return;
+      if (result == null) {
+        setState(() => _pickingAvatar = false);
+        return;
+      }
+      if (result.bytes.length > 2 * 1024 * 1024) {
+        setState(() {
+          _pickingAvatar = false;
+          _avatarPickError = '头像图片不能超过 2 MB';
+        });
+        return;
+      }
+      setState(() {
+        _avatarBytes = result.bytes;
+        _avatarMimeType = result.mimeType;
+        _pickingAvatar = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _pickingAvatar = false;
+        _avatarPickError = '选择图片失败';
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -1272,6 +1412,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         for (final entry in _ruleChoices.entries)
           entry.key: entry.value.toList(growable: false),
       },
+      avatarUrl: _avatarDataUrl,
     );
   }
 
@@ -1438,7 +1579,13 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
             ),
         ],
       ),
-      7 => _DetailsStep(name: _nameController.text),
+      7 => _DetailsStep(
+        name: _nameController.text,
+        avatarBytes: _avatarBytes,
+        isPickingAvatar: _pickingAvatar,
+        avatarPickError: _avatarPickError,
+        onPickAvatar: _pickAvatarImage,
+      ),
       8 => _BuilderReviewStep(
         summary: summary,
         review: review,
@@ -2012,18 +2159,41 @@ class _SummaryMetric extends StatelessWidget {
 }
 
 class _DetailsStep extends StatelessWidget {
-  const _DetailsStep({required this.name});
+  const _DetailsStep({
+    required this.name,
+    required this.avatarBytes,
+    required this.isPickingAvatar,
+    required this.avatarPickError,
+    required this.onPickAvatar,
+  });
 
   final String name;
+  final Uint8List? avatarBytes;
+  final bool isPickingAvatar;
+  final String? avatarPickError;
+  final VoidCallback onPickAvatar;
 
   @override
   Widget build(BuildContext context) {
-    return Card.outlined(
-      child: ListTile(
-        leading: const Icon(Icons.person_outline),
-        title: Text(name.trim().isEmpty ? '角色名尚未填写' : name.trim()),
-        subtitle: const Text('角色名始终位于每个步骤顶部；头像、外貌和人物经历可在角色卡中继续完善。'),
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AvatarPicker(
+          key: const Key('standard-character-avatar-picker'),
+          previewBytes: avatarBytes,
+          isUploading: isPickingAvatar,
+          error: avatarPickError,
+          onPick: onPickAvatar,
+        ),
+        const SizedBox(height: 12),
+        Card.outlined(
+          child: ListTile(
+            leading: const Icon(Icons.person_outline),
+            title: Text(name.trim().isEmpty ? '角色名尚未填写' : name.trim()),
+            subtitle: const Text('角色名位于每个步骤顶部；头像、外貌和人物经历可在角色卡中继续完善。'),
+          ),
+        ),
+      ],
     );
   }
 }

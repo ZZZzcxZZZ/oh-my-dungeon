@@ -18,6 +18,7 @@ class CharacterEditDraft {
     required this.inventory,
     required this.currency,
     required this.notes,
+    this.avatarUrl,
     this.data = const {},
     this.contentReferences = const <CharacterContentReference>[],
   });
@@ -37,6 +38,10 @@ class CharacterEditDraft {
   final List<Map<String, Object>> inventory;
   final Map<String, int> currency;
   final String notes;
+
+  /// 角色头像。本地角色以离线形式保存（data URL 或本地文件路径）；
+  /// 绑定战役时由发布流程上传到服务端媒体服务。规范 §头像来源。
+  final String? avatarUrl;
   final Map<String, Object?> data;
   final List<CharacterContentReference> contentReferences;
 
@@ -54,6 +59,7 @@ class CharacterEditDraft {
       notes: notes,
       contentReferences: contentReferences,
     ).copyWith(
+      avatarUrl: avatarUrl,
       currentHp: currentHp,
       maxHp: maxHp,
       armorClass: armorClass,

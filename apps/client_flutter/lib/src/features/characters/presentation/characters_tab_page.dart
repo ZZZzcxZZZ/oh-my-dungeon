@@ -212,6 +212,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
         builder: (context) => CharacterEditorPage(
           defaultCreationMethod: defaultCreationMethod,
           contentEntries: contentEntries,
+          onPickImage: _pickAvatarImage,
           onSubmit: (draft) async {
             final success = await widget.controller.createCharacter(draft);
             if (mounted) {
@@ -355,9 +356,11 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
         builder: (context) => CharacterEditorPage(
           initialCharacter: character,
           contentEntries: contentEntries,
+          onPickImage: _pickAvatarImage,
           onSubmit: (draft) async {
             final updated = character.copyWith(
               name: draft.name,
+              avatarUrl: draft.avatarUrl,
               level: draft.level,
               classSummary:
                   emptyToNull(draft.classSummary) ?? character.classSummary,

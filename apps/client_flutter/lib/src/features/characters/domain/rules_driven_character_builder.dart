@@ -18,6 +18,7 @@ class RulesDrivenCharacterBuilder {
     required CharacterBuild build,
     required Map<String, int> abilities,
     String notes = '',
+    String? avatarUrl,
     List<String> extraSpellRefs = const <String>[],
     List<String> extraItemRefs = const <String>[],
   }) {
@@ -103,6 +104,7 @@ class RulesDrivenCharacterBuilder {
       notes: notes.isEmpty
           ? 'D&D 2024 引导创建：${backgroundEntry?.name ?? ''} / ${speciesEntry?.name ?? ''} / ${classEntry?.name ?? ''}。'
           : notes,
+      avatarUrl: avatarUrl,
       contentReferences: _contentReferences(
         effectiveBuild,
         ledger,

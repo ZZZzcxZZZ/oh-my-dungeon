@@ -6,6 +6,7 @@ import '../domain/campaign_archive_entry.dart';
 import 'actors/campaign_actor_controller.dart';
 import 'campaign_controller.dart';
 import 'widgets/campaign_avatar.dart';
+import 'widgets/campaign_actor_quick_sheet.dart';
 
 /// The campaign's non-chat workspace. Chat stays fast and focused; durable
 /// information lives here behind a compact Material 3 tab bar.
@@ -77,6 +78,7 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
                 members: widget.controller.workspaceContext?.members ??
                     widget.campaign.memberPreview,
                 actors: _actors,
+                isManager: _canManage,
               ),
               _ArchivesTab(
                 entries: widget.controller.archives,
@@ -204,10 +206,11 @@ class _OverviewTab extends StatelessWidget {
 }
 
 class _MembersTab extends StatelessWidget {
-  const _MembersTab({required this.members, required this.actors});
+  const _MembersTab({required this.members, required this.actors, required this.isManager});
 
   final List<CampaignMemberPreview> members;
   final List<CampaignActor> actors;
+  final bool isManager;
 
   @override
   Widget build(BuildContext context) => ListView.separated(
@@ -219,6 +222,9 @@ class _MembersTab extends StatelessWidget {
           final actor = actors.where((item) => item.ownerUserId == member.userId).firstOrNull;
           final name = actor?.sheet['name']?.toString().trim();
           return ListTile(
+            onTap: actor == null
+                ? null
+                : () => _showQuickSheet(context, actor),
             leading: CampaignAvatar(
               initials: (name?.isNotEmpty ?? false) ? name! : member.displayName,
               imageUrl: actor?.sheet['avatarUrl'] as String?,
@@ -234,6 +240,17 @@ class _MembersTab extends StatelessWidget {
           );
         },
       );
+
+  void _showQuickSheet(BuildContext context, CampaignActor actor) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => CampaignActorQuickSheet(
+        actor: actor,
+        isManager: isManager,
+      ),
+    );
+  }
 }
 
 class _ArchivesTab extends StatelessWidget {

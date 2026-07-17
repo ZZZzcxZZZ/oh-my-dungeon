@@ -225,7 +225,16 @@ export class CampaignActorsService {
     input: UpdateActorInput,
   ): Promise<CampaignActorSummary> {
     const { row, ctx } = await this.loadActor(campaignId, actorId);
-    this.policy.canEditOwnedActor(actor, ctx);
+    // Spec §完整管理: 转为常驻 — lifecycle 变更需要 DM 权限；普通 sheet
+    // 编辑沿用 canEditOwnedActor，保持玩家自编辑角色卡的能力。
+    const currentLifecycle = row.lifecycle === "temporary" ? "temporary" : "persistent";
+    const lifecycleChanged =
+      input.lifecycle !== undefined && input.lifecycle !== currentLifecycle;
+    if (lifecycleChanged) {
+      this.policy.canManageActor(actor, ctx);
+    } else {
+      this.policy.canEditOwnedActor(actor, ctx);
+    }
     return this.applyUpdate(actor, campaignId, row, input);
   }
 
@@ -436,6 +445,14 @@ export class CampaignActorsService {
     const afterSheet = input.sheet;
     const nextRevision = existing.revision + 1;
     const changedPaths = diffPaths(beforeSheet, afterSheet);
+    // Spec §完整管理: 转为常驻 — 当 lifecycle 实际变化时，把它加入变更路径
+    // 并写入 update.data，让审计记录和数据库列都反映新的 lifecycle。
+    const currentLifecycle = existing.lifecycle === "temporary" ? "temporary" : "persistent";
+    const lifecycleChanged =
+      input.lifecycle !== undefined && input.lifecycle !== currentLifecycle;
+    if (lifecycleChanged) {
+      changedPaths.push("lifecycle");
+    }
 
     const updated = await this.prismaService.$transaction(async (tx) => {
       const result = await tx.campaignActor.update({
@@ -444,6 +461,7 @@ export class CampaignActorsService {
           sheetJson: afterSheet as unknown as Prisma.InputJsonValue,
           revision: nextRevision,
           updatedBy: actor.userId,
+          ...(lifecycleChanged ? { lifecycle: input.lifecycle } : {}),
         },
       });
       await tx.campaignActorAudit.create({
@@ -454,8 +472,12 @@ export class CampaignActorsService {
           baseRevision: existing.revision,
           resultRevision: nextRevision,
           changedPaths: changedPaths as unknown as Prisma.InputJsonValue,
-          beforeJson: beforeSheet as unknown as Prisma.InputJsonValue,
-          afterJson: afterSheet as unknown as Prisma.InputJsonValue,
+          beforeJson: lifecycleChanged
+            ? { sheet: beforeSheet, lifecycle: currentLifecycle } as unknown as Prisma.InputJsonValue
+            : beforeSheet as unknown as Prisma.InputJsonValue,
+          afterJson: lifecycleChanged
+            ? { sheet: afterSheet, lifecycle: input.lifecycle } as unknown as Prisma.InputJsonValue
+            : afterSheet as unknown as Prisma.InputJsonValue,
         },
       });
       const change = await this.changeService.recordInTransaction(

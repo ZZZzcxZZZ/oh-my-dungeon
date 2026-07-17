@@ -111,6 +111,12 @@ export interface CreateActorInput {
 export interface UpdateActorInput {
   baseRevision: number;
   sheet: Record<string, unknown>;
+  /**
+   * Spec §完整管理: 转为常驻 — DM 可将 temporary 角色升级为 persistent。
+   * 仅在 lifecycle 实际发生变化时强制 canManageActor 权限；未提供时
+   * 保持原有 canEditOwnedActor 行为，避免影响玩家自编辑角色卡。
+   */
+  lifecycle?: "persistent" | "temporary";
 }
 
 export interface AssignActorInput {

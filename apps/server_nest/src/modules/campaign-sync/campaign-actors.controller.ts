@@ -36,6 +36,7 @@ interface CreateActorBody {
 interface UpdateActorBody {
   baseRevision?: unknown;
   sheet?: unknown;
+  lifecycle?: unknown;
 }
 
 interface AssignActorBody {
@@ -115,6 +116,7 @@ export class CampaignActorsController {
     return this.actorsService.update(user, campaignId, actorId, {
       baseRevision: parseBaseRevision(body.baseRevision),
       sheet: parseSheet(body.sheet),
+      lifecycle: parseOptionalLifecycle(body.lifecycle),
     });
   }
 
@@ -199,6 +201,17 @@ function parseActorType(value: unknown): CampaignActorType {
 
 function parseLifecycle(value: unknown): "persistent" | "temporary" {
   if (value === undefined || value === "persistent") return "persistent";
+  if (value === "temporary") return "temporary";
+  throw new BadRequestException("lifecycle must be persistent or temporary");
+}
+
+/**
+ * Spec §完整管理: 转为常驻 — PUT /actors/:id 可携带 lifecycle 字段将
+ * temporary 角色升级为 persistent。未提供时返回 undefined，保持原有行为。
+ */
+function parseOptionalLifecycle(value: unknown): "persistent" | "temporary" | undefined {
+  if (value === undefined) return undefined;
+  if (value === "persistent") return "persistent";
   if (value === "temporary") return "temporary";
   throw new BadRequestException("lifecycle must be persistent or temporary");
 }

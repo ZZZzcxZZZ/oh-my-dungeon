@@ -504,6 +504,76 @@ describe("campaign actors endpoints", () => {
 
       expect(res.body.revision).toBe(2);
     });
+
+    // Spec §完整管理: 转为常驻 — DM 可以把 temporary 角色转为 persistent。
+    it("lets the DM convert a temporary actor to persistent via lifecycle field", async () => {
+      const token = await loginAs(storedDm);
+      const existing = {
+        id: "actor-1",
+        campaignId: "camp-1",
+        ownerUserId: null,
+        sourceCharacterId: null,
+        actorType: "npc",
+        status: "active",
+        lifecycle: "temporary",
+        sheetJson: { name: "Innkeeper" },
+        revision: 1,
+        updatedBy: "dm-1",
+        createdAt: new Date("2026-07-14T00:00:00.000Z"),
+        updatedAt: new Date("2026-07-14T00:00:00.000Z"),
+      };
+      const updated = {
+        ...existing,
+        lifecycle: "persistent",
+        revision: 2,
+        updatedBy: "dm-1",
+      };
+      prismaService.campaignActor.findUnique.mockResolvedValueOnce(existing);
+      prismaService.campaignActor.update.mockResolvedValueOnce(updated);
+
+      const res = await request(app.getHttpServer())
+        .put("/api/campaigns/camp-1/actors/actor-1")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          baseRevision: 1,
+          sheet: { name: "Innkeeper" },
+          lifecycle: "persistent",
+        })
+        .expect(200);
+
+      expect(res.body.lifecycle).toBe("persistent");
+      const args = prismaService.campaignActor.update.mock.calls[0][0];
+      expect(args.data.lifecycle).toBe("persistent");
+    });
+
+    it("rejects a player trying to convert an actor lifecycle to persistent", async () => {
+      const token = await loginAs(storedPlayer);
+      const existing = {
+        id: "actor-1",
+        campaignId: "camp-1",
+        ownerUserId: null,
+        sourceCharacterId: null,
+        actorType: "npc",
+        status: "active",
+        lifecycle: "temporary",
+        sheetJson: { name: "Innkeeper" },
+        revision: 1,
+        updatedBy: "dm-1",
+        createdAt: new Date("2026-07-14T00:00:00.000Z"),
+        updatedAt: new Date("2026-07-14T00:00:00.000Z"),
+      };
+      prismaService.campaignActor.findUnique.mockResolvedValueOnce(existing);
+
+      await request(app.getHttpServer())
+        .put("/api/campaigns/camp-1/actors/actor-1")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          baseRevision: 1,
+          sheet: { name: "Innkeeper" },
+          lifecycle: "persistent",
+        })
+        .expect(403);
+    });
   });
 
   describe("POST /api/campaigns/:campaignId/actors/:actorId/archive", () => {

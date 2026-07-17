@@ -136,6 +136,9 @@ void main() {
     bool isDm = false,
     DiceRoller? diceRoller,
   }) async {
+    // Per spec §客户端工作模式: client mode must not grant campaign rights.
+    // canManageCampaign is the only authority for DM UI; isDm is the app
+    // preference and must NOT affect chat page behavior.
     campaignClient.canManageCampaign = isDm;
     await tester.pumpWidget(
       MaterialApp(
@@ -145,7 +148,6 @@ void main() {
           campaignActorId: campaignActorId,
           campaignController: campaignController,
           contentRepository: contentRepository,
-          isDm: isDm,
           actorController: actorController,
           diceRoller: diceRoller,
         ),
@@ -552,6 +554,42 @@ void main() {
         campaignClient.sendMessageCalls.single.draftActor?['displayName'],
         '神秘人',
       );
+    },
+  );
+
+  // Spec §客户端工作模式: 普通玩家切换全局 DM 模式后仍不出现战役 DM 功能。
+  // CampaignChatPage 必须不接收 isDm 入参；所有 DM UI 一律依据
+  // workspaceContext.capabilities.canManageCampaign。
+  testWidgets(
+    'player with DM app preference still sees no DM-only tools when capabilities say player',
+    (tester) async {
+      // App preference is DM mode, but server capabilities say player.
+      campaignClient.canManageCampaign = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CampaignChatPage(
+            campaign: _campaign,
+            character: _character,
+            campaignActorId: 'actor-1',
+            campaignController: campaignController,
+            contentRepository: contentRepository,
+            actorController: actorController,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // DM-only entries must NOT appear for a player.
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('draft-identity-entry')), findsNothing);
+
+      // DM control panel entry (in more actions) must also be hidden.
+      await tester.tap(find.byTooltip('更多跑团功能'));
+      await tester.pumpAndSettle();
+      // Per spec: interface does not show disabled DM features.
+      // The DM control ListTile must not be rendered for players.
+      expect(find.byKey(const Key('campaign-dm-control-entry')), findsNothing);
     },
   );
 }

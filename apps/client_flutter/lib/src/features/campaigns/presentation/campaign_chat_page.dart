@@ -31,7 +31,6 @@ class CampaignChatPage extends StatefulWidget {
     required this.character,
     required this.campaignController,
     required this.contentRepository,
-    required this.isDm,
     this.campaignActorId,
     this.diceRoller,
     this.campaignContentController,
@@ -43,7 +42,6 @@ class CampaignChatPage extends StatefulWidget {
   final CharacterSheet? character;
   final CampaignController campaignController;
   final ContentRepository contentRepository;
-  final bool isDm;
   final String? campaignActorId;
   final DiceRoller? diceRoller;
   final CampaignContentController? campaignContentController;
@@ -560,6 +558,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                 ),
                 if (_canManageCampaign)
                   ListTile(
+                    key: const Key('campaign-dm-control-entry'),
                     leading: const Icon(Icons.shield_outlined),
                     title: Text(chatText('dmControl')),
                     subtitle: Text(chatText('dmControlHint')),

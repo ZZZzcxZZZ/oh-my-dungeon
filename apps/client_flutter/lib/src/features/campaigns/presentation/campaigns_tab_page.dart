@@ -245,7 +245,6 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
           contentRepository: widget.contentRepository,
           campaignContentController: widget.campaignContentController,
           actorController: widget.actorController,
-          isDm: campaign.ownerId == widget.authController.user?.id,
           campaignActorId: null,
           diceRoller: widget.diceRoller,
         ),

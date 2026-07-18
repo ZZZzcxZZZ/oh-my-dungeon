@@ -5,6 +5,7 @@ import '../../rules/domain/character_rules_engine.dart';
 import 'character_content_reference.dart';
 import 'character_edit_draft.dart';
 import 'dnd5e_rules.dart';
+import 'structured_class_rules.dart';
 
 class RulesDrivenCharacterBuilder {
   RulesDrivenCharacterBuilder({required this.entries})
@@ -21,6 +22,7 @@ class RulesDrivenCharacterBuilder {
     String? avatarUrl,
     List<String> extraSpellRefs = const <String>[],
     List<String> extraItemRefs = const <String>[],
+    List<String> skillProficiencies = const <String>[],
   }) {
     final classEntry = _selectedEntry(build, 'class');
     final speciesEntry = _selectedEntry(build, 'species');
@@ -46,6 +48,14 @@ class RulesDrivenCharacterBuilder {
       }
     }
 
+    for (final ability in StructuredClassRules.savingThrowAbilities(
+      classEntry,
+    )) {
+      if (saves.containsKey(ability)) saves[ability] = true;
+    }
+    for (final skill in skillProficiencies) {
+      if (skills.containsKey(skill)) skills[skill] = true;
+    }
     final featureRefs = {
       ..._entryRefs(ledger, RuleGrantKind.feature),
       ..._choiceEntryRefs(ledger, const {'classFeature', 'feature', 'feat'}),
@@ -158,12 +168,11 @@ class RulesDrivenCharacterBuilder {
                 'id': resource.id,
                 'name': resource.label,
                 'maximum': resource.value?.toInt() ?? 1,
-                'recovery':
-                    resource.data['recovery'] == 'shortRest'
-                        ? 'shortRest'
-                        : resource.data['recovery'] == 'none'
-                        ? 'none'
-                        : 'longRest',
+                'recovery': resource.data['recovery'] == 'shortRest'
+                    ? 'shortRest'
+                    : resource.data['recovery'] == 'none'
+                    ? 'none'
+                    : 'longRest',
               },
           ],
         if (actions.isNotEmpty)

@@ -154,6 +154,37 @@ subclassOf, featureOf, spellOf, requires, replaces, related
 
 选择子职业后，它的 `grants`、`choices` 和 `progression` 会递归进入角色创建、升级和角色卡。
 
+## 职业基础规则字段
+
+职业条目的展示摘要放在 `structured`，可执行选择与等级授予继续放在 `rules`。新资料包应使用稳定、与语言无关的规范字段：
+
+```json
+{
+  "structured": {
+    "primaryAbility": "力量或敏捷",
+    "hitDie": "d10",
+    "savingThrowAbilities": ["str", "con"],
+    "skillChoice": {
+      "count": 2,
+      "options": ["杂技", "驯兽", "运动", "历史", "洞悉", "威吓", "说服", "察觉", "求生"]
+    },
+    "weaponProficiency": "简易武器与军用武器",
+    "armorProficiency": "轻甲、中甲、重甲与盾牌",
+    "startingEquipment": "用于阅读的简短方案摘要"
+  }
+}
+```
+
+- `savingThrowAbilities` 只允许六项能力稳定键：`str / dex / con / int / wis / cha`。角色构建器会把它们写入豁免熟练。
+- `skillChoice.count` 是职业技能选择数量；`options` 使用客户端稳定技能名。创建引导只展示候选项，背景已授予技能不会重复计数。
+- `startingEquipment` 仅用于创建步骤的阅读摘要。可执行装备必须使用下文的 `equipmentBundle` choice 和 `equipment` grant，客户端不会从自然语言正文猜测物品。
+- `primaryAbility / hitDie / weaponProficiency / armorProficiency` 用于创建摘要和派生计算；需要影响数值或库存时仍应声明对应 grant。
+
+当前客户端兼容旧私有包的 `savingThrows` 与 `skills` 中文字符串，并归一化常见译名；该兼容层不应作为新包格式。私有包验收会检查每个职业能否解析出两个豁免、正数技能选择数量和非空候选。
+
+## 法术检索分面
+
+法术条目应提供 `structured.level`（0-9 整数）、`structured.school`（字符串）与 `structured.classes`（字符串数组）。资料库按环位、学派、职业执行 AND 查询；同一字段选择多个值时执行 OR 查询。筛选只读取结构化字段，不解析正文。
 ## 法术能力与法术位
 
 施法职业在 `structured.spellcastingAbility` 中声明 `str`、`dex`、`con`、`int`、`wis` 或 `cha`。法术位使用 `resource` grant 和 `spellSlot:<环阶>` target 声明：

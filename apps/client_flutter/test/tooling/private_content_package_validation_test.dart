@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dnd_table_client/src/core/database/app_database.dart';
+import 'package:dnd_table_client/src/features/characters/domain/structured_class_rules.dart';
 import 'package:dnd_table_client/src/features/content/data/import/content_package_importer.dart';
 import 'package:dnd_table_client/src/features/content/data/local/content_repository.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_choice_resolver.dart';
@@ -41,12 +42,18 @@ void main() {
     () async {
       final database = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(database.close);
-      final report = await ContentPackageImporter(
-        DriftContentRepository(database),
-      ).previewJson(await File(packagePath).readAsString());
-      final entries = {for (final entry in report.entries) entry.id: entry};
+      final repository = DriftContentRepository(database);
+      final importer = ContentPackageImporter(repository);
+      final report = await importer.previewJson(
+        await File(packagePath).readAsString(),
+      );
+      expect(report.valid, isTrue);
+      await importer.importReport(report);
+
+      final installed = await repository.search(const ContentQuery());
+      final entries = {for (final entry in installed) entry.id: entry};
       final resolver = RuleChoiceResolver(entries: entries);
-      final classes = report.entries.where((entry) => entry.type == 'class');
+      final classes = installed.where((entry) => entry.type == 'class');
 
       expect(classes, hasLength(12));
       for (final classEntry in classes) {
@@ -65,6 +72,23 @@ void main() {
           ),
           hasLength(4),
           reason: '${classEntry.name} should expose four related subclasses',
+        );
+        expect(
+          StructuredClassRules.savingThrowAbilities(classEntry),
+          hasLength(2),
+          reason:
+              '${classEntry.name} should expose two saving throw proficiencies',
+        );
+        final skillChoice = StructuredClassRules.skillChoice(classEntry);
+        expect(
+          skillChoice.count,
+          greaterThan(0),
+          reason: '${classEntry.name} should expose a skill choice count',
+        );
+        expect(
+          skillChoice.options,
+          isNotEmpty,
+          reason: '${classEntry.name} should expose canonical skill options',
         );
       }
     },

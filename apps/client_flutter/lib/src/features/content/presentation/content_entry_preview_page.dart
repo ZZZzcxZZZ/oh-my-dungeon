@@ -143,6 +143,7 @@ class _ContentEntryPreviewDialogState
                       ),
                     ),
                     IconButton(
+                      key: const Key('content-detail-close'),
                       tooltip: '关闭详情',
                       onPressed: () => Navigator.of(context).pop(),
                       icon: const Icon(Icons.close),

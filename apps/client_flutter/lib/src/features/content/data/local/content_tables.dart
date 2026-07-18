@@ -31,6 +31,7 @@ class LocalContentEntries extends Table {
   TextColumn get bodyJson => text().withDefault(const Constant('[]'))();
   TextColumn get structuredJson => text().withDefault(const Constant('{}'))();
   TextColumn get rulesJson => text().withDefault(const Constant('{}'))();
+  TextColumn get relationsJson => text().withDefault(const Constant('[]'))();
   TextColumn get tagsJson => text().withDefault(const Constant('[]'))();
   TextColumn get sourceLabel => text().withDefault(const Constant(''))();
   IntColumn get revision => integer()();

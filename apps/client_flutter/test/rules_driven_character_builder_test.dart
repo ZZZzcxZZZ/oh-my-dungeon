@@ -133,6 +133,48 @@ void main() {
     );
   });
 
+  test('uses structured class saves and preserves guided skill choices', () {
+    final fighter = _entry(
+      id: 'test:class/fighter',
+      type: 'class',
+      name: '战士',
+      structured: const {'hitDie': 'd10', 'savingThrows': '力量与体质'},
+      rules: const {
+        'progression': [
+          {
+            'level': 1,
+            'grants': [
+              {'id': 'second-wind', 'kind': 'feature', 'label': '回气'},
+            ],
+          },
+        ],
+      },
+    );
+    final builder = RulesDrivenCharacterBuilder(entries: {fighter.id: fighter});
+
+    final draft = builder.build(
+      name: '莱娅',
+      build: const CharacterBuild(
+        level: 1,
+        selections: {'class': 'test:class/fighter'},
+      ),
+      abilities: const {
+        'str': 15,
+        'dex': 13,
+        'con': 14,
+        'int': 10,
+        'wis': 12,
+        'cha': 8,
+      },
+      skillProficiencies: const ['运动', '察觉'],
+    );
+
+    expect(draft.saves['str'], isTrue);
+    expect(draft.saves['con'], isTrue);
+    expect(draft.saves['dex'], isFalse);
+    expect(draft.skills['运动'], isTrue);
+    expect(draft.skills['察觉'], isTrue);
+  });
   test('persists only rule-approved choices and keeps explicit extras', () {
     final mage = _entry(
       id: 'test:class/mage',

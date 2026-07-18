@@ -12,6 +12,18 @@ class _TypeFilter {
   final String label;
 }
 
+const _spellLevelLabels = <String, String>{
+  '0': '戏法',
+  '1': '1环',
+  '2': '2环',
+  '3': '3环',
+  '4': '4环',
+  '5': '5环',
+  '6': '6环',
+  '7': '7环',
+  '8': '8环',
+  '9': '9环',
+};
 const _typeFilters = <_TypeFilter>[
   _TypeFilter(value: null, label: '全部'),
   _TypeFilter(value: 'spell', label: '法术'),
@@ -47,12 +59,18 @@ class ContentSearchPage extends StatefulWidget {
 class _ContentSearchPageState extends State<ContentSearchPage> {
   final TextEditingController _searchController = TextEditingController();
   String? _selectedType;
+  String? _selectedSpellLevel;
+  String? _selectedSpellSchool;
+  String? _selectedSpellClass;
+  List<String> _spellSchools = const [];
+  List<String> _spellClasses = const [];
   bool _favoritesOnly = false;
 
   @override
   void initState() {
     super.initState();
     _runSearch();
+    _loadSpellFacetOptions();
   }
 
   @override
@@ -67,13 +85,116 @@ class _ContentSearchPageState extends State<ContentSearchPage> {
       text: text.isEmpty ? null : text,
       type: _selectedType,
       favoritesOnly: _favoritesOnly,
+      facets: <String, Set<String>>{
+        if (_selectedType == 'spell' && _selectedSpellLevel != null)
+          'level': {_selectedSpellLevel!},
+        if (_selectedType == 'spell' && _selectedSpellSchool != null)
+          'school': {_selectedSpellSchool!},
+        if (_selectedType == 'spell' && _selectedSpellClass != null)
+          'classes': {_selectedSpellClass!},
+      },
     );
+  }
+
+  Future<void> _loadSpellFacetOptions() async {
+    final options = await widget.controller.facetOptions(
+      type: 'spell',
+      fields: const ['school', 'classes'],
+    );
+    if (!mounted) return;
+    setState(() {
+      _spellSchools = options['school'] ?? const [];
+      _spellClasses = options['classes'] ?? const [];
+    });
+  }
+
+  void _clearSpellFilters() {
+    _selectedSpellLevel = null;
+    _selectedSpellSchool = null;
+    _selectedSpellClass = null;
   }
 
   bool get _hasActiveFilter =>
       (_searchController.text.trim().isNotEmpty) ||
       _selectedType != null ||
-      _favoritesOnly;
+      _favoritesOnly ||
+      _selectedSpellLevel != null ||
+      _selectedSpellSchool != null ||
+      _selectedSpellClass != null;
+
+  Widget _buildSpellFilters() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 720;
+        final width = compact
+            ? constraints.maxWidth
+            : (constraints.maxWidth - 16) / 3;
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            SizedBox(
+              width: width,
+              child: DropdownMenu<String?>(
+                key: const Key('spell-level-filter'),
+                initialSelection: _selectedSpellLevel,
+                expandedInsets: EdgeInsets.zero,
+                label: const Text('环位'),
+                dropdownMenuEntries: [
+                  const DropdownMenuEntry(value: null, label: '全部环位'),
+                  for (final level in _spellLevelLabels.entries)
+                    DropdownMenuEntry(value: level.key, label: level.value),
+                ],
+                onSelected: (value) {
+                  setState(() => _selectedSpellLevel = value);
+                  _runSearch();
+                },
+              ),
+            ),
+            SizedBox(
+              width: width,
+              child: DropdownMenu<String?>(
+                key: const Key('spell-school-filter'),
+                initialSelection: _selectedSpellSchool,
+                expandedInsets: EdgeInsets.zero,
+                label: const Text('学派'),
+                dropdownMenuEntries: [
+                  const DropdownMenuEntry(value: null, label: '全部学派'),
+                  for (final school in _spellSchools)
+                    DropdownMenuEntry(value: school, label: school),
+                ],
+                onSelected: (value) {
+                  setState(() => _selectedSpellSchool = value);
+                  _runSearch();
+                },
+              ),
+            ),
+            SizedBox(
+              width: width,
+              child: DropdownMenu<String?>(
+                key: const Key('spell-class-filter'),
+                initialSelection: _selectedSpellClass,
+                expandedInsets: EdgeInsets.zero,
+                label: const Text('职业'),
+                dropdownMenuEntries: [
+                  const DropdownMenuEntry(value: null, label: '全部职业'),
+                  for (final characterClass in _spellClasses)
+                    DropdownMenuEntry(
+                      value: characterClass,
+                      label: characterClass,
+                    ),
+                ],
+                onSelected: (value) {
+                  setState(() => _selectedSpellClass = value);
+                  _runSearch();
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -111,7 +232,11 @@ class _ContentSearchPageState extends State<ContentSearchPage> {
                             ),
                         ],
                         onSelected: (value) {
-                          setState(() => _selectedType = value);
+                          setState(() {
+                            _selectedType = value;
+                            if (value != 'spell') _clearSpellFilters();
+                          });
+                          if (value == 'spell') _loadSpellFacetOptions();
                           _runSearch();
                         },
                       ),
@@ -128,6 +253,10 @@ class _ContentSearchPageState extends State<ContentSearchPage> {
                     ),
                   ],
                 ),
+                if (_selectedType == 'spell') ...[
+                  const SizedBox(height: 12),
+                  _buildSpellFilters(),
+                ],
               ],
             ),
           ),
@@ -179,8 +308,7 @@ class _ContentSearchPageState extends State<ContentSearchPage> {
                   itemBuilder: (context, index) {
                     final entry = results[index];
                     final definition = registry.definitionFor(entry.type);
-                    final isSelected =
-                        widget.selectedEntryKey == entry.id;
+                    final isSelected = widget.selectedEntryKey == entry.id;
                     return ListTile(
                       leading: Icon(definition.icon),
                       title: Text(entry.name),

@@ -63,6 +63,60 @@ void main() {
     expect(find.text('战士'), findsNothing);
   });
 
+  testWidgets('spell type exposes level school and class filters', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1000, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    final entries = [
+      ContentEntry.fromJson({
+        'id': 'example:spell/fireball',
+        'type': 'spell',
+        'slug': 'fireball',
+        'name': '火球术',
+        'body': <Map<String, Object?>>[],
+        'structured': {
+          'level': 3,
+          'school': '塑能',
+          'classes': ['术士', '法师'],
+        },
+        'revision': 1,
+      }),
+      ContentEntry.fromJson({
+        'id': 'example:spell/fire-bolt',
+        'type': 'spell',
+        'slug': 'fire-bolt',
+        'name': '火焰箭',
+        'body': <Map<String, Object?>>[],
+        'structured': {
+          'level': 0,
+          'school': '塑能',
+          'classes': ['术士', '法师'],
+        },
+        'revision': 1,
+      }),
+    ];
+
+    await tester.pumpWidget(buildContentTestApp(entries: entries));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownMenu<String?>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('法术').last);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('spell-level-filter')), findsOneWidget);
+    expect(find.byKey(const Key('spell-school-filter')), findsOneWidget);
+    expect(find.byKey(const Key('spell-class-filter')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('spell-level-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('3环').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('火球术'), findsOneWidget);
+    expect(find.text('火焰箭'), findsNothing);
+  });
   testWidgets('shows character grants and choices grouped by level', (
     tester,
   ) async {

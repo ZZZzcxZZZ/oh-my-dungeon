@@ -41,6 +41,7 @@ class CampaignAwareContentRepository implements ContentRepository {
       type: query.type,
       favoritesOnly: false,
       packageId: query.packageId,
+      facets: query.facets,
     );
     final localEntries = await local.search(localQuery);
     final merged = <ContentEntry>[];
@@ -252,7 +253,7 @@ class CampaignAwareContentRepository implements ContentRepository {
       ].join('\n').toLowerCase();
       if (!hay.contains(needle)) return false;
     }
-    return true;
+    return contentEntryMatchesFacets(entry, query.facets);
   }
 
   Map<String, Object?> _rebaseRuleReferences(

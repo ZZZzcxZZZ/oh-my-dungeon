@@ -14,6 +14,7 @@ class ContentDetailPage extends StatefulWidget {
     required this.controller,
     required this.onOpenEntry,
     required this.onImportRequested,
+    this.onClose,
     super.key,
   });
 
@@ -21,6 +22,7 @@ class ContentDetailPage extends StatefulWidget {
   final ContentLibraryController controller;
   final ValueChanged<String> onOpenEntry;
   final VoidCallback onImportRequested;
+  final VoidCallback? onClose;
 
   @override
   State<ContentDetailPage> createState() => _ContentDetailPageState();
@@ -107,6 +109,17 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     await widget.controller.repository.saveNote(entryKey, _noteController.text);
   }
 
+  Widget? _appBarLeading() {
+    final onClose = widget.onClose;
+    if (onClose == null) return null;
+    return IconButton(
+      key: const Key('content-detail-close'),
+      tooltip: '关闭详情',
+      onPressed: onClose,
+      icon: const Icon(Icons.close),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -115,7 +128,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
 
     if (entryKey == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('资料库')),
+        appBar: AppBar(leading: _appBarLeading(), title: const Text('资料库')),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(32),
@@ -140,7 +153,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
 
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('加载中…')),
+        appBar: AppBar(leading: _appBarLeading(), title: const Text('加载中…')),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -148,7 +161,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     final entry = _entry;
     if (entry == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('资料库')),
+        appBar: AppBar(leading: _appBarLeading(), title: const Text('资料库')),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(32),
@@ -170,6 +183,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: _appBarLeading(),
         title: Text(entry.name),
         actions: [
           IconButton(

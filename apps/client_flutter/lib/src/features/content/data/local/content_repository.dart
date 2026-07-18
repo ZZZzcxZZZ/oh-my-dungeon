@@ -13,12 +13,29 @@ class ContentQuery {
     this.type,
     this.favoritesOnly = false,
     this.packageId,
+    this.facets = const <String, Set<String>>{},
   });
 
   final String? text;
   final String? type;
   final bool favoritesOnly;
   final String? packageId;
+  final Map<String, Set<String>> facets;
+}
+
+bool contentEntryMatchesFacets(
+  ContentEntry entry,
+  Map<String, Set<String>> facets,
+) {
+  for (final facet in facets.entries) {
+    if (facet.value.isEmpty) continue;
+    final raw = entry.structured[facet.key];
+    final values = raw is Iterable
+        ? raw.map((value) => '$value').toSet()
+        : <String>{if (raw != null) '$raw'};
+    if (!values.any(facet.value.contains)) return false;
+  }
+  return true;
 }
 
 class ContentLink {
@@ -60,6 +77,7 @@ abstract interface class ContentRepository {
   Future<bool> isPackageEnabled(String packageId);
   Future<ContentDeletionImpact> deletionImpact(String packageId);
   Future<void> deletePackage(String packageId);
+
   /// Spec §资料包: 一键清除所有本地资料包及其条目、收藏、笔记和资源。
   /// 用于旧版数据污染时重置；返回受影响的条目数。
   Future<int> clearAllPackages();
@@ -97,7 +115,8 @@ class DriftContentRepository implements ContentRepository {
 
     if (query.text != null && query.text!.isNotEmpty) {
       final pattern = '%${query.text}%';
-      predicate = predicate &
+      predicate =
+          predicate &
           (entries.name.like(pattern) |
               entries.aliasesJson.like(pattern) |
               entries.summary.like(pattern) |
@@ -117,66 +136,74 @@ class DriftContentRepository implements ContentRepository {
 
     if (query.favoritesOnly) {
       stmt.join([
-        innerJoin(
-          favorites,
-          favorites.entryKey.equalsExp(entries.entryKey),
-        ),
+        innerJoin(favorites, favorites.entryKey.equalsExp(entries.entryKey)),
       ]);
     }
 
     final rows = await stmt.get();
-    return rows.map((row) => _mapEntry(row.readTable(entries))).toList();
+    return rows
+        .map((row) => _mapEntry(row.readTable(entries)))
+        .where((entry) => contentEntryMatchesFacets(entry, query.facets))
+        .toList();
   }
 
   @override
   Future<ContentEntry?> getByKey(String entryKey) async {
     final db = _database;
-    final row = await (db.select(db.localContentEntries)
-          ..where((t) => t.entryKey.equals(entryKey)))
-        .getSingleOrNull();
+    final row = await (db.select(
+      db.localContentEntries,
+    )..where((t) => t.entryKey.equals(entryKey))).getSingleOrNull();
     return row == null ? null : _mapEntry(row);
   }
 
   @override
   Future<List<ContentLink>> outgoingLinks(String entryKey) async {
     final db = _database;
-    final rows = await (db.select(db.contentLinks)
-          ..where((t) => t.sourceId.equals(entryKey))
-          ..orderBy([(t) => OrderingTerm.asc(t.targetId)]))
-        .get();
+    final rows =
+        await (db.select(db.contentLinks)
+              ..where((t) => t.sourceId.equals(entryKey))
+              ..orderBy([(t) => OrderingTerm.asc(t.targetId)]))
+            .get();
     return rows
-        .map((row) => ContentLink(
-              sourceId: row.sourceId,
-              targetId: row.targetId,
-              linkText: row.linkText,
-            ))
+        .map(
+          (row) => ContentLink(
+            sourceId: row.sourceId,
+            targetId: row.targetId,
+            linkText: row.linkText,
+          ),
+        )
         .toList();
   }
 
   @override
   Future<List<ContentLink>> incomingLinks(String entryKey) async {
     final db = _database;
-    final rows = await (db.select(db.contentLinks)
-          ..where((t) => t.targetId.equals(entryKey))
-          ..orderBy([(t) => OrderingTerm.asc(t.sourceId)]))
-        .get();
+    final rows =
+        await (db.select(db.contentLinks)
+              ..where((t) => t.targetId.equals(entryKey))
+              ..orderBy([(t) => OrderingTerm.asc(t.sourceId)]))
+            .get();
     return rows
-        .map((row) => ContentLink(
-              sourceId: row.sourceId,
-              targetId: row.targetId,
-              linkText: row.linkText,
-            ))
+        .map(
+          (row) => ContentLink(
+            sourceId: row.sourceId,
+            targetId: row.targetId,
+            linkText: row.linkText,
+          ),
+        )
         .toList();
   }
 
   @override
   Future<Uint8List?> readAsset(String packageId, String relativePath) async {
     final db = _database;
-    final row = await (db.select(db.localContentAssets)
-          ..where((t) =>
-              t.packageId.equals(packageId) &
-              t.relativePath.equals(relativePath)))
-        .getSingleOrNull();
+    final row =
+        await (db.select(db.localContentAssets)..where(
+              (t) =>
+                  t.packageId.equals(packageId) &
+                  t.relativePath.equals(relativePath),
+            ))
+            .getSingleOrNull();
     return row?.bytes;
   }
 
@@ -192,20 +219,22 @@ class DriftContentRepository implements ContentRepository {
 
     await db.transaction(() async {
       final prefix = '$packageId:%';
-      await (db.delete(db.contentLinks)
-            ..where((t) => t.sourceId.like(prefix) | t.targetId.like(prefix)))
-          .go();
-      await (db.delete(db.localContentEntries)
-            ..where((t) => t.packageId.equals(packageId)))
-          .go();
-      await (db.delete(db.localContentAssets)
-            ..where((t) => t.packageId.equals(packageId)))
-          .go();
-      await (db.delete(db.localContentPackages)
-            ..where((t) => t.id.equals(packageId)))
-          .go();
+      await (db.delete(
+        db.contentLinks,
+      )..where((t) => t.sourceId.like(prefix) | t.targetId.like(prefix))).go();
+      await (db.delete(
+        db.localContentEntries,
+      )..where((t) => t.packageId.equals(packageId))).go();
+      await (db.delete(
+        db.localContentAssets,
+      )..where((t) => t.packageId.equals(packageId))).go();
+      await (db.delete(
+        db.localContentPackages,
+      )..where((t) => t.id.equals(packageId))).go();
 
-      await db.into(db.localContentPackages).insert(
+      await db
+          .into(db.localContentPackages)
+          .insert(
             LocalContentPackagesCompanion.insert(
               id: packageId,
               formatVersion: manifest.formatVersion,
@@ -222,7 +251,9 @@ class DriftContentRepository implements ContentRepository {
 
       var linkIndex = 0;
       for (final entry in entries) {
-        await db.into(db.localContentEntries).insert(
+        await db
+            .into(db.localContentEntries)
+            .insert(
               LocalContentEntriesCompanion.insert(
                 entryKey: entry.id,
                 packageId: packageId,
@@ -236,6 +267,13 @@ class DriftContentRepository implements ContentRepository {
                 ),
                 structuredJson: Value(jsonEncode(entry.structured)),
                 rulesJson: Value(jsonEncode(entry.rules?.toJson() ?? const {})),
+                relationsJson: Value(
+                  jsonEncode(
+                    entry.relations
+                        .map((relation) => relation.toJson())
+                        .toList(),
+                  ),
+                ),
                 tagsJson: Value(jsonEncode(entry.tags)),
                 sourceLabel: Value(entry.source.label),
                 revision: entry.revision,
@@ -244,7 +282,9 @@ class DriftContentRepository implements ContentRepository {
 
         for (final block in entry.body) {
           if (block is EntryLinkBlock) {
-            await db.into(db.contentLinks).insert(
+            await db
+                .into(db.contentLinks)
+                .insert(
                   ContentLinksCompanion.insert(
                     id: '${entry.id}#${linkIndex++}',
                     sourceId: entry.id,
@@ -257,7 +297,9 @@ class DriftContentRepository implements ContentRepository {
       }
 
       for (final entry in assets.entries) {
-        await db.into(db.localContentAssets).insert(
+        await db
+            .into(db.localContentAssets)
+            .insert(
               LocalContentAssetsCompanion.insert(
                 packageId: packageId,
                 relativePath: entry.key,
@@ -293,9 +335,9 @@ class DriftContentRepository implements ContentRepository {
   @override
   Future<bool> isPackageEnabled(String packageId) async {
     final db = _database;
-    final row = await (db.select(db.localContentPackages)
-          ..where((t) => t.id.equals(packageId)))
-        .getSingleOrNull();
+    final row = await (db.select(
+      db.localContentPackages,
+    )..where((t) => t.id.equals(packageId))).getSingleOrNull();
     return row?.enabled ?? false;
   }
 
@@ -306,11 +348,12 @@ class DriftContentRepository implements ContentRepository {
     final favorites = db.contentFavorites;
     final notes = db.contentNotes;
 
-    final entryKeys = await (db.selectOnly(entries)
-          ..addColumns([entries.entryKey])
-          ..where(entries.packageId.equals(packageId)))
-        .map((row) => row.read(entries.entryKey)!)
-        .get();
+    final entryKeys =
+        await (db.selectOnly(entries)
+              ..addColumns([entries.entryKey])
+              ..where(entries.packageId.equals(packageId)))
+            .map((row) => row.read(entries.entryKey)!)
+            .get();
 
     if (entryKeys.isEmpty) {
       return const ContentDeletionImpact(
@@ -321,18 +364,20 @@ class DriftContentRepository implements ContentRepository {
     }
 
     final favCountExpr = favorites.entryKey.count();
-    final favoriteCount = await (db.selectOnly(favorites)
-          ..addColumns([favCountExpr])
-          ..where(favorites.entryKey.isIn(entryKeys)))
-        .map((row) => row.read(favCountExpr) ?? 0)
-        .getSingle();
+    final favoriteCount =
+        await (db.selectOnly(favorites)
+              ..addColumns([favCountExpr])
+              ..where(favorites.entryKey.isIn(entryKeys)))
+            .map((row) => row.read(favCountExpr) ?? 0)
+            .getSingle();
 
     final noteCountExpr = notes.entryKey.count();
-    final noteCount = await (db.selectOnly(notes)
-          ..addColumns([noteCountExpr])
-          ..where(notes.entryKey.isIn(entryKeys)))
-        .map((row) => row.read(noteCountExpr) ?? 0)
-        .getSingle();
+    final noteCount =
+        await (db.selectOnly(notes)
+              ..addColumns([noteCountExpr])
+              ..where(notes.entryKey.isIn(entryKeys)))
+            .map((row) => row.read(noteCountExpr) ?? 0)
+            .getSingle();
 
     return ContentDeletionImpact(
       entryCount: entryKeys.length,
@@ -347,37 +392,38 @@ class DriftContentRepository implements ContentRepository {
     final entries = db.localContentEntries;
 
     await db.transaction(() async {
-      final entryKeys = await (db.selectOnly(entries)
-            ..addColumns([entries.entryKey])
-            ..where(entries.packageId.equals(packageId)))
-          .map((row) => row.read(entries.entryKey)!)
-          .get();
+      final entryKeys =
+          await (db.selectOnly(entries)
+                ..addColumns([entries.entryKey])
+                ..where(entries.packageId.equals(packageId)))
+              .map((row) => row.read(entries.entryKey)!)
+              .get();
 
       if (entryKeys.isNotEmpty) {
-        await (db.delete(db.contentLinks)
-              ..where(
-                  (t) => t.sourceId.isIn(entryKeys) | t.targetId.isIn(entryKeys)))
+        await (db.delete(db.contentLinks)..where(
+              (t) => t.sourceId.isIn(entryKeys) | t.targetId.isIn(entryKeys),
+            ))
             .go();
-        await (db.delete(db.contentFavorites)
-              ..where((t) => t.entryKey.isIn(entryKeys)))
-            .go();
-        await (db.delete(db.contentNotes)
-              ..where((t) => t.entryKey.isIn(entryKeys)))
-            .go();
-        await (db.delete(db.contentReadHistory)
-              ..where((t) => t.entryKey.isIn(entryKeys)))
-            .go();
+        await (db.delete(
+          db.contentFavorites,
+        )..where((t) => t.entryKey.isIn(entryKeys))).go();
+        await (db.delete(
+          db.contentNotes,
+        )..where((t) => t.entryKey.isIn(entryKeys))).go();
+        await (db.delete(
+          db.contentReadHistory,
+        )..where((t) => t.entryKey.isIn(entryKeys))).go();
       }
 
-      await (db.delete(db.localContentEntries)
-            ..where((t) => t.packageId.equals(packageId)))
-          .go();
-      await (db.delete(db.localContentAssets)
-            ..where((t) => t.packageId.equals(packageId)))
-          .go();
-      await (db.delete(db.localContentPackages)
-            ..where((t) => t.id.equals(packageId)))
-          .go();
+      await (db.delete(
+        db.localContentEntries,
+      )..where((t) => t.packageId.equals(packageId))).go();
+      await (db.delete(
+        db.localContentAssets,
+      )..where((t) => t.packageId.equals(packageId))).go();
+      await (db.delete(
+        db.localContentPackages,
+      )..where((t) => t.id.equals(packageId))).go();
     });
   }
 
@@ -385,10 +431,13 @@ class DriftContentRepository implements ContentRepository {
   Future<int> clearAllPackages() async {
     final db = _database;
     return db.transaction(() async {
-      final entryCount = await (db.selectOnly(db.localContentEntries)
-            ..addColumns([db.localContentEntries.entryKey.count()]))
-          .map((row) => row.read(db.localContentEntries.entryKey.count()) ?? 0)
-          .getSingle();
+      final entryCount =
+          await (db.selectOnly(db.localContentEntries)
+                ..addColumns([db.localContentEntries.entryKey.count()]))
+              .map(
+                (row) => row.read(db.localContentEntries.entryKey.count()) ?? 0,
+              )
+              .getSingle();
       // Order matters: child tables (links/favorites/notes/history/assets)
       // reference entries/packages, so clear them first.
       await db.delete(db.contentLinks).go();
@@ -407,16 +456,18 @@ class DriftContentRepository implements ContentRepository {
     final db = _database;
     await db.transaction(() async {
       if (favorite) {
-        await db.into(db.contentFavorites).insertOnConflictUpdate(
+        await db
+            .into(db.contentFavorites)
+            .insertOnConflictUpdate(
               ContentFavoritesCompanion.insert(
                 entryKey: entryKey,
                 createdAt: DateTime.now(),
               ),
             );
       } else {
-        await (db.delete(db.contentFavorites)
-              ..where((t) => t.entryKey.equals(entryKey)))
-            .go();
+        await (db.delete(
+          db.contentFavorites,
+        )..where((t) => t.entryKey.equals(entryKey))).go();
       }
       await _enqueueVaultOperation(
         entityType: 'favorite',
@@ -429,9 +480,9 @@ class DriftContentRepository implements ContentRepository {
   @override
   Future<bool> isFavorite(String entryKey) async {
     final db = _database;
-    final row = await (db.select(db.contentFavorites)
-          ..where((t) => t.entryKey.equals(entryKey)))
-        .getSingleOrNull();
+    final row = await (db.select(
+      db.contentFavorites,
+    )..where((t) => t.entryKey.equals(entryKey))).getSingleOrNull();
     return row != null;
   }
 
@@ -439,7 +490,9 @@ class DriftContentRepository implements ContentRepository {
   Future<void> saveNote(String entryKey, String markdown) async {
     final db = _database;
     await db.transaction(() async {
-      await db.into(db.contentNotes).insertOnConflictUpdate(
+      await db
+          .into(db.contentNotes)
+          .insertOnConflictUpdate(
             ContentNotesCompanion.insert(
               entryKey: entryKey,
               markdown: markdown,
@@ -460,18 +513,24 @@ class DriftContentRepository implements ContentRepository {
     required String payloadJson,
   }) async {
     final db = _database;
-    final revision = await (db.select(db.vaultEntityRevisions)
-          ..where((row) =>
-              row.entityType.equals(entityType) & row.entityId.equals(entityId)))
-        .getSingleOrNull();
-    await (db.delete(db.syncOutbox)
-          ..where((row) =>
+    final revision =
+        await (db.select(db.vaultEntityRevisions)..where(
+              (row) =>
+                  row.entityType.equals(entityType) &
+                  row.entityId.equals(entityId),
+            ))
+            .getSingleOrNull();
+    await (db.delete(db.syncOutbox)..where(
+          (row) =>
               row.scope.equals('vault') &
               row.entityType.equals(entityType) &
-              row.entityId.equals(entityId)))
+              row.entityId.equals(entityId),
+        ))
         .go();
     final now = DateTime.now();
-    await db.into(db.syncOutbox).insert(
+    await db
+        .into(db.syncOutbox)
+        .insert(
           SyncOutboxCompanion.insert(
             id: 'vault:$entityType:$entityId:${now.microsecondsSinceEpoch}',
             scope: 'vault',
@@ -508,6 +567,7 @@ class DriftContentRepository implements ContentRepository {
       'aliases': jsonDecode(row.aliasesJson) as List<Object?>,
       'summary': row.summary,
       'structured': jsonDecode(row.structuredJson),
+      'relations': jsonDecode(row.relationsJson),
       'tags': jsonDecode(row.tagsJson) as List<Object?>,
     };
     final rules = jsonDecode(row.rulesJson);

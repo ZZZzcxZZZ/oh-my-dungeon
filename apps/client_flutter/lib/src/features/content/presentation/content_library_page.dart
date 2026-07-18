@@ -40,6 +40,7 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
               });
             },
             onImportRequested: widget.onImportRequested,
+            onClose: () => Navigator.of(dialogContext).pop(),
           ),
         ),
       ),

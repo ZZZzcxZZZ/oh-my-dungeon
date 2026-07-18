@@ -8,13 +8,13 @@ import 'package:dnd_table_client/src/features/content/domain/content_file_picker
 import 'package:dnd_table_client/src/features/content/domain/content_package_manifest.dart';
 
 ContentEntry testFighterEntry() => ContentEntry.fromJson({
-      'id': 'example:class/fighter',
-      'type': 'class',
-      'slug': 'fighter',
-      'name': '战士',
-      'body': <Map<String, Object?>>[],
-      'revision': 1,
-    });
+  'id': 'example:class/fighter',
+  'type': 'class',
+  'slug': 'fighter',
+  'name': '战士',
+  'body': <Map<String, Object?>>[],
+  'revision': 1,
+});
 
 class MemoryContentFilePicker implements ContentFilePicker {
   MemoryContentFilePicker({this.result});
@@ -82,6 +82,7 @@ class MemoryContentRepository implements ContentRepository {
       if (query.packageId != null && packageId != query.packageId) continue;
       if (query.type != null && entry.type != query.type) continue;
       if (query.favoritesOnly && !_favorites.contains(entry.id)) continue;
+      if (!contentEntryMatchesFacets(entry, query.facets)) continue;
 
       if (query.text != null && query.text!.isNotEmpty) {
         final needle = query.text!.toLowerCase();
@@ -144,11 +145,13 @@ class MemoryContentRepository implements ContentRepository {
       _entries[entry.id] = entry;
       for (final block in entry.body) {
         if (block is EntryLinkBlock) {
-          _links.add(ContentLink(
-            sourceId: entry.id,
-            targetId: block.targetId,
-            linkText: block.text,
-          ));
+          _links.add(
+            ContentLink(
+              sourceId: entry.id,
+              targetId: block.targetId,
+              linkText: block.text,
+            ),
+          );
         }
       }
     }
@@ -172,10 +175,10 @@ class MemoryContentRepository implements ContentRepository {
     final entryKeys = _entries.keys
         .where((key) => key.startsWith('$packageId:'))
         .toList();
-    final favoriteCount =
-        entryKeys.where((key) => _favorites.contains(key)).length;
-    final noteCount =
-        entryKeys.where((key) => _notes.containsKey(key)).length;
+    final favoriteCount = entryKeys
+        .where((key) => _favorites.contains(key))
+        .length;
+    final noteCount = entryKeys.where((key) => _notes.containsKey(key)).length;
     return ContentDeletionImpact(
       entryCount: entryKeys.length,
       favoriteCount: favoriteCount,
@@ -228,7 +231,8 @@ class MemoryContentRepository implements ContentRepository {
   }
 
   @override
-  Future<bool> isFavorite(String entryKey) async => _favorites.contains(entryKey);
+  Future<bool> isFavorite(String entryKey) async =>
+      _favorites.contains(entryKey);
 
   @override
   Future<void> saveNote(String entryKey, String markdown) async {

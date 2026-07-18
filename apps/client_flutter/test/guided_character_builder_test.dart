@@ -121,7 +121,7 @@ void main() {
     await tester.tap(find.byTooltip('查看 战士'));
     await tester.pumpAndSettle();
     expect(find.text('角色规则'), findsOneWidget);
-    await tester.pageBack();
+    await tester.tap(find.byKey(const Key('content-detail-close')));
     await tester.pumpAndSettle();
 
     await tester.enterText(

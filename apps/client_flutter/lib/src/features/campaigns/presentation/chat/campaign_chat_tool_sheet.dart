@@ -10,6 +10,7 @@ enum CampaignChatToolAction {
   skillCheck,
   hpStatus,
   contentEntries,
+  viewJournal,
   recordClue,
   shareLocation,
   groupFiles,
@@ -67,6 +68,12 @@ class CampaignChatToolSheet extends StatelessWidget {
         keyName: 'tool-content-entries',
         label: '资料条目',
         icon: Icons.menu_book_outlined,
+      ),
+      const _ToolDefinition(
+        action: CampaignChatToolAction.viewJournal,
+        keyName: 'tool-view-journal',
+        label: '战役记录',
+        icon: Icons.history_edu_outlined,
       ),
       if (isManager) ...const [
         _ToolDefinition(

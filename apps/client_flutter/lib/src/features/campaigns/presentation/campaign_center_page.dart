@@ -27,6 +27,7 @@ class CampaignCenterPage extends StatefulWidget {
     required this.controller,
     this.actorController,
     this.contentRepository,
+    this.initialTab = 0,
     super.key,
   });
 
@@ -34,6 +35,10 @@ class CampaignCenterPage extends StatefulWidget {
   final CampaignController controller;
   final CampaignActorController? actorController;
   final ContentRepository? contentRepository;
+
+  /// 初始选中的面板下标。0=概览 1=队伍 2=档案 3=记录。
+  /// 聊天页工具菜单的"战役记录"入口会传 3 直接跳到记录面板。
+  final int initialTab;
 
   @override
   State<CampaignCenterPage> createState() => _CampaignCenterPageState();
@@ -43,12 +48,13 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
   /// Wide-screen breakpoint matching Material 3 expanded layout guidance.
   static const double _wideBreakpoint = 840;
 
-  int _currentIndex = 0;
+  late int _currentIndex;
   String? _archiveKind;
 
   @override
   void initState() {
     super.initState();
+    _currentIndex = widget.initialTab.clamp(0, 3);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialData();
     });

@@ -539,6 +539,9 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       case CampaignChatToolAction.contentEntries:
         await _showContentLibrary();
         break;
+      case CampaignChatToolAction.viewJournal:
+        await _openCampaignRecords();
+        break;
       case CampaignChatToolAction.recordClue:
         await _showArchiveCreationForm(initialKind: 'clue');
         break;
@@ -819,6 +822,21 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         SnackBar(content: Text('${chatText('invalidDice')}$error')),
       );
     }
+  }
+
+  Future<void> _openCampaignRecords() async {
+    // 跳转到战役中心并直接选中记录面板（initialTab=3）。
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => CampaignCenterPage(
+          campaign: widget.campaign,
+          controller: widget.campaignController,
+          actorController: widget.actorController,
+          contentRepository: widget.contentRepository,
+          initialTab: 3,
+        ),
+      ),
+    );
   }
 
   Future<void> _showContentLibrary() async {

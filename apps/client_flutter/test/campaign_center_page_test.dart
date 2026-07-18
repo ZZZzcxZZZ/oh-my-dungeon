@@ -14,7 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/campaign_test_support.dart';
 
 /// Plan 3 task 2: narrow screens render `NavigationBar`, wide screens render
-/// `NavigationRail`, all four panels (overview/team/archive/records) are
+/// `NavigationRail`, all four panels (overview/characters/archive/records) are
 /// reachable, and DM-only affordances only appear when server capabilities
 /// allow `canManageCampaign`.
 void main() {
@@ -92,8 +92,9 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('narrow screen shows NavigationBar with four destinations',
-      (tester) async {
+  testWidgets('narrow screen shows NavigationBar with four destinations', (
+    tester,
+  ) async {
     final authController = await buildLoggedInAuthController();
     final controller = await buildCampaignController(
       authController: authController,
@@ -106,7 +107,8 @@ void main() {
     expect(find.byType(NavigationRail), findsNothing);
     expect(find.byType(NavigationDestination), findsNWidgets(4));
     expect(find.text('概览'), findsWidgets);
-    expect(find.text('队伍'), findsWidgets);
+    expect(find.text('角色'), findsWidgets);
+    expect(find.text('队伍'), findsNothing);
     expect(find.text('档案'), findsWidgets);
     expect(find.text('记录'), findsWidgets);
 
@@ -114,25 +116,23 @@ void main() {
     authController.dispose();
   });
 
-  testWidgets('wide screen shows NavigationRail with four destinations',
-      (tester) async {
+  testWidgets('wide screen shows NavigationRail with four destinations', (
+    tester,
+  ) async {
     final authController = await buildLoggedInAuthController();
     final controller = await buildCampaignController(
       authController: authController,
       canManage: false,
     );
 
-    await pumpCenterPage(
-      tester,
-      controller,
-      size: const Size(1400, 900),
-    );
+    await pumpCenterPage(tester, controller, size: const Size(1400, 900));
 
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
     // NavigationRail wraps destinations internally; verify via labels.
     expect(find.text('概览'), findsOneWidget);
-    expect(find.text('队伍'), findsOneWidget);
+    expect(find.text('角色'), findsOneWidget);
+    expect(find.text('队伍'), findsNothing);
     expect(find.text('档案'), findsOneWidget);
     expect(find.text('记录'), findsOneWidget);
 
@@ -140,8 +140,9 @@ void main() {
     authController.dispose();
   });
 
-  testWidgets('tapping destinations switches the visible panel',
-      (tester) async {
+  testWidgets('tapping destinations switches the visible panel', (
+    tester,
+  ) async {
     final authController = await buildLoggedInAuthController();
     final controller = await buildCampaignController(
       authController: authController,
@@ -163,58 +164,62 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('campaign-records-panel')), findsOneWidget);
 
-    // Switch to team panel.
-    await tester.tap(find.text('队伍').last);
+    // Switch to characters panel.
+    await tester.tap(find.text('角色').last);
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('campaign-team-panel')), findsOneWidget);
+    expect(find.byKey(const Key('campaign-characters-panel')), findsOneWidget);
 
     controller.dispose();
     authController.dispose();
   });
 
   testWidgets(
-      'DM-only manage button only shows when canManageCampaign is true',
-      (tester) async {
-    // Player: no manage affordance.
-    final playerAuth = await buildLoggedInAuthController();
-    final playerController = await buildCampaignController(
-      authController: playerAuth,
-      canManage: false,
-    );
-    await pumpCenterPage(tester, playerController);
-    expect(find.byKey(const Key('campaign-create-archive-button')), findsNothing);
-    playerController.dispose();
-    playerAuth.dispose();
+    'DM-only manage button only shows when canManageCampaign is true',
+    (tester) async {
+      // Player: no manage affordance.
+      final playerAuth = await buildLoggedInAuthController();
+      final playerController = await buildCampaignController(
+        authController: playerAuth,
+        canManage: false,
+      );
+      await pumpCenterPage(tester, playerController);
+      expect(
+        find.byKey(const Key('campaign-create-archive-button')),
+        findsNothing,
+      );
+      playerController.dispose();
+      playerAuth.dispose();
 
-    // Reset view for the next pump.
-    tester.view.resetPhysicalSize();
-    tester.view.resetDevicePixelRatio();
+      // Reset view for the next pump.
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
 
-    // DM: manage affordance appears — but only on the archive panel per
-    // spec §档案 (new-entry FAB lives inside the archive panel, not the
-    // overview/team/records panels).
-    final dmAuth = await buildLoggedInAuthController();
-    final dmController = await buildCampaignController(
-      authController: dmAuth,
-      canManage: true,
-    );
-    await pumpCenterPage(tester, dmController);
-    // FAB must NOT appear on the default overview panel.
-    expect(
-      find.byKey(const Key('campaign-create-archive-button')),
-      findsNothing,
-    );
-    // Navigate to the archive panel — FAB appears here.
-    await tester.tap(find.text('档案').last);
-    await tester.pumpAndSettle();
-    expect(
-      find.byKey(const Key('campaign-create-archive-button')),
-      findsOneWidget,
-    );
+      // DM: manage affordance appears — but only on the archive panel per
+      // spec §档案 (new-entry FAB lives inside the archive panel, not the
+      // overview/team/records panels).
+      final dmAuth = await buildLoggedInAuthController();
+      final dmController = await buildCampaignController(
+        authController: dmAuth,
+        canManage: true,
+      );
+      await pumpCenterPage(tester, dmController);
+      // FAB must NOT appear on the default overview panel.
+      expect(
+        find.byKey(const Key('campaign-create-archive-button')),
+        findsNothing,
+      );
+      // Navigate to the archive panel — FAB appears here.
+      await tester.tap(find.text('档案').last);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('campaign-create-archive-button')),
+        findsOneWidget,
+      );
 
-    dmController.dispose();
-    dmAuth.dispose();
-  });
+      dmController.dispose();
+      dmAuth.dispose();
+    },
+  );
 
   // Spec §概览: "DM 在相同位置额外看到控场摘要、群体检定和遭遇准备入口。"
   // The DM control entry is migrated from the chat toolbar to the overview
@@ -256,31 +261,30 @@ void main() {
     },
   );
 
-  testWidgets(
-    'tapping DM control entry opens the DM control bottom sheet',
-    (tester) async {
-      final dmAuth = await buildLoggedInAuthController();
-      final dmController = await buildCampaignController(
-        authController: dmAuth,
-        canManage: true,
-      );
-      await pumpCenterPage(tester, dmController);
+  testWidgets('tapping DM control entry opens the DM control bottom sheet', (
+    tester,
+  ) async {
+    final dmAuth = await buildLoggedInAuthController();
+    final dmController = await buildCampaignController(
+      authController: dmAuth,
+      canManage: true,
+    );
+    await pumpCenterPage(tester, dmController);
 
-      await tester.tap(
-        find.byKey(const Key('campaign-overview-dm-control-entry')),
-      );
-      await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('campaign-overview-dm-control-entry')),
+    );
+    await tester.pumpAndSettle();
 
-      // DM control sheet should appear with its characteristic title and
-      // submenu entries (遭遇控场 / 成员状态).
-      expect(find.text('DM 控场'), findsWidgets);
-      expect(find.text('遭遇控场'), findsOneWidget);
-      expect(find.text('成员状态'), findsOneWidget);
+    // DM control sheet should appear with its characteristic title and
+    // submenu entries (遭遇控场 / 成员状态).
+    expect(find.text('DM 控场'), findsWidgets);
+    expect(find.text('遭遇控场'), findsOneWidget);
+    expect(find.text('成员状态'), findsOneWidget);
 
-      dmController.dispose();
-      dmAuth.dispose();
-    },
-  );
+    dmController.dispose();
+    dmAuth.dispose();
+  });
 
   // Spec §档案: 新建条目 FAB 只在档案面板出现, 概览/队伍/记录面板都不显示。
   testWidgets(
@@ -299,8 +303,8 @@ void main() {
         findsNothing,
       );
 
-      // Team panel — no FAB.
-      await tester.tap(find.text('队伍').last);
+      // Characters panel — no FAB.
+      await tester.tap(find.text('角色').last);
       await tester.pumpAndSettle();
       expect(
         find.byKey(const Key('campaign-create-archive-button')),
@@ -316,7 +320,7 @@ void main() {
       );
 
       // Records panel — no FAB.
-      await tester.tap(find.text('记录').last);
+      await tester.tap(find.byIcon(Icons.history_outlined));
       await tester.pumpAndSettle();
       expect(
         find.byKey(const Key('campaign-create-archive-button')),
@@ -328,9 +332,9 @@ void main() {
     },
   );
 
-  // Spec §队伍: 邀请和管理成员在 战役中心 → 队伍，DM 就地操作。
+  // 成员和邀请属于概览，不再与角色管理混合。
   testWidgets(
-    'team panel shows invite button only when canManageCampaign is true',
+    'overview shows members and invite button only for campaign managers',
     (tester) async {
       // Player: no invite button.
       final playerAuth = await buildLoggedInAuthController();
@@ -339,9 +343,8 @@ void main() {
         canManage: false,
       );
       await pumpCenterPage(tester, playerController);
-      await tester.tap(find.text('队伍').last);
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('team-invite-button')), findsNothing);
+      expect(find.byKey(const Key('campaign-member-list')), findsOneWidget);
+      expect(find.byKey(const Key('campaign-invite-share')), findsNothing);
       playerController.dispose();
       playerAuth.dispose();
 
@@ -355,9 +358,8 @@ void main() {
         canManage: true,
       );
       await pumpCenterPage(tester, dmController);
-      await tester.tap(find.text('队伍').last);
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('team-invite-button')), findsOneWidget);
+      expect(find.byKey(const Key('campaign-member-list')), findsOneWidget);
+      expect(find.byKey(const Key('campaign-invite-share')), findsOneWidget);
 
       dmController.dispose();
       dmAuth.dispose();
@@ -373,14 +375,12 @@ void main() {
         canManage: true,
       );
       await pumpCenterPage(tester, dmController);
-      await tester.tap(find.text('队伍').last);
-      await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('team-invite-button')));
+      await tester.tap(find.byKey(const Key('campaign-invite-share')));
       await tester.pumpAndSettle();
 
       // The invite code should appear in a dialog.
-      expect(find.textContaining('JOIN1234'), findsOneWidget);
+      expect(find.textContaining('JOIN1234'), findsWidgets);
       expect(find.text('邀请码已创建'), findsOneWidget);
 
       dmController.dispose();
@@ -437,45 +437,44 @@ void main() {
 
       // Create form should be open with kind pre-filled.
       expect(find.text('新建战役条目'), findsOneWidget);
-      expect(find.text('地点'), findsOneWidget);
+      expect(find.text('地点'), findsWidgets);
 
       dmController.dispose();
       dmAuth.dispose();
     },
   );
 
-  // Spec §DM 角色生命周期: DM 可在 战役中心 → 队伍 创建常驻
+  // Spec §DM 角色生命周期: DM 可在 战役中心 → 角色 创建常驻
   // NPC/怪物/同伴（actorType: npc/monster/companion，lifecycle: persistent）。
+  testWidgets('DM characters panel shows create persistent actor button', (
+    tester,
+  ) async {
+    final dmAuth = await buildLoggedInAuthController();
+    final dmController = await buildCampaignController(
+      authController: dmAuth,
+      canManage: true,
+    );
+    final actorController = await buildActorController();
+    await pumpCenterPage(
+      tester,
+      dmController,
+      actorController: actorController,
+    );
+    await tester.tap(find.text('角色').last);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('characters-create-actor-button')),
+      findsOneWidget,
+    );
+
+    actorController.dispose();
+    dmController.dispose();
+    dmAuth.dispose();
+  });
+
   testWidgets(
-    'DM team panel shows create persistent actor button',
-    (tester) async {
-      final dmAuth = await buildLoggedInAuthController();
-      final dmController = await buildCampaignController(
-        authController: dmAuth,
-        canManage: true,
-      );
-      final actorController = await buildActorController();
-      await pumpCenterPage(
-        tester,
-        dmController,
-        actorController: actorController,
-      );
-      await tester.tap(find.text('队伍').last);
-      await tester.pumpAndSettle();
-
-      expect(
-        find.byKey(const Key('team-create-persistent-actor-button')),
-        findsOneWidget,
-      );
-
-      actorController.dispose();
-      dmController.dispose();
-      dmAuth.dispose();
-    },
-  );
-
-  testWidgets(
-    'player team panel does not show create persistent actor button',
+    'player characters panel does not show create persistent actor button',
     (tester) async {
       final playerAuth = await buildLoggedInAuthController();
       final playerController = await buildCampaignController(
@@ -488,11 +487,11 @@ void main() {
         playerController,
         actorController: actorController,
       );
-      await tester.tap(find.text('队伍').last);
+      await tester.tap(find.text('角色').last);
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const Key('team-create-persistent-actor-button')),
+        find.byKey(const Key('characters-create-actor-button')),
         findsNothing,
       );
 
@@ -516,12 +515,10 @@ void main() {
         dmController,
         actorController: actorController,
       );
-      await tester.tap(find.text('队伍').last);
+      await tester.tap(find.text('角色').last);
       await tester.pumpAndSettle();
 
-      await tester.tap(
-        find.byKey(const Key('team-create-persistent-actor-button')),
-      );
+      await tester.tap(find.byKey(const Key('characters-create-actor-button')));
       await tester.pumpAndSettle();
 
       // Form should show NPC / 怪物 / 同伴 options.
@@ -540,93 +537,88 @@ void main() {
   // 概览面板"战役设置"区块。DM 可见全部 4 项, 普通玩家只见"离开战役"。
   // 这些操作原来藏在聊天页右上角三点菜单里, 用户要求完全去除三点菜单并
   // 迁移到战役中心, 与 spec 一致。
-  testWidgets(
-    'DM overview panel shows all four global setting entries',
-    (tester) async {
-      final dmAuth = await buildLoggedInAuthController();
-      final dmController = await buildCampaignController(
-        authController: dmAuth,
-        canManage: true,
-      );
-      await pumpCenterPage(tester, dmController);
+  testWidgets('DM overview panel shows all four global setting entries', (
+    tester,
+  ) async {
+    final dmAuth = await buildLoggedInAuthController();
+    final dmController = await buildCampaignController(
+      authController: dmAuth,
+      canManage: true,
+    );
+    await pumpCenterPage(tester, dmController);
 
-      expect(
-        find.byKey(const Key('campaign-overview-edit-details')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const Key('campaign-overview-transfer-ownership')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const Key('campaign-overview-archive-campaign')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const Key('campaign-overview-leave-campaign')),
-        findsOneWidget,
-      );
+    expect(
+      find.byKey(const Key('campaign-overview-edit-details')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('campaign-overview-transfer-ownership')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('campaign-overview-archive-campaign')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('campaign-overview-leave-campaign')),
+      findsOneWidget,
+    );
 
-      dmController.dispose();
-      dmAuth.dispose();
-    },
-  );
+    dmController.dispose();
+    dmAuth.dispose();
+  });
 
-  testWidgets(
-    'player overview panel only shows leave campaign entry',
-    (tester) async {
-      final playerAuth = await buildLoggedInAuthController();
-      final playerController = await buildCampaignController(
-        authController: playerAuth,
-        canManage: false,
-      );
-      await pumpCenterPage(tester, playerController);
+  testWidgets('player overview panel only shows leave campaign entry', (
+    tester,
+  ) async {
+    final playerAuth = await buildLoggedInAuthController();
+    final playerController = await buildCampaignController(
+      authController: playerAuth,
+      canManage: false,
+    );
+    await pumpCenterPage(tester, playerController);
 
-      // Owner-only entries must NOT appear for non-managers.
-      expect(
-        find.byKey(const Key('campaign-overview-edit-details')),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const Key('campaign-overview-transfer-ownership')),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const Key('campaign-overview-archive-campaign')),
-        findsNothing,
-      );
-      // Leave campaign remains available to any member.
-      expect(
-        find.byKey(const Key('campaign-overview-leave-campaign')),
-        findsOneWidget,
-      );
+    // Owner-only entries must NOT appear for non-managers.
+    expect(
+      find.byKey(const Key('campaign-overview-edit-details')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const Key('campaign-overview-transfer-ownership')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const Key('campaign-overview-archive-campaign')),
+      findsNothing,
+    );
+    // Leave campaign remains available to any member.
+    expect(
+      find.byKey(const Key('campaign-overview-leave-campaign')),
+      findsOneWidget,
+    );
 
-      playerController.dispose();
-      playerAuth.dispose();
-    },
-  );
+    playerController.dispose();
+    playerAuth.dispose();
+  });
 
-  testWidgets(
-    'tapping leave campaign shows the developing snackbar',
-    (tester) async {
-      final playerAuth = await buildLoggedInAuthController();
-      final playerController = await buildCampaignController(
-        authController: playerAuth,
-        canManage: false,
-      );
-      await pumpCenterPage(tester, playerController);
+  testWidgets('tapping leave campaign shows the developing snackbar', (
+    tester,
+  ) async {
+    final playerAuth = await buildLoggedInAuthController();
+    final playerController = await buildCampaignController(
+      authController: playerAuth,
+      canManage: false,
+    );
+    await pumpCenterPage(tester, playerController);
 
-      await tester.tap(
-        find.byKey(const Key('campaign-overview-leave-campaign')),
-      );
-      await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('campaign-overview-leave-campaign')));
+    await tester.pumpAndSettle();
 
-      expect(find.text('该功能正在开发中'), findsOneWidget);
+    expect(find.text('该功能正在开发中'), findsOneWidget);
 
-      playerController.dispose();
-      playerAuth.dispose();
-    },
-  );
+    playerController.dispose();
+    playerAuth.dispose();
+  });
 }
 
 const _campaign = Campaign(
@@ -652,26 +644,23 @@ class _FakeAuthClient implements AuthClient {
     required String apiBaseUrl,
     required String identifier,
     required String password,
-  }) async =>
-      const AuthSession(
-        user: _user,
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-      );
+  }) async => const AuthSession(
+    user: _user,
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+  );
 
   @override
   Future<AuthUser> me({
     required String apiBaseUrl,
     required String accessToken,
-  }) async =>
-      _user;
+  }) async => _user;
 
   @override
   Future<String> refresh({
     required String apiBaseUrl,
     required String refreshToken,
-  }) async =>
-      'access-token';
+  }) async => 'access-token';
 
   @override
   Future<RegisterResult> register({
@@ -679,8 +668,7 @@ class _FakeAuthClient implements AuthClient {
     required String username,
     required String email,
     required String password,
-  }) async =>
-      const RegisterResult(user: _user, isFirstUser: false);
+  }) async => const RegisterResult(user: _user, isFirstUser: false);
 
   @override
   Future<void> logout({
@@ -699,26 +687,25 @@ class _FakeCampaignClient implements CampaignClient {
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-  }) async =>
-      CampaignWorkspaceContext(
-        campaign: _campaign,
-        membership: const CampaignMembership(
-          id: 'member-1',
-          campaignId: 'camp-1',
-          userId: 'user-1',
-          role: 'player',
-          displayName: 'ranger',
-          joinedAt: '2026-07-09T00:00:00.000Z',
-        ),
-        members: const [],
-        actors: const [],
-        capabilities: CampaignCapabilities(
-          canManageCampaign: canManage,
-          canManageMembers: canManage,
-          canCreateActors: canManage,
-          canSpeakAsNarrator: canManage,
-        ),
-      );
+  }) async => CampaignWorkspaceContext(
+    campaign: _campaign,
+    membership: const CampaignMembership(
+      id: 'member-1',
+      campaignId: 'camp-1',
+      userId: 'user-1',
+      role: 'player',
+      displayName: 'ranger',
+      joinedAt: '2026-07-09T00:00:00.000Z',
+    ),
+    members: const [],
+    actors: const [],
+    capabilities: CampaignCapabilities(
+      canManageCampaign: canManage,
+      canManageMembers: canManage,
+      canCreateActors: canManage,
+      canSpeakAsNarrator: canManage,
+    ),
+  );
 
   @override
   Future<List<CampaignArchiveEntry>> listArchives({
@@ -726,8 +713,7 @@ class _FakeCampaignClient implements CampaignClient {
     required String accessToken,
     required String campaignId,
     String? kind,
-  }) async =>
-      const [];
+  }) async => const [];
 
   @override
   Future<CampaignArchiveEntry> createArchiveEntry({
@@ -738,17 +724,16 @@ class _FakeCampaignClient implements CampaignClient {
     required String title,
     String? summary,
     Map<String, Object?>? payload,
-  }) async =>
-      const CampaignArchiveEntry(
-        id: 'archive-new',
-        campaignId: 'camp-1',
-        kind: 'clue',
-        title: 'New clue',
-        summary: '',
-        payload: {},
-        pinned: false,
-        updatedAt: '2026-07-17T00:00:00.000Z',
-      );
+  }) async => const CampaignArchiveEntry(
+    id: 'archive-new',
+    campaignId: 'camp-1',
+    kind: 'clue',
+    title: 'New clue',
+    summary: '',
+    payload: {},
+    pinned: false,
+    updatedAt: '2026-07-17T00:00:00.000Z',
+  );
 
   @override
   Future<void> archiveEntry({
@@ -769,8 +754,7 @@ class _FakeCampaignClient implements CampaignClient {
     String? summary,
     Map<String, Object?>? payload,
     bool? pinned,
-  }) async =>
-      throw UnimplementedError();
+  }) async => throw UnimplementedError();
 
   @override
   Future<Campaign> createCampaign({
@@ -779,23 +763,20 @@ class _FakeCampaignClient implements CampaignClient {
     required String name,
     String? description,
     String? system,
-  }) =>
-      throw UnimplementedError();
+  }) => throw UnimplementedError();
 
   @override
   Future<Campaign> getCampaign({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-  }) async =>
-      _campaign;
+  }) async => _campaign;
 
   @override
   Future<List<Campaign>> listCampaigns({
     required String apiBaseUrl,
     required String accessToken,
-  }) async =>
-      const [_campaign];
+  }) async => const [_campaign];
 
   @override
   Future<CampaignInvite> createInvite({
@@ -803,33 +784,31 @@ class _FakeCampaignClient implements CampaignClient {
     required String accessToken,
     required String campaignId,
     int? maxUses,
-  }) async =>
-      const CampaignInvite(
-        id: 'invite-1',
-        campaignId: 'camp-1',
-        code: 'JOIN1234',
-        roleOnJoin: 'player',
-        expiresAt: null,
-        maxUses: 1,
-        usedCount: 0,
-        requireApproval: false,
-        createdAt: '2026-07-17T00:00:00.000Z',
-      );
+  }) async => const CampaignInvite(
+    id: 'invite-1',
+    campaignId: 'camp-1',
+    code: 'JOIN1234',
+    roleOnJoin: 'player',
+    expiresAt: null,
+    maxUses: 1,
+    usedCount: 0,
+    requireApproval: false,
+    createdAt: '2026-07-17T00:00:00.000Z',
+  );
 
   @override
   Future<CampaignMembership> joinCampaign({
     required String apiBaseUrl,
     required String accessToken,
     required String code,
-  }) async =>
-      const CampaignMembership(
-        id: 'member-2',
-        campaignId: 'camp-1',
-        userId: 'user-1',
-        role: 'player',
-        displayName: 'ranger',
-        joinedAt: '2026-07-09T00:00:00.000Z',
-      );
+  }) async => const CampaignMembership(
+    id: 'member-2',
+    campaignId: 'camp-1',
+    userId: 'user-1',
+    role: 'player',
+    displayName: 'ranger',
+    joinedAt: '2026-07-09T00:00:00.000Z',
+  );
 
   @override
   Future<List<CampaignChatMessage>> listMessages({
@@ -837,8 +816,7 @@ class _FakeCampaignClient implements CampaignClient {
     required String accessToken,
     required String campaignId,
     String? query,
-  }) async =>
-      const [];
+  }) async => const [];
 
   @override
   Future<void> markCampaignRead({
@@ -854,8 +832,7 @@ class _FakeCampaignClient implements CampaignClient {
     required String campaignId,
     required String speakerMode,
     String? actorId,
-  }) =>
-      throw UnimplementedError();
+  }) => throw UnimplementedError();
 
   @override
   Future<CampaignChatMessage> sendMessage({
@@ -868,14 +845,12 @@ class _FakeCampaignClient implements CampaignClient {
     String? actionId,
     Map<String, Object?>? eventData,
     Map<String, Object?>? draftActor,
-  }) =>
-      throw UnimplementedError();
+  }) => throw UnimplementedError();
 
   @override
   Future<List<CampaignInvite>> listInvites({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-  }) async =>
-      const [];
+  }) async => const [];
 }

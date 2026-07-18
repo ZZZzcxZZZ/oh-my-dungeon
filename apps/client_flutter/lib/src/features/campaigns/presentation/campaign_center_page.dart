@@ -6,9 +6,10 @@ import 'actors/campaign_actor_controller.dart';
 import 'campaign_controller.dart';
 import 'campaign_detail_page.dart';
 import 'center/campaign_archive_panel.dart';
+import 'center/campaign_characters_panel.dart';
 import 'center/campaign_overview_panel.dart';
 import 'center/campaign_records_panel.dart';
-import 'center/campaign_team_panel.dart';
+import 'widgets/campaign_actor_quick_sheet.dart';
 
 /// The campaign's non-chat workspace. Chat stays fast and focused; durable
 /// information lives here behind an adaptive Material 3 navigation shell —
@@ -57,8 +58,7 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
       widget.controller.workspaceContext?.capabilities.canManageCampaign ??
       false;
 
-  List<CampaignActor> get _actors =>
-      widget.actorController?.actors ?? const [];
+  List<CampaignActor> get _actors => widget.actorController?.actors ?? const [];
 
   List<CampaignMemberPreview> get _members =>
       widget.controller.workspaceContext?.members ??
@@ -84,7 +84,8 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
             floatingActionButton: _buildManageFab(),
             body: isWide
                 ? _buildWideLayout(context)
-                : _buildNarrowLayout(context),
+                : _buildPanel(_currentIndex),
+            bottomNavigationBar: isWide ? null : _buildBottomNavigation(),
           );
         },
       ),
@@ -95,11 +96,11 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
     // Spec §档案: 新建条目 FAB 只在档案面板出现, 概览/队伍/记录面板不显示。
     if (!_canManage) return null;
     if (_currentIndex != 2) return null;
-    return FloatingActionButton.extended(
+    return FloatingActionButton(
       key: const Key('campaign-create-archive-button'),
+      tooltip: '新建条目',
       onPressed: _showCreateArchiveTypeMenu,
-      icon: const Icon(Icons.add),
-      label: const Text('新建条目'),
+      child: const Icon(Icons.add),
     );
   }
 
@@ -150,36 +151,30 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
     await _showCreateArchiveDialog(initialKind: selected);
   }
 
-  Widget _buildNarrowLayout(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(child: _buildPanel(_currentIndex)),
-        NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: (index) =>
-              setState(() => _currentIndex = index),
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.info_outline),
-              selectedIcon: Icon(Icons.info),
-              label: '概览',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.group_outlined),
-              selectedIcon: Icon(Icons.group),
-              label: '队伍',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.folder_outlined),
-              selectedIcon: Icon(Icons.folder),
-              label: '档案',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.history_outlined),
-              selectedIcon: Icon(Icons.history),
-              label: '记录',
-            ),
-          ],
+  Widget _buildBottomNavigation() {
+    return NavigationBar(
+      selectedIndex: _currentIndex,
+      onDestinationSelected: (index) => setState(() => _currentIndex = index),
+      destinations: const [
+        NavigationDestination(
+          icon: Icon(Icons.info_outline),
+          selectedIcon: Icon(Icons.info),
+          label: '概览',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.badge_outlined),
+          selectedIcon: Icon(Icons.badge),
+          label: '角色',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.folder_outlined),
+          selectedIcon: Icon(Icons.folder),
+          label: '档案',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.history_outlined),
+          selectedIcon: Icon(Icons.history),
+          label: '记录',
         ),
       ],
     );
@@ -201,9 +196,9 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
               label: Text('概览'),
             ),
             NavigationRailDestination(
-              icon: Icon(Icons.group_outlined),
-              selectedIcon: Icon(Icons.group),
-              label: Text('队伍'),
+              icon: Icon(Icons.badge_outlined),
+              selectedIcon: Icon(Icons.badge),
+              label: Text('角色'),
             ),
             NavigationRailDestination(
               icon: Icon(Icons.folder_outlined),
@@ -229,37 +224,37 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
         return CampaignOverviewPanel(
           campaign: widget.campaign,
           canManage: _canManage,
+          members: _members,
+          actors: _actors,
+          invites: _canManage ? widget.controller.invites : const [],
+          campaignName: widget.campaign.name,
+          serverUrl: widget.controller.apiBaseUrl,
+          onCreateInvite: _canManage
+              ? () => widget.controller.createInvite(
+                  campaignId: widget.campaign.id,
+                  maxUses: 1,
+                )
+              : null,
           onOpenDmControl: _canManage ? _showDmControlSheet : null,
           // Spec §全局设置: 4 项低频操作整合到概览面板, DM 可见全部 4 项,
           // 普通玩家只见"离开战役"。
           onEditDetails: _canManage ? _openCampaignManagement : null,
-          onTransferOwnership:
-              _canManage ? _showNotImplemented : null,
-          onArchiveCampaign:
-              _canManage ? _showNotImplemented : null,
+          onTransferOwnership: _canManage ? _showNotImplemented : null,
+          onArchiveCampaign: _canManage ? _showNotImplemented : null,
           onLeaveCampaign: _showNotImplemented,
         );
       case 1:
-        return CampaignTeamPanel(
-          members: _members,
+        return CampaignCharactersPanel(
           actors: _actors,
           isManager: _canManage,
-          invites: _canManage ? widget.controller.invites : const [],
+          onOpenActor: _showActorQuickSheet,
           activeSpeakerActorId: _activeSpeakerActorId,
-          onCreateInvite: _canManage
-              ? () => widget.controller.createInvite(
-                    campaignId: widget.campaign.id,
-                    maxUses: 1,
-                  )
-              : null,
-          campaignName: widget.campaign.name,
-          serverUrl: widget.controller.apiBaseUrl,
-          onCreatePersistentActor: _canManage && widget.actorController != null
+          onCreateActor: _canManage && widget.actorController != null
               ? ({
                   required String actorType,
                   required String displayName,
+                  required String lifecycle,
                   int? maxHp,
-                  String? avatarUrl,
                 }) async {
                   // AuthController.ensureValidAccessToken 会基于 JWT exp
                   // 主动预刷新；actor controller 的同步 accessTokenProvider
@@ -269,12 +264,11 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
                   if (token == null) return '登录已过期，请重新登录';
                   final success = await widget.actorController!.createDmActor(
                     actorType: actorType,
-                    lifecycle: 'persistent',
+                    lifecycle: lifecycle,
                     sheet: {
                       'name': displayName,
                       'maxHp': ?maxHp,
                       'currentHp': ?maxHp,
-                      'avatarUrl': ?avatarUrl,
                     },
                   );
                   return success
@@ -282,13 +276,26 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
                       : (widget.actorController!.error ?? '创建失败');
                 }
               : null,
+          onArchiveActor: _canManage && widget.actorController != null
+              ? ({required CampaignActor actor}) async {
+                  final token = await widget.controller.authController
+                      .ensureValidAccessToken();
+                  if (token == null) return '登录已过期，请重新登录';
+                  final success = await widget.actorController!.archiveActor(
+                    actor,
+                  );
+                  return success
+                      ? null
+                      : (widget.actorController!.error ?? '归档失败');
+                }
+              : null,
           onConvertToPersistent: _canManage && widget.actorController != null
               ? ({required CampaignActor actor}) async {
                   final token = await widget.controller.authController
                       .ensureValidAccessToken();
                   if (token == null) return '登录已过期，请重新登录';
-                  final success =
-                      await widget.actorController!.convertToPersistent(actor);
+                  final success = await widget.actorController!
+                      .convertToPersistent(actor);
                   return success
                       ? null
                       : (widget.actorController!.error ?? '转为常驻失败');
@@ -301,12 +308,13 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
                   if (token == null) return '登录已过期，请重新登录';
                   var lastError = '归档失败';
                   for (final id in actorIds) {
-                    final actor = _actors.firstWhere(
-                      (a) => a.id == id,
-                      orElse: () => _actors.first,
+                    final actor = _actors
+                        .where((candidate) => candidate.id == id)
+                        .firstOrNull;
+                    if (actor == null) continue;
+                    final success = await widget.actorController!.archiveActor(
+                      actor,
                     );
-                    final success =
-                        await widget.actorController!.archiveActor(actor);
                     if (!success) {
                       lastError = widget.actorController!.error ?? lastError;
                     }
@@ -338,13 +346,9 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
           selectedKind: _archiveKind,
           onKindChanged: (kind) {
             setState(() => _archiveKind = kind);
-            widget.controller.loadArchives(
-              widget.campaign.id,
-              kind: kind,
-            );
+            widget.controller.loadArchives(widget.campaign.id, kind: kind);
           },
-          onRefresh: () =>
-              widget.controller.loadArchives(widget.campaign.id),
+          onRefresh: () => widget.controller.loadArchives(widget.campaign.id),
           onArchive: (entry) => widget.controller.archiveEntry(
             campaignId: widget.campaign.id,
             entryId: entry.id,
@@ -361,6 +365,15 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
       default:
         return const SizedBox.shrink();
     }
+  }
+
+  void _showActorQuickSheet(CampaignActor actor) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) =>
+          CampaignActorQuickSheet(actor: actor, isManager: _canManage),
+    );
   }
 
   Future<void> _showCreateArchiveDialog({String initialKind = 'clue'}) async {
@@ -449,10 +462,7 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'DM 控场',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
+                Text('DM 控场', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 8),
                 const Text('这里会继续整合遭遇、成员状态和隐藏信息。'),
                 const SizedBox(height: 12),
@@ -489,8 +499,8 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
   /// Spec §全局设置: 所有权转移、战役归档、离开战役三项暂未实现的服务端
   /// 操作，统一显示"开发中"提示，避免静默无反馈。
   void _showNotImplemented() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('该功能正在开发中')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('该功能正在开发中')));
   }
 }

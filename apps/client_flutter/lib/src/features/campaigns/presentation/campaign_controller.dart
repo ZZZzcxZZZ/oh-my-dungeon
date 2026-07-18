@@ -258,13 +258,19 @@ class CampaignController extends ChangeNotifier {
     notifyListeners();
 
     // Marking read is intentionally best-effort; reading chat must still work
-    // when a self-hosted server is temporarily unreachable.
+    // when a self-hosted server is temporarily unreachable. 走
+    // ensureValidAccessToken 与其他方法保持一致;失败/中止都由 catch 吞掉,
+    // 不影响消息加载本身。Flutter web 上请求进行中切换页面会被浏览器
+    // abort, 控制台会打印 net::ERR_ABORTED — 这是预期噪音。
     try {
-      await campaignClient.markCampaignRead(
-        apiBaseUrl: apiBaseUrl,
-        accessToken: token,
-        campaignId: campaignId,
-      );
+      final readToken = await authController.ensureValidAccessToken();
+      if (readToken != null) {
+        await campaignClient.markCampaignRead(
+          apiBaseUrl: apiBaseUrl,
+          accessToken: readToken,
+          campaignId: campaignId,
+        );
+      }
     } catch (_) {}
   }
 

@@ -90,8 +90,7 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
         // Spec §客户端工作模式: 战役创建入口只在 DM 模式显示。Player 模式
         // 下隐藏 FAB，仅保留加入/刷新入口；owner 在 Player 模式进入战役
         // 时会收到一键切换 DM 模式的提示（见 Task 4.2）。
-        final isDmMode =
-            widget.modeController.mode == ClientMode.dungeonMaster;
+        final isDmMode = widget.modeController.mode == ClientMode.dungeonMaster;
         return Scaffold(
           appBar: AppBar(
             title: const Text('战役'),
@@ -205,8 +204,7 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
 
     if (campaigns.isEmpty) {
       // Spec §客户端工作模式: 创建入口只在 DM 模式显示，空态文案随模式调整。
-      final isDmMode =
-          widget.modeController.mode == ClientMode.dungeonMaster;
+      final isDmMode = widget.modeController.mode == ClientMode.dungeonMaster;
       final message = isDmMode
           ? '暂无战役\n点击右下角创建，或使用邀请码加入'
           : '暂无战役\n使用上方邀请码入口加入朋友的团';
@@ -266,6 +264,7 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
         builder: (context) => CampaignChatPage(
           campaign: campaign,
           character: character,
+          localCharacters: widget.characterController.characters,
           campaignController: widget.campaignController,
           contentRepository: widget.contentRepository,
           campaignContentController: widget.campaignContentController,
@@ -289,7 +288,8 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
     final membership = campaign.memberPreview
         .where((m) => m.userId == currentUserId)
         .firstOrNull;
-    final isOwnerOrDm = campaign.ownerId == currentUserId ||
+    final isOwnerOrDm =
+        campaign.ownerId == currentUserId ||
         membership?.role == 'owner' ||
         membership?.role == 'dm';
     final currentMode = widget.modeController.mode;
@@ -865,7 +865,9 @@ class _CampaignChatListItem extends StatelessWidget {
         if (campaign.unreadCount > 0) ...[
           const SizedBox(height: 4),
           Badge(
-            label: Text(campaign.unreadCount > 99 ? '99+' : '${campaign.unreadCount}'),
+            label: Text(
+              campaign.unreadCount > 99 ? '99+' : '${campaign.unreadCount}',
+            ),
           ),
         ],
       ],

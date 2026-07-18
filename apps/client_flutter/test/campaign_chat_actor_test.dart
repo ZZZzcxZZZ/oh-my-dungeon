@@ -200,26 +200,32 @@ void main() {
     expect(text.style?.fontWeight, FontWeight.bold);
   });
 
-  testWidgets('chat avatars expose a health ring only when the server shares a state', (tester) async {
-    campaignClient.messages = const [
-      CampaignChatMessage(
-        id: 'health-1',
-        campaignId: 'camp-1',
-        senderId: 'user-2',
-        campaignActorId: 'actor-player',
-        displayName: 'Arannis',
-        avatarUrl: null,
-        publicHealthState: 'injured',
-        kind: 'say',
-        content: 'Still standing.',
-        createdAt: '2026-07-09T00:00:00.000Z',
-      ),
-    ];
+  testWidgets(
+    'chat avatars expose a health ring only when the server shares a state',
+    (tester) async {
+      campaignClient.messages = const [
+        CampaignChatMessage(
+          id: 'health-1',
+          campaignId: 'camp-1',
+          senderId: 'user-2',
+          campaignActorId: 'actor-player',
+          displayName: 'Arannis',
+          avatarUrl: null,
+          publicHealthState: 'injured',
+          kind: 'say',
+          content: 'Still standing.',
+          createdAt: '2026-07-09T00:00:00.000Z',
+        ),
+      ];
 
-    await pumpChatPage(tester);
+      await pumpChatPage(tester);
 
-    expect(find.byKey(const Key('campaign-avatar-ring-injured')), findsOneWidget);
-  });
+      expect(
+        find.byKey(const Key('campaign-avatar-ring-injured')),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('content tool reads the offline campaign-aware repository', (
     tester,
@@ -329,15 +335,16 @@ void main() {
     expect(find.byKey(const Key('campaign-chat-identity-bar')), findsNothing);
   });
 
-  testWidgets('campaign chat stays focused and does not expose the retired swipe hub', (
-    tester,
-  ) async {
-    await pumpChatPage(tester, isDm: true);
+  testWidgets(
+    'campaign chat stays focused and does not expose the retired swipe hub',
+    (tester) async {
+      await pumpChatPage(tester, isDm: true);
 
-    expect(find.byKey(const Key('campaign-chat-page')), findsOneWidget);
-    expect(find.byKey(const Key('campaign-hub-page')), findsNothing);
-    expect(find.byKey(const Key('campaign-workspace')), findsNothing);
-  });
+      expect(find.byKey(const Key('campaign-chat-page')), findsOneWidget);
+      expect(find.byKey(const Key('campaign-hub-page')), findsNothing);
+      expect(find.byKey(const Key('campaign-workspace')), findsNothing);
+    },
+  );
 
   testWidgets('member sheet joins campaign membership with actor status', (
     tester,
@@ -458,36 +465,35 @@ void main() {
     },
   );
 
-  testWidgets(
-    'avatar without a resolvable actor stays silent on tap',
-    (tester) async {
-      campaignClient.messages = const [
-        CampaignChatMessage(
-          id: 'avatar-2',
-          campaignId: 'camp-1',
-          senderId: 'user-2',
-          campaignActorId: null,
-          displayName: 'Stranger',
-          avatarUrl: null,
-          kind: 'say',
-          content: 'Hello',
-          createdAt: '2026-07-09T00:00:00.000Z',
-        ),
-      ];
+  testWidgets('avatar without a resolvable actor stays silent on tap', (
+    tester,
+  ) async {
+    campaignClient.messages = const [
+      CampaignChatMessage(
+        id: 'avatar-2',
+        campaignId: 'camp-1',
+        senderId: 'user-2',
+        campaignActorId: null,
+        displayName: 'Stranger',
+        avatarUrl: null,
+        kind: 'say',
+        content: 'Hello',
+        createdAt: '2026-07-09T00:00:00.000Z',
+      ),
+    ];
 
-      await pumpChatPage(tester);
+    await pumpChatPage(tester);
 
-      final bubbleAvatar = find.descendant(
-        of: find.byType(CampaignChatBubble),
-        matching: find.byType(ChatAvatar),
-      );
-      expect(bubbleAvatar, findsOneWidget);
-      await tester.tap(bubbleAvatar);
-      await tester.pumpAndSettle();
+    final bubbleAvatar = find.descendant(
+      of: find.byType(CampaignChatBubble),
+      matching: find.byType(ChatAvatar),
+    );
+    expect(bubbleAvatar, findsOneWidget);
+    await tester.tap(bubbleAvatar);
+    await tester.pumpAndSettle();
 
-      expect(find.byType(CampaignActorQuickSheet), findsNothing);
-    },
-  );
+    expect(find.byType(CampaignActorQuickSheet), findsNothing);
+  });
 
   testWidgets(
     'DM creates a temporary identity draft and sends the first message atomically',
@@ -593,10 +599,7 @@ void main() {
       // per spec §概览, so it must not appear in chat for anyone.
       expect(find.byKey(const Key('identity-temporary-entry')), findsNothing);
       expect(find.byKey(const Key('campaign-dm-control-entry')), findsNothing);
-      expect(
-        find.byKey(const Key('tool-dm-identity-switch')),
-        findsNothing,
-      );
+      expect(find.byKey(const Key('tool-dm-identity-switch')), findsNothing);
     },
   );
 
@@ -679,31 +682,30 @@ void main() {
   // entry so DMs can start a one-off speaker without leaving the identity
   // sheet. The entry is shared with the merged tool panel via the same
   // _draftIdentity state.
-  testWidgets(
-    'DM identity panel exposes the quick temporary identity entry',
-    (tester) async {
-      campaignClient.canManageCampaign = true;
-      campaignClient.workspaceActors = const [];
+  testWidgets('DM identity panel exposes the quick temporary identity entry', (
+    tester,
+  ) async {
+    campaignClient.canManageCampaign = true;
+    campaignClient.workspaceActors = const [];
 
-      await pumpChatPage(tester, isDm: true);
-      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('tool-dm-identity-switch')));
-      await tester.pumpAndSettle();
+    await pumpChatPage(tester, isDm: true);
+    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tool-dm-identity-switch')));
+    await tester.pumpAndSettle();
 
-      // The quick temporary identity entry is part of the DM identity panel.
-      expect(
-        find.byKey(const Key('identity-quick-temporary-entry')),
-        findsOneWidget,
-      );
-      expect(find.text('快速临时身份'), findsOneWidget);
+    // The quick temporary identity entry is part of the DM identity panel.
+    expect(
+      find.byKey(const Key('identity-quick-temporary-entry')),
+      findsOneWidget,
+    );
+    expect(find.text('快速临时身份'), findsOneWidget);
 
-      // Tapping the entry opens the draft form sheet on top.
-      await tester.tap(find.byKey(const Key('identity-quick-temporary-entry')));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('draft-identity-name')), findsOneWidget);
-    },
-  );
+    // Tapping the entry opens the draft form sheet on top.
+    await tester.tap(find.byKey(const Key('identity-quick-temporary-entry')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('draft-identity-name')), findsOneWidget);
+  });
 
   testWidgets(
     'player identity panel does not expose the quick temporary identity entry',
@@ -748,10 +750,7 @@ void main() {
 
       // DM-only entries must NOT appear for player in the merged tool panel.
       expect(find.byKey(const Key('identity-temporary-entry')), findsNothing);
-      expect(
-        find.byKey(const Key('tool-dm-identity-switch')),
-        findsNothing,
-      );
+      expect(find.byKey(const Key('tool-dm-identity-switch')), findsNothing);
 
       // Open the player identity sub-panel via "切换发言身份".
       await tester.tap(find.byKey(const Key('tool-player-identity-switch')));
@@ -790,7 +789,10 @@ void main() {
       // 1. 当前身份精确信息 (header)
       expect(find.byKey(const Key('tool-current-identity')), findsOneWidget);
       // 2. 打开角色卡
-      expect(find.byKey(const Key('tool-open-character-sheet')), findsOneWidget);
+      expect(
+        find.byKey(const Key('tool-open-character-sheet')),
+        findsOneWidget,
+      );
       // 3. 掷骰
       expect(find.byKey(const Key('tool-roll-dice')), findsOneWidget);
       // 4. 技能检定
@@ -834,14 +836,20 @@ void main() {
 
       // Player-visible tools (spec §输入栏):
       expect(find.byKey(const Key('tool-current-identity')), findsOneWidget);
-      expect(find.byKey(const Key('tool-open-character-sheet')), findsOneWidget);
+      expect(
+        find.byKey(const Key('tool-open-character-sheet')),
+        findsOneWidget,
+      );
       expect(find.byKey(const Key('tool-roll-dice')), findsOneWidget);
-      expect(find.byKey(const Key('tool-skill-check')), findsOneWidget);
       expect(find.byKey(const Key('tool-hp-status')), findsOneWidget);
       expect(find.byKey(const Key('tool-content-entries')), findsOneWidget);
-      expect(find.byKey(const Key('tool-record-clue')), findsOneWidget);
-      expect(find.byKey(const Key('tool-share-location')), findsOneWidget);
-      expect(find.byKey(const Key('tool-group-files')), findsOneWidget);
+
+      // These actions write manager-owned campaign state. The server rejects
+      // them for players, so the UI must not advertise dead controls.
+      expect(find.byKey(const Key('tool-skill-check')), findsNothing);
+      expect(find.byKey(const Key('tool-record-clue')), findsNothing);
+      expect(find.byKey(const Key('tool-share-location')), findsNothing);
+      expect(find.byKey(const Key('tool-group-files')), findsNothing);
 
       // Player gets "切换发言身份" instead of "DM 身份切换".
       expect(
@@ -856,44 +864,144 @@ void main() {
     },
   );
 
+  testWidgets(
+    'composer follows the active NPC speaker instead of the local character',
+    (tester) async {
+      campaignClient.workspaceMembership = const CampaignMembership(
+        id: 'member-1',
+        campaignId: 'camp-1',
+        userId: 'user-1',
+        role: 'owner',
+        displayName: 'Dungeon Master',
+        joinedAt: '2026-07-09T00:00:00.000Z',
+        activeSpeakerActorId: 'actor-npc-1',
+        speakerMode: 'actor',
+      );
+      campaignClient.workspaceActors = const [
+        CampaignWorkspaceActor(
+          id: 'actor-npc-1',
+          ownerUserId: 'user-1',
+          actorType: 'npc',
+          status: 'active',
+          lifecycle: 'persistent',
+          displayName: '酒馆老板',
+          avatarAssetId: null,
+          publicHealthState: 'healthy',
+        ),
+      ];
+
+      await pumpChatPage(tester, isDm: true);
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('酒馆老板'), findsOneWidget);
+      expect(find.text('Arannis'), findsNothing);
+    },
+  );
+
+  testWidgets('OOC speaker uses a compact composer without say/action modes', (
+    tester,
+  ) async {
+    campaignClient.workspaceMembership = const CampaignMembership(
+      id: 'member-1',
+      campaignId: 'camp-1',
+      userId: 'user-1',
+      role: 'player',
+      displayName: 'Player One',
+      joinedAt: '2026-07-09T00:00:00.000Z',
+      speakerMode: 'ooc',
+    );
+
+    await pumpChatPage(tester);
+
+    expect(find.byKey(const Key('chat-mode-say')), findsNothing);
+    expect(find.byKey(const Key('chat-mode-action')), findsNothing);
+    final input = tester.widget<TextField>(
+      find.byKey(const Key('campaign-chat-input')),
+    );
+    expect(input.decoration?.hintText, contains('场外'));
+  });
+
+  testWidgets(
+    'active campaign actor exposes character actions without legacy actor id',
+    (tester) async {
+      campaignClient.workspaceMembership = const CampaignMembership(
+        id: 'member-1',
+        campaignId: 'camp-1',
+        userId: 'user-1',
+        role: 'owner',
+        displayName: 'Dungeon Master',
+        joinedAt: '2026-07-09T00:00:00.000Z',
+        activeSpeakerActorId: 'actor-player',
+        speakerMode: 'actor',
+      );
+      campaignClient.workspaceActors = const [
+        CampaignWorkspaceActor(
+          id: 'actor-player',
+          ownerUserId: 'user-2',
+          actorType: 'player',
+          status: 'active',
+          lifecycle: 'persistent',
+          displayName: 'Arannis',
+          avatarAssetId: null,
+          publicHealthState: 'healthy',
+        ),
+      ];
+
+      await pumpChatPage(tester, isDm: true);
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('tool-character-actions')), findsOneWidget);
+    },
+  );
+
+  testWidgets('tool sheet stays usable on a narrow phone viewport', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await pumpChatPage(tester, isDm: true, campaignActorId: 'actor-1');
+    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const Key('tool-dm-identity-switch')), findsOneWidget);
+    expect(find.byKey(const Key('identity-temporary-entry')), findsOneWidget);
+  });
+
   // Spec §档案: 资料、地点、线索和文件统一属于战役档案, 可从聊天跳转。
   // The 3 previously-disabled toolbar items (记录线索/分享地点/群文件) must
   // now be enabled and route to the archive creation form pre-filled with the
   // corresponding kind.
-  testWidgets(
-    'record clue tool opens archive creation form with kind=clue',
-    (tester) async {
-      await pumpChatPage(tester, isDm: true);
+  testWidgets('record clue tool opens archive creation form with kind=clue', (
+    tester,
+  ) async {
+    await pumpChatPage(tester, isDm: true);
 
-      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
-      await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+    await tester.pumpAndSettle();
 
-      final clueTile = tester.widget<ListTile>(
-        find.byKey(const Key('tool-record-clue')),
-      );
-      expect(clueTile.enabled, isTrue);
+    await tester.tap(find.byKey(const Key('tool-record-clue')));
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('tool-record-clue')));
-      await tester.pumpAndSettle();
+    expect(find.text('新建战役条目'), findsOneWidget);
+    // Initial kind should be 线索.
+    expect(find.text('线索'), findsWidgets);
 
-      expect(find.text('新建战役条目'), findsOneWidget);
-      // Initial kind should be 线索.
-      expect(find.text('线索'), findsWidgets);
+    await tester.enterText(find.byType(TextFormField).first, '神秘符文');
+    await tester.tap(find.text('创建'));
+    await tester.pumpAndSettle();
 
-      await tester.enterText(
-        find.byType(TextFormField).first,
-        '神秘符文',
-      );
-      await tester.tap(find.text('创建'));
-      await tester.pumpAndSettle();
-
-      expect(campaignClient.createArchiveEntryCalls, hasLength(1));
-      final call = campaignClient.createArchiveEntryCalls.single;
-      expect(call.campaignId, _campaign.id);
-      expect(call.kind, 'clue');
-      expect(call.title, '神秘符文');
-    },
-  );
+    expect(campaignClient.createArchiveEntryCalls, hasLength(1));
+    final call = campaignClient.createArchiveEntryCalls.single;
+    expect(call.campaignId, _campaign.id);
+    expect(call.kind, 'clue');
+    expect(call.title, '神秘符文');
+  });
 
   testWidgets(
     'share location tool opens archive creation form with kind=location',
@@ -903,21 +1011,13 @@ void main() {
       await tester.tap(find.byKey(const Key('campaign-chat-identity')));
       await tester.pumpAndSettle();
 
-      final locationTile = tester.widget<ListTile>(
-        find.byKey(const Key('tool-share-location')),
-      );
-      expect(locationTile.enabled, isTrue);
-
       await tester.tap(find.byKey(const Key('tool-share-location')));
       await tester.pumpAndSettle();
 
       expect(find.text('新建战役条目'), findsOneWidget);
       expect(find.text('地点'), findsWidgets);
 
-      await tester.enterText(
-        find.byType(TextFormField).first,
-        '老橡树酒馆',
-      );
+      await tester.enterText(find.byType(TextFormField).first, '老橡树酒馆');
       await tester.tap(find.text('创建'));
       await tester.pumpAndSettle();
 
@@ -928,71 +1028,44 @@ void main() {
     },
   );
 
-  testWidgets(
-    'group files tool opens archive creation form with kind=file',
-    (tester) async {
-      await pumpChatPage(tester, isDm: true);
+  testWidgets('group files tool opens archive creation form with kind=file', (
+    tester,
+  ) async {
+    await pumpChatPage(tester, isDm: true);
 
-      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
-      await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+    await tester.pumpAndSettle();
 
-      final fileTile = tester.widget<ListTile>(
-        find.byKey(const Key('tool-group-files')),
-      );
-      expect(fileTile.enabled, isTrue);
+    await tester.tap(find.byKey(const Key('tool-group-files')));
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('tool-group-files')));
-      await tester.pumpAndSettle();
+    expect(find.text('新建战役条目'), findsOneWidget);
+    expect(find.text('文件'), findsWidgets);
 
-      expect(find.text('新建战役条目'), findsOneWidget);
-      expect(find.text('文件'), findsWidgets);
+    await tester.enterText(find.byType(TextFormField).first, 'NPC关系图');
+    await tester.tap(find.text('创建'));
+    await tester.pumpAndSettle();
 
-      await tester.enterText(
-        find.byType(TextFormField).first,
-        'NPC关系图',
-      );
-      await tester.tap(find.text('创建'));
-      await tester.pumpAndSettle();
-
-      expect(campaignClient.createArchiveEntryCalls, hasLength(1));
-      final call = campaignClient.createArchiveEntryCalls.single;
-      expect(call.kind, 'file');
-      expect(call.title, 'NPC关系图');
-    },
-  );
+    expect(campaignClient.createArchiveEntryCalls, hasLength(1));
+    final call = campaignClient.createArchiveEntryCalls.single;
+    expect(call.kind, 'file');
+    expect(call.title, 'NPC关系图');
+  });
 
   // Spec §顶部: 聊天顶部只显示返回、战役名称+在线状态、搜索、战役中心。
-  testWidgets(
-    'chat AppBar only exposes search and campaign center actions',
-    (tester) async {
-      await pumpChatPage(tester);
+  testWidgets('chat AppBar only exposes search and campaign center actions', (
+    tester,
+  ) async {
+    await pumpChatPage(tester);
 
-      // Must have search and campaign center entries.
-      expect(find.byTooltip('搜索'), findsOneWidget);
-      expect(find.byKey(const Key('campaign-open-center')), findsOneWidget);
+    // Must have search and campaign center entries.
+    expect(find.byTooltip('搜索'), findsOneWidget);
+    expect(find.byKey(const Key('campaign-open-center')), findsOneWidget);
 
-      // Must NOT expose 战役资料 or 成员 as direct AppBar buttons.
-      expect(find.byTooltip('战役资料'), findsNothing);
-      expect(find.byTooltip('成员'), findsNothing);
-    },
-  );
-
-  // Spec §全局设置: 右上角更多菜单只有战役名称/封面/简介、所有权转移、
-  // 战役归档、离开战役四项。
-  testWidgets(
-    'chat AppBar more menu contains only the four global settings',
-    (tester) async {
-      await pumpChatPage(tester);
-
-      await tester.tap(find.byType(PopupMenuButton<String>));
-      await tester.pumpAndSettle();
-
-      expect(find.text('战役名称、封面和简介'), findsOneWidget);
-      expect(find.text('所有权转移'), findsOneWidget);
-      expect(find.text('战役归档'), findsOneWidget);
-      expect(find.text('离开战役'), findsOneWidget);
-    },
-  );
+    // Must NOT expose 战役资料 or 成员 as direct AppBar buttons.
+    expect(find.byTooltip('战役资料'), findsNothing);
+    expect(find.byTooltip('成员'), findsNothing);
+  });
 
   // Spec §输入栏: 战役资料入口迁移到头像快捷面板第 6 项"资料条目"，
   // 不在 AppBar 单独入口。
@@ -1037,138 +1110,116 @@ void main() {
 
       // 掷骰 sheet 应当出现, 聊天页仍应保留在栈中 (输入框可见)。
       expect(find.text('快速掷骰'), findsOneWidget);
-      expect(
-        find.byKey(const Key('campaign-chat-input')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const Key('campaign-chat-input')), findsOneWidget);
 
       // 关闭掷骰 sheet 后, 聊天页应仍然可见。
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
-      expect(
-        find.byKey(const Key('campaign-chat-input')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const Key('campaign-chat-input')), findsOneWidget);
     },
   );
 
-  testWidgets(
-    'tool panel character actions keeps chat page on stage',
-    (tester) async {
-      // 角色动作条目仅在 _characterActions 非空且 campaignActorId 非空时出现。
-      await pumpChatPage(tester, isDm: true, campaignActorId: 'actor-1');
+  testWidgets('tool panel character actions keeps chat page on stage', (
+    tester,
+  ) async {
+    // 角色动作条目仅在 _characterActions 非空且 campaignActorId 非空时出现。
+    await pumpChatPage(tester, isDm: true, campaignActorId: 'actor-1');
 
-      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+    await tester.pumpAndSettle();
+
+    final actionsEntry = find.byKey(const Key('tool-character-actions'));
+    if (actionsEntry.evaluate().isNotEmpty) {
+      await tester.tap(actionsEntry);
       await tester.pumpAndSettle();
 
-      final actionsEntry = find.byKey(const Key('tool-character-actions'));
-      if (actionsEntry.evaluate().isNotEmpty) {
-        await tester.tap(actionsEntry);
-        await tester.pumpAndSettle();
+      // 角色动作 sheet 出现时聊天页输入框仍在。
+      expect(find.byKey(const Key('campaign-chat-input')), findsOneWidget);
+    }
+  });
 
-        // 角色动作 sheet 出现时聊天页输入框仍在。
-        expect(
-          find.byKey(const Key('campaign-chat-input')),
-          findsOneWidget,
-        );
-      }
-    },
-  );
+  testWidgets('tool panel open character sheet keeps chat page on stage', (
+    tester,
+  ) async {
+    await pumpChatPage(tester, isDm: true);
 
-  testWidgets(
-    'tool panel open character sheet keeps chat page on stage',
-    (tester) async {
-      await pumpChatPage(tester, isDm: true);
+    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
-      await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tool-open-character-sheet')));
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('tool-open-character-sheet')));
-      await tester.pumpAndSettle();
+    // 角色详情页应通过 push 进入, 聊天页仍应在栈中 (返回后会回到聊天)。
+    expect(find.byType(BackButton), findsOneWidget);
+    // 角色详情页应可见。
+    expect(find.text('Arannis'), findsWidgets);
+  });
 
-      // 角色详情页应通过 push 进入, 聊天页仍应在栈中 (返回后会回到聊天)。
-      expect(find.byType(BackButton), findsOneWidget);
-      // 角色详情页应可见。
-      expect(find.text('Arannis'), findsWidgets);
-    },
-  );
+  testWidgets('tool panel content library fallback keeps chat page on stage', (
+    tester,
+  ) async {
+    // 不传 campaignContentController, 走 _showContentLibrary 回退分支。
+    await pumpChatPage(tester, isDm: true);
 
-  testWidgets(
-    'tool panel content library fallback keeps chat page on stage',
-    (tester) async {
-      // 不传 campaignContentController, 走 _showContentLibrary 回退分支。
-      await pumpChatPage(tester, isDm: true);
+    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
-      await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tool-content-entries')));
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('tool-content-entries')));
-      await tester.pumpAndSettle();
-
-      // 资料库 sheet 出现时聊天页输入框仍应在栈中。
-      expect(
-        find.byKey(const Key('campaign-chat-input')),
-        findsOneWidget,
-      );
-    },
-  );
+    // 资料库 sheet 出现时聊天页输入框仍应在栈中。
+    expect(find.byKey(const Key('campaign-chat-input')), findsOneWidget);
+  });
 
   // Spec §顶部: 搜索结果点击后应跳转到对应消息气泡并高亮 800ms。
-  testWidgets(
-    'chat search result tap jumps to message and highlights it',
-    (tester) async {
-      campaignClient.messages = const [
-        CampaignChatMessage(
-          id: 'msg-target',
-          campaignId: 'camp-1',
-          senderId: 'user-2',
-          campaignActorId: null,
-          displayName: 'Player Two',
-          avatarUrl: null,
-          kind: 'say',
-          content: '我发现了一个线索',
-          createdAt: '2026-07-09T00:00:00.000Z',
-        ),
-      ];
-      await pumpChatPage(tester);
+  testWidgets('chat search result tap jumps to message and highlights it', (
+    tester,
+  ) async {
+    campaignClient.messages = const [
+      CampaignChatMessage(
+        id: 'msg-target',
+        campaignId: 'camp-1',
+        senderId: 'user-2',
+        campaignActorId: null,
+        displayName: 'Player Two',
+        avatarUrl: null,
+        kind: 'say',
+        content: '我发现了一个线索',
+        createdAt: '2026-07-09T00:00:00.000Z',
+      ),
+    ];
+    await pumpChatPage(tester);
 
-      // 打开搜索面板。
-      await tester.tap(find.byTooltip('搜索'));
-      await tester.pumpAndSettle();
+    // 打开搜索面板。
+    await tester.tap(find.byTooltip('搜索'));
+    await tester.pumpAndSettle();
 
-      // 输入关键词触发搜索 (FakeClient.listMessages 直接返回 messages)。
-      await tester.enterText(
-        find.byKey(const Key('campaign-chat-search-field')),
-        '线索',
-      );
-      await tester.pumpAndSettle();
+    // 输入关键词触发搜索 (FakeClient.listMessages 直接返回 messages)。
+    await tester.enterText(
+      find.byKey(const Key('campaign-chat-search-field')),
+      '线索',
+    );
+    await tester.pumpAndSettle();
 
-      // 搜索结果应可点击。
-      expect(
-        find.byKey(const Key('campaign-chat-search-result-msg-target')),
-        findsOneWidget,
-      );
+    // 搜索结果应可点击。
+    expect(
+      find.byKey(const Key('campaign-chat-search-result-msg-target')),
+      findsOneWidget,
+    );
 
-      // 点击结果, sheet 应关闭, 聊天页仍可见, 目标消息高亮。
-      await tester.tap(
-        find.byKey(const Key('campaign-chat-search-result-msg-target')),
-      );
-      await tester.pumpAndSettle();
+    // 点击结果, sheet 应关闭, 聊天页仍可见, 目标消息高亮。
+    await tester.tap(
+      find.byKey(const Key('campaign-chat-search-result-msg-target')),
+    );
+    await tester.pumpAndSettle();
 
-      // 搜索 sheet 应当关闭。
-      expect(
-        find.byKey(const Key('campaign-chat-search-field')),
-        findsNothing,
-      );
-      // 聊天页仍在栈中。
-      expect(
-        find.byKey(const Key('campaign-chat-input')),
-        findsOneWidget,
-      );
-      // 目标消息气泡可见。
-      expect(find.text('我发现了一个线索'), findsOneWidget);
-    },
-  );
+    // 搜索 sheet 应当关闭。
+    expect(find.byKey(const Key('campaign-chat-search-field')), findsNothing);
+    // 聊天页仍在栈中。
+    expect(find.byKey(const Key('campaign-chat-input')), findsOneWidget);
+    // 目标消息气泡可见。
+    expect(find.text('我发现了一个线索'), findsOneWidget);
+  });
 
   // Spec §顶部: AppBar 副标题应显示简要在线状态 (成员数 + 当前发言身份),
   // 而不是静态 "战役聊天室" 文案。
@@ -1199,33 +1250,55 @@ void main() {
     },
   );
 
-  testWidgets(
-    'player chat page also has no more-menu',
-    (tester) async {
-      await pumpChatPage(tester, isDm: false);
+  testWidgets('player chat page also has no more-menu', (tester) async {
+    await pumpChatPage(tester, isDm: false);
 
-      expect(find.byKey(const Key('campaign-chat-more-menu')), findsNothing);
-    },
-  );
+    expect(find.byKey(const Key('campaign-chat-more-menu')), findsNothing);
+  });
 }
 
 class _RecordingCampaignClient implements CampaignClient {
   @override
-  Future<void> markCampaignRead({required String apiBaseUrl, required String accessToken, required String campaignId}) async {}
+  Future<void> markCampaignRead({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+  }) async {}
   @override
-  Future<CampaignMembership> updateSpeaker({required String apiBaseUrl, required String accessToken, required String campaignId, required String speakerMode, String? actorId}) => throw UnimplementedError();
+  Future<CampaignMembership> updateSpeaker({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String speakerMode,
+    String? actorId,
+  }) => throw UnimplementedError();
   @override
-  Future<List<CampaignArchiveEntry>> listArchives({required String apiBaseUrl, required String accessToken, required String campaignId, String? kind}) async => const [];
+  Future<List<CampaignArchiveEntry>> listArchives({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    String? kind,
+  }) async => const [];
   final List<_CreatedArchiveCall> createArchiveEntryCalls = [];
   @override
-  Future<CampaignArchiveEntry> createArchiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String kind, required String title, String? summary, Map<String, Object?>? payload}) async {
-    createArchiveEntryCalls.add(_CreatedArchiveCall(
-      campaignId: campaignId,
-      kind: kind,
-      title: title,
-      summary: summary,
-      payload: payload,
-    ));
+  Future<CampaignArchiveEntry> createArchiveEntry({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String kind,
+    required String title,
+    String? summary,
+    Map<String, Object?>? payload,
+  }) async {
+    createArchiveEntryCalls.add(
+      _CreatedArchiveCall(
+        campaignId: campaignId,
+        kind: kind,
+        title: title,
+        summary: summary,
+        payload: payload,
+      ),
+    );
     return CampaignArchiveEntry(
       id: 'archive-${createArchiveEntryCalls.length}',
       campaignId: campaignId,
@@ -1237,10 +1310,26 @@ class _RecordingCampaignClient implements CampaignClient {
       updatedAt: '2026-07-17T00:00:00.000Z',
     );
   }
+
   @override
-  Future<CampaignArchiveEntry> updateArchiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String entryId, String? kind, String? title, String? summary, Map<String, Object?>? payload, bool? pinned}) => throw UnimplementedError();
+  Future<CampaignArchiveEntry> updateArchiveEntry({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String entryId,
+    String? kind,
+    String? title,
+    String? summary,
+    Map<String, Object?>? payload,
+    bool? pinned,
+  }) => throw UnimplementedError();
   @override
-  Future<void> archiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String entryId}) => throw UnimplementedError();
+  Future<void> archiveEntry({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String entryId,
+  }) => throw UnimplementedError();
   final List<_SentMessageCall> sendMessageCalls = [];
   List<CampaignChatMessage> messages = [];
   bool canManageCampaign = false;
@@ -1262,7 +1351,8 @@ class _RecordingCampaignClient implements CampaignClient {
   }) async {
     return CampaignWorkspaceContext(
       campaign: _campaign,
-      membership: workspaceMembership ??
+      membership:
+          workspaceMembership ??
           const CampaignMembership(
             id: 'member-1',
             campaignId: 'camp-1',

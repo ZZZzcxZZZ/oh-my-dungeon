@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -47,6 +46,7 @@ import '../../../features/vault/domain/vault_models.dart';
 import '../../../features/vault/presentation/vault_sync_controller.dart';
 import '../domain/active_server_session.dart';
 import 'home_dashboard_page.dart';
+import 'content_bootstrap_gate.dart';
 import 'settings_tab_page.dart';
 
 /// Bottom-navigation shell shown after a server profile is selected.
@@ -68,6 +68,7 @@ class MainShell extends StatefulWidget {
     this.serverProfilesPageBuilder,
     this.onSwitchToProfile,
     this.enableBackgroundSync = true,
+    this.bundledContentLoader,
     super.key,
   });
 
@@ -84,6 +85,7 @@ class MainShell extends StatefulWidget {
   final WidgetBuilder? serverProfilesPageBuilder;
   final ValueChanged<ServerProfile>? onSwitchToProfile;
   final bool enableBackgroundSync;
+  final Future<String> Function()? bundledContentLoader;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -111,6 +113,7 @@ class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
   String? _activeCampaignId;
   String? _deviceId;
+  late final Future<void> _contentBootstrap;
 
   @override
   void initState() {
@@ -152,7 +155,7 @@ class _MainShellState extends State<MainShell> {
     _libraryController = ContentLibraryController(
       repository: _contentRepository,
     );
-    unawaited(_installBundledContent());
+    _contentBootstrap = _installBundledContent();
     _actorController = CampaignActorController(
       cacheRepository: _campaignCacheRepository,
       apiClient: HttpCampaignSyncApiClient(),
@@ -259,6 +262,7 @@ class _MainShellState extends State<MainShell> {
     if (widget.database == null) return;
     final installed = await BundledContentInstaller(
       repository: _localContentRepository,
+      loadBundle: widget.bundledContentLoader,
     ).installIfAvailable();
     if (installed && mounted) {
       await _libraryController.refresh();
@@ -310,6 +314,13 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    return ContentBootstrapGate(
+      future: _contentBootstrap,
+      builder: _buildReadyShell,
+    );
+  }
+
+  Widget _buildReadyShell(BuildContext context) {
     final pages = [
       HomeDashboardPage(
         session: widget.session,

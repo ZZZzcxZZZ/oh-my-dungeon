@@ -33,4 +33,25 @@ void main() {
     expect(await repository.getByKey('test.bundle:feat/example'), isNotNull);
     expect(await installer.installIfAvailable(), isFalse);
   });
+
+  test(
+    'reimports corrected content with the same version and entry count',
+    () async {
+      final repository = MemoryContentRepository();
+      var bundle = _bundle;
+      final installer = BundledContentInstaller(
+        repository: repository,
+        loadBundle: () async => bundle,
+      );
+
+      expect(await installer.installIfAvailable(), isTrue);
+      bundle = _bundle.replaceFirst('Example feat', 'Corrected feat');
+
+      expect(await installer.installIfAvailable(), isTrue);
+      expect(
+        (await repository.getByKey('test.bundle:feat/example'))?.name,
+        'Corrected feat',
+      );
+    },
+  );
 }

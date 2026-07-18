@@ -222,6 +222,7 @@ void main() {
     final packages = await repository.watchPackages().first;
     expect(packages, hasLength(1));
     expect(packages.first.id, 'example');
+    expect(packages.first.contentHash, 'hash-1');
   });
 
   test('setting a favorite enqueues a vault operation', () async {

@@ -493,6 +493,7 @@ class DriftContentRepository implements ContentRepository {
       locale: row.locale,
       system: row.system,
       entryCount: row.entryCount,
+      contentHash: row.contentHash,
     );
   }
 

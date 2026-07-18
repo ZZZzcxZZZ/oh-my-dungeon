@@ -48,6 +48,8 @@ $repoRoot = Resolve-Path "$PSScriptRoot/.."
 $privateImportDir = Join-Path (Join-Path $repoRoot 'private-imports') 'phb-2024-v2'
 $manifestPath = Join-Path $privateImportDir 'manifest.json'
 $entriesDir = Join-Path $privateImportDir 'entries'
+$privateBundlePath = Join-Path (Join-Path $repoRoot 'private-imports') 'phb-2024-v2-bundle.json'
+$bundleBuilderPath = Join-Path $PSScriptRoot 'build-private-content-bundle.ps1'
 
 $clientDir = Join-Path (Join-Path $repoRoot 'apps') 'client_flutter'
 $bundledContentPath = Join-Path (Join-Path $clientDir 'assets') 'bundled_content.json'
@@ -102,45 +104,13 @@ Write-Done "前置检查通过"
 # --------------------------------------------------------------------------- #
 Write-Step "合并 manifest + entries/*.json 为单文件 bundle"
 
-$manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
-$entryFiles = Get-ChildItem -Path $entriesDir -Filter '*.json' -File
-if ($entryFiles.Count -eq 0) {
-    Write-Fail "entries 目录下无 .json 文件"
-    exit 1
+& $bundleBuilderPath -SourceDirectory $privateImportDir -OutputPath $privateBundlePath
+if ($LASTEXITCODE -ne 0) {
+    throw "私人资料包聚合失败"
 }
-
-# 逐个解析条目，丢弃 _sourcePath 等内部字段
-$entries = New-Object System.Collections.ArrayList
-foreach ($file in $entryFiles) {
-    $entry = Get-Content $file.FullName -Raw | ConvertFrom-Json
-    # 移除以下划线开头的内部字段（_sourcePath 等）
-    $cleanEntry = [ordered]@{}
-    foreach ($prop in $entry.PSObject.Properties) {
-        if (-not $prop.Name.StartsWith('_')) {
-            $cleanEntry[$prop.Name] = $prop.Value
-        }
-    }
-    [void]$entries.Add($cleanEntry)
-}
-
-# 构造 bundle：manifest 字段 + entries 数组
-$bundle = [ordered]@{
-    formatVersion = $manifest.formatVersion
-    id            = $manifest.id
-    name          = $manifest.name
-    version       = $manifest.version
-    locale        = $manifest.locale
-    system        = $manifest.system
-    entryCount    = $entries.Count
-    entries       = $entries
-}
-
-$bundleJson = $bundle | ConvertTo-Json -Depth 100 -Compress
-Write-Done "合并 $($entries.Count) 条条目 (manifest 期望 $($manifest.entryCount))"
-
-if ($entries.Count -ne $manifest.entryCount) {
-    Write-Host "    警告: 实际条目数与 manifest.entryCount 不一致，继续构建" -ForegroundColor Yellow
-}
+$bundleJson = Get-Content -LiteralPath $privateBundlePath -Raw -Encoding UTF8
+$bundle = $bundleJson | ConvertFrom-Json
+Write-Done "合并 $($bundle.entryCount) 条条目"
 
 # --------------------------------------------------------------------------- #
 # 3. 备份当前 bundled_content.json
@@ -231,7 +201,6 @@ if ($buildSuccess) {
     Write-Host ""
     Write-Host "    注意：本构建产物包含商业版权内容（玩家手册 2024 私有提取），" -ForegroundColor Yellow
     Write-Host "          仅限本地测试，不得向第三方分发。" -ForegroundColor Yellow
-    exit 0
 } else {
-    exit 1
+    throw "flutter build $Target failed"
 }

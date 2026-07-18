@@ -17,7 +17,11 @@ $ContentBundlePath = if ($ContentBundlePath) { $ContentBundlePath } else { $defa
 $OutputDirectory = if ($OutputDirectory) { $OutputDirectory } else { Join-Path $root "dist\android" }
 
 if (-not (Test-Path -LiteralPath $ContentBundlePath)) {
-  throw "Private content bundle was not found: $ContentBundlePath"
+  $bundleBuilder = Join-Path $PSScriptRoot "build-private-content-bundle.ps1"
+  & $bundleBuilder -OutputPath $ContentBundlePath
+  if ($LASTEXITCODE -ne 0) {
+    throw "Private content bundle generation failed"
+  }
 }
 
 if (-not (Test-Path -LiteralPath $assetPath)) {
@@ -53,7 +57,7 @@ try {
   }
 
   New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
-  $destination = Join-Path $OutputDirectory "dnd-table-tool-0.1.1-private-test.apk"
+  $destination = Join-Path $OutputDirectory "dnd-table-tool-0.1-private-test.apk"
   Copy-Item -LiteralPath $apk -Destination $destination -Force
   $hash = (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash
   Write-Host "APK: $destination"

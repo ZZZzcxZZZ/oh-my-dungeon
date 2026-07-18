@@ -29,9 +29,7 @@ class BundledContentInstaller {
 
     final installed = await _repository.watchPackages().first;
     final current = installed.where((item) => item.id == report.packageId);
-    if (current.isNotEmpty &&
-        current.first.version == report.version &&
-        current.first.entryCount == report.entryCount) {
+    if (current.isNotEmpty && current.first.contentHash == report.contentHash) {
       return false;
     }
 

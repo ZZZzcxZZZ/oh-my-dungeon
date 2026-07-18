@@ -1,6 +1,7 @@
 param(
   [int]$Port = 5173,
-  [switch]$ReplaceExisting
+  [switch]$ReplaceExisting,
+  [switch]$PublicContent
 )
 
 $ErrorActionPreference = "Stop"
@@ -34,11 +35,20 @@ if (Test-Path $webDir) {
   Remove-Item -LiteralPath $resolvedWebDir -Recurse -Force
 }
 
-Push-Location $clientDir
-try {
-  flutter build web --release --pwa-strategy=none
-} finally {
-  Pop-Location
+$privateContentDirectory = Join-Path $root "private-imports\phb-2024-v2"
+if (-not $PublicContent -and (Test-Path -LiteralPath $privateContentDirectory)) {
+  $privateBuilder = Join-Path $PSScriptRoot "build_private_client.ps1"
+  & $privateBuilder -Target web -BuildArgs @('--release', '--pwa-strategy=none')
+} else {
+  Push-Location $clientDir
+  try {
+    flutter build web --release --pwa-strategy=none
+    if ($LASTEXITCODE -ne 0) {
+      throw "Flutter web build failed with exit code $LASTEXITCODE"
+    }
+  } finally {
+    Pop-Location
+  }
 }
 
 $serviceWorkerPath = Join-Path $webDir "flutter_service_worker.js"

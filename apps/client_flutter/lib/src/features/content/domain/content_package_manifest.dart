@@ -7,6 +7,7 @@ class ContentPackageManifest {
     required this.locale,
     required this.system,
     required this.entryCount,
+    this.contentHash = '',
   });
 
   final int formatVersion;
@@ -16,6 +17,7 @@ class ContentPackageManifest {
   final String locale;
   final String system;
   final int entryCount;
+  final String contentHash;
 
   factory ContentPackageManifest.fromJson(Map<String, Object?> json) {
     final formatVersion = json['formatVersion'];
@@ -44,6 +46,20 @@ class ContentPackageManifest {
       locale: locale as String,
       system: system as String,
       entryCount: (entryCount as num).toInt(),
+      contentHash: json['contentHash'] as String? ?? '',
+    );
+  }
+
+  ContentPackageManifest copyWith({String? contentHash}) {
+    return ContentPackageManifest(
+      formatVersion: formatVersion,
+      id: id,
+      name: name,
+      version: version,
+      locale: locale,
+      system: system,
+      entryCount: entryCount,
+      contentHash: contentHash ?? this.contentHash,
     );
   }
 
@@ -55,5 +71,6 @@ class ContentPackageManifest {
         'locale': locale,
         'system': system,
         'entryCount': entryCount,
+        if (contentHash.isNotEmpty) 'contentHash': contentHash,
       };
 }

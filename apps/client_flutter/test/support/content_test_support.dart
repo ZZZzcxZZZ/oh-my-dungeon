@@ -137,7 +137,7 @@ class MemoryContentRepository implements ContentRepository {
     _assets.remove(packageId);
     _packages.remove(packageId);
 
-    _packages[packageId] = manifest;
+    _packages[packageId] = manifest.copyWith(contentHash: contentHash);
     _enabled[packageId] = true;
 
     for (final entry in entries) {

@@ -6,6 +6,24 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReleasePackagingTest(unittest.TestCase):
+    def test_private_bundle_builder_reads_every_json_file_as_utf8(self):
+        script = (ROOT / "scripts" / "build-private-content-bundle.ps1").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("Get-Content", script)
+        self.assertIn("-Encoding UTF8", script)
+        self.assertIn("phb-2024-v2-bundle.json", script)
+        self.assertIn("entryCount", script)
+
+    def test_local_web_preview_uses_the_private_builder_when_available(self):
+        script = (ROOT / "scripts" / "preview-client.ps1").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("build_private_client.ps1", script)
+        self.assertIn("phb-2024-v2", script)
+
     def test_private_apk_builder_stages_then_restores_the_placeholder(self):
         script = (ROOT / "scripts" / "build-private-test-apk.ps1").read_text(
             encoding="utf-8"
@@ -17,6 +35,7 @@ class ReleasePackagingTest(unittest.TestCase):
         self.assertIn("init.d", script)
         self.assertIn("finally", script)
         self.assertIn("WriteAllBytes", script)
+        self.assertIn("build-private-content-bundle.ps1", script)
 
         init_script = (ROOT / "scripts" / "gradle-repositories.init.gradle").read_text(
             encoding="utf-8"

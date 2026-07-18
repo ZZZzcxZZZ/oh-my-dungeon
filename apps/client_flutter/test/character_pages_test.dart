@@ -89,20 +89,19 @@ void main() {
     },
   );
 
-  testWidgets(
-    'character detail header falls back to initial when no avatar',
-    (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(home: CharacterDetailPage(character: _character)),
-      );
+  testWidgets('character detail header falls back to initial when no avatar', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: CharacterDetailPage(character: _character)),
+    );
 
-      final avatar = tester.widget<CircleAvatar>(
-        find.byKey(const Key('character-detail-avatar')),
-      );
-      expect(avatar.backgroundImage, isNull);
-      expect(avatar.child, isNotNull);
-    },
-  );
+    final avatar = tester.widget<CircleAvatar>(
+      find.byKey(const Key('character-detail-avatar')),
+    );
+    expect(avatar.backgroundImage, isNull);
+    expect(avatar.child, isNotNull);
+  });
 
   testWidgets('character resources can be added with a rest recovery rule', (
     tester,
@@ -312,9 +311,7 @@ void main() {
     expect(find.text('升级队列'), findsOneWidget);
     expect(find.text('新增：动作如潮'), findsOneWidget);
 
-    await tester.ensureVisible(
-      find.widgetWithText(FilledButton, '应用等级规则'),
-    );
+    await tester.ensureVisible(find.widgetWithText(FilledButton, '应用等级规则'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, '应用等级规则'));
     await tester.pumpAndSettle();
@@ -1663,6 +1660,166 @@ void main() {
     expect(submitted!.notes, contains('侍僧 / Acolyte'));
   });
 
+  testWidgets('standard build persists structured saves and guided skills', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    final fighter = ContentEntry.fromJson({
+      'id': 'test:class/fighter',
+      'type': 'class',
+      'slug': 'fighter',
+      'name': '战士',
+      'body': <Map<String, Object?>>[],
+      'revision': 1,
+      'structured': {
+        'hitDie': 'd10',
+        'savingThrows': '力量与体质',
+        'skills': '选择2项：特技、驯兽、运动、历史、洞悉、威吓、游说、察觉、求生',
+      },
+      'rules': {
+        'progression': [
+          {
+            'level': 1,
+            'grants': [
+              {'id': 'second-wind', 'kind': 'feature', 'label': '回气'},
+            ],
+          },
+        ],
+      },
+    });
+    CharacterEditDraft? submitted;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          contentEntries: [fighter],
+          onSubmit: (draft) async {
+            submitted = draft;
+            return true;
+          },
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const Key('standard-character-name-field')),
+      '莱娅',
+    );
+    await _goToBuilderStep(tester, 4, '熟练');
+    await tester.tap(find.byKey(const Key('standard-skill-察觉-chip')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('standard-skill-求生-chip')));
+    await tester.pumpAndSettle();
+    await _goToBuilderStep(tester, 8, '审核');
+    await tester.tap(find.widgetWithText(FilledButton, '创建角色'));
+    await tester.pumpAndSettle();
+
+    expect(submitted, isNotNull);
+    expect(submitted!.saves['str'], isTrue);
+    expect(submitted!.saves['con'], isTrue);
+    expect(submitted!.skills['运动'], isTrue);
+    expect(submitted!.skills['威吓'], isTrue);
+    expect(submitted!.skills['察觉'], isTrue);
+    expect(submitted!.skills['求生'], isTrue);
+  });
+
+  testWidgets('standard build exposes all three ability generation methods', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          onSubmit: (_) async => true,
+        ),
+      ),
+    );
+    await _goToBuilderStep(tester, 3, '属性');
+
+    expect(find.byKey(const Key('ability-method-standard')), findsOneWidget);
+    expect(find.byKey(const Key('ability-method-point-buy')), findsOneWidget);
+    expect(find.byKey(const Key('ability-method-rolled')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('ability-method-point-buy')));
+    await tester.pumpAndSettle();
+    expect(find.text('剩余 0 / 27 点'), findsOneWidget);
+    expect(find.byKey(const Key('point-buy-str-decrease')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('ability-method-rolled')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('reroll-ability-scores')), findsOneWidget);
+  });
+  testWidgets('standard build opens option references in a floating reader', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          contentEntries: const [_fighterContent],
+          onSubmit: (_) async => true,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('查看 战士 / Fighter'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.text('战士 / Fighter'), findsWidgets);
+  });
+
+  testWidgets('standard build shows structured class rule summaries', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          contentEntries: const [_fighterContent],
+          onSubmit: (_) async => true,
+        ),
+      ),
+    );
+
+    expect(find.text('职业规则摘要'), findsOneWidget);
+    expect(find.text('力量或敏捷'), findsOneWidget);
+    expect(find.text('d10'), findsOneWidget);
+
+    await _goToBuilderStep(tester, 4, '熟练');
+    expect(find.text('力量与体质'), findsOneWidget);
+    expect(find.text('简易武器与军用武器'), findsOneWidget);
+    expect(find.text('轻甲、中甲、重甲与盾牌'), findsOneWidget);
+    expect(find.text('职业技能 0/2 · 背景 2'), findsOneWidget);
+    expect(find.byKey(const Key('standard-skill-欺瞒-chip')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('standard-skill-察觉-chip')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('standard-skill-求生-chip')));
+    await tester.pumpAndSettle();
+    expect(find.text('职业技能 2/2 · 背景 2'), findsOneWidget);
+    final disabledThirdChoice = tester.widget<FilterChip>(
+      find.byKey(const Key('standard-skill-洞悉-chip')),
+    );
+    expect(disabledThirdChoice.onSelected, isNull);
+
+    await _goToBuilderStep(tester, 5, '装备');
+    expect(find.textContaining('链甲、巨剑'), findsOneWidget);
+  });
   testWidgets('standard build can add library spells and equipment', (
     tester,
   ) async {
@@ -1749,8 +1906,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: CharacterEditorPage(
-            onPickImage: () async =>
-                (bytes: fakeBytes, mimeType: 'image/png'),
+            onPickImage: () async => (bytes: fakeBytes, mimeType: 'image/png'),
             onSubmit: (draft) async {
               submitted = draft;
               return true;
@@ -1762,10 +1918,7 @@ void main() {
       // 从标准引导进入完整角色卡。
       await tester.tap(find.widgetWithText(FilledButton, '标准创建'));
       await tester.pumpAndSettle();
-      final fullSheetButton = find.widgetWithText(
-        OutlinedButton,
-        '继续编辑完整角色卡',
-      );
+      final fullSheetButton = find.widgetWithText(OutlinedButton, '继续编辑完整角色卡');
       await tester.tap(
         fullSheetButton.evaluate().isNotEmpty
             ? fullSheetButton
@@ -1856,59 +2009,54 @@ void main() {
     },
   );
 
-  testWidgets(
-    'standard build details step exposes avatar picker',
-    (tester) async {
-      final fakeBytes = _validPngBytes;
-      CharacterEditDraft? submitted;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: CharacterEditorPage(
-            defaultCreationMethod: 'standard',
-            onPickImage: () async =>
-                (bytes: fakeBytes, mimeType: 'image/jpeg'),
-            onSubmit: (draft) async {
-              submitted = draft;
-              return true;
-            },
-          ),
+  testWidgets('standard build details step exposes avatar picker', (
+    tester,
+  ) async {
+    final fakeBytes = _validPngBytes;
+    CharacterEditDraft? submitted;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          onPickImage: () async => (bytes: fakeBytes, mimeType: 'image/jpeg'),
+          onSubmit: (draft) async {
+            submitted = draft;
+            return true;
+          },
         ),
-      );
+      ),
+    );
 
-      expect(find.text('标准创建角色'), findsOneWidget);
+    expect(find.text('标准创建角色'), findsOneWidget);
 
-      // 跳到"详情"步骤（step 7）。
-      await _goToBuilderStep(tester, 7, '详情');
-      await tester.pumpAndSettle();
+    // 跳到"详情"步骤（step 7）。
+    await _goToBuilderStep(tester, 7, '详情');
+    await tester.pumpAndSettle();
 
-      // 详情步骤出现头像选择器。
-      expect(
-        find.byKey(const Key('standard-character-avatar-picker')),
-        findsOneWidget,
-      );
-      await tester.tap(find.widgetWithText(OutlinedButton, '选择图片'));
-      await tester.pumpAndSettle();
+    // 详情步骤出现头像选择器。
+    expect(
+      find.byKey(const Key('standard-character-avatar-picker')),
+      findsOneWidget,
+    );
+    await tester.tap(find.widgetWithText(OutlinedButton, '选择图片'));
+    await tester.pumpAndSettle();
 
-      // 回到职业步骤填名字并提交。
-      await _goToBuilderStep(tester, 0, '职业');
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const Key('standard-character-name-field')),
-        'StandardAvatar',
-      );
-      await _goToBuilderStep(tester, 8, '审核');
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, '创建角色'));
-      await tester.pumpAndSettle();
+    // 回到职业步骤填名字并提交。
+    await _goToBuilderStep(tester, 0, '职业');
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('standard-character-name-field')),
+      'StandardAvatar',
+    );
+    await _goToBuilderStep(tester, 8, '审核');
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '创建角色'));
+    await tester.pumpAndSettle();
 
-      expect(submitted, isNotNull);
-      expect(submitted!.avatarUrl, isNotNull);
-      expect(
-        submitted!.avatarUrl!.startsWith('data:image/jpeg;base64,'),
-        isTrue,
-      );
-    },
-  );
+    expect(submitted, isNotNull);
+    expect(submitted!.avatarUrl, isNotNull);
+    expect(submitted!.avatarUrl!.startsWith('data:image/jpeg;base64,'), isTrue);
+  });
 }
 
 const _validPngDataUrl =
@@ -1983,7 +2131,16 @@ const _fighterContent = ContentEntry(
   name: '战士 / Fighter',
   body: [],
   revision: 1,
-  structured: {'page': 60},
+  structured: {
+    'page': 60,
+    'primaryAbility': '力量或敏捷',
+    'hitDie': 'd10',
+    'savingThrows': '力量与体质',
+    'skills': '选择2项：特技、驯兽、运动、历史、洞悉、威吓、游说、察觉、求生',
+    'weaponProficiency': '简易武器与军用武器',
+    'armorProficiency': '轻甲、中甲、重甲与盾牌',
+    'startingEquipment': '链甲、巨剑、轻弩、20支弩矢、地城套组以及4GP',
+  },
   tags: ['private-phb-2024-index', 'class'],
   source: ContentSource(label: 'Private PHB 2024 PDF Index'),
 );

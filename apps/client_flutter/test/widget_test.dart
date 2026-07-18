@@ -611,61 +611,60 @@ void main() {
     authController.dispose();
   });
 
-  testWidgets(
-    'only dm mode can open the three-step campaign creation guide',
-    (tester) async {
-      final store = InMemoryServerProfileStore();
-      await store.saveProfile(profile);
-      await store.setDefaultProfileId(profile.id);
-      final tokenStore = InMemoryAuthTokenStore();
-      await tokenStore.saveTokens(
-        profile.id,
-        const StoredAuthTokens(
-          accessToken: 'access-token',
-          refreshToken: 'refresh-token',
-        ),
-      );
-      final modeController = ClientModeController();
+  testWidgets('only dm mode can open the three-step campaign creation guide', (
+    tester,
+  ) async {
+    final store = InMemoryServerProfileStore();
+    await store.saveProfile(profile);
+    await store.setDefaultProfileId(profile.id);
+    final tokenStore = InMemoryAuthTokenStore();
+    await tokenStore.saveTokens(
+      profile.id,
+      const StoredAuthTokens(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      ),
+    );
+    final modeController = ClientModeController();
 
-      await tester.pumpWidget(
-        DndTableApp(
-          serverProfileStore: store,
-          authTokenStore: tokenStore,
-          authClient: _FakeAuthClient(),
-          campaignClient: _FakeCampaignClient(),
-          modeController: modeController,
-        ),
-      );
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      DndTableApp(
+        serverProfileStore: store,
+        authTokenStore: tokenStore,
+        authClient: _FakeAuthClient(),
+        campaignClient: _FakeCampaignClient(),
+        modeController: modeController,
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.text('战役'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('战役'));
+    await tester.pumpAndSettle();
 
-      expect(find.byTooltip('使用邀请码加入战役'), findsOneWidget);
-      expect(find.widgetWithText(FloatingActionButton, '加入战役'), findsNothing);
-      expect(find.byKey(const Key('campaign-create-button')), findsNothing);
+    expect(find.byTooltip('使用邀请码加入战役'), findsOneWidget);
+    expect(find.widgetWithText(FloatingActionButton, '加入战役'), findsNothing);
+    expect(find.byKey(const Key('campaign-create-button')), findsNothing);
 
-      await modeController.setMode(ClientMode.dungeonMaster);
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('campaign-create-button')), findsOneWidget);
+    await modeController.setMode(ClientMode.dungeonMaster);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('campaign-create-button')), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('campaign-create-button')));
-      await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('campaign-create-button')));
+    await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('campaign-creation-guide')), findsOneWidget);
-      expect(find.text('基本信息'), findsOneWidget);
-      expect(find.text('下一步'), findsOneWidget);
+    expect(find.byKey(const Key('campaign-creation-guide')), findsOneWidget);
+    expect(find.text('基本信息'), findsOneWidget);
+    expect(find.text('下一步'), findsOneWidget);
 
-      await tester.tap(find.text('取消'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('campaign-create-button')), findsOneWidget);
-      expect(find.widgetWithText(FloatingActionButton, '加入战役'), findsNothing);
+    expect(find.byKey(const Key('campaign-create-button')), findsOneWidget);
+    expect(find.widgetWithText(FloatingActionButton, '加入战役'), findsNothing);
 
-      await tester.pumpWidget(const SizedBox.shrink());
-      modeController.dispose();
-    },
-  );
+    await tester.pumpWidget(const SizedBox.shrink());
+    modeController.dispose();
+  });
 
   testWidgets('campaigns open a qq-style chat room with say and action input', (
     tester,
@@ -761,7 +760,7 @@ void main() {
     await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
     // Spec §输入栏 merged tool panel: 桌面工具 entry removed; labels follow spec.
-    expect(find.text('技能检定'), findsOneWidget);
+    expect(find.text('代掷检定'), findsOneWidget);
     expect(find.text('掷骰'), findsOneWidget);
     expect(find.text('资料条目'), findsOneWidget);
 
@@ -792,7 +791,7 @@ void main() {
     await tester.tap(find.text('Fire Bolt'));
     await tester.pumpAndSettle();
     expect(find.text('A mote of fire.'), findsOneWidget);
-    await tester.tap(find.byType(BackButton));
+    await tester.tap(find.byKey(const Key('content-detail-close')));
     await tester.pumpAndSettle();
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -915,7 +914,7 @@ void main() {
     // Spec §输入栏: 桌面工具 entry removed; merged panel exposes the
     // spec-defined 11 tools directly. Verify a few key tools are present.
     expect(find.text('掷骰'), findsOneWidget);
-    expect(find.text('技能检定'), findsOneWidget);
+    expect(find.text('代掷检定'), findsOneWidget);
     expect(find.text('资料条目'), findsOneWidget);
     // 桌面工具 info-only sheet is gone.
     expect(find.text('桌面工具'), findsNothing);
@@ -1117,7 +1116,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('campaign-open-center')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('DM 控场'));
+    await tester.tap(
+      find.byKey(const Key('campaign-overview-dm-control-entry')),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('遭遇控场'), findsOneWidget);
@@ -1156,7 +1157,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('DM 控场'), findsNothing);
-    expect(find.text('技能检定'), findsNothing);
+    expect(find.text('代掷检定'), findsNothing);
   });
 
   testWidgets('offline settings exposes servers and sync status', (
@@ -1290,17 +1291,55 @@ class _FixedCampaignController extends CampaignController {
 
 class _FakeCampaignClient implements CampaignClient {
   @override
-  Future<void> markCampaignRead({required String apiBaseUrl, required String accessToken, required String campaignId}) async {}
+  Future<void> markCampaignRead({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+  }) async {}
   @override
-  Future<CampaignMembership> updateSpeaker({required String apiBaseUrl, required String accessToken, required String campaignId, required String speakerMode, String? actorId}) => throw UnimplementedError();
+  Future<CampaignMembership> updateSpeaker({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String speakerMode,
+    String? actorId,
+  }) => throw UnimplementedError();
   @override
-  Future<List<CampaignArchiveEntry>> listArchives({required String apiBaseUrl, required String accessToken, required String campaignId, String? kind}) async => const [];
+  Future<List<CampaignArchiveEntry>> listArchives({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    String? kind,
+  }) async => const [];
   @override
-  Future<CampaignArchiveEntry> createArchiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String kind, required String title, String? summary, Map<String, Object?>? payload}) => throw UnimplementedError();
+  Future<CampaignArchiveEntry> createArchiveEntry({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String kind,
+    required String title,
+    String? summary,
+    Map<String, Object?>? payload,
+  }) => throw UnimplementedError();
   @override
-  Future<CampaignArchiveEntry> updateArchiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String entryId, String? kind, String? title, String? summary, Map<String, Object?>? payload, bool? pinned}) => throw UnimplementedError();
+  Future<CampaignArchiveEntry> updateArchiveEntry({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String entryId,
+    String? kind,
+    String? title,
+    String? summary,
+    Map<String, Object?>? payload,
+    bool? pinned,
+  }) => throw UnimplementedError();
   @override
-  Future<void> archiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String entryId}) => throw UnimplementedError();
+  Future<void> archiveEntry({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String entryId,
+  }) => throw UnimplementedError();
   _FakeCampaignClient({
     List<CampaignChatMessage> initialMessages = const [],
     Campaign? campaign,

@@ -59,8 +59,11 @@ class CharacterController extends ChangeNotifier {
       _lastCreatedCharacter = character;
       notifyListeners();
       return true;
-    } catch (_) {
-      _error = '创建角色失败';
+    } catch (e, stack) {
+      // Spec §错误反馈: 真实异常打到 console 方便定位 (Drift 事务失败、
+      // rules engine 解析失败、约束冲突等), 同时给用户可读的错误信息。
+      debugPrint('createCharacter failed: $e\n$stack');
+      _error = '创建角色失败：$e';
       notifyListeners();
       return false;
     }
@@ -72,8 +75,9 @@ class CharacterController extends ChangeNotifier {
       await _repository.save(character);
       notifyListeners();
       return true;
-    } catch (_) {
-      _error = '保存角色失败';
+    } catch (e, stack) {
+      debugPrint('updateCharacter failed: $e\n$stack');
+      _error = '保存角色失败：$e';
       notifyListeners();
       return false;
     }

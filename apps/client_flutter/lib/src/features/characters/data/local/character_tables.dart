@@ -17,6 +17,11 @@ class Characters extends Table {
 }
 
 /// 角色引用的本地资料条目快照。删除资料包后角色仍可凭借 snapshot 使用。
+///
+/// 主键为 {characterId, entryKey}: 一个角色对同一个资料条目只能有一条
+/// 引用, 但可以有多个 slot="feature" 的引用 (每个职业特性一条)。
+/// 旧版本主键为 {characterId, slot}, 导致同 kind 的多个 grant (如多个
+/// feature) 主键冲突 (SqliteException 1555)。schema v8 修正此约束。
 @DataClassName('CharacterContentRefRow')
 class CharacterContentRefs extends Table {
   TextColumn get characterId => text()();
@@ -26,5 +31,5 @@ class CharacterContentRefs extends Table {
   TextColumn get snapshotJson => text().withDefault(const Constant('{}'))();
 
   @override
-  Set<Column<Object>> get primaryKey => {characterId, slot};
+  Set<Column<Object>> get primaryKey => {characterId, entryKey};
 }

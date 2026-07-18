@@ -2648,6 +2648,18 @@ class $LocalContentEntriesTable extends LocalContentEntries
     requiredDuringInsert: false,
     defaultValue: const Constant('{}'),
   );
+  static const VerificationMeta _relationsJsonMeta = const VerificationMeta(
+    'relationsJson',
+  );
+  @override
+  late final GeneratedColumn<String> relationsJson = GeneratedColumn<String>(
+    'relations_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('[]'),
+  );
   static const VerificationMeta _tagsJsonMeta = const VerificationMeta(
     'tagsJson',
   );
@@ -2695,6 +2707,7 @@ class $LocalContentEntriesTable extends LocalContentEntries
     bodyJson,
     structuredJson,
     rulesJson,
+    relationsJson,
     tagsJson,
     sourceLabel,
     revision,
@@ -2787,6 +2800,15 @@ class $LocalContentEntriesTable extends LocalContentEntries
         rulesJson.isAcceptableOrUnknown(data['rules_json']!, _rulesJsonMeta),
       );
     }
+    if (data.containsKey('relations_json')) {
+      context.handle(
+        _relationsJsonMeta,
+        relationsJson.isAcceptableOrUnknown(
+          data['relations_json']!,
+          _relationsJsonMeta,
+        ),
+      );
+    }
     if (data.containsKey('tags_json')) {
       context.handle(
         _tagsJsonMeta,
@@ -2859,6 +2881,10 @@ class $LocalContentEntriesTable extends LocalContentEntries
         DriftSqlType.string,
         data['${effectivePrefix}rules_json'],
       )!,
+      relationsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}relations_json'],
+      )!,
       tagsJson: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}tags_json'],
@@ -2892,6 +2918,7 @@ class LocalContentEntryRow extends DataClass
   final String bodyJson;
   final String structuredJson;
   final String rulesJson;
+  final String relationsJson;
   final String tagsJson;
   final String sourceLabel;
   final int revision;
@@ -2906,6 +2933,7 @@ class LocalContentEntryRow extends DataClass
     required this.bodyJson,
     required this.structuredJson,
     required this.rulesJson,
+    required this.relationsJson,
     required this.tagsJson,
     required this.sourceLabel,
     required this.revision,
@@ -2923,6 +2951,7 @@ class LocalContentEntryRow extends DataClass
     map['body_json'] = Variable<String>(bodyJson);
     map['structured_json'] = Variable<String>(structuredJson);
     map['rules_json'] = Variable<String>(rulesJson);
+    map['relations_json'] = Variable<String>(relationsJson);
     map['tags_json'] = Variable<String>(tagsJson);
     map['source_label'] = Variable<String>(sourceLabel);
     map['revision'] = Variable<int>(revision);
@@ -2941,6 +2970,7 @@ class LocalContentEntryRow extends DataClass
       bodyJson: Value(bodyJson),
       structuredJson: Value(structuredJson),
       rulesJson: Value(rulesJson),
+      relationsJson: Value(relationsJson),
       tagsJson: Value(tagsJson),
       sourceLabel: Value(sourceLabel),
       revision: Value(revision),
@@ -2963,6 +2993,7 @@ class LocalContentEntryRow extends DataClass
       bodyJson: serializer.fromJson<String>(json['bodyJson']),
       structuredJson: serializer.fromJson<String>(json['structuredJson']),
       rulesJson: serializer.fromJson<String>(json['rulesJson']),
+      relationsJson: serializer.fromJson<String>(json['relationsJson']),
       tagsJson: serializer.fromJson<String>(json['tagsJson']),
       sourceLabel: serializer.fromJson<String>(json['sourceLabel']),
       revision: serializer.fromJson<int>(json['revision']),
@@ -2982,6 +3013,7 @@ class LocalContentEntryRow extends DataClass
       'bodyJson': serializer.toJson<String>(bodyJson),
       'structuredJson': serializer.toJson<String>(structuredJson),
       'rulesJson': serializer.toJson<String>(rulesJson),
+      'relationsJson': serializer.toJson<String>(relationsJson),
       'tagsJson': serializer.toJson<String>(tagsJson),
       'sourceLabel': serializer.toJson<String>(sourceLabel),
       'revision': serializer.toJson<int>(revision),
@@ -2999,6 +3031,7 @@ class LocalContentEntryRow extends DataClass
     String? bodyJson,
     String? structuredJson,
     String? rulesJson,
+    String? relationsJson,
     String? tagsJson,
     String? sourceLabel,
     int? revision,
@@ -3013,6 +3046,7 @@ class LocalContentEntryRow extends DataClass
     bodyJson: bodyJson ?? this.bodyJson,
     structuredJson: structuredJson ?? this.structuredJson,
     rulesJson: rulesJson ?? this.rulesJson,
+    relationsJson: relationsJson ?? this.relationsJson,
     tagsJson: tagsJson ?? this.tagsJson,
     sourceLabel: sourceLabel ?? this.sourceLabel,
     revision: revision ?? this.revision,
@@ -3033,6 +3067,9 @@ class LocalContentEntryRow extends DataClass
           ? data.structuredJson.value
           : this.structuredJson,
       rulesJson: data.rulesJson.present ? data.rulesJson.value : this.rulesJson,
+      relationsJson: data.relationsJson.present
+          ? data.relationsJson.value
+          : this.relationsJson,
       tagsJson: data.tagsJson.present ? data.tagsJson.value : this.tagsJson,
       sourceLabel: data.sourceLabel.present
           ? data.sourceLabel.value
@@ -3054,6 +3091,7 @@ class LocalContentEntryRow extends DataClass
           ..write('bodyJson: $bodyJson, ')
           ..write('structuredJson: $structuredJson, ')
           ..write('rulesJson: $rulesJson, ')
+          ..write('relationsJson: $relationsJson, ')
           ..write('tagsJson: $tagsJson, ')
           ..write('sourceLabel: $sourceLabel, ')
           ..write('revision: $revision')
@@ -3073,6 +3111,7 @@ class LocalContentEntryRow extends DataClass
     bodyJson,
     structuredJson,
     rulesJson,
+    relationsJson,
     tagsJson,
     sourceLabel,
     revision,
@@ -3091,6 +3130,7 @@ class LocalContentEntryRow extends DataClass
           other.bodyJson == this.bodyJson &&
           other.structuredJson == this.structuredJson &&
           other.rulesJson == this.rulesJson &&
+          other.relationsJson == this.relationsJson &&
           other.tagsJson == this.tagsJson &&
           other.sourceLabel == this.sourceLabel &&
           other.revision == this.revision);
@@ -3108,6 +3148,7 @@ class LocalContentEntriesCompanion
   final Value<String> bodyJson;
   final Value<String> structuredJson;
   final Value<String> rulesJson;
+  final Value<String> relationsJson;
   final Value<String> tagsJson;
   final Value<String> sourceLabel;
   final Value<int> revision;
@@ -3123,6 +3164,7 @@ class LocalContentEntriesCompanion
     this.bodyJson = const Value.absent(),
     this.structuredJson = const Value.absent(),
     this.rulesJson = const Value.absent(),
+    this.relationsJson = const Value.absent(),
     this.tagsJson = const Value.absent(),
     this.sourceLabel = const Value.absent(),
     this.revision = const Value.absent(),
@@ -3139,6 +3181,7 @@ class LocalContentEntriesCompanion
     this.bodyJson = const Value.absent(),
     this.structuredJson = const Value.absent(),
     this.rulesJson = const Value.absent(),
+    this.relationsJson = const Value.absent(),
     this.tagsJson = const Value.absent(),
     this.sourceLabel = const Value.absent(),
     required int revision,
@@ -3160,6 +3203,7 @@ class LocalContentEntriesCompanion
     Expression<String>? bodyJson,
     Expression<String>? structuredJson,
     Expression<String>? rulesJson,
+    Expression<String>? relationsJson,
     Expression<String>? tagsJson,
     Expression<String>? sourceLabel,
     Expression<int>? revision,
@@ -3176,6 +3220,7 @@ class LocalContentEntriesCompanion
       if (bodyJson != null) 'body_json': bodyJson,
       if (structuredJson != null) 'structured_json': structuredJson,
       if (rulesJson != null) 'rules_json': rulesJson,
+      if (relationsJson != null) 'relations_json': relationsJson,
       if (tagsJson != null) 'tags_json': tagsJson,
       if (sourceLabel != null) 'source_label': sourceLabel,
       if (revision != null) 'revision': revision,
@@ -3194,6 +3239,7 @@ class LocalContentEntriesCompanion
     Value<String>? bodyJson,
     Value<String>? structuredJson,
     Value<String>? rulesJson,
+    Value<String>? relationsJson,
     Value<String>? tagsJson,
     Value<String>? sourceLabel,
     Value<int>? revision,
@@ -3210,6 +3256,7 @@ class LocalContentEntriesCompanion
       bodyJson: bodyJson ?? this.bodyJson,
       structuredJson: structuredJson ?? this.structuredJson,
       rulesJson: rulesJson ?? this.rulesJson,
+      relationsJson: relationsJson ?? this.relationsJson,
       tagsJson: tagsJson ?? this.tagsJson,
       sourceLabel: sourceLabel ?? this.sourceLabel,
       revision: revision ?? this.revision,
@@ -3250,6 +3297,9 @@ class LocalContentEntriesCompanion
     if (rulesJson.present) {
       map['rules_json'] = Variable<String>(rulesJson.value);
     }
+    if (relationsJson.present) {
+      map['relations_json'] = Variable<String>(relationsJson.value);
+    }
     if (tagsJson.present) {
       map['tags_json'] = Variable<String>(tagsJson.value);
     }
@@ -3278,6 +3328,7 @@ class LocalContentEntriesCompanion
           ..write('bodyJson: $bodyJson, ')
           ..write('structuredJson: $structuredJson, ')
           ..write('rulesJson: $rulesJson, ')
+          ..write('relationsJson: $relationsJson, ')
           ..write('tagsJson: $tagsJson, ')
           ..write('sourceLabel: $sourceLabel, ')
           ..write('revision: $revision, ')
@@ -5328,7 +5379,7 @@ class $CharacterContentRefsTable extends CharacterContentRefs
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => {characterId, slot};
+  Set<GeneratedColumn> get $primaryKey => {characterId, entryKey};
   @override
   CharacterContentRefRow map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
@@ -9611,6 +9662,7 @@ typedef $$LocalContentEntriesTableCreateCompanionBuilder =
       Value<String> bodyJson,
       Value<String> structuredJson,
       Value<String> rulesJson,
+      Value<String> relationsJson,
       Value<String> tagsJson,
       Value<String> sourceLabel,
       required int revision,
@@ -9628,6 +9680,7 @@ typedef $$LocalContentEntriesTableUpdateCompanionBuilder =
       Value<String> bodyJson,
       Value<String> structuredJson,
       Value<String> rulesJson,
+      Value<String> relationsJson,
       Value<String> tagsJson,
       Value<String> sourceLabel,
       Value<int> revision,
@@ -9690,6 +9743,11 @@ class $$LocalContentEntriesTableFilterComposer
 
   ColumnFilters<String> get rulesJson => $composableBuilder(
     column: $table.rulesJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get relationsJson => $composableBuilder(
+    column: $table.relationsJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9768,6 +9826,11 @@ class $$LocalContentEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get relationsJson => $composableBuilder(
+    column: $table.relationsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get tagsJson => $composableBuilder(
     column: $table.tagsJson,
     builder: (column) => ColumnOrderings(column),
@@ -9826,6 +9889,11 @@ class $$LocalContentEntriesTableAnnotationComposer
 
   GeneratedColumn<String> get rulesJson =>
       $composableBuilder(column: $table.rulesJson, builder: (column) => column);
+
+  GeneratedColumn<String> get relationsJson => $composableBuilder(
+    column: $table.relationsJson,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get tagsJson =>
       $composableBuilder(column: $table.tagsJson, builder: (column) => column);
@@ -9892,6 +9960,7 @@ class $$LocalContentEntriesTableTableManager
                 Value<String> bodyJson = const Value.absent(),
                 Value<String> structuredJson = const Value.absent(),
                 Value<String> rulesJson = const Value.absent(),
+                Value<String> relationsJson = const Value.absent(),
                 Value<String> tagsJson = const Value.absent(),
                 Value<String> sourceLabel = const Value.absent(),
                 Value<int> revision = const Value.absent(),
@@ -9907,6 +9976,7 @@ class $$LocalContentEntriesTableTableManager
                 bodyJson: bodyJson,
                 structuredJson: structuredJson,
                 rulesJson: rulesJson,
+                relationsJson: relationsJson,
                 tagsJson: tagsJson,
                 sourceLabel: sourceLabel,
                 revision: revision,
@@ -9924,6 +9994,7 @@ class $$LocalContentEntriesTableTableManager
                 Value<String> bodyJson = const Value.absent(),
                 Value<String> structuredJson = const Value.absent(),
                 Value<String> rulesJson = const Value.absent(),
+                Value<String> relationsJson = const Value.absent(),
                 Value<String> tagsJson = const Value.absent(),
                 Value<String> sourceLabel = const Value.absent(),
                 required int revision,
@@ -9939,6 +10010,7 @@ class $$LocalContentEntriesTableTableManager
                 bodyJson: bodyJson,
                 structuredJson: structuredJson,
                 rulesJson: rulesJson,
+                relationsJson: relationsJson,
                 tagsJson: tagsJson,
                 sourceLabel: sourceLabel,
                 revision: revision,

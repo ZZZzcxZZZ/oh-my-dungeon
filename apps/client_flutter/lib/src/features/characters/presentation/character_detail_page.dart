@@ -1885,6 +1885,7 @@ class _RuntimePanelState extends State<_RuntimePanel> {
 
   @override
   Widget build(BuildContext context) {
+    final editable = widget.onUpdateRuntime != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1898,45 +1899,50 @@ class _RuntimePanelState extends State<_RuntimePanel> {
             inspiration: _inspiration,
             deathSaveSuccesses: _deathSaveSuccesses,
             deathSaveFailures: _deathSaveFailures,
-            onAdjustHp: _showHpAdjustment,
-            onTemporaryHpDecrease: _temporaryHp <= 0
+            onAdjustHp: editable ? _showHpAdjustment : null,
+            onTemporaryHpDecrease: !editable || _temporaryHp <= 0
                 ? null
                 : () => _setTemporaryHp(_temporaryHp - 1),
-            onTemporaryHpIncrease: () => _setTemporaryHp(_temporaryHp + 1),
-            onToggleInspiration: () => _setInspiration(!_inspiration),
-            onDeathSaveSuccess: _deathSaveSuccesses >= 3
+            onTemporaryHpIncrease: editable
+                ? () => _setTemporaryHp(_temporaryHp + 1)
+                : null,
+            onToggleInspiration: editable
+                ? () => _setInspiration(!_inspiration)
+                : null,
+            onDeathSaveSuccess: !editable || _deathSaveSuccesses >= 3
                 ? null
                 : () => _setDeathSaveSuccesses(_deathSaveSuccesses + 1),
-            onDeathSaveFailure: _deathSaveFailures >= 3
+            onDeathSaveFailure: !editable || _deathSaveFailures >= 3
                 ? null
                 : () => _setDeathSaveFailures(_deathSaveFailures + 1),
           ),
         ),
-        _Section(
-          title: '休息',
-          icon: Icons.hotel_outlined,
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              FilledButton.tonalIcon(
-                onPressed: _takeShortRest,
-                icon: const Icon(Icons.bedtime_outlined),
-                label: const Text('短休'),
-              ),
-              FilledButton.icon(
-                onPressed: _takeLongRest,
-                icon: const Icon(Icons.night_shelter_outlined),
-                label: const Text('长休'),
-              ),
-              OutlinedButton.icon(
-                onPressed: _resetDeathSaves,
-                icon: const Icon(Icons.restart_alt_outlined),
-                label: const Text('重置死亡豁免'),
-              ),
-            ],
+        if (editable)
+          _Section(
+            title: '休息',
+            icon: Icons.hotel_outlined,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.tonalIcon(
+                  onPressed: _takeShortRest,
+                  icon: const Icon(Icons.bedtime_outlined),
+                  label: const Text('短休'),
+                ),
+                FilledButton.icon(
+                  onPressed: _takeLongRest,
+                  icon: const Icon(Icons.night_shelter_outlined),
+                  label: const Text('长休'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _resetDeathSaves,
+                  icon: const Icon(Icons.restart_alt_outlined),
+                  label: const Text('重置死亡豁免'),
+                ),
+              ],
+            ),
           ),
-        ),
         _Section(
           title: '状态与效果',
           icon: Icons.warning_amber_outlined,
@@ -1955,52 +1961,56 @@ class _RuntimePanelState extends State<_RuntimePanel> {
                         avatar: const Icon(Icons.flag_outlined, size: 18),
                         deleteIcon: const Icon(Icons.cancel),
                         label: Text(condition),
-                        onDeleted: () => _removeCondition(condition),
+                        onDeleted: editable
+                            ? () => _removeCondition(condition)
+                            : null,
                       ),
                 ],
               ),
-              const SizedBox(height: 12),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 360),
-                child: TextField(
-                  key: const Key('condition-search-field'),
-                  controller: _conditionSearchController,
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    labelText: '搜索或输入自定义状态',
-                    prefixIcon: const Icon(Icons.search_outlined),
-                    suffixIcon: _conditionSearchController.text.isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: '清空状态搜索',
-                            onPressed: () {
-                              setState(_conditionSearchController.clear);
-                            },
-                            icon: const Icon(Icons.close_outlined),
-                          ),
-                    border: const OutlineInputBorder(),
+              if (editable) ...[
+                const SizedBox(height: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 360),
+                  child: TextField(
+                    key: const Key('condition-search-field'),
+                    controller: _conditionSearchController,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      labelText: '搜索或输入自定义状态',
+                      prefixIcon: const Icon(Icons.search_outlined),
+                      suffixIcon: _conditionSearchController.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: '清空状态搜索',
+                              onPressed: () {
+                                setState(_conditionSearchController.clear);
+                              },
+                              icon: const Icon(Icons.close_outlined),
+                            ),
+                      border: const OutlineInputBorder(),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final condition in _filteredConditionOptions())
-                    ActionChip(
-                      avatar: const Icon(Icons.add, size: 18),
-                      label: Text(condition),
-                      onPressed: () => _addCondition(condition),
-                    ),
-                  if (_canAddCustomCondition())
-                    FilledButton.icon(
-                      onPressed: _addCustomCondition,
-                      icon: const Icon(Icons.add_circle_outline),
-                      label: const Text('添加自定义状态'),
-                    ),
-                ],
-              ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final condition in _filteredConditionOptions())
+                      ActionChip(
+                        avatar: const Icon(Icons.add, size: 18),
+                        label: Text(condition),
+                        onPressed: () => _addCondition(condition),
+                      ),
+                    if (_canAddCustomCondition())
+                      FilledButton.icon(
+                        onPressed: _addCustomCondition,
+                        icon: const Icon(Icons.add_circle_outline),
+                        label: const Text('添加自定义状态'),
+                      ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -2163,10 +2173,10 @@ class _RuntimeStatusGrid extends StatelessWidget {
   final bool inspiration;
   final int deathSaveSuccesses;
   final int deathSaveFailures;
-  final VoidCallback onAdjustHp;
+  final VoidCallback? onAdjustHp;
   final VoidCallback? onTemporaryHpDecrease;
-  final VoidCallback onTemporaryHpIncrease;
-  final VoidCallback onToggleInspiration;
+  final VoidCallback? onTemporaryHpIncrease;
+  final VoidCallback? onToggleInspiration;
   final VoidCallback? onDeathSaveSuccess;
   final VoidCallback? onDeathSaveFailure;
 

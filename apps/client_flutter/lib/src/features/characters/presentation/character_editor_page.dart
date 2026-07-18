@@ -1,13 +1,16 @@
 import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../domain/ability_score_generator.dart';
 import '../domain/character.dart';
 import '../domain/character_edit_draft.dart';
 import '../domain/dnd5e_rules.dart';
 import '../domain/quick_build.dart';
 import '../domain/rules_driven_character_builder.dart';
+import '../domain/structured_class_rules.dart';
 import '../../content/domain/content_entry.dart';
 import '../../content/presentation/content_entry_preview_page.dart';
 import '../../campaigns/presentation/widgets/avatar_picker.dart';
@@ -635,15 +638,27 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
     }
 
     setState(() => _saving = true);
-    final ok = await widget.onSubmit(_draft(name));
-    if (!mounted) return;
-    setState(() => _saving = false);
-    if (ok) {
-      Navigator.of(context).maybePop();
-    } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('保存角色失败')));
+    try {
+      final ok = await widget.onSubmit(_draft(name));
+      if (!mounted) return;
+      if (ok) {
+        Navigator.of(context).maybePop();
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('保存角色失败')));
+      }
+    } catch (e, stack) {
+      // Spec §错误反馈: 表单提交过程中的任何异常都不能让 _saving 卡死,
+      // 必须复位按钮状态并把真实错误打到 console 方便定位。
+      debugPrint('character _submit failed: $e\n$stack');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('保存角色失败：$e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -657,64 +672,79 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
     }
 
     setState(() => _saving = true);
-    final entries = {
-      for (final entry in widget.contentEntries) entry.id: entry,
-    };
-    final selectedEntryIds = [
-      quickDraft.classEntryId,
-      quickDraft.speciesEntryId,
-      quickDraft.backgroundEntryId,
-    ].whereType<String>().toList(growable: false);
-    final hasStructuredRules = selectedEntryIds.any(
-      (entryId) => entries[entryId]?.rules != null,
-    );
-    final draft = hasStructuredRules
-        ? RulesDrivenCharacterBuilder(entries: entries).build(
-            name: name,
-            build: CharacterBuild(
-              level: quickDraft.level,
-              selections: {
-                if (quickDraft.classEntryId != null)
-                  'class': quickDraft.classEntryId!,
-                if (quickDraft.speciesEntryId != null)
-                  'species': quickDraft.speciesEntryId!,
-                if (quickDraft.backgroundEntryId != null)
-                  'background': quickDraft.backgroundEntryId!,
-              },
-              choices: quickDraft.ruleChoices,
-            ),
-            abilities: quickDraft.abilities ?? Dnd5eRules.defaultAbilities,
-            avatarUrl: quickDraft.avatarUrl ?? _effectiveAvatarUrl,
-            extraSpellRefs: quickDraft.spellRefs,
-            extraItemRefs: quickDraft.itemRefs,
-          )
-        : QuickBuildService.build(
-            QuickBuildSelection(
-              name: quickDraft.name,
-              className: quickDraft.className,
-              species: quickDraft.species,
-              background: quickDraft.background,
-              level: quickDraft.level,
-              spellRefs: quickDraft.spellRefs,
-              itemRefs: quickDraft.itemRefs,
-              abilities: quickDraft.abilities,
-              skillProficiencies: quickDraft.skillProficiencies,
-              classEntryId: quickDraft.classEntryId,
-              speciesEntryId: quickDraft.speciesEntryId,
-              backgroundEntryId: quickDraft.backgroundEntryId,
-              ruleChoices: quickDraft.ruleChoices,
+    try {
+      final entries = {
+        for (final entry in widget.contentEntries) entry.id: entry,
+      };
+      final selectedEntryIds = [
+        quickDraft.classEntryId,
+        quickDraft.speciesEntryId,
+        quickDraft.backgroundEntryId,
+      ].whereType<String>().toList(growable: false);
+      final hasStructuredRules = selectedEntryIds.any(
+        (entryId) => entries[entryId]?.rules != null,
+      );
+      final draft = hasStructuredRules
+          ? RulesDrivenCharacterBuilder(entries: entries).build(
+              name: name,
+              build: CharacterBuild(
+                level: quickDraft.level,
+                selections: {
+                  if (quickDraft.classEntryId != null)
+                    'class': quickDraft.classEntryId!,
+                  if (quickDraft.speciesEntryId != null)
+                    'species': quickDraft.speciesEntryId!,
+                  if (quickDraft.backgroundEntryId != null)
+                    'background': quickDraft.backgroundEntryId!,
+                },
+                choices: quickDraft.ruleChoices,
+              ),
+              abilities: quickDraft.abilities ?? Dnd5eRules.defaultAbilities,
               avatarUrl: quickDraft.avatarUrl ?? _effectiveAvatarUrl,
-            ),
-          );
-    final ok = await widget.onSubmit(draft);
-    if (!mounted) return;
-    setState(() => _saving = false);
-    if (ok) {
-      Navigator.of(context).maybePop();
+              extraSpellRefs: quickDraft.spellRefs,
+              extraItemRefs: quickDraft.itemRefs,
+              skillProficiencies:
+                  quickDraft.skillProficiencies ?? const <String>[],
+            )
+          : QuickBuildService.build(
+              QuickBuildSelection(
+                name: quickDraft.name,
+                className: quickDraft.className,
+                species: quickDraft.species,
+                background: quickDraft.background,
+                level: quickDraft.level,
+                spellRefs: quickDraft.spellRefs,
+                itemRefs: quickDraft.itemRefs,
+                abilities: quickDraft.abilities,
+                skillProficiencies: quickDraft.skillProficiencies,
+                classEntryId: quickDraft.classEntryId,
+                speciesEntryId: quickDraft.speciesEntryId,
+                backgroundEntryId: quickDraft.backgroundEntryId,
+                ruleChoices: quickDraft.ruleChoices,
+                avatarUrl: quickDraft.avatarUrl ?? _effectiveAvatarUrl,
+              ),
+            );
+      final ok = await widget.onSubmit(draft);
+      if (!mounted) return;
+      if (ok) {
+        Navigator.of(context).maybePop();
+      }
+      // On failure, the caller (onSubmit) is responsible for showing the
+      // specific error SnackBar — the editor does not have access to the
+      // controller's error message.
+    } catch (e, stack) {
+      // Spec §错误反馈: RulesDrivenCharacterBuilder.build() 或 onSubmit
+      // 抛出的任何异常都必须复位 _saving 并给用户可见反馈, 否则按钮会
+      // 一直灰着且无任何提示 (用户报告"一直不能创建角色"的直接原因)。
+      debugPrint('character _submitQuickBuild failed: $e\n$stack');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('创建角色失败：$e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
-    // On failure, the caller (onSubmit) is responsible for showing the
-    // specific error SnackBar — the editor does not have access to the
-    // controller's error message.
   }
 
   CharacterEditDraft _draft(String name) {
@@ -1153,6 +1183,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
   late Set<String> _selectedSkillProficiencies;
   late Map<String, int> _abilityScores;
   late Map<String, TextEditingController> _abilityControllers;
+  AbilityScoreMethod _abilityMethod = AbilityScoreMethod.standardArray;
 
   // 头像选择状态（规范 §头像来源：本地角色头像离线保存在客户端）。
   Uint8List? _avatarBytes;
@@ -1261,6 +1292,11 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       'item',
     ], const []);
     final activeRuleChoices = _activeRuleChoices();
+    final startingEquipment = _entryById(
+      _classEntryId,
+    )?.structured['startingEquipment'];
+    final hasStructuredStartingEquipment =
+        startingEquipment != null && '$startingEquipment'.trim().isNotEmpty;
     final visibleStepIndexes = <int>[
       0,
       1,
@@ -1268,6 +1304,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       3,
       4,
       if (itemOptions.isNotEmpty ||
+          hasStructuredStartingEquipment ||
           activeRuleChoices.any((choice) => choice.builderStep == 5))
         5,
       if (spellOptions.isNotEmpty ||
@@ -1445,6 +1482,12 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
           }),
         ),
     ];
+    final classSkillChoice = StructuredClassRules.skillChoice(
+      _entryById(_classEntryId),
+    );
+    final fixedBackgroundSkills = classSkillChoice.count > 0
+        ? _presetSkillsForBackground(_background)
+        : const <String>{};
     return switch (_currentStep) {
       0 => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1461,6 +1504,11 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
               _resetAbilityScoresForClass(value);
               _applyRecommendedRuleChoices();
             }),
+          ),
+          _StructuredRuleSummary(
+            title: '职业规则摘要',
+            entry: _entryById(_classEntryId),
+            fields: const ['primaryAbility', 'hitDie'],
           ),
           _LevelProgressionSection(
             level: _level,
@@ -1529,20 +1577,55 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
           Text('设置属性', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 12),
           _AbilityScoreSection(
+            method: _abilityMethod,
             scores: _abilityScores,
             controllers: _abilityControllers,
+            onMethodChanged: _changeAbilityMethod,
+            onApplyRecommended: () => setState(
+              () => _setAbilityScores(_presetAbilitiesForClass(_className)),
+            ),
+            onRoll: _rollAbilityScores,
             onChanged: (ability, value) =>
                 setState(() => _abilityScores[ability] = value),
           ),
         ],
       ),
-      4 => _SkillProficiencySection(
-        selected: _selectedSkillProficiencies,
-        onChanged: (next) => setState(() => _selectedSkillProficiencies = next),
+      4 => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _StructuredRuleSummary(
+            title: '职业熟练摘要',
+            entry: _entryById(_classEntryId),
+            fields: const [
+              'savingThrows',
+              'skills',
+              'weaponProficiency',
+              'armorProficiency',
+            ],
+          ),
+          ...ruleChoiceWidgets,
+          _SkillProficiencySection(
+            selected: _selectedSkillProficiencies,
+            options: classSkillChoice.options,
+            maximum: classSkillChoice.count > 0 ? classSkillChoice.count : null,
+            fixed: fixedBackgroundSkills,
+            onChanged: (next) =>
+                setState(() => _selectedSkillProficiencies = next),
+          ),
+          _RuleGrantPreview(
+            entries: _ruleEntriesForStep(4, activeRuleChoices),
+            level: _level,
+          ),
+        ],
       ),
       5 => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _StructuredRuleSummary(
+            title: '职业初始装备',
+            entry: _entryById(_classEntryId),
+            fields: const ['startingEquipment'],
+          ),
           ...ruleChoiceWidgets,
           if (ruleChoiceWidgets.isEmpty)
             _MultiChoiceSection(
@@ -1640,6 +1723,13 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     return widget.contentEntries.any(
       (entry) => types.contains(entry.type) && entry.name.trim().isNotEmpty,
     );
+  }
+
+  ContentEntry? _entryById(String? entryId) {
+    if (entryId == null) return null;
+    return widget.contentEntries
+        .where((entry) => entry.id == entryId)
+        .firstOrNull;
   }
 
   String? _entryIdFor(String type, String name) {
@@ -1749,13 +1839,10 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         )
         .firstOrNull;
     if (entry == null) return;
-    Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (context) => ContentEntryPreviewPage(
-          entry: entry,
-          entries: widget.contentEntries,
-        ),
-      ),
+    showContentEntryPreviewDialog(
+      context,
+      entry: entry,
+      entries: widget.contentEntries,
     );
   }
 
@@ -1807,25 +1894,71 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       ..addAll(next);
   }
 
-  Map<String, int> _presetAbilitiesForClass(String className) {
-    final normalized = className.toLowerCase();
-    if (normalized.contains('法师') || normalized.contains('wizard')) {
-      return {'str': 8, 'dex': 14, 'con': 14, 'int': 16, 'wis': 12, 'cha': 10};
-    }
-    if (normalized.contains('游荡者') || normalized.contains('rogue')) {
-      return {'str': 8, 'dex': 16, 'con': 14, 'int': 12, 'wis': 10, 'cha': 14};
-    }
-    if (normalized.contains('牧师') || normalized.contains('cleric')) {
-      return {'str': 10, 'dex': 12, 'con': 14, 'int': 8, 'wis': 16, 'cha': 14};
-    }
-    return {'str': 16, 'dex': 14, 'con': 14, 'int': 10, 'wis': 12, 'cha': 8};
+  void _changeAbilityMethod(AbilityScoreMethod method) {
+    setState(() {
+      _abilityMethod = method;
+      if (method == AbilityScoreMethod.rolled) {
+        _setAbilityScores(
+          AbilityScoreGenerator.assignByPriority(
+            scores: _abilityScores.values.toList(growable: false),
+            priorities: _abilityPrioritiesForClass(_className),
+          ),
+        );
+      } else {
+        _setAbilityScores(_presetAbilitiesForClass(_className));
+      }
+    });
   }
 
-  void _resetAbilityScoresForClass(String className) {
-    _abilityScores = _presetAbilitiesForClass(className);
+  void _rollAbilityScores() {
+    final random = Random.secure();
+    final rolled = AbilityScoreGenerator.rollSix(nextInt: random.nextInt);
+    setState(() {
+      _abilityMethod = AbilityScoreMethod.rolled;
+      _setAbilityScores(
+        AbilityScoreGenerator.assignByPriority(
+          scores: rolled,
+          priorities: _abilityPrioritiesForClass(_className),
+        ),
+      );
+    });
+  }
+
+  List<String> _abilityPrioritiesForClass(String className) {
+    final preset = _presetAbilitiesForClass(className).entries.toList()
+      ..sort((left, right) => right.value.compareTo(left.value));
+    return preset.map((entry) => entry.key).toList(growable: false);
+  }
+
+  void _setAbilityScores(Map<String, int> scores) {
+    _abilityScores = Map<String, int>.from(scores);
     for (final entry in _abilityScores.entries) {
       _abilityControllers[entry.key]?.text = '${entry.value}';
     }
+  }
+
+  Map<String, int> _presetAbilitiesForClass(String className) {
+    final normalized = className.toLowerCase();
+    if (normalized.contains('法师') || normalized.contains('wizard')) {
+      return {'str': 8, 'dex': 13, 'con': 14, 'int': 15, 'wis': 12, 'cha': 10};
+    }
+    if (normalized.contains('游荡者') || normalized.contains('rogue')) {
+      return {'str': 8, 'dex': 15, 'con': 14, 'int': 12, 'wis': 10, 'cha': 13};
+    }
+    if (normalized.contains('牧师') || normalized.contains('cleric')) {
+      return {'str': 10, 'dex': 12, 'con': 14, 'int': 8, 'wis': 15, 'cha': 13};
+    }
+    return {'str': 15, 'dex': 14, 'con': 13, 'int': 10, 'wis': 12, 'cha': 8};
+  }
+
+  void _resetAbilityScoresForClass(String className) {
+    final scores = _abilityMethod == AbilityScoreMethod.rolled
+        ? AbilityScoreGenerator.assignByPriority(
+            scores: _abilityScores.values.toList(growable: false),
+            priorities: _abilityPrioritiesForClass(className),
+          )
+        : _presetAbilitiesForClass(className);
+    _setAbilityScores(scores);
   }
 
   Set<String> _presetSkillsForBackground(String background) {
@@ -2197,6 +2330,91 @@ class _DetailsStep extends StatelessWidget {
   }
 }
 
+class _StructuredRuleSummary extends StatelessWidget {
+  const _StructuredRuleSummary({
+    required this.title,
+    required this.entry,
+    required this.fields,
+  });
+
+  final String title;
+  final ContentEntry? entry;
+  final List<String> fields;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <({String field, String value})>[];
+    for (final field in fields) {
+      final value = _formatValue(entry?.structured[field]);
+      if (value.isNotEmpty) items.add((field: field, value: value));
+    }
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Card.filled(
+        key: Key('structured-rule-summary-$title'),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.rule_folder_outlined),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              for (final item in items)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(_iconFor(item.field)),
+                  title: Text(_labelFor(item.field)),
+                  subtitle: Text(item.value),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _formatValue(Object? value) {
+    if (value == null) return '';
+    if (value is Iterable) return value.map((item) => '$item').join('、');
+    return '$value'.trim();
+  }
+
+  static String _labelFor(String field) => switch (field) {
+    'primaryAbility' => '主属性',
+    'hitDie' => '生命骰',
+    'savingThrows' => '豁免熟练',
+    'skills' => '技能选择',
+    'weaponProficiency' => '武器熟练',
+    'armorProficiency' => '护甲熟练',
+    'startingEquipment' => '初始装备',
+    _ => field,
+  };
+
+  static IconData _iconFor(String field) => switch (field) {
+    'primaryAbility' => Icons.hexagon_outlined,
+    'hitDie' => Icons.favorite_outline,
+    'savingThrows' => Icons.health_and_safety_outlined,
+    'skills' => Icons.psychology_outlined,
+    'weaponProficiency' => Icons.gavel_outlined,
+    'armorProficiency' => Icons.shield_outlined,
+    'startingEquipment' => Icons.inventory_2_outlined,
+    _ => Icons.info_outline,
+  };
+}
+
 class _RuleGrantPreview extends StatelessWidget {
   const _RuleGrantPreview({required this.entries, required this.level});
 
@@ -2483,13 +2701,10 @@ class _RuleChoiceSection extends StatelessWidget {
                             key: Key('builder-open-entry-${option.id}'),
                             tooltip: '查看 ${option.name}',
                             visualDensity: VisualDensity.compact,
-                            onPressed: () => Navigator.of(context).push<void>(
-                              MaterialPageRoute(
-                                builder: (context) => ContentEntryPreviewPage(
-                                  entry: option,
-                                  entries: allEntries,
-                                ),
-                              ),
+                            onPressed: () => showContentEntryPreviewDialog(
+                              context,
+                              entry: option,
+                              entries: allEntries,
                             ),
                             icon: const Icon(Icons.open_in_new, size: 18),
                           ),
@@ -2764,13 +2979,21 @@ class _LevelProgressionSection extends StatelessWidget {
 
 class _AbilityScoreSection extends StatelessWidget {
   const _AbilityScoreSection({
+    required this.method,
     required this.scores,
     required this.controllers,
+    required this.onMethodChanged,
+    required this.onApplyRecommended,
+    required this.onRoll,
     required this.onChanged,
   });
 
+  final AbilityScoreMethod method;
   final Map<String, int> scores;
   final Map<String, TextEditingController> controllers;
+  final ValueChanged<AbilityScoreMethod> onMethodChanged;
+  final VoidCallback onApplyRecommended;
+  final VoidCallback onRoll;
   final void Function(String ability, int value) onChanged;
 
   @override
@@ -2780,6 +3003,7 @@ class _AbilityScoreSection extends StatelessWidget {
       final score = scores[ability];
       return score != null && score >= 3 && score <= 20;
     });
+    final remaining = AbilityScoreGenerator.pointBuyRemaining(scores);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -2798,31 +3022,105 @@ class _AbilityScoreSection extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
+          SegmentedButton<AbilityScoreMethod>(
+            segments: const [
+              ButtonSegment(
+                value: AbilityScoreMethod.standardArray,
+                icon: Icon(Icons.view_array_outlined),
+                label: Text('标准数组', key: Key('ability-method-standard')),
+              ),
+              ButtonSegment(
+                value: AbilityScoreMethod.pointBuy,
+                icon: Icon(Icons.calculate_outlined),
+                label: Text('27 点购点', key: Key('ability-method-point-buy')),
+              ),
+              ButtonSegment(
+                value: AbilityScoreMethod.rolled,
+                icon: Icon(Icons.casino_outlined),
+                label: Text('随机', key: Key('ability-method-rolled')),
+              ),
+            ],
+            selected: {method},
+            showSelectedIcon: false,
+            onSelectionChanged: (selection) =>
+                onMethodChanged(selection.single),
+          ),
+          const SizedBox(height: 12),
+          if (method == AbilityScoreMethod.pointBuy)
+            Row(
+              children: [
+                Icon(
+                  remaining < 0 ? Icons.error_outline : Icons.toll_outlined,
+                  color: remaining < 0 ? theme.colorScheme.error : null,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '剩余 $remaining / ${AbilityScoreGenerator.pointBuyBudget} 点',
+                  key: const Key('point-buy-remaining'),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: remaining < 0 ? theme.colorScheme.error : null,
+                  ),
+                ),
+              ],
+            )
+          else
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.tonalIcon(
+                key: Key(
+                  method == AbilityScoreMethod.rolled
+                      ? 'reroll-ability-scores'
+                      : 'apply-recommended-ability-array',
+                ),
+                onPressed: method == AbilityScoreMethod.rolled
+                    ? onRoll
+                    : onApplyRecommended,
+                icon: Icon(
+                  method == AbilityScoreMethod.rolled
+                      ? Icons.casino_outlined
+                      : Icons.auto_fix_high_outlined,
+                ),
+                label: Text(
+                  method == AbilityScoreMethod.rolled ? '重新掷骰' : '按职业推荐分配',
+                ),
+              ),
+            ),
+          const SizedBox(height: 12),
           LayoutBuilder(
             builder: (context, constraints) {
               final compact = constraints.maxWidth < 560;
               return GridView.count(
                 crossAxisCount: compact ? 2 : 3,
-                childAspectRatio: compact ? 2.7 : 3.2,
+                childAspectRatio: compact ? 1.7 : 2.2,
                 crossAxisSpacing: 8,
                 mainAxisSpacing: 8,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 children: [
                   for (final entry in Dnd5eRules.abilityLabels.entries)
-                    TextField(
-                      key: Key('standard-ability-${entry.key}-field'),
-                      controller: controllers[entry.key],
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: entry.value,
-                        helperText:
-                            '调整值 ${Dnd5eRules.formatModifier(Dnd5eRules.abilityModifier(scores[entry.key] ?? 10))}',
-                        border: const OutlineInputBorder(),
-                      ),
-                      onChanged: (value) =>
-                          onChanged(entry.key, int.tryParse(value) ?? 0),
-                    ),
+                    method == AbilityScoreMethod.pointBuy
+                        ? _PointBuyAbilityTile(
+                            ability: entry.key,
+                            label: entry.value,
+                            scores: scores,
+                            onChanged: (value) {
+                              controllers[entry.key]?.text = '$value';
+                              onChanged(entry.key, value);
+                            },
+                          )
+                        : TextField(
+                            key: Key('standard-ability-${entry.key}-field'),
+                            controller: controllers[entry.key],
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: entry.value,
+                              helperText:
+                                  '调整值 ${Dnd5eRules.formatModifier(Dnd5eRules.abilityModifier(scores[entry.key] ?? 10))}',
+                              border: const OutlineInputBorder(),
+                            ),
+                            onChanged: (value) =>
+                                onChanged(entry.key, int.tryParse(value) ?? 0),
+                          ),
                 ],
               );
             },
@@ -2833,18 +3131,95 @@ class _AbilityScoreSection extends StatelessWidget {
   }
 }
 
+class _PointBuyAbilityTile extends StatelessWidget {
+  const _PointBuyAbilityTile({
+    required this.ability,
+    required this.label,
+    required this.scores,
+    required this.onChanged,
+  });
+
+  final String ability;
+  final String label;
+  final Map<String, int> scores;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final score = scores[ability] ?? 8;
+    final canIncrease = AbilityScoreGenerator.canSetPointBuyScore(
+      scores,
+      ability,
+      score + 1,
+    );
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: Theme.of(context).textTheme.labelLarge),
+                  Text(
+                    '$score  ${Dnd5eRules.formatModifier(Dnd5eRules.abilityModifier(score))}',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              key: Key('point-buy-$ability-decrease'),
+              tooltip: '降低$label',
+              onPressed: score > 8 ? () => onChanged(score - 1) : null,
+              icon: const Icon(Icons.remove),
+            ),
+            IconButton(
+              key: Key('point-buy-$ability-increase'),
+              tooltip: '提高$label',
+              onPressed: canIncrease ? () => onChanged(score + 1) : null,
+              icon: const Icon(Icons.add),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SkillProficiencySection extends StatelessWidget {
   const _SkillProficiencySection({
     required this.selected,
     required this.onChanged,
+    this.options = const <String>[],
+    this.fixed = const <String>{},
+    this.maximum,
   });
 
   final Set<String> selected;
+  final List<String> options;
+  final Set<String> fixed;
+  final int? maximum;
   final ValueChanged<Set<String>> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final constrained = maximum != null && options.isNotEmpty;
+    final optionNames = options.toSet();
+    final chosen = selected
+        .where((skill) => optionNames.contains(skill) && !fixed.contains(skill))
+        .toSet();
+    final displayedNames = constrained
+        ? <String>{...fixed, ...optionNames}
+        : Dnd5eRules.skills.map((skill) => skill.name).toSet();
+    final displayedSkills = Dnd5eRules.skills
+        .where((skill) => displayedNames.contains(skill.name))
+        .toList(growable: false);
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
@@ -2855,7 +3230,11 @@ class _SkillProficiencySection extends StatelessWidget {
               Expanded(child: Text('熟练', style: theme.textTheme.titleMedium)),
               InputChip(
                 avatar: const Icon(Icons.workspace_premium_outlined),
-                label: Text('熟练 ${selected.length} 项'),
+                label: Text(
+                  constrained
+                      ? '职业技能 ${chosen.length}/$maximum · 背景 ${fixed.length}'
+                      : '熟练 ${selected.length} 项',
+                ),
               ),
             ],
           ),
@@ -2864,21 +3243,34 @@ class _SkillProficiencySection extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              for (final skill in Dnd5eRules.skills)
-                FilterChip(
-                  key: Key('standard-skill-${skill.name}-chip'),
-                  label: Text(
-                    '${skill.name} · ${Dnd5eRules.abilityLabels[skill.ability]}',
-                  ),
-                  selected: selected.contains(skill.name),
-                  onSelected: (isSelected) {
-                    final next = {...selected};
-                    if (isSelected) {
-                      next.add(skill.name);
-                    } else {
-                      next.remove(skill.name);
-                    }
-                    onChanged(next);
+              for (final skill in displayedSkills)
+                Builder(
+                  builder: (context) {
+                    final isFixed = constrained && fixed.contains(skill.name);
+                    final isSelected = selected.contains(skill.name);
+                    final atLimit =
+                        constrained && chosen.length >= (maximum ?? 0);
+                    return FilterChip(
+                      key: Key('standard-skill-${skill.name}-chip'),
+                      avatar: isFixed
+                          ? const Icon(Icons.lock_outline, size: 16)
+                          : null,
+                      label: Text(
+                        '${skill.name} · ${Dnd5eRules.abilityLabels[skill.ability]}',
+                      ),
+                      selected: isSelected,
+                      onSelected: isFixed || (!isSelected && atLimit)
+                          ? null
+                          : (nextSelected) {
+                              final next = {...selected};
+                              if (nextSelected) {
+                                next.add(skill.name);
+                              } else {
+                                next.remove(skill.name);
+                              }
+                              onChanged(next);
+                            },
+                    );
                   },
                 ),
             ],

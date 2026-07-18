@@ -133,3 +133,16 @@ export interface CampaignCheckRequestView {
   responses: CampaignChatMessageView[];
   status: "open" | "closed";
 }
+
+/**
+ * 战役日志条目视图。journal 是 system/checkRequest/roll/archivePublished
+ * 等关键事件的归档，campaignId 关联到所属战役，refId 指回触发的消息 id。
+ */
+export interface CampaignJournalEntryView {
+  id: string;
+  campaignId: string;
+  type: string;
+  summary: string;
+  refId: string | null;
+  createdAt: string;
+}

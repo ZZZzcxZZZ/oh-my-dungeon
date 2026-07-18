@@ -55,6 +55,10 @@ describe("campaigns endpoints", () => {
       count: jest.fn(),
       update: jest.fn(),
     },
+    journalEntry: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+    },
     campaignActor: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
@@ -164,6 +168,8 @@ describe("campaigns endpoints", () => {
     prismaService.campaignChatMessage.findFirst.mockResolvedValue(null);
     prismaService.campaignChatMessage.count.mockResolvedValue(0);
     prismaService.campaignChatMessage.update.mockResolvedValue({});
+    prismaService.journalEntry.create.mockResolvedValue({});
+    prismaService.journalEntry.findMany.mockResolvedValue([]);
     prismaService.campaignArchiveEntry.create.mockResolvedValue({
       id: "archive-1",
       campaignId: "camp-1",
@@ -1467,6 +1473,295 @@ describe("campaigns endpoints", () => {
       await request(app.getHttpServer())
         .get("/api/campaigns/camp-1/check-requests")
         .expect(401);
+    });
+  });
+
+  describe("GET /api/campaigns/:id/journal", () => {
+    const campaignWithOwner = {
+      id: "camp-1",
+      name: "Curse of Strahd",
+      description: "",
+      system: "dnd5e",
+      ownerId: "user-1",
+      status: "active",
+      createdAt: "2026-07-09T00:00:00.000Z",
+      updatedAt: "2026-07-09T00:00:00.000Z",
+      members: [{ userId: "user-1", role: "owner" }],
+    };
+
+    it("returns journal entries ordered by createdAt asc", async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwner,
+      );
+      prismaService.journalEntry.findMany.mockResolvedValueOnce([
+        {
+          id: "je-1",
+          campaignId: "camp-1",
+          sessionId: null,
+          type: "check_request",
+          summary: "请 Mira 进行察觉检定",
+          refId: "msg-check-1",
+          createdAt: "2026-07-09T00:00:00.000Z",
+        },
+        {
+          id: "je-2",
+          campaignId: "camp-1",
+          sessionId: null,
+          type: "roll",
+          summary: "Mira 察觉 17",
+          refId: "msg-roll-1",
+          createdAt: "2026-07-09T00:01:00.000Z",
+        },
+      ]);
+
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/journal")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body).toHaveLength(2);
+          expect(body[0].id).toBe("je-1");
+          expect(body[0].type).toBe("check_request");
+          expect(body[0].summary).toBe("请 Mira 进行察觉检定");
+          expect(body[0].refId).toBe("msg-check-1");
+          expect(body[1].id).toBe("je-2");
+        });
+    });
+
+    it("filters by type when query param provided", async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwner,
+      );
+      prismaService.journalEntry.findMany.mockResolvedValueOnce([]);
+
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/journal?type=roll")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200);
+
+      expect(prismaService.journalEntry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            campaignId: "camp-1",
+            type: "roll",
+          }),
+        }),
+      );
+    });
+
+    it("rejects without authentication with 401", async () => {
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/journal")
+        .expect(401);
+    });
+  });
+
+  describe("POST /api/campaigns/:id/messages journal side-effects", () => {
+    const campaignWithOwner = {
+      id: "camp-1",
+      name: "Curse of Strahd",
+      description: "",
+      system: "dnd5e",
+      ownerId: "user-1",
+      status: "active",
+      createdAt: "2026-07-09T00:00:00.000Z",
+      updatedAt: "2026-07-09T00:00:00.000Z",
+      members: [{ userId: "user-1", role: "owner" }],
+    };
+
+    it("writes a journal entry when sending a system message", async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwner,
+      );
+      prismaService.campaignChatMessage.create.mockResolvedValueOnce({
+        id: "msg-sys-1",
+        campaignId: "camp-1",
+        senderId: "user-1",
+        campaignActorId: null,
+        displayName: "旁白 / DM",
+        avatarUrl: null,
+        speakerMode: "narrator",
+        delegatedByUserId: null,
+        speakerAvatarAssetId: null,
+        publicHealthState: null,
+        ooc: false,
+        kind: "system",
+        content: "夜幕降临",
+        actionSnapshot: null,
+        eventData: null,
+        createdAt: "2026-07-09T00:05:00.000Z",
+      });
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/messages")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          kind: "system",
+          content: "夜幕降临",
+        })
+        .expect(201);
+
+      expect(prismaService.journalEntry.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            campaignId: "camp-1",
+            type: "system",
+            summary: "夜幕降临",
+            refId: "msg-sys-1",
+          }),
+        }),
+      );
+    });
+
+    it("writes a journal entry when sending a checkRequest message", async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwner,
+      );
+      prismaService.campaignActor.findUnique.mockResolvedValueOnce({
+        id: "actor-mira",
+        campaignId: "camp-1",
+        ownerUserId: "user-2",
+        actorType: "player",
+        status: "active",
+        sheetJson: { name: "Mira" },
+      });
+      prismaService.campaignChatMessage.create.mockResolvedValueOnce({
+        id: "msg-check-1",
+        campaignId: "camp-1",
+        senderId: "user-1",
+        campaignActorId: null,
+        displayName: "旁白 / DM",
+        avatarUrl: null,
+        speakerMode: "narrator",
+        delegatedByUserId: null,
+        speakerAvatarAssetId: null,
+        publicHealthState: null,
+        ooc: false,
+        kind: "checkRequest",
+        content: "请 Mira 进行察觉检定",
+        actionSnapshot: null,
+        eventData: {
+          targetActorId: "actor-mira",
+          checkType: "skill",
+          checkKey: "察觉",
+          label: "察觉检定",
+          dc: 15,
+          rollMode: "normal",
+        },
+        createdAt: "2026-07-09T00:06:00.000Z",
+      });
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/messages")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          kind: "checkRequest",
+          content: "请 Mira 进行察觉检定",
+          eventData: {
+            targetActorId: "actor-mira",
+            checkType: "skill",
+            checkKey: "察觉",
+            label: "察觉检定",
+            dc: 15,
+            rollMode: "normal",
+          },
+        })
+        .expect(201);
+
+      expect(prismaService.journalEntry.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            campaignId: "camp-1",
+            type: "check_request",
+            refId: "msg-check-1",
+          }),
+        }),
+      );
+    });
+
+    it("writes a journal entry when sending a roll message", async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwner,
+      );
+      prismaService.campaignChatMessage.create.mockResolvedValueOnce({
+        id: "msg-roll-1",
+        campaignId: "camp-1",
+        senderId: "user-1",
+        campaignActorId: null,
+        displayName: "ranger",
+        avatarUrl: null,
+        speakerMode: "actor",
+        delegatedByUserId: null,
+        speakerAvatarAssetId: null,
+        publicHealthState: null,
+        ooc: false,
+        kind: "roll",
+        content: "攻击 18",
+        actionSnapshot: null,
+        eventData: { notation: "1d20+5", total: 18, label: "攻击" },
+        createdAt: "2026-07-09T00:07:00.000Z",
+      });
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/messages")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          kind: "roll",
+          content: "攻击 18",
+          eventData: { notation: "1d20+5", total: 18, label: "攻击" },
+        })
+        .expect(201);
+
+      expect(prismaService.journalEntry.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            campaignId: "camp-1",
+            type: "roll",
+            refId: "msg-roll-1",
+          }),
+        }),
+      );
+    });
+
+    it("does not write a journal entry for plain say messages", async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwner,
+      );
+      prismaService.campaignChatMessage.create.mockResolvedValueOnce({
+        id: "msg-say-1",
+        campaignId: "camp-1",
+        senderId: "user-1",
+        campaignActorId: null,
+        displayName: "ranger",
+        avatarUrl: null,
+        speakerMode: "actor",
+        delegatedByUserId: null,
+        speakerAvatarAssetId: null,
+        publicHealthState: null,
+        ooc: false,
+        kind: "say",
+        content: "大家好",
+        actionSnapshot: null,
+        eventData: null,
+        createdAt: "2026-07-09T00:08:00.000Z",
+      });
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/messages")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          kind: "say",
+          content: "大家好",
+        })
+        .expect(201);
+
+      expect(prismaService.journalEntry.create).not.toHaveBeenCalled();
     });
   });
 

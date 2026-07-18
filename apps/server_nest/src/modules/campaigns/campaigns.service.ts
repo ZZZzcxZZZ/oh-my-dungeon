@@ -19,6 +19,7 @@ import {
 import type {
   CampaignChatMessageView,
   CampaignCheckRequestView,
+  CampaignJournalEntryView,
   CampaignWorkspaceContextView,
   CampaignMemberPreview,
   CampaignView,
@@ -351,6 +352,32 @@ export class CampaignsService {
     });
   }
 
+  /**
+   * 列出战役日志条目。type 用于按事件类型过滤（system/check_request/roll/
+   * archive_published 等），q 用于按 summary 模糊搜索。
+   */
+  async listJournal(
+    actor: AccessTokenPayload,
+    campaignId: string,
+    query: { type?: string; q?: string } = {},
+  ): Promise<CampaignJournalEntryView[]> {
+    const campaign = await this.fetchCampaignContext(campaignId);
+    this.policy.canViewCampaign(actor, campaign.context);
+
+    const entries = await this.prismaService.journalEntry.findMany({
+      where: {
+        campaignId,
+        ...(query.type ? { type: query.type } : {}),
+        ...(query.q
+          ? { summary: { contains: query.q, mode: "insensitive" } }
+          : {}),
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    return entries.map((entry: any) => toCampaignJournalEntryView(entry));
+  }
+
   async sendMessage(
     actor: AccessTokenPayload,
     campaignId: string,
@@ -550,6 +577,21 @@ export class CampaignsService {
 
     const view = toCampaignChatMessageView(created);
     this.gateway.broadcastToCampaign(campaignId, "campaign:message:new", view);
+
+    // 关键事件同步写入战役日志 (JournalEntry)。say/action/ooc 等普通对话不
+    // 进日志；仅 system/checkRequest/roll/archivePublished 等结构化事件
+    // 归档，供 records_panel 检索。
+    const journalType = toJournalType(kind);
+    if (journalType) {
+      await this.prismaService.journalEntry.create({
+        data: {
+          campaignId,
+          type: journalType,
+          summary: content,
+          refId: created.id,
+        },
+      });
+    }
 
     return view;
   }
@@ -919,6 +961,32 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     return null;
   }
   return value as Record<string, unknown>;
+}
+
+/**
+ * 把消息 kind 映射到 journal entry type；返回 null 表示该 kind 不归档
+ * (say/action/ooc 等纯对话)。checkRequest→check_request、
+ * archivePublished→archive_published，与 sessions 模块保持一致。
+ */
+function toJournalType(kind: string): string | null {
+  if (kind === "system" || kind === "roll") return kind;
+  if (kind === "checkRequest") return "check_request";
+  if (kind === "archivePublished") return "archive_published";
+  return null;
+}
+
+function toCampaignJournalEntryView(entry: any): CampaignJournalEntryView {
+  return {
+    id: entry.id,
+    campaignId: entry.campaignId,
+    type: entry.type,
+    summary: entry.summary,
+    refId: entry.refId ?? null,
+    createdAt:
+      entry.createdAt instanceof Date
+        ? entry.createdAt.toISOString()
+        : entry.createdAt,
+  };
 }
 
 function normalizeMessageKind(kind: string | undefined): string {

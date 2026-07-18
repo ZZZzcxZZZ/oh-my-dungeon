@@ -16,6 +16,7 @@ import { CampaignsService } from "./campaigns.service";
 import type {
   CampaignChatMessageView,
   CampaignCheckRequestView,
+  CampaignJournalEntryView,
   CampaignWorkspaceContextView,
   CampaignView,
   DraftActorInput,
@@ -99,6 +100,16 @@ export class CampaignsController {
     @Param("id") campaignId: string,
   ): Promise<CampaignCheckRequestView[]> {
     return this.campaignsService.listCheckRequests(user, campaignId);
+  }
+
+  @Get(":id/journal")
+  listJournal(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param("id") campaignId: string,
+    @Query("type") type?: string,
+    @Query("q") q?: string,
+  ): Promise<CampaignJournalEntryView[]> {
+    return this.campaignsService.listJournal(user, campaignId, { type, q });
   }
 
   @Post(":id/messages")

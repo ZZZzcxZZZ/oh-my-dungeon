@@ -14,6 +14,8 @@ import '../../content/domain/content_entry.dart';
 import '../domain/character.dart';
 import '../domain/character_rule_projector.dart';
 import '../domain/dnd5e_rules.dart';
+import 'character_conflict_banner_controller.dart';
+import 'character_conflict_resolution_page.dart';
 import 'character_detail_page.dart';
 import 'character_controller.dart';
 import 'character_editor_page.dart';
@@ -29,6 +31,7 @@ class CharactersTabPage extends StatefulWidget {
     this.appPreferencesController,
     this.modeController,
     this.actorController,
+    this.conflictBannerController,
     super.key,
   });
 
@@ -41,6 +44,9 @@ class CharactersTabPage extends StatefulWidget {
   final ClientModeController? modeController;
   final CampaignActorController? actorController;
 
+  /// 角色 vs Actor 同步冲突 banner。仅在桌面/移动端有本地数据库时注入。
+  final CharacterConflictBannerController? conflictBannerController;
+
   @override
   State<CharactersTabPage> createState() => _CharactersTabPageState();
 }
@@ -51,6 +57,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     super.initState();
     widget.modeController?.addListener(_onModeChanged);
     widget.actorController?.addListener(_onActorChanged);
+    widget.conflictBannerController?.addListener(_onBannerChanged);
   }
 
   @override
@@ -64,12 +71,17 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
       oldWidget.actorController?.removeListener(_onActorChanged);
       widget.actorController?.addListener(_onActorChanged);
     }
+    if (oldWidget.conflictBannerController != widget.conflictBannerController) {
+      oldWidget.conflictBannerController?.removeListener(_onBannerChanged);
+      widget.conflictBannerController?.addListener(_onBannerChanged);
+    }
   }
 
   @override
   void dispose() {
     widget.modeController?.removeListener(_onModeChanged);
     widget.actorController?.removeListener(_onActorChanged);
+    widget.conflictBannerController?.removeListener(_onBannerChanged);
     super.dispose();
   }
 
@@ -81,6 +93,10 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     if (mounted) setState(() {});
   }
 
+  void _onBannerChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -88,6 +104,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
         widget.controller,
         widget.campaignController,
         widget.appPreferencesController,
+        widget.conflictBannerController,
       ]),
       builder: (context, _) {
         return Scaffold(
@@ -101,10 +118,67 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
           ),
           body: KeyedSubtree(
             key: const Key('player-local-characters'),
-            child: _buildCharacterList(context),
+            child: Column(
+              children: [
+                if (widget.conflictBannerController?.hasUnresolved ?? false)
+                  _buildConflictBanner(context),
+                Expanded(child: _buildCharacterList(context)),
+              ],
+            ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildConflictBanner(BuildContext context) {
+    final banner = widget.conflictBannerController!;
+    final count = banner.unresolvedCount;
+    final theme = Theme.of(context);
+    return Material(
+      key: const Key('character-conflict-banner'),
+      color: theme.colorScheme.errorContainer,
+      child: InkWell(
+        onTap: _openConflictResolutionPage,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(
+                Icons.sync_problem,
+                color: theme.colorScheme.onErrorContainer,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '$count 个角色有未解决的同步冲突',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onErrorContainer,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: theme.colorScheme.onErrorContainer,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openConflictResolutionPage() async {
+    final banner = widget.conflictBannerController;
+    if (banner == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CharacterConflictResolutionPage(
+          controller: banner,
+          characterController: widget.controller,
+          actorController: widget.actorController,
+        ),
+      ),
     );
   }
 

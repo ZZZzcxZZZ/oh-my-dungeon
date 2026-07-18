@@ -25,7 +25,9 @@ import '../../../features/campaigns/presentation/content/campaign_content_contro
 import '../../../features/campaigns/presentation/campaign_controller.dart';
 import '../../../features/campaigns/presentation/campaigns_tab_page.dart';
 import '../../../features/characters/data/character_repository.dart';
+import '../../../features/characters/data/local/character_sync_conflict_repository.dart';
 import '../../../features/characters/data/local/drift_character_repository.dart';
+import '../../../features/characters/presentation/character_conflict_banner_controller.dart';
 import '../../../features/characters/presentation/character_controller.dart';
 import '../../../features/characters/presentation/characters_tab_page.dart';
 import '../../../features/client_mode/domain/client_mode.dart';
@@ -106,6 +108,7 @@ class _MainShellState extends State<MainShell> {
   late final CampaignContentController _campaignContentController;
   CampaignActorBacklinkService? _backlinkService;
   CampaignSyncService? _campaignSyncService;
+  CharacterConflictBannerController? _conflictBannerController;
   VaultSyncController? _vaultSyncController;
   late final LocalDataArchiveService _archiveService;
   final SyncStatusController _syncStatusController = SyncStatusController();
@@ -169,6 +172,13 @@ class _MainShellState extends State<MainShell> {
             database: widget.database!,
           )
         : null;
+    // Spec §双向同步 切片 B: conflictBannerController 监听所有未解决冲突，
+    // 角色列表页 banner + 冲突解决页共用。
+    _conflictBannerController = widget.database != null
+        ? CharacterConflictBannerController(
+            repository: DriftCharacterSyncConflictRepository(widget.database!),
+          )
+        : null;
     _actorController = CampaignActorController(
       cacheRepository: _campaignCacheRepository,
       apiClient: HttpCampaignSyncApiClient(),
@@ -220,6 +230,7 @@ class _MainShellState extends State<MainShell> {
     _authController.dispose();
     _syncStatusController.dispose();
     _vaultSyncController?.dispose();
+    _conflictBannerController?.dispose();
     super.dispose();
   }
 
@@ -363,6 +374,7 @@ class _MainShellState extends State<MainShell> {
         appPreferencesController: widget.appPreferencesController,
         modeController: widget.modeController,
         actorController: _actorController,
+        conflictBannerController: _conflictBannerController,
       ),
       ContentLibraryPage(
         controller: _libraryController,

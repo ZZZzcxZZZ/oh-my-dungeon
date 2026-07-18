@@ -6,6 +6,7 @@ import '../../characters/domain/character.dart';
 import '../../characters/presentation/character_controller.dart';
 import '../../client_mode/domain/client_mode.dart';
 import '../../content/data/local/content_repository.dart';
+import '../../encounters/presentation/encounter_controller.dart';
 import '../../../core/dice/dice_roller.dart';
 import '../../server_home/domain/active_server_session.dart';
 import '../domain/campaign.dart';
@@ -31,6 +32,7 @@ class CampaignsTabPage extends StatefulWidget {
     this.onCampaignOpened,
     this.campaignContentController,
     this.actorController,
+    this.encounterController,
     super.key,
   });
 
@@ -45,6 +47,7 @@ class CampaignsTabPage extends StatefulWidget {
   final Future<void> Function(String campaignId)? onCampaignOpened;
   final CampaignContentController? campaignContentController;
   final CampaignActorController? actorController;
+  final EncounterController? encounterController;
 
   @override
   State<CampaignsTabPage> createState() => _CampaignsTabPageState();
@@ -269,6 +272,7 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
           contentRepository: widget.contentRepository,
           campaignContentController: widget.campaignContentController,
           actorController: widget.actorController,
+          encounterController: widget.encounterController,
           campaignActorId: null,
           diceRoller: widget.diceRoller,
         ),

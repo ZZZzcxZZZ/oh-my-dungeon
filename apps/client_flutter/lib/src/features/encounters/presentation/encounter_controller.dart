@@ -37,6 +37,15 @@ class EncounterController extends ChangeNotifier {
     }
   }
 
+  /// Test-only helper to set the active encounter without going through the
+  /// network. Lets widget tests verify rendering and HP adjustments against
+  /// a deterministic fixture.
+  @visibleForTesting
+  void setActiveEncounterForTest(Encounter encounter) {
+    _activeEncounter = encounter;
+    notifyListeners();
+  }
+
   Future<void> loadEncounters(String campaignId) async {
     final token = accessToken;
     if (token == null) return;

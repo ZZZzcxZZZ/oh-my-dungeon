@@ -39,6 +39,8 @@ import '../../../features/content/domain/content_file_picker.dart';
 import '../../../features/content/presentation/content_library_controller.dart';
 import '../../../features/content/presentation/content_library_page.dart';
 import '../../../features/content/presentation/content_package_settings_page.dart';
+import '../../../features/encounters/data/encounter_api_client.dart';
+import '../../../features/encounters/presentation/encounter_controller.dart';
 import '../../../core/dice/dice_roller.dart';
 import '../../../features/server_profiles/domain/server_profile.dart';
 import '../../../features/server_profiles/data/server_profile_store.dart';
@@ -106,6 +108,7 @@ class _MainShellState extends State<MainShell> {
   late final CampaignSocketService _campaignSocketService;
   late final CampaignActorController _actorController;
   late final CampaignContentController _campaignContentController;
+  late final EncounterController _encounterController;
   CampaignActorBacklinkService? _backlinkService;
   CampaignSyncService? _campaignSyncService;
   CharacterConflictBannerController? _conflictBannerController;
@@ -198,6 +201,13 @@ class _MainShellState extends State<MainShell> {
       accessTokenProvider: () => _authController.accessToken ?? '',
       currentUserIdProvider: () => _authController.user?.id ?? '',
     );
+    // Spec §遭遇控场: 共享给战役中心的 DM 控场底部页, 让 DM 在战役进行中
+    // 快速管理遭遇 HP / 推进回合.
+    _encounterController = EncounterController(
+      apiBaseUrl: profile?.apiBaseUrl ?? '',
+      authController: _authController,
+      encounterClient: EncounterApiClient(),
+    );
     if (widget.database != null && widget.enableBackgroundSync) {
       _campaignSyncService = CampaignSyncService(
         cacheRepository: _campaignCacheRepository,
@@ -224,6 +234,7 @@ class _MainShellState extends State<MainShell> {
     _campaignSocketService.disconnect();
     _actorController.dispose();
     _campaignContentController.dispose();
+    _encounterController.dispose();
     _libraryController.dispose();
     _characterController.dispose();
     _campaignController.dispose();
@@ -364,6 +375,7 @@ class _MainShellState extends State<MainShell> {
         onCampaignOpened: _activateCampaign,
         campaignContentController: _campaignContentController,
         actorController: _actorController,
+        encounterController: _encounterController,
       ),
       CharactersTabPage(
         controller: _characterController,

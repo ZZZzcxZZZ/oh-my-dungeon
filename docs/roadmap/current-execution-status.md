@@ -176,11 +176,11 @@
 
 1. 完成战役聊天室信息架构：群聊式列表、最近消息、未读、成员头像叠放。
 2. 把日志从旧 Session 详情迁入战役 `+` 工具，并补齐检定请求历史与重复响应状态。
-3. 把遭遇控场从旧桌面页迁入「DM 控场」底部页。
+3. ✅ 把遭遇控场从旧桌面页迁入「DM 控场」底部页 — `EncounterPanelPage` widget 已创建, 接入 `EncounterController`, DM 控场 sheet 提供"遭遇控场"入口跳转, 支持参与者 HP 调整 / 推进回合 / 结束遭遇 / 空态新建遭遇.
 4. 推进标准创建向导：法术准备和装备购买。
 5. 增强本地资料库 GUI：编辑条目、复制条目、批量导入确认向导。
 6. 旧 `rooms`、`TableTabPage` 和 Session 源码仅保留为日志/遭遇迁移素材；迁移完成后再按模块删除，禁止重新接入主导航。
-7. DM Actor 编辑与玩家本地角色的双向同步：DM 在战役里修改 Actor 后，把变化回写到玩家本地角色；玩家继续在本地修改后再发布新一版 Actor，配合审计与冲突提示。
+7. ✅ DM Actor 编辑与玩家本地角色的双向同步 — 切片 A (publishCharacter baseRevision + socket changeStream + 409 冲突对话框) 与切片 B (CharacterSyncConflictRepository + BannerController + ResolutionPage) 已完成.
 
 ## 验证规则
 

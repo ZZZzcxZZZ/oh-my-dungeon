@@ -9,6 +9,7 @@ import '../../content/data/local/content_repository.dart';
 import '../../content/domain/content_entry.dart';
 import '../../content/presentation/content_detail_page.dart';
 import '../../content/presentation/content_library_controller.dart';
+import '../../encounters/presentation/encounter_controller.dart';
 import '../../../core/dice/dice_roller.dart';
 import '../domain/campaign.dart';
 import '../domain/campaign_actor.dart';
@@ -39,6 +40,7 @@ class CampaignChatPage extends StatefulWidget {
     this.diceRoller,
     this.campaignContentController,
     this.actorController,
+    this.encounterController,
     super.key,
   });
 
@@ -51,6 +53,7 @@ class CampaignChatPage extends StatefulWidget {
   final DiceRoller? diceRoller;
   final CampaignContentController? campaignContentController;
   final CampaignActorController? actorController;
+  final EncounterController? encounterController;
 
   @override
   State<CampaignChatPage> createState() => _CampaignChatPageState();
@@ -186,6 +189,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                       controller: widget.campaignController,
                       actorController: widget.actorController,
                       contentRepository: widget.contentRepository,
+                      encounterController: widget.encounterController,
                     ),
                   ),
                 ),
@@ -833,6 +837,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
           controller: widget.campaignController,
           actorController: widget.actorController,
           contentRepository: widget.contentRepository,
+          encounterController: widget.encounterController,
           initialTab: 3,
         ),
       ),

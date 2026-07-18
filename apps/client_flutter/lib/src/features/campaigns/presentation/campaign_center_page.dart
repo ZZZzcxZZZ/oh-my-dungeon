@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../content/data/local/content_repository.dart';
+import '../../encounters/presentation/encounter_controller.dart';
+import '../../encounters/presentation/encounter_panel_page.dart';
 
 import '../domain/campaign.dart';
 import '../domain/campaign_actor.dart';
@@ -27,6 +29,7 @@ class CampaignCenterPage extends StatefulWidget {
     required this.controller,
     this.actorController,
     this.contentRepository,
+    this.encounterController,
     this.initialTab = 0,
     super.key,
   });
@@ -35,6 +38,7 @@ class CampaignCenterPage extends StatefulWidget {
   final CampaignController controller;
   final CampaignActorController? actorController;
   final ContentRepository? contentRepository;
+  final EncounterController? encounterController;
 
   /// 初始选中的面板下标。0=概览 1=队伍 2=档案 3=记录。
   /// 聊天页工具菜单的"战役记录"入口会传 3 直接跳到记录面板。
@@ -468,11 +472,11 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
 
   /// Spec §概览: DM 在概览面板看到控场摘要、群体检定和遭遇准备入口。
   /// 控场入口从聊天工具栏迁移到战役中心 → 概览, 与 spec 一致。
-  Future<void> _showDmControlSheet() {
-    return showModalBottomSheet<void>(
+  Future<void> _showDmControlSheet() async {
+    await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (context) {
+      builder: (sheetContext) {
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -482,23 +486,50 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
               children: [
                 Text('DM 控场', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 8),
-                const Text('这里会继续整合遭遇、成员状态和隐藏信息。'),
+                const Text('遭遇、成员状态等控场工具集中在此处。'),
                 const SizedBox(height: 12),
-                const ListTile(
-                  leading: Icon(Icons.shield_outlined),
-                  title: Text('遭遇控场'),
-                  subtitle: Text('管理先攻、回合、敌人生命值和状态'),
+                ListTile(
+                  leading: const Icon(Icons.shield_outlined),
+                  title: const Text('遭遇控场'),
+                  subtitle: const Text('管理先攻、回合、敌人生命值和状态'),
+                  enabled: widget.encounterController != null,
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _openEncounterPanel();
+                  },
                 ),
-                const ListTile(
-                  leading: Icon(Icons.group_outlined),
-                  title: Text('成员状态'),
-                  subtitle: Text('查看角色 HP、AC、状态和可见信息'),
+                ListTile(
+                  leading: const Icon(Icons.group_outlined),
+                  title: const Text('成员状态'),
+                  subtitle: const Text('查看角色 HP、AC、状态和可见信息'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _showNotImplemented();
+                  },
                 ),
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  /// Spec §遭遇控场: 把遭遇面板作为 DM 控场的子页面打开, 入口位于
+  /// 战役中心 → 概览 → DM 控场底部页。无 controller 时静默不响应。
+  Future<void> _openEncounterPanel() async {
+    final controller = widget.encounterController;
+    if (controller == null) return;
+    // 进入控场页前先拉一次该战役的遭遇列表, 顺便让 controller 知道活跃遭遇。
+    await controller.loadEncounters(widget.campaign.id);
+    if (!mounted) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => _EncounterControlHostPage(
+          controller: controller,
+          campaignId: widget.campaign.id,
+        ),
+      ),
     );
   }
 
@@ -520,5 +551,80 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('该功能正在开发中')));
+  }
+}
+
+/// DM 控场遭遇面板的承载页面: 提供 Scaffold + AppBar, 把
+/// [EncounterPanelPage] 嵌入 body, 并在空态时承接"新建遭遇"流程。
+class _EncounterControlHostPage extends StatefulWidget {
+  const _EncounterControlHostPage({
+    required this.controller,
+    required this.campaignId,
+  });
+
+  final EncounterController controller;
+  final String campaignId;
+
+  @override
+  State<_EncounterControlHostPage> createState() =>
+      _EncounterControlHostPageState();
+}
+
+class _EncounterControlHostPageState extends State<_EncounterControlHostPage> {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('遭遇控场')),
+      body: EncounterPanelPage(
+        controller: widget.controller,
+        campaignId: widget.campaignId,
+        onCreateEncounter: _showCreateEncounterDialog,
+      ),
+    );
+  }
+
+  Future<void> _showCreateEncounterDialog() async {
+    final nameController = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('新建遭遇'),
+          content: TextField(
+            key: const Key('encounter-create-name-field'),
+            controller: nameController,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: '遭遇名称',
+              hintText: '例如: 哥布林伏击',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(nameController.text.trim());
+              },
+              child: const Text('创建'),
+            ),
+          ],
+        );
+      },
+    );
+    nameController.dispose();
+    if (name == null || name.isEmpty || !mounted) return;
+    final success = await widget.controller.createEncounter(
+      campaignId: widget.campaignId,
+      name: name,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(success ? '已创建遭遇: $name' : (widget.controller.error ?? '创建失败')),
+      ),
+    );
   }
 }

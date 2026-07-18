@@ -612,7 +612,7 @@ void main() {
       campaignClient.workspaceActors = [
         const CampaignWorkspaceActor(
           id: 'actor-npc-1',
-          ownerUserId: 'user-1',
+          ownerUserId: null,
           actorType: 'npc',
           status: 'active',
           lifecycle: 'persistent',
@@ -629,6 +629,16 @@ void main() {
           displayName: '哥布林',
           avatarAssetId: null,
           publicHealthState: 'unknown',
+        ),
+        const CampaignWorkspaceActor(
+          id: 'actor-temp-1',
+          ownerUserId: null,
+          actorType: 'npc',
+          status: 'active',
+          lifecycle: 'temporary',
+          displayName: '临时守卫',
+          avatarAssetId: null,
+          publicHealthState: 'healthy',
         ),
         const CampaignWorkspaceActor(
           id: 'actor-player-2',
@@ -662,6 +672,10 @@ void main() {
       );
       expect(
         find.byKey(const Key('identity-actor-actor-monster-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('identity-actor-actor-temp-1')),
         findsOneWidget,
       );
       // Proxy entry for player-owned actor (ownerUserId != current user).
@@ -705,6 +719,20 @@ void main() {
     await tester.tap(find.byKey(const Key('identity-quick-temporary-entry')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('draft-identity-name')), findsOneWidget);
+  });
+
+  testWidgets('say and action modes are icon-only with semantic labels', (
+    tester,
+  ) async {
+    await pumpChatPage(tester, campaignActorId: 'actor-1');
+
+    expect(find.text('说'), findsNothing);
+    expect(find.text('做'), findsNothing);
+
+    final semantics = tester.ensureSemantics();
+    expect(find.bySemanticsLabel('说'), findsOneWidget);
+    expect(find.bySemanticsLabel('做'), findsOneWidget);
+    semantics.dispose();
   });
 
   testWidgets(

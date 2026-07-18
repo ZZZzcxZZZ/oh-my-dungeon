@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'chat_helpers.dart';
 
-/// 聊天输入区"说/做"模式切换。窄屏只显示图标，宽屏额外显示文字。
+/// 聊天输入区“说/做”模式切换。可见界面保持图标化，文字通过 Tooltip 和
+/// Semantics 提供。
 enum ChatMode { say, act }
 
 class ChatModePicker extends StatelessWidget {
@@ -75,31 +76,29 @@ class ChatModeHalf extends StatelessWidget {
     final foreground = selected
         ? colorScheme.onSecondaryContainer
         : colorScheme.onSurfaceVariant;
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: enabled ? onTap : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? colorScheme.secondaryContainer : Colors.transparent,
+    return Semantics(
+      label: label,
+      button: true,
+      enabled: enabled,
+      selected: selected,
+      child: Tooltip(
+        message: label,
+        excludeFromSemantics: true,
+        child: InkWell(
           borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 18, color: foreground),
-            if (MediaQuery.sizeOf(context).width >= 420) ...[
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: foreground,
-                ),
-              ),
-            ],
-          ],
+          onTap: enabled ? onTap : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+            decoration: BoxDecoration(
+              color: selected
+                  ? colorScheme.secondaryContainer
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, size: 18, color: foreground),
+          ),
         ),
       ),
     );

@@ -24,6 +24,7 @@ class CampaignIdentitySheet extends StatelessWidget {
     required this.membership,
     required this.isManager,
     required this.persistentActors,
+    required this.temporaryActors,
     required this.proxyActors,
     required this.hasBoundCharacter,
     super.key,
@@ -33,6 +34,7 @@ class CampaignIdentitySheet extends StatelessWidget {
   final CampaignMembership membership;
   final bool isManager;
   final List<CampaignWorkspaceActor> persistentActors;
+  final List<CampaignWorkspaceActor> temporaryActors;
   final List<CampaignWorkspaceActor> proxyActors;
   final bool hasBoundCharacter;
 
@@ -95,6 +97,11 @@ class CampaignIdentitySheet extends StatelessWidget {
                   const _SectionTitle('常驻 NPC、怪物与同伴'),
                   for (final actor in persistentActors)
                     _actorTile(context, actor),
+                ],
+                if (temporaryActors.isNotEmpty) ...[
+                  const _SectionTitle('临时角色'),
+                  for (final actor in temporaryActors)
+                    _actorTile(context, actor, subtitle: '临时身份'),
                 ],
                 if (proxyActors.isNotEmpty) ...[
                   const _SectionTitle('代管玩家角色'),

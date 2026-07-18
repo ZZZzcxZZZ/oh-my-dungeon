@@ -16,6 +16,7 @@ import 'actors/campaign_actor_controller.dart';
 import 'actors/campaign_actor_sheet_page.dart';
 import 'campaign_controller.dart';
 import 'campaign_center_page.dart';
+import 'campaign_workspace_mutation_coordinator.dart';
 import 'chat/campaign_archive_create_dialog.dart';
 import 'chat/campaign_chat_tool_sheet.dart';
 import 'chat/campaign_chat_bubble.dart';
@@ -511,12 +512,18 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     if (sent) {
       _controller.clear();
       if (draft != null) {
-        // First message of a draft identity creates the temporary actor on
-        // the server; refresh workspace context so the new actor shows up.
         _draftIdentity = null;
-        await widget.campaignController.loadWorkspaceContext(
-          widget.campaign.id,
-        );
+        final actorController = widget.actorController;
+        if (actorController == null) {
+          await widget.campaignController.loadWorkspaceContext(
+            widget.campaign.id,
+          );
+        } else {
+          await CampaignWorkspaceMutationCoordinator(
+            pullActors: actorController.pullUntilCurrent,
+            loadWorkspace: widget.campaignController.loadWorkspaceContext,
+          ).refreshAfterActorMutation(widget.campaign.id);
+        }
       }
     } else if (draft != null) {
       // Spec: failed draft send keeps the draft and shows the spec error.
@@ -599,10 +606,15 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         .where(
           (actor) =>
               actor.lifecycle != 'temporary' &&
-              actor.ownerUserId == membership.userId &&
               (actor.actorType == 'npc' ||
                   actor.actorType == 'monster' ||
                   actor.actorType == 'companion'),
+        )
+        .toList(growable: false);
+    final temporaryActors = activeActors
+        .where(
+          (actor) =>
+              actor.lifecycle == 'temporary' && actor.actorType != 'player',
         )
         .toList(growable: false);
     final proxyActors = activeActors
@@ -623,6 +635,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         membership: membership,
         isManager: _canManageCampaign,
         persistentActors: persistentActors,
+        temporaryActors: temporaryActors,
         proxyActors: proxyActors,
         hasBoundCharacter:
             membership.boundActorId != null ||

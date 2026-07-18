@@ -1641,6 +1641,9 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
                   _openEntryByTypesAndName(const ['equipment', 'item'], name),
               onChanged: (next) =>
                   setState(() => _replaceSet(_selectedItemRefs, next)),
+              maximum: StructuredClassRules.startingEquipmentChoice(
+                _entryById(_classEntryId),
+              )?.maximum,
             ),
         ],
       ),
@@ -1658,6 +1661,11 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
               onOpenOption: (name) => _openEntryByTypeAndName('spell', name),
               onChanged: (next) =>
                   setState(() => _replaceSet(_selectedSpellRefs, next)),
+              maximum: StructuredClassRules.preparedSpellLimit(
+                _entryById(_classEntryId),
+                abilities: _abilityScores,
+                level: _level,
+              ),
             ),
         ],
       ),
@@ -3290,6 +3298,7 @@ class _MultiChoiceSection extends StatelessWidget {
     required this.emptyLabel,
     this.sourceLabel,
     this.onOpenOption,
+    this.maximum,
   });
 
   final String title;
@@ -3300,14 +3309,37 @@ class _MultiChoiceSection extends StatelessWidget {
   final String? sourceLabel;
   final ValueChanged<String>? onOpenOption;
 
+  /// 最多可选数量。已选数量达到该值后，未选项的 FilterChip 不可再选。
+  /// null 表示不限制。已选项始终允许取消选择。
+  final int? maximum;
+
   @override
   Widget build(BuildContext context) {
+    final limit = maximum;
+    final atLimit = limit != null && selected.length >= limit;
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(title, style: theme.textTheme.titleMedium),
+              if (limit != null) ...[
+                const SizedBox(width: 8),
+                Text(
+                  '${selected.length} / $limit',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: atLimit
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ],
+          ),
           if (sourceLabel != null) ...[
             const SizedBox(height: 4),
             InputChip(
@@ -3331,6 +3363,8 @@ class _MultiChoiceSection extends StatelessWidget {
                         label: Text(option),
                         selected: selected.contains(option),
                         onSelected: (isSelected) {
+                          // 已达上限且试图新增：拒绝。允许取消已选项。
+                          if (isSelected && atLimit) return;
                           final next = {...selected};
                           if (isSelected) {
                             next.add(option);

@@ -10,6 +10,16 @@ class StructuredSkillChoice {
   final List<String> options;
 }
 
+/// 职业初始装备的选择上限。来自 class entry 的
+/// `structured.startingEquipmentChoice.maximum`，用于角色创建向导"装备"步骤
+/// 限制玩家自由挑选的装备数量。null 表示该职业不使用自由挑选模式
+/// （全部由 equipmentBundle 授予）。
+class StartingEquipmentChoice {
+  const StartingEquipmentChoice({required this.maximum});
+
+  final int maximum;
+}
+
 abstract final class StructuredClassRules {
   static Set<String> savingThrowAbilities(ContentEntry? entry) {
     final structured = entry?.structured;
@@ -68,6 +78,44 @@ abstract final class StructuredClassRules {
       count: count.clamp(0, options.length),
       options: options,
     );
+  }
+
+  /// 准备法术数量上限。D&D 2024 prepared 模型（牧师/德鲁伊/法师/圣武士/
+  /// 游侠）= 施法属性调整值 + 职业等级，最低 1。返回 null 表示该职业不使用
+  /// prepared 模型（如术士/邪术师使用 spellsKnown，由其它路径处理）。
+  ///
+  /// 输入 [abilities] 是角色六维属性值，[level] 是职业等级。
+  /// 决策依据：class entry 的 `structured.spellcastingAbility` 与
+  /// `structured.preparedSpellcasting` 两个字段同时存在且后者为 true。
+  static int? preparedSpellLimit(
+    ContentEntry? entry, {
+    required Map<String, int> abilities,
+    required int level,
+  }) {
+    final structured = entry?.structured;
+    if (structured == null) return null;
+    final isPrepared = structured['preparedSpellcasting'];
+    if (isPrepared is! bool || !isPrepared) return null;
+    final ability = structured['spellcastingAbility'];
+    final abilityKey = _abilityKey('$ability');
+    if (abilityKey == null) return null;
+    final score = abilities[abilityKey] ?? 10;
+    final modifier = Dnd5eRules.abilityModifier(score);
+    final total = modifier + level;
+    return total < 1 ? 1 : total;
+  }
+
+  /// 职业初始装备自由挑选上限。null 表示该职业未声明自由挑选模式。
+  static StartingEquipmentChoice? startingEquipmentChoice(
+    ContentEntry? entry,
+  ) {
+    final structured = entry?.structured;
+    if (structured == null) return null;
+    final raw = structured['startingEquipmentChoice'];
+    if (raw is! Map) return null;
+    final maximum = (raw['maximum'] as num?)?.toInt();
+    if (maximum == null || maximum <= 0) return null;
+    return StartingEquipmentChoice(maximum: maximum);
   }
 
   static String? _abilityKey(String value) {

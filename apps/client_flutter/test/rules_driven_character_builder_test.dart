@@ -300,6 +300,136 @@ void main() {
       },
     ]);
   });
+
+  test('emits preparedSpellLimit for prepared casters', () {
+    final classEntry = _entry(
+      id: 'test:class/cleric',
+      type: 'class',
+      name: 'Cleric',
+      structured: const {
+        'spellcastingAbility': 'wis',
+        'preparedSpellcasting': true,
+      },
+      rules: const {
+        'progression': [
+          {
+            'level': 1,
+            'grants': [
+              {
+                'id': 'first-level-slots',
+                'kind': 'resource',
+                'label': 'First-level slots',
+                'target': 'spellSlot:1',
+                'value': 2,
+              },
+            ],
+          },
+        ],
+      },
+    );
+
+    final draft =
+        RulesDrivenCharacterBuilder(entries: {classEntry.id: classEntry}).build(
+          name: 'Mira',
+          build: const CharacterBuild(
+            level: 1,
+            selections: {'class': 'test:class/cleric'},
+          ),
+          abilities: const {
+            'str': 8,
+            'dex': 14,
+            'con': 14,
+            'int': 12,
+            'wis': 16,
+            'cha': 10,
+          },
+        );
+
+    // 感知 16 → +3，等级 1 → 4
+    expect(draft.data['preparedSpellLimit'], 4);
+  });
+
+  test('omits preparedSpellLimit for non-prepared casters', () {
+    final classEntry = _entry(
+      id: 'test:class/sorcerer',
+      type: 'class',
+      name: 'Sorcerer',
+      structured: const {'spellcastingAbility': 'cha'},
+      rules: const {
+        'progression': [
+          {
+            'level': 1,
+            'grants': [
+              {
+                'id': 'first-level-slots',
+                'kind': 'resource',
+                'label': 'First-level slots',
+                'target': 'spellSlot:1',
+                'value': 2,
+              },
+            ],
+          },
+        ],
+      },
+    );
+
+    final draft =
+        RulesDrivenCharacterBuilder(entries: {classEntry.id: classEntry}).build(
+          name: 'Aria',
+          build: const CharacterBuild(
+            level: 1,
+            selections: {'class': 'test:class/sorcerer'},
+          ),
+          abilities: const {
+            'str': 8,
+            'dex': 14,
+            'con': 14,
+            'int': 12,
+            'wis': 10,
+            'cha': 16,
+          },
+        );
+
+    expect(draft.data.containsKey('preparedSpellLimit'), isFalse);
+  });
+
+  test('emits startingEquipmentMaximum when declared', () {
+    final classEntry = _entry(
+      id: 'test:class/fighter',
+      type: 'class',
+      name: 'Fighter',
+      structured: const {
+        'startingEquipmentChoice': {'maximum': 5},
+      },
+      rules: const {
+        'progression': [
+          {
+            'level': 1,
+            'grants': [],
+          },
+        ],
+      },
+    );
+
+    final draft =
+        RulesDrivenCharacterBuilder(entries: {classEntry.id: classEntry}).build(
+          name: 'Bob',
+          build: const CharacterBuild(
+            level: 1,
+            selections: {'class': 'test:class/fighter'},
+          ),
+          abilities: const {
+            'str': 16,
+            'dex': 14,
+            'con': 14,
+            'int': 10,
+            'wis': 12,
+            'cha': 10,
+          },
+        );
+
+    expect(draft.data['startingEquipmentMaximum'], 5);
+  });
 }
 
 ContentEntry _entry({

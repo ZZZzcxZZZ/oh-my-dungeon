@@ -161,6 +161,16 @@ class RulesDrivenCharacterBuilder {
         if (classEntry?.structured['spellcastingAbility']
             case final String ability)
           'spellcastingAbility': ability,
+        if (StructuredClassRules.preparedSpellLimit(
+          classEntry,
+          abilities: abilities,
+          level: build.level,
+        )
+            case final int preparedLimit)
+          'preparedSpellLimit': preparedLimit,
+        if (StructuredClassRules.startingEquipmentChoice(classEntry)
+            case final StartingEquipmentChoice equipmentChoice)
+          'startingEquipmentMaximum': equipmentChoice.maximum,
         if (classResources.isNotEmpty)
           'classResources': [
             for (final resource in classResources)

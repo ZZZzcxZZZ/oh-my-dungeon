@@ -133,6 +133,28 @@ void main() {
   });
 
   group('CampaignContextController archives', () {
+    test('maps a missing archive route to an upgrade message', () async {
+      final authController = await buildLoggedInAuthController();
+      final controller = CampaignContextController(
+        apiBaseUrl: apiBaseUrl,
+        authController: authController,
+        campaignClient: _FakeCampaignClient(
+          archivesError: const CampaignApiException(
+            'Cannot GET /api/campaigns/camp-1/archives',
+            statusCode: 404,
+          ),
+        ),
+      );
+
+      await controller.loadArchives('camp-1');
+
+      expect(controller.archives, isEmpty);
+      expect(controller.archivesError, '当前服务器版本不支持战役档案，请更新服务端');
+
+      controller.dispose();
+      authController.dispose();
+    });
+
     test('loads campaign archives independently from the chat stream', () async {
       final authController = await buildLoggedInAuthController();
       final controller = CampaignContextController(
@@ -296,9 +318,10 @@ class _FakeAuthClient implements AuthClient {
 }
 
 class _FakeCampaignClient implements CampaignClient {
-  _FakeCampaignClient({this.workspaceContextError});
+  _FakeCampaignClient({this.workspaceContextError, this.archivesError});
 
   final CampaignApiException? workspaceContextError;
+  final CampaignApiException? archivesError;
 
   @override
   Future<void> markCampaignRead({
@@ -334,6 +357,7 @@ class _FakeCampaignClient implements CampaignClient {
     required String campaignId,
     String? kind,
   }) async {
+    if (archivesError != null) throw archivesError!;
     return const [
       CampaignArchiveEntry(
         id: 'archive-1',

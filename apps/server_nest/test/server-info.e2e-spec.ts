@@ -52,6 +52,14 @@ describe('server metadata endpoints', () => {
         expect(body.websocketUrl).toBe('ws://localhost:3000/realtime');
         expect(body.registrationEnabled).toBe(true);
         expect(body.supportedSystems).toEqual(['dnd5e']);
+        expect(body.apiVersion).toBe('1');
+        expect(body.features).toEqual(
+          expect.arrayContaining([
+            'campaignArchives',
+            'campaignActors',
+            'campaignChat'
+          ])
+        );
       });
   });
 

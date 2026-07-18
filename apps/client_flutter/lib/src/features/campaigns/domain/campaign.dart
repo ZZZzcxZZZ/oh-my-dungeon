@@ -486,21 +486,43 @@ class CampaignCapabilities {
   const CampaignCapabilities({
     required this.canManageCampaign,
     required this.canManageMembers,
+    this.canInviteMembers = false,
     required this.canCreateActors,
+    this.canManageActors = false,
+    this.canEditAnyActor = false,
     required this.canSpeakAsNarrator,
+    this.canCreateArchive = false,
+    this.canManageArchive = false,
   });
 
   final bool canManageCampaign;
   final bool canManageMembers;
+  final bool canInviteMembers;
   final bool canCreateActors;
+  final bool canManageActors;
+  final bool canEditAnyActor;
   final bool canSpeakAsNarrator;
+  final bool canCreateArchive;
+  final bool canManageArchive;
 
   factory CampaignCapabilities.fromJson(Map<String, Object?> json) {
+    final canManageCampaign =
+        json['canManageCampaign'] as bool? ?? false;
     return CampaignCapabilities(
-      canManageCampaign: json['canManageCampaign'] as bool? ?? false,
+      canManageCampaign: canManageCampaign,
       canManageMembers: json['canManageMembers'] as bool? ?? false,
+      canInviteMembers:
+          json['canInviteMembers'] as bool? ?? canManageCampaign,
       canCreateActors: json['canCreateActors'] as bool? ?? false,
+      canManageActors:
+          json['canManageActors'] as bool? ?? canManageCampaign,
+      canEditAnyActor:
+          json['canEditAnyActor'] as bool? ?? canManageCampaign,
       canSpeakAsNarrator: json['canSpeakAsNarrator'] as bool? ?? false,
+      canCreateArchive:
+          json['canCreateArchive'] as bool? ?? canManageCampaign,
+      canManageArchive:
+          json['canManageArchive'] as bool? ?? canManageCampaign,
     );
   }
 }

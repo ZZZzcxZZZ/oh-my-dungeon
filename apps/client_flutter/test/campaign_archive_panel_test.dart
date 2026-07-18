@@ -10,6 +10,7 @@ void main() {
     WidgetTester tester, {
     required List<CampaignArchiveEntry> entries,
     bool canManage = false,
+    String? error,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -17,7 +18,7 @@ void main() {
           body: CampaignArchivePanel(
             entries: entries,
             isLoading: false,
-            error: null,
+            error: error,
             canManage: canManage,
             selectedKind: null,
             onKindChanged: (_) {},
@@ -29,6 +30,18 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('archive load errors offer a clear retry action', (tester) async {
+    await pumpPanel(
+      tester,
+      entries: const [],
+      error: '当前服务器版本不支持战役档案，请更新服务端',
+    );
+
+    expect(find.text('当前服务器版本不支持战役档案，请更新服务端'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
+    expect(find.byIcon(Icons.refresh), findsOneWidget);
+  });
 
   testWidgets(
     'tapping an archive entry shows a card popup with body content rendered',
@@ -58,7 +71,7 @@ void main() {
       // Detail popup should show: title, kind banner, summary, body content.
       expect(find.text('古老的地图'), findsWidgets);
       expect(find.text('文档'), findsOneWidget);
-      expect(find.text('一张羊皮纸地图'), findsOneWidget);
+      expect(find.text('一张羊皮纸地图'), findsWidgets);
       expect(
         find.text('地图上标记着失落之城的入口，位于群山深处。'),
         findsOneWidget,
@@ -121,8 +134,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('龙穴'), findsWidgets);
-      expect(find.text('地点'), findsOneWidget);
-      expect(find.text('熔岩环绕的洞穴'), findsOneWidget);
+      expect(find.text('地点'), findsWidgets);
+      expect(find.text('熔岩环绕的洞穴'), findsWidgets);
       // No body, no source, no related entities — no extra sections.
       expect(find.textContaining('来源消息'), findsNothing);
       expect(find.textContaining('关联角色'), findsNothing);

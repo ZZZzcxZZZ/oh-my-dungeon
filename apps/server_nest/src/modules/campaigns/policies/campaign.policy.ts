@@ -51,8 +51,13 @@ export interface CampaignActorIdentity {
 export interface CampaignCapabilities {
   canManageCampaign: boolean;
   canManageMembers: boolean;
+  canInviteMembers: boolean;
   canCreateActors: boolean;
+  canManageActors: boolean;
+  canEditAnyActor: boolean;
   canSpeakAsNarrator: boolean;
+  canCreateArchive: boolean;
+  canManageArchive: boolean;
 }
 
 const MANAGE_ROLES = new Set(['owner', 'dm']);
@@ -74,8 +79,13 @@ export class CampaignPolicy {
     return {
       canManageCampaign: isManager,
       canManageMembers: isManager,
+      canInviteMembers: isManager,
       canCreateActors: isManager,
+      canManageActors: isManager,
+      canEditAnyActor: isManager,
       canSpeakAsNarrator: isManager,
+      canCreateArchive: isManager,
+      canManageArchive: isManager,
     };
   }
 

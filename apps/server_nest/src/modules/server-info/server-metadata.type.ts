@@ -6,4 +6,6 @@ export type ServerMetadata = {
   registrationEnabled: boolean;
   serverMode: 'self_hosted' | 'public';
   supportedSystems: string[];
+  apiVersion: string;
+  features: string[];
 };

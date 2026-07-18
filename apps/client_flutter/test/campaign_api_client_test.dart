@@ -326,8 +326,13 @@ void main() {
               'capabilities': const {
                 'canManageCampaign': false,
                 'canManageMembers': false,
+                'canInviteMembers': false,
                 'canCreateActors': false,
+                'canManageActors': false,
+                'canEditAnyActor': false,
                 'canSpeakAsNarrator': false,
+                'canCreateArchive': false,
+                'canManageArchive': false,
               },
             }),
             200,
@@ -347,6 +352,9 @@ void main() {
       expect(context.membership.boundActorId, 'actor-1');
       expect(context.actors.single.publicHealthState, 'healthy');
       expect(context.capabilities.canManageCampaign, isFalse);
+      expect(context.capabilities.canInviteMembers, isFalse);
+      expect(context.capabilities.canEditAnyActor, isFalse);
+      expect(context.capabilities.canManageArchive, isFalse);
     });
   });
 

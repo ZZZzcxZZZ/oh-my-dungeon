@@ -368,6 +368,27 @@ void main() {
     },
   );
 
+  testWidgets('player center does not request manager-only campaign detail', (
+    tester,
+  ) async {
+    final authController = await buildLoggedInAuthController();
+    final campaignClient = _FakeCampaignClient(canManage: false);
+    final controller = CampaignController(
+      apiBaseUrl: apiBaseUrl,
+      authController: authController,
+      campaignClient: campaignClient,
+    );
+    await controller.loadWorkspaceContext('camp-1');
+
+    await pumpCenterPage(tester, controller);
+
+    expect(campaignClient.getCampaignCalls, 0);
+    expect(campaignClient.listInvitesCalls, 0);
+
+    controller.dispose();
+    authController.dispose();
+  });
+
   testWidgets('overview opens the full sheet for a bound member actor', (
     tester,
   ) async {
@@ -726,6 +747,8 @@ class _FakeCampaignClient implements CampaignClient {
   _FakeCampaignClient({required this.canManage});
 
   final bool canManage;
+  int getCampaignCalls = 0;
+  int listInvitesCalls = 0;
 
   @override
   Future<CampaignWorkspaceContext> getWorkspaceContext({
@@ -815,7 +838,10 @@ class _FakeCampaignClient implements CampaignClient {
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-  }) async => _campaign;
+  }) async {
+    getCampaignCalls += 1;
+    return _campaign;
+  }
 
   @override
   Future<List<Campaign>> listCampaigns({
@@ -897,5 +923,8 @@ class _FakeCampaignClient implements CampaignClient {
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-  }) async => const [];
+  }) async {
+    listInvitesCalls += 1;
+    return const [];
+  }
 }

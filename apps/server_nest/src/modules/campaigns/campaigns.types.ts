@@ -95,8 +95,13 @@ export interface MembershipView {
 export interface CampaignCapabilitiesView {
   canManageCampaign: boolean;
   canManageMembers: boolean;
+  canInviteMembers: boolean;
   canCreateActors: boolean;
+  canManageActors: boolean;
+  canEditAnyActor: boolean;
   canSpeakAsNarrator: boolean;
+  canCreateArchive: boolean;
+  canManageArchive: boolean;
 }
 
 export interface CampaignWorkspaceActorView {

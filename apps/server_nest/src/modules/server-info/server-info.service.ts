@@ -25,7 +25,9 @@ export class ServerInfoService {
       websocketUrl: this.toWebSocketUrl(publicBaseUrl),
       registrationEnabled,
       serverMode: 'self_hosted',
-      supportedSystems: ['dnd5e']
+      supportedSystems: ['dnd5e'],
+      apiVersion: '1',
+      features: ['campaignArchives', 'campaignActors', 'campaignChat']
     };
   }
 

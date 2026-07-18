@@ -70,6 +70,55 @@ describe('CampaignPolicy', () => {
     });
   });
 
+  describe('capabilitiesFor', () => {
+    const campaign = {
+      campaignId: 'c-1',
+      ownerId: 'user-1',
+      members: [
+        { userId: 'user-1', role: 'owner' },
+        { userId: 'user-2', role: 'player' }
+      ]
+    };
+
+    it('grants every campaign management capability to the owner', () => {
+      expect(
+        policy.capabilitiesFor(
+          { userId: 'user-1', username: 'ranger' },
+          campaign
+        )
+      ).toEqual({
+        canManageCampaign: true,
+        canManageMembers: true,
+        canInviteMembers: true,
+        canCreateActors: true,
+        canManageActors: true,
+        canEditAnyActor: true,
+        canSpeakAsNarrator: true,
+        canCreateArchive: true,
+        canManageArchive: true
+      });
+    });
+
+    it('denies campaign management capabilities to a player', () => {
+      expect(
+        policy.capabilitiesFor(
+          { userId: 'user-2', username: 'bard' },
+          campaign
+        )
+      ).toEqual({
+        canManageCampaign: false,
+        canManageMembers: false,
+        canInviteMembers: false,
+        canCreateActors: false,
+        canManageActors: false,
+        canEditAnyActor: false,
+        canSpeakAsNarrator: false,
+        canCreateArchive: false,
+        canManageArchive: false
+      });
+    });
+  });
+
   describe('canManageCampaign', () => {
     it('allows owner to manage', () => {
       expect(() =>

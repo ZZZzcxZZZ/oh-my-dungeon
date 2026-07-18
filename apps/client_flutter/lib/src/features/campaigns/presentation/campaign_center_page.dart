@@ -46,12 +46,16 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.controller.loadWorkspaceContext(widget.campaign.id);
-      widget.controller.loadArchives(widget.campaign.id);
-      // Spec §队伍: 邀请码列表在队伍面板就地展示, 需要拉取战役详情
-      // (含 invites)。非 manager 调用会被服务端 403 忽略, 不影响普通玩家。
-      widget.controller.loadCampaignDetail(widget.campaign.id);
+      _loadInitialData();
     });
+  }
+
+  Future<void> _loadInitialData() async {
+    await widget.controller.loadWorkspaceContext(widget.campaign.id);
+    if (!mounted) return;
+    await widget.controller.loadArchives(widget.campaign.id);
+    if (!mounted || !_canManage) return;
+    await widget.controller.loadCampaignDetail(widget.campaign.id);
   }
 
   bool get _canManage =>

@@ -112,7 +112,7 @@ class CampaignContextController extends ChangeNotifier {
         kind: kind,
       );
     } on CampaignApiException catch (error) {
-      _archivesError = error.message;
+      _archivesError = _archiveLoadErrorMessage(error);
     } catch (_) {
       _archivesError = 'Failed to load campaign archives';
     }
@@ -239,4 +239,12 @@ class CampaignContextController extends ChangeNotifier {
     authController.removeListener(_onAuthChanged);
     super.dispose();
   }
+}
+
+String _archiveLoadErrorMessage(CampaignApiException error) {
+  return switch (error.statusCode) {
+    404 => '当前服务器版本不支持战役档案，请更新服务端',
+    403 => '你没有查看此战役档案的权限',
+    _ => error.message,
+  };
 }

@@ -12,11 +12,15 @@ void main() {
       'registrationEnabled': true,
       'serverMode': 'self_hosted',
       'supportedSystems': ['dnd5e'],
+      'apiVersion': '1',
+      'features': ['campaignArchives', 'campaignActors', 'campaignChat'],
     });
 
     expect(metadata.name, 'D&D Table Tool');
     expect(metadata.registrationEnabled, isTrue);
     expect(metadata.supportedSystems, ['dnd5e']);
+    expect(metadata.apiVersion, '1');
+    expect(metadata.features, contains('campaignArchives'));
   });
 
   test('creates a server profile from discovered metadata', () {
@@ -28,6 +32,8 @@ void main() {
       registrationEnabled: true,
       serverMode: 'self_hosted',
       supportedSystems: ['dnd5e'],
+      apiVersion: '1',
+      features: ['campaignArchives'],
     );
 
     final profile = ServerProfile.fromMetadata(

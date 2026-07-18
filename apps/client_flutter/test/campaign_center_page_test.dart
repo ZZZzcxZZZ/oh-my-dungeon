@@ -5,9 +5,11 @@ import 'package:dnd_table_client/src/features/auth/presentation/auth_controller.
 import 'package:dnd_table_client/src/features/campaigns/data/campaign_api_client.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_archive_entry.dart';
+import 'package:dnd_table_client/src/features/campaigns/domain/campaign_actor.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_controller.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_center_page.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_controller.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/center/campaign_overview_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -365,6 +367,49 @@ void main() {
       dmAuth.dispose();
     },
   );
+
+  testWidgets('overview opens the full sheet for a bound member actor', (
+    tester,
+  ) async {
+    CampaignActor? openedActor;
+    final actor = CampaignActor(
+      id: 'actor-1',
+      campaignId: 'camp-1',
+      ownerUserId: 'user-1',
+      sourceCharacterId: null,
+      actorType: 'player',
+      status: 'active',
+      sheet: const {'name': '莱雅', 'currentHp': 8, 'maxHp': 10},
+      revision: 1,
+      updatedBy: 'user-1',
+      createdAt: '2026-07-18T00:00:00Z',
+      updatedAt: '2026-07-18T00:00:00Z',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CampaignOverviewPanel(
+            campaign: _campaign,
+            canManage: false,
+            members: const [
+              CampaignMemberPreview(
+                userId: 'user-1',
+                displayName: '玩家一',
+                role: 'player',
+              ),
+            ],
+            actors: [actor],
+            onOpenActor: (value) => openedActor = value,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('玩家一'));
+
+    expect(openedActor, same(actor));
+  });
 
   testWidgets(
     'tapping invite button creates an invite and shows the code dialog',

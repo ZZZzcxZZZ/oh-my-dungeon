@@ -13,7 +13,7 @@ import '../../../core/dice/dice_roller.dart';
 import '../domain/campaign.dart';
 import '../domain/campaign_actor.dart';
 import 'actors/campaign_actor_controller.dart';
-import 'actors/campaign_actor_sheet_page.dart';
+import 'actors/campaign_actor_sheet_launcher.dart';
 import 'campaign_controller.dart';
 import 'campaign_center_page.dart';
 import 'campaign_workspace_mutation_coordinator.dart';
@@ -28,7 +28,6 @@ import 'chat/chat_mode_picker.dart';
 import 'chat/check_request_sheet.dart';
 import 'content/campaign_content_controller.dart';
 import 'content/campaign_content_page.dart';
-import 'widgets/campaign_actor_quick_sheet.dart';
 
 class CampaignChatPage extends StatefulWidget {
   const CampaignChatPage({
@@ -309,9 +308,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     return '$memberPart$speakerPart';
   }
 
-  /// 解析消息头像点击：当消息绑定的 campaignActorId 能在 actorController 中
-  /// 找到 active 角色时，返回弹出 CampaignActorQuickSheet 的回调；否则返回
-  /// null，头像保持静默（避免点击无 actor 的陌生人头像时出现空弹窗）。
+  /// 解析消息头像点击：只有能解析到战役 Actor 时才打开统一完整角色卡。
   VoidCallback? _resolveAvatarTap(CampaignChatMessage message) {
     final actorId = message.campaignActorId;
     if (actorId == null || actorId.isEmpty) return null;
@@ -322,30 +319,17 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       orElse: () => null,
     );
     if (actor == null) return null;
-    return () => _showActorQuickSheet(actor);
+    return () => _openActorSheet(actor);
   }
 
-  Future<void> _showActorQuickSheet(CampaignActor actor) {
-    return showModalBottomSheet<void>(
+  Future<void> _openActorSheet(CampaignActor actor) {
+    final controller = widget.actorController;
+    if (controller == null) return Future<void>.value();
+    return openCampaignActorSheet(
       context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => CampaignActorQuickSheet(
-        actor: actor,
-        isManager: _canManageCampaign,
-        onOpenSheet: widget.actorController == null
-            ? null
-            : () {
-                Navigator.of(sheetContext).pop();
-                Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(
-                    builder: (_) => CampaignActorSheetPage(
-                      controller: widget.actorController!,
-                      actorId: actor.id,
-                    ),
-                  ),
-                );
-              },
-      ),
+      controller: controller,
+      actor: actor,
+      canEditAnyActor: _canManageCampaign,
     );
   }
 
@@ -1037,15 +1021,18 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     final actorId = identity.actorId;
     final actorController = widget.actorController;
     if (actorId != null && actorController != null) {
-      Navigator.of(context).push<void>(
-        MaterialPageRoute(
-          builder: (context) => CampaignActorSheetPage(
-            controller: actorController,
-            actorId: actorId,
-          ),
-        ),
-      );
-      return;
+      final actor = actorController.actors
+          .where((candidate) => candidate.id == actorId)
+          .firstOrNull;
+      if (actor != null) {
+        openCampaignActorSheet(
+          context: context,
+          controller: actorController,
+          actor: actor,
+          canEditAnyActor: _canManageCampaign,
+        );
+        return;
+      }
     }
 
     ScaffoldMessenger.of(

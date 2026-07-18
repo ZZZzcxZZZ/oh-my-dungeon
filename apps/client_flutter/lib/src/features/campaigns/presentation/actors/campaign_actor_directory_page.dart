@@ -206,6 +206,7 @@ class CampaignActorDirectoryPage extends StatelessWidget {
         builder: (context) => CampaignActorSheetPage(
           controller: controller,
           actorId: actor.id,
+          canEdit: true,
         ),
       ),
     );

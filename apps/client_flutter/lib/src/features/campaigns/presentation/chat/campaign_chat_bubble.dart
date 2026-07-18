@@ -7,8 +7,8 @@ import 'chat_helpers.dart';
 /// 战役聊天消息泡泡。按 [CampaignChatMessage.kind] 渲染：
 /// system、checkRequest、roll、action、say 各有独立样式。
 ///
-/// 头像点击通过 [onAvatarTap] 回调注入，宿主页面负责解析 actor 并弹出
-/// CampaignActorQuickSheet；不传则头像不可点。
+/// 头像点击通过 [onAvatarTap] 回调注入，宿主页面负责解析 actor 并打开
+/// 完整角色卡；不传则头像不可点。
 class CampaignChatBubble extends StatelessWidget {
   const CampaignChatBubble({
     required this.message,

@@ -7,11 +7,11 @@ import 'package:dnd_table_client/src/features/campaigns/data/campaign_socket_ser
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_archive_entry.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_controller.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_sheet_page.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_chat_page.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_controller.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/chat/campaign_chat_bubble.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/chat/chat_avatar.dart';
-import 'package:dnd_table_client/src/features/campaigns/presentation/widgets/campaign_actor_quick_sheet.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_controller.dart';
 import 'package:dnd_table_client/src/features/content/data/local/content_repository.dart';
@@ -353,9 +353,6 @@ void main() {
 
     await tester.tap(find.byKey(const Key('campaign-open-center')));
     await tester.pumpAndSettle();
-    // Center now uses NavigationBar; tap the 队伍 destination label.
-    await tester.tap(find.text('队伍').last);
-    await tester.pumpAndSettle();
 
     expect(find.text('Dungeon Master'), findsOneWidget);
     expect(find.text('Player Two'), findsOneWidget);
@@ -433,7 +430,7 @@ void main() {
   });
 
   testWidgets(
-    'tapping a chat bubble avatar opens the CampaignActorQuickSheet',
+    'tapping a chat bubble avatar opens the full read-only actor sheet',
     (tester) async {
       campaignClient.messages = const [
         CampaignChatMessage(
@@ -459,9 +456,9 @@ void main() {
       await tester.tap(bubbleAvatar);
       await tester.pumpAndSettle();
 
-      expect(find.byType(CampaignActorQuickSheet), findsOneWidget);
+      expect(find.byType(CampaignActorSheetPage), findsOneWidget);
       expect(find.text('Arannis'), findsWidgets);
-      expect(find.text('打开角色卡'), findsOneWidget);
+      expect(find.byTooltip('受到 1 点伤害'), findsNothing);
     },
   );
 
@@ -492,7 +489,7 @@ void main() {
     await tester.tap(bubbleAvatar);
     await tester.pumpAndSettle();
 
-    expect(find.byType(CampaignActorQuickSheet), findsNothing);
+    expect(find.byType(CampaignActorSheetPage), findsNothing);
   });
 
   testWidgets(

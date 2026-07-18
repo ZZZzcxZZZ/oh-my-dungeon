@@ -27,6 +27,7 @@ class CampaignOverviewPanel extends StatelessWidget {
     this.actors = const [],
     this.invites = const [],
     this.onCreateInvite,
+    this.onOpenActor,
     this.campaignName,
     this.serverUrl,
     this.onOpenDmControl,
@@ -43,6 +44,7 @@ class CampaignOverviewPanel extends StatelessWidget {
   final List<CampaignActor> actors;
   final List<CampaignInvite> invites;
   final Future<CampaignInvite?> Function()? onCreateInvite;
+  final ValueChanged<CampaignActor>? onOpenActor;
   final String? campaignName;
   final String? serverUrl;
 
@@ -85,7 +87,11 @@ class CampaignOverviewPanel extends StatelessWidget {
           const Divider(),
           _CampaignSummary(members: members, actors: actors),
           const SizedBox(height: 8),
-          _CampaignMemberList(members: members, actors: actors),
+          _CampaignMemberList(
+            members: members,
+            actors: actors,
+            onOpenActor: onOpenActor,
+          ),
           if (canManage && onCreateInvite != null) ...[
             const SizedBox(height: 8),
             _CampaignInviteShare(
@@ -161,10 +167,15 @@ class _CampaignSummary extends StatelessWidget {
 }
 
 class _CampaignMemberList extends StatelessWidget {
-  const _CampaignMemberList({required this.members, required this.actors});
+  const _CampaignMemberList({
+    required this.members,
+    required this.actors,
+    required this.onOpenActor,
+  });
 
   final List<CampaignMemberPreview> members;
   final List<CampaignActor> actors;
+  final ValueChanged<CampaignActor>? onOpenActor;
 
   @override
   Widget build(BuildContext context) {
@@ -215,6 +226,10 @@ class _CampaignMemberList extends StatelessWidget {
             ? '$actorName · ${_roleLabel(member.role)}'
             : '${_roleLabel(member.role)} · 未绑定角色',
       ),
+      trailing: actor == null ? null : const Icon(Icons.chevron_right),
+      onTap: actor == null || onOpenActor == null
+          ? null
+          : () => onOpenActor!(actor),
     );
   }
 }

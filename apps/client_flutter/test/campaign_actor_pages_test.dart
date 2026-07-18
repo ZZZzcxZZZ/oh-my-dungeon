@@ -3,6 +3,7 @@ import 'package:dnd_table_client/src/features/campaigns/domain/campaign_actor.da
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_actor_audit.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_controller.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_directory_page.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_sheet_launcher.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_sheet_page.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_controller.dart';
@@ -19,6 +20,81 @@ void main() {
     await Future.microtask(() {});
     await Future.microtask(() {});
   }
+
+  test('campaign actor edit permission follows ownership and DM authority', () {
+    final ownActor = testCampaignActor(
+      id: 'own',
+      ownerUserId: 'user-1',
+      sheet: const {'name': 'Own'},
+    );
+    final otherActor = testCampaignActor(
+      id: 'other',
+      ownerUserId: 'user-2',
+      sheet: const {'name': 'Other'},
+    );
+
+    expect(
+      canEditCampaignActor(
+        actor: ownActor,
+        currentUserId: 'user-1',
+        canEditAnyActor: false,
+      ),
+      isTrue,
+    );
+    expect(
+      canEditCampaignActor(
+        actor: otherActor,
+        currentUserId: 'user-1',
+        canEditAnyActor: false,
+      ),
+      isFalse,
+    );
+    expect(
+      canEditCampaignActor(
+        actor: otherActor,
+        currentUserId: 'user-1',
+        canEditAnyActor: true,
+      ),
+      isTrue,
+    );
+  });
+
+  testWidgets('read-only actor sheet hides every editing affordance', (
+    tester,
+  ) async {
+    final controller = CampaignActorController(
+      cacheRepository: MemoryCampaignCacheRepository(actors: [_sampleActor]),
+      apiClient: MemoryCampaignSyncApiClient(),
+      apiBaseUrl: 'https://example.test',
+      accessToken: 'access-token',
+      currentUserId: 'viewer',
+    );
+    await controller.selectCampaign('campaign-1');
+    await drainStream();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CampaignActorSheetPage(
+          controller: controller,
+          actorId: _sampleActor.id,
+          canEdit: false,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('campaign-actor-sheet')), findsOneWidget);
+    expect(find.byTooltip('归档'), findsNothing);
+    expect(find.byKey(const Key('campaign-actor-avatar-picker')), findsNothing);
+    expect(find.byTooltip('受到 1 点伤害'), findsNothing);
+    expect(find.byTooltip('恢复 1 点 HP'), findsNothing);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -1600));
+    await tester.pumpAndSettle();
+    expect(find.text('备注'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+
+    controller.dispose();
+  });
 
   test('uses credentials that become available after construction', () async {
     var accessToken = '';
@@ -75,53 +151,57 @@ void main() {
   // actors via the DM create endpoint (/actors), not the self-publish endpoint
   // (/actors/publish) which rejects non-player types. See
   // docs/superpowers/plans/2026-07-17-workspace-spec-compliance-fixes.md Task 1.3.
-  test('createDmActor creates a persistent NPC via the DM create endpoint',
-      () async {
-    final apiClient = MemoryCampaignSyncApiClient();
-    final controller = CampaignActorController(
-      cacheRepository: MemoryCampaignCacheRepository(),
-      apiClient: apiClient,
-      apiBaseUrl: 'https://example.test',
-      accessToken: 'access-token',
-      currentUserId: 'dm-1',
-    );
-    await controller.selectCampaign('campaign-1');
+  test(
+    'createDmActor creates a persistent NPC via the DM create endpoint',
+    () async {
+      final apiClient = MemoryCampaignSyncApiClient();
+      final controller = CampaignActorController(
+        cacheRepository: MemoryCampaignCacheRepository(),
+        apiClient: apiClient,
+        apiBaseUrl: 'https://example.test',
+        accessToken: 'access-token',
+        currentUserId: 'dm-1',
+      );
+      await controller.selectCampaign('campaign-1');
 
-    final created = await controller.createDmActor(
-      actorType: 'npc',
-      sheet: {'name': '酒馆老板', 'currentHp': 12, 'maxHp': 12},
-    );
+      final created = await controller.createDmActor(
+        actorType: 'npc',
+        sheet: {'name': '酒馆老板', 'currentHp': 12, 'maxHp': 12},
+      );
 
-    expect(created, isTrue);
-    expect(apiClient.createActorCalls, hasLength(1));
-    expect(apiClient.createActorCalls.single['actorType'], 'npc');
-    expect(apiClient.createActorCalls.single['lifecycle'], 'persistent');
-    expect(apiClient.publishCalls, isEmpty);
-    controller.dispose();
-  });
+      expect(created, isTrue);
+      expect(apiClient.createActorCalls, hasLength(1));
+      expect(apiClient.createActorCalls.single['actorType'], 'npc');
+      expect(apiClient.createActorCalls.single['lifecycle'], 'persistent');
+      expect(apiClient.publishCalls, isEmpty);
+      controller.dispose();
+    },
+  );
 
-  test('createDmActor creates a persistent monster via the DM create endpoint',
-      () async {
-    final apiClient = MemoryCampaignSyncApiClient();
-    final controller = CampaignActorController(
-      cacheRepository: MemoryCampaignCacheRepository(),
-      apiClient: apiClient,
-      apiBaseUrl: 'https://example.test',
-      accessToken: 'access-token',
-      currentUserId: 'dm-1',
-    );
-    await controller.selectCampaign('campaign-1');
+  test(
+    'createDmActor creates a persistent monster via the DM create endpoint',
+    () async {
+      final apiClient = MemoryCampaignSyncApiClient();
+      final controller = CampaignActorController(
+        cacheRepository: MemoryCampaignCacheRepository(),
+        apiClient: apiClient,
+        apiBaseUrl: 'https://example.test',
+        accessToken: 'access-token',
+        currentUserId: 'dm-1',
+      );
+      await controller.selectCampaign('campaign-1');
 
-    final created = await controller.createDmActor(
-      actorType: 'monster',
-      sheet: {'name': '哥布林', 'currentHp': 7, 'maxHp': 7},
-    );
+      final created = await controller.createDmActor(
+        actorType: 'monster',
+        sheet: {'name': '哥布林', 'currentHp': 7, 'maxHp': 7},
+      );
 
-    expect(created, isTrue);
-    expect(apiClient.createActorCalls.single['actorType'], 'monster');
-    expect(apiClient.createActorCalls.single['lifecycle'], 'persistent');
-    controller.dispose();
-  });
+      expect(created, isTrue);
+      expect(apiClient.createActorCalls.single['actorType'], 'monster');
+      expect(apiClient.createActorCalls.single['lifecycle'], 'persistent');
+      controller.dispose();
+    },
+  );
 
   // Spec compliance: error path must surface server-provided message instead
   // of a generic "发布角色失败" string. The previous catch-all discarded the
@@ -519,7 +599,11 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: CampaignActorSheetPage(controller: controller, actorId: actor.id),
+        home: CampaignActorSheetPage(
+          controller: controller,
+          actorId: actor.id,
+          canEdit: true,
+        ),
       ),
     );
     await tester.pumpAndSettle();

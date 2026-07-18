@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import '../domain/campaign.dart';
 import '../domain/campaign_actor.dart';
 import 'actors/campaign_actor_controller.dart';
+import 'actors/campaign_actor_sheet_launcher.dart';
 import 'campaign_controller.dart';
 import 'campaign_detail_page.dart';
 import 'center/campaign_archive_panel.dart';
 import 'center/campaign_characters_panel.dart';
 import 'center/campaign_overview_panel.dart';
 import 'center/campaign_records_panel.dart';
-import 'widgets/campaign_actor_quick_sheet.dart';
 
 /// The campaign's non-chat workspace. Chat stays fast and focused; durable
 /// information lives here behind an adaptive Material 3 navigation shell —
@@ -235,6 +235,7 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
                   maxUses: 1,
                 )
               : null,
+          onOpenActor: _openActorSheet,
           onOpenDmControl: _canManage ? _showDmControlSheet : null,
           // Spec §全局设置: 4 项低频操作整合到概览面板, DM 可见全部 4 项,
           // 普通玩家只见"离开战役"。
@@ -247,7 +248,7 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
         return CampaignCharactersPanel(
           actors: _actors,
           isManager: _canManage,
-          onOpenActor: _showActorQuickSheet,
+          onOpenActor: _openActorSheet,
           activeSpeakerActorId: _activeSpeakerActorId,
           onCreateActor: _canManage && widget.actorController != null
               ? ({
@@ -367,12 +368,14 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
     }
   }
 
-  void _showActorQuickSheet(CampaignActor actor) {
-    showModalBottomSheet<void>(
+  void _openActorSheet(CampaignActor actor) {
+    final controller = widget.actorController;
+    if (controller == null) return;
+    openCampaignActorSheet(
       context: context,
-      showDragHandle: true,
-      builder: (context) =>
-          CampaignActorQuickSheet(actor: actor, isManager: _canManage),
+      controller: controller,
+      actor: actor,
+      canEditAnyActor: _canManage,
     );
   }
 

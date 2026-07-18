@@ -13,11 +13,13 @@ class CampaignActorSheetPage extends StatefulWidget {
   const CampaignActorSheetPage({
     required this.controller,
     required this.actorId,
+    required this.canEdit,
     super.key,
   });
 
   final CampaignActorController controller;
   final String actorId;
+  final bool canEdit;
 
   @override
   State<CampaignActorSheetPage> createState() => _CampaignActorSheetPageState();
@@ -96,13 +98,15 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
             pinned: true,
             expandedHeight: 180,
             title: Text(sheet['name']?.toString() ?? '(未命名)'),
-            actions: [
-              IconButton(
-                tooltip: '归档',
-                icon: const Icon(Icons.archive_outlined),
-                onPressed: () => _confirmArchive(actor),
-              ),
-            ],
+            actions: widget.canEdit
+                ? [
+                    IconButton(
+                      tooltip: '归档',
+                      icon: const Icon(Icons.archive_outlined),
+                      onPressed: () => _confirmArchive(actor),
+                    ),
+                  ]
+                : null,
           ),
           SliverList(
             delegate: SliverChildListDelegate([
@@ -147,14 +151,15 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
-                IconButton(
-                  key: const Key('campaign-actor-avatar-picker'),
-                  tooltip: '更换头像',
-                  icon: const Icon(Icons.add_a_photo_outlined),
-                  onPressed: actor.status == 'archived'
-                      ? null
-                      : () => _pickAvatar(actor, sheet),
-                ),
+                if (widget.canEdit)
+                  IconButton(
+                    key: const Key('campaign-actor-avatar-picker'),
+                    tooltip: '更换头像',
+                    icon: const Icon(Icons.add_a_photo_outlined),
+                    onPressed: actor.status == 'archived'
+                        ? null
+                        : () => _pickAvatar(actor, sheet),
+                  ),
               ],
             ),
             const SizedBox(height: 8),
@@ -164,7 +169,6 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
               children: [
                 if (armorClass > 0) Chip(label: Text('AC $armorClass')),
                 if (speed > 0) Chip(label: Text('速度 $speed')),
-                Chip(label: Text('版本 ${actor.revision}')),
                 if (actor.status == 'archived')
                   Chip(
                     label: Text(
@@ -196,21 +200,23 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
           const SizedBox(height: 8),
           Row(
             children: [
-              IconButton(
-                tooltip: '受到 1 点伤害',
-                icon: const Icon(Icons.remove_circle_outline),
-                onPressed: actor.status == 'archived'
-                    ? null
-                    : () => _updateHp(actor, sheet, currentHp - 1),
-              ),
+              if (widget.canEdit)
+                IconButton(
+                  tooltip: '受到 1 点伤害',
+                  icon: const Icon(Icons.remove_circle_outline),
+                  onPressed: actor.status == 'archived'
+                      ? null
+                      : () => _updateHp(actor, sheet, currentHp - 1),
+                ),
               Text('当前 HP $currentHp/$maxHp'),
-              IconButton(
-                tooltip: '恢复 1 点 HP',
-                icon: const Icon(Icons.add_circle_outline),
-                onPressed: actor.status == 'archived'
-                    ? null
-                    : () => _updateHp(actor, sheet, currentHp + 1),
-              ),
+              if (widget.canEdit)
+                IconButton(
+                  tooltip: '恢复 1 点 HP',
+                  icon: const Icon(Icons.add_circle_outline),
+                  onPressed: actor.status == 'archived'
+                      ? null
+                      : () => _updateHp(actor, sheet, currentHp + 1),
+                ),
             ],
           ),
         ],
@@ -377,41 +383,57 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
             ),
             const SizedBox(height: 12),
           ],
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.shield_outlined),
+          if (widget.canEdit)
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.shield_outlined),
+                    label: Text('AC $armorClass'),
+                    onPressed: actor.status == 'archived'
+                        ? null
+                        : () => _editNumericField(
+                            actor,
+                            sheet,
+                            'armorClass',
+                            'AC',
+                            armorClass,
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.directions_run),
+                    label: Text('速度 $speed'),
+                    onPressed: actor.status == 'archived'
+                        ? null
+                        : () => _editNumericField(
+                            actor,
+                            sheet,
+                            'speed',
+                            '速度',
+                            speed,
+                          ),
+                  ),
+                ),
+              ],
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                Chip(
+                  avatar: const Icon(Icons.shield_outlined, size: 18),
                   label: Text('AC $armorClass'),
-                  onPressed: actor.status == 'archived'
-                      ? null
-                      : () => _editNumericField(
-                          actor,
-                          sheet,
-                          'armorClass',
-                          'AC',
-                          armorClass,
-                        ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.directions_run),
+                Chip(
+                  avatar: const Icon(Icons.directions_run, size: 18),
                   label: Text('速度 $speed'),
-                  onPressed: actor.status == 'archived'
-                      ? null
-                      : () => _editNumericField(
-                          actor,
-                          sheet,
-                          'speed',
-                          '速度',
-                          speed,
-                        ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );
@@ -430,18 +452,22 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
         children: [
           Text('备注', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-          TextField(
-            controller: TextEditingController(text: notes)
-              ..selection = TextSelection.fromPosition(
-                TextPosition(offset: notes.length),
+          if (widget.canEdit)
+            TextField(
+              controller: TextEditingController(text: notes)
+                ..selection = TextSelection.fromPosition(
+                  TextPosition(offset: notes.length),
+                ),
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: '添加战役备注',
               ),
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              hintText: 'DM 备注，仅战役主持人可见',
-            ),
-            maxLines: 4,
-            onSubmitted: (value) => _updateField(actor, sheet, 'notes', value),
-          ),
+              maxLines: 4,
+              onSubmitted: (value) =>
+                  _updateField(actor, sheet, 'notes', value),
+            )
+          else
+            Text(notes.trim().isEmpty ? '暂无备注' : notes),
         ],
       ),
     );
@@ -470,9 +496,9 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
     final bytes = file?.bytes;
     if (bytes == null || bytes.isEmpty || !mounted) return;
     if (bytes.length > 2 * 1024 * 1024) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('头像图片不能超过 2 MB')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('头像图片不能超过 2 MB')));
       return;
     }
     final extension = (file?.extension ?? 'png').toLowerCase();

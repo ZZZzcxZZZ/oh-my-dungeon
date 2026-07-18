@@ -51,7 +51,9 @@ describe("campaigns endpoints", () => {
     campaignChatMessage: {
       create: jest.fn(),
       findMany: jest.fn(),
+      findFirst: jest.fn(),
       count: jest.fn(),
+      update: jest.fn(),
     },
     campaignActor: {
       findUnique: jest.fn(),
@@ -159,7 +161,9 @@ describe("campaigns endpoints", () => {
     prismaService.campaignInvite.update.mockResolvedValue({});
     prismaService.campaignChatMessage.create.mockResolvedValue({});
     prismaService.campaignChatMessage.findMany.mockResolvedValue([]);
+    prismaService.campaignChatMessage.findFirst.mockResolvedValue(null);
     prismaService.campaignChatMessage.count.mockResolvedValue(0);
+    prismaService.campaignChatMessage.update.mockResolvedValue({});
     prismaService.campaignArchiveEntry.create.mockResolvedValue({
       id: "archive-1",
       campaignId: "camp-1",
@@ -1359,6 +1363,217 @@ describe("campaigns endpoints", () => {
           draftActor: { displayName: "旅店老板" },
         })
         .expect(500);
+
+      expect(prismaService.campaignChatMessage.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("GET /api/campaigns/:id/check-requests", () => {
+    const campaignWithOwner = {
+      id: "camp-1",
+      name: "Curse of Strahd",
+      description: "",
+      system: "dnd5e",
+      ownerId: "user-1",
+      status: "active",
+      createdAt: "2026-07-09T00:00:00.000Z",
+      updatedAt: "2026-07-09T00:00:00.000Z",
+      members: [{ userId: "user-1", role: "owner" }],
+    };
+
+    it("returns check requests with their responses", async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwner,
+      );
+      prismaService.campaignChatMessage.findMany.mockResolvedValueOnce([
+        {
+          id: "msg-roll-1",
+          campaignId: "camp-1",
+          senderId: "user-2",
+          campaignActorId: "actor-player",
+          displayName: "Mira",
+          avatarUrl: null,
+          speakerMode: "actor",
+          delegatedByUserId: null,
+          speakerAvatarAssetId: null,
+          publicHealthState: null,
+          ooc: false,
+          kind: "roll",
+          content: "察觉 17",
+          actionSnapshot: null,
+          eventData: { requestId: "msg-check-1", total: 17, label: "察觉" },
+          createdAt: "2026-07-09T00:01:00.000Z",
+        },
+        {
+          id: "msg-check-1",
+          campaignId: "camp-1",
+          senderId: "user-1",
+          campaignActorId: null,
+          displayName: "ranger",
+          avatarUrl: null,
+          speakerMode: "narrator",
+          delegatedByUserId: null,
+          speakerAvatarAssetId: null,
+          publicHealthState: null,
+          ooc: false,
+          kind: "checkRequest",
+          content: "请 Mira 进行察觉检定",
+          actionSnapshot: null,
+          eventData: {
+            targetActorId: "actor-player",
+            checkType: "skill",
+            checkKey: "察觉",
+            label: "察觉检定",
+            dc: 15,
+            rollMode: "normal",
+          },
+          createdAt: "2026-07-09T00:00:00.000Z",
+        },
+      ]);
+
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/check-requests")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body).toHaveLength(1);
+          expect(body[0].message.id).toBe("msg-check-1");
+          expect(body[0].message.kind).toBe("checkRequest");
+          expect(body[0].status).toBe("open");
+          expect(body[0].responses).toHaveLength(1);
+          expect(body[0].responses[0].id).toBe("msg-roll-1");
+          expect(body[0].responses[0].eventData.requestId).toBe("msg-check-1");
+        });
+    });
+
+    it("returns empty list when no check requests exist", async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwner,
+      );
+      prismaService.campaignChatMessage.findMany.mockResolvedValueOnce([]);
+
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/check-requests")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body).toEqual([]);
+        });
+    });
+
+    it("rejects without authentication with 401", async () => {
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/check-requests")
+        .expect(401);
+    });
+  });
+
+  describe("POST /api/campaigns/:id/messages check request response", () => {
+    const campaignWithOwnerAndPlayer = {
+      id: "camp-1",
+      name: "Curse of Strahd",
+      description: "",
+      system: "dnd5e",
+      ownerId: "user-1",
+      status: "active",
+      createdAt: "2026-07-09T00:00:00.000Z",
+      updatedAt: "2026-07-09T00:00:00.000Z",
+      members: [
+        { userId: "user-1", role: "owner" },
+        {
+          userId: "user-2",
+          role: "player",
+          boundActorId: "actor-player",
+          activeSpeakerActorId: "actor-player",
+          speakerMode: "actor",
+        },
+      ],
+    };
+
+    it("rejects a duplicate response with 409", async () => {
+      const token = await loginAs(storedPlayerUser);
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwnerAndPlayer,
+      );
+      prismaService.campaignActor.findUnique.mockResolvedValueOnce({
+        id: "actor-player",
+        campaignId: "camp-1",
+        ownerUserId: "user-2",
+        actorType: "player",
+        status: "active",
+        sheetJson: { name: "Mira", avatarUrl: null },
+      });
+      // 原始 checkRequest 消息存在
+      prismaService.campaignChatMessage.findFirst
+        .mockResolvedValueOnce({
+          id: "msg-check-1",
+          campaignId: "camp-1",
+          kind: "checkRequest",
+          eventData: {
+            targetActorId: "actor-player",
+            checkType: "skill",
+            checkKey: "察觉",
+            rollMode: "normal",
+          },
+        })
+        // 玩家已响应过
+        .mockResolvedValueOnce({
+          id: "msg-roll-prev",
+          campaignId: "camp-1",
+          senderId: "user-2",
+          kind: "roll",
+          eventData: { requestId: "msg-check-1", total: 12 },
+        });
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/messages")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          kind: "roll",
+          content: "察觉 15",
+          campaignActorId: "actor-player",
+          eventData: {
+            requestId: "msg-check-1",
+            total: 15,
+            label: "察觉",
+          },
+        })
+        .expect(409);
+
+      expect(prismaService.campaignChatMessage.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects a response to a non-existent check request with 400", async () => {
+      const token = await loginAs(storedPlayerUser);
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwnerAndPlayer,
+      );
+      prismaService.campaignActor.findUnique.mockResolvedValueOnce({
+        id: "actor-player",
+        campaignId: "camp-1",
+        ownerUserId: "user-2",
+        actorType: "player",
+        status: "active",
+        sheetJson: { name: "Mira", avatarUrl: null },
+      });
+      prismaService.campaignChatMessage.findFirst.mockResolvedValueOnce(null);
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/messages")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          kind: "roll",
+          content: "察觉 15",
+          campaignActorId: "actor-player",
+          eventData: {
+            requestId: "msg-missing",
+            total: 15,
+            label: "察觉",
+          },
+        })
+        .expect(400);
 
       expect(prismaService.campaignChatMessage.create).not.toHaveBeenCalled();
     });

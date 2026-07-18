@@ -254,6 +254,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                         onRespondCheckRequest: _canRespondToCheck(message)
                             ? () => _respondToCheckRequest(message)
                             : null,
+                        hasResponded: _hasRespondedToCheck(message),
                         onAvatarTap: _resolveAvatarTap(message),
                       ),
                     );
@@ -1157,6 +1158,21 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         widget.campaignActorId != null &&
         message.eventData?['targetActorId'] == widget.campaignActorId &&
         widget.character != null;
+  }
+
+  /// 扫描当前战役消息列表，判断当前用户是否已对某 checkRequest 发过响应。
+  /// 响应定义为：kind='roll' 且 eventData.requestId == message.id 且
+  /// senderId == 当前用户 id。与后端 sendMessage 重复响应校验一致。
+  bool _hasRespondedToCheck(CampaignChatMessage message) {
+    if (message.kind != 'checkRequest') return false;
+    final currentUserId = widget.campaignController.authController.user?.id;
+    if (currentUserId == null) return false;
+    return widget.campaignController.messages.any(
+      (m) =>
+          m.kind == 'roll' &&
+          m.senderId == currentUserId &&
+          m.eventData?['requestId'] == message.id,
+    );
   }
 
   Future<void> _respondToCheckRequest(CampaignChatMessage message) async {

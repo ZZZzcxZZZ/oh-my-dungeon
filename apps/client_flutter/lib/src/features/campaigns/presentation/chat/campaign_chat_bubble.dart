@@ -13,12 +13,15 @@ class CampaignChatBubble extends StatelessWidget {
   const CampaignChatBubble({
     required this.message,
     this.onRespondCheckRequest,
+    this.hasResponded = false,
     this.onAvatarTap,
     super.key,
   });
 
   final CampaignChatMessage message;
   final VoidCallback? onRespondCheckRequest;
+  /// 当前玩家是否已响应过此 checkRequest。true 时按钮变灰显示「已响应」。
+  final bool hasResponded;
   final VoidCallback? onAvatarTap;
 
   @override
@@ -90,11 +93,17 @@ class CampaignChatBubble extends StatelessWidget {
           subtitle: dc == null ? null : Text('DC $dc'),
           trailing: onRespondCheckRequest == null
               ? null
-              : FilledButton.tonal(
-                  key: const Key('respond-check-request'),
-                  onPressed: onRespondCheckRequest,
-                  child: const Text('进行检定'),
-                ),
+              : hasResponded
+                  ? FilledButton.tonal(
+                      key: const Key('responded-check-request'),
+                      onPressed: null,
+                      child: const Text('已响应'),
+                    )
+                  : FilledButton.tonal(
+                      key: const Key('respond-check-request'),
+                      onPressed: onRespondCheckRequest,
+                      child: const Text('进行检定'),
+                    ),
         ),
       );
     }

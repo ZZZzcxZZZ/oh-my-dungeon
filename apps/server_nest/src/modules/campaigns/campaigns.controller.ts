@@ -15,6 +15,7 @@ import type { AccessTokenPayload } from "../auth/auth.types";
 import { CampaignsService } from "./campaigns.service";
 import type {
   CampaignChatMessageView,
+  CampaignCheckRequestView,
   CampaignWorkspaceContextView,
   CampaignView,
   DraftActorInput,
@@ -90,6 +91,14 @@ export class CampaignsController {
     @Query("query") query?: string,
   ): Promise<CampaignChatMessageView[]> {
     return this.campaignsService.listMessages(user, campaignId, query);
+  }
+
+  @Get(":id/check-requests")
+  listCheckRequests(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param("id") campaignId: string,
+  ): Promise<CampaignCheckRequestView[]> {
+    return this.campaignsService.listCheckRequests(user, campaignId);
   }
 
   @Post(":id/messages")

@@ -122,3 +122,14 @@ export interface CampaignWorkspaceContextView {
   actors: CampaignWorkspaceActorView[];
   capabilities: CampaignCapabilitiesView;
 }
+
+/**
+ * 检定请求视图。message 是 DM 发起的 kind='checkRequest' 消息，
+ * responses 是玩家回复的 kind='roll' 且 eventData.requestId 匹配的消息列表，
+ * status 来自 eventData.status（默认 'open'），'closed' 表示 DM 已关闭、玩家不能再响应。
+ */
+export interface CampaignCheckRequestView {
+  message: CampaignChatMessageView;
+  responses: CampaignChatMessageView[];
+  status: "open" | "closed";
+}

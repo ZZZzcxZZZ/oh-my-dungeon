@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -17,6 +18,7 @@ import {
 } from "./policies/campaign.policy";
 import type {
   CampaignChatMessageView,
+  CampaignCheckRequestView,
   CampaignWorkspaceContextView,
   CampaignMemberPreview,
   CampaignView,
@@ -308,6 +310,47 @@ export class CampaignsService {
     return messages.map(toCampaignChatMessageView).reverse();
   }
 
+  /**
+   * 列出战役内的检定请求（kind='checkRequest'）及其响应（kind='roll' 且
+   * eventData.requestId 匹配的）。status 来自原始 checkRequest 消息的
+   * eventData.status，默认 'open'。
+   */
+  async listCheckRequests(
+    actor: AccessTokenPayload,
+    campaignId: string,
+  ): Promise<CampaignCheckRequestView[]> {
+    const campaign = await this.fetchCampaignContext(campaignId);
+    this.policy.canViewCampaign(actor, campaign.context);
+
+    const messages = await this.prismaService.campaignChatMessage.findMany({
+      where: {
+        campaignId,
+        OR: [{ kind: "checkRequest" }, { kind: "roll" }],
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const checkRequests = messages.filter((m: any) => m.kind === "checkRequest");
+    const rolls = messages.filter((m: any) => m.kind === "roll");
+
+    return checkRequests.map((checkRequest: any) => {
+      const requestData = asRecord(checkRequest.eventData) ?? {};
+      const status: "open" | "closed" =
+        requestData.status === "closed" ? "closed" : "open";
+      const responses = rolls
+        .filter((roll: any) => {
+          const rollData = asRecord(roll.eventData) ?? {};
+          return rollData.requestId === checkRequest.id;
+        })
+        .map(toCampaignChatMessageView);
+      return {
+        message: toCampaignChatMessageView(checkRequest),
+        responses,
+        status,
+      };
+    });
+  }
+
   async sendMessage(
     actor: AccessTokenPayload,
     campaignId: string,
@@ -447,6 +490,35 @@ export class CampaignsService {
       if (!targetActor || targetActor.campaignId !== campaignId) {
         throw new BadRequestException(
           "Check target does not belong to this campaign",
+        );
+      }
+    }
+
+    if (kind === "roll" && eventData?.requestId) {
+      const requestId = eventData.requestId as string;
+      const originalRequest =
+        await this.prismaService.campaignChatMessage.findFirst({
+          where: { id: requestId, campaignId, kind: "checkRequest" },
+        });
+      if (!originalRequest) {
+        throw new BadRequestException("Check request not found");
+      }
+      const originalEventData = asRecord(originalRequest.eventData) ?? {};
+      if (originalEventData.status === "closed") {
+        throw new BadRequestException("Check request is closed");
+      }
+      const existingResponse =
+        await this.prismaService.campaignChatMessage.findFirst({
+          where: {
+            campaignId,
+            kind: "roll",
+            senderId: actor.userId,
+            eventData: { path: ["requestId"], equals: requestId },
+          },
+        });
+      if (existingResponse) {
+        throw new ConflictException(
+          "Already responded to this check request",
         );
       }
     }

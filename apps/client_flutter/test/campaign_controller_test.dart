@@ -117,6 +117,47 @@ void main() {
     controller.dispose();
     authController.dispose();
   });
+
+  // Spec §双向同步 切片 A: socket 收到 campaign:changed 信号后应触发
+  // onCampaignChanged 回调，由调用方接入 actorController.pullUntilCurrent。
+  test(
+    'connectCampaignChat subscribes to changeStream and invokes onCampaignChanged',
+    () async {
+      final authController = await buildLoggedInAuthController();
+      final socket = _FakeCampaignSocketService();
+      int changeCallCount = 0;
+      final controller = CampaignController(
+        apiBaseUrl: apiBaseUrl,
+        authController: authController,
+        campaignClient: _FakeCampaignClient(),
+        campaignSocketService: socket,
+        onCampaignChanged: () async {
+          changeCallCount += 1;
+        },
+      );
+
+      await controller.connectCampaignChat('camp-1');
+      socket.emitChange();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(changeCallCount, 1);
+
+      // 多次信号都应触发。
+      socket.emitChange();
+      socket.emitChange();
+      await Future<void>.delayed(Duration.zero);
+      expect(changeCallCount, 3);
+
+      // 断开后不再触发。
+      await controller.disconnectCampaignChat();
+      socket.emitChange();
+      await Future<void>.delayed(Duration.zero);
+      expect(changeCallCount, 3);
+
+      controller.dispose();
+      authController.dispose();
+    },
+  );
 }
 
 const _remoteMessage = CampaignChatMessage(
@@ -133,6 +174,7 @@ const _remoteMessage = CampaignChatMessage(
 
 class _FakeCampaignSocketService implements CampaignSocketService {
   final _messageController = StreamController<CampaignChatMessage>.broadcast();
+  final _changeController = StreamController<void>.broadcast();
   final List<({String serverOrigin, String accessToken, String campaignId})>
   connectCalls = [];
   int disconnectCount = 0;
@@ -161,8 +203,15 @@ class _FakeCampaignSocketService implements CampaignSocketService {
   @override
   Stream<CampaignChatMessage> get messageStream => _messageController.stream;
 
+  @override
+  Stream<void> get changeStream => _changeController.stream;
+
   void emitMessage(CampaignChatMessage message) {
     _messageController.add(message);
+  }
+
+  void emitChange() {
+    _changeController.add(null);
   }
 }
 

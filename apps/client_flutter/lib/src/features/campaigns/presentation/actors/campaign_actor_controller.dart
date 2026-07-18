@@ -39,13 +39,15 @@ class CampaignActorController extends ChangeNotifier {
     required String currentUserId,
     String Function()? accessTokenProvider,
     String Function()? currentUserIdProvider,
+    Future<void> Function(CampaignActor actor)? onActorPublished,
   }) : _cacheRepository = cacheRepository,
        _apiClient = apiClient,
        _apiBaseUrl = apiBaseUrl,
        _initialAccessToken = accessToken,
        _initialCurrentUserId = currentUserId,
        _accessTokenProvider = accessTokenProvider,
-       _currentUserIdProvider = currentUserIdProvider;
+       _currentUserIdProvider = currentUserIdProvider,
+       _onActorPublished = onActorPublished;
 
   final CampaignCacheRepository _cacheRepository;
   final CampaignSyncApiClient _apiClient;
@@ -54,6 +56,7 @@ class CampaignActorController extends ChangeNotifier {
   final String _initialCurrentUserId;
   final String Function()? _accessTokenProvider;
   final String Function()? _currentUserIdProvider;
+  final Future<void> Function(CampaignActor actor)? _onActorPublished;
 
   String get _accessToken =>
       _accessTokenProvider?.call() ?? _initialAccessToken;
@@ -216,6 +219,7 @@ class CampaignActorController extends ChangeNotifier {
     CharacterSheet character, {
     String actorType = 'player',
     Map<String, Object?>? sheetOverride,
+    int? baseRevisionOverride,
   }) async {
     final campaignId = _selectedCampaignId;
     if (campaignId == null) {
@@ -224,6 +228,15 @@ class CampaignActorController extends ChangeNotifier {
       return false;
     }
     _error = null;
+    _conflict = null;
+    // Spec §双向同步 切片 A: 重发布必须用本地缓存的 actor.revision 作
+    // baseRevision，否则服务端必然 409。首次发布本地无 actor，传 0。
+    // baseRevisionOverride 用于冲突解决"用本地覆盖"时传入服务端最新 revision。
+    final existing = _actors.cast<CampaignActor?>().firstWhere(
+          (a) => a?.sourceCharacterId == character.id,
+          orElse: () => null,
+        );
+    final baseRevision = baseRevisionOverride ?? existing?.revision ?? 0;
     try {
       final actor = await _apiClient.publishActor(
         apiBaseUrl: _apiBaseUrl,
@@ -231,7 +244,7 @@ class CampaignActorController extends ChangeNotifier {
         campaignId: campaignId,
         sourceCharacterId: character.id,
         actorType: actorType,
-        baseRevision: 0,
+        baseRevision: baseRevision,
         sheet: sheetOverride ?? character.toJson(),
       );
       // 立即写本地缓存，避免等待拉取循环。
@@ -239,6 +252,12 @@ class CampaignActorController extends ChangeNotifier {
         campaignId,
         _singleChangePage(actor, 'upsert'),
       );
+      // 立即把远端 actor 回写本地角色，避免等下次 pullUntilCurrent 才同步
+      // 运行时字段。backlinkService 可能为 null（web build 无 database）。
+      final callback = _onActorPublished;
+      if (callback != null) {
+        await callback(actor);
+      }
       return true;
     } on CampaignConflictException catch (e) {
       _conflict = e;

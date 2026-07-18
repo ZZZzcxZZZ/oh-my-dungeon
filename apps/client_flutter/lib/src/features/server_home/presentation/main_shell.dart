@@ -104,6 +104,7 @@ class _MainShellState extends State<MainShell> {
   late final CampaignSocketService _campaignSocketService;
   late final CampaignActorController _actorController;
   late final CampaignContentController _campaignContentController;
+  CampaignActorBacklinkService? _backlinkService;
   CampaignSyncService? _campaignSyncService;
   VaultSyncController? _vaultSyncController;
   late final LocalDataArchiveService _archiveService;
@@ -128,11 +129,15 @@ class _MainShellState extends State<MainShell> {
     )..initialize();
     _campaignSocketService =
         widget.campaignSocketService ?? SocketIoCampaignSocketService();
+    // Spec §双向同步 切片 A: socket 收到 campaign:changed 信号时触发
+    // actorController 增量拉取。闭包延迟引用 _actorController，它在下方
+    // 才初始化，但闭包只在 connectCampaignChat 时调用，那时已就绪。
     _campaignController = CampaignController(
       apiBaseUrl: profile?.apiBaseUrl ?? '',
       authController: _authController,
       campaignClient: widget.campaignClient,
       campaignSocketService: _campaignSocketService,
+      onCampaignChanged: () => _actorController.pullUntilCurrent(),
     );
     _characterRepository = widget.database != null
         ? DriftCharacterRepository(widget.database!)
@@ -156,6 +161,14 @@ class _MainShellState extends State<MainShell> {
       repository: _contentRepository,
     );
     _contentBootstrap = _installBundledContent();
+    // Spec §双向同步 切片 A: backlinkService 提前构造，供 _actorController
+    // 发布成功回写本地角色，也供 _campaignSyncService 拉取循环复用。
+    _backlinkService = widget.database != null
+        ? CampaignActorBacklinkService(
+            characterRepository: _characterRepository,
+            database: widget.database!,
+          )
+        : null;
     _actorController = CampaignActorController(
       cacheRepository: _campaignCacheRepository,
       apiClient: HttpCampaignSyncApiClient(),
@@ -164,6 +177,7 @@ class _MainShellState extends State<MainShell> {
       currentUserId: _authController.user?.id ?? '',
       accessTokenProvider: () => _authController.accessToken ?? '',
       currentUserIdProvider: () => _authController.user?.id ?? '',
+      onActorPublished: _backlinkService?.applyActorToCharacter,
     );
     _campaignContentController = CampaignContentController(
       cacheRepository: _campaignCacheRepository,
@@ -178,10 +192,7 @@ class _MainShellState extends State<MainShell> {
       _campaignSyncService = CampaignSyncService(
         cacheRepository: _campaignCacheRepository,
         apiClient: HttpCampaignSyncApiClient(),
-        backlinkService: CampaignActorBacklinkService(
-          characterRepository: _characterRepository,
-          database: widget.database!,
-        ),
+        backlinkService: _backlinkService!,
       );
       _vaultSyncController = VaultSyncController(
         syncRepository: DriftSyncRepository(widget.database!),

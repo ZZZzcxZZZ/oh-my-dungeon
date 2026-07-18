@@ -15,7 +15,9 @@ class CampaignController extends ChangeNotifier {
     required this.authController,
     required this.campaignClient,
     CampaignSocketService? campaignSocketService,
+    Future<void> Function()? onCampaignChanged,
   })  : _socketService = campaignSocketService ?? NoopCampaignSocketService(),
+        _onCampaignChanged = onCampaignChanged,
         contextController = CampaignContextController(
           apiBaseUrl: apiBaseUrl,
           authController: authController,
@@ -31,8 +33,10 @@ class CampaignController extends ChangeNotifier {
   final AuthController authController;
   final CampaignClient campaignClient;
   final CampaignSocketService _socketService;
+  final Future<void> Function()? _onCampaignChanged;
   final CampaignContextController contextController;
   StreamSubscription<CampaignChatMessage>? _messageSubscription;
+  StreamSubscription<void>? _changeSubscription;
   String? _connectedCampaignId;
 
   List<Campaign> _campaigns = [];
@@ -415,11 +419,20 @@ class CampaignController extends ChangeNotifier {
     }
 
     await _messageSubscription?.cancel();
+    await _changeSubscription?.cancel();
     _messageSubscription = _socketService.messageStream.listen((message) {
       if (message.campaignId != _connectedCampaignId) return;
       _appendMessage(message);
       notifyListeners();
     });
+    // Spec §双向同步 切片 A: 收到 campaign:changed 信号后触发增量拉取，
+    // 由调用方注入 onCampaignChanged 回调（通常接 actorController.pullUntilCurrent）。
+    final onChanged = _onCampaignChanged;
+    if (onChanged != null) {
+      _changeSubscription = _socketService.changeStream.listen((_) {
+        onChanged();
+      });
+    }
 
     _connectedCampaignId = campaignId;
     try {
@@ -437,6 +450,8 @@ class CampaignController extends ChangeNotifier {
     _connectedCampaignId = null;
     await _messageSubscription?.cancel();
     _messageSubscription = null;
+    await _changeSubscription?.cancel();
+    _changeSubscription = null;
     await _socketService.disconnect();
   }
 

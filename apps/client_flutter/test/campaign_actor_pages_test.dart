@@ -255,6 +255,89 @@ void main() {
     controller.dispose();
   });
 
+  // Spec §双向同步 切片 A: 重发布必须用本地缓存的 actor.revision 作
+  // baseRevision，否则服务端 applyUpdate 第 446 行 nextRevision =
+  // existing.revision + 1 检查 baseRevision 不匹配必然 409。
+  test(
+    'publishCharacter uses local actor revision as baseRevision when re-publishing',
+    () async {
+      final cacheRepository = MemoryCampaignCacheRepository(
+        actors: [
+          testCampaignActor(
+            id: 'actor-existing',
+            campaignId: 'campaign-1',
+            sourceCharacterId: 'char-1',
+            revision: 5,
+          ),
+        ],
+      );
+      final apiClient = MemoryCampaignSyncApiClient();
+      final controller = CampaignActorController(
+        cacheRepository: cacheRepository,
+        apiClient: apiClient,
+        apiBaseUrl: 'https://example.test',
+        accessToken: 'access-token',
+        currentUserId: 'user-1',
+      );
+      await controller.selectCampaign('campaign-1');
+      await drainStream();
+
+      final published = await controller.publishCharacter(_sampleCharacter);
+
+      expect(published, isTrue);
+      expect(apiClient.publishCalls.single['baseRevision'], 5);
+      controller.dispose();
+    },
+  );
+
+  test('publishCharacter uses baseRevision 0 on first publish', () async {
+    final apiClient = MemoryCampaignSyncApiClient();
+    final controller = CampaignActorController(
+      cacheRepository: MemoryCampaignCacheRepository(),
+      apiClient: apiClient,
+      apiBaseUrl: 'https://example.test',
+      accessToken: 'access-token',
+      currentUserId: 'user-1',
+    );
+    await controller.selectCampaign('campaign-1');
+    await drainStream();
+
+    final published = await controller.publishCharacter(_sampleCharacter);
+
+    expect(published, isTrue);
+    expect(apiClient.publishCalls.single['baseRevision'], 0);
+    controller.dispose();
+  });
+
+  // Spec §双向同步 切片 A: 发布成功后立即调用 backlink 回调把远端 actor
+  // 回写本地角色，避免等下次 pullUntilCurrent 才同步运行时字段。
+  test(
+    'publishCharacter invokes onActorPublished callback after success',
+    () async {
+      final apiClient = MemoryCampaignSyncApiClient();
+      CampaignActor? publishedActor;
+      final controller = CampaignActorController(
+        cacheRepository: MemoryCampaignCacheRepository(),
+        apiClient: apiClient,
+        apiBaseUrl: 'https://example.test',
+        accessToken: 'access-token',
+        currentUserId: 'user-1',
+        onActorPublished: (actor) async {
+          publishedActor = actor;
+        },
+      );
+      await controller.selectCampaign('campaign-1');
+      await drainStream();
+
+      final published = await controller.publishCharacter(_sampleCharacter);
+
+      expect(published, isTrue);
+      expect(publishedActor, isNotNull);
+      expect(publishedActor!.sourceCharacterId, 'char-1');
+      controller.dispose();
+    },
+  );
+
   testWidgets(
     'player and dm modes both show local characters with create FAB',
     (tester) async {
@@ -478,6 +561,86 @@ void main() {
     expect(apiClient.publishCalls.last['sourceCharacterId'], 'char-1');
     expect(apiClient.publishCalls.last['actorType'], 'player');
     expect(apiClient.publishCalls.last['baseRevision'], 0);
+
+    characterController.dispose();
+    actorController.dispose();
+    modeController.dispose();
+  });
+
+  // Spec §双向同步 切片 A: publishCharacter 返回 409 时应显示冲突对话框，
+  // 提供"用本地覆盖"（用服务端最新 revision 重试）和"用远端覆盖"（pull）。
+  testWidgets('publish conflict shows comparison dialog with override actions', (
+    tester,
+  ) async {
+    final characterRepository = MemoryCharacterRepository(
+      initial: [_sampleCharacter],
+    );
+    final characterController = CharacterController(
+      repository: characterRepository,
+    );
+    await drainStream();
+
+    final cacheRepository = MemoryCampaignCacheRepository(
+      actors: [
+        testCampaignActor(
+          id: 'actor-existing',
+          campaignId: 'campaign-1',
+          sourceCharacterId: 'char-1',
+          revision: 3,
+        ),
+      ],
+    );
+    final apiClient = MemoryCampaignSyncApiClient();
+    apiClient.nextPublishActorException = const CampaignConflictException({
+      'id': 'actor-existing',
+      'campaignId': 'campaign-1',
+      'actorType': 'player',
+      'status': 'active',
+      'sheet': {'name': 'Mira', 'currentHp': 5, 'maxHp': 20},
+      'revision': 7,
+      'updatedBy': 'dm-user',
+      'createdAt': '2026-01-01T00:00:00.000Z',
+      'updatedAt': '2026-07-14T00:00:00.000Z',
+    });
+    final modeController = ClientModeController();
+    final actorController = CampaignActorController(
+      cacheRepository: cacheRepository,
+      apiClient: apiClient,
+      apiBaseUrl: 'https://example.test',
+      accessToken: 'access-token',
+      currentUserId: 'user-1',
+    );
+    await actorController.selectCampaign('campaign-1');
+    await drainStream();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharactersTabPage(
+          controller: characterController,
+          modeController: modeController,
+          actorController: actorController,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('character-expand-char-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('publish-character-char-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '发布'));
+    await tester.pumpAndSettle();
+
+    // 冲突对话框出现，显示远端版本信息。
+    expect(find.byKey(const Key('publish-conflict-dialog')), findsOneWidget);
+    expect(find.textContaining('已被其他端修改'), findsOneWidget);
+    expect(find.textContaining('版本号 7'), findsOneWidget);
+
+    // "用本地覆盖"：用服务端 revision=7 重试 publishActor。
+    await tester.tap(find.widgetWithText(FilledButton, '用本地覆盖'));
+    await tester.pumpAndSettle();
+    expect(apiClient.publishCalls, hasLength(2));
+    expect(apiClient.publishCalls.last['baseRevision'], 7);
 
     characterController.dispose();
     actorController.dispose();

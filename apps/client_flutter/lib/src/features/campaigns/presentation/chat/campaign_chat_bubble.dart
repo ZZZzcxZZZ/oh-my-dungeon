@@ -26,6 +26,39 @@ class CampaignChatBubble extends StatelessWidget {
     final displayName = message.displayName.trim().isEmpty
         ? chatText('unknownSpeaker')
         : message.displayName;
+    if (message.speakerMode == 'narrator') {
+      final theme = Theme.of(context);
+      return Padding(
+        key: const Key('narrator-message'),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+        child: Row(
+          children: [
+            Expanded(child: Divider(color: theme.colorScheme.outlineVariant)),
+            const SizedBox(width: 10),
+            Icon(
+              Icons.auto_stories_outlined,
+              size: 18,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              flex: 4,
+              child: Text(
+                message.content,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Divider(color: theme.colorScheme.outlineVariant)),
+          ],
+        ),
+      );
+    }
     if (message.kind == 'system') {
       return Padding(
         key: const Key('system-message'),
@@ -34,9 +67,9 @@ class CampaignChatBubble extends StatelessWidget {
           child: Text(
             message.content,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
         ),
       );
@@ -126,7 +159,9 @@ class CampaignChatBubble extends StatelessWidget {
                   ),
                   Card(
                     margin: const EdgeInsets.only(top: 4),
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,

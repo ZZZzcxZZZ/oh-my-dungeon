@@ -612,6 +612,11 @@ void main() {
       canManage: true,
     );
     await pumpCenterPage(tester, dmController);
+    await tester.ensureVisible(
+      find.byKey(const Key('campaign-overview-settings')),
+    );
+    await tester.tap(find.byKey(const Key('campaign-overview-settings')));
+    await tester.pumpAndSettle();
 
     expect(
       find.byKey(const Key('campaign-overview-edit-details')),
@@ -643,6 +648,11 @@ void main() {
       canManage: false,
     );
     await pumpCenterPage(tester, playerController);
+    await tester.ensureVisible(
+      find.byKey(const Key('campaign-overview-settings')),
+    );
+    await tester.tap(find.byKey(const Key('campaign-overview-settings')));
+    await tester.pumpAndSettle();
 
     // Owner-only entries must NOT appear for non-managers.
     expect(
@@ -676,6 +686,11 @@ void main() {
       canManage: false,
     );
     await pumpCenterPage(tester, playerController);
+    await tester.ensureVisible(
+      find.byKey(const Key('campaign-overview-settings')),
+    );
+    await tester.tap(find.byKey(const Key('campaign-overview-settings')));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('campaign-overview-leave-campaign')));
     await tester.pumpAndSettle();

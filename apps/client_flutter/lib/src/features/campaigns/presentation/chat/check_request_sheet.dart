@@ -76,7 +76,7 @@ class _CheckRequestSheetState extends State<CheckRequestSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '向 ${name == null || name.isEmpty ? '该角色' : name} 发起检定',
+              '为 ${name == null || name.isEmpty ? '该角色' : name} 代掷检定',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 16),
@@ -142,10 +142,10 @@ class _CheckRequestSheetState extends State<CheckRequestSheet> {
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                key: const Key('send-check-request'),
+                key: const Key('roll-check-now'),
                 onPressed: _submit,
-                icon: const Icon(Icons.send_outlined),
-                label: const Text('发送检定请求'),
+                icon: const Icon(Icons.casino_outlined),
+                label: const Text('立即掷骰'),
               ),
             ),
           ],

@@ -1,6 +1,7 @@
 import '../../../characters/domain/character.dart';
 import '../../domain/campaign.dart';
 import '../../domain/campaign_actor.dart';
+import '../../domain/campaign_health.dart';
 
 /// Presentation model for the identity currently used by the chat composer.
 ///
@@ -124,7 +125,15 @@ CampaignComposerIdentity resolveCampaignComposerIdentity({
     speakerMode: speakerMode,
     actorId: actorId,
     avatarUrl: avatarUrl,
-    healthState: workspaceActor?.publicHealthState,
+    healthState:
+        campaignHealthStateFromSheet(sheet) ??
+        (localCharacter == null
+            ? null
+            : campaignHealthStateFromHp(
+                localCharacter.currentHp,
+                localCharacter.maxHp,
+              )) ??
+        workspaceActor?.publicHealthState,
     localCharacter: localCharacter,
     campaignActor: campaignActor,
     subtitle: hp ?? actorLabel ?? '角色发言',

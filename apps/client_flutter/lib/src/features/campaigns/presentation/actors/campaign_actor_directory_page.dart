@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../content/data/local/content_repository.dart';
 import '../../domain/campaign_actor.dart';
 import 'campaign_actor_controller.dart';
-import 'campaign_actor_sheet_page.dart';
+import 'campaign_actor_sheet_launcher.dart';
 
 /// 战役下拉选项。简化结构以兼容 Dart 3.0 之前的字段类型语法。
 class CampaignOption {
@@ -18,12 +19,14 @@ class CampaignActorDirectoryPage extends StatelessWidget {
     required this.controller,
     required this.campaigns,
     this.onPublishCharacter,
+    this.contentRepository,
     super.key,
   });
 
   final CampaignActorController controller;
   final List<CampaignOption> campaigns;
   final VoidCallback? onPublishCharacter;
+  final ContentRepository? contentRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -200,15 +203,13 @@ class CampaignActorDirectoryPage extends StatelessWidget {
     );
   }
 
-  Future<void> _openSheet(BuildContext context, CampaignActor actor) async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (context) => CampaignActorSheetPage(
-          controller: controller,
-          actorId: actor.id,
-          canEdit: true,
-        ),
-      ),
+  Future<void> _openSheet(BuildContext context, CampaignActor actor) {
+    return openCampaignActorSheet(
+      context: context,
+      controller: controller,
+      actor: actor,
+      canEditAnyActor: true,
+      contentRepository: contentRepository,
     );
   }
 }

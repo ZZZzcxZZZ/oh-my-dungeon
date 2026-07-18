@@ -185,6 +185,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                       campaign: widget.campaign,
                       controller: widget.campaignController,
                       actorController: widget.actorController,
+                      contentRepository: widget.contentRepository,
                     ),
                   ),
                 ),
@@ -329,6 +330,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       controller: controller,
       actor: actor,
       canEditAnyActor: _canManageCampaign,
+      contentRepository: widget.contentRepository,
     );
   }
 
@@ -969,22 +971,43 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     searchController.dispose();
   }
 
-  Future<void> _openContentEntry(String entryKey) async {
-    Navigator.of(context).pop();
+  Future<void> _openContentEntry(
+    String entryKey, {
+    bool closeLibrary = true,
+  }) async {
+    if (closeLibrary) Navigator.of(context).pop();
+    if (!mounted) return;
     final controller = ContentLibraryController(
       repository: widget.contentRepository,
     );
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => ContentDetailPage(
-          entryKey: entryKey,
-          controller: controller,
-          onOpenEntry: _openContentEntry,
-          onImportRequested: () {},
+    String? nextEntryKey;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        clipBehavior: Clip.antiAlias,
+        insetPadding: const EdgeInsets.all(16),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 960,
+            maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.9,
+          ),
+          child: ContentDetailPage(
+            entryKey: entryKey,
+            controller: controller,
+            onOpenEntry: (next) {
+              nextEntryKey = next;
+              Navigator.of(dialogContext).pop();
+            },
+            onImportRequested: () {},
+            onClose: () => Navigator.of(dialogContext).pop(),
+          ),
         ),
       ),
     );
     controller.dispose();
+    if (nextEntryKey != null && mounted) {
+      await _openContentEntry(nextEntryKey!, closeLibrary: false);
+    }
   }
 
   void _openCharacterSheet() {
@@ -1011,6 +1034,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
           controller: actorController,
           actor: actor,
           canEditAnyActor: _canManageCampaign,
+          contentRepository: widget.contentRepository,
         );
         return;
       }
@@ -1030,7 +1054,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     if (actors.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('当前没有可请求检定的玩家角色')));
+      ).showSnackBar(const SnackBar(content: Text('当前没有可代掷检定的玩家角色')));
       return;
     }
     final selected = await showModalBottomSheet<CampaignActor>(
@@ -1042,7 +1066,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
           children: [
             const ListTile(
               leading: Icon(Icons.fact_check_outlined),
-              title: Text('选择检定目标'),
+              title: Text('选择代掷目标'),
             ),
             for (final actor in actors)
               ListTile(
@@ -1068,28 +1092,64 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       isScrollControlled: true,
       builder: (context) => CheckRequestSheet(actor: actor),
     );
-    if (draft == null || !mounted) return;
+    if (draft == null || !mounted || _sending) return;
 
-    final name = actor.sheet['name']?.toString().trim();
-    final actorName = name == null || name.isEmpty ? '该角色' : name;
-    final eventData = <String, Object?>{
-      'targetActorId': actor.id,
-      'checkType': draft.type,
-      'checkKey': draft.key,
-      'label': draft.label,
-      if (draft.dc != null) 'dc': draft.dc,
-      'rollMode': draft.rollMode,
+    final character = campaignActorToCharacterSheet(actor);
+    final modifier = switch (draft.type) {
+      'skill' => Dnd5eRules.skillBonus(
+        skillName: draft.key,
+        abilities: character.abilityMap,
+        level: character.level,
+        proficient: character.skillMap[draft.key] == true,
+      ),
+      'save' => Dnd5eRules.saveBonus(
+        ability: draft.key,
+        abilities: character.abilityMap,
+        level: character.level,
+        proficient: character.saveMap[draft.key] == true,
+      ),
+      _ => Dnd5eRules.abilityBonus(character.abilityMap, draft.key),
     };
+    final roller = widget.diceRoller ?? DiceRoller();
+    final first = roller.rollD20().total;
+    final second = draft.rollMode == 'normal' ? first : roller.rollD20().total;
+    final die = switch (draft.rollMode) {
+      'advantage' => first > second ? first : second,
+      'disadvantage' => first < second ? first : second,
+      _ => first,
+    };
+    final total = die + modifier;
+    final actorName = character.name.trim().isEmpty ? '该角色' : character.name;
+
+    setState(() => _sending = true);
     final sent = await widget.campaignController.sendMessage(
       campaignId: widget.campaign.id,
-      kind: 'checkRequest',
-      content: '要求 $actorName 进行${draft.label}',
-      eventData: eventData,
+      kind: 'roll',
+      content:
+          '$actorName · ${draft.label}：$die ${Dnd5eRules.formatModifier(modifier)} = $total',
+      campaignActorId: actor.id,
+      eventData: {
+        'targetActorId': actor.id,
+        'checkType': draft.type,
+        'checkKey': draft.key,
+        'label': draft.label,
+        'rollMode': draft.rollMode,
+        'notation': draft.rollMode == 'normal' ? 'd20' : '2d20',
+        'die': die,
+        'modifier': modifier,
+        'total': total,
+        'dmRolled': true,
+        if (draft.dc != null) 'dc': draft.dc,
+        if (draft.dc != null) 'success': total >= draft.dc!,
+      },
     );
-    if (!mounted || sent) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(chatText('sendFailed'))));
+    if (!mounted) return;
+    setState(() => _sending = false);
+    if (!sent) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(chatText('sendFailed'))));
+    }
   }
 
   bool _canRespondToCheck(CampaignChatMessage message) {

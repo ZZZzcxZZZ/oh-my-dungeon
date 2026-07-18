@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/presentation/avatar_image_provider.dart';
+import '../../domain/campaign_health.dart';
 
 /// 战役角色头像的健康分级，对应生命环颜色。
 ///
@@ -31,14 +32,13 @@ class CampaignAvatar extends StatelessWidget {
   /// 按 HP 比例计算健康分级：>50% 健康、>25% 受伤、>0 危险、0 倒地、
   /// 无 maxHp 未知。供 viewer-aware 投影后的客户端渲染复用。
   static CampaignAvatarHealth healthFromHp(num? current, num? max) {
-    final m = max ?? 0;
-    if (m <= 0) return CampaignAvatarHealth.unknown;
-    final c = current ?? 0;
-    if (c <= 0) return CampaignAvatarHealth.down;
-    final ratio = c / m;
-    if (ratio > 0.5) return CampaignAvatarHealth.healthy;
-    if (ratio > 0.25) return CampaignAvatarHealth.injured;
-    return CampaignAvatarHealth.critical;
+    return switch (campaignHealthStateFromHp(current, max)) {
+      'healthy' => CampaignAvatarHealth.healthy,
+      'injured' => CampaignAvatarHealth.injured,
+      'critical' => CampaignAvatarHealth.critical,
+      'down' => CampaignAvatarHealth.down,
+      _ => CampaignAvatarHealth.unknown,
+    };
   }
 
   @override
@@ -57,6 +57,7 @@ class CampaignAvatar extends StatelessWidget {
         width: size,
         height: size,
         child: Stack(
+          fit: StackFit.expand,
           clipBehavior: Clip.none,
           children: [
             CustomPaint(
@@ -65,19 +66,21 @@ class CampaignAvatar extends StatelessWidget {
                 strokeWidth: ringWidth,
                 hollow: health == CampaignAvatarHealth.down,
               ),
-              child: CircleAvatar(
-                radius: (size / 2) - ringWidth - 1,
-                backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                backgroundImage: image,
-                child: image != null
-                    ? null
-                    : Text(
-                        label,
-                        style: TextStyle(
-                          fontSize: size * 0.4,
-                          fontWeight: FontWeight.w600,
+              child: Padding(
+                padding: EdgeInsets.all(ringWidth + 2),
+                child: CircleAvatar(
+                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                  backgroundImage: image,
+                  child: image != null
+                      ? null
+                      : Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: size * 0.32,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
+                ),
               ),
             ),
             if (health == CampaignAvatarHealth.down)

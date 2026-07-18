@@ -435,6 +435,10 @@ export class CampaignsService {
       }
     }
 
+    if (speakerMode === "narrator") {
+      displayName = "旁白 / DM";
+    }
+
     if (kind === "checkRequest") {
       const targetActorId = eventData?.targetActorId as string;
       const targetActor = await this.prismaService.campaignActor.findUnique({

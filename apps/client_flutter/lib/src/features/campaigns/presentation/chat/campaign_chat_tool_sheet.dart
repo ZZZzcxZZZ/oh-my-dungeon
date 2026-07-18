@@ -45,7 +45,7 @@ class CampaignChatToolSheet extends StatelessWidget {
         const _ToolDefinition(
           action: CampaignChatToolAction.skillCheck,
           keyName: 'tool-skill-check',
-          label: '技能检定',
+          label: '代掷检定',
           icon: Icons.fact_check_outlined,
         ),
       if (identity.hasCharacterSheet)

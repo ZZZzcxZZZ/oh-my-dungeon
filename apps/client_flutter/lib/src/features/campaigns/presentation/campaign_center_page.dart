@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../content/data/local/content_repository.dart';
+
 import '../domain/campaign.dart';
 import '../domain/campaign_actor.dart';
 import 'actors/campaign_actor_controller.dart';
@@ -24,12 +26,14 @@ class CampaignCenterPage extends StatefulWidget {
     required this.campaign,
     required this.controller,
     this.actorController,
+    this.contentRepository,
     super.key,
   });
 
   final Campaign campaign;
   final CampaignController controller;
   final CampaignActorController? actorController;
+  final ContentRepository? contentRepository;
 
   @override
   State<CampaignCenterPage> createState() => _CampaignCenterPageState();
@@ -380,6 +384,7 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
       controller: controller,
       actor: actor,
       canEditAnyActor: _canManage,
+      contentRepository: widget.contentRepository,
     );
   }
 

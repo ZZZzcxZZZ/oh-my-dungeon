@@ -711,6 +711,57 @@ describe("campaigns endpoints", () => {
         });
     });
 
+    it("persists narrator messages with the narrator identity", async () => {
+      const token = await loginAsDm();
+      prismaService.campaign.findUnique.mockResolvedValueOnce({
+        id: "camp-1",
+        name: "Curse of Strahd",
+        description: "",
+        system: "dnd5e",
+        ownerId: "user-1",
+        status: "active",
+        createdAt: "2026-07-09T00:00:00.000Z",
+        updatedAt: "2026-07-09T00:00:00.000Z",
+        members: [
+          {
+            userId: "user-1",
+            role: "owner",
+            speakerMode: "narrator",
+            activeSpeakerActorId: null,
+          },
+        ],
+      });
+      prismaService.campaignChatMessage.create.mockResolvedValueOnce({
+        id: "msg-narrator",
+        campaignId: "camp-1",
+        senderId: "user-1",
+        campaignActorId: null,
+        displayName: "旁白 / DM",
+        avatarUrl: null,
+        kind: "say",
+        content: "The door closes behind you.",
+        speakerMode: "narrator",
+        publicHealthState: null,
+        ooc: false,
+        createdAt: "2026-07-09T00:00:00.000Z",
+      });
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/messages")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ kind: "say", content: "The door closes behind you." })
+        .expect(201);
+
+      expect(
+        prismaService.campaignChatMessage.create.mock.calls[0][0].data,
+      ).toEqual(
+        expect.objectContaining({
+          campaignActorId: null,
+          displayName: "旁白 / DM",
+          speakerMode: "narrator",
+        }),
+      );
+    });
     const campaignWithOwner = {
       id: "camp-1",
       name: "Curse of Strahd",

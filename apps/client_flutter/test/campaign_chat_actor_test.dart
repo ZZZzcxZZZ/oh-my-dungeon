@@ -7,7 +7,7 @@ import 'package:dnd_table_client/src/features/campaigns/data/campaign_socket_ser
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_archive_entry.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_controller.dart';
-import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_sheet_page.dart';
+import 'package:dnd_table_client/src/features/characters/presentation/character_detail_page.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_chat_page.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_controller.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/chat/campaign_chat_bubble.dart';
@@ -15,6 +15,7 @@ import 'package:dnd_table_client/src/features/campaigns/presentation/chat/chat_a
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_controller.dart';
 import 'package:dnd_table_client/src/features/content/data/local/content_repository.dart';
+import 'package:dnd_table_client/src/features/content/presentation/content_detail_page.dart';
 import 'package:dnd_table_client/src/core/dice/dice_roller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -200,6 +201,30 @@ void main() {
     expect(text.style?.fontWeight, FontWeight.bold);
   });
 
+  testWidgets('narrator messages use a dedicated centered presentation', (
+    tester,
+  ) async {
+    campaignClient.messages = const [
+      CampaignChatMessage(
+        id: 'narrator-1',
+        campaignId: 'camp-1',
+        senderId: 'user-1',
+        campaignActorId: null,
+        displayName: '旁白 / DM',
+        avatarUrl: null,
+        speakerMode: 'narrator',
+        kind: 'say',
+        content: '门在你们身后缓缓关闭。',
+        createdAt: '2026-07-09T00:00:00.000Z',
+      ),
+    ];
+
+    await pumpChatPage(tester, isDm: true);
+
+    expect(find.byKey(const Key('narrator-message')), findsOneWidget);
+    expect(find.byKey(const Key('say-message')), findsNothing);
+    expect(find.text('门在你们身后缓缓关闭。'), findsOneWidget);
+  });
   testWidgets(
     'chat avatars expose a health ring only when the server shares a state',
     (tester) async {
@@ -359,31 +384,34 @@ void main() {
     expect(find.textContaining('Arannis'), findsWidgets);
   });
 
-  testWidgets('dm requests a player skill check directly from chat tools', (
+  testWidgets('dm directly rolls a player skill check from chat tools', (
     tester,
   ) async {
-    await pumpChatPage(tester, isDm: true);
+    await pumpChatPage(
+      tester,
+      isDm: true,
+      diceRoller: DiceRoller(nextInt: (_) => 14),
+    );
 
     await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('技能检定'));
+    await tester.tap(find.text('代掷检定'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('campaign-actor-actor-player')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('check-type-skill')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('send-check-request')));
+    await tester.tap(find.byKey(const Key('roll-check-now')));
     await tester.pumpAndSettle();
 
     final call = campaignClient.sendMessageCalls.single;
-    expect(call.kind, 'checkRequest');
-    expect(call.eventData, {
-      'targetActorId': 'actor-player',
-      'checkType': 'skill',
-      'checkKey': '杂技',
-      'label': '杂技技能检定',
-      'rollMode': 'normal',
-    });
+    expect(call.kind, 'roll');
+    expect(call.campaignActorId, 'actor-player');
+    expect(call.eventData, containsPair('targetActorId', 'actor-player'));
+    expect(call.eventData, containsPair('checkType', 'skill'));
+    expect(call.eventData, containsPair('checkKey', '杂技'));
+    expect(call.eventData, containsPair('dmRolled', true));
+    expect(call.eventData, containsPair('total', 15));
   });
 
   testWidgets('target player answers a check request with a linked roll', (
@@ -456,12 +484,50 @@ void main() {
       await tester.tap(bubbleAvatar);
       await tester.pumpAndSettle();
 
-      expect(find.byType(CampaignActorSheetPage), findsOneWidget);
+      expect(find.byType(CharacterDetailPage), findsOneWidget);
       expect(find.text('Arannis'), findsWidgets);
-      expect(find.byTooltip('受到 1 点伤害'), findsNothing);
+      final sheet = tester.widget<CharacterDetailPage>(
+        find.byType(CharacterDetailPage),
+      );
+      expect(sheet.onUpdateRuntime, isNull);
+      expect(sheet.onSaveCharacter, isNull);
+      expect(sheet.contentEntries, isNotEmpty);
     },
   );
 
+  testWidgets('DM opens another player full sheet with editing authority', (
+    tester,
+  ) async {
+    campaignClient.messages = const [
+      CampaignChatMessage(
+        id: 'avatar-dm-1',
+        campaignId: 'camp-1',
+        senderId: 'user-2',
+        campaignActorId: 'actor-player',
+        displayName: 'Arannis',
+        avatarUrl: null,
+        kind: 'say',
+        content: 'Hello',
+        createdAt: '2026-07-09T00:00:00.000Z',
+      ),
+    ];
+
+    await pumpChatPage(tester, isDm: true);
+    await tester.tap(
+      find.descendant(
+        of: find.byType(CampaignChatBubble),
+        matching: find.byType(ChatAvatar),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final sheet = tester.widget<CharacterDetailPage>(
+      find.byType(CharacterDetailPage),
+    );
+    expect(sheet.onUpdateRuntime, isNotNull);
+    expect(sheet.onUpdateInventory, isNotNull);
+    expect(sheet.onSaveCharacter, isNotNull);
+  });
   testWidgets('avatar without a resolvable actor stays silent on tap', (
     tester,
   ) async {
@@ -489,7 +555,7 @@ void main() {
     await tester.tap(bubbleAvatar);
     await tester.pumpAndSettle();
 
-    expect(find.byType(CampaignActorSheetPage), findsNothing);
+    expect(find.byType(CharacterDetailPage), findsNothing);
   });
 
   testWidgets(
@@ -1094,31 +1160,35 @@ void main() {
 
   // Spec §输入栏: 战役资料入口迁移到头像快捷面板第 6 项"资料条目"，
   // 不在 AppBar 单独入口。
-  testWidgets(
-    'tool panel content entry opens the quick content library',
-    (tester) async {
-      final contentController = CampaignContentController(
-        cacheRepository: MemoryCampaignCacheRepository(),
-        apiClient: MemoryCampaignSyncApiClient(),
-        apiBaseUrl: _apiBaseUrl,
-        accessToken: 'access-token',
-        currentUserId: 'user-1',
-      );
-      await pumpChatPage(tester, campaignContentController: contentController);
+  testWidgets('tool panel content entry opens the quick content library', (
+    tester,
+  ) async {
+    final contentController = CampaignContentController(
+      cacheRepository: MemoryCampaignCacheRepository(),
+      apiClient: MemoryCampaignSyncApiClient(),
+      apiBaseUrl: _apiBaseUrl,
+      accessToken: 'access-token',
+      currentUserId: 'user-1',
+    );
+    await pumpChatPage(tester, campaignContentController: contentController);
 
-      // Open the tool panel by tapping the identity avatar.
-      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
-      await tester.pumpAndSettle();
+    // Open the tool panel by tapping the identity avatar.
+    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+    await tester.pumpAndSettle();
 
-      // The composer is for quick lookup; package management stays in campaign center.
-      await tester.tap(find.byKey(const Key('tool-content-entries')));
-      await tester.pumpAndSettle();
+    // The composer is for quick lookup; package management stays in campaign center.
+    await tester.tap(find.byKey(const Key('tool-content-entries')));
+    await tester.pumpAndSettle();
 
-      expect(find.text('战役资料库'), findsOneWidget);
+    expect(find.text('战役资料库'), findsOneWidget);
+    await tester.tap(find.text('战士'));
+    await tester.pumpAndSettle();
 
-      contentController.dispose();
-    },
-  );
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.byType(ContentDetailPage), findsOneWidget);
+
+    contentController.dispose();
+  });
 
   // Spec §输入栏: 工具面板条目点击后只关闭工具面板, 不应 double-pop
   // 把聊天页弹走。Helper 方法不应自行 Navigator.pop, 关闭 sheet 是调用方职责。

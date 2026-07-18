@@ -31,25 +31,25 @@ class ChatAvatar extends StatelessWidget {
       onTap: onTap,
       child: SizedBox.square(
         dimension: size,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            CircleAvatar(
-              backgroundImage: image,
-              child: image == null ? Text(avatarText(name)) : null,
-            ),
-            if (color != null)
-              IgnorePointer(
-                child: DecoratedBox(
-                  key: Key('campaign-avatar-ring-$healthState'),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: color, width: 3),
+        child: color == null
+            ? CircleAvatar(
+                backgroundImage: image,
+                child: image == null ? Text(avatarText(name)) : null,
+              )
+            : DecoratedBox(
+                key: Key('campaign-avatar-ring-$healthState'),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: color, width: 2.5),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: CircleAvatar(
+                    backgroundImage: image,
+                    child: image == null ? Text(avatarText(name)) : null,
                   ),
                 ),
               ),
-          ],
-        ),
       ),
     );
   }

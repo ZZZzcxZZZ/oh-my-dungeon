@@ -411,11 +411,13 @@ void main() {
     await tester.tap(find.text('Test Hero'));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('campaign-actor-sheet')), findsOneWidget);
-    expect(find.textContaining('HP 10/20'), findsOneWidget);
+    expect(find.byKey(const Key('campaign-actor-full-sheet')), findsOneWidget);
+    expect(find.textContaining('HP 10/20'), findsWidgets);
 
-    await tester.tap(find.byTooltip('受到 1 点伤害'));
+    await tester.tap(find.byKey(const Key('runtime-hp-panel')));
     await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('hp-quick-value-field')), '1');
+    await tester.tap(find.widgetWithText(FilledButton, '受到伤害'));
     await tester.pumpAndSettle();
 
     expect(apiClient.updateActorCalls, hasLength(1));
@@ -525,8 +527,10 @@ void main() {
 
     await tester.tap(find.text('Test Hero'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('受到 1 点伤害'));
+    await tester.tap(find.byKey(const Key('runtime-hp-panel')));
     await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('hp-quick-value-field')), '1');
+    await tester.tap(find.widgetWithText(FilledButton, '受到伤害'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('actor-conflict-dialog')), findsOneWidget);

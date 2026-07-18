@@ -66,65 +66,99 @@ class CampaignOverviewPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return KeyedSubtree(
       key: key ?? const Key('campaign-overview-panel'),
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.only(bottom: 32),
         children: [
-          Text(
-            campaign.description.trim().isEmpty
-                ? '尚未填写战役简介'
-                : campaign.description,
-          ),
-          const SizedBox(height: 20),
-          ListTile(
-            leading: Icon(
-              canManage ? Icons.shield_outlined : Icons.person_outline,
+          Container(
+            key: const Key('campaign-overview-header'),
+            color: colors.surfaceContainerLow,
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  campaign.description.trim().isEmpty
+                      ? '尚未填写战役简介'
+                      : campaign.description,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    Chip(
+                      avatar: Icon(
+                        canManage
+                            ? Icons.shield_outlined
+                            : Icons.person_outline,
+                        size: 18,
+                      ),
+                      label: Text(canManage ? '主持人' : '玩家'),
+                    ),
+                    Chip(
+                      avatar: const Icon(Icons.auto_stories_outlined, size: 18),
+                      label: Text(campaign.system),
+                    ),
+                    Chip(
+                      avatar: const Icon(Icons.cloud_done_outlined, size: 18),
+                      label: Text(
+                        campaign.status == 'active' ? '进行中' : campaign.status,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            title: Text(canManage ? '地下城主' : '玩家'),
-            subtitle: Text('系统：${campaign.system}'),
           ),
-          const Divider(),
-          _CampaignSummary(members: members, actors: actors),
-          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: _CampaignSummary(members: members, actors: actors),
+          ),
+          if (canManage && onCreateInvite != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: _CampaignInviteShare(
+                invites: invites,
+                onCreateInvite: onCreateInvite!,
+                campaignName: campaignName ?? campaign.name,
+                serverUrl: serverUrl,
+              ),
+            ),
           _CampaignMemberList(
             members: members,
             actors: actors,
             onOpenActor: onOpenActor,
           ),
-          if (canManage && onCreateInvite != null) ...[
-            const SizedBox(height: 8),
-            _CampaignInviteShare(
-              invites: invites,
-              onCreateInvite: onCreateInvite!,
-              campaignName: campaignName ?? campaign.name,
-              serverUrl: serverUrl,
+          if (canManage && onOpenDmControl != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Card.filled(
+                margin: EdgeInsets.zero,
+                child: ListTile(
+                  key: const Key('campaign-overview-dm-control-entry'),
+                  leading: const Icon(Icons.admin_panel_settings_outlined),
+                  title: const Text('主持工具'),
+                  subtitle: const Text('遭遇、成员状态与 DM 私有工具'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: onOpenDmControl,
+                ),
+              ),
             ),
-          ],
-          // Spec §概览: DM 在相同位置额外看到控场摘要、群体检定和遭遇准备入口。
-          if (canManage && onOpenDmControl != null) ...[
-            const Divider(),
-            ListTile(
-              key: const Key('campaign-overview-dm-control-entry'),
-              leading: const Icon(Icons.admin_panel_settings_outlined),
-              title: const Text('DM 控场'),
-              subtitle: const Text('遭遇、成员状态和 DM 私有工具'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: onOpenDmControl,
+          if (_hasAnySettingEntry)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: _CampaignSettingsSection(
+                canManage: canManage,
+                onEditDetails: onEditDetails,
+                onTransferOwnership: onTransferOwnership,
+                onArchiveCampaign: onArchiveCampaign,
+                onLeaveCampaign: onLeaveCampaign,
+              ),
             ),
-          ],
-          // Spec §全局设置: 4 项低频操作整合到概览面板。DM 可见全部 4 项,
-          // 普通玩家只见"离开战役"。原聊天页三点菜单已删除。
-          if (_hasAnySettingEntry) ...[
-            const Divider(),
-            _CampaignSettingsSection(
-              canManage: canManage,
-              onEditDetails: onEditDetails,
-              onTransferOwnership: onTransferOwnership,
-              onArchiveCampaign: onArchiveCampaign,
-              onLeaveCampaign: onLeaveCampaign,
-            ),
-          ],
         ],
       ),
     );
@@ -146,22 +180,47 @@ class _CampaignSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeActors = actors
-        .where((actor) => actor.status != 'archived')
-        .length;
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        Chip(
-          avatar: const Icon(Icons.group_outlined, size: 18),
-          label: Text('${members.length} 位成员'),
-        ),
-        Chip(
-          avatar: const Icon(Icons.badge_outlined, size: 18),
-          label: Text('$activeActors 个角色'),
-        ),
-      ],
+    final active = actors.where((actor) => actor.status != 'archived').toList();
+    final players = active.where((actor) => actor.actorType == 'player').length;
+    final supporting = active.length - players;
+    return Container(
+      key: const Key('campaign-overview-stats'),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLowest,
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Row(
+        children: [
+          _CampaignMetric(value: members.length, label: '成员'),
+          const VerticalDivider(width: 1),
+          _CampaignMetric(value: players, label: '玩家角色'),
+          const VerticalDivider(width: 1),
+          _CampaignMetric(value: supporting, label: 'NPC / 同伴'),
+        ],
+      ),
+    );
+  }
+}
+
+class _CampaignMetric extends StatelessWidget {
+  const _CampaignMetric({required this.value, required this.label});
+
+  final int value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('$value', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 2),
+          Text(label, style: Theme.of(context).textTheme.labelMedium),
+        ],
+      ),
     );
   }
 }
@@ -252,13 +311,24 @@ class _CampaignInviteShare extends StatelessWidget {
     final current = invites
         .where((invite) => invite.usedCount < invite.maxUses)
         .firstOrNull;
-    return ListTile(
+    return Card.filled(
       key: const Key('campaign-invite-share'),
-      leading: const Icon(Icons.person_add_alt_1_outlined),
-      title: Text(current == null ? '创建邀请码' : '分享邀请码'),
-      subtitle: Text(current?.code ?? '邀请玩家加入这个战役'),
-      trailing: const Icon(Icons.ios_share_outlined),
-      onTap: () => _share(context, current),
+      margin: EdgeInsets.zero,
+      color: Theme.of(context).colorScheme.secondaryContainer,
+      child: ListTile(
+        leading: const Icon(Icons.person_add_alt_1_outlined),
+        title: const Text('邀请玩家'),
+        subtitle: Text(
+          current == null ? '创建邀请码并分享服务器信息' : '邀请码  ${current.code}',
+          style: current == null
+              ? null
+              : const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        trailing: Icon(
+          current == null ? Icons.add_link_outlined : Icons.ios_share_outlined,
+        ),
+        onTap: () => _share(context, current),
+      ),
     );
   }
 
@@ -324,48 +394,44 @@ class _CampaignSettingsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return ExpansionTile(
+      key: const Key('campaign-overview-settings'),
+      leading: const Icon(Icons.settings_outlined),
+      title: const Text('战役设置'),
+      subtitle: const Text('低频管理与退出操作'),
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Text(
-            '战役设置',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
         if (canManage && onEditDetails != null)
           ListTile(
             key: const Key('campaign-overview-edit-details'),
             leading: const Icon(Icons.edit_outlined),
-            title: const Text('战役名称、封面和简介'),
-            trailing: const Icon(Icons.chevron_right),
+            title: const Text('名称、封面和简介'),
             onTap: onEditDetails,
           ),
         if (canManage && onTransferOwnership != null)
           ListTile(
             key: const Key('campaign-overview-transfer-ownership'),
             leading: const Icon(Icons.swap_horiz_outlined),
-            title: const Text('所有权转移'),
-            trailing: const Icon(Icons.chevron_right),
+            title: const Text('转移所有权'),
             onTap: onTransferOwnership,
           ),
         if (canManage && onArchiveCampaign != null)
           ListTile(
             key: const Key('campaign-overview-archive-campaign'),
             leading: const Icon(Icons.archive_outlined),
-            title: const Text('战役归档'),
-            trailing: const Icon(Icons.chevron_right),
+            title: const Text('归档战役'),
             onTap: onArchiveCampaign,
           ),
         if (onLeaveCampaign != null)
           ListTile(
             key: const Key('campaign-overview-leave-campaign'),
-            leading: const Icon(Icons.logout_outlined),
-            title: const Text('离开战役'),
-            trailing: const Icon(Icons.chevron_right),
+            leading: Icon(
+              Icons.logout_outlined,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            title: Text(
+              '离开战役',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
             onTap: onLeaveCampaign,
           ),
       ],

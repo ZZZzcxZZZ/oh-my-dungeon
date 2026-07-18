@@ -1,7 +1,6 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 
+import '../../../../core/presentation/avatar_image_provider.dart';
 import 'chat_helpers.dart';
 
 /// 聊天消息和成员列表中显示的角色头像。支持 data URI 与网络图片，
@@ -25,7 +24,7 @@ class ChatAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final url = avatarUrl?.trim();
-    final image = _avatarImage(url);
+    final image = avatarImageProvider(url);
     final color = healthRingColor(context, healthState);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -53,20 +52,6 @@ class ChatAvatar extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  ImageProvider<Object>? _avatarImage(String? url) {
-    if (url == null || url.isEmpty) return null;
-    if (url.startsWith('data:image/')) {
-      final separator = url.indexOf(',');
-      if (separator < 0) return null;
-      try {
-        return MemoryImage(base64Decode(url.substring(separator + 1)));
-      } on FormatException {
-        return null;
-      }
-    }
-    return NetworkImage(url);
   }
 }
 

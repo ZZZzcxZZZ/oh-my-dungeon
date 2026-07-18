@@ -359,7 +359,7 @@ void main() {
   );
 
   testWidgets(
-    'owner declining switch-to-DM prompt stays in Player mode and proceeds',
+    'owner declining switch-to-DM prompt stays in Player mode and does not enter',
     (tester) async {
       final auth = await buildLoggedInAuthController();
       final campaignController = await buildCampaignController(auth);
@@ -386,8 +386,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(modeController.mode, ClientMode.player);
-      // Campaign chat page is pushed.
-      expect(find.byType(MaterialPageRoute), findsWidgets);
+      expect(find.byKey(const Key('campaign-chat-page')), findsNothing);
+      expect(find.text('Curse of Strahd'), findsOneWidget);
 
       modeController.dispose();
       prefs.dispose();
@@ -555,7 +555,7 @@ void main() {
   );
 
   testWidgets(
-    'mode prompt is shown only once per campaign per session',
+    'owner is prompted again after declining DM mode',
     (tester) async {
       final auth = await buildLoggedInAuthController();
       final campaignController = await buildCampaignController(auth);
@@ -584,19 +584,14 @@ void main() {
       );
       await tester.tap(find.byKey(const Key('mode-switch-stay-player')));
       await tester.pumpAndSettle();
-      // Wait for the chat page to settle, then pop back to the list.
-      await tester.pumpAndSettle();
-      // Pop the pushed chat page.
-      final navigator = tester.state<NavigatorState>(find.byType(Navigator).first);
-      navigator.pop();
-      await tester.pumpAndSettle();
+      expect(find.text('Curse of Strahd'), findsOneWidget);
 
-      // Second entry: prompt must NOT be shown again.
+      // The host cannot enter in Player mode, so the next attempt asks again.
       await tester.tap(find.text('Curse of Strahd'));
       await tester.pumpAndSettle();
       expect(
         find.byKey(const Key('mode-switch-to-dm-dialog')),
-        findsNothing,
+        findsOneWidget,
       );
 
       modeController.dispose();

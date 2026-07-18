@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/presentation/avatar_image_provider.dart';
+
 /// 战役角色头像的健康分级，对应生命环颜色。
 ///
 /// 服务端按 viewer 投影：自己与 owner/dm 可得精确 HP 比例，其他玩家只拿到
@@ -42,9 +44,10 @@ class CampaignAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final hasImage = imageUrl != null && imageUrl!.isNotEmpty;
-    final label =
-        initials.isNotEmpty ? initials.characters.first.toUpperCase() : '';
+    final image = avatarImageProvider(imageUrl);
+    final label = initials.isNotEmpty
+        ? initials.characters.first.toUpperCase()
+        : '';
     final ringWidth = size * 0.09;
 
     return GestureDetector(
@@ -65,8 +68,8 @@ class CampaignAvatar extends StatelessWidget {
               child: CircleAvatar(
                 radius: (size / 2) - ringWidth - 1,
                 backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                backgroundImage: hasImage ? NetworkImage(imageUrl!) : null,
-                child: hasImage
+                backgroundImage: image,
+                child: image != null
                     ? null
                     : Text(
                         label,

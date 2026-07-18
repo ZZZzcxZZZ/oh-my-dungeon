@@ -146,7 +146,12 @@ void main() {
         'locale': 'zh-CN',
         'system': 'dnd5e-2024',
         'entryCount': 1,
-        'entries': [testFighterEntry().toJson()],
+        'entries': [
+          {
+            ...testFighterEntry().toJson(),
+            'id': '$packageId:class/fighter',
+          },
+        ],
       }));
       await importer.importReport(report);
     }

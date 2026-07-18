@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/presentation/avatar_image_provider.dart';
+
 /// 头像选择与上传 UI（plan 2 任务5）。
 ///
 /// 纯 UI 组件：图片选择和上传的实际平台/网络调用由宿主页面通过 [onPick] 和
@@ -29,8 +31,7 @@ class AvatarPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final hasPreview = previewBytes != null;
-    final hasCurrent =
-        currentAvatarUrl != null && currentAvatarUrl!.isNotEmpty;
+    final hasCurrent = currentAvatarUrl != null && currentAvatarUrl!.isNotEmpty;
     final canUpload = hasPreview && !isUploading && onUpload != null;
 
     return Column(
@@ -43,7 +44,7 @@ class AvatarPicker extends StatelessWidget {
             backgroundColor: theme.colorScheme.surfaceContainerHighest,
             backgroundImage: hasPreview
                 ? MemoryImage(previewBytes!)
-                : (hasCurrent ? NetworkImage(currentAvatarUrl!) : null),
+                : avatarImageProvider(currentAvatarUrl),
             child: (!hasPreview && !hasCurrent)
                 ? Icon(
                     Icons.person,

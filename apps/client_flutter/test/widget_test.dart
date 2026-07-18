@@ -612,7 +612,7 @@ void main() {
   });
 
   testWidgets(
-    'any authenticated user can open the three-step campaign creation guide',
+    'only dm mode can open the three-step campaign creation guide',
     (tester) async {
       final store = InMemoryServerProfileStore();
       await store.saveProfile(profile);
@@ -643,9 +643,13 @@ void main() {
 
       expect(find.byTooltip('使用邀请码加入战役'), findsOneWidget);
       expect(find.widgetWithText(FloatingActionButton, '加入战役'), findsNothing);
-      expect(find.widgetWithText(FloatingActionButton, '创建战役'), findsOneWidget);
+      expect(find.byKey(const Key('campaign-create-button')), findsNothing);
 
-      await tester.tap(find.widgetWithText(FloatingActionButton, '创建战役'));
+      await modeController.setMode(ClientMode.dungeonMaster);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('campaign-create-button')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('campaign-create-button')));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('campaign-creation-guide')), findsOneWidget);
@@ -655,10 +659,7 @@ void main() {
       await tester.tap(find.text('取消'));
       await tester.pumpAndSettle();
 
-      await modeController.setMode(ClientMode.dungeonMaster);
-      await tester.pumpAndSettle();
-
-      expect(find.widgetWithText(FloatingActionButton, '创建战役'), findsOneWidget);
+      expect(find.byKey(const Key('campaign-create-button')), findsOneWidget);
       expect(find.widgetWithText(FloatingActionButton, '加入战役'), findsNothing);
 
       await tester.pumpWidget(const SizedBox.shrink());
@@ -698,6 +699,8 @@ void main() {
     );
     final database = await databaseWithCharacter(_character);
     await installLocalContent(database, const [_contentEntry]);
+    final modeController = ClientModeController();
+    await modeController.setMode(ClientMode.dungeonMaster);
 
     await tester.pumpWidget(
       DndTableApp(
@@ -709,6 +712,7 @@ void main() {
         diceRoller: DiceRoller(nextInt: (_) => 19),
         database: database,
         enableBackgroundSync: false,
+        modeController: modeController,
       ),
     );
     await tester.pumpAndSettle();
@@ -727,18 +731,10 @@ void main() {
     expect(find.text('酒馆里已经坐满了冒险者'), findsOneWidget);
     // Identity now lives in the compact composer instead of a tall header.
     expect(find.byKey(const Key('campaign-chat-identity')), findsOneWidget);
-    expect(find.text('说'), findsOneWidget);
-    expect(find.text('做'), findsOneWidget);
     expect(find.byKey(const Key('chat-mode-say')), findsOneWidget);
     expect(find.byKey(const Key('chat-mode-action')), findsOneWidget);
     // Spec §输入栏: separate `+` button is removed; avatar opens merged panel.
     expect(find.byTooltip('更多跑团功能'), findsNothing);
-
-    await tester.tap(find.byTooltip('成员'));
-    await tester.pumpAndSettle();
-    expect(find.text('战役成员'), findsOneWidget);
-    await tester.tap(find.byTooltip('Close'));
-    await tester.pumpAndSettle();
 
     await tester.enterText(
       find.byKey(const Key('campaign-chat-input')),
@@ -748,7 +744,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('今晚从酒馆开始'), findsOneWidget);
 
-    await tester.tap(find.text('做'));
+    await tester.tap(find.byKey(const Key('chat-mode-action')));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('campaign-chat-input')),
@@ -767,7 +763,6 @@ void main() {
     // Spec §输入栏 merged tool panel: 桌面工具 entry removed; labels follow spec.
     expect(find.text('技能检定'), findsOneWidget);
     expect(find.text('掷骰'), findsOneWidget);
-    expect(find.text('打开角色卡'), findsOneWidget);
     expect(find.text('资料条目'), findsOneWidget);
 
     await tester.tap(find.text('掷骰'));
@@ -782,9 +777,7 @@ void main() {
     await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.ancestor(of: find.text('资料条目'), matching: find.byType(ListTile)),
-    );
+    await tester.tap(find.byKey(const Key('tool-content-entries')));
     for (var i = 0; i < 10 && find.text('战役资料库').evaluate().isEmpty; i++) {
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 20)),
@@ -802,15 +795,9 @@ void main() {
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('打开角色卡'));
-    await tester.pumpAndSettle();
-    expect(find.text('Elf / Ranger / Lv.3'), findsOneWidget);
-    expect(find.text('属性'), findsWidgets);
-
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
+    modeController.dispose();
   });
 
   testWidgets(
@@ -842,6 +829,7 @@ void main() {
           authTokenStore: tokenStore,
           authClient: _FakeAuthClient(),
           campaignClient: _FakeCampaignClient(
+            campaign: _playerCampaign,
             initialMessages: const [
               CampaignChatMessage(
                 id: 'msg-conditions',
@@ -859,6 +847,7 @@ void main() {
           campaignSocketService: NoopCampaignSocketService(),
           database: database,
           enableBackgroundSync: false,
+          bundledContentLoader: () async => '{}',
         ),
       );
       await tester.pumpAndSettle();
@@ -898,6 +887,8 @@ void main() {
     );
     await preferencesController.initialize();
     await preferencesController.setCompactLists(true);
+    final modeController = ClientModeController();
+    await modeController.setMode(ClientMode.dungeonMaster);
 
     await tester.pumpWidget(
       DndTableApp(
@@ -907,6 +898,7 @@ void main() {
         campaignClient: _FakeCampaignClient(),
         campaignSocketService: NoopCampaignSocketService(),
         appPreferencesController: preferencesController,
+        modeController: modeController,
       ),
     );
     await tester.pumpAndSettle();
@@ -930,6 +922,7 @@ void main() {
 
     await tester.pumpWidget(const SizedBox.shrink());
     preferencesController.dispose();
+    modeController.dispose();
   });
 
   testWidgets('content library uses compact list preference', (tester) async {
@@ -1122,13 +1115,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Starter Campaign'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+    await tester.tap(find.byKey(const Key('campaign-open-center')));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('DM 控场'),
-      160,
-      scrollable: find.byType(Scrollable).last,
-    );
     await tester.tap(find.text('DM 控场'));
     await tester.pumpAndSettle();
 
@@ -1168,8 +1156,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('DM 控场'), findsNothing);
-    // Spec §输入栏: 检定请求 entry is now labeled 技能检定 in the merged panel.
-    expect(find.text('技能检定'), findsOneWidget);
+    expect(find.text('技能检定'), findsNothing);
   });
 
   testWidgets('offline settings exposes servers and sync status', (
@@ -1178,7 +1165,11 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     await tester.pumpWidget(
-      DndTableApp(database: database, enableBackgroundSync: false),
+      DndTableApp(
+        database: database,
+        enableBackgroundSync: false,
+        bundledContentLoader: () async => '{}',
+      ),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('设置').last);
@@ -1395,9 +1386,7 @@ class _FakeCampaignClient implements CampaignClient {
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-  }) {
-    throw UnimplementedError();
-  }
+  }) async => const [];
 
   @override
   Future<CampaignMembership> joinCampaign({

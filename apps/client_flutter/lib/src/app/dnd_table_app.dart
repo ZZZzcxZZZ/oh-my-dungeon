@@ -32,6 +32,7 @@ class DndTableApp extends StatefulWidget {
     this.appPreferencesController,
     this.diceRoller,
     this.enableBackgroundSync = true,
+    this.bundledContentLoader,
     super.key,
   });
 
@@ -46,6 +47,7 @@ class DndTableApp extends StatefulWidget {
   final AppPreferencesController? appPreferencesController;
   final DiceRoller? diceRoller;
   final bool enableBackgroundSync;
+  final Future<String> Function()? bundledContentLoader;
 
   @override
   State<DndTableApp> createState() => _DndTableAppState();
@@ -207,6 +209,7 @@ class _DndTableAppState extends State<DndTableApp> {
       database: deps.database,
       diceRoller: widget.diceRoller,
       enableBackgroundSync: widget.enableBackgroundSync,
+      bundledContentLoader: widget.bundledContentLoader,
       serverProfileStore: deps.serverProfileStore,
       serverProfilesPageBuilder: (context) => ServerProfilesPage(
         store: deps.serverProfileStore,

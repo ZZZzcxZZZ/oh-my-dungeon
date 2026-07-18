@@ -254,8 +254,8 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
     // - owner/dm 在 Player 模式：提示一键切换 DM 模式
     // - 非 owner 在 DM 模式：提示只能以玩家身份参与
     // 每个战役每会话只提示一次，用户取消后不再打扰。
-    await _maybeShowModePrompt(campaign);
-    if (!mounted) return;
+    final canOpen = await _maybeShowModePrompt(campaign);
+    if (!mounted || !canOpen) return;
 
     await widget.onCampaignOpened?.call(campaign.id);
     if (!mounted) return;
@@ -280,10 +280,10 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
   ///
   /// 返回 true 表示用户已确认继续（或无需提示），返回 false 表示用户
   /// 取消进入战役（仅在非 owner 误入 DM 模式时给用户机会退回）。
-  Future<void> _maybeShowModePrompt(Campaign campaign) async {
-    if (_modePromptShownCampaignIds.contains(campaign.id)) return;
+  Future<bool> _maybeShowModePrompt(Campaign campaign) async {
+    if (_modePromptShownCampaignIds.contains(campaign.id)) return true;
     final currentUserId = widget.authController.user?.id;
-    if (currentUserId == null) return;
+    if (currentUserId == null) return false;
 
     final membership = campaign.memberPreview
         .where((m) => m.userId == currentUserId)
@@ -300,8 +300,10 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
       final switchToDm = await _showSwitchToDmDialog(campaign);
       if (switchToDm && mounted) {
         await widget.modeController.setMode(ClientMode.dungeonMaster);
+      } else {
+        _modePromptShownCampaignIds.remove(campaign.id);
       }
-      return;
+      return switchToDm;
     }
 
     // Spec §客户端工作模式: 普通玩家即使切换到 DM 模式，仍然只拥有
@@ -309,8 +311,9 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
     if (!isOwnerOrDm && currentMode == ClientMode.dungeonMaster) {
       _modePromptShownCampaignIds.add(campaign.id);
       await _showPlayerOnlyDialog(campaign);
-      return;
+      return true;
     }
+    return true;
   }
 
   Future<bool> _showSwitchToDmDialog(Campaign campaign) async {

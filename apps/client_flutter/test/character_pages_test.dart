@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
@@ -69,10 +70,9 @@ void main() {
   testWidgets(
     'character detail header shows avatar image when avatarUrl is set',
     (tester) async {
-      const avatarBytes = [1, 2, 3, 4];
       final avatarChar = _character.copyWith(
         avatarUrl: Uri.dataFromBytes(
-          avatarBytes,
+          _validPngBytes,
           mimeType: 'image/png',
         ).toString(),
       );
@@ -82,10 +82,7 @@ void main() {
 
       // 头部的 CircleAvatar 应当配置了 backgroundImage（而非首字母 fallback）。
       final avatar = tester.widget<CircleAvatar>(
-        find.ancestor(
-          of: find.text('Arannis'),
-          matching: find.byType(CircleAvatar),
-        ),
+        find.byKey(const Key('character-detail-avatar')),
       );
       expect(avatar.backgroundImage, isNotNull);
       expect(avatar.child, isNull);
@@ -100,10 +97,7 @@ void main() {
       );
 
       final avatar = tester.widget<CircleAvatar>(
-        find.ancestor(
-          of: find.text('Arannis'),
-          matching: find.byType(CircleAvatar),
-        ),
+        find.byKey(const Key('character-detail-avatar')),
       );
       expect(avatar.backgroundImage, isNull);
       expect(avatar.child, isNotNull);
@@ -318,9 +312,8 @@ void main() {
     expect(find.text('升级队列'), findsOneWidget);
     expect(find.text('新增：动作如潮'), findsOneWidget);
 
-    await tester.drag(
-      find.byType(SingleChildScrollView),
-      const Offset(0, -160),
+    await tester.ensureVisible(
+      find.widgetWithText(FilledButton, '应用等级规则'),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, '应用等级规则'));
@@ -1752,7 +1745,7 @@ void main() {
     'full sheet character editor exposes avatar picker and saves avatar data url',
     (tester) async {
       CharacterEditDraft? submitted;
-      final fakeBytes = Uint8List.fromList([1, 2, 3, 4]);
+      final fakeBytes = _validPngBytes;
       await tester.pumpWidget(
         MaterialApp(
           home: CharacterEditorPage(
@@ -1766,10 +1759,18 @@ void main() {
         ),
       );
 
-      // 直接进入 fullSheet：选 quick → 继续编辑完整角色卡。
-      await tester.tap(find.widgetWithText(FilledButton, '快速创建'));
+      // 从标准引导进入完整角色卡。
+      await tester.tap(find.widgetWithText(FilledButton, '标准创建'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(OutlinedButton, '继续编辑完整角色卡'));
+      final fullSheetButton = find.widgetWithText(
+        OutlinedButton,
+        '继续编辑完整角色卡',
+      );
+      await tester.tap(
+        fullSheetButton.evaluate().isNotEmpty
+            ? fullSheetButton
+            : find.byTooltip('继续编辑完整角色卡'),
+      );
       await tester.pumpAndSettle();
 
       // 基础区出现头像选择器。
@@ -1802,7 +1803,7 @@ void main() {
         id: 'char-avatar',
         ownerUserId: 'user-1',
         name: 'Elara',
-        avatarUrl: 'data:image/png;base64,AAAA',
+        avatarUrl: _validPngDataUrl,
         system: 'dnd5e',
         level: 1,
         classSummary: '法师',
@@ -1858,7 +1859,7 @@ void main() {
   testWidgets(
     'standard build details step exposes avatar picker',
     (tester) async {
-      final fakeBytes = Uint8List.fromList([9, 9, 9]);
+      final fakeBytes = _validPngBytes;
       CharacterEditDraft? submitted;
       await tester.pumpWidget(
         MaterialApp(
@@ -1909,6 +1910,14 @@ void main() {
     },
   );
 }
+
+const _validPngDataUrl =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwC'
+    'AAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
+final Uint8List _validPngBytes = base64Decode(
+  _validPngDataUrl.substring(_validPngDataUrl.indexOf(',') + 1),
+);
 
 Future<void> _goToBuilderStep(
   WidgetTester tester,

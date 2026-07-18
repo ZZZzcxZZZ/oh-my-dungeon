@@ -1095,7 +1095,7 @@ void main() {
   // Spec §输入栏: 战役资料入口迁移到头像快捷面板第 6 项"资料条目"，
   // 不在 AppBar 单独入口。
   testWidgets(
-    'tool panel content entry opens CampaignContentPage when controller is available',
+    'tool panel content entry opens the quick content library',
     (tester) async {
       final contentController = CampaignContentController(
         cacheRepository: MemoryCampaignCacheRepository(),
@@ -1110,11 +1110,11 @@ void main() {
       await tester.tap(find.byKey(const Key('campaign-chat-identity')));
       await tester.pumpAndSettle();
 
-      // Tap "资料条目" — should navigate to CampaignContentPage.
+      // The composer is for quick lookup; package management stays in campaign center.
       await tester.tap(find.byKey(const Key('tool-content-entries')));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('campaign-content-page')), findsOneWidget);
+      expect(find.text('战役资料库'), findsOneWidget);
 
       contentController.dispose();
     },

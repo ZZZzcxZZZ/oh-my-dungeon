@@ -27,7 +27,6 @@ import 'chat/chat_helpers.dart';
 import 'chat/chat_mode_picker.dart';
 import 'chat/check_request_sheet.dart';
 import 'content/campaign_content_controller.dart';
-import 'content/campaign_content_page.dart';
 
 class CampaignChatPage extends StatefulWidget {
   const CampaignChatPage({
@@ -333,20 +332,6 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     );
   }
 
-  Future<void> _openCampaignContent() async {
-    final controller = widget.campaignContentController;
-    if (controller == null) return;
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => CampaignContentPage(
-          controller: controller,
-          campaignId: widget.campaign.id,
-          canEdit: _canManageCampaign,
-        ),
-      ),
-    );
-  }
-
   /// Spec §顶部: 聊天顶部搜索入口。打开轻量搜索面板，直接调用
   /// `searchMessages` 检索战役历史消息，不替换实时聊天时间线。
   /// 选中搜索结果后关闭面板并跳转到对应消息气泡。
@@ -549,11 +534,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         await _showCheckRequestTargetPicker();
         break;
       case CampaignChatToolAction.contentEntries:
-        if (widget.campaignContentController != null) {
-          await _openCampaignContent();
-        } else {
-          await _showContentLibrary();
-        }
+        await _showContentLibrary();
         break;
       case CampaignChatToolAction.recordClue:
         await _showArchiveCreationForm(initialKind: 'clue');

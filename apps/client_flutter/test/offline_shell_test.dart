@@ -12,7 +12,9 @@ void main() {
 
   testWidgets('opens the local shell without a server profile', (tester) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
-    await tester.pumpWidget(DndTableApp(database: database));
+    await tester.pumpWidget(
+      DndTableApp(database: database, bundledContentLoader: () async => '{}'),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('首页'), findsWidgets);
@@ -29,7 +31,9 @@ void main() {
     tester,
   ) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
-    await tester.pumpWidget(DndTableApp(database: database));
+    await tester.pumpWidget(
+      DndTableApp(database: database, bundledContentLoader: () async => '{}'),
+    );
     await tester.pumpAndSettle();
 
     // 默认在首页 tab，切到战役 tab 应看到离线提示。
@@ -44,7 +48,9 @@ void main() {
     tester,
   ) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
-    await tester.pumpWidget(DndTableApp(database: database));
+    await tester.pumpWidget(
+      DndTableApp(database: database, bundledContentLoader: () async => '{}'),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('设置'));

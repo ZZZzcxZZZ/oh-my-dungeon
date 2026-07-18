@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dnd_table_client/src/features/characters/data/character_repository.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_controller.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/characters_tab_page.dart';
@@ -40,9 +42,8 @@ void main() {
   testWidgets(
     'character list card shows avatar image when avatarUrl is set',
     (tester) async {
-      const avatarBytes = [9, 8, 7, 6];
       final avatarUrl = Uri.dataFromBytes(
-        avatarBytes,
+        base64Decode(_validPngBase64),
         mimeType: 'image/png',
       ).toString();
       final repository = MemoryCharacterRepository(
@@ -54,10 +55,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final avatar = tester.widget<CircleAvatar>(
-        find.ancestor(
-          of: find.text('Hero'),
-          matching: find.byType(CircleAvatar),
-        ),
+        find.byKey(const Key('character-list-avatar-c1')),
       );
       expect(avatar.backgroundImage, isNotNull);
       expect(avatar.child, isNull);
@@ -74,13 +72,14 @@ void main() {
       await tester.pumpAndSettle();
 
       final avatar = tester.widget<CircleAvatar>(
-        find.ancestor(
-          of: find.text('Hero'),
-          matching: find.byType(CircleAvatar),
-        ),
+        find.byKey(const Key('character-list-avatar-c1')),
       );
       expect(avatar.backgroundImage, isNull);
       expect(avatar.child, isNotNull);
     },
   );
 }
+
+const _validPngBase64 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8A'
+    'AQUBAScY42YAAAAASUVORK5CYII=';

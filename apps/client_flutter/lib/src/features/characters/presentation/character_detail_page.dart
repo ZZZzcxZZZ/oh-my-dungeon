@@ -1,11 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 
 import '../../content/domain/content_entry.dart';
 import '../../content/presentation/content_entry_preview_page.dart';
 import '../../../core/dice/dice_roller.dart';
+import '../../../core/presentation/avatar_image_provider.dart';
 import '../domain/character.dart';
 import '../domain/character_manual_overrides.dart';
 import '../domain/character_override_resolver.dart';
@@ -295,8 +294,9 @@ class _CharacterHeader extends StatelessWidget {
       child: Row(
         children: [
           CircleAvatar(
+            key: const Key('character-detail-avatar'),
             radius: 18,
-            backgroundImage: _avatarImage(character.avatarUrl),
+            backgroundImage: avatarImageProvider(character.avatarUrl),
             child: character.avatarUrl == null || character.avatarUrl!.isEmpty
                 ? Text(character.name.characters.first.toUpperCase())
                 : null,
@@ -348,19 +348,6 @@ class _CharacterHeader extends StatelessWidget {
 
   // 规范 §头像来源：本地角色头像以 data URL 离线保存，战役角色头像为网络 URL。
   // 这里同时支持两种格式，无头像时返回 null 让 CircleAvatar 退回首字母。
-  ImageProvider<Object>? _avatarImage(String? url) {
-    if (url == null || url.isEmpty) return null;
-    if (url.startsWith('data:image/')) {
-      final separator = url.indexOf(',');
-      if (separator < 0) return null;
-      try {
-        return MemoryImage(base64Decode(url.substring(separator + 1)));
-      } on FormatException {
-        return null;
-      }
-    }
-    return NetworkImage(url);
-  }
 }
 
 class _SheetTab extends StatelessWidget {

@@ -88,7 +88,7 @@ void main() {
       // Default behavior: detail popup with message kind label.
       expect(find.text('Arannis 获得长剑'), findsWidgets);
       expect(find.textContaining('系统事件'), findsOneWidget);
-      expect(find.textContaining('DM'), findsOneWidget);
+      expect(find.text('发言者：DM'), findsOneWidget);
     },
   );
 }

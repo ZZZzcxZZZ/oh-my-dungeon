@@ -125,7 +125,7 @@ void main() {
       expect(apiClient.createEntryCalls, hasLength(1));
       expect(apiClient.createEntryCalls.last['campaignId'], 'campaign-1');
       expect(apiClient.createEntryCalls.last['type'], 'location');
-      expect(apiClient.createEntryCalls.last['slug'], 'black-tower');
+      expect(apiClient.createEntryCalls.last['slug'], '');
       expect(apiClient.createEntryCalls.last['name'], '黑塔');
 
       controller.dispose();

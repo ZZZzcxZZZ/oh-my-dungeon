@@ -1,9 +1,9 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/presentation/avatar_image_provider.dart';
 import '../../app_preferences/presentation/app_preferences_controller.dart';
 import '../../campaigns/presentation/actors/campaign_actor_controller.dart';
 import '../../campaigns/presentation/actors/publish_character_sheet.dart';
@@ -809,7 +809,8 @@ class _CharacterCardState extends State<_CharacterCard> {
           ListTile(
             onTap: widget.onOpen,
             leading: CircleAvatar(
-              backgroundImage: _avatarImage(widget.character.avatarUrl),
+              key: Key('character-list-avatar-${widget.character.id}'),
+              backgroundImage: avatarImageProvider(widget.character.avatarUrl),
               child: widget.character.avatarUrl == null ||
                       widget.character.avatarUrl!.isEmpty
                   ? Text(widget.character.name.characters.first.toUpperCase())
@@ -1116,19 +1117,4 @@ List<String> _splitRefs(String value) {
       .map((item) => item.trim())
       .where((item) => item.isNotEmpty)
       .toList(growable: false);
-}
-
-// Spec §头像来源: 支持本地角色头像（data URL）和战役角色头像（http(s) URL）。
-ImageProvider<Object>? _avatarImage(String? url) {
-  if (url == null || url.isEmpty) return null;
-  if (url.startsWith('data:image/')) {
-    final separator = url.indexOf(',');
-    if (separator < 0) return null;
-    try {
-      return MemoryImage(base64Decode(url.substring(separator + 1)));
-    } on FormatException {
-      return null;
-    }
-  }
-  return NetworkImage(url);
 }

@@ -98,8 +98,8 @@ void main() {
       await tester.pumpAndSettle();
 
       // No DM popup menu.
-      expect(find.text('创建角色'), findsNothing);
       expect(find.byKey(const Key('dm-create-quick-npc')), findsNothing);
+      expect(find.byKey(const Key('character-name')), findsOneWidget);
 
       actorController.dispose();
       modeController.dispose();
@@ -130,8 +130,8 @@ void main() {
       await tester.pumpAndSettle();
 
       // No DM popup menu — falls back to full editor path.
-      expect(find.text('创建角色'), findsNothing);
       expect(find.byKey(const Key('dm-create-quick-npc')), findsNothing);
+      expect(find.byKey(const Key('character-name')), findsOneWidget);
 
       actorController.dispose();
       modeController.dispose();

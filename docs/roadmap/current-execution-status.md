@@ -165,10 +165,10 @@
 
 - 战役列表还需要进一步像群聊列表：最近消息、未读、成员头像叠放；绑定角色头像和状态摘要已有第一版。
 - 聊天消息还需要系统事件、私聊 / DM 可见性和更完整的骰点卡片；角色 HP/AC/状态条件旁显已有第一版。
-- 标准创建已有 2024 顺序的分步导航、完成度、固定摘要、规则选择、授予预览与独立升级向导；后续还需要补齐法术准备数量上限和装备购买预算。
+- 标准创建已有 2024 顺序的分步导航、完成度、固定摘要、规则选择、授予预览与独立升级向导；法术准备数量上限已按施法属性修正 + 等级派生并阻止超额选择，装备购买预算仍待后续增强。
 - 检定请求已接入战役上下文；「桌面工具」仍需继续迁入日志和地图。
 - 「DM 控场」目前是入口壳，遭遇面板需要从旧桌面页迁入战役工具。
-- 本地资料库已有导入预览、检索、筛选、收藏、笔记和独立详情路由；后续还缺条目编辑、复制条目、批量导入确认向导和更完整的字段校验。
+- 本地资料库已有导入预览、检索、筛选、收藏、笔记、独立详情路由、条目编辑、复制条目和批量导入确认向导；后续可继续扩展字段校验与更多类型的结构化字段可视化。
 - 资料库详情页已按 Material 3 规范配色，类型 chips 已统一，但可继续扩展更多类型的结构化字段可视化（如怪物的挑战等级、状态的持续时间）。
 - 商业规则正文（如 PHB 2024）不能提交进公开仓库，也不进入 seed 或分发产物；用户若需要完整正文，只能保存在用户本地或自托管服务器，并以本地 JSON / `.dndpack` 形式导入。
 
@@ -177,9 +177,9 @@
 1. 完成战役聊天室信息架构：群聊式列表、最近消息、未读、成员头像叠放。
 2. 把日志从旧 Session 详情迁入战役 `+` 工具，并补齐检定请求历史与重复响应状态。
 3. ✅ 把遭遇控场从旧桌面页迁入「DM 控场」底部页 — `EncounterPanelPage` widget 已创建, 接入 `EncounterController`, DM 控场 sheet 提供"遭遇控场"入口跳转, 支持参与者 HP 调整 / 推进回合 / 结束遭遇 / 空态新建遭遇.
-4. 推进标准创建向导：法术准备和装备购买。
-5. 增强本地资料库 GUI：编辑条目、复制条目、批量导入确认向导。
-6. 旧 `rooms`、`TableTabPage` 和 Session 源码仅保留为日志/遭遇迁移素材；迁移完成后再按模块删除，禁止重新接入主导航。
+4. ✅ 推进标准创建向导：法术准备上限 — `StructuredClassRules.preparedSpellLimit` 按施法属性修正 + 等级计算可准备法术数，向导第 6 步通过 `_MultiChoiceSection.maximum` 阻止超额选择并实时显示 `已选/上限` 计数；装备购买预算仍为后续增强项。
+5. ✅ 增强本地资料库 GUI：编辑条目、复制条目、批量导入确认向导 — `ContentDetailPage` 支持就地编辑条目名称/摘要，并基于现有条目复制副本；新增 `BatchImportWizardDialog` 通过 `ContentFilePicker.pickMultiple()` 并行生成多份预览报告，支持勾选/全选/取消全选后批量导入；`ContentPackageSettingsPage` 在「从文件导入」下新增「批量导入」入口。
+6. ✅ 旧 `rooms`、`TableTabPage` 和 Session 源码清理 — 服务端 `RoomsModule` / `SessionsModule` / `SessionsGateway` 已整体删除，`SessionPolicy` 收敛并迁移到 `check-requests/policies/`（仅保留 `canStartSession` / `canViewSession` / `canViewDMContent`），`app.module.ts`、`realtime.module.ts`、`check-requests.e2e-spec.ts`、`server-info.e2e-spec.ts` 同步移除相关引用与 rooms 测试。
 7. ✅ DM Actor 编辑与玩家本地角色的双向同步 — 切片 A (publishCharacter baseRevision + socket changeStream + 409 冲突对话框) 与切片 B (CharacterSyncConflictRepository + BannerController + ResolutionPage) 已完成.
 
 ## 验证规则

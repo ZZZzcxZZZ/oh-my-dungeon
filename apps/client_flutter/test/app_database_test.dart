@@ -3,9 +3,9 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('opens an empty schema at version seven', () async {
+  test('opens an empty schema at version eight', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
-    expect(database.schemaVersion, 7);
+    expect(database.schemaVersion, 8);
     expect(await database.select(database.serverProfiles).get(), isEmpty);
     expect(await database.select(database.syncOutbox).get(), isEmpty);
     expect(await database.select(database.localContentPackages).get(), isEmpty);

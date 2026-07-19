@@ -9,10 +9,8 @@ import { EncountersModule } from './modules/encounters/encounters.module';
 import { HealthModule } from './modules/health/health.module';
 import { MediaModule } from './modules/media/media.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
-import { RoomsModule } from './modules/rooms/rooms.module';
 import { ServerInfoModule } from './modules/server-info/server-info.module';
 import { ServerSettingsModule } from './modules/server-settings/server-settings.module';
-import { SessionsModule } from './modules/sessions/sessions.module';
 import { VaultModule } from './modules/vault/vault.module';
 import { PrismaModule } from './prisma/prisma.module';
 
@@ -25,7 +23,6 @@ import { PrismaModule } from './prisma/prisma.module';
     PrismaModule,
     HealthModule,
     MediaModule,
-    RoomsModule,
     ServerInfoModule,
     AuthModule,
     ServerSettingsModule,
@@ -35,7 +32,6 @@ import { PrismaModule } from './prisma/prisma.module';
     CheckRequestsModule,
     EncountersModule,
     RealtimeModule,
-    SessionsModule,
     VaultModule
   ]
 })

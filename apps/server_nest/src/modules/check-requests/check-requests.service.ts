@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccessTokenPayload } from '../auth/auth.types';
 import type { CampaignContext } from '../campaigns/policies/campaign.policy';
-import { SessionPolicy } from '../sessions/policies/session.policy';
+import { SessionPolicy } from './policies/session.policy';
 import type {
   CheckRequestView,
   CheckResponseView,

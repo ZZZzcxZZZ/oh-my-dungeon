@@ -5,27 +5,16 @@ import type { CampaignContext } from '../../campaigns/policies/campaign.policy';
 const MANAGE_ROLES = new Set(['owner', 'dm']);
 const VIEW_ROLES = new Set(['owner', 'dm', 'player', 'spectator']);
 
+/// Spec §旧代码清理: 原 `sessions/policies/session.policy.ts` 的迁移版本.
+/// 旧 sessions 模块已删除, 但 check-requests 仍需要基于 CampaignContext
+/// 的角色校验, 因此把 policy 收纳到本模块内部.
 @Injectable()
 export class SessionPolicy {
-  canCreateSession(
-    actor: AccessTokenPayload,
-    campaign: CampaignContext
-  ): void {
-    this.assertCanManage(actor, campaign, 'Only the owner or a DM can create a session');
-  }
-
   canStartSession(
     actor: AccessTokenPayload,
     campaign: CampaignContext
   ): void {
     this.assertCanManage(actor, campaign, 'Only the owner or a DM can start a session');
-  }
-
-  canEndSession(
-    actor: AccessTokenPayload,
-    campaign: CampaignContext
-  ): void {
-    this.assertCanManage(actor, campaign, 'Only the owner or a DM can end a session');
   }
 
   canViewSession(
@@ -44,25 +33,11 @@ export class SessionPolicy {
     }
   }
 
-  canSendDMMessage(
-    actor: AccessTokenPayload,
-    campaign: CampaignContext
-  ): void {
-    this.assertCanManage(actor, campaign, 'Only the owner or a DM can send DM messages');
-  }
-
   canViewDMContent(
     actor: AccessTokenPayload,
     campaign: CampaignContext
   ): void {
     this.assertCanManage(actor, campaign, 'Only the owner or a DM can view DM content');
-  }
-
-  canRollDM(
-    actor: AccessTokenPayload,
-    campaign: CampaignContext
-  ): void {
-    this.assertCanManage(actor, campaign, 'Only the owner or a DM can roll DM dice');
   }
 
   private assertCanManage(

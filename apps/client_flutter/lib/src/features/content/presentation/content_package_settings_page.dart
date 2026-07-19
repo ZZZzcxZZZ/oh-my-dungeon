@@ -8,6 +8,7 @@ import '../data/local/content_repository.dart';
 import '../domain/content_file_picker.dart';
 import '../domain/content_import_report.dart';
 import '../domain/content_package_manifest.dart';
+import 'batch_import_wizard_dialog.dart';
 import 'content_import_preview_dialog.dart';
 
 class ContentPackageSettingsPage extends StatefulWidget {
@@ -80,6 +81,21 @@ class _ContentPackageSettingsPageState
         onConfirm: () async {
           await widget.importer.importReport(report);
         },
+      ),
+    );
+  }
+
+  /// Spec §资料库 GUI 增强: 批量导入确认向导. 一次选择多个文件,
+  /// 弹出 [BatchImportWizardDialog] 让用户勾选要导入的资料包.
+  Future<void> _pickMultipleAndPreview() async {
+    final files = await widget.filePicker.pickMultiple();
+    if (files.isEmpty) return;
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => BatchImportWizardDialog(
+        files: files,
+        importer: widget.importer,
       ),
     );
   }
@@ -160,6 +176,15 @@ class _ContentPackageSettingsPageState
               onPressed: _pickAndPreview,
               icon: const Icon(Icons.file_upload_outlined),
               label: const Text('从文件导入'),
+            ),
+            const SizedBox(height: 8),
+            // Spec §资料库 GUI 增强: 批量导入入口, 一次选择多个文件
+            // 并在确认向导中勾选要导入的资料包.
+            OutlinedButton.icon(
+              key: const Key('content-batch-import-button'),
+              onPressed: _pickMultipleAndPreview,
+              icon: const Icon(Icons.folder_open_outlined),
+              label: const Text('批量导入'),
             ),
             const SizedBox(height: 16),
             for (final package in _packages)

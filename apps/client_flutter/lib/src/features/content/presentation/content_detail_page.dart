@@ -109,6 +109,156 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     await widget.controller.repository.saveNote(entryKey, _noteController.text);
   }
 
+  /// Spec §资料库 GUI 增强: 编辑条目名称、摘要等可变字段, 保留 id/slug/type.
+  /// 入口在 AppBar 编辑按钮, 仅本地条目可编辑. 保存时调用 repository
+  /// .updateEntry, 自动 +1 revision 防止与远端同步混淆.
+  Future<void> _showEditDialog() async {
+    final entry = _entry;
+    if (entry == null) return;
+    final nameController = TextEditingController(text: entry.name);
+    final summaryController = TextEditingController(text: entry.summary);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('编辑条目'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  key: const Key('content-edit-name-field'),
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: '名称'),
+                  autofocus: true,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  key: const Key('content-edit-summary-field'),
+                  controller: summaryController,
+                  decoration: const InputDecoration(labelText: '摘要'),
+                  minLines: 2,
+                  maxLines: 5,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('保存'),
+            ),
+          ],
+        );
+      },
+    );
+    // 在 dialog 关闭动画结束前不要 dispose controller, 否则
+    // dialog 退出动画期间 TextField 仍会访问已 dispose 的 controller.
+    // 局部 controller 在 dialog 退出动画完成后会自动被 GC.
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    final newName = nameController.text.trim();
+    final newSummary = summaryController.text.trim();
+
+    if (newName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('名称不能为空')),
+      );
+      return;
+    }
+    final updated = ContentEntry.fromJson({
+      ...entry.toJson(),
+      'name': newName,
+      'summary': newSummary,
+      'revision': entry.revision + 1,
+    });
+    try {
+      await widget.controller.repository.updateEntry(updated);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已保存修改')),
+        );
+        await _loadEntry();
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('保存失败: $error')),
+        );
+      }
+    }
+  }
+
+  /// Spec §资料库 GUI 增强: 复制条目. 在同一资料包内创建一个新条目,
+  /// slug 自动加 -copy 后缀, name 由用户输入. 仅本地条目可复制.
+  Future<void> _showDuplicateDialog() async {
+    final entry = _entry;
+    if (entry == null) return;
+    final nameController = TextEditingController(text: '${entry.name}（副本）');
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('复制条目'),
+          content: TextField(
+            key: const Key('content-duplicate-name-field'),
+            controller: nameController,
+            decoration: const InputDecoration(
+              labelText: '新条目名称',
+              hintText: '例如: 火球术（家规副本）',
+            ),
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('创建副本'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    final newName = nameController.text.trim();
+    if (newName.isEmpty) return;
+    try {
+      final duplicate = await widget.controller.repository.duplicateEntry(
+        entry.id,
+        newName: newName,
+      );
+      if (!mounted) return;
+      if (duplicate == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('复制失败: 找不到源条目')),
+        );
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已创建副本: ${duplicate.name}')),
+      );
+      widget.onOpenEntry(duplicate.id);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('复制失败: $error')),
+        );
+      }
+    }
+  }
+
   Widget? _appBarLeading() {
     final onClose = widget.onClose;
     if (onClose == null) return null;
@@ -180,12 +330,28 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
 
     final definition = ContentTypeRegistry.defaults().definitionFor(entry.type);
     final packageId = entry.id.split(':').first;
+    // Spec §资料库 GUI 增强: 只允许编辑本地条目, 战役条目只读.
+    final canEdit = entry.origin == ContentOrigin.local;
 
     return Scaffold(
       appBar: AppBar(
         leading: _appBarLeading(),
         title: Text(entry.name),
         actions: [
+          if (canEdit)
+            IconButton(
+              key: const Key('content-detail-edit'),
+              tooltip: '编辑条目',
+              onPressed: _showEditDialog,
+              icon: const Icon(Icons.edit_outlined),
+            ),
+          if (canEdit)
+            IconButton(
+              key: const Key('content-detail-duplicate'),
+              tooltip: '复制条目',
+              onPressed: _showDuplicateDialog,
+              icon: const Icon(Icons.content_copy_outlined),
+            ),
           IconButton(
             tooltip: _isFavorite ? '取消收藏' : '收藏',
             onPressed: _toggleFavorite,

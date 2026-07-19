@@ -489,4 +489,125 @@ void main() {
     expect(payload['contentHash'], 'hash-abc');
     await database.close();
   });
+
+  test('updateEntry rewrites mutable fields without touching the key', () async {
+    final entry = ContentEntry.fromJson({
+      'id': 'example:spell/fireball',
+      'type': 'spell',
+      'slug': 'fireball',
+      'name': '火球术',
+      'summary': '爆炸性火焰',
+      'body': <Map<String, Object?>>[],
+      'tags': ['spell', 'fire'],
+      'revision': 1,
+    });
+    await repository.replacePackage(
+      manifest: const ContentPackageManifest(
+        formatVersion: 1,
+        id: 'example',
+        name: 'Example',
+        version: '1.0.0',
+        locale: 'zh-CN',
+        system: 'dnd5e-2024',
+        entryCount: 1,
+      ),
+      entries: [entry],
+      contentHash: 'hash-1',
+    );
+
+    final updated = ContentEntry.fromJson({
+      'id': 'example:spell/fireball',
+      'type': 'spell',
+      'slug': 'fireball',
+      'name': '火球术（家规）',
+      'summary': '爆炸性火焰, DC 增益 +2',
+      'body': <Map<String, Object?>>[],
+      'tags': ['spell', 'fire', 'homebrew'],
+      'revision': 2,
+    });
+    await repository.updateEntry(updated);
+
+    final reloaded = await repository.getByKey('example:spell/fireball');
+    expect(reloaded?.name, '火球术（家规）');
+    expect(reloaded?.summary, '爆炸性火焰, DC 增益 +2');
+    expect(reloaded?.tags, contains('homebrew'));
+    expect(reloaded?.revision, 2);
+    // 收藏和笔记应保留 (entryKey 未变).
+    await repository.setFavorite('example:spell/fireball', true);
+    await repository.saveNote('example:spell/fireball', '笔记');
+    await repository.updateEntry(updated);
+    expect(await repository.isFavorite('example:spell/fireball'), isTrue);
+  });
+
+  test('updateEntry rejects entries that do not exist yet', () async {
+    final ghost = ContentEntry.fromJson({
+      'id': 'example:spell/fireball',
+      'type': 'spell',
+      'slug': 'fireball',
+      'name': '火球术',
+      'body': <Map<String, Object?>>[],
+      'revision': 1,
+    });
+    expect(
+      () => repository.updateEntry(ghost),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  test('duplicateEntry clones an entry with a new id and name', () async {
+    final entry = ContentEntry.fromJson({
+      'id': 'example:spell/fireball',
+      'type': 'spell',
+      'slug': 'fireball',
+      'name': '火球术',
+      'summary': '爆炸性火焰',
+      'body': <Map<String, Object?>>[],
+      'revision': 1,
+    });
+    await repository.replacePackage(
+      manifest: const ContentPackageManifest(
+        formatVersion: 1,
+        id: 'example',
+        name: 'Example',
+        version: '1.0.0',
+        locale: 'zh-CN',
+        system: 'dnd5e-2024',
+        entryCount: 1,
+      ),
+      entries: [entry],
+      contentHash: 'hash-1',
+    );
+
+    final duplicate = await repository.duplicateEntry(
+      'example:spell/fireball',
+      newName: '火球术（家规副本）',
+    );
+    expect(duplicate, isNotNull);
+    expect(duplicate!.id, 'example:spell/fireball-copy');
+    expect(duplicate.slug, 'fireball-copy');
+    expect(duplicate.name, '火球术（家规副本）');
+    expect(duplicate.type, 'spell');
+    expect(duplicate.summary, '爆炸性火焰');
+
+    // 副本可被搜索到 (同包 enabled).
+    final results = await repository.search(
+      const ContentQuery(text: '家规副本'),
+    );
+    expect(results, hasLength(1));
+    expect(results.single.id, 'example:spell/fireball-copy');
+
+    // 原条目仍在.
+    expect(
+      await repository.getByKey('example:spell/fireball'),
+      isNotNull,
+    );
+  });
+
+  test('duplicateEntry returns null when source entry is missing', () async {
+    final duplicate = await repository.duplicateEntry(
+      'example:spell/missing',
+      newName: '幽灵',
+    );
+    expect(duplicate, isNull);
+  });
 }

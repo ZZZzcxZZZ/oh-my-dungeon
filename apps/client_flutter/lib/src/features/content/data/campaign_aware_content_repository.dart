@@ -162,6 +162,61 @@ class CampaignAwareContentRepository implements ContentRepository {
   Future<void> saveNote(String entryKey, String markdown) =>
       local.saveNote(entryKey, markdown);
 
+  @override
+  Future<void> updateEntry(ContentEntry entry) {
+    // 战役条目 (campaign: 前缀) 不支持本地编辑; 只允许本地条目.
+    if (entry.id.startsWith(_localPrefix)) {
+      final originalKey = entry.id.substring(_localPrefix.length);
+      final rebased = _stripOrigin(entry, originalKey);
+      return local.updateEntry(rebased);
+    }
+    if (entry.id.startsWith(_campaignPrefix)) {
+      throw StateError(
+        'Cannot edit campaign-scoped entry ${entry.id} locally',
+      );
+    }
+    return local.updateEntry(entry);
+  }
+
+  @override
+  Future<ContentEntry?> duplicateEntry(
+    String entryKey, {
+    required String newName,
+  }) async {
+    if (entryKey.startsWith(_localPrefix)) {
+      final originalKey = entryKey.substring(_localPrefix.length);
+      final duplicate = await local.duplicateEntry(
+        originalKey,
+        newName: newName,
+      );
+      if (duplicate == null) return null;
+      return _rebase(duplicate, _localKey(duplicate.id), ContentOrigin.local);
+    }
+    // 战役条目不支持本地复制.
+    return null;
+  }
+
+  /// Spec §资料库 GUI 增强: 编辑时把组合 Repository 暴露的 entryKey
+  /// (带 `local:` 前缀) 还原回本地 Repository 的原始 key, 再交给本地
+  /// Repository 写入. 其余字段保持不变.
+  ContentEntry _stripOrigin(ContentEntry entry, String originalKey) {
+    return ContentEntry(
+      id: originalKey,
+      type: entry.type,
+      slug: entry.slug,
+      name: entry.name,
+      body: entry.body,
+      revision: entry.revision,
+      aliases: entry.aliases,
+      summary: entry.summary,
+      structured: entry.structured,
+      tags: entry.tags,
+      source: entry.source,
+      relations: entry.relations,
+      rules: entry.rules,
+    );
+  }
+
   ContentEntry _rebase(
     ContentEntry source,
     String newId,

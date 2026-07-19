@@ -17,12 +17,17 @@ ContentEntry testFighterEntry() => ContentEntry.fromJson({
 });
 
 class MemoryContentFilePicker implements ContentFilePicker {
-  MemoryContentFilePicker({this.result});
+  MemoryContentFilePicker({this.result, this.multipleResult});
 
   PickedContentFile? result;
+  List<PickedContentFile>? multipleResult;
 
   @override
   Future<PickedContentFile?> pick() async => result;
+
+  @override
+  Future<List<PickedContentFile>> pickMultiple() async =>
+      multipleResult ?? const [];
 }
 
 class MemoryContentRepository implements ContentRepository {
@@ -237,5 +242,65 @@ class MemoryContentRepository implements ContentRepository {
   @override
   Future<void> saveNote(String entryKey, String markdown) async {
     _notes[entryKey] = markdown;
+  }
+
+  @override
+  Future<void> updateEntry(ContentEntry entry) async {
+    if (!_entries.containsKey(entry.id)) {
+      throw StateError(
+        'Cannot update entry ${entry.id}: not present in local repository',
+      );
+    }
+    _entries[entry.id] = entry;
+    // 重建 outgoing links (body 可能变更).
+    _links.removeWhere((link) => link.sourceId == entry.id);
+    for (final block in entry.body) {
+      if (block is EntryLinkBlock) {
+        _links.add(
+          ContentLink(
+            sourceId: entry.id,
+            targetId: block.targetId,
+            linkText: block.text,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Future<ContentEntry?> duplicateEntry(
+    String entryKey, {
+    required String newName,
+  }) async {
+    final source = _entries[entryKey];
+    if (source == null) return null;
+    final packageId = source.id.split(':').first;
+    final baseSlug = '${source.slug}-copy';
+    var newSlug = baseSlug;
+    var newKey = '$packageId:${source.type}/$newSlug';
+    var counter = 2;
+    while (_entries.containsKey(newKey)) {
+      newSlug = '$baseSlug-$counter';
+      newKey = '$packageId:${source.type}/$newSlug';
+      counter += 1;
+    }
+    final json = source.toJson();
+    json['id'] = newKey;
+    json['slug'] = newSlug;
+    json['name'] = newName;
+    final duplicate = ContentEntry.fromJson(json);
+    _entries[newKey] = duplicate;
+    for (final block in source.body) {
+      if (block is EntryLinkBlock) {
+        _links.add(
+          ContentLink(
+            sourceId: newKey,
+            targetId: block.targetId,
+            linkText: block.text,
+          ),
+        );
+      }
+    }
+    return duplicate;
   }
 }

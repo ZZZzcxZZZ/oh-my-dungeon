@@ -214,4 +214,65 @@ void main() {
 
     expect(await repository.watchPackages().first, hasLength(1));
   });
+
+  // Spec §资料库 GUI 增强: 批量导入入口在资料包管理页可见,
+  // 点击后通过 filePicker.pickMultiple 取多个文件并弹出确认向导.
+  testWidgets('batch import button opens wizard and imports multiple packages',
+      (tester) async {
+    final alphaBytes = utf8.encode(jsonEncode({
+      'formatVersion': 1,
+      'id': 'alpha',
+      'name': 'Alpha',
+      'version': '1.0.0',
+      'locale': 'zh-CN',
+      'system': 'dnd5e-2024',
+      'entryCount': 1,
+      'entries': [
+        {
+          ...testFighterEntry().toJson(),
+          'id': 'alpha:class/fighter',
+        },
+      ],
+    }));
+    final betaBytes = utf8.encode(jsonEncode({
+      'formatVersion': 1,
+      'id': 'beta',
+      'name': 'Beta',
+      'version': '1.0.0',
+      'locale': 'zh-CN',
+      'system': 'dnd5e-2024',
+      'entryCount': 1,
+      'entries': [
+        {
+          ...testFighterEntry().toJson(),
+          'id': 'beta:class/fighter',
+        },
+      ],
+    }));
+    final picker = MemoryContentFilePicker(
+      multipleResult: [
+        PickedContentFile(name: 'alpha.json', bytes: alphaBytes),
+        PickedContentFile(name: 'beta.json', bytes: betaBytes),
+      ],
+    );
+    final repository = MemoryContentRepository();
+    await tester.pumpWidget(MaterialApp(
+      home: ContentPackageSettingsPage(
+        repository: repository,
+        importer: ContentPackageImporter(repository),
+        filePicker: picker,
+      ),
+    ));
+
+    await tester.tap(find.text('批量导入'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alpha'), findsOneWidget);
+    expect(find.text('Beta'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, '导入 2 个'));
+    await tester.pumpAndSettle();
+
+    final packages = await repository.watchPackages().first;
+    expect(packages.map((p) => p.id), containsAll(['alpha', 'beta']));
+  });
 }

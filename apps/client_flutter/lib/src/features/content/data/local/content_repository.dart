@@ -84,6 +84,20 @@ abstract interface class ContentRepository {
   Future<void> setFavorite(String entryKey, bool favorite);
   Future<bool> isFavorite(String entryKey);
   Future<void> saveNote(String entryKey, String markdown);
+
+  /// Spec §资料库 GUI 增强: 编辑条目. 用相同 id 覆盖可变字段
+  /// (name / summary / body / aliases / tags / structured / relations /
+  /// rules / source / revision). 收藏、笔记、读历史以 entryKey 为键, 因此
+  /// 保留. 如果条目不存在则抛 [StateError].
+  Future<void> updateEntry(ContentEntry entry);
+
+  /// Spec §资料库 GUI 增强: 复制条目. 在同一资料包内创建一个新条目,
+  /// id 形如 `{packageId}:{type}/{slug}-copy`, 名称由 [newName] 提供.
+  /// 源条目不存在时返回 null. 副本不带收藏 / 笔记 / 读历史.
+  Future<ContentEntry?> duplicateEntry(
+    String entryKey, {
+    required String newName,
+  });
 }
 
 class DriftContentRepository implements ContentRepository {
@@ -507,6 +521,172 @@ class DriftContentRepository implements ContentRepository {
     });
   }
 
+  @override
+  Future<void> updateEntry(ContentEntry entry) async {
+    final db = _database;
+    final entries = db.localContentEntries;
+    final existing = await (db.select(
+      entries,
+    )..where((t) => t.entryKey.equals(entry.id))).getSingleOrNull();
+    if (existing == null) {
+      throw StateError(
+        'Cannot update entry ${entry.id}: not present in local repository',
+      );
+    }
+    await db.transaction(() async {
+      // 重新写一遍 links, 因为 body 可能变更导致链接集合变化.
+      await (db.delete(
+        db.contentLinks,
+      )..where((t) => t.sourceId.equals(entry.id))).go();
+      await (db.update(entries)..where((t) => t.entryKey.equals(entry.id)))
+          .write(
+            LocalContentEntriesCompanion(
+              name: Value(entry.name),
+              aliasesJson: Value(jsonEncode(entry.aliases)),
+              summary: Value(entry.summary),
+              bodyJson: Value(
+                jsonEncode(entry.body.map((b) => b.toJson()).toList()),
+              ),
+              structuredJson: Value(jsonEncode(entry.structured)),
+              rulesJson: Value(jsonEncode(entry.rules?.toJson() ?? const {})),
+              relationsJson: Value(
+                jsonEncode(
+                  entry.relations.map((r) => r.toJson()).toList(),
+                ),
+              ),
+              tagsJson: Value(jsonEncode(entry.tags)),
+              sourceLabel: Value(entry.source.label),
+              revision: Value(entry.revision),
+            ),
+          );
+      var linkIndex = 0;
+      for (final block in entry.body) {
+        if (block is EntryLinkBlock) {
+          await db.into(db.contentLinks).insert(
+                ContentLinksCompanion.insert(
+                  id: '${entry.id}#${linkIndex++}',
+                  sourceId: entry.id,
+                  targetId: block.targetId,
+                  linkText: Value(block.text),
+                ),
+              );
+        }
+      }
+      await _enqueueVaultOperation(
+        entityType: 'contentEntry',
+        entityId: entry.id,
+        payloadJson: jsonEncode(entry.toJson()),
+      );
+    });
+  }
+
+  @override
+  Future<ContentEntry?> duplicateEntry(
+    String entryKey, {
+    required String newName,
+  }) async {
+    final db = _database;
+    final entries = db.localContentEntries;
+    final source = await (db.select(
+      entries,
+    )..where((t) => t.entryKey.equals(entryKey))).getSingleOrNull();
+    if (source == null) return null;
+    final newSlug = '${source.slug}-copy';
+    final newKey = '${source.packageId}:${source.type}/$newSlug';
+    if (await (db.select(
+      entries,
+    )..where((t) => t.entryKey.equals(newKey))).getSingleOrNull() !=
+        null) {
+      // 已存在 -copy, 试 -copy-2, -copy-3 ...
+      var counter = 2;
+      var candidate = '${source.packageId}:${source.type}/$newSlug-$counter';
+      while (await (db.select(
+        entries,
+      )..where((t) => t.entryKey.equals(candidate))).getSingleOrNull() !=
+          null) {
+        counter += 1;
+        candidate = '${source.packageId}:${source.type}/$newSlug-$counter';
+      }
+      return _insertDuplicate(
+        source: source,
+        newEntryKey: candidate,
+        newSlug: '$newSlug-$counter',
+        newName: newName,
+      );
+    }
+    return _insertDuplicate(
+      source: source,
+      newEntryKey: newKey,
+      newSlug: newSlug,
+      newName: newName,
+    );
+  }
+
+  Future<ContentEntry?> _insertDuplicate({
+    required LocalContentEntryRow source,
+    required String newEntryKey,
+    required String newSlug,
+    required String newName,
+  }) async {
+    final db = _database;
+    final newEntry = ContentEntry.fromJson({
+      'id': newEntryKey,
+      'type': source.type,
+      'slug': newSlug,
+      'name': newName,
+      'body': jsonDecode(source.bodyJson) as List<Object?>,
+      'revision': source.revision,
+      'aliases': jsonDecode(source.aliasesJson) as List<Object?>,
+      'summary': source.summary,
+      'structured': jsonDecode(source.structuredJson),
+      'relations': jsonDecode(source.relationsJson),
+      'tags': jsonDecode(source.tagsJson) as List<Object?>,
+      if (source.sourceLabel.isNotEmpty) 'source': {'label': source.sourceLabel},
+    });
+    await db.transaction(() async {
+      await db.into(db.localContentEntries).insert(
+            LocalContentEntriesCompanion.insert(
+              entryKey: newEntryKey,
+              packageId: source.packageId,
+              type: source.type,
+              slug: newSlug,
+              name: newName,
+              aliasesJson: Value(source.aliasesJson),
+              summary: Value(source.summary),
+              bodyJson: Value(source.bodyJson),
+              structuredJson: Value(source.structuredJson),
+              rulesJson: Value(source.rulesJson),
+              relationsJson: Value(source.relationsJson),
+              tagsJson: Value(source.tagsJson),
+              sourceLabel: Value(source.sourceLabel),
+              revision: source.revision,
+            ),
+          );
+      // 复制 outgoing links (指向其他条目); incoming links 不复制 (它们由
+      // 其他条目持有, 不属于本条目).
+      final outgoing = await (db.select(
+        db.contentLinks,
+      )..where((t) => t.sourceId.equals(source.entryKey))).get();
+      var linkIndex = 0;
+      for (final link in outgoing) {
+        await db.into(db.contentLinks).insert(
+              ContentLinksCompanion.insert(
+                id: '$newEntryKey#${linkIndex++}',
+                sourceId: newEntryKey,
+                targetId: link.targetId,
+                linkText: Value(link.linkText),
+              ),
+            );
+      }
+      await _enqueueVaultOperation(
+        entityType: 'contentEntry',
+        entityId: newEntryKey,
+        payloadJson: jsonEncode(newEntry.toJson()),
+      );
+    });
+    return newEntry;
+  }
+
   Future<void> _enqueueVaultOperation({
     required String entityType,
     required String entityId,
@@ -628,4 +808,15 @@ class EmptyContentRepository implements ContentRepository {
   Future<bool> isFavorite(String entryKey) async => false;
   @override
   Future<void> saveNote(String entryKey, String markdown) async {}
+  @override
+  Future<void> updateEntry(ContentEntry entry) async {
+    throw StateError(
+      'Cannot update entry ${entry.id}: local repository is unavailable',
+    );
+  }
+  @override
+  Future<ContentEntry?> duplicateEntry(
+    String entryKey, {
+    required String newName,
+  }) async => null;
 }

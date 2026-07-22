@@ -66,7 +66,8 @@ class CampaignOverviewPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     return KeyedSubtree(
       key: key ?? const Key('campaign-overview-panel'),
       child: ListView(
@@ -83,7 +84,7 @@ class CampaignOverviewPanel extends StatelessWidget {
                   campaign.description.trim().isEmpty
                       ? '尚未填写战役简介'
                       : campaign.description,
-                  style: Theme.of(context).textTheme.bodyLarge,
+                  style: theme.textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 14),
                 Wrap(
@@ -133,47 +134,20 @@ class CampaignOverviewPanel extends StatelessWidget {
             actors: actors,
             onOpenActor: onOpenActor,
           ),
+          // Plan 2026-07-23 Task 1.1: section divider 防止成员列表与下方
+          // DM 工具卡/设置区块"黏在一起"。
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Divider(),
+          ),
           if (canManage && onOpenDmControl != null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: Material(
-                color: colors.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(12),
-                child: InkWell(
-                  key: const Key('campaign-overview-dm-control-entry'),
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: onOpenDmControl,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.admin_panel_settings_outlined),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
-                              Text('主持工具'),
-                              Text(
-                                '遭遇、成员状态与 DM 私有工具',
-                                style: TextStyle(fontSize: 12),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.chevron_right),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: _DmControlEntry(onTap: onOpenDmControl!),
             ),
           if (_hasAnySettingEntry)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
               child: _CampaignSettingsSection(
                 canManage: canManage,
                 onEditDetails: onEditDetails,
@@ -193,6 +167,62 @@ class CampaignOverviewPanel extends StatelessWidget {
               onTransferOwnership != null ||
               onArchiveCampaign != null)) ||
       onLeaveCampaign != null;
+}
+
+/// Plan 2026-07-23 Task 1.1: DM 工具卡降权入口。
+///
+/// 原 `Material(color: surfaceContainerHigh)` 视觉权重过强，与上方成员
+/// ListTile 视觉相近导致"黏在一起"。改为 `surfaceContainerLow` 背景 +
+/// `outlineVariant` 描边，区分层次。
+class _DmControlEntry extends StatelessWidget {
+  const _DmControlEntry({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Container(
+      key: const Key('campaign-overview-dm-control-entry'),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                const Icon(Icons.admin_panel_settings_outlined),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('主持工具'),
+                      Text(
+                        '遭遇、成员状态与 DM 私有工具',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: colors.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _CampaignSummary extends StatelessWidget {

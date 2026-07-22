@@ -1,9 +1,7 @@
 import 'dart:async';
 
 import 'package:dnd_table_client/src/features/characters/data/character_repository.dart';
-import 'package:dnd_table_client/src/features/characters/data/legacy_character_importer.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
-import 'package:dnd_table_client/src/features/vault/domain/vault_models.dart';
 
 CharacterSheet testCharacter({
   String id = 'character-1',
@@ -70,30 +68,4 @@ class MemoryCharacterRepository implements CharacterRepository {
     _archived.remove(id);
     _emit();
   }
-}
-
-class MemoryLegacyCharacterClient implements LegacyCharacterClient {
-  MemoryLegacyCharacterClient({
-    this.characters = const [],
-    this.throwOnList = false,
-  });
-
-  final List<CharacterSheet> characters;
-  final bool throwOnList;
-
-  @override
-  Future<List<CharacterSheet>> list(VaultSession session) async {
-    if (throwOnList) throw Exception('Network error');
-    return List.of(characters);
-  }
-}
-
-class MemoryMigrationMarkers implements MigrationMarkers {
-  final Set<String> completed = {};
-
-  @override
-  Future<bool> contains(String key) async => completed.contains(key);
-
-  @override
-  Future<void> markCompleted(String key) async => completed.add(key);
 }

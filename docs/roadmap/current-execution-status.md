@@ -1,5 +1,41 @@
 # 当前执行状态与版本推进计划
 
+## 0.1 用户反馈整合与产品加固归档（2026-07-23）
+
+### 本轮归档执行
+
+- **部署验证**：47.115.78.115 部署最新 server（commit `0f1a506`），`/health` 与 `/.well-known/dnd-tool-server` 通过，9 migrations No pending，seed 完成。
+- **用户反馈收集**：本轮测试发现 10 项 issue，覆盖内容库、设置页、聊天 composer、临时角色、战役中心、FAB 一致性、档案 wiki、掷骰、角色卡联动、战役卡片展开与旧接口清理。
+- **Worktree 归档**：删除 6 个 git worktree（campaign-center / character-experience / content-library / content-wiki / offline-first-plans / settings-theme）；campaign-center worktree 最后一个文档修复 commit `043f7a5` 已 cherry-pick 为 `90ce611`。
+- **分支清理**：删除 6 个已合并本地分支，剩余 `main` 与 `offline-first-0.1`，无残留 worktree。
+- **Plans 归档**：所有 plans 已归档到 `docs/superpowers/plans/archive/`，活动 plans 目录为空。
+- **新计划落地**：[2026-07-23-user-feedback-integration-hardening](../superpowers/plans/2026-07-23-user-feedback-integration-hardening.md) 作为新一轮计划起点，按 Wave 1-5 渐进式推进。
+- **Roadmap 修订**：[2026-07-23-integrated-product-hardening-roadmap](2026-07-23-integrated-product-hardening-roadmap.md) 已更新 P0/P1/P2/P6/P7 条款，新增战役卡片展开、FAB 一致性、筛选面板重构、档案时间格式化与编辑者署名等任务。
+
+### 下一波开发顺序（Wave 1-5）
+
+```
+Wave 1 (P0+P1) ──┬─> Wave 2 (P2) ──┐
+                 │                  │
+                 └─> Wave 3 (P4+P5)─┴─> Wave 4 (P6) ──> Wave 5 (P7)
+                   [依赖 CampaignEvent]
+```
+
+- **Wave 1**：战役中心区块重构 / 说/做滑块动画 / 设置页清理与自定义增强 / 全局 FAB 一致性
+- **Wave 2**：资料库子职业查询修复 / 筛选面板 Material 3 重构 / facet 字段扩展
+- **Wave 3**：CampaignEvent 事件层 / 组合式骰子编辑器 / 角色卡 CampaignActionSink / DM 快捷操作
+- **Wave 4**：档案详情渲染 bug 修复 / 标签筛选 / 时间格式化与编辑者署名 / 创建 UI 重构
+- **Wave 5**：主页战役卡片可展开 / 临时身份用后即弃 / 主聊/私聊/小群
+
+### 旧接口清理清单
+
+- **本轮已清理**：6 个 worktree、6 个分支、所有活动 plans 归档
+- **Wave 1 待清理**：`HomeDashboardPage` 死代码、`LegacyCharacterImporter` 疑似死代码、过时注释「与 sessions 模块保持一致」
+- **Wave 3 待清理**：`GET :id/check-requests` 端点复查下线、`CharacterCampaignBinding` 全套删除（迁移到 CampaignActor）、Prisma 残留 Session/CheckRequest 表
+- **Wave 5 待清理**：临时角色持久化路径（`sendDraftActorMessage` + `createTemporaryNpc` + `_showQuickTemporaryForm` + 临时角色面板分区）
+
+详见 [计划文档第五节](../superpowers/plans/2026-07-23-user-feedback-integration-hardening.md#五旧接口清理清单)。
+
 ## 0.1 四线并行收束（2026-07-23）
 
 四条并行成果已全部整合进 `offline-first-0.1` 主线：

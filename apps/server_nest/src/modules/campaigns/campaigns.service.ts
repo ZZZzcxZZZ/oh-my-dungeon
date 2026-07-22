@@ -1007,7 +1007,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 /**
  * 把消息 kind 映射到 journal entry type；返回 null 表示该 kind 不归档
  * (say/action/ooc 等纯对话)。checkRequest→check_request、
- * archivePublished→archive_published，与 sessions 模块保持一致。
+ * archivePublished→archive_published。
  */
 function toJournalType(kind: string): string | null {
   if (kind === "system" || kind === "roll") return kind;

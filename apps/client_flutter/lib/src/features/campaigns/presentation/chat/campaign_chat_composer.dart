@@ -79,7 +79,7 @@ class CampaignChatComposer extends StatelessWidget {
                         children: [
                           if (!identity.isOoc)
                             SizedBox(
-                              width: 68,
+                              width: 96,
                               height: 48,
                               child: ChatModePicker(
                                 mode: mode,

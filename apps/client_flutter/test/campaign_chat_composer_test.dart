@@ -44,10 +44,10 @@ void main() {
       tester.getSize(find.byKey(const Key('campaign-avatar-target'))),
       const Size.square(48),
     );
-    expect(find.bySemanticsLabel('说'), findsOneWidget);
-    expect(find.bySemanticsLabel('做'), findsOneWidget);
-    expect(find.text('说'), findsNothing);
-    expect(find.text('做'), findsNothing);
+    // Plan 2026-07-23 Task 1.2: 现在显示「说」「做」文字标签 + 图标。
+    expect(find.text('说'), findsOneWidget);
+    expect(find.text('做'), findsOneWidget);
+    expect(find.byType(ChatModePicker), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -91,7 +91,7 @@ void main() {
             builder: (context, setState) => Align(
               alignment: Alignment.bottomLeft,
               child: SizedBox(
-                width: 68,
+                width: 96,
                 child: ChatModePicker(
                   mode: mode,
                   enabled: true,
@@ -105,7 +105,8 @@ void main() {
     );
 
     expect(find.byKey(const Key('chat-mode-track')), findsNothing);
-    expect(find.byKey(const Key('chat-mode-thumb')), findsNothing);
+    // Plan 2026-07-23 Task 1.2: 引入滑动 thumb，现在存在。
+    expect(find.byKey(const Key('chat-mode-thumb')), findsOneWidget);
     expect(
       tester
           .widget<ChatModeHalf>(find.byKey(const Key('chat-mode-say')))
@@ -113,7 +114,8 @@ void main() {
       isTrue,
     );
 
-    await tester.tap(find.bySemanticsLabel('做'));
+    // Plan 2026-07-23 Task 1.2: 点击 act 按钮触发切换。
+    await tester.tap(find.byKey(const Key('chat-mode-action')));
     await tester.pumpAndSettle();
 
     expect(mode, ChatMode.act);

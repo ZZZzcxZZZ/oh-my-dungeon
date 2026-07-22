@@ -2057,6 +2057,334 @@ void main() {
     expect(submitted!.avatarUrl, isNotNull);
     expect(submitted!.avatarUrl!.startsWith('data:image/jpeg;base64,'), isTrue);
   });
+
+  // Spec §统一业务列表: 动作/法术/装备/资源/特性使用同一紧凑行规范（contentPadding zero）；
+  // 条目点击打开已有浮层 reader；列表尾部提供 FilledButton.tonalIcon 添加命令。
+  testWidgets(
+    'spells panel groups spells by level and opens the reader on tap',
+    (tester) async {
+      final character = _character.copyWith(
+        data: <String, Object?>{
+          'runtime': <String, Object?>{'temporaryHp': 5},
+          'contentRefs': <String, Object?>{
+            'spells': <String>[
+              'guide:spell/fire-bolt',
+              'guide:spell/magic-missile',
+              'guide:spell/shield',
+            ],
+          },
+        },
+      );
+      final fireBolt = ContentEntry.fromJson({
+        'id': 'guide:spell/fire-bolt',
+        'type': 'spell',
+        'slug': 'fire-bolt',
+        'name': '火焰箭',
+        'body': <Map<String, Object?>>[],
+        'revision': 1,
+        'structured': {'level': 0},
+      });
+      final magicMissile = ContentEntry.fromJson({
+        'id': 'guide:spell/magic-missile',
+        'type': 'spell',
+        'slug': 'magic-missile',
+        'name': '魔法飞弹',
+        'body': <Map<String, Object?>>[],
+        'revision': 1,
+        'structured': {'level': 1},
+      });
+      final shield = ContentEntry.fromJson({
+        'id': 'guide:spell/shield',
+        'type': 'spell',
+        'slug': 'shield',
+        'name': '护盾术',
+        'body': <Map<String, Object?>>[],
+        'revision': 1,
+        'structured': {'level': 1},
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterDetailPage(
+            character: character,
+            contentEntries: [fireBolt, magicMissile, shield],
+            initialTab: 'spells',
+            onSaveCharacter: (_) async => true,
+          ),
+        ),
+      );
+
+      // 法术按环位分组：戏法在前，一环在后。
+      expect(find.text('戏法'), findsOneWidget);
+      expect(find.text('一环'), findsOneWidget);
+      final cantripIndex = tester
+          .getCenter(find.text('戏法'))
+          .dy;
+      final leveledIndex = tester.getCenter(find.text('一环')).dy;
+      expect(cantripIndex, lessThan(leveledIndex));
+
+      // 紧凑行规范：contentPadding 为 zero。
+      final magicMissileTile = tester.widget<ListTile>(
+        find.ancestor(
+          of: find.text('魔法飞弹'),
+          matching: find.byType(ListTile),
+        ),
+      );
+      expect(magicMissileTile.contentPadding, EdgeInsets.zero);
+
+      // 列表尾部提供添加命令。
+      expect(
+        find.widgetWithText(FilledButton, '添加法术'),
+        findsOneWidget,
+      );
+
+      // 点击关联条目打开 reader 浮层。
+      await tester.ensureVisible(find.text('魔法飞弹').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('魔法飞弹').last);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('content-detail-close')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('content-detail-close')));
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    'equipment panel places currency above items and opens the reader on tap',
+    (tester) async {
+      final character = _character.copyWith(
+        inventory: <Map<String, Object?>>[
+          <String, Object?>{
+            'entryId': 'guide:equipment/longbow',
+            'name': '长弓',
+            'quantity': 1,
+          },
+        ],
+        currency: <String, Object?>{'gp': 10},
+      );
+      final longbow = ContentEntry.fromJson({
+        'id': 'guide:equipment/longbow',
+        'type': 'equipment',
+        'slug': 'longbow',
+        'name': '长弓',
+        'body': <Map<String, Object?>>[],
+        'revision': 1,
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterDetailPage(
+            character: character,
+            contentEntries: [longbow],
+            initialTab: 'equipment',
+            onUpdateInventory: ({inventory, currency}) async {},
+          ),
+        ),
+      );
+
+      // 货币段位于装备与物品段之前。
+      final currencyIndex = tester.getCenter(find.text('货币')).dy;
+      final itemsIndex = tester.getCenter(find.text('装备与物品')).dy;
+      expect(currencyIndex, lessThan(itemsIndex));
+
+      // 列表尾部提供从资料库添加命令。
+      expect(
+        find.widgetWithText(FilledButton, '从资料库添加'),
+        findsOneWidget,
+      );
+
+      // 装备行使用紧凑行规范。
+      final longbowTile = tester.widget<ListTile>(
+        find.ancestor(
+          of: find.text('长弓 x1'),
+          matching: find.byType(ListTile),
+        ),
+      );
+      expect(longbowTile.contentPadding, EdgeInsets.zero);
+      expect(longbowTile.dense, isTrue);
+
+      // 点击带资料引用的条目打开 reader 浮层。
+      await tester.ensureVisible(find.text('长弓 x1'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('长弓 x1'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('content-detail-close')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('content-detail-close')));
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    'features panel renders rule grants with compact rows and opens the reader',
+    (tester) async {
+      final character = _character.copyWith(
+        data: <String, Object?>{
+          'resolvedGrants': <Map<String, Object?>>[
+            <String, Object?>{
+              'id': 'second-wind',
+              'kind': 'feature',
+              'label': '回气',
+              'entryId': 'guide:class-feature/second-wind',
+              'sourceEntryId': 'guide:class/fighter',
+              'sourceEntryName': '战士',
+              'sourceLevel': 1,
+            },
+          ],
+        },
+      );
+      final secondWind = ContentEntry.fromJson({
+        'id': 'guide:class-feature/second-wind',
+        'type': 'classFeature',
+        'slug': 'second-wind',
+        'name': '回气',
+        'body': <Map<String, Object?>>[],
+        'revision': 1,
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterDetailPage(
+            character: character,
+            contentEntries: [secondWind],
+            initialTab: 'features',
+            onSaveCharacter: (_) async => true,
+          ),
+        ),
+      );
+
+      expect(find.text('自动获得的特性'), findsOneWidget);
+      expect(find.text('回气'), findsOneWidget);
+
+      // 紧凑行规范：dense + contentPadding zero。
+      final grantTile = tester.widget<ListTile>(
+        find.ancestor(
+          of: find.text('回气'),
+          matching: find.byType(ListTile),
+        ),
+      );
+      expect(grantTile.contentPadding, EdgeInsets.zero);
+      expect(grantTile.dense, isTrue);
+
+      // 列表尾部提供从资料库添加命令。
+      expect(
+        find.widgetWithText(FilledButton, '从资料库添加'),
+        findsOneWidget,
+      );
+
+      // 点击带 entryId 的特性打开 reader 浮层。
+      await tester.tap(find.text('回气').last);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('content-detail-close')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('content-detail-close')));
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    'resources panel adapts columns and shows shortRest/longRest/none labels',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1280, 900);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final character = _character.copyWith(
+        data: <String, Object?>{
+          'runtime': <String, Object?>{'temporaryHp': 5},
+          'classResources': <Map<String, Object?>>[
+            <String, Object?>{
+              'id': 'res-action-surge',
+              'name': '动作如潮',
+              'maximum': 1,
+              'recovery': 'shortRest',
+            },
+            <String, Object?>{
+              'id': 'res-rage',
+              'name': '狂暴',
+              'maximum': 3,
+              'recovery': 'longRest',
+            },
+            <String, Object?>{
+              'id': 'res-heroic',
+              'name': '英雄点',
+              'maximum': 2,
+              'recovery': 'none',
+            },
+          ],
+        },
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterDetailPage(
+            character: character,
+            initialTab: 'resources',
+            onSaveCharacter: (_) async => true,
+          ),
+        ),
+      );
+
+      // 三种恢复标签都应渲染。
+      expect(find.text('短休恢复'), findsOneWidget);
+      expect(find.text('长休恢复'), findsOneWidget);
+      expect(find.text('不自动恢复'), findsOneWidget);
+
+      // 列表尾部提供添加资源命令。
+      expect(
+        find.widgetWithText(FilledButton, '添加资源'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'actions panel renders rule actions with compact rows',
+    (tester) async {
+      final character = _character.copyWith(
+        data: <String, Object?>{
+          'actions': <Map<String, Object?>>[
+            <String, Object?>{
+              'id': 'riposte',
+              'name': '还击',
+              'entryId': 'guide:feature/riposte',
+              'formula': '1d8+2',
+            },
+          ],
+        },
+      );
+      final riposte = ContentEntry.fromJson({
+        'id': 'guide:feature/riposte',
+        'type': 'classFeature',
+        'slug': 'riposte',
+        'name': '还击',
+        'body': <Map<String, Object?>>[],
+        'revision': 1,
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterDetailPage(
+            character: character,
+            contentEntries: [riposte],
+            initialTab: 'actions',
+          ),
+        ),
+      );
+
+      expect(find.text('资料动作'), findsOneWidget);
+      expect(find.text('还击'), findsOneWidget);
+
+      // 紧凑行规范：dense + contentPadding zero。
+      final actionTile = tester.widget<ListTile>(
+        find.ancestor(
+          of: find.text('还击'),
+          matching: find.byType(ListTile),
+        ),
+      );
+      expect(actionTile.contentPadding, EdgeInsets.zero);
+      expect(actionTile.dense, isTrue);
+    },
+  );
 }
 
 const _validPngDataUrl =

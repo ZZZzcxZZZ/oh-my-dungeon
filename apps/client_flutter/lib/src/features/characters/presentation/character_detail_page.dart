@@ -3375,6 +3375,21 @@ Map<String, Object> _normalizeInventoryItem(Object? item) {
     if (item['consumable'] is bool) {
       result['consumable'] = item['consumable']! as bool;
     }
+    // 保留资料引用与装备状态，使条目点击可打开 reader 并显示已装备/已同调标记。
+    final entryId = item['entryId']?.toString();
+    if (entryId != null && entryId.isNotEmpty) {
+      result['entryId'] = entryId;
+    }
+    if (item['equipped'] is bool) {
+      result['equipped'] = item['equipped']! as bool;
+    }
+    if (item['attuned'] is bool) {
+      result['attuned'] = item['attuned']! as bool;
+    }
+    final description = item['description']?.toString();
+    if (description != null && description.trim().isNotEmpty) {
+      result['description'] = description;
+    }
     return result;
   }
   return {'name': item?.toString() ?? '未命名物品', 'quantity': 1};

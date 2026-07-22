@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../content/domain/content_entry.dart';
+import '../../content/presentation/content_entry_preview_page.dart';
 import '../../rules/domain/character_rules_engine.dart';
 import '../../rules/domain/rule_choice_resolver.dart';
 import '../domain/character.dart';
@@ -205,21 +206,37 @@ class _ChoiceOptions extends StatelessWidget {
           runSpacing: 8,
           children: [
             for (final option in options)
-              FilterChip(
-                label: Text(option.name),
-                selected: choice.selected.contains(option.id),
-                onSelected: (selected) {
-                  final next = <String>[...choice.selected];
-                  if (selected) {
-                    if (choice.definition.maximum == 1) next.clear();
-                    if (next.length < choice.definition.maximum) {
-                      next.add(option.id);
-                    }
-                  } else {
-                    next.remove(option.id);
-                  }
-                  onChanged(next);
-                },
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FilterChip(
+                    label: Text(option.name),
+                    selected: choice.selected.contains(option.id),
+                    onSelected: (selected) {
+                      final next = <String>[...choice.selected];
+                      if (selected) {
+                        if (choice.definition.maximum == 1) next.clear();
+                        if (next.length < choice.definition.maximum) {
+                          next.add(option.id);
+                        }
+                      } else {
+                        next.remove(option.id);
+                      }
+                      onChanged(next);
+                    },
+                  ),
+                  IconButton(
+                    key: Key('builder-open-entry-${option.id}'),
+                    tooltip: '查看 ${option.name}',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => showContentEntryPreviewDialog(
+                      context,
+                      entry: option,
+                      entries: entries.values.toList(growable: false),
+                    ),
+                    icon: const Icon(Icons.open_in_new, size: 18),
+                  ),
+                ],
               ),
           ],
         ),

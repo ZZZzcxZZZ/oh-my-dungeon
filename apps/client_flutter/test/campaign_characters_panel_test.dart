@@ -60,9 +60,9 @@ void main() {
     await tester.pumpWidget(panel(isManager: true));
 
     expect(find.text('玩家角色'), findsWidgets);
-    expect(find.text('NPC 与其他角色'), findsOneWidget);
+    expect(find.text('常驻 NPC'), findsOneWidget);
     expect(find.text('临时角色'), findsOneWidget);
-    expect(find.text('已归档'), findsOneWidget);
+    expect(find.text('归档角色'), findsOneWidget);
     expect(find.byKey(const Key('actor-row-player-1')), findsOneWidget);
     expect(find.byKey(const Key('actor-row-npc-1')), findsOneWidget);
     expect(find.byKey(const Key('actor-row-temp-1')), findsOneWidget);
@@ -124,4 +124,43 @@ void main() {
       findsOneWidget,
     );
   });
+
+  // Plan 2026-07-23 task 2: DM 显示管理动作，玩家只显示自己可用动作；
+  // 权限只读已有 capabilities，不根据客户端模式猜测。Panel 是纯展示组件，
+  // 所有管理动作都通过 `isManager` 参数门控，由父级从 server capabilities
+  // 派生。这里验证玩家看不到批量管理开关与每行操作入口（显示 chevron），
+  // DM 则可见批量管理开关且角色行不再显示 chevron（走菜单分支）。
+  testWidgets(
+    'gates batch management and per-actor menu on isManager',
+    (tester) async {
+      // Player: no batch toggle, per-actor row shows chevron (no menu).
+      await tester.pumpWidget(panel(isManager: false));
+      expect(
+        find.byKey(const Key('characters-select-toggle')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('actor-row-player-1')),
+          matching: find.byIcon(Icons.chevron_right),
+        ),
+        findsOneWidget,
+      );
+
+      // DM: batch toggle appears, per-actor row no longer shows chevron
+      // (management menu branch is taken instead).
+      await tester.pumpWidget(panel(isManager: true));
+      expect(
+        find.byKey(const Key('characters-select-toggle')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('actor-row-player-1')),
+          matching: find.byIcon(Icons.chevron_right),
+        ),
+        findsNothing,
+      );
+    },
+  );
 }

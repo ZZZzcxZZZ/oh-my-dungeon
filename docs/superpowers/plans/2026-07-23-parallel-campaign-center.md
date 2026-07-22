@@ -26,10 +26,10 @@
 
 ### 任务 2：角色区管理
 
-- [ ] 写失败测试：玩家角色、常驻 NPC、临时角色、归档角色分区；归档默认折叠；每个角色点击打开统一完整角色卡。
-- [ ] DM 显示管理动作，玩家只显示自己可用动作；权限只读已有 capabilities，不根据客户端模式猜测。
-- [ ] 运行 `flutter test test/campaign_characters_panel_test.dart test/campaign_actor_pages_test.dart`。
-- [ ] 提交 `refactor(v0.1): complete campaign actor panel`。
+- [x] 写失败测试：玩家角色、常驻 NPC、临时角色、归档角色分区；归档默认折叠；每个角色点击打开统一完整角色卡。
+- [x] DM 显示管理动作，玩家只显示自己可用动作；权限只读已有 capabilities，不根据客户端模式猜测。
+- [x] 运行 `flutter test test/campaign_characters_panel_test.dart test/campaign_actor_pages_test.dart`。
+- [x] 提交 `refactor(v0.1): complete campaign actor panel`。
 
 ### 任务 3：档案正文与权限
 

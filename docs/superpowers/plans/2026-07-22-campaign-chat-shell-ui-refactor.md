@@ -441,21 +441,21 @@ flutter test test/campaign_chat_actor_test.dart --plain-name "chat app bar only 
 
 预期：全部 PASS。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/features/campaigns/presentation/campaign_chat_page.dart apps/client_flutter/test/campaign_chat_actor_test.dart
 git commit -m "refactor(v0.1): assemble campaign chat shell components"
 ```
 
-## 任务 6：轻量整理身份工具面板
+## 任务 6：轻量整理身份工具面板（已完成）
 
 **文件：**
 
 - 修改：`apps/client_flutter/lib/src/features/campaigns/presentation/chat/campaign_chat_tool_sheet.dart`
 - 修改：`apps/client_flutter/test/campaign_chat_actor_test.dart`
 
-- [ ] **步骤 1：编写失败的面板层级测试**
+- [x] **步骤 1：编写失败的面板层级测试**
 
 测试当前身份名称成为标题、高频操作排在战役工具之前、玩家隐藏 DM 工具、不可用角色动作不渲染：
 
@@ -475,13 +475,13 @@ testWidgets('tool sheet keeps the current UI but groups actions by frequency', (
 });
 ```
 
-- [ ] **步骤 2：运行测试并确认失败**
+- [x] **步骤 2：运行测试并确认失败**
 
 运行：`flutter test test/campaign_chat_actor_test.dart --plain-name "tool sheet keeps the current UI but groups actions by frequency"`
 
 预期：FAIL，分组 key 尚不存在。
 
-- [ ] **步骤 3：调整面板而不重绘**
+- [x] **步骤 3：调整面板而不重绘**
 
 - 标题使用 `identity.displayName`。
 - 身份摘要保留现有 ListTile 和按钮。
@@ -489,7 +489,7 @@ testWidgets('tool sheet keeps the current UI but groups actions by frequency', (
 - 保留手机三列、宽屏四列和 76px 工具高度。
 - DM 能力只由 `isManager` 控制。
 
-- [ ] **步骤 4：运行面板与页面测试**
+- [x] **步骤 4：运行面板与页面测试**
 
 运行：`flutter test test/campaign_chat_actor_test.dart`
 

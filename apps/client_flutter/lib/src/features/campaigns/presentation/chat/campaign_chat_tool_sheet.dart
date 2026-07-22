@@ -35,7 +35,7 @@ class CampaignChatToolSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final actions = <_ToolDefinition>[
+    final primaryActions = <_ToolDefinition>[
       const _ToolDefinition(
         action: CampaignChatToolAction.rollDice,
         keyName: 'tool-roll-dice',
@@ -63,6 +63,8 @@ class CampaignChatToolSheet extends StatelessWidget {
           label: '角色动作',
           icon: Icons.bolt_outlined,
         ),
+    ];
+    final campaignActions = <_ToolDefinition>[
       const _ToolDefinition(
         action: CampaignChatToolAction.contentEntries,
         keyName: 'tool-content-entries',
@@ -113,7 +115,12 @@ class CampaignChatToolSheet extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('跑团工具', style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                identity.displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
               const SizedBox(height: 8),
               Material(
                 color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -127,7 +134,7 @@ class CampaignChatToolSheet extends StatelessWidget {
                       identity.healthState,
                     ),
                   ),
-                  title: Text(identity.displayName),
+                  title: const Text('当前身份'),
                   subtitle: Text(identity.subtitle),
                 ),
               ),
@@ -162,40 +169,21 @@ class CampaignChatToolSheet extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
-              Text('快捷操作', style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 8),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final columns = constraints.maxWidth >= 560
-                      ? 4
-                      : constraints.maxWidth >= 320
-                      ? 3
-                      : 2;
-                  final width =
-                      (constraints.maxWidth - (columns - 1) * 8) / columns;
-                  return Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final action in actions)
-                        SizedBox(
-                          width: width,
-                          height: 76,
-                          child: _ToolButton(
-                            definition: action,
-                            detail:
-                                action.action ==
-                                        CampaignChatToolAction
-                                            .temporaryIdentity &&
-                                    draftIdentityName != null
-                                ? '草稿：$draftIdentityName'
-                                : null,
-                          ),
-                        ),
-                    ],
-                  );
-                },
+              _ToolGrid(
+                key: const Key('tool-primary-actions'),
+                title: '快捷操作',
+                actions: primaryActions,
+                draftIdentityName: draftIdentityName,
               ),
+              if (campaignActions.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                _ToolGrid(
+                  key: const Key('tool-campaign-actions'),
+                  title: '战役工具',
+                  actions: campaignActions,
+                  draftIdentityName: draftIdentityName,
+                ),
+              ],
             ],
           ),
         ),
@@ -205,6 +193,61 @@ class CampaignChatToolSheet extends StatelessWidget {
 
   void _closeWith(BuildContext context, CampaignChatToolAction action) {
     Navigator.of(context).pop(action);
+  }
+}
+
+class _ToolGrid extends StatelessWidget {
+  const _ToolGrid({
+    required this.title,
+    required this.actions,
+    required this.draftIdentityName,
+    super.key,
+  });
+
+  final String title;
+  final List<_ToolDefinition> actions;
+  final String? draftIdentityName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth >= 560
+                ? 4
+                : constraints.maxWidth >= 320
+                ? 3
+                : 2;
+            final width =
+                (constraints.maxWidth - (columns - 1) * 8) / columns;
+            return Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final action in actions)
+                  SizedBox(
+                    width: width,
+                    height: 76,
+                    child: _ToolButton(
+                      definition: action,
+                      detail:
+                          action.action ==
+                                  CampaignChatToolAction.temporaryIdentity &&
+                              draftIdentityName != null
+                          ? '草稿：$draftIdentityName'
+                          : null,
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
   }
 }
 

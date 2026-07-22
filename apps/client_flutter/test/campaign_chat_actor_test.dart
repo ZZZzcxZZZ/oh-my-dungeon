@@ -1066,6 +1066,22 @@ void main() {
     expect(find.byKey(const Key('identity-temporary-entry')), findsOneWidget);
   });
 
+  testWidgets('tool sheet groups actions by frequency', (tester) async {
+    await pumpChatPage(tester, isDm: true, campaignActorId: 'actor-1');
+    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+    await tester.pumpAndSettle();
+
+    final primary = find.byKey(const Key('tool-primary-actions'));
+    final campaign = find.byKey(const Key('tool-campaign-actions'));
+    expect(find.text('Arannis'), findsWidgets);
+    expect(primary, findsOneWidget);
+    expect(campaign, findsOneWidget);
+    expect(
+      tester.getTopLeft(primary).dy,
+      lessThan(tester.getTopLeft(campaign).dy),
+    );
+  });
+
   // Spec §档案: 资料、地点、线索和文件统一属于战役档案, 可从聊天跳转。
   // The 3 previously-disabled toolbar items (记录线索/分享地点/群文件) must
   // now be enabled and route to the archive creation form pre-filled with the

@@ -17,13 +17,15 @@ Widget buildContentTestApp({required List<ContentEntry> entries}) {
 }
 
 void main() {
-  testWidgets('shows an import action when the local library is empty', (
+  testWidgets('empty library guides to settings without an import button', (
     tester,
   ) async {
     await tester.pumpWidget(buildContentTestApp(entries: const []));
     await tester.pumpAndSettle();
     expect(find.text('资料库还是空的'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, '导入资料包'), findsOneWidget);
+    // 资料库浏览页只读: 导入与资料包管理留在设置入口.
+    expect(find.widgetWithText(FilledButton, '导入资料包'), findsNothing);
+    expect(find.textContaining('设置'), findsOneWidget);
   });
 
   testWidgets('opens a narrow-screen entry in a floating detail card', (

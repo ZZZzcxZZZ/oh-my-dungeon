@@ -298,7 +298,6 @@ class _ContentSearchPageState extends State<ContentSearchPage> {
                   }
                   return ContentHomePage(
                     controller: widget.controller,
-                    onImportRequested: widget.onImportRequested,
                   );
                 }
                 return ListView.separated(

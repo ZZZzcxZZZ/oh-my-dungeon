@@ -98,7 +98,7 @@ class CampaignContextController extends ChangeNotifier {
     return false;
   }
 
-  Future<void> loadArchives(String campaignId, {String? kind}) async {
+  Future<void> loadArchives(String campaignId, {String? kind, String? query}) async {
     final token = await authController.ensureValidAccessToken();
     if (token == null) return;
     _archivesLoading = true;
@@ -110,6 +110,7 @@ class CampaignContextController extends ChangeNotifier {
         accessToken: token,
         campaignId: campaignId,
         kind: kind,
+        query: query,
       );
     } on CampaignApiException catch (error) {
       _archivesError = _archiveLoadErrorMessage(error);
@@ -126,6 +127,10 @@ class CampaignContextController extends ChangeNotifier {
     required String title,
     String? summary,
     Map<String, Object?>? payload,
+    List<Map<String, Object?>>? bodyBlocks,
+    List<String>? tags,
+    List<Map<String, Object?>>? links,
+    List<Map<String, Object?>>? attachmentRefs,
   }) async {
     final token = await authController.ensureValidAccessToken();
     if (token == null) return null;
@@ -139,6 +144,10 @@ class CampaignContextController extends ChangeNotifier {
         title: title,
         summary: summary,
         payload: payload,
+        bodyBlocks: bodyBlocks,
+        tags: tags,
+        links: links,
+        attachmentRefs: attachmentRefs,
       );
       _archives = [entry, ..._archives];
       notifyListeners();
@@ -160,6 +169,10 @@ class CampaignContextController extends ChangeNotifier {
     String? summary,
     Map<String, Object?>? payload,
     bool? pinned,
+    List<Map<String, Object?>>? bodyBlocks,
+    List<String>? tags,
+    List<Map<String, Object?>>? links,
+    List<Map<String, Object?>>? attachmentRefs,
   }) async {
     final token = await authController.ensureValidAccessToken();
     if (token == null) return null;
@@ -175,6 +188,10 @@ class CampaignContextController extends ChangeNotifier {
         summary: summary,
         payload: payload,
         pinned: pinned,
+        bodyBlocks: bodyBlocks,
+        tags: tags,
+        links: links,
+        attachmentRefs: attachmentRefs,
       );
       _archives = _archives
           .map((existing) => existing.id == entry.id ? entry : existing)

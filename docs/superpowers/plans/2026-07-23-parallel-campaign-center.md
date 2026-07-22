@@ -33,12 +33,12 @@
 
 ### 任务 3：档案正文与权限
 
-- [ ] 写 Nest 失败测试：创建/更新档案支持 `bodyBlocks`、tags、links、attachmentRefs；创建者和 manager 可编辑，其他成员只读；搜索匹配标题、摘要、正文和标签。
-- [ ] 只在独立 archive service/controller 中实现 DTO 校验和权限；保持已有路径兼容。
-- [ ] 写 Flutter 失败测试：档案列表采用资料条目式行；详情可完整滚动；创建/编辑表单可编辑正文，不再只有名称和说明。
-- [ ] 窄屏详情使用接近全高的 BottomSheet，宽屏使用最大宽度 760 的 Dialog；禁止局促小卡片。
-- [ ] 分别运行 Nest archive e2e 与 `flutter test test/campaign_archive_panel_test.dart`。
-- [ ] 提交 `feat(v0.1): turn campaign archives into wiki`。
+- [x] 写 Nest 失败测试：创建/更新档案支持 `bodyBlocks`、tags、links、attachmentRefs；创建者和 manager 可编辑，其他成员只读；搜索匹配标题、摘要、正文和标签。
+- [x] 只在独立 archive service/controller 中实现 DTO 校验和权限；保持已有路径兼容。
+- [x] 写 Flutter 失败测试：档案列表采用资料条目式行；详情可完整滚动；创建/编辑表单可编辑正文，不再只有名称和说明。
+- [x] 窄屏详情使用接近全高的 BottomSheet，宽屏使用最大宽度 760 的 Dialog；禁止局促小卡片。
+- [x] 分别运行 Nest archive e2e 与 `flutter test test/campaign_archive_panel_test.dart`。
+- [x] 提交 `feat(v0.1): turn campaign archives into wiki`。
 
 ### 任务 4：验收
 

@@ -824,6 +824,7 @@ class _FakeCampaignClient implements CampaignClient {
     required String accessToken,
     required String campaignId,
     String? kind,
+    String? query,
   }) async => const [];
 
   @override
@@ -835,6 +836,10 @@ class _FakeCampaignClient implements CampaignClient {
     required String title,
     String? summary,
     Map<String, Object?>? payload,
+    List<Map<String, Object?>>? bodyBlocks,
+    List<String>? tags,
+    List<Map<String, Object?>>? links,
+    List<Map<String, Object?>>? attachmentRefs,
   }) async => const CampaignArchiveEntry(
     id: 'archive-new',
     campaignId: 'camp-1',
@@ -865,6 +870,10 @@ class _FakeCampaignClient implements CampaignClient {
     String? summary,
     Map<String, Object?>? payload,
     bool? pinned,
+    List<Map<String, Object?>>? bodyBlocks,
+    List<String>? tags,
+    List<Map<String, Object?>>? links,
+    List<Map<String, Object?>>? attachmentRefs,
   }) async => throw UnimplementedError();
 
   @override

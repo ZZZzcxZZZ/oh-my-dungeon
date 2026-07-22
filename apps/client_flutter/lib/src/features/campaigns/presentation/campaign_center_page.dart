@@ -86,6 +86,12 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
   String? get _activeSpeakerActorId =>
       widget.controller.workspaceContext?.membership.activeSpeakerActorId;
 
+  /// Spec §档案: 当前用户 ID, 用于客户端判断"是否条目创建者"以决定编辑按钮
+  /// 可见性。权限最终仍由服务端 capabilities 与 `createdBy` 校验, 这里只是
+  /// 决定 UI 是否暴露编辑入口。
+  String? get _currentUserId =>
+      widget.controller.workspaceContext?.membership.userId;
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -351,6 +357,7 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
           isLoading: widget.controller.isArchivesLoading,
           error: widget.controller.archivesError,
           canManage: _canManage,
+          currentUserId: _currentUserId,
           selectedKind: _archiveKind,
           onKindChanged: (kind) {
             setState(() => _archiveKind = kind);
@@ -361,6 +368,25 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
             campaignId: widget.campaign.id,
             entryId: entry.id,
           ),
+          onUpdate: (entry, {bodyBlocks, summary, tags, title}) async {
+            final updated = await widget.controller.updateArchiveEntry(
+              campaignId: widget.campaign.id,
+              entryId: entry.id,
+              title: title,
+              summary: summary,
+              bodyBlocks: bodyBlocks,
+              tags: tags,
+            );
+            if (updated != null) return true;
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(widget.controller.archivesError ?? '保存失败'),
+                ),
+              );
+            }
+            return false;
+          },
         );
       default:
         return const SizedBox.shrink();
@@ -383,41 +409,64 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
     var kind = initialKind;
     final title = TextEditingController();
     final summary = TextEditingController();
+    final body = TextEditingController();
+    final tags = TextEditingController();
     final formKey = GlobalKey<FormState>();
     final create = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('新建战役条目'),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                initialValue: kind,
-                decoration: const InputDecoration(labelText: '类型'),
-                items: const [
-                  DropdownMenuItem(value: 'clue', child: Text('线索')),
-                  DropdownMenuItem(value: 'location', child: Text('地点')),
-                  DropdownMenuItem(value: 'document', child: Text('文档')),
-                  DropdownMenuItem(value: 'file', child: Text('文件')),
-                ],
-                onChanged: (value) => kind = value ?? kind,
-              ),
-              TextFormField(
-                controller: title,
-                autofocus: true,
-                decoration: const InputDecoration(labelText: '名称'),
-                validator: (value) =>
-                    value == null || value.trim().isEmpty ? '请输入名称' : null,
-              ),
-              TextField(
-                controller: summary,
-                minLines: 2,
-                maxLines: 4,
-                decoration: const InputDecoration(labelText: '说明（可选）'),
-              ),
-            ],
+        content: SingleChildScrollView(
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: kind,
+                  decoration: const InputDecoration(labelText: '类型'),
+                  items: const [
+                    DropdownMenuItem(value: 'clue', child: Text('线索')),
+                    DropdownMenuItem(value: 'location', child: Text('地点')),
+                    DropdownMenuItem(value: 'document', child: Text('文档')),
+                    DropdownMenuItem(value: 'file', child: Text('文件')),
+                  ],
+                  onChanged: (value) => kind = value ?? kind,
+                ),
+                TextFormField(
+                  controller: title,
+                  autofocus: true,
+                  decoration: const InputDecoration(labelText: '名称'),
+                  validator: (value) =>
+                      value == null || value.trim().isEmpty ? '请输入名称' : null,
+                ),
+                TextField(
+                  controller: summary,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: const InputDecoration(labelText: '说明（可选）'),
+                ),
+                TextField(
+                  key: const Key('archive-create-body'),
+                  controller: body,
+                  minLines: 4,
+                  maxLines: 10,
+                  decoration: const InputDecoration(
+                    labelText: '正文（可选）',
+                    helperText: '每个换行表示一个段落',
+                    alignLabelWithHint: true,
+                  ),
+                ),
+                TextField(
+                  key: const Key('archive-create-tags'),
+                  controller: tags,
+                  decoration: const InputDecoration(
+                    labelText: '标签（可选）',
+                    helperText: '用英文逗号分隔，例如：lore, map',
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         actions: [
@@ -436,15 +485,40 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
         ],
       ),
     );
-    if (create != true || !mounted) return;
+    if (create != true || !mounted) {
+      title.dispose();
+      summary.dispose();
+      body.dispose();
+      tags.dispose();
+      return;
+    }
+    // Convert body text into structured paragraph blocks; parse tags list.
+    final bodyBlocks = body.text
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .map((line) => <String, Object?>{
+              'type': 'paragraph',
+              'text': line,
+            })
+        .toList(growable: false);
+    final tagList = tags.text
+        .split(',')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
     final entry = await widget.controller.createArchiveEntry(
       campaignId: widget.campaign.id,
       kind: kind,
-      title: title.text,
-      summary: summary.text,
+      title: title.text.trim(),
+      summary: summary.text.trim(),
+      bodyBlocks: bodyBlocks.isEmpty ? null : bodyBlocks,
+      tags: tagList.isEmpty ? null : tagList,
     );
     title.dispose();
     summary.dispose();
+    body.dispose();
+    tags.dispose();
     if (!mounted || entry != null) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(widget.controller.archivesError ?? '创建失败')),

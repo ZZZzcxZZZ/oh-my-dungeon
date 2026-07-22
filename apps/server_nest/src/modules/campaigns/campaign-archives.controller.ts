@@ -4,21 +4,54 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CampaignArchivesService } from './campaign-archives.service';
 
+interface CreateArchiveBody {
+  kind?: unknown;
+  title?: unknown;
+  summary?: unknown;
+  payload?: unknown;
+  bodyBlocks?: unknown;
+  tags?: unknown;
+  links?: unknown;
+  attachmentRefs?: unknown;
+}
+
+interface UpdateArchiveBody extends CreateArchiveBody {
+  pinned?: unknown;
+}
+
 @Controller('campaigns/:campaignId/archives')
 @UseGuards(JwtAuthGuard)
 export class CampaignArchivesController {
   constructor(private readonly archives: CampaignArchivesService) {}
 
   @Get()
-  list(@CurrentUser() user: AccessTokenPayload, @Param('campaignId') campaignId: string, @Query('kind') kind?: string) {
-    return this.archives.list(user, campaignId, kind);
+  list(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('campaignId') campaignId: string,
+    @Query('kind') kind?: string,
+    @Query('q') q?: string,
+  ) {
+    return this.archives.list(user, campaignId, kind, q);
   }
 
   @Post()
-  create(@CurrentUser() user: AccessTokenPayload, @Param('campaignId') campaignId: string, @Body() body: { kind?: unknown; title?: unknown; summary?: unknown; payload?: unknown }) {
+  create(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('campaignId') campaignId: string,
+    @Body() body: CreateArchiveBody,
+  ) {
     if (typeof body.kind !== 'string' || typeof body.title !== 'string') throw new BadRequestException('kind and title are required');
     if (body.payload != null && (typeof body.payload !== 'object' || Array.isArray(body.payload))) throw new BadRequestException('payload must be an object');
-    return this.archives.create(user, campaignId, { kind: body.kind, title: body.title, summary: typeof body.summary === 'string' ? body.summary : undefined, payload: body.payload as Record<string, unknown> | undefined });
+    return this.archives.create(user, campaignId, {
+      kind: body.kind,
+      title: body.title,
+      summary: typeof body.summary === 'string' ? body.summary : undefined,
+      payload: body.payload as Record<string, unknown> | undefined,
+      bodyBlocks: body.bodyBlocks,
+      tags: body.tags,
+      links: body.links,
+      attachmentRefs: body.attachmentRefs,
+    });
   }
 
   @Put(':entryId')
@@ -26,7 +59,7 @@ export class CampaignArchivesController {
     @CurrentUser() user: AccessTokenPayload,
     @Param('campaignId') campaignId: string,
     @Param('entryId') entryId: string,
-    @Body() body: { kind?: unknown; title?: unknown; summary?: unknown; payload?: unknown; pinned?: unknown },
+    @Body() body: UpdateArchiveBody,
   ) {
     if (body.kind !== undefined && typeof body.kind !== 'string') throw new BadRequestException('kind must be a string');
     if (body.title !== undefined && typeof body.title !== 'string') throw new BadRequestException('title must be a string');
@@ -39,6 +72,10 @@ export class CampaignArchivesController {
       summary: body.summary as string | undefined,
       payload: body.payload as Record<string, unknown> | undefined,
       pinned: body.pinned as boolean | undefined,
+      bodyBlocks: body.bodyBlocks,
+      tags: body.tags,
+      links: body.links,
+      attachmentRefs: body.attachmentRefs,
     });
   }
 

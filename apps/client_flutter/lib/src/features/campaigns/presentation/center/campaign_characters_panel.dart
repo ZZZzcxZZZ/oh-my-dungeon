@@ -48,6 +48,7 @@ class CampaignCharactersPanel extends StatefulWidget {
 
 class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
   bool _selecting = false;
+  bool _archivedExpanded = false;
   final Set<String> _selectedIds = {};
 
   @override
@@ -71,8 +72,19 @@ class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
               child: Center(child: Text('战役中还没有角色')),
             ),
           for (final section in sections) ...[
-            _SectionHeader(label: section.$2, count: section.$3.length),
-            for (final actor in section.$3) _buildActorRow(context, actor),
+            _SectionHeader(
+              key: section.$1 == 'archived'
+                  ? const Key('archived-section-toggle')
+                  : null,
+              label: section.$2,
+              count: section.$3.length,
+              expanded: section.$1 == 'archived' ? _archivedExpanded : null,
+              onTap: section.$1 == 'archived'
+                  ? () => setState(() => _archivedExpanded = !_archivedExpanded)
+                  : null,
+            ),
+            if (section.$1 != 'archived' || _archivedExpanded)
+              for (final actor in section.$3) _buildActorRow(context, actor),
           ],
         ],
       ),
@@ -135,6 +147,10 @@ class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
               initials: displayName,
               imageUrl: actor.sheet['avatarUrl'] as String?,
               health: CampaignAvatar.healthFromHp(
+                actor.sheet['currentHp'] as num?,
+                actor.sheet['maxHp'] as num?,
+              ),
+              healthFraction: CampaignAvatar.fractionFromHp(
                 actor.sheet['currentHp'] as num?,
                 actor.sheet['maxHp'] as num?,
               ),
@@ -260,31 +276,54 @@ class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
 }
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.label, required this.count});
+  const _SectionHeader({
+    required this.label,
+    required this.count,
+    this.expanded,
+    this.onTap,
+    super.key,
+  });
 
   final String label;
   final int count;
+  final bool? expanded;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-      child: Row(
-        children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+    return Semantics(
+      button: onTap != null,
+      expanded: expanded,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 12, 8),
+          child: Row(
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '$count',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const Spacer(),
+              if (expanded != null)
+                AnimatedRotation(
+                  turns: expanded! ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 180),
+                  child: const Icon(Icons.expand_more, size: 20),
+                ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Text(
-            '$count',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

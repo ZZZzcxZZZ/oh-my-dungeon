@@ -554,6 +554,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('publish-character-sheet')), findsOneWidget);
+    expect(find.text('NPC'), findsNothing);
+    expect(find.text('怪物'), findsNothing);
     await tester.tap(find.widgetWithText(FilledButton, '发布'));
     await tester.pumpAndSettle();
 
@@ -569,83 +571,84 @@ void main() {
 
   // Spec §双向同步 切片 A: publishCharacter 返回 409 时应显示冲突对话框，
   // 提供"用本地覆盖"（用服务端最新 revision 重试）和"用远端覆盖"（pull）。
-  testWidgets('publish conflict shows comparison dialog with override actions', (
-    tester,
-  ) async {
-    final characterRepository = MemoryCharacterRepository(
-      initial: [_sampleCharacter],
-    );
-    final characterController = CharacterController(
-      repository: characterRepository,
-    );
-    await drainStream();
+  testWidgets(
+    'publish conflict shows comparison dialog with override actions',
+    (tester) async {
+      final characterRepository = MemoryCharacterRepository(
+        initial: [_sampleCharacter],
+      );
+      final characterController = CharacterController(
+        repository: characterRepository,
+      );
+      await drainStream();
 
-    final cacheRepository = MemoryCampaignCacheRepository(
-      actors: [
-        testCampaignActor(
-          id: 'actor-existing',
-          campaignId: 'campaign-1',
-          sourceCharacterId: 'char-1',
-          revision: 3,
+      final cacheRepository = MemoryCampaignCacheRepository(
+        actors: [
+          testCampaignActor(
+            id: 'actor-existing',
+            campaignId: 'campaign-1',
+            sourceCharacterId: 'char-1',
+            revision: 3,
+          ),
+        ],
+      );
+      final apiClient = MemoryCampaignSyncApiClient();
+      apiClient.nextPublishActorException = const CampaignConflictException({
+        'id': 'actor-existing',
+        'campaignId': 'campaign-1',
+        'actorType': 'player',
+        'status': 'active',
+        'sheet': {'name': 'Mira', 'currentHp': 5, 'maxHp': 20},
+        'revision': 7,
+        'updatedBy': 'dm-user',
+        'createdAt': '2026-01-01T00:00:00.000Z',
+        'updatedAt': '2026-07-14T00:00:00.000Z',
+      });
+      final modeController = ClientModeController();
+      final actorController = CampaignActorController(
+        cacheRepository: cacheRepository,
+        apiClient: apiClient,
+        apiBaseUrl: 'https://example.test',
+        accessToken: 'access-token',
+        currentUserId: 'user-1',
+      );
+      await actorController.selectCampaign('campaign-1');
+      await drainStream();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharactersTabPage(
+            controller: characterController,
+            modeController: modeController,
+            actorController: actorController,
+          ),
         ),
-      ],
-    );
-    final apiClient = MemoryCampaignSyncApiClient();
-    apiClient.nextPublishActorException = const CampaignConflictException({
-      'id': 'actor-existing',
-      'campaignId': 'campaign-1',
-      'actorType': 'player',
-      'status': 'active',
-      'sheet': {'name': 'Mira', 'currentHp': 5, 'maxHp': 20},
-      'revision': 7,
-      'updatedBy': 'dm-user',
-      'createdAt': '2026-01-01T00:00:00.000Z',
-      'updatedAt': '2026-07-14T00:00:00.000Z',
-    });
-    final modeController = ClientModeController();
-    final actorController = CampaignActorController(
-      cacheRepository: cacheRepository,
-      apiClient: apiClient,
-      apiBaseUrl: 'https://example.test',
-      accessToken: 'access-token',
-      currentUserId: 'user-1',
-    );
-    await actorController.selectCampaign('campaign-1');
-    await drainStream();
+      );
+      await tester.pumpAndSettle();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: CharactersTabPage(
-          controller: characterController,
-          modeController: modeController,
-          actorController: actorController,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('character-expand-char-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('publish-character-char-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '发布'));
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('character-expand-char-1')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('publish-character-char-1')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '发布'));
-    await tester.pumpAndSettle();
+      // 冲突对话框出现，显示远端版本信息。
+      expect(find.byKey(const Key('publish-conflict-dialog')), findsOneWidget);
+      expect(find.textContaining('已被其他端修改'), findsOneWidget);
+      expect(find.textContaining('版本号 7'), findsOneWidget);
 
-    // 冲突对话框出现，显示远端版本信息。
-    expect(find.byKey(const Key('publish-conflict-dialog')), findsOneWidget);
-    expect(find.textContaining('已被其他端修改'), findsOneWidget);
-    expect(find.textContaining('版本号 7'), findsOneWidget);
+      // "用本地覆盖"：用服务端 revision=7 重试 publishActor。
+      await tester.tap(find.widgetWithText(FilledButton, '用本地覆盖'));
+      await tester.pumpAndSettle();
+      expect(apiClient.publishCalls, hasLength(2));
+      expect(apiClient.publishCalls.last['baseRevision'], 7);
 
-    // "用本地覆盖"：用服务端 revision=7 重试 publishActor。
-    await tester.tap(find.widgetWithText(FilledButton, '用本地覆盖'));
-    await tester.pumpAndSettle();
-    expect(apiClient.publishCalls, hasLength(2));
-    expect(apiClient.publishCalls.last['baseRevision'], 7);
-
-    characterController.dispose();
-    actorController.dispose();
-    modeController.dispose();
-  });
+      characterController.dispose();
+      actorController.dispose();
+      modeController.dispose();
+    },
+  );
 
   testWidgets('actor update conflict shows comparison and reload action', (
     tester,

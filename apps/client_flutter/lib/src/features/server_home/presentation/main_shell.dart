@@ -49,7 +49,6 @@ import '../../../features/vault/data/vault_api_client.dart';
 import '../../../features/vault/domain/vault_models.dart';
 import '../../../features/vault/presentation/vault_sync_controller.dart';
 import '../domain/active_server_session.dart';
-import 'home_dashboard_page.dart';
 import 'content_bootstrap_gate.dart';
 import 'settings_tab_page.dart';
 
@@ -190,7 +189,7 @@ class _MainShellState extends State<MainShell> {
       currentUserId: _authController.user?.id ?? '',
       accessTokenProvider: () => _authController.accessToken ?? '',
       currentUserIdProvider: () => _authController.user?.id ?? '',
-      onActorPublished: _backlinkService?.applyActorToCharacter,
+      onActorPublished: _backlinkService?.applyPublishedActorToCharacter,
     );
     _campaignContentController = CampaignContentController(
       cacheRepository: _campaignCacheRepository,
@@ -355,14 +354,6 @@ class _MainShellState extends State<MainShell> {
 
   Widget _buildReadyShell(BuildContext context) {
     final pages = [
-      HomeDashboardPage(
-        session: widget.session,
-        modeController: widget.modeController,
-        authController: _authController,
-        campaignController: _campaignController,
-        characterController: _characterController,
-        onNavigateToTab: (index) => setState(() => _currentIndex = index),
-      ),
       CampaignsTabPage(
         session: widget.session,
         authController: _authController,
@@ -387,6 +378,7 @@ class _MainShellState extends State<MainShell> {
         modeController: widget.modeController,
         actorController: _actorController,
         conflictBannerController: _conflictBannerController,
+        onUseRemoteConflict: _backlinkService?.resolveConflictWithRemote,
       ),
       ContentLibraryPage(
         controller: _libraryController,
@@ -424,11 +416,6 @@ class _MainShellState extends State<MainShell> {
                   labelType: NavigationRailLabelType.all,
                   destinations: [
                     const NavigationRailDestination(
-                      icon: Icon(Icons.dashboard_outlined),
-                      selectedIcon: Icon(Icons.dashboard),
-                      label: Text('首页'),
-                    ),
-                    const NavigationRailDestination(
                       icon: Icon(Icons.castle_outlined),
                       selectedIcon: Icon(Icons.castle),
                       label: Text('战役'),
@@ -465,11 +452,6 @@ class _MainShellState extends State<MainShell> {
               setState(() => _currentIndex = index);
             },
             destinations: [
-              const NavigationDestination(
-                icon: Icon(Icons.dashboard_outlined),
-                selectedIcon: Icon(Icons.dashboard),
-                label: '首页',
-              ),
               const NavigationDestination(
                 icon: Icon(Icons.castle_outlined),
                 selectedIcon: Icon(Icons.castle),

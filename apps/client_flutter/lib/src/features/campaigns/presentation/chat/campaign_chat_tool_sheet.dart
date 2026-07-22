@@ -133,6 +133,7 @@ class CampaignChatToolSheet extends StatelessWidget {
                     health: CampaignAvatar.healthFromState(
                       identity.healthState,
                     ),
+                    healthFraction: identity.healthFraction,
                   ),
                   title: const Text('当前身份'),
                   subtitle: Text(identity.subtitle),
@@ -222,8 +223,7 @@ class _ToolGrid extends StatelessWidget {
                 : constraints.maxWidth >= 320
                 ? 3
                 : 2;
-            final width =
-                (constraints.maxWidth - (columns - 1) * 8) / columns;
+            final width = (constraints.maxWidth - (columns - 1) * 8) / columns;
             return Wrap(
               spacing: 8,
               runSpacing: 8,

@@ -29,6 +29,7 @@ export interface CampaignChatMessageView {
   delegatedByUserId: string | null;
   speakerAvatarAssetId: string | null;
   publicHealthState: string | null;
+  publicHealthFraction: number | null;
   ooc: boolean;
   kind: string;
   content: string;

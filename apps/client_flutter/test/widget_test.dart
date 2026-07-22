@@ -87,13 +87,14 @@ void main() {
     await tester.pumpAndSettle();
 
     // 离线优先：未配置服务器时直接进入 MainShell（本地模式）。
-    expect(find.text('首页'), findsWidgets);
+    expect(find.text('首页'), findsNothing);
+    expect(find.byType(NavigationDestination), findsNWidgets(4));
     expect(find.text('战役'), findsWidgets);
     expect(find.text('角色'), findsWidgets);
     expect(find.text('资料库'), findsWidgets);
     expect(find.text('设置'), findsWidgets);
     expect(find.text('连接你的跑团服务器'), findsNothing);
-    expect(find.text('本地模式'), findsOneWidget);
+    expect(find.text('未连接服务器'), findsWidgets);
   });
 
   testWidgets('shows a recoverable startup error instead of a blank page', (
@@ -127,8 +128,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 有默认 profile 时直接进入主界面（底部导航）。
-    expect(find.text('首页'), findsWidgets);
+    // 有默认 profile 时直接进入四入口主界面。
+    expect(find.byType(NavigationDestination), findsNWidgets(4));
 
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
@@ -233,7 +234,7 @@ void main() {
     expect(find.text('连接你的跑团服务器'), findsOneWidget);
   });
 
-  testWidgets('opens a saved server profile and shows dashboard tab', (
+  testWidgets('opens a saved server profile on the campaigns tab', (
     tester,
   ) async {
     final store = InMemoryServerProfileStore();
@@ -247,10 +248,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Default tab is 首页, giving the app a product-level entry point.
-    expect(find.text('首页'), findsWidgets);
-    expect(find.text('跑团总览'), findsOneWidget);
-    expect(find.text('登录后同步战役、角色和跑团状态'), findsOneWidget);
+    expect(find.text('首页'), findsNothing);
+    expect(find.byType(NavigationDestination), findsNWidgets(4));
+    expect(find.widgetWithText(NavigationDestination, '战役'), findsOneWidget);
 
     // Settings tab shows server info and mode.
     await tester.tap(find.text('设置'));
@@ -305,6 +305,7 @@ void main() {
     expect(find.text('高对比 Material 3'), findsOneWidget);
     expect(find.text('默认骰子'), findsOneWidget);
     expect(find.text('掷骰确认'), findsOneWidget);
+    expect(find.text('合并连续消息头像'), findsOneWidget);
     expect(find.text('规则与角色创建'), findsOneWidget);
     expect(find.text('默认规则集'), findsOneWidget);
     expect(find.text('默认创建方式'), findsOneWidget);
@@ -537,7 +538,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('战役'));
+    await tester.tap(find.widgetWithText(NavigationDestination, '战役'));
     await tester.pumpAndSettle();
 
     expect(find.text('Starter Campaign'), findsOneWidget);
@@ -638,7 +639,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('战役'));
+    await tester.tap(find.widgetWithText(NavigationDestination, '战役'));
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('使用邀请码加入战役'), findsOneWidget);
@@ -716,7 +717,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('战役'));
+    await tester.tap(find.widgetWithText(NavigationDestination, '战役'));
     await tester.pumpAndSettle();
 
     // Group-chat-style list: last message summary + character status.
@@ -851,7 +852,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('战役'));
+      await tester.tap(find.widgetWithText(NavigationDestination, '战役'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Starter Campaign'));
       await tester.pumpAndSettle();
@@ -904,7 +905,7 @@ void main() {
 
     expect(find.widgetWithText(NavigationDestination, '桌面'), findsNothing);
 
-    await tester.tap(find.text('战役'));
+    await tester.tap(find.widgetWithText(NavigationDestination, '战役'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Starter Campaign'));
     await tester.pumpAndSettle();
@@ -1110,7 +1111,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('战役'));
+    await tester.tap(find.widgetWithText(NavigationDestination, '战役'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Starter Campaign'));
     await tester.pumpAndSettle();
@@ -1149,7 +1150,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('战役'));
+    await tester.tap(find.widgetWithText(NavigationDestination, '战役'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Starter Campaign'));
     await tester.pumpAndSettle();

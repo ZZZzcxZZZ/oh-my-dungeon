@@ -233,9 +233,9 @@ class CampaignActorController extends ChangeNotifier {
     // baseRevision，否则服务端必然 409。首次发布本地无 actor，传 0。
     // baseRevisionOverride 用于冲突解决"用本地覆盖"时传入服务端最新 revision。
     final existing = _actors.cast<CampaignActor?>().firstWhere(
-          (a) => a?.sourceCharacterId == character.id,
-          orElse: () => null,
-        );
+      (a) => a?.sourceCharacterId == character.id,
+      orElse: () => null,
+    );
     final baseRevision = baseRevisionOverride ?? existing?.revision ?? 0;
     try {
       final actor = await _apiClient.publishActor(
@@ -252,6 +252,7 @@ class CampaignActorController extends ChangeNotifier {
         campaignId,
         _singleChangePage(actor, 'upsert'),
       );
+      _upsertActor(actor);
       // 立即把远端 actor 回写本地角色，避免等下次 pullUntilCurrent 才同步
       // 运行时字段。backlinkService 可能为 null（web build 无 database）。
       final callback = _onActorPublished;
@@ -311,6 +312,7 @@ class CampaignActorController extends ChangeNotifier {
         campaignId,
         _singleChangePage(created, 'upsert'),
       );
+      _upsertActor(created);
       return true;
     } on CampaignConflictException catch (e) {
       _conflict = e;
@@ -329,10 +331,7 @@ class CampaignActorController extends ChangeNotifier {
 
   /// Creates a throwaway DM persona with enough state to be used in chat and
   /// later added to an encounter without opening the full character editor.
-  Future<bool> createTemporaryNpc({
-    required String name,
-    int maxHp = 1,
-  }) async {
+  Future<bool> createTemporaryNpc({required String name, int maxHp = 1}) async {
     final campaignId = _selectedCampaignId;
     final normalizedName = name.trim();
     if (campaignId == null || normalizedName.isEmpty) return false;
@@ -352,6 +351,7 @@ class CampaignActorController extends ChangeNotifier {
         campaignId,
         _singleChangePage(created, 'upsert'),
       );
+      _upsertActor(created);
       return true;
     } on CampaignConflictException catch (error) {
       _conflict = error;
@@ -391,6 +391,7 @@ class CampaignActorController extends ChangeNotifier {
         campaignId,
         _singleChangePage(updated, 'upsert'),
       );
+      _upsertActor(updated);
       await loadActorAudits(actor.id);
       return true;
     } on CampaignConflictException catch (e) {
@@ -435,6 +436,7 @@ class CampaignActorController extends ChangeNotifier {
         campaignId,
         _singleChangePage(archived, 'upsert'),
       );
+      _upsertActor(archived);
       return true;
     } on CampaignConflictException catch (e) {
       _conflict = e;
@@ -452,6 +454,16 @@ class CampaignActorController extends ChangeNotifier {
   }
 
   /// 构造一个仅包含单个 actor 变更的页面，用于写本地缓存。
+  void _upsertActor(CampaignActor actor) {
+    final index = _actors.indexWhere((candidate) => candidate.id == actor.id);
+    if (index < 0) {
+      _actors = [..._actors, actor];
+    } else {
+      _actors = [..._actors]..[index] = actor;
+    }
+    notifyListeners();
+  }
+
   CampaignChangePage _singleChangePage(CampaignActor actor, String operation) {
     return CampaignChangePage(
       items: [

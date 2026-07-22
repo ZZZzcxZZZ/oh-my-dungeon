@@ -59,60 +59,76 @@ class CampaignChatComposer extends StatelessWidget {
                       health: CampaignAvatar.healthFromState(
                         identity.healthState,
                       ),
+                      healthFraction: identity.healthFraction,
                       size: 32,
                       tapTargetSize: 48,
                       onTap: sending ? null : onIdentityTap,
                     ),
                   ),
-                  if (!identity.isOoc) ...[
-                    const SizedBox(width: 4),
-                    SizedBox(
-                      width: 68,
-                      height: 48,
-                      child: Center(
-                        child: ChatModePicker(
-                          mode: mode,
-                          enabled: !sending,
-                          onChanged: onModeChanged,
-                        ),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 6),
                   Expanded(
-                    child: TextField(
-                      key: const Key('campaign-chat-input'),
-                      controller: controller,
-                      enabled: !sending,
-                      minLines: 1,
-                      maxLines: 4,
-                      textInputAction: TextInputAction.send,
-                      decoration: InputDecoration(
-                        hintText: _hintText,
-                        filled: true,
-                        fillColor: colors.surfaceContainerHighest,
-                        border: const OutlineInputBorder(
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
+                    child: Container(
+                      key: const Key('campaign-composer-input-surface'),
+                      constraints: const BoxConstraints(minHeight: 48),
+                      decoration: BoxDecoration(
+                        color: colors.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(24),
                       ),
-                      onSubmitted: sending ? null : (_) => _submit(),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (!identity.isOoc)
+                            SizedBox(
+                              width: 68,
+                              height: 48,
+                              child: ChatModePicker(
+                                mode: mode,
+                                enabled: !sending,
+                                onChanged: onModeChanged,
+                              ),
+                            ),
+                          Expanded(
+                            child: TextField(
+                              key: const Key('campaign-chat-input'),
+                              controller: controller,
+                              enabled: !sending,
+                              minLines: 1,
+                              maxLines: 4,
+                              textInputAction: TextInputAction.send,
+                              decoration: InputDecoration(
+                                hintText: _hintText,
+                                filled: false,
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                contentPadding: EdgeInsets.only(
+                                  left: identity.isOoc ? 14 : 6,
+                                  right: 12,
+                                  top: 12,
+                                  bottom: 12,
+                                ),
+                              ),
+                              onSubmitted: sending ? null : (_) => _submit(),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  IconButton.filled(
-                    key: const Key('campaign-chat-send'),
-                    tooltip: chatText('send'),
-                    onPressed: sending ? null : _submit,
-                    icon: sending
-                        ? const SizedBox.square(
-                            dimension: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.send_rounded),
+                  const SizedBox(width: 6),
+                  SizedBox.square(
+                    dimension: 48,
+                    child: IconButton.filled(
+                      key: const Key('campaign-chat-send'),
+                      tooltip: chatText('send'),
+                      onPressed: sending ? null : _submit,
+                      icon: sending
+                          ? const SizedBox.square(
+                              dimension: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.send_rounded),
+                    ),
                   ),
                 ],
               ),

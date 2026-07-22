@@ -70,6 +70,10 @@ class AppPreferencesController extends ChangeNotifier {
     return _save(_preferences.copyWith(logCharacterRuntimeChanges: value));
   }
 
+  Future<void> setGroupConsecutiveChatMessages(bool value) {
+    return _save(_preferences.copyWith(groupConsecutiveChatMessages: value));
+  }
+
   Future<void> _save(AppPreferences preferences) async {
     _preferences = preferences;
     await store.save(preferences);

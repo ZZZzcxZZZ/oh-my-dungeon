@@ -39,8 +39,12 @@ docs/deployment/self-hosting.md
   `v2.x` tags are internal iteration records, not release gates.
 - The product is campaign-first: a campaign opens as a group-chat room. Do not
   extend the frozen `rooms` prototype or revive the old top-level table flow.
-- The immediate milestone is `0.1-content-wiki`: campaign-scoped packages,
-  linked Wiki entries, favorites, and a Material 3 library redesign.
+- The active milestone is the `0.1` campaign/rules integration hardening line.
+  Treat `docs/roadmap/current-execution-status.md` as the live backlog and the
+  July 18 hardening spec/plan as the latest completed design baseline.
+- `RoomsModule`, `SessionsModule`, `SessionsGateway`, and the standalone
+  `CheckRequestsModule` are retired. Do not recreate their routes or make a
+  Session a prerequisite for campaign chat, journal, checks, or encounters.
 - Commercial rulebook content remains a user-provided private import. Never
   commit it, seed it, or include it in a distributable build artifact.
 
@@ -76,8 +80,9 @@ Do not use `doctor` as a substitute for reading the roadmap and validating requi
 
 ## Immediate Next Work
 
-Read `docs/superpowers/specs/2026-07-13-campaign-content-wiki-design.md` and
-`docs/superpowers/plans/2026-07-13-campaign-content-wiki.md` before changing
-the content module. Execute it with TDD. The first boundary is intentionally
-limited to campaign packages, Wiki links, favorites, class progression, and
-the library UX; do not add a public package marketplace or rules graph editor.
+Read `docs/superpowers/specs/2026-07-18-campaign-rules-integration-hardening-design.md`
+and `docs/superpowers/plans/2026-07-18-campaign-rules-integration-hardening.md`
+before changing campaign, Actor, character builder, or content integration.
+Preserve the offline boundary: imported package bodies remain local, Vault
+only carries allowed personal entities, and campaigns only sync DM-published
+JSON entries. Do not add a public package marketplace or a second detail flow.

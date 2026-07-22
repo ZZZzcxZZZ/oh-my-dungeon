@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/campaign.dart';
+import '../../domain/campaign_actor.dart';
+import '../../domain/campaign_health.dart';
 import '../widgets/campaign_avatar.dart';
 import 'campaign_composer_identity.dart';
 
@@ -26,6 +28,7 @@ class CampaignIdentitySheet extends StatelessWidget {
     required this.persistentActors,
     required this.temporaryActors,
     required this.proxyActors,
+    required this.campaignActors,
     required this.hasBoundCharacter,
     super.key,
   });
@@ -36,6 +39,7 @@ class CampaignIdentitySheet extends StatelessWidget {
   final List<CampaignWorkspaceActor> persistentActors;
   final List<CampaignWorkspaceActor> temporaryActors;
   final List<CampaignWorkspaceActor> proxyActors;
+  final List<CampaignActor> campaignActors;
   final bool hasBoundCharacter;
 
   @override
@@ -61,9 +65,8 @@ class CampaignIdentitySheet extends StatelessWidget {
                 leading: CampaignAvatar(
                   initials: identity.displayName,
                   imageUrl: identity.avatarUrl,
-                  health: CampaignAvatar.healthFromState(
-                    identity.healthState,
-                  ),
+                  health: CampaignAvatar.healthFromState(identity.healthState),
+                  healthFraction: identity.healthFraction,
                 ),
                 title: Text(identity.displayName),
                 subtitle: Text('当前身份 · ${identity.subtitle}'),
@@ -143,11 +146,16 @@ class CampaignIdentitySheet extends StatelessWidget {
     CampaignWorkspaceActor actor, {
     String? subtitle,
   }) {
+    final campaignActor = _campaignActorFor(actor.id);
+    final sheet = campaignActor?.sheet ?? const <String, Object?>{};
     return ListTile(
       key: Key('identity-actor-${actor.id}'),
       leading: CampaignAvatar(
         initials: actor.displayName,
-        health: CampaignAvatar.healthFromState(actor.publicHealthState),
+        health: CampaignAvatar.healthFromState(
+          campaignHealthStateFromSheet(sheet) ?? actor.publicHealthState,
+        ),
+        healthFraction: campaignHealthFractionFromSheet(sheet),
       ),
       title: Text(actor.displayName),
       subtitle: subtitle == null ? null : Text(subtitle),
@@ -157,6 +165,13 @@ class CampaignIdentitySheet extends StatelessWidget {
       onTap: () =>
           Navigator.of(context).pop(CampaignSpeakerChoice('actor', actor.id)),
     );
+  }
+
+  CampaignActor? _campaignActorFor(String actorId) {
+    for (final actor in campaignActors) {
+      if (actor.id == actorId) return actor;
+    }
+    return null;
   }
 
   Widget _choiceTile(

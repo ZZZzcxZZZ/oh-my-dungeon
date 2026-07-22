@@ -55,6 +55,8 @@ const _campaign = Campaign(
 
 final _character = CharacterSheet.fromJson({
   ...CharacterSheet.local(id: 'char-1', name: 'Arannis', level: 3).toJson(),
+  'currentHp': 7,
+  'maxHp': 10,
   'data': {
     'actions': [
       {
@@ -228,7 +230,7 @@ void main() {
     expect(find.text('门在你们身后缓缓关闭。'), findsOneWidget);
   });
   testWidgets(
-    'chat avatars expose a health ring only when the server shares a state',
+    'chat avatars preserve the health state captured when the message was sent',
     (tester) async {
       campaignClient.messages = const [
         CampaignChatMessage(
@@ -239,6 +241,7 @@ void main() {
           displayName: 'Arannis',
           avatarUrl: null,
           publicHealthState: 'injured',
+          publicHealthFraction: 0.42,
           kind: 'say',
           content: 'Still standing.',
           createdAt: '2026-07-09T00:00:00.000Z',
@@ -247,12 +250,89 @@ void main() {
 
       await pumpChatPage(tester);
 
-      expect(
-        find.byKey(const Key('campaign-avatar-ring-injured')),
-        findsOneWidget,
+      final message = find.byKey(const Key('say-message'));
+      final messageAvatar = find.descendant(
+        of: message,
+        matching: find.byType(CampaignAvatar),
       );
+      expect(messageAvatar, findsOneWidget);
+      var avatar = tester.widget<CampaignAvatar>(messageAvatar);
+      expect(avatar.health, CampaignAvatarHealth.injured);
+      expect(avatar.healthFraction, 0.42);
+
+      final actor = actorController.actors.singleWhere(
+        (candidate) => candidate.id == 'actor-player',
+      );
+      expect(
+        await actorController.updateActor(actor, {
+          ...actor.sheet,
+          'currentHp': 2,
+          'maxHp': 10,
+        }),
+        isTrue,
+      );
+      await tester.pumpAndSettle();
+
+      final updatedActor = actorController.actors.singleWhere(
+        (candidate) => candidate.id == 'actor-player',
+      );
+      expect(updatedActor.sheet['currentHp'], 2);
+      expect(updatedActor.sheet['maxHp'], 10);
+      avatar = tester.widget<CampaignAvatar>(messageAvatar);
+      expect(avatar.health, CampaignAvatarHealth.injured);
+      expect(avatar.healthFraction, 0.42);
     },
   );
+
+  testWidgets(
+    'tool panel current identity uses the actor current HP fraction',
+    (tester) async {
+      await pumpChatPage(tester, campaignActorId: 'actor-player');
+
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+
+      final avatarFinder = find.descendant(
+        of: find.byKey(const Key('tool-current-identity')),
+        matching: find.byType(CampaignAvatar),
+      );
+      final avatar = tester.widget<CampaignAvatar>(avatarFinder);
+      expect(avatar.health, CampaignAvatarHealth.healthy);
+      expect(avatar.healthFraction, 0.7);
+    },
+  );
+
+  testWidgets('identity switch uses current actor HP over workspace grade', (
+    tester,
+  ) async {
+    campaignClient.canManageCampaign = true;
+    campaignClient.workspaceActors = const [
+      CampaignWorkspaceActor(
+        id: 'actor-player',
+        ownerUserId: 'user-2',
+        actorType: 'player',
+        status: 'active',
+        lifecycle: 'persistent',
+        displayName: 'Arannis',
+        avatarAssetId: null,
+        publicHealthState: 'critical',
+      ),
+    ];
+    await pumpChatPage(tester, isDm: true, campaignActorId: 'actor-player');
+
+    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tool-dm-identity-switch')));
+    await tester.pumpAndSettle();
+
+    final avatarFinder = find.descendant(
+      of: find.byKey(const Key('identity-actor-actor-player')),
+      matching: find.byType(CampaignAvatar),
+    );
+    final avatar = tester.widget<CampaignAvatar>(avatarFinder);
+    expect(avatar.health, CampaignAvatarHealth.healthy);
+    expect(avatar.healthFraction, 0.7);
+  });
 
   testWidgets('content tool reads the offline campaign-aware repository', (
     tester,
@@ -1161,9 +1241,7 @@ void main() {
     expect(call.title, 'NPC关系图');
   });
 
-  testWidgets('chat shell only exposes campaign navigation', (
-    tester,
-  ) async {
+  testWidgets('chat shell only exposes campaign navigation', (tester) async {
     campaignClient.messages = const [
       CampaignChatMessage(
         id: 'shell-message',

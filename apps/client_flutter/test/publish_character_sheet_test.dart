@@ -39,6 +39,7 @@ void main() {
     WidgetTester tester,
     CampaignActorController controller, {
     CharacterSheet? character,
+    bool allowDmActorTypes = false,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -46,6 +47,7 @@ void main() {
           body: PublishCharacterSheet(
             controller: controller,
             character: character ?? sampleCharacter,
+            allowDmActorTypes: allowDmActorTypes,
           ),
         ),
       ),
@@ -119,7 +121,7 @@ void main() {
         currentUserId: 'dm-1',
       );
 
-      await pumpSheet(tester, controller);
+      await pumpSheet(tester, controller, allowDmActorTypes: true);
 
       await tester.tap(find.text('NPC'));
       await tester.pumpAndSettle();
@@ -149,7 +151,7 @@ void main() {
         currentUserId: 'dm-1',
       );
 
-      await pumpSheet(tester, controller);
+      await pumpSheet(tester, controller, allowDmActorTypes: true);
 
       await tester.tap(find.text('怪物'));
       await tester.pumpAndSettle();

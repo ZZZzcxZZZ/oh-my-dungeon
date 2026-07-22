@@ -15,6 +15,7 @@ class CampaignChatTimeline extends StatelessWidget {
     required this.canRespondToCheck,
     required this.hasRespondedToCheck,
     required this.onRespondToCheck,
+    this.groupConsecutiveMessages = true,
     super.key,
   });
 
@@ -25,6 +26,7 @@ class CampaignChatTimeline extends StatelessWidget {
   final bool Function(CampaignChatMessage message) canRespondToCheck;
   final bool Function(CampaignChatMessage message) hasRespondedToCheck;
   final ValueChanged<CampaignChatMessage> onRespondToCheck;
+  final bool groupConsecutiveMessages;
 
   @override
   Widget build(BuildContext context) {
@@ -44,13 +46,13 @@ class CampaignChatTimeline extends StatelessWidget {
             final messageIndex = messages.length - 1 - index;
             final message = messages[messageIndex];
             final presentation = CampaignMessagePresentation.resolve(
-              previous: messageIndex == 0
-                  ? null
-                  : messages[messageIndex - 1],
+              previous: messageIndex == 0 ? null : messages[messageIndex - 1],
               current: message,
               currentUserId: currentUserId,
+              groupConsecutiveMessages: groupConsecutiveMessages,
             );
-            final centered = message.speakerMode == 'narrator' ||
+            final centered =
+                message.speakerMode == 'narrator' ||
                 message.kind == 'system' ||
                 message.kind == 'checkRequest';
             final alignment = centered

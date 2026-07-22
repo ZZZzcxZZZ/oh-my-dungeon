@@ -62,4 +62,14 @@ describe('server metadata endpoints', () => {
         );
       });
   });
+
+  it('does not expose orphaned session check-request routes', async () => {
+    await request(app.getHttpServer())
+      .get('/api/sessions/removed-session/check-requests')
+      .expect(404);
+    await request(app.getHttpServer())
+      .post('/api/check-requests/removed-request/responses')
+      .send({})
+      .expect(404);
+  });
 });

@@ -11,32 +11,31 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/character_test_support.dart';
 
 void main() {
-  testWidgets(
-    'shows empty state when no unresolved conflicts exist',
-    (tester) async {
-      final repository = _MemoryConflictRepository();
-      final banner = CharacterConflictBannerController(repository: repository);
-      await Future.microtask(() {});
-      await Future.microtask(() {});
+  testWidgets('shows empty state when no unresolved conflicts exist', (
+    tester,
+  ) async {
+    final repository = _MemoryConflictRepository();
+    final banner = CharacterConflictBannerController(repository: repository);
+    await Future.microtask(() {});
+    await Future.microtask(() {});
 
-      repository.emit(const []);
-      await Future.microtask(() {});
-      await Future.microtask(() {});
+    repository.emit(const []);
+    await Future.microtask(() {});
+    await Future.microtask(() {});
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: CharacterConflictResolutionPage(
-            controller: banner,
-            characterController: _emptyController(),
-          ),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterConflictResolutionPage(
+          controller: banner,
+          characterController: _emptyController(),
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.text('没有未解决的同步冲突'), findsOneWidget);
-      banner.dispose();
-    },
-  );
+    expect(find.text('没有未解决的同步冲突'), findsOneWidget);
+    banner.dispose();
+  });
 
   testWidgets('lists each conflict with local and remote HP', (tester) async {
     final repository = _MemoryConflictRepository();
@@ -57,9 +56,9 @@ void main() {
     await Future.microtask(() {});
 
     final characterController = CharacterController(
-      repository: MemoryCharacterRepository(initial: [
-        testCharacter(id: 'char-1', name: 'Mira'),
-      ]),
+      repository: MemoryCharacterRepository(
+        initial: [testCharacter(id: 'char-1', name: 'Mira')],
+      ),
     );
     await Future.microtask(() {});
     await Future.microtask(() {});
@@ -85,8 +84,9 @@ void main() {
     banner.dispose();
   });
 
-  testWidgets('use local button calls markResolved after publish success',
-      (tester) async {
+  testWidgets('use local button calls markResolved after publish success', (
+    tester,
+  ) async {
     final repository = _MemoryConflictRepository();
     final banner = CharacterConflictBannerController(repository: repository);
     await Future.microtask(() {});
@@ -97,16 +97,21 @@ void main() {
         id: 'c1',
         characterId: 'char-1',
         localSheet: {'name': 'Mira', 'currentHp': 18, 'maxHp': 20},
-        remoteSheet: {'name': 'Mira', 'revision': 3, 'currentHp': 5, 'maxHp': 20},
+        remoteSheet: {
+          'name': 'Mira',
+          'revision': 3,
+          'currentHp': 5,
+          'maxHp': 20,
+        },
       ),
     ]);
     await Future.microtask(() {});
     await Future.microtask(() {});
 
     final characterController = CharacterController(
-      repository: MemoryCharacterRepository(initial: [
-        testCharacter(id: 'char-1', name: 'Mira'),
-      ]),
+      repository: MemoryCharacterRepository(
+        initial: [testCharacter(id: 'char-1', name: 'Mira')],
+      ),
     );
     await Future.microtask(() {});
     await Future.microtask(() {});
@@ -133,7 +138,9 @@ void main() {
     banner.dispose();
   });
 
-  testWidgets('use remote button calls markResolved', (tester) async {
+  testWidgets('use remote marks resolved only after applying remote data', (
+    tester,
+  ) async {
     final repository = _MemoryConflictRepository();
     final banner = CharacterConflictBannerController(repository: repository);
     await Future.microtask(() {});
@@ -151,9 +158,9 @@ void main() {
     await Future.microtask(() {});
 
     final characterController = CharacterController(
-      repository: MemoryCharacterRepository(initial: [
-        testCharacter(id: 'char-1', name: 'Mira'),
-      ]),
+      repository: MemoryCharacterRepository(
+        initial: [testCharacter(id: 'char-1', name: 'Mira')],
+      ),
     );
     await Future.microtask(() {});
     await Future.microtask(() {});
@@ -163,7 +170,7 @@ void main() {
         home: CharacterConflictResolutionPage(
           controller: banner,
           characterController: characterController,
-          // actorController 为 null，但 useRemote 会走提示分支
+          onUseRemote: (conflict) async => true,
         ),
       ),
     );
@@ -172,9 +179,8 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, '用远端覆盖'));
     await tester.pumpAndSettle();
 
-    // actorController 为空时不应 markResolved
-    expect(repository.markResolvedCalls, isEmpty);
-    expect(find.text('未连接到战役，无法拉取'), findsOneWidget);
+    expect(repository.markResolvedCalls, ['c1']);
+    expect(find.text('已用远端版本覆盖'), findsOneWidget);
 
     characterController.dispose();
     banner.dispose();

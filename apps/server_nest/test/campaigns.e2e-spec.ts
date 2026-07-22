@@ -704,6 +704,7 @@ describe("campaigns endpoints", () => {
         content: "Welcome to the tavern.",
         speakerMode: "actor",
         publicHealthState: "healthy",
+        publicHealthFraction: 1,
         ooc: false,
         createdAt: "2026-07-09T00:00:00.000Z",
       });
@@ -718,7 +719,13 @@ describe("campaigns endpoints", () => {
           expect(body.displayName).toBe("The Innkeeper");
           expect(body.speakerMode).toBe("actor");
           expect(body.publicHealthState).toBe("healthy");
+          expect(body.publicHealthFraction).toBe(1);
         });
+
+      expect(
+        prismaService.campaignChatMessage.create.mock.calls[0][0].data
+          .publicHealthFraction,
+      ).toBe(1);
     });
 
     it("persists narrator messages with the narrator identity", async () => {
@@ -1267,6 +1274,7 @@ describe("campaigns endpoints", () => {
         delegatedByUserId: null,
         speakerAvatarAssetId: null,
         publicHealthState: "healthy",
+        publicHealthFraction: 1,
         ooc: false,
         kind: "say",
         content: "欢迎光临",
@@ -1289,6 +1297,7 @@ describe("campaigns endpoints", () => {
           expect(body.displayName).toBe("旅店老板");
           expect(body.speakerMode).toBe("actor");
           expect(body.publicHealthState).toBe("healthy");
+          expect(body.publicHealthFraction).toBe(1);
         });
 
       const actorCreateArgs = prismaService.campaignActor.create.mock.calls[0][0];
@@ -1614,6 +1623,7 @@ describe("campaigns endpoints", () => {
           }),
         }),
       );
+      expect(prismaService.$transaction).toHaveBeenCalledTimes(1);
     });
 
     it("writes a journal entry when sending a checkRequest message", async () => {
@@ -1869,6 +1879,46 @@ describe("campaigns endpoints", () => {
           },
         })
         .expect(400);
+
+      expect(prismaService.campaignChatMessage.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects a response sent as a different actor than the request target", async () => {
+      const token = await loginAs(storedPlayerUser);
+      prismaService.campaign.findUnique.mockResolvedValueOnce(
+        campaignWithOwnerAndPlayer,
+      );
+      prismaService.campaignActor.findUnique.mockResolvedValueOnce({
+        id: "actor-player",
+        campaignId: "camp-1",
+        ownerUserId: "user-2",
+        actorType: "player",
+        status: "active",
+        sheetJson: { name: "Mira", avatarUrl: null },
+      });
+      prismaService.campaignChatMessage.findFirst
+        .mockResolvedValueOnce({
+          id: "msg-check-other",
+          campaignId: "camp-1",
+          kind: "checkRequest",
+          eventData: { targetActorId: "actor-other", status: "open" },
+        })
+        .mockResolvedValueOnce(null);
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/messages")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          kind: "roll",
+          content: "察觉 15",
+          campaignActorId: "actor-player",
+          eventData: {
+            requestId: "msg-check-other",
+            total: 15,
+            label: "察觉",
+          },
+        })
+        .expect(403);
 
       expect(prismaService.campaignChatMessage.create).not.toHaveBeenCalled();
     });

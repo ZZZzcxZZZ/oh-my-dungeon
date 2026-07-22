@@ -14,6 +14,7 @@ class AppPreferences {
     required this.highContrastTheme,
     required this.dynamicSchemeVariant,
     required this.logCharacterRuntimeChanges,
+    required this.groupConsecutiveChatMessages,
   });
 
   static const defaults = AppPreferences(
@@ -29,6 +30,7 @@ class AppPreferences {
     highContrastTheme: false,
     dynamicSchemeVariant: 'tonalSpot',
     logCharacterRuntimeChanges: true,
+    groupConsecutiveChatMessages: true,
   );
 
   final ThemeMode themeMode;
@@ -43,6 +45,7 @@ class AppPreferences {
   final bool highContrastTheme;
   final String dynamicSchemeVariant;
   final bool logCharacterRuntimeChanges;
+  final bool groupConsecutiveChatMessages;
 
   Color get seedColor => Color(seedColorValue);
 
@@ -59,6 +62,7 @@ class AppPreferences {
     'highContrastTheme': highContrastTheme,
     'dynamicSchemeVariant': dynamicSchemeVariant,
     'logCharacterRuntimeChanges': logCharacterRuntimeChanges,
+    'groupConsecutiveChatMessages': groupConsecutiveChatMessages,
   };
 
   AppPreferences copyWith({
@@ -74,6 +78,7 @@ class AppPreferences {
     bool? highContrastTheme,
     String? dynamicSchemeVariant,
     bool? logCharacterRuntimeChanges,
+    bool? groupConsecutiveChatMessages,
   }) {
     return AppPreferences(
       themeMode: themeMode ?? this.themeMode,
@@ -90,6 +95,8 @@ class AppPreferences {
       dynamicSchemeVariant: dynamicSchemeVariant ?? this.dynamicSchemeVariant,
       logCharacterRuntimeChanges:
           logCharacterRuntimeChanges ?? this.logCharacterRuntimeChanges,
+      groupConsecutiveChatMessages:
+          groupConsecutiveChatMessages ?? this.groupConsecutiveChatMessages,
     );
   }
 }

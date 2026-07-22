@@ -1,415 +1,121 @@
 # 领域模型设计
 
-## 1. 核心实体总览
+## 1. 两个数据域
 
-```text
-User
-ServerSettings
-ServerAdmin
-Campaign
-CampaignMember
-CampaignInvite
-Session
-Character
-CharacterCampaignBinding
-CharacterSnapshot
-ContentPackage
-ContentItem
-ContentOverride
-ChatMessage
-DiceRoll
-RollRequest
-JournalEntry
-Encounter
-EncounterParticipant
-Effect
-Npc
-```
+0.1 明确区分个人离线数据和战役协作数据：
+
+- 个人域以客户端 Drift 为事实源：角色、资料包、收藏、笔记、偏好和备份。
+- 战役域以服务端 PostgreSQL 为事实源：成员、Actor、聊天、战役资料、档案、日志和遭遇。
+
+本地 `CharacterSheet` 不是服务端 `CampaignActor`。玩家发布角色后形成战役快照，并用 `sourceCharacterId` 和 backlink 建立可冲突的双向同步。
 
 ## 2. 用户与服务器
 
-### User
+### User / RefreshToken / ServerAdmin
 
-```text
-id
-username
-email
-passwordHash
-displayName
-avatarUrl
-defaultClientMode: player / dm
-createdAt
-updatedAt
-```
+`User` 保存 username、email 和 passwordHash，不保存明文密码。RefreshToken 支持轮换和撤销；首个注册用户原子成为 ServerAdmin owner。
 
-### ServerSettings
+### Vault
 
-```text
-id
-serverName
-registrationEnabled
-defaultLocale
-allowPublicCampaignDiscovery
-maxUploadSize
-enabledSystems
-createdAt
-updatedAt
-```
+`VaultEntity`、`VaultChange`、`VaultOperation` 和 `VaultDevice` 提供按用户隔离的可选跨设备同步。允许同步个人角色、收藏、笔记、偏好和资料包 manifest；资料正文和 assets 禁止进入 Vault。
 
-### ServerAdmin
-
-```text
-id
-userId
-role: owner / admin
-createdAt
-```
-
-首版初始化策略：首次注册用户自动成为 ServerAdmin owner。自托管场景下这是最简单可靠的默认行为。
-
-## 3. 战役与成员
+## 3. 战役身份
 
 ### Campaign
 
 ```text
-id
-name
-description
-system: dnd5e
-ownerId
-status: active / archived
-createdAt
-updatedAt
+id, name, description, system, ownerId, status, createdAt, updatedAt
 ```
 
 ### CampaignMember
 
 ```text
-id
-campaignId
-userId
-role: owner / dm / player / spectator
-displayName
-joinedAt
-updatedAt
+campaignId, userId, role
+boundActorId, activeSpeakerActorId, speakerMode
+displayName, lastReadAt
 ```
 
-一个用户可以加入多个战役，并在不同战役中拥有不同角色。真实权限以 CampaignMember 为准。
+公开邀请码永远加入为 player。客户端全局 DM/Player 模式不改变 membership 权限。
 
 ### CampaignInvite
 
 ```text
-id
-campaignId
-code
-roleOnJoin: player / spectator
-expiresAt
-maxUses
-usedCount
-requireApproval
-createdBy
-createdAt
+campaignId, code, roleOnJoin, expiresAt, maxUses, usedCount, createdBy
 ```
 
-MVP 可以先实现自动加入。requireApproval 预留给之后的 DM 审批流程。
+## 4. 角色与 Actor
 
-## 4. 跑团会话
+### 本地 CharacterSheet
 
-### Session
+完整 JSON 保存于 Drift `Characters.sheetJson`，并有单调递增的本地 `revision`。资料引用另存稳定 entryKey、sourceRevision 和 snapshot，资料包缺失时角色仍可使用。
+
+### CampaignActor
 
 ```text
-id
 campaignId
-title
-status: scheduled / live / ended
-startedAt
-endedAt
-createdBy
-activeEncounterId
-createdAt
-updatedAt
-```
-
-Campaign 是长期容器，Session 是一次实际开团。一个 Campaign 可以有多个 Session，同一时间通常只有一个 live Session。
-
-## 5. 角色
-
-### Character
-
-```text
-id
 ownerUserId
-name
-avatarUrl
-system: dnd5e
-level
-classSummary
-raceSummary
-currentHp
-maxHp
-armorClass
-data
-createdAt
-updatedAt
+sourceCharacterId
+actorType: player / npc / monster / companion
+lifecycle: persistent / temporary
+status: active / archived
+sheetJson
+revision
+updatedBy
 ```
 
-`data` 使用 JSONB 保存角色卡详情：
+- 玩家只能发布并编辑自己的 player Actor。
+- owner/DM 可创建 NPC 等 Actor，并编辑任意 Actor。
+- 消息身份、头像、生命值和角色详情均从 CampaignActor 快照读取。
+- `CampaignActorAudit` 保存 baseRevision、resultRevision、变更路径和前后快照。
+
+客户端 `CampaignActorBacklink` 记录最近发布的本地 revision 和最近应用的 Actor revision。双方都偏离基线时生成 `CharacterSyncConflict`，不能静默覆盖。
+
+## 5. 资料
+
+### 本地 ContentPackage / ContentEntry
+
+资料包由客户端导入 JSON 或 `.dndpack`。`ContentEntry` 使用稳定 ID，并保存：
 
 ```text
-basic
-abilities
-saves
-skills
-combat
-resources
-spells
-inventory
-features
-notes
-overrides
+type, slug, name, aliases, summary
+body, structured, rules, relations, tags, source, revision
 ```
 
-常用列表字段冗余在表列中，用于快速查询和展示。
+rules 和 relations 同时驱动 Wiki、角色创建、升级、角色卡与聊天动作。编辑和复制导入条目仍属于本地包，不进入 Vault。
 
-### CharacterCampaignBinding
+### CampaignContentEntry
+
+DM 明确发布到战役的独立 JSON 条目。它通过 `CampaignChange` cursor 增量同步到成员缓存，与本地包同名时并存并标注来源。
+
+## 6. 聊天、日志与档案
+
+### CampaignChatMessage
 
 ```text
-id
-campaignId
-characterId
-userId
-visibility: public / party / dm_only
-status: active / retired / dead / archived
-dmNotes
-joinedAt
-updatedAt
+campaignId, senderId, campaignActorId
+displayName, avatarUrl, speakerMode, delegatedByUserId
+kind: say / action / ooc / roll / system / checkRequest / archivePublished
+content, eventData, actionSnapshot, publicHealthState, createdAt
 ```
 
-角色归用户所有，通过 binding 加入战役。不要把角色强行建模成只属于单个战役。
-
-### CharacterSnapshot
-
-```text
-id
-characterId
-campaignId
-sessionId
-reason
-data
-createdBy
-createdAt
-```
-
-快照用于误操作恢复、日志回放、战斗记录和关键节点保存。
-
-## 6. 内容库
-
-### ContentPackage
-
-```text
-id
-scope: system / user / campaign
-ownerUserId
-campaignId
-name
-version
-schemaVersion
-locale
-status: active / disabled / archived
-createdBy
-createdAt
-updatedAt
-```
-
-### ContentItem
-
-```text
-id
-packageId
-type: spell / item / feat / class / race / background / monster / condition
-slug
-name
-structured
-description
-tags
-sourceLabel
-schemaVersion
-createdAt
-updatedAt
-```
-
-`structured` 使用 JSONB，按 type 由 JSON Schema 校验。description 使用富文本或 Markdown 子集。
-
-### ContentOverride
-
-```text
-id
-campaignId
-baseContentItemId
-overrideType: disable / patch / derive
-derivedContentItemId
-patchData
-reason
-createdBy
-createdAt
-updatedAt
-```
-
-战役内容解析顺序：
-
-1. 读取系统基础库。
-2. 合并用户个人库中被战役启用的内容。
-3. 合并战役扩展库。
-4. 应用 ContentOverride。
-5. 输出当前战役可用内容视图。
-
-## 7. 聊天、骰子与检定请求
-
-### ChatMessage
-
-```text
-id
-campaignId
-sessionId
-senderUserId
-visibility: public / dm_only / private
-body
-metadata
-createdAt
-```
-
-### DiceRoll
-
-```text
-id
-campaignId
-sessionId
-rollerUserId
-characterId
-expression
-result
-breakdown
-visibility: public / dm_only / private
-reason
-createdAt
-```
-
-### RollRequest
-
-```text
-id
-campaignId
-sessionId
-requestedBy
-targetType: all / users / characters
-targetIds
-abilityOrSkill
-dc
-dcVisibility: public / dm_only
-visibility: public / dm_only
-status: open / completed / cancelled
-createdAt
-updatedAt
-```
-
-RollRequest 的响应可以作为 DiceRoll 记录，并在 metadata 中关联 rollRequestId。
-
-## 8. 事件日志
+显示身份由服务端根据 membership 和 Actor 派生，不信任客户端 displayName。检定请求和响应通过 `eventData.requestId/targetActorId` 关联。
 
 ### JournalEntry
 
-```text
-id
-campaignId
-sessionId
-type
-visibility: public / dm_only / private
-actorUserId
-targetRef
-payload
-createdAt
-```
+关键消息投影为战役日志。消息和日志在同一事务写入，普通说/做/OOC 不重复入日志。
 
-JournalEntry 是统一事件流。聊天、掷骰、HP 变化、状态变化、成员加入、回合推进、内容包导入等关键事件都应写入 JournalEntry。
+### CampaignArchiveEntry
 
-## 9. 遭遇、参与者与效果
+战役共享 document、location、clue 和 file 条目，支持置顶和软删除；只有战役管理者可写，成员可读。
 
-### Encounter
+## 7. 遭遇
 
-```text
-id
-campaignId
-sessionId
-name
-status: draft / active / completed
-round
-currentTurnParticipantId
-createdBy
-createdAt
-updatedAt
-```
+`Npc`、`Encounter` 和 `EncounterParticipant` 属于战役 DM 控场。Encounter 直接关联 campaign；可空的 legacy sessionId 暂时保留用于旧数据迁移，不得作为新流程前置条件。
 
-### EncounterParticipant
+## 8. 增量同步
 
-```text
-id
-encounterId
-participantType: character / npc / monster
-characterId
-npcId
-displayName
-initiative
-hpCurrent
-hpMax
-armorClass
-isHiddenFromPlayers
-sortOrder
-snapshot
-createdAt
-updatedAt
-```
+`CampaignChange` 是 Actor 和战役资料的单调 cursor 日志，WebSocket 只广播 `{campaignId, entityType, cursor}`。客户端按 cursor 拉取完整实体并写入 Drift campaign cache。
 
-参与者保存快照，避免资料库怪物更新影响已经创建的遭遇。
+## 9. 遗留模型
 
-### Effect
-
-```text
-id
-campaignId
-targetType: character / encounter_participant
-targetId
-sourceType: spell / feature / manual / condition
-sourceContentItemId
-name
-durationType: instant / round / until_short_rest / until_long_rest / manual
-expiresAt
-remainingRounds
-structuredModifiers
-description
-createdBy
-createdAt
-updatedAt
-```
-
-MVP 中 structuredModifiers 只做基础承载，不强制完整自动计算。后续规则引擎可以逐步读取它。
-
-## 10. NPC
-
-### Npc
-
-```text
-id
-campaignId
-contentItemId
-name
-publicDescription
-dmNotes
-stats
-tags
-createdBy
-createdAt
-updatedAt
-```
-
-NPC 可以从怪物资料库派生，也可以完全由 DM 手写。
-
+Prisma 仍含 Session、SessionMember、ChatMessage、DiceRoll、CheckRequest、CheckResponse 和部分旧 Character 绑定模型，以避免预发布数据库升级时直接丢数据。对应 Rooms/Sessions/CheckRequests API 已移除；新代码不得依赖这些表创建产品流程。后续应通过单独迁移归档或删除，而不是重新暴露接口。

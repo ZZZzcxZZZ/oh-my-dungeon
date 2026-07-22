@@ -265,6 +265,7 @@ model CampaignChatMessage {
   delegatedByUserId String?
   speakerAvatarAssetId String?
   publicHealthState String?
+  publicHealthFraction Float?
   ooc              Boolean        @default(false)
   kind             String         @default("say")
   content          String

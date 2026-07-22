@@ -12,19 +12,21 @@ import 'character_controller.dart';
 ///
 /// 列出所有未解决冲突，每个冲突显示本地 vs 远端 sheet 的关键差异，并提供：
 /// - 用本地覆盖：调 actorController.publishCharacter 重发本地角色
-/// - 用远端覆盖：调 actorController.pullUntilCurrent 后 markResolved
+/// - 用远端覆盖：应用冲突发生时捕获的远端快照后 markResolved
 /// - 稍后处理：关闭页面，冲突保留
 class CharacterConflictResolutionPage extends StatelessWidget {
   const CharacterConflictResolutionPage({
     required this.controller,
     required this.characterController,
     this.actorController,
+    this.onUseRemote,
     super.key,
   });
 
   final CharacterConflictBannerController controller;
   final CharacterController characterController;
   final CampaignActorController? actorController;
+  final Future<bool> Function(CharacterSyncConflict conflict)? onUseRemote;
 
   @override
   Widget build(BuildContext context) {
@@ -70,10 +72,7 @@ class CharacterConflictResolutionPage extends StatelessWidget {
   String _characterName(String characterId) {
     final character = characterController.characters
         .cast<CharacterSheet?>()
-        .firstWhere(
-          (c) => c?.id == characterId,
-          orElse: () => null,
-        );
+        .firstWhere((c) => c?.id == characterId, orElse: () => null);
     return character?.name ?? '已删除的角色';
   }
 
@@ -88,10 +87,7 @@ class CharacterConflictResolutionPage extends StatelessWidget {
     }
     final character = characterController.characters
         .cast<CharacterSheet?>()
-        .firstWhere(
-          (c) => c?.id == conflict.characterId,
-          orElse: () => null,
-        );
+        .firstWhere((c) => c?.id == conflict.characterId, orElse: () => null);
     if (character == null) {
       _showSnack(context, '本地角色已被删除');
       return;
@@ -114,28 +110,43 @@ class CharacterConflictResolutionPage extends StatelessWidget {
     BuildContext context,
     CharacterSyncConflict conflict,
   ) async {
-    final actor = actorController;
-    if (actor == null) {
-      _showSnack(context, '未连接到战役，无法拉取');
+    final applyRemote = onUseRemote;
+    if (applyRemote == null) {
+      _showSnack(context, '未连接到战役，无法覆盖');
       return;
     }
-    await actor.pullUntilCurrent();
+    final success = await applyRemote(conflict);
+    if (!context.mounted) return;
+    if (!success) {
+      _showSnack(context, '远端版本应用失败');
+      return;
+    }
     await controller.markResolved(conflict.id);
     if (context.mounted) _showSnack(context, '已用远端版本覆盖');
   }
 
   Future<void> _resolveAllWithRemote(BuildContext context) async {
-    final actor = actorController;
-    if (actor == null) {
-      _showSnack(context, '未连接到战役，无法拉取');
+    final applyRemote = onUseRemote;
+    if (applyRemote == null) {
+      _showSnack(context, '未连接到战役，无法覆盖');
       return;
     }
-    await actor.pullUntilCurrent();
     final conflicts = List<CharacterSyncConflict>.from(controller.conflicts);
+    var resolvedCount = 0;
     for (final conflict in conflicts) {
-      await controller.markResolved(conflict.id);
+      if (await applyRemote(conflict)) {
+        await controller.markResolved(conflict.id);
+        resolvedCount += 1;
+      }
     }
-    if (context.mounted) _showSnack(context, '已用远端版本解决全部冲突');
+    if (context.mounted) {
+      _showSnack(
+        context,
+        resolvedCount == conflicts.length
+            ? '已用远端版本解决全部冲突'
+            : '已解决 $resolvedCount/${conflicts.length} 个冲突',
+      );
+    }
   }
 
   int? _extractRevision(String remoteJson) {
@@ -150,9 +161,9 @@ class CharacterConflictResolutionPage extends StatelessWidget {
   }
 
   void _showSnack(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -306,7 +317,10 @@ class _SheetComparison extends StatelessWidget {
             style: theme.textTheme.labelSmall?.copyWith(color: onColor),
           ),
           const SizedBox(height: 4),
-          Text(name, style: theme.textTheme.titleSmall?.copyWith(color: onColor)),
+          Text(
+            name,
+            style: theme.textTheme.titleSmall?.copyWith(color: onColor),
+          ),
           if (maxHp > 0) ...[
             const SizedBox(height: 4),
             Text(

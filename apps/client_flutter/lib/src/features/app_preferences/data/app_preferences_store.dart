@@ -40,6 +40,8 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
       'app_preferences.dynamic_scheme_variant';
   static const _logCharacterRuntimeChangesKey =
       'app_preferences.log_character_runtime_changes';
+  static const _groupConsecutiveChatMessagesKey =
+      'app_preferences.group_consecutive_chat_messages';
 
   @override
   Future<AppPreferences> load() async {
@@ -89,6 +91,9 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
       logCharacterRuntimeChanges:
           _preferences.getBool(_logCharacterRuntimeChangesKey) ??
           AppPreferences.defaults.logCharacterRuntimeChanges,
+      groupConsecutiveChatMessages:
+          _preferences.getBool(_groupConsecutiveChatMessagesKey) ??
+          AppPreferences.defaults.groupConsecutiveChatMessages,
     );
   }
 
@@ -129,6 +134,10 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
     await _preferences.setBool(
       _logCharacterRuntimeChangesKey,
       preferences.logCharacterRuntimeChanges,
+    );
+    await _preferences.setBool(
+      _groupConsecutiveChatMessagesKey,
+      preferences.groupConsecutiveChatMessages,
     );
     final repo = syncRepository;
     if (repo != null) {

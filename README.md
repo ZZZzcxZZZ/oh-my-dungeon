@@ -6,7 +6,7 @@
 
 当前统一为 `0.1` 开发线。此前文档中出现的 `v0.2`、`v0.8`、`v1.0`、`v2.x` 均视为内部迭代记录，不代表项目已经达到可用 MVP 或正式发布。现在的目标是把已有原型收束为一个真正可用的 `0.1`：战役应像 QQ 群聊一样作为跑团主入口，角色卡、资料库、掷骰、检定和 DM 工具都围绕战役聊天室展开。
 
-当前已有可复用基础能力：服务器 profile、账号、战役、Session/聊天原型、掷骰、角色卡、资料库、DM 控场、检定请求、日志、内容包导入导出、部署与备份恢复文档。它们正在重新整合到 `0.1` 的产品主线里：顶层「桌面」入口已收束到战役聊天室的 `+` 工具菜单，不能继续以“多层新建场次”的临时体验作为完成标准。
+当前已有可复用基础能力：服务器 profile、账号、战役聊天室、掷骰、角色卡、资料库、DM 控场、战役日志、内容包导入导出、部署与备份恢复。`Session` 和 `Rooms` 已退出 `0.1` 产品路径：战役本身就是长期群聊与跑团工作区，不再要求逐层创建场次。
 
 客户端采用离线优先架构：基于 Drift 的本地数据库作为唯一事实来源，应用无需配置服务器即可启动并使用首页、角色、资料库和设置；服务器是可选协作设施，用于跨设备同步和战役联机。服务器 Profile 迁入 Drift 持久化，旧 SharedPreferences 数据一次性迁移。资料库默认为空，项目不内置任何 SRD/PHB/官方规则正文；用户通过本地导入 JSON 或 `.dndpack` 包添加自己的资料。
 
@@ -21,7 +21,7 @@
 - NestJS 服务端骨架
 - `/health`
 - `/.well-known/dnd-tool-server`
-- Prisma schema（User / ServerAdmin / RefreshToken / ServerSetting / VaultEntity / VaultChange / VaultOperation / VaultDevice / Campaign / CampaignSyncState / CampaignActor / CampaignActorAudit / CampaignContentEntry / CampaignChange / CampaignMember / CampaignInvite / CampaignChatMessage / Session / SessionMember / ChatMessage / DiceRoll / JournalEntry / Character / CharacterCampaignBinding / Npc / Encounter / EncounterParticipant / CheckRequest / CheckResponse）
+- Prisma schema（User / Auth / Vault / Campaign / CampaignActor / CampaignContentEntry / CampaignChange / CampaignChatMessage / JournalEntry / Archive / Encounter 等；Session/CheckRequest 旧表仅作预发布数据兼容）
 - Docker Compose 配置
 - GitHub Actions CI 配置
 - 服务端与客户端基础测试
@@ -34,11 +34,9 @@
 - 客户端登录/注册 UI 与当前用户状态
 - 服务端 campaign API：创建 / 列表 / 详情 / 邀请码 / 加入
 - 客户端战役列表与详情页
-- 服务端 session API：创建 / 列表 / 详情 / 开始 / 结束 / 聊天 / 掷骰 / 日志
-- WebSocket Gateway 实时广播（消息、掷骰、会话更新、战役 cursor 推送）
-- 客户端 Session 能力：聊天时间线、掷骰输入、在线成员和 socket.io 实时连接，作为战役聊天室工具继续迁入
+- WebSocket Gateway 实时广播（战役消息和 Actor/资料 cursor 变更）
 - 服务端角色 API：创建 / 编辑 / 自有角色列表 / 角色绑定战役 / 战役角色列表 / 战役角色 HP 调整
-- 客户端角色入口：Material 3 底部导航“角色”页、基础创建/编辑、战役绑定和 HP 快捷调整；Player 模式只管理本地角色，DM 模式管理所选战役的 Actor
+- 客户端角色入口：Material 3 底部导航“角色”页管理本地角色；战役 Actor 的完整管理入口位于战役中心和聊天统一角色卡，DM 可编辑全部 Actor
 - 服务端战役协作 API：CampaignActor CRUD 与审计、CampaignContentEntry CRUD（DM 独立 JSON 条目）、CampaignChange cursor 增量推送、CampaignSyncState 游标管理
 - 客户端战役缓存：5 张本地 Drift 表缓存当前战役的 Actor / ContentEntry / Backlinks / SyncCursors / SyncConflicts，离线可读，联网时按 cursor 增量更新
 - Wiki 同时检索本地资料包和当前战役缓存，同名条目不覆盖，来源 chip 标注「本地」/「战役」
@@ -58,9 +56,8 @@
 - 客户端本地备份与恢复：`.dndtable-backup` ZIP、SHA-256 校验、单事务原子替换、战役缓存清理、资料索引重建
 - 服务端 DM 控场 API：NPC、Encounter、EncounterParticipant、开始/推进/结束遭遇、HP/状态/可见性更新与 JournalEntry 记录
 - 客户端战役工具入口：战役聊天室 `+` 菜单提供桌面工具和 DM 控场入口
-- 服务端检定请求 API：DM 发起检定请求、玩家响应、重复响应保护、目标可见性过滤、关闭请求、结果写入 ChatMessage / DiceRoll / JournalEntry
-- 客户端场次检定入口：Session 详情页显示检定请求、DM 发起、玩家输入修正值响应、DM 查看提交数并关闭请求
-- Session Journal 支持按类型和关键词检索
+- 战役消息支持结构化检定与响应历史、重复响应保护和目标 Actor 校验；DM 快捷检定可直接代掷并写入 roll 消息
+- Campaign Journal 支持按类型和关键词检索
 - 自托管部署、升级、备份与恢复文档
 
 当前执行状态见 [当前执行状态与版本推进计划](docs/roadmap/current-execution-status.md)。

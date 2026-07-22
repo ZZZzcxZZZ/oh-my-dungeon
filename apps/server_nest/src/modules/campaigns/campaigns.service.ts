@@ -396,6 +396,7 @@ export class CampaignsService {
     let delegatedByUserId: string | null = null;
     let speakerAvatarAssetId: string | null = null;
     let publicHealthState: string | null = null;
+    let publicHealthFraction: number | null = null;
     const eventData = validateEventData(kind, input.eventData);
     const membership = campaign.members.find(
       (member: any) => member.userId === actor.userId,
@@ -482,6 +483,7 @@ export class CampaignsService {
       campaignActorId = effectiveActorId;
       speakerAvatarAssetId = campaignActor.avatarAssetId ?? null;
       publicHealthState = resolvePublicHealthState(sheet);
+      publicHealthFraction = resolvePublicHealthFraction(sheet);
       if (
         capabilities.canManageCampaign &&
         campaignActor.actorType === "player" &&
@@ -531,6 +533,16 @@ export class CampaignsService {
         throw new BadRequestException("Check request not found");
       }
       const originalEventData = asRecord(originalRequest.eventData) ?? {};
+      const targetActorId = originalEventData.targetActorId;
+      if (
+        typeof targetActorId === "string" &&
+        targetActorId.length > 0 &&
+        targetActorId !== effectiveActorId
+      ) {
+        throw new ForbiddenException(
+          "Check request must be answered by its target actor",
+        );
+      }
       if (originalEventData.status === "closed") {
         throw new BadRequestException("Check request is closed");
       }
@@ -550,48 +562,54 @@ export class CampaignsService {
       }
     }
 
-    const created = await this.prismaService.campaignChatMessage.create({
-      data: {
-        campaignId,
-        senderId: actor.userId,
-        campaignActorId,
-        displayName,
-        avatarUrl,
-        speakerMode,
-        delegatedByUserId,
-        speakerAvatarAssetId,
-        publicHealthState,
-        ooc,
-        kind,
-        content,
-        ...(actionSnapshot
-          ? {
-              actionSnapshot: actionSnapshot as Prisma.InputJsonValue,
-            }
-          : {}),
-        ...(eventData
-          ? { eventData: eventData as Prisma.InputJsonValue }
-          : {}),
-      },
-    });
+    const messageData: Prisma.CampaignChatMessageUncheckedCreateInput = {
+      campaignId,
+      senderId: actor.userId,
+      campaignActorId,
+      displayName,
+      avatarUrl,
+      speakerMode,
+      delegatedByUserId,
+      speakerAvatarAssetId,
+      publicHealthState,
+      publicHealthFraction,
+      ooc,
+      kind,
+      content,
+      ...(actionSnapshot
+        ? {
+            actionSnapshot: actionSnapshot as Prisma.InputJsonValue,
+          }
+        : {}),
+      ...(eventData
+        ? { eventData: eventData as Prisma.InputJsonValue }
+        : {}),
+    };
+
+    // Key events and their journal projection are one consistency boundary.
+    // Broadcasting is deliberately deferred until the transaction commits.
+    const journalType = toJournalType(kind);
+    const created = journalType
+      ? await this.prismaService.$transaction(async (tx) => {
+          const message = await tx.campaignChatMessage.create({
+            data: messageData,
+          });
+          await tx.journalEntry.create({
+            data: {
+              campaignId,
+              type: journalType,
+              summary: content,
+              refId: message.id,
+            },
+          });
+          return message;
+        })
+      : await this.prismaService.campaignChatMessage.create({
+          data: messageData,
+        });
 
     const view = toCampaignChatMessageView(created);
     this.gateway.broadcastToCampaign(campaignId, "campaign:message:new", view);
-
-    // 关键事件同步写入战役日志 (JournalEntry)。say/action/ooc 等普通对话不
-    // 进日志；仅 system/checkRequest/roll/archivePublished 等结构化事件
-    // 归档，供 records_panel 检索。
-    const journalType = toJournalType(kind);
-    if (journalType) {
-      await this.prismaService.journalEntry.create({
-        data: {
-          campaignId,
-          type: journalType,
-          summary: content,
-          refId: created.id,
-        },
-      });
-    }
 
     return view;
   }
@@ -637,6 +655,7 @@ export class CampaignsService {
       avatarUrl,
     };
     const publicHealthState = resolvePublicHealthState(sheet);
+    const publicHealthFraction = resolvePublicHealthFraction(sheet);
 
     const created = await this.prismaService.$transaction(async (tx) => {
       const tempActor = await tx.campaignActor.create({
@@ -672,6 +691,7 @@ export class CampaignsService {
           delegatedByUserId: null,
           speakerAvatarAssetId: null,
           publicHealthState,
+          publicHealthFraction,
           ooc: false,
           kind: input.kind,
           content: input.content,
@@ -903,6 +923,23 @@ function resolvePublicHealthState(
   return "healthy";
 }
 
+function resolvePublicHealthFraction(
+  sheet: Record<string, unknown>,
+): number | null {
+  const currentHp = sheet.currentHp;
+  const maxHp = sheet.maxHp;
+  if (
+    typeof currentHp !== "number" ||
+    !Number.isFinite(currentHp) ||
+    typeof maxHp !== "number" ||
+    !Number.isFinite(maxHp) ||
+    maxHp <= 0
+  ) {
+    return null;
+  }
+  return Math.min(1, Math.max(0, currentHp / maxHp));
+}
+
 function toCampaignChatMessageView(message: any): CampaignChatMessageView {
   return {
     id: message.id,
@@ -915,6 +952,10 @@ function toCampaignChatMessageView(message: any): CampaignChatMessageView {
     delegatedByUserId: message.delegatedByUserId ?? null,
     speakerAvatarAssetId: message.speakerAvatarAssetId ?? null,
     publicHealthState: message.publicHealthState ?? null,
+    publicHealthFraction:
+      typeof message.publicHealthFraction === "number"
+        ? message.publicHealthFraction
+        : null,
     ooc: message.ooc ?? false,
     kind: message.kind,
     content: message.content,

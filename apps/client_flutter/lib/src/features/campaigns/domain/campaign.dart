@@ -159,6 +159,7 @@ class CampaignChatMessage {
     this.delegatedByUserId,
     this.speakerAvatarAssetId,
     this.publicHealthState,
+    this.publicHealthFraction,
     this.ooc = false,
     this.actionSnapshot,
     this.eventData,
@@ -174,6 +175,7 @@ class CampaignChatMessage {
   final String? delegatedByUserId;
   final String? speakerAvatarAssetId;
   final String? publicHealthState;
+  final double? publicHealthFraction;
   final bool ooc;
   final String kind;
   final String content;
@@ -193,6 +195,7 @@ class CampaignChatMessage {
       delegatedByUserId: json['delegatedByUserId'] as String?,
       speakerAvatarAssetId: json['speakerAvatarAssetId'] as String?,
       publicHealthState: json['publicHealthState'] as String?,
+      publicHealthFraction: (json['publicHealthFraction'] as num?)?.toDouble(),
       ooc: json['ooc'] as bool? ?? false,
       kind: json['kind']! as String,
       content: json['content']! as String,
@@ -220,6 +223,7 @@ class CampaignChatMessage {
             delegatedByUserId == other.delegatedByUserId &&
             speakerAvatarAssetId == other.speakerAvatarAssetId &&
             publicHealthState == other.publicHealthState &&
+            publicHealthFraction == other.publicHealthFraction &&
             ooc == other.ooc &&
             kind == other.kind &&
             content == other.content &&
@@ -240,6 +244,7 @@ class CampaignChatMessage {
     delegatedByUserId,
     speakerAvatarAssetId,
     publicHealthState,
+    publicHealthFraction,
     ooc,
     kind,
     content,

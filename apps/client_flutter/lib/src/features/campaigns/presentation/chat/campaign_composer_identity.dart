@@ -14,6 +14,7 @@ class CampaignComposerIdentity {
     required this.actorId,
     required this.avatarUrl,
     required this.healthState,
+    this.healthFraction,
     required this.localCharacter,
     required this.campaignActor,
     required this.subtitle,
@@ -24,6 +25,7 @@ class CampaignComposerIdentity {
   final String? actorId;
   final String? avatarUrl;
   final String? healthState;
+  final double? healthFraction;
   final CharacterSheet? localCharacter;
   final CampaignActor? campaignActor;
   final String subtitle;
@@ -134,6 +136,14 @@ CampaignComposerIdentity resolveCampaignComposerIdentity({
                 localCharacter.maxHp,
               )) ??
         workspaceActor?.publicHealthState,
+    healthFraction:
+        campaignHealthFractionFromSheet(sheet) ??
+        (localCharacter == null
+            ? null
+            : campaignHealthFractionFromHp(
+                localCharacter.currentHp,
+                localCharacter.maxHp,
+              )),
     localCharacter: localCharacter,
     campaignActor: campaignActor,
     subtitle: hp ?? actorLabel ?? '角色发言',

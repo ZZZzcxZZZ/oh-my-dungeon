@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/presentation/avatar_image_provider.dart';
@@ -15,6 +17,7 @@ enum CampaignAvatarHealth { healthy, injured, critical, down, unknown }
 class CampaignAvatar extends StatelessWidget {
   const CampaignAvatar({
     this.health = CampaignAvatarHealth.unknown,
+    this.healthFraction,
     this.imageUrl,
     this.initials = '',
     this.size = 40,
@@ -24,6 +27,7 @@ class CampaignAvatar extends StatelessWidget {
   });
 
   final CampaignAvatarHealth health;
+  final double? healthFraction;
   final String? imageUrl;
   final String initials;
   final double size;
@@ -39,6 +43,9 @@ class CampaignAvatar extends StatelessWidget {
       _ => CampaignAvatarHealth.unknown,
     };
   }
+
+  static double? fractionFromHp(num? current, num? max) =>
+      campaignHealthFractionFromHp(current, max);
 
   static CampaignAvatarHealth healthFromState(String? state) {
     return switch (state) {
@@ -58,6 +65,8 @@ class CampaignAvatar extends StatelessWidget {
         ? initials.characters.first.toUpperCase()
         : '';
     final ringWidth = size * 0.09;
+    final ringFraction =
+        healthFraction?.clamp(0, 1).toDouble() ?? _fallbackFraction(health);
     final targetSize = tapTargetSize == null
         ? size
         : tapTargetSize!.clamp(size, double.infinity).toDouble();
@@ -83,10 +92,13 @@ class CampaignAvatar extends StatelessWidget {
                 children: [
                   CustomPaint(
                     key: Key('campaign-avatar-ring-${health.name}'),
-                    painter: _HealthRingPainter(
+                    painter: CampaignHealthRingPainter(
                       color: _ringColor(theme.colorScheme, health),
+                      trackColor: theme.colorScheme.outlineVariant.withValues(
+                        alpha: 0.72,
+                      ),
                       strokeWidth: ringWidth,
-                      hollow: health == CampaignAvatarHealth.down,
+                      fraction: ringFraction,
                     ),
                     child: Padding(
                       padding: EdgeInsets.all(ringWidth + 2),
@@ -149,39 +161,70 @@ class CampaignAvatar extends StatelessWidget {
     return switch (health) {
       CampaignAvatarHealth.healthy => colors.primary,
       CampaignAvatarHealth.injured => colors.tertiary,
-      CampaignAvatarHealth.critical || CampaignAvatarHealth.down =>
-        colors.error,
+      CampaignAvatarHealth.critical ||
+      CampaignAvatarHealth.down => colors.error,
       CampaignAvatarHealth.unknown => colors.outline,
     };
   }
+
+  double? _fallbackFraction(CampaignAvatarHealth health) => switch (health) {
+    CampaignAvatarHealth.healthy => 0.75,
+    CampaignAvatarHealth.injured => 0.5,
+    CampaignAvatarHealth.critical => 0.25,
+    CampaignAvatarHealth.down => 0,
+    CampaignAvatarHealth.unknown => null,
+  };
 }
 
-class _HealthRingPainter extends CustomPainter {
-  const _HealthRingPainter({
+class CampaignHealthRingPainter extends CustomPainter {
+  const CampaignHealthRingPainter({
     required this.color,
+    required this.trackColor,
     required this.strokeWidth,
-    required this.hollow,
+    required this.fraction,
   });
 
   final Color color;
+  final Color trackColor;
   final double strokeWidth;
-  final bool hollow;
+  final double? fraction;
 
   @override
   void paint(Canvas canvas, Size canvasSize) {
-    final paint = Paint()
+    final trackPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.butt;
+    final radius = (canvasSize.shortestSide - strokeWidth) / 2;
+    final center = Offset(canvasSize.width / 2, canvasSize.height / 2);
+    canvas.drawCircle(center, radius, trackPaint);
+
+    final progress = fraction;
+    if (progress == null || progress <= 0) return;
+    final progressPaint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round;
-    final radius = (canvasSize.shortestSide - strokeWidth) / 2;
-    final center = Offset(canvasSize.width / 2, canvasSize.height / 2);
-    canvas.drawCircle(center, radius, paint);
+    if (progress >= 1) {
+      canvas.drawCircle(center, radius, progressPaint);
+      return;
+    }
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    canvas.drawArc(
+      rect,
+      -math.pi / 2,
+      math.pi * 2 * progress,
+      false,
+      progressPaint,
+    );
   }
 
   @override
-  bool shouldRepaint(covariant _HealthRingPainter oldDelegate) =>
+  bool shouldRepaint(covariant CampaignHealthRingPainter oldDelegate) =>
       color != oldDelegate.color ||
+      trackColor != oldDelegate.trackColor ||
       strokeWidth != oldDelegate.strokeWidth ||
-      hollow != oldDelegate.hollow;
+      fraction != oldDelegate.fraction;
 }

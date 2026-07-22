@@ -612,6 +612,15 @@ class _SettingsTabPageState extends State<SettingsTabPage> {
                 value: preferences.confirmBeforeRoll,
                 onChanged: widget.appPreferencesController.setConfirmBeforeRoll,
               ),
+              SwitchListTile(
+                secondary: const Icon(Icons.account_circle_outlined),
+                title: const Text('合并连续消息头像'),
+                subtitle: const Text('同一角色连续发言时，只在第一条消息显示头像和名称'),
+                value: preferences.groupConsecutiveChatMessages,
+                onChanged: widget
+                    .appPreferencesController
+                    .setGroupConsecutiveChatMessages,
+              ),
             ],
           ),
         ),

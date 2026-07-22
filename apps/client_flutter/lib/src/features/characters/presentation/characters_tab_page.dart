@@ -11,6 +11,7 @@ import '../../campaigns/presentation/campaign_controller.dart';
 import '../../client_mode/domain/client_mode.dart';
 import '../../content/data/local/content_repository.dart';
 import '../../content/domain/content_entry.dart';
+import '../data/local/character_sync_conflict_repository.dart';
 import '../domain/character.dart';
 import '../domain/character_rule_projector.dart';
 import '../domain/dnd5e_rules.dart';
@@ -32,6 +33,7 @@ class CharactersTabPage extends StatefulWidget {
     this.modeController,
     this.actorController,
     this.conflictBannerController,
+    this.onUseRemoteConflict,
     super.key,
   });
 
@@ -46,6 +48,8 @@ class CharactersTabPage extends StatefulWidget {
 
   /// 角色 vs Actor 同步冲突 banner。仅在桌面/移动端有本地数据库时注入。
   final CharacterConflictBannerController? conflictBannerController;
+  final Future<bool> Function(CharacterSyncConflict conflict)?
+  onUseRemoteConflict;
 
   @override
   State<CharactersTabPage> createState() => _CharactersTabPageState();
@@ -112,7 +116,9 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
           floatingActionButton: FloatingActionButton.extended(
             key: const Key('create_character'),
             heroTag: 'create_character',
-            onPressed: _isDmModeWithCampaign ? _showDmCreateMenu : _openCreatePage,
+            onPressed: _isDmModeWithCampaign
+                ? _showDmCreateMenu
+                : _openCreatePage,
             icon: const Icon(Icons.person_add_alt_1),
             label: const Text('新角色'),
           ),
@@ -177,6 +183,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
           controller: banner,
           characterController: widget.controller,
           actorController: widget.actorController,
+          onUseRemote: widget.onUseRemoteConflict,
         ),
       ),
     );
@@ -466,9 +473,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     if (!mounted) return;
     messenger.showSnackBar(
       SnackBar(
-        content: Text(
-          success ? '已创建临时角色' : (actorController.error ?? '创建失败'),
-        ),
+        content: Text(success ? '已创建临时角色' : (actorController.error ?? '创建失败')),
       ),
     );
   }
@@ -505,9 +510,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
               messenger.showSnackBar(
                 SnackBar(
                   content: Text(
-                    success
-                        ? '角色已创建'
-                        : (widget.controller.error ?? '创建失败'),
+                    success ? '角色已创建' : (widget.controller.error ?? '创建失败'),
                   ),
                 ),
               );
@@ -676,9 +679,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
               messenger.showSnackBar(
                 SnackBar(
                   content: Text(
-                    success
-                        ? '角色已保存'
-                        : (widget.controller.error ?? '保存失败'),
+                    success ? '角色已保存' : (widget.controller.error ?? '保存失败'),
                   ),
                 ),
               );
@@ -790,6 +791,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
       builder: (context) => PublishCharacterSheet(
         controller: actorController,
         character: character,
+        allowDmActorTypes: _isDmModeWithCampaign,
       ),
     );
   }
@@ -885,7 +887,8 @@ class _CharacterCardState extends State<_CharacterCard> {
             leading: CircleAvatar(
               key: Key('character-list-avatar-${widget.character.id}'),
               backgroundImage: avatarImageProvider(widget.character.avatarUrl),
-              child: widget.character.avatarUrl == null ||
+              child:
+                  widget.character.avatarUrl == null ||
                       widget.character.avatarUrl!.isEmpty
                   ? Text(widget.character.name.characters.first.toUpperCase())
                   : null,

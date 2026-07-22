@@ -22,21 +22,21 @@ class DriftCharacterRepository implements CharacterRepository {
           ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
         .watch()
         .asyncMap((rows) async {
-      final result = <CharacterSheet>[];
-      for (final row in rows) {
-        final refs = await _loadRefs(row.id);
-        result.add(_toCharacter(row, refs));
-      }
-      return result;
-    });
+          final result = <CharacterSheet>[];
+          for (final row in rows) {
+            final refs = await _loadRefs(row.id);
+            result.add(_toCharacter(row, refs));
+          }
+          return result;
+        });
   }
 
   @override
   Future<CharacterSheet?> getById(String id) async {
     final db = _database;
-    final row = await (db.select(db.characters)
-          ..where((t) => t.id.equals(id)))
-        .getSingleOrNull();
+    final row = await (db.select(
+      db.characters,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
     if (row == null) return null;
     final refs = await _loadRefs(id);
     return _toCharacter(row, refs);
@@ -46,26 +46,30 @@ class DriftCharacterRepository implements CharacterRepository {
   Future<void> save(CharacterSheet character) async {
     final db = _database;
     await db.transaction(() async {
-      final existing = await (db.select(db.characters)
-            ..where((t) => t.id.equals(character.id)))
-          .getSingleOrNull();
-      await _writeCharacter(character);
-      await (db.delete(db.syncOutbox)
-            ..where(
-              (t) =>
-                  t.scope.equals('vault') &
-                  t.entityType.equals('character') &
-                  t.entityId.equals(character.id),
-            ))
+      final existing = await (db.select(
+        db.characters,
+      )..where((t) => t.id.equals(character.id))).getSingleOrNull();
+      await _writeCharacter(
+        character,
+        revision: Value((existing?.revision ?? 0) + 1),
+      );
+      await (db.delete(db.syncOutbox)..where(
+            (t) =>
+                t.scope.equals('vault') &
+                t.entityType.equals('character') &
+                t.entityId.equals(character.id),
+          ))
           .go();
-      await DriftSyncRepository(_database).enqueue(SyncOperation(
-        id: 'vault:character:${character.id}:${DateTime.now().microsecondsSinceEpoch}',
-        scope: 'vault',
-        entityType: 'character',
-        entityId: character.id,
-        baseRevision: existing?.syncRevision ?? 0,
-        payloadJson: jsonEncode(character.toJson()),
-      ));
+      await DriftSyncRepository(_database).enqueue(
+        SyncOperation(
+          id: 'vault:character:${character.id}:${DateTime.now().microsecondsSinceEpoch}',
+          scope: 'vault',
+          entityType: 'character',
+          entityId: character.id,
+          baseRevision: existing?.syncRevision ?? 0,
+          payloadJson: jsonEncode(character.toJson()),
+        ),
+      );
     });
   }
 
@@ -75,29 +79,42 @@ class DriftCharacterRepository implements CharacterRepository {
   Future<void> saveRemote(CharacterSheet character, int syncRevision) async {
     final db = _database;
     await db.transaction(() async {
-      await _writeCharacter(character, syncRevision: Value(syncRevision));
+      final existing = await (db.select(
+        db.characters,
+      )..where((t) => t.id.equals(character.id))).getSingleOrNull();
+      await _writeCharacter(
+        character,
+        revision: Value((existing?.revision ?? 0) + 1),
+        syncRevision: Value(syncRevision),
+      );
     });
   }
 
   Future<void> _writeCharacter(
     CharacterSheet character, {
+    Value<int> revision = const Value.absent(),
     Value<int?> syncRevision = const Value.absent(),
   }) async {
     final db = _database;
-    await db.into(db.characters).insertOnConflictUpdate(
+    await db
+        .into(db.characters)
+        .insertOnConflictUpdate(
           CharactersCompanion.insert(
             id: character.id,
             ownerLocalId: Value(character.ownerUserId),
             sheetJson: jsonEncode(character.toJson()),
+            revision: revision,
             syncRevision: syncRevision,
             updatedAt: Value(DateTime.now()),
           ),
         );
-    await (db.delete(db.characterContentRefs)
-          ..where((t) => t.characterId.equals(character.id)))
-        .go();
+    await (db.delete(
+      db.characterContentRefs,
+    )..where((t) => t.characterId.equals(character.id))).go();
     for (final ref in character.contentReferences) {
-      await db.into(db.characterContentRefs).insert(
+      await db
+          .into(db.characterContentRefs)
+          .insert(
             CharacterContentRefsCompanion.insert(
               characterId: character.id,
               slot: ref.slot,
@@ -112,41 +129,42 @@ class DriftCharacterRepository implements CharacterRepository {
   @override
   Future<void> archive(String id) async {
     final db = _database;
-    await (db.update(db.characters)
-          ..where((t) => t.id.equals(id)))
-        .write(CharactersCompanion(archivedAt: Value(DateTime.now())));
+    await (db.update(db.characters)..where((t) => t.id.equals(id))).write(
+      CharactersCompanion(archivedAt: Value(DateTime.now())),
+    );
   }
 
   @override
   Future<void> delete(String id) async {
     final db = _database;
     await db.transaction(() async {
-      await (db.delete(db.characterContentRefs)
-            ..where((t) => t.characterId.equals(id)))
-          .go();
-      await (db.delete(db.characters)
-            ..where((t) => t.id.equals(id)))
-          .go();
+      await (db.delete(
+        db.characterContentRefs,
+      )..where((t) => t.characterId.equals(id))).go();
+      await (db.delete(db.characters)..where((t) => t.id.equals(id))).go();
     });
   }
 
   Future<List<CharacterContentReference>> _loadRefs(String characterId) async {
     final db = _database;
-    final rows = await (db.select(db.characterContentRefs)
-          ..where((t) => t.characterId.equals(characterId))
-          ..orderBy([(t) => OrderingTerm.asc(t.slot)]))
-        .get();
+    final rows =
+        await (db.select(db.characterContentRefs)
+              ..where((t) => t.characterId.equals(characterId))
+              ..orderBy([(t) => OrderingTerm.asc(t.slot)]))
+            .get();
     return rows
-        .map((row) => CharacterContentReference(
-              slot: row.slot,
-              entryKey: row.entryKey,
-              sourceRevision: row.sourceRevision,
-              snapshot: row.snapshotJson.isEmpty
-                  ? const <String, Object?>{}
-                  : Map<String, Object?>.from(
-                      jsonDecode(row.snapshotJson) as Map,
-                    ),
-            ))
+        .map(
+          (row) => CharacterContentReference(
+            slot: row.slot,
+            entryKey: row.entryKey,
+            sourceRevision: row.sourceRevision,
+            snapshot: row.snapshotJson.isEmpty
+                ? const <String, Object?>{}
+                : Map<String, Object?>.from(
+                    jsonDecode(row.snapshotJson) as Map,
+                  ),
+          ),
+        )
         .toList();
   }
 

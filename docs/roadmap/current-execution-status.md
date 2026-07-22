@@ -179,8 +179,35 @@
 3. ✅ 把遭遇控场从旧桌面页迁入「DM 控场」底部页 — `EncounterPanelPage` widget 已创建, 接入 `EncounterController`, DM 控场 sheet 提供"遭遇控场"入口跳转, 支持参与者 HP 调整 / 推进回合 / 结束遭遇 / 空态新建遭遇.
 4. ✅ 推进标准创建向导：法术准备上限 — `StructuredClassRules.preparedSpellLimit` 按施法属性修正 + 等级计算可准备法术数，向导第 6 步通过 `_MultiChoiceSection.maximum` 阻止超额选择并实时显示 `已选/上限` 计数；装备购买预算仍为后续增强项。
 5. ✅ 增强本地资料库 GUI：编辑条目、复制条目、批量导入确认向导 — `ContentDetailPage` 支持就地编辑条目名称/摘要，并基于现有条目复制副本；新增 `BatchImportWizardDialog` 通过 `ContentFilePicker.pickMultiple()` 并行生成多份预览报告，支持勾选/全选/取消全选后批量导入；`ContentPackageSettingsPage` 在「从文件导入」下新增「批量导入」入口。
-6. ✅ 旧 `rooms`、`TableTabPage` 和 Session 源码清理 — 服务端 `RoomsModule` / `SessionsModule` / `SessionsGateway` 已整体删除，`SessionPolicy` 收敛并迁移到 `check-requests/policies/`（仅保留 `canStartSession` / `canViewSession` / `canViewDMContent`），`app.module.ts`、`realtime.module.ts`、`check-requests.e2e-spec.ts`、`server-info.e2e-spec.ts` 同步移除相关引用与 rooms 测试。
+6. ✅ 旧 `rooms`、`TableTabPage`、Session 和独立 CheckRequests 源码清理 — 服务端 `RoomsModule` / `SessionsModule` / `SessionsGateway` / `CheckRequestsModule` 已删除；检定历史收敛为 CampaignChatMessage 聚合，旧 Session 检定路由固定返回 404。Prisma 旧表暂留给预发布数据迁移，不得作为新功能依赖。
 7. ✅ DM Actor 编辑与玩家本地角色的双向同步 — 切片 A (publishCharacter baseRevision + socket changeStream + 409 冲突对话框) 与切片 B (CharacterSyncConflictRepository + BannerController + ResolutionPage) 已完成.
+
+## 2026-07-22 总体审查修复
+
+- 本地资料条目编辑/复制不再把完整正文送入 Vault；复制条目保留结构化 rules。
+- 本地角色 revision 每次写入递增；发布成功建立新 backlink 基线，避免自冲突。
+- Actor 无冲突回写覆盖完整角色构建字段；冲突保存远端 actor revision，并能真正应用已捕获的远端快照。
+- 输入栏角色卡优先走统一 CampaignActor launcher，恢复玩家本人和 DM 的正确编辑权限。
+- 检定响应必须使用请求目标 Actor；关键消息与 JournalEntry 同事务写入，提交后再广播。
+- 移除已孤立的 Session CheckRequests HTTP 模块，并同步架构、API、领域模型和 Agent 入口文档。
+- 最终验收：`npm run doctor` 全绿，服务端 18 套件 / 271 项测试通过，Flutter 567 项通过、2 项私有包路径测试按设计跳过；随后 `npm run validate:phb-private` 以真实 1106 条资料包补跑 2 项导入与子职关联测试并通过；`flutter build web --release` 成功，`git diff --check` 通过。
+
+## 2026-07-22 战役聊天壳层收口
+
+- 顶栏收束为返回、战役名称和战役中心；聊天记录搜索统一留在战役中心，不再在聊天室维护重复搜索、高亮和跳转状态。
+- 消息时间线按群聊习惯区分本人靠右、他人靠左，连续同身份消息折叠重复姓名，旁白、系统事件和检定卡保持居中且限制阅读宽度。
+- 时间线默认定位到最新消息，发送成功后回到最新位置；360x800、390x844 和 1280x720 均有长身份与长内容回归测试。
+- 输入栏拆为独立 Material 3 Composer：32px 头像配 48px 触控目标、紧凑图标式说/做切换、可伸缩文本框、发送状态和临时身份提示；失败发送保留草稿。
+- 头像工具面板保留既有视觉，将身份、高频角色操作和战役工具分层；客户端 DM/Player 偏好不参与战役权限判断。
+- 删除聊天页旧内联输入栏、旧搜索面板和重复消息布局，聊天页面只负责生命周期、加载态与业务动作协调。
+- 验收：聊天相关 69 项测试通过；Flutter 全量 583 项通过、2 项私有路径测试按设计跳过；`flutter analyze` 零问题；Web release 构建成功；`npm run doctor` 全绿，服务端 18 套件 / 271 项测试通过，Docker Compose 配置有效。
+
+## 2026-07-22 角色呈现壳层重构
+
+- 角色卡新增独立 `CharacterSheetShell`：手机保留可滚动标签，900px 以上使用 Material 3 NavigationRail，八个业务面板和初始页面 ID 保持不变。
+- 标准创建新增独立 `CharacterBuilderShell`：手机步骤选择、桌面侧栏、编辑区、摘要列和底部动作插槽脱离规则状态，职业、子职、装备、法术和规则选择逻辑未改动。
+- 删除角色业务页面中的重复响应式 Scaffold、NavigationRail 和手机步骤选择器实现，为后续角色卡内容密度优化建立稳定边界。
+- 验收：角色壳层与角色页面 49 项测试通过；Flutter 全量 587 项通过、2 项私有路径测试按设计跳过；`flutter analyze` 零问题；Web release 构建成功；`npm run doctor` 全绿，服务端 18 套件 / 271 项测试通过。
 
 ## 验证规则
 

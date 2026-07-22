@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_actor.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/chat/campaign_composer_identity.dart';
@@ -15,6 +17,14 @@ void main() {
       expect(CampaignAvatar.healthFromHp(5, 20), CampaignAvatarHealth.critical);
       expect(CampaignAvatar.healthFromHp(3, 20), CampaignAvatarHealth.critical);
       expect(CampaignAvatar.healthFromHp(0, 20), CampaignAvatarHealth.down);
+    });
+
+    test('keeps the exact HP fraction for a progress ring', () {
+      expect(CampaignAvatar.fractionFromHp(20, 20), 1);
+      expect(CampaignAvatar.fractionFromHp(5, 20), 0.25);
+      expect(CampaignAvatar.fractionFromHp(-2, 20), 0);
+      expect(CampaignAvatar.fractionFromHp(24, 20), 1);
+      expect(CampaignAvatar.fractionFromHp(10, 0), isNull);
     });
 
     test('returns unknown when maxHp missing or zero', () {
@@ -40,10 +50,7 @@ void main() {
         CampaignAvatar.healthFromState('critical'),
         CampaignAvatarHealth.critical,
       );
-      expect(
-        CampaignAvatar.healthFromState('down'),
-        CampaignAvatarHealth.down,
-      );
+      expect(CampaignAvatar.healthFromState('down'), CampaignAvatarHealth.down);
       expect(
         CampaignAvatar.healthFromState(null),
         CampaignAvatarHealth.unknown,
@@ -115,6 +122,39 @@ void main() {
     );
 
     expect(identity.healthState, 'critical');
+    expect(identity.healthFraction, 0.1);
+  });
+
+  test('health ring paints remaining HP over a neutral track', () async {
+    const size = ui.Size.square(40);
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    const painter = CampaignHealthRingPainter(
+      color: ui.Color(0xFFFF0000),
+      trackColor: ui.Color(0xFF0000FF),
+      strokeWidth: 4,
+      fraction: 0.25,
+    );
+
+    painter.paint(canvas, size);
+    final image = await recorder.endRecording().toImage(40, 40);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    final data = bytes!.buffer.asUint8List();
+
+    ui.Color pixelAt(int x, int y) {
+      final offset = (y * 40 + x) * 4;
+      return ui.Color.fromARGB(
+        data[offset + 3],
+        data[offset],
+        data[offset + 1],
+        data[offset + 2],
+      );
+    }
+
+    final top = pixelAt(20, 2);
+    final bottom = pixelAt(20, 38);
+    expect(top.r, greaterThan(top.b));
+    expect(bottom.b, greaterThan(bottom.r));
   });
   testWidgets('shows first initial when no image is provided', (tester) async {
     await tester.pumpWidget(

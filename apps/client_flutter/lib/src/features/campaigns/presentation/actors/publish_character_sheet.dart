@@ -14,11 +14,13 @@ class PublishCharacterSheet extends StatefulWidget {
   const PublishCharacterSheet({
     required this.controller,
     required this.character,
+    this.allowDmActorTypes = false,
     super.key,
   });
 
   final CampaignActorController controller;
   final CharacterSheet character;
+  final bool allowDmActorTypes;
 
   @override
   State<PublishCharacterSheet> createState() => _PublishCharacterSheetState();
@@ -38,9 +40,7 @@ class _PublishCharacterSheetState extends State<PublishCharacterSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '将“${widget.character.name}”发布为战役角色，DM 可在战役中查看和编辑。',
-            ),
+            Text('将“${widget.character.name}”发布为战役角色，DM 可在战役中查看和编辑。'),
             const SizedBox(height: 12),
             Text('角色概要', style: Theme.of(context).textTheme.labelLarge),
             const SizedBox(height: 4),
@@ -53,39 +53,45 @@ class _PublishCharacterSheetState extends State<PublishCharacterSheet> {
                   Chip(label: Text(widget.character.classSummary)),
                 if (widget.character.raceSummary.isNotEmpty)
                   Chip(label: Text(widget.character.raceSummary)),
-                Chip(label: Text('HP ${widget.character.currentHp}/${widget.character.maxHp}')),
+                Chip(
+                  label: Text(
+                    'HP ${widget.character.currentHp}/${widget.character.maxHp}',
+                  ),
+                ),
                 Chip(label: Text('AC ${widget.character.armorClass}')),
               ],
             ),
-            const SizedBox(height: 16),
-            Text('角色类型', style: Theme.of(context).textTheme.labelLarge),
-            const SizedBox(height: 4),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                ChoiceChip(
-                  label: const Text('玩家角色'),
-                  selected: _actorType == 'player',
-                  onSelected: (_) => setState(() => _actorType = 'player'),
-                ),
-                ChoiceChip(
-                  label: const Text('NPC'),
-                  selected: _actorType == 'npc',
-                  onSelected: (_) => setState(() => _actorType = 'npc'),
-                ),
-                ChoiceChip(
-                  label: const Text('怪物'),
-                  selected: _actorType == 'monster',
-                  onSelected: (_) => setState(() => _actorType = 'monster'),
-                ),
-                ChoiceChip(
-                  label: const Text('同伴'),
-                  selected: _actorType == 'companion',
-                  onSelected: (_) => setState(() => _actorType = 'companion'),
-                ),
-              ],
-            ),
+            if (widget.allowDmActorTypes) ...[
+              const SizedBox(height: 16),
+              Text('角色类型', style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  ChoiceChip(
+                    label: const Text('玩家角色'),
+                    selected: _actorType == 'player',
+                    onSelected: (_) => setState(() => _actorType = 'player'),
+                  ),
+                  ChoiceChip(
+                    label: const Text('NPC'),
+                    selected: _actorType == 'npc',
+                    onSelected: (_) => setState(() => _actorType = 'npc'),
+                  ),
+                  ChoiceChip(
+                    label: const Text('怪物'),
+                    selected: _actorType == 'monster',
+                    onSelected: (_) => setState(() => _actorType = 'monster'),
+                  ),
+                  ChoiceChip(
+                    label: const Text('同伴'),
+                    selected: _actorType == 'companion',
+                    onSelected: (_) => setState(() => _actorType = 'companion'),
+                  ),
+                ],
+              ),
+            ],
             if (widget.controller.selectedCampaignId == null) ...[
               const SizedBox(height: 12),
               Text(
@@ -134,9 +140,9 @@ class _PublishCharacterSheetState extends State<PublishCharacterSheet> {
     if (!mounted) return;
     setState(() => _submitting = false);
     if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已发布到战役')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已发布到战役')));
       Navigator.of(context).pop();
       return;
     }
@@ -147,9 +153,9 @@ class _PublishCharacterSheetState extends State<PublishCharacterSheet> {
       await _showConflictDialog(conflict, sheet);
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(widget.controller.error ?? '发布失败')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(widget.controller.error ?? '发布失败')));
   }
 
   Future<void> _showConflictDialog(
@@ -158,7 +164,9 @@ class _PublishCharacterSheetState extends State<PublishCharacterSheet> {
   ) async {
     final controller = widget.controller;
     final remoteRevision = conflict.current['revision'];
-    final remoteRevisionInt = remoteRevision is num ? remoteRevision.toInt() : null;
+    final remoteRevisionInt = remoteRevision is num
+        ? remoteRevision.toInt()
+        : null;
     final remoteSheet = conflict.current['sheet'] is Map
         ? Map<String, Object?>.from(conflict.current['sheet'] as Map)
         : <String, Object?>{};
@@ -230,14 +238,14 @@ class _PublishCharacterSheetState extends State<PublishCharacterSheet> {
     if (!mounted) return;
     setState(() => _submitting = false);
     if (retrySuccess) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已用本地版本覆盖远端')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已用本地版本覆盖远端')));
       Navigator.of(context).pop();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(controller.error ?? '覆盖失败，请重试')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(controller.error ?? '覆盖失败，请重试')));
     }
   }
 

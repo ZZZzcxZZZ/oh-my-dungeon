@@ -30,6 +30,10 @@ class CampaignMemberTile extends StatelessWidget {
           actor?.sheet['currentHp'] as num?,
           actor?.sheet['maxHp'] as num?,
         ),
+        healthFraction: CampaignAvatar.fractionFromHp(
+          actor?.sheet['currentHp'] as num?,
+          actor?.sheet['maxHp'] as num?,
+        ),
       ),
       title: Text(member.displayName),
       subtitle: subtitle.isEmpty ? null : Text(subtitle),
@@ -54,6 +58,10 @@ class ActorOnlyMemberTile extends StatelessWidget {
         initials: displayName,
         imageUrl: actor.sheet['avatarUrl'] as String?,
         health: CampaignAvatar.healthFromHp(
+          actor.sheet['currentHp'] as num?,
+          actor.sheet['maxHp'] as num?,
+        ),
+        healthFraction: CampaignAvatar.fractionFromHp(
           actor.sheet['currentHp'] as num?,
           actor.sheet['maxHp'] as num?,
         ),

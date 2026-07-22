@@ -538,31 +538,32 @@ class DriftContentRepository implements ContentRepository {
       await (db.delete(
         db.contentLinks,
       )..where((t) => t.sourceId.equals(entry.id))).go();
-      await (db.update(entries)..where((t) => t.entryKey.equals(entry.id)))
-          .write(
-            LocalContentEntriesCompanion(
-              name: Value(entry.name),
-              aliasesJson: Value(jsonEncode(entry.aliases)),
-              summary: Value(entry.summary),
-              bodyJson: Value(
-                jsonEncode(entry.body.map((b) => b.toJson()).toList()),
-              ),
-              structuredJson: Value(jsonEncode(entry.structured)),
-              rulesJson: Value(jsonEncode(entry.rules?.toJson() ?? const {})),
-              relationsJson: Value(
-                jsonEncode(
-                  entry.relations.map((r) => r.toJson()).toList(),
-                ),
-              ),
-              tagsJson: Value(jsonEncode(entry.tags)),
-              sourceLabel: Value(entry.source.label),
-              revision: Value(entry.revision),
-            ),
-          );
+      await (db.update(
+        entries,
+      )..where((t) => t.entryKey.equals(entry.id))).write(
+        LocalContentEntriesCompanion(
+          name: Value(entry.name),
+          aliasesJson: Value(jsonEncode(entry.aliases)),
+          summary: Value(entry.summary),
+          bodyJson: Value(
+            jsonEncode(entry.body.map((b) => b.toJson()).toList()),
+          ),
+          structuredJson: Value(jsonEncode(entry.structured)),
+          rulesJson: Value(jsonEncode(entry.rules?.toJson() ?? const {})),
+          relationsJson: Value(
+            jsonEncode(entry.relations.map((r) => r.toJson()).toList()),
+          ),
+          tagsJson: Value(jsonEncode(entry.tags)),
+          sourceLabel: Value(entry.source.label),
+          revision: Value(entry.revision),
+        ),
+      );
       var linkIndex = 0;
       for (final block in entry.body) {
         if (block is EntryLinkBlock) {
-          await db.into(db.contentLinks).insert(
+          await db
+              .into(db.contentLinks)
+              .insert(
                 ContentLinksCompanion.insert(
                   id: '${entry.id}#${linkIndex++}',
                   sourceId: entry.id,
@@ -572,11 +573,9 @@ class DriftContentRepository implements ContentRepository {
               );
         }
       }
-      await _enqueueVaultOperation(
-        entityType: 'contentEntry',
-        entityId: entry.id,
-        payloadJson: jsonEncode(entry.toJson()),
-      );
+      // Imported package entries, including local edits, stay on this device.
+      // Campaign sharing has its own explicit content sync path; sending the
+      // full entry through Vault would upload private package bodies.
     });
   }
 
@@ -594,15 +593,15 @@ class DriftContentRepository implements ContentRepository {
     final newSlug = '${source.slug}-copy';
     final newKey = '${source.packageId}:${source.type}/$newSlug';
     if (await (db.select(
-      entries,
-    )..where((t) => t.entryKey.equals(newKey))).getSingleOrNull() !=
+          entries,
+        )..where((t) => t.entryKey.equals(newKey))).getSingleOrNull() !=
         null) {
       // 已存在 -copy, 试 -copy-2, -copy-3 ...
       var counter = 2;
       var candidate = '${source.packageId}:${source.type}/$newSlug-$counter';
       while (await (db.select(
-        entries,
-      )..where((t) => t.entryKey.equals(candidate))).getSingleOrNull() !=
+            entries,
+          )..where((t) => t.entryKey.equals(candidate))).getSingleOrNull() !=
           null) {
         counter += 1;
         candidate = '${source.packageId}:${source.type}/$newSlug-$counter';
@@ -639,12 +638,16 @@ class DriftContentRepository implements ContentRepository {
       'aliases': jsonDecode(source.aliasesJson) as List<Object?>,
       'summary': source.summary,
       'structured': jsonDecode(source.structuredJson),
+      'rules': jsonDecode(source.rulesJson),
       'relations': jsonDecode(source.relationsJson),
       'tags': jsonDecode(source.tagsJson) as List<Object?>,
-      if (source.sourceLabel.isNotEmpty) 'source': {'label': source.sourceLabel},
+      if (source.sourceLabel.isNotEmpty)
+        'source': {'label': source.sourceLabel},
     });
     await db.transaction(() async {
-      await db.into(db.localContentEntries).insert(
+      await db
+          .into(db.localContentEntries)
+          .insert(
             LocalContentEntriesCompanion.insert(
               entryKey: newEntryKey,
               packageId: source.packageId,
@@ -669,7 +672,9 @@ class DriftContentRepository implements ContentRepository {
       )..where((t) => t.sourceId.equals(source.entryKey))).get();
       var linkIndex = 0;
       for (final link in outgoing) {
-        await db.into(db.contentLinks).insert(
+        await db
+            .into(db.contentLinks)
+            .insert(
               ContentLinksCompanion.insert(
                 id: '$newEntryKey#${linkIndex++}',
                 sourceId: newEntryKey,
@@ -678,11 +683,8 @@ class DriftContentRepository implements ContentRepository {
               ),
             );
       }
-      await _enqueueVaultOperation(
-        entityType: 'contentEntry',
-        entityId: newEntryKey,
-        payloadJson: jsonEncode(newEntry.toJson()),
-      );
+      // A duplicate is another local package entry. It is shared only when a
+      // DM explicitly publishes it to a campaign.
     });
     return newEntry;
   }
@@ -814,6 +816,7 @@ class EmptyContentRepository implements ContentRepository {
       'Cannot update entry ${entry.id}: local repository is unavailable',
     );
   }
+
   @override
   Future<ContentEntry?> duplicateEntry(
     String entryKey, {

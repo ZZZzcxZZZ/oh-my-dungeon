@@ -4,7 +4,6 @@ import { AuthModule } from './modules/auth/auth.module';
 import { CampaignSyncModule } from './modules/campaign-sync/campaign-sync.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { CharactersModule } from './modules/characters/characters.module';
-import { CheckRequestsModule } from './modules/check-requests/check-requests.module';
 import { EncountersModule } from './modules/encounters/encounters.module';
 import { HealthModule } from './modules/health/health.module';
 import { MediaModule } from './modules/media/media.module';
@@ -29,7 +28,6 @@ import { PrismaModule } from './prisma/prisma.module';
     CampaignsModule,
     CampaignSyncModule,
     CharactersModule,
-    CheckRequestsModule,
     EncountersModule,
     RealtimeModule,
     VaultModule

@@ -2,223 +2,112 @@
 
 ## 1. 总体架构
 
-项目采用 monorepo + 模块化单体服务端。
+项目采用 monorepo、Flutter 离线优先客户端和 NestJS 模块化单体服务端。
 
 ```text
 dnd-table-tool/
-  apps/
-    client_flutter/
-    server_nest/
-  packages/
-    api_contracts/
-    dnd_rules/
-  docs/
-  infra/
-  scripts/
+  apps/client_flutter/   Flutter 多端客户端
+  apps/server_nest/      NestJS + Prisma 服务端
+  packages/              预留共享契约与规则边界
+  docs/                  产品、架构、计划与部署文档
+  infra/                 Docker Compose 与部署配置
+  scripts/               验证、私有测试构建和分发脚本
 ```
 
-## 2. 技术栈
+客户端本地功能不依赖服务器。服务器负责账号、战役聊天室、战役 Actor/资料/档案/遭遇协作，以及用户主动启用的 Personal Vault。
 
-### 2.1 客户端
+## 2. 技术栈现状
 
-- Flutter
-- Material 3
-- go_router
-- Riverpod
-- freezed
-- json_serializable
-- dio
-- web_socket_channel
-- flutter_secure_storage 或等价安全存储
+### 客户端
 
-### 2.2 服务端
+- Flutter + Material 3
+- Drift / SQLite 本地数据库
+- `http` REST 客户端
+- `socket_io_client` 战役实时通知
+- ChangeNotifier/controller 形式的轻量状态管理
+- `file_picker`、`archive`、`crypto` 用于资料导入和本地备份
 
-- NestJS
-- PostgreSQL
-- Prisma
-- JWT
-- REST
-- WebSocket Gateway
-- OpenAPI / Swagger
+项目当前未采用 Riverpod、go_router、freezed 或 dio。新增代码应遵循现有 controller、repository 和 Navigator 结构，除非另有已批准的迁移计划。
 
-### 2.3 部署
+### 服务端与部署
 
-- Docker Compose
-- PostgreSQL volume
-- 可选 Caddy 或 Nginx 反向代理
+- NestJS、PostgreSQL、Prisma、JWT、Socket.IO
+- Docker Compose；可选 Caddy/Nginx 反向代理
 
-## 3. Monorepo 目录职责
+## 3. Flutter 边界
+
+客户端使用 feature-first 目录：
 
 ```text
-apps/client_flutter
-  Flutter 多端客户端。
-
-apps/server_nest
-  NestJS 服务端，可通过 Docker 部署。
-
-packages/api_contracts
-  OpenAPI 文件、WebSocket 事件协议、共享 DTO 生成配置。
-
-packages/dnd_rules
-  D&D 5e 规则计算核心，优先沉淀纯函数和可测试逻辑。
-
-docs
-  产品规划、架构设计、部署文档、开发指南和决策记录。
-
-infra
-  Docker Compose、反向代理配置样例、数据库初始化相关文件。
-
-scripts
-  开发、安装、更新、备份、恢复脚本。
-```
-
-## 4. Flutter 客户端结构
-
-客户端采用 feature-first 结构。
-
-```text
-lib/
-  app/
-    app.dart
-    router.dart
-    theme.dart
-  core/
-    network/
-    realtime/
-    storage/
-    errors/
-    widgets/
+lib/src/
+  core/                  数据库、网络、同步、通用展示
   features/
-    server_profiles/
+    app_preferences/
     auth/
     campaigns/
-    table/
-    character_sheet/
-    compendium/
-    dm_panel/
-    settings/
+    characters/
+    client_mode/
+    content/
+    encounters/
+    server_home/
+    server_profiles/
+    vault/
 ```
 
-### 4.1 客户端模块边界
+- `characters`：个人本地角色和规则投影。
+- `content`：本地资料包、Wiki、收藏、笔记和导入；正文只在客户端。
+- `campaigns`：联网工作区、聊天、Actor、战役资料和 cursor 缓存。
+- `encounters`：战役内 DM 控场。
+- `vault`：可选个人跨设备同步，不得同步资料正文。
+- `client_mode`：本机界面偏好，不是权限来源。
 
-- app：应用启动、主题、路由、全局 provider。
-- core/network：REST 客户端、拦截器、错误映射。
-- core/realtime：WebSocket 连接、重连、事件分发。
-- core/storage：服务器配置、token、偏好和缓存。
-- server_profiles：添加、编辑、测试和切换服务器。
-- auth：登录、注册、当前用户状态。
-- campaigns：战役列表、创建、加入、成员关系。
-- table：跑团桌面、聊天、骰子、事件流、在线成员。
-- character_sheet：角色卡、角色列表、角色创建和编辑。
-- compendium：资料库浏览、搜索、引用和内容详情。
-- dm_panel：DM 战役工作台、成员、遭遇、NPC、内容管理入口。
-- settings：模式切换、主题、服务器、账号设置。
+本地角色、资料和设置以 Drift 为事实源。战役 Actor 是服务器角色快照，本地通过 backlink 和 revision 做双向同步，冲突必须显式解决。
 
-### 4.2 Material 3 使用原则
+## 4. NestJS 模块
 
-客户端尽量使用官方 Material 3 组件：
+当前挂载模块：
 
-- NavigationBar
-- NavigationRail
-- ListTile
-- Card
-- FilledButton
-- IconButton
-- SegmentedButton
-- DropdownMenu
-- TextField
-- Dialog
-- BottomSheet
-- MenuAnchor
-- Badge
+- `auth`、`server-settings`、`server-info`、`health`
+- `campaigns`：战役、成员、邀请、聊天、日志和档案
+- `campaign-sync`：Actor、战役资料和增量 change cursor
+- `encounters`：NPC、遭遇和参与者
+- `realtime`：campaign room、消息和变更通知
+- `vault`：个人实体跨设备同步
+- `media`：头像等媒体资源
+- `characters`：旧服务器角色兼容与导入边界，个人角色主路径已迁到本地
 
-不为常规按钮、选择器、导航和表单发明自定义组件。自定义组件只用于角色卡、骰子结果、先攻队列和资料条目等领域特定 UI。
+`RoomsModule`、`SessionsModule`、`SessionsGateway` 和独立 `CheckRequestsModule` 已删除。Prisma 中残留的 Session/CheckRequest 表仅用于预发布数据兼容和后续迁移，不代表可调用 API。
 
-## 5. NestJS 服务端结构
+## 5. 数据流
 
-服务端采用模块化单体，每个业务模块内部保持固定结构。
+### 离线个人数据
 
 ```text
-src/modules/campaigns/
-  campaigns.module.ts
-  campaigns.controller.ts
-  campaigns.service.ts
-  campaigns.repository.ts
-  dto/
-  policies/
-  events/
-  tests/
+UI -> controller -> repository -> Drift
+                         -> Vault outbox（仅允许的个人实体）
 ```
 
-### 5.1 服务端模块
+### 战役协作
 
-- auth：注册、登录、刷新 token、会话。
-- users：用户资料、偏好。
-- server-settings：服务器名称、注册开关、管理员。
-- campaigns：战役、成员、邀请。
-- sessions：跑团会话。
-- characters：角色卡、战役绑定、角色快照。
-- compendium：内容包、内容条目、覆盖层、导入导出。
-- chat：聊天消息。
-- dice：掷骰表达式、结果、可见性。
-- roll-requests：DM 检定请求。
-- journal：事件流和跑团日志。
-- encounters：遭遇、参与者、先攻队列。
-- effects：状态和临时效果。
-- npcs：NPC 与怪物实例。
-- realtime：WebSocket 网关、房间广播、在线状态。
-- files：头像、附件和未来地图资源。
+```text
+UI -> REST policy/write -> PostgreSQL transaction -> Socket.IO notice
+                                                 -> HTTP cursor pull
+                                                 -> Drift campaign cache
+```
 
-### 5.2 层职责
+WebSocket 不是持久层。客户端必须能用 REST 和本地 cursor 在重连后恢复完整状态。
 
-- controller：HTTP 入参、认证上下文和返回 DTO。
-- service：业务流程编排。
-- repository：Prisma 查询封装。
-- policy：权限判断。
-- event：领域事件、Journal 写入和 WebSocket 广播。
-- dto：输入输出契约。
+### 资料边界
 
-Controller 不直接访问 Prisma。Service 不直接信任客户端传来的角色或权限。所有写操作必须走 policy。
+- 本地导入包：完整正文、rules、relations、assets 留在客户端。
+- Vault：只同步 manifest、收藏、笔记等允许实体。
+- 战役：只同步 DM 明确创建或发布的 `CampaignContentEntry`。
 
-## 6. REST 与 WebSocket 分工
+## 6. 工程约束
 
-REST 负责稳定资源：
-
-- 登录注册
-- 服务器元信息
-- 战役、成员、邀请
-- 角色 CRUD
-- 内容库查询、导入、启用、覆盖
-- 日志查询
-- 遭遇管理
-
-WebSocket 负责实时事件：
-
-- 聊天消息实时分发
-- 掷骰结果实时分发
-- 检定请求和响应
-- 在线成员
-- HP、状态、资源变化
-- 遭遇开始、回合推进、遭遇结束
-
-关键实时事件必须落库。WebSocket 不是数据的唯一来源。
-
-## 7. 数据一致性原则
-
-1. 权限以服务端数据库为准。
-2. 重要业务状态落 PostgreSQL。
-3. WebSocket 只作为实时同步通道，不作为持久层。
-4. JournalEntry 记录关键事件，支撑回顾、检索和审计。
-5. 运行时实例保存必要快照，避免基础资料更新影响已发生事件。
-
-## 8. 可扩展原则
-
-新增功能必须优先回答四个问题：
-
-1. 它属于哪个业务模块。
-2. 它是否需要 REST 契约。
-3. 它是否需要 WebSocket 事件。
-4. 它是否需要写 JournalEntry。
-
-如果一个功能跨越多个模块，应通过领域事件连接，而不是让模块互相读写内部实现。
-
+1. 权限以服务端 policy 和 membership 为准。
+2. 关键跨表写入使用事务，广播发生在提交之后。
+3. Actor 更新必须推进 revision；本地角色更新必须推进本地 revision。
+4. 资料条目稳定 ID 和结构化 rules 是角色创建、升级、角色卡和聊天动作的共同输入。
+5. Material 3 组件优先；页面状态、空态、错误态和窄屏布局必须有测试。
+6. 不新增第二套 Session、角色详情、资料详情或检定模型；先复用现有统一入口。

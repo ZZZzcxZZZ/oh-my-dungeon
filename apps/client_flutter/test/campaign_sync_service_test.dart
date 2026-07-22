@@ -1,10 +1,14 @@
+import 'dart:convert';
+
 import 'package:dnd_table_client/src/core/database/app_database.dart';
 import 'package:dnd_table_client/src/features/campaigns/data/local/campaign_cache_repository.dart';
 import 'package:dnd_table_client/src/features/campaigns/data/sync/campaign_actor_backlink_service.dart';
 import 'package:dnd_table_client/src/features/campaigns/data/sync/campaign_sync_api_client.dart';
 import 'package:dnd_table_client/src/features/campaigns/data/sync/campaign_sync_service.dart';
+import 'package:dnd_table_client/src/features/campaigns/domain/campaign_actor.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_change.dart';
 import 'package:dnd_table_client/src/features/characters/data/local/drift_character_repository.dart';
+import 'package:dnd_table_client/src/features/characters/data/local/character_sync_conflict_repository.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -90,24 +94,34 @@ void main() {
       final database = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(database.close);
       final cacheRepository = MemoryCampaignCacheRepository();
-      final apiClient = MemoryCampaignSyncApiClient(changePages: [
-        CampaignChangePage(
-          items: [
-            _contentChange(
-                changeId: 'c1', entryId: 'entry-1', cursor: '1', name: '月港'),
-          ],
-          nextCursor: '1',
-          hasMore: true,
-        ),
-        CampaignChangePage(
-          items: [
-            _contentChange(
-                changeId: 'c2', entryId: 'entry-2', cursor: '2', name: '黑塔'),
-          ],
-          nextCursor: '2',
-          hasMore: false,
-        ),
-      ]);
+      final apiClient = MemoryCampaignSyncApiClient(
+        changePages: [
+          CampaignChangePage(
+            items: [
+              _contentChange(
+                changeId: 'c1',
+                entryId: 'entry-1',
+                cursor: '1',
+                name: '月港',
+              ),
+            ],
+            nextCursor: '1',
+            hasMore: true,
+          ),
+          CampaignChangePage(
+            items: [
+              _contentChange(
+                changeId: 'c2',
+                entryId: 'entry-2',
+                cursor: '2',
+                name: '黑塔',
+              ),
+            ],
+            nextCursor: '2',
+            hasMore: false,
+          ),
+        ],
+      );
       final backlinkService = CampaignActorBacklinkService(
         characterRepository: DriftCharacterRepository(database),
         database: database,
@@ -147,22 +161,31 @@ void main() {
         CharacterSheet.local(id: 'char-1', name: 'Hero', level: 1),
       );
       final cacheRepository = DriftCampaignCacheRepository(database);
-      final apiClient = MemoryCampaignSyncApiClient(changePages: [
-        CampaignChangePage(
-          items: [
-            _actorChange(
-              changeId: 'c1',
-              actorId: 'actor-1',
-              cursor: '1',
-              ownerUserId: _userId,
-              sourceCharacterId: 'char-1',
-              sheet: {'name': 'Hero', 'currentHp': 10, 'maxHp': 20},
-            ),
-          ],
-          nextCursor: '1',
-          hasMore: false,
-        ),
-      ]);
+      final apiClient = MemoryCampaignSyncApiClient(
+        changePages: [
+          CampaignChangePage(
+            items: [
+              _actorChange(
+                changeId: 'c1',
+                actorId: 'actor-1',
+                cursor: '1',
+                ownerUserId: _userId,
+                sourceCharacterId: 'char-1',
+                sheet: {
+                  'name': 'Hero Renamed',
+                  'level': 4,
+                  'classSummary': '战士',
+                  'notes': 'DM note',
+                  'currentHp': 10,
+                  'maxHp': 20,
+                },
+              ),
+            ],
+            nextCursor: '1',
+            hasMore: false,
+          ),
+        ],
+      );
       final backlinkService = CampaignActorBacklinkService(
         characterRepository: characterRepository,
         database: database,
@@ -186,12 +209,133 @@ void main() {
       expect(updated, isNotNull);
       expect(updated!.currentHp, 10);
       expect(updated.maxHp, 20);
+      expect(updated.name, 'Hero Renamed');
+      expect(updated.level, 4);
+      expect(updated.classSummary, '战士');
+      expect(updated.notes, 'DM note');
       // Backlink row should record the applied revision.
-      final backlinkRow = await (database.select(database.campaignActorBacklinks)
-            ..where((t) => t.campaignActorId.equals('actor-1')))
-          .getSingleOrNull();
+      final backlinkRow = await (database.select(
+        database.campaignActorBacklinks,
+      )..where((t) => t.campaignActorId.equals('actor-1'))).getSingleOrNull();
       expect(backlinkRow, isNotNull);
       expect(backlinkRow!.lastAppliedActorRevision, 1);
+    });
+
+    test('records a conflict after the local character changed', () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final characterRepository = DriftCharacterRepository(database);
+      await characterRepository.save(
+        CharacterSheet.local(id: 'char-1', name: 'Hero', level: 1),
+      );
+      final backlinkService = CampaignActorBacklinkService(
+        characterRepository: characterRepository,
+        database: database,
+      );
+      await backlinkService.applyPublishedActorToCharacter(
+        CampaignActor.fromJson(
+          _actorChange(
+            changeId: 'c1',
+            actorId: 'actor-1',
+            cursor: '1',
+            ownerUserId: _userId,
+            sourceCharacterId: 'char-1',
+            revision: 1,
+          ).entity!,
+        ),
+      );
+      final local = await characterRepository.getById('char-1');
+      await characterRepository.save(
+        local!.copyWith(abilities: const {'str': 18}),
+      );
+
+      await backlinkService.applyActorToCharacter(
+        CampaignActor.fromJson(
+          _actorChange(
+            changeId: 'c2',
+            actorId: 'actor-1',
+            cursor: '2',
+            ownerUserId: _userId,
+            sourceCharacterId: 'char-1',
+            revision: 2,
+            sheet: {
+              ...local.toJson(),
+              'abilities': const {'str': 12},
+            },
+          ).entity!,
+        ),
+      );
+
+      final conflicts = await database
+          .select(database.characterSyncConflicts)
+          .get();
+      expect(conflicts, hasLength(1));
+      expect(conflicts.single.remoteValueJson, contains('"revision":2'));
+
+      await backlinkService.applyActorToCharacter(
+        CampaignActor.fromJson(
+          _actorChange(
+            changeId: 'c3',
+            actorId: 'actor-1',
+            cursor: '3',
+            ownerUserId: _userId,
+            sourceCharacterId: 'char-1',
+            revision: 3,
+            sheet: {
+              ...local.toJson(),
+              'abilities': const {'str': 10},
+            },
+          ).entity!,
+        ),
+      );
+
+      final stillLocal = await characterRepository.getById('char-1');
+      expect(stillLocal!.abilities, const {'str': 18});
+      expect(
+        await database.select(database.characterSyncConflicts).get(),
+        hasLength(2),
+      );
+    });
+
+    test('resolves a conflict by applying the captured remote sheet', () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final characterRepository = DriftCharacterRepository(database);
+      final local = CharacterSheet.local(
+        id: 'char-1',
+        name: 'Hero',
+        level: 1,
+      ).copyWith(abilities: const {'str': 18});
+      await characterRepository.save(local);
+      final backlinkService = CampaignActorBacklinkService(
+        characterRepository: characterRepository,
+        database: database,
+      );
+      final conflict = CharacterSyncConflict(
+        id: 'conflict-1',
+        characterId: 'char-1',
+        campaignActorId: 'actor-1',
+        fieldPath: 'build',
+        localValueJson: jsonEncode(local.toJson()),
+        remoteValueJson: jsonEncode({
+          ...local.toJson(),
+          'abilities': const {'str': 12},
+          'revision': 7,
+        }),
+        createdAt: DateTime(2026, 7, 22),
+      );
+
+      final applied = await backlinkService.resolveConflictWithRemote(conflict);
+
+      expect(applied, isTrue);
+      expect(
+        (await characterRepository.getById('char-1'))!.abilityMap['str'],
+        12,
+      );
+      final backlink = await database
+          .select(database.campaignActorBacklinks)
+          .getSingle();
+      expect(backlink.lastAppliedActorRevision, 7);
     });
 
     test('401 response returns paused result and keeps cursor', () async {
@@ -199,8 +343,10 @@ void main() {
       addTearDown(database.close);
       final cacheRepository = MemoryCampaignCacheRepository();
       final apiClient = MemoryCampaignSyncApiClient(
-        listChangesException:
-            const CampaignSyncException('Unauthorized', statusCode: 401),
+        listChangesException: const CampaignSyncException(
+          'Unauthorized',
+          statusCode: 401,
+        ),
       );
       final backlinkService = CampaignActorBacklinkService(
         characterRepository: DriftCharacterRepository(database),
@@ -229,8 +375,10 @@ void main() {
       addTearDown(database.close);
       final cacheRepository = MemoryCampaignCacheRepository();
       final apiClient = MemoryCampaignSyncApiClient(
-        listChangesException:
-            const CampaignSyncException('Forbidden', statusCode: 403),
+        listChangesException: const CampaignSyncException(
+          'Forbidden',
+          statusCode: 403,
+        ),
       );
       final backlinkService = CampaignActorBacklinkService(
         characterRepository: DriftCharacterRepository(database),

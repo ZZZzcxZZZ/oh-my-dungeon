@@ -51,6 +51,80 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('groups mode and text inside one composer input surface', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(360, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final text = TextEditingController();
+    addTearDown(text.dispose);
+    await tester.pumpWidget(
+      _harness(controller: text, onSend: (_) async => true),
+    );
+
+    final avatar = tester.getRect(
+      find.byKey(const Key('campaign-avatar-target')),
+    );
+    final surface = tester.getRect(
+      find.byKey(const Key('campaign-composer-input-surface')),
+    );
+    final modeControl = tester.getRect(find.byType(ChatModePicker));
+    final input = tester.getRect(find.byKey(const Key('campaign-chat-input')));
+    final send = tester.getRect(find.byKey(const Key('campaign-chat-send')));
+
+    expect(avatar.right, lessThan(surface.left));
+    expect(surface.right, lessThan(send.left));
+    expect(surface.contains(modeControl.center), isTrue);
+    expect(surface.contains(input.center), isTrue);
+    expect(input.width, greaterThanOrEqualTo(120));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('uses the previous two compact mode buttons', (tester) async {
+    var mode = ChatMode.say;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) => Align(
+              alignment: Alignment.bottomLeft,
+              child: SizedBox(
+                width: 68,
+                child: ChatModePicker(
+                  mode: mode,
+                  enabled: true,
+                  onChanged: (next) => setState(() => mode = next),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const Key('chat-mode-track')), findsNothing);
+    expect(find.byKey(const Key('chat-mode-thumb')), findsNothing);
+    expect(
+      tester
+          .widget<ChatModeHalf>(find.byKey(const Key('chat-mode-say')))
+          .selected,
+      isTrue,
+    );
+
+    await tester.tap(find.bySemanticsLabel('做'));
+    await tester.pumpAndSettle();
+
+    expect(mode, ChatMode.act);
+    expect(
+      tester
+          .widget<ChatModeHalf>(find.byKey(const Key('chat-mode-action')))
+          .selected,
+      isTrue,
+    );
+  });
+
   testWidgets('shows a dismissible temporary identity banner', (tester) async {
     final text = TextEditingController();
     var discarded = false;
@@ -77,9 +151,7 @@ void main() {
       tester.view.physicalSize = size;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      final text = TextEditingController(
-        text: 'verylongunbrokenchatdraft' * 8,
-      );
+      final text = TextEditingController(text: 'verylongunbrokenchatdraft' * 8);
       addTearDown(text.dispose);
 
       await tester.pumpWidget(

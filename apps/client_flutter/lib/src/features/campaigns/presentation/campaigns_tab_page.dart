@@ -273,6 +273,7 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
           campaignContentController: widget.campaignContentController,
           actorController: widget.actorController,
           encounterController: widget.encounterController,
+          appPreferencesController: widget.appPreferencesController,
           campaignActorId: null,
           diceRoller: widget.diceRoller,
         ),

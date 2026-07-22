@@ -31,6 +31,28 @@ void main() {
       expect(presentation.isOwn, isTrue);
     });
 
+    test('keeps every avatar when message grouping is disabled', () {
+      final first = _message(
+        id: '1',
+        actorId: 'actor-1',
+        createdAt: '2026-07-22T10:00:00Z',
+      );
+      final second = _message(
+        id: '2',
+        actorId: 'actor-1',
+        createdAt: '2026-07-22T10:01:00Z',
+      );
+
+      final presentation = CampaignMessagePresentation.resolve(
+        previous: first,
+        current: second,
+        currentUserId: 'user-1',
+        groupConsecutiveMessages: false,
+      );
+
+      expect(presentation.showIdentity, isTrue);
+    });
+
     test('starts a new group when the active actor changes', () {
       final first = _message(
         id: '1',
@@ -211,6 +233,29 @@ void main() {
       expect(find.byType(CampaignAvatar), findsOneWidget);
     });
 
+    testWidgets('shows every repeated avatar when grouping is disabled', (
+      tester,
+    ) async {
+      await _pumpTimeline(
+        tester,
+        groupConsecutiveMessages: false,
+        messages: [
+          _message(
+            id: 'first',
+            actorId: 'actor-1',
+            createdAt: '2026-07-22T10:00:00Z',
+          ),
+          _message(
+            id: 'second',
+            actorId: 'actor-1',
+            createdAt: '2026-07-22T10:01:00Z',
+          ),
+        ],
+      );
+
+      expect(find.byType(CampaignAvatar), findsNWidgets(2));
+    });
+
     testWidgets('keeps event cards compact on a wide viewport', (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(1280, 720);
@@ -272,32 +317,31 @@ void main() {
       Size(390, 844),
       Size(1280, 720),
     ]) {
-      testWidgets('starts at the latest message at ${size.width}x${size.height}', (
-        tester,
-      ) async {
-        tester.view.devicePixelRatio = 1;
-        tester.view.physicalSize = size;
-        addTearDown(tester.view.resetPhysicalSize);
-        addTearDown(tester.view.resetDevicePixelRatio);
+      testWidgets(
+        'starts at the latest message at ${size.width}x${size.height}',
+        (tester) async {
+          tester.view.devicePixelRatio = 1;
+          tester.view.physicalSize = size;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
 
-        await _pumpTimeline(
-          tester,
-          messages: [
-            for (var index = 0; index < 30; index++)
-              _message(
-                id: index == 29
-                    ? 'latest-message'
-                    : 'message-$index',
-                actorId:
-                    '一位拥有非常非常长名称的角色-$index-without-spaces',
-                createdAt: '2026-07-22T10:${index.toString().padLeft(2, '0')}:00Z',
-              ),
-          ],
-        );
+          await _pumpTimeline(
+            tester,
+            messages: [
+              for (var index = 0; index < 30; index++)
+                _message(
+                  id: index == 29 ? 'latest-message' : 'message-$index',
+                  actorId: '一位拥有非常非常长名称的角色-$index-without-spaces',
+                  createdAt:
+                      '2026-07-22T10:${index.toString().padLeft(2, '0')}:00Z',
+                ),
+            ],
+          );
 
-        expect(find.text('latest-message'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-      });
+          expect(find.text('latest-message'), findsOneWidget);
+          expect(tester.takeException(), isNull);
+        },
+      );
     }
   });
 }
@@ -305,6 +349,7 @@ void main() {
 Future<void> _pumpTimeline(
   WidgetTester tester, {
   required List<CampaignChatMessage> messages,
+  bool groupConsecutiveMessages = true,
 }) async {
   final controller = ScrollController();
   addTearDown(controller.dispose);
@@ -313,6 +358,7 @@ Future<void> _pumpTimeline(
       home: Scaffold(
         body: CampaignChatTimeline(
           messages: messages,
+          groupConsecutiveMessages: groupConsecutiveMessages,
           currentUserId: 'user-1',
           scrollController: controller,
           onAvatarTap: (_) => null,

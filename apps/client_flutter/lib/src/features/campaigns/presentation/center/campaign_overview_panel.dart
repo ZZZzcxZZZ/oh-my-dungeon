@@ -277,6 +277,10 @@ class _CampaignMemberList extends StatelessWidget {
           actor?.sheet['currentHp'] as num?,
           actor?.sheet['maxHp'] as num?,
         ),
+        healthFraction: CampaignAvatar.fractionFromHp(
+          actor?.sheet['currentHp'] as num?,
+          actor?.sheet['maxHp'] as num?,
+        ),
         size: 40,
       ),
       title: Text(member.displayName),

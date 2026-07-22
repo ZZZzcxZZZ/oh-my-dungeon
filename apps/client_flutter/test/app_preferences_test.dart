@@ -23,6 +23,7 @@ void main() {
     expect(controller.preferences.highContrastTheme, isFalse);
     expect(controller.preferences.dynamicSchemeVariant, 'tonalSpot');
     expect(controller.preferences.logCharacterRuntimeChanges, isTrue);
+    expect(controller.preferences.groupConsecutiveChatMessages, isTrue);
   });
 
   test('persists preference changes and notifies listeners', () async {
@@ -43,11 +44,12 @@ void main() {
     await controller.setHighContrastTheme(true);
     await controller.setDynamicSchemeVariant('fidelity');
     await controller.setLogCharacterRuntimeChanges(false);
+    await controller.setGroupConsecutiveChatMessages(false);
 
     final reloaded = AppPreferencesController(store: store);
     await reloaded.initialize();
 
-    expect(notifications, 11);
+    expect(notifications, 12);
     expect(reloaded.preferences.themeMode, ThemeMode.dark);
     expect(reloaded.preferences.defaultDice, '2d20kh1');
     expect(reloaded.preferences.compactLists, isTrue);
@@ -59,28 +61,32 @@ void main() {
     expect(reloaded.preferences.highContrastTheme, isTrue);
     expect(reloaded.preferences.dynamicSchemeVariant, 'fidelity');
     expect(reloaded.preferences.logCharacterRuntimeChanges, isFalse);
+    expect(reloaded.preferences.groupConsecutiveChatMessages, isFalse);
   });
 
-  test('migrates the previous quick-build default to the standard guide once', () async {
-    SharedPreferences.setMockInitialValues({
-      'app_preferences.default_creation_method': 'quick',
-    });
-    final preferences = await SharedPreferences.getInstance();
-    final store = SharedPreferencesAppPreferencesStore(preferences);
+  test(
+    'migrates the previous quick-build default to the standard guide once',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'app_preferences.default_creation_method': 'quick',
+      });
+      final preferences = await SharedPreferences.getInstance();
+      final store = SharedPreferencesAppPreferencesStore(preferences);
 
-    final migrated = await store.load();
+      final migrated = await store.load();
 
-    expect(migrated.defaultCreationMethod, 'standard');
-    expect(
-      preferences.getBool('app_preferences.standard_guide_migrated'),
-      isTrue,
-    );
-    expect(
-      preferences.getString('app_preferences.default_creation_method'),
-      'standard',
-    );
+      expect(migrated.defaultCreationMethod, 'standard');
+      expect(
+        preferences.getBool('app_preferences.standard_guide_migrated'),
+        isTrue,
+      );
+      expect(
+        preferences.getString('app_preferences.default_creation_method'),
+        'standard',
+      );
 
-    await store.save(migrated.copyWith(defaultCreationMethod: 'quick'));
-    expect((await store.load()).defaultCreationMethod, 'quick');
-  });
+      await store.save(migrated.copyWith(defaultCreationMethod: 'quick'));
+      expect((await store.load()).defaultCreationMethod, 'quick');
+    },
+  );
 }

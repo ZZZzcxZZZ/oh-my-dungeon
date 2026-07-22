@@ -15,16 +15,19 @@ class CampaignMessagePresentation {
     CampaignChatMessage? previous,
     required CampaignChatMessage current,
     required String? currentUserId,
+    bool groupConsecutiveMessages = true,
   }) {
     final gap = _gap(previous, current);
-    final separated = previous == null ||
+    final separated =
+        previous == null ||
         gap == null ||
         gap.isNegative ||
         gap.inMinutes >= 10;
     final ordinary = current.kind == 'say' || current.kind == 'action';
     final previousOrdinary =
         previous?.kind == 'say' || previous?.kind == 'action';
-    final sameSpeaker = previous != null &&
+    final sameSpeaker =
+        previous != null &&
         previous.senderId == current.senderId &&
         previous.campaignActorId == current.campaignActorId &&
         previous.speakerMode == current.speakerMode;
@@ -32,6 +35,7 @@ class CampaignMessagePresentation {
     return CampaignMessagePresentation(
       isOwn: currentUserId != null && current.senderId == currentUserId,
       showIdentity:
+          !groupConsecutiveMessages ||
           !(ordinary && previousOrdinary && sameSpeaker && !separated),
       showTimeDivider: previous == null || separated,
     );

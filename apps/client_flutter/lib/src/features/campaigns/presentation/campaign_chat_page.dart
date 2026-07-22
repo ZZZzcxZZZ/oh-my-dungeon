@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app_preferences/presentation/app_preferences_controller.dart';
 import '../../characters/domain/character.dart';
 import '../../characters/domain/dnd5e_rules.dart';
 import '../../characters/presentation/character_detail_page.dart';
@@ -40,6 +41,7 @@ class CampaignChatPage extends StatefulWidget {
     this.campaignContentController,
     this.actorController,
     this.encounterController,
+    this.appPreferencesController,
     super.key,
   });
 
@@ -53,6 +55,7 @@ class CampaignChatPage extends StatefulWidget {
   final CampaignContentController? campaignContentController;
   final CampaignActorController? actorController;
   final EncounterController? encounterController;
+  final AppPreferencesController? appPreferencesController;
 
   @override
   State<CampaignChatPage> createState() => _CampaignChatPageState();
@@ -90,6 +93,8 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       animation: Listenable.merge([
         widget.campaignController,
         if (widget.actorController != null) widget.actorController!,
+        if (widget.appPreferencesController != null)
+          widget.appPreferencesController!,
       ]),
       builder: (context, _) {
         final messages = widget.campaignController.messages;
@@ -158,6 +163,12 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                   canRespondToCheck: _canRespondToCheck,
                   hasRespondedToCheck: _hasRespondedToCheck,
                   onRespondToCheck: _respondToCheckRequest,
+                  groupConsecutiveMessages:
+                      widget
+                          .appPreferencesController
+                          ?.preferences
+                          .groupConsecutiveChatMessages ??
+                      true,
                 ),
         ),
         CampaignChatComposer(
@@ -391,6 +402,8 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         persistentActors: persistentActors,
         temporaryActors: temporaryActors,
         proxyActors: proxyActors,
+        campaignActors:
+            widget.actorController?.actors ?? const <CampaignActor>[],
         hasBoundCharacter:
             membership.boundActorId != null ||
             (widget.campaignActorId != null && widget.character != null),

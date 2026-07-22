@@ -4,6 +4,8 @@ import 'package:drift/drift.dart';
 
 import '../../../../core/database/app_database.dart';
 import '../../../characters/data/character_repository.dart';
+import '../../../characters/data/local/character_sync_conflict_repository.dart';
+import '../../../characters/domain/character.dart';
 import '../../domain/campaign_actor.dart';
 
 /// 把远端 Actor 变更回写到本地角色。运行时字段（HP、临时生命、状态）始终覆盖，
@@ -17,7 +19,21 @@ class CampaignActorBacklinkService {
   final CharacterRepository characterRepository;
   final AppDatabase database;
 
-  Future<void> applyActorToCharacter(CampaignActor actor) async {
+  Future<void> applyActorToCharacter(CampaignActor actor) {
+    return _applyActorToCharacter(actor, acceptRemoteBuild: false);
+  }
+
+  /// Applies the actor produced by a successful local publish and establishes
+  /// it as the new sync baseline. This must not conflict with the edit that
+  /// initiated the publish.
+  Future<void> applyPublishedActorToCharacter(CampaignActor actor) {
+    return _applyActorToCharacter(actor, acceptRemoteBuild: true);
+  }
+
+  Future<void> _applyActorToCharacter(
+    CampaignActor actor, {
+    required bool acceptRemoteBuild,
+  }) async {
     if (actor.sourceCharacterId == null) return;
     final characterId = actor.sourceCharacterId!;
     final character = await characterRepository.getById(characterId);
@@ -40,45 +56,80 @@ class CampaignActorBacklinkService {
     updated = updated.copyWith(data: _mergeRuntime(updated.data, sheet));
 
     // 构建字段：仅当本地未偏离 lastPublished 时覆盖，否则记录冲突。
-    final buildDiverged = lastPublished != 0 && localRevision != lastPublished;
+    final buildDiverged =
+        !acceptRemoteBuild &&
+        lastPublished != 0 &&
+        localRevision != lastPublished;
     if (buildDiverged) {
       await _recordConflict(
         characterId: characterId,
         actorId: actor.id,
         localSheet: updated.toJson(),
-        remoteSheet: sheet,
+        remoteSheet: {...sheet, 'revision': actor.revision},
       );
     } else {
-      updated = updated.copyWith(
-        abilities: sheet['abilities'] ?? updated.abilities,
-        saves: sheet['saves'] ?? updated.saves,
-        skills: sheet['skills'] ?? updated.skills,
-        inventory: sheet['inventory'] ?? updated.inventory,
-        currency: sheet['currency'] ?? updated.currency,
-      );
+      updated = _mergeRemoteBuild(updated, sheet);
     }
 
     await characterRepository.save(updated);
+    final appliedLocalRevision = await _readCharacterRevision(characterId);
     await _saveBacklink(
       actor.id,
       characterId,
-      localRevision,
+      buildDiverged ? lastPublished : appliedLocalRevision,
       actor.revision,
     );
   }
 
+  /// Resolves a recorded conflict from the snapshot captured when it occurred.
+  /// Pulling the campaign cursor again is insufficient because that change may
+  /// already have been consumed.
+  Future<bool> resolveConflictWithRemote(CharacterSyncConflict conflict) async {
+    try {
+      final character = await characterRepository.getById(conflict.characterId);
+      if (character == null) return false;
+      final decoded = jsonDecode(conflict.remoteValueJson);
+      if (decoded is! Map) return false;
+      final remote = Map<String, Object?>.from(decoded);
+      final merged = <String, Object?>{
+        ...character.toJson(),
+        ...remote,
+        'id': character.id,
+        'ownerUserId': character.ownerUserId,
+      };
+      final updated = CharacterSheet.fromJson(merged);
+      await characterRepository.save(updated);
+      final localRevision = await _readCharacterRevision(character.id);
+      final actorRevision = remote['revision'] is num
+          ? (remote['revision'] as num).toInt()
+          : (await _loadBacklink(
+                  conflict.campaignActorId,
+                ))?.lastAppliedActorRevision ??
+                0;
+      await _saveBacklink(
+        conflict.campaignActorId,
+        character.id,
+        localRevision,
+        actorRevision,
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<CampaignActorBacklinkRow?> _loadBacklink(String actorId) async {
     final db = database;
-    return (db.select(db.campaignActorBacklinks)
-          ..where((t) => t.campaignActorId.equals(actorId)))
-        .getSingleOrNull();
+    return (db.select(
+      db.campaignActorBacklinks,
+    )..where((t) => t.campaignActorId.equals(actorId))).getSingleOrNull();
   }
 
   Future<int> _readCharacterRevision(String characterId) async {
     final db = database;
-    final row = await (db.select(db.characters)
-          ..where((t) => t.id.equals(characterId)))
-        .getSingleOrNull();
+    final row = await (db.select(
+      db.characters,
+    )..where((t) => t.id.equals(characterId))).getSingleOrNull();
     return row?.revision ?? 1;
   }
 
@@ -89,7 +140,9 @@ class CampaignActorBacklinkService {
     int actorRevision,
   ) async {
     final db = database;
-    await db.into(db.campaignActorBacklinks).insertOnConflictUpdate(
+    await db
+        .into(db.campaignActorBacklinks)
+        .insertOnConflictUpdate(
           CampaignActorBacklinksCompanion.insert(
             campaignActorId: actorId,
             sourceCharacterId: characterId,
@@ -108,7 +161,9 @@ class CampaignActorBacklinkService {
     final db = database;
     final id =
         'conflict:$characterId:$actorId:${DateTime.now().microsecondsSinceEpoch}';
-    await db.into(db.characterSyncConflicts).insert(
+    await db
+        .into(db.characterSyncConflicts)
+        .insert(
           CharacterSyncConflictsCompanion.insert(
             id: id,
             characterId: characterId,
@@ -151,6 +206,26 @@ class CampaignActorBacklinkService {
     }
     dataMap['runtime'] = runtime;
     return dataMap;
+  }
+
+  CharacterSheet _mergeRemoteBuild(
+    CharacterSheet runtimeUpdated,
+    Map<String, Object?> sheet,
+  ) {
+    final merged = <String, Object?>{
+      ...runtimeUpdated.toJson(),
+      ...sheet,
+      'id': runtimeUpdated.id,
+      'ownerUserId': runtimeUpdated.ownerUserId,
+    };
+    final remote = CharacterSheet.fromJson(merged);
+    return remote.copyWith(
+      currentHp: runtimeUpdated.currentHp,
+      maxHp: runtimeUpdated.maxHp,
+      armorClass: runtimeUpdated.armorClass,
+      speed: runtimeUpdated.speed,
+      data: _mergeRuntime(remote.data, sheet),
+    );
   }
 
   int _readInt(Map<String, Object?> sheet, String key, int fallback) {

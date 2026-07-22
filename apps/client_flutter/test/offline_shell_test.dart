@@ -17,7 +17,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('首页'), findsWidgets);
+    expect(find.text('首页'), findsNothing);
     expect(find.text('战役'), findsWidgets);
     expect(find.text('角色'), findsWidgets);
     expect(find.text('资料库'), findsWidgets);
@@ -36,10 +36,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 默认在首页 tab，切到战役 tab 应看到离线提示。
-    await tester.tap(find.text('战役'));
-    await tester.pumpAndSettle();
-
+    // 战役是默认入口；离线时直接说明需要连接服务器。
     expect(find.text('未连接服务器'), findsWidgets);
     await database.close();
   });

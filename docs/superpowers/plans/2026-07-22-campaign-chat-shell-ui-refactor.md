@@ -308,14 +308,14 @@ final bool showIdentity;
 
 预期：全部 PASS。
 
-- [ ] **步骤 6：提交**
+- [x] **步骤 6：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/features/campaigns/presentation/chat/campaign_chat_timeline.dart apps/client_flutter/lib/src/features/campaigns/presentation/chat/campaign_chat_bubble.dart apps/client_flutter/test/campaign_chat_timeline_test.dart
 git commit -m "feat(v0.1): add responsive campaign message timeline"
 ```
 
-## 任务 4：提取并修复 Composer
+## 任务 4：提取并修复 Composer（已完成）
 
 **文件：**
 
@@ -323,7 +323,7 @@ git commit -m "feat(v0.1): add responsive campaign message timeline"
 - 修改：`apps/client_flutter/lib/src/features/campaigns/presentation/chat/chat_mode_picker.dart`
 - 测试：`apps/client_flutter/test/campaign_chat_composer_test.dart`
 
-- [ ] **步骤 1：编写失败的 Composer 测试**
+- [x] **步骤 1：编写失败的 Composer 测试**
 
 测试 360x800 和 390x844 下无溢出、头像目标为 48px、说/做有语义、键盘 inset 下仍显示输入框，并验证失败发送不清空控制器：
 
@@ -351,13 +351,13 @@ testWidgets('keeps the composer usable at 360px with keyboard insets', (
 });
 ```
 
-- [ ] **步骤 2：运行测试并确认失败**
+- [x] **步骤 2：运行测试并确认失败**
 
 运行：`flutter test test/campaign_chat_composer_test.dart`
 
 预期：FAIL，Composer 组件尚不存在。
 
-- [ ] **步骤 3：实现单行 Composer**
+- [x] **步骤 3：实现单行 Composer**
 
 接口：
 
@@ -379,11 +379,11 @@ class CampaignChatComposer extends StatelessWidget {
 
 使用 `Material(color: colorScheme.surfaceContainer)` 包住一个 `SafeArea(top: false)`。头像外层直接使用统一 `CampaignAvatar(size: 32, tapTargetSize: 48)`，不再嵌套 `IconButton`。模式选择器固定 64px，输入框 `Expanded`，发送目标 48px。
 
-- [ ] **步骤 4：实现发送结果与草稿规则**
+- [x] **步骤 4：实现发送结果与草稿规则**
 
 `onSend` 返回 `Future<bool>`；组件不自行清空文本。页面成功时清空，失败时保留，并由页面显示 SnackBar。临时身份横幅保持在 Composer 上方，但关闭目标为 48px。
 
-- [ ] **步骤 5：运行 Composer 测试**
+- [x] **步骤 5：运行 Composer 测试**
 
 运行：`flutter test test/campaign_chat_composer_test.dart`
 

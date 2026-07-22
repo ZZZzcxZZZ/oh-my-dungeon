@@ -9,6 +9,7 @@ import '../features/auth/data/auth_api_client.dart';
 import '../features/auth/data/auth_token_store.dart';
 import '../features/campaigns/data/campaign_api_client.dart';
 import '../features/campaigns/data/campaign_socket_service.dart';
+import '../features/client_mode/data/client_mode_store.dart';
 import '../features/client_mode/domain/client_mode.dart';
 import '../core/dice/dice_roller.dart';
 import '../features/server_home/domain/active_server_session.dart';
@@ -54,8 +55,8 @@ class DndTableApp extends StatefulWidget {
 }
 
 class _DndTableAppState extends State<DndTableApp> {
-  late final ClientModeController _modeController;
-  late final bool _ownsModeController;
+  late ClientModeController _modeController;
+  late bool _ownsModeController;
   AppPreferencesController? _ownedPreferencesController;
   late final Future<_AppDeps> _depsFuture;
   final ActiveServerSession _session = ActiveServerSession();
@@ -111,6 +112,19 @@ class _DndTableAppState extends State<DndTableApp> {
     }
     if (!appPreferencesController.initialized) {
       await appPreferencesController.initialize();
+    }
+
+    // When the caller did not inject a mode controller, upgrade the
+    // placeholder to a persistent one backed by SharedPreferences so the
+    // chosen DM/Player mode survives app restarts. Skip the upgrade in tests
+    // that opt into the in-memory preference path (no SharedPreferences).
+    if (widget.modeController == null && preferences != null) {
+      final persistent = ClientModeController.withStore(
+        store: SharedPreferencesClientModeStore(preferences),
+      );
+      await persistent.initialize();
+      _modeController.dispose();
+      _modeController = persistent;
     }
 
     final authClient = widget.authClient ?? AuthApiClient();

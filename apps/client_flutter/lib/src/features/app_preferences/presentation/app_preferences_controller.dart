@@ -10,12 +10,17 @@ class AppPreferencesController extends ChangeNotifier {
 
   AppPreferences _preferences = AppPreferences.defaults;
   bool _initialized = false;
+  Object? _lastError;
 
   AppPreferences get preferences => _preferences;
   bool get initialized => _initialized;
+  Object? get lastError => _lastError;
 
   Future<void> initialize() async {
+    // Load failures must propagate so the app can surface a startup error
+    // page (see DndTableApp). Save failures are handled separately in _save.
     _preferences = await store.load();
+    _lastError = null;
     _initialized = true;
     notifyListeners();
   }
@@ -70,9 +75,25 @@ class AppPreferencesController extends ChangeNotifier {
     return _save(_preferences.copyWith(logCharacterRuntimeChanges: value));
   }
 
-  Future<void> _save(AppPreferences preferences) async {
-    _preferences = preferences;
-    await store.save(preferences);
+  /// Clears [lastError] once the UI has surfaced it to the user.
+  void clearError() {
+    if (_lastError == null) return;
+    _lastError = null;
     notifyListeners();
+  }
+
+  Future<void> _save(AppPreferences next) async {
+    final previous = _preferences;
+    try {
+      await store.save(next);
+      _preferences = next;
+      _lastError = null;
+      notifyListeners();
+    } catch (error) {
+      _preferences = previous;
+      _lastError = error;
+      notifyListeners();
+      throw error;
+    }
   }
 }

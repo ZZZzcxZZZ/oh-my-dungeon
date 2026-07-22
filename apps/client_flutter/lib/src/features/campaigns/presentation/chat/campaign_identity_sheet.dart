@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/campaign.dart';
+import '../widgets/campaign_avatar.dart';
 import 'campaign_composer_identity.dart';
-import 'chat_avatar.dart';
 
 class CampaignSpeakerChoice {
   const CampaignSpeakerChoice(this.speakerMode, [this.actorId])
@@ -58,10 +58,12 @@ class CampaignIdentitySheet extends StatelessWidget {
                 ),
               ),
               ListTile(
-                leading: ChatAvatar(
-                  name: identity.displayName,
-                  avatarUrl: identity.avatarUrl,
-                  healthState: identity.healthState,
+                leading: CampaignAvatar(
+                  initials: identity.displayName,
+                  imageUrl: identity.avatarUrl,
+                  health: CampaignAvatar.healthFromState(
+                    identity.healthState,
+                  ),
                 ),
                 title: Text(identity.displayName),
                 subtitle: Text('当前身份 · ${identity.subtitle}'),
@@ -143,10 +145,9 @@ class CampaignIdentitySheet extends StatelessWidget {
   }) {
     return ListTile(
       key: Key('identity-actor-${actor.id}'),
-      leading: ChatAvatar(
-        name: actor.displayName,
-        avatarUrl: null,
-        healthState: actor.publicHealthState,
+      leading: CampaignAvatar(
+        initials: actor.displayName,
+        health: CampaignAvatar.healthFromState(actor.publicHealthState),
       ),
       title: Text(actor.displayName),
       subtitle: subtitle == null ? null : Text(subtitle),

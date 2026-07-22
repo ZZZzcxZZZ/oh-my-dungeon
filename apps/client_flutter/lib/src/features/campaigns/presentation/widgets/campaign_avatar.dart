@@ -11,14 +11,14 @@ enum CampaignAvatarHealth { healthy, injured, critical, down, unknown }
 
 /// 统一的角色/账号头像，外圈生命环按 [health] 着色。
 ///
-/// 设计参考战役工作区重构设计：名字旁不再重复 HP 数字，状态由圆环颜色和
-/// 倒地角标传达。无 [imageUrl] 时显示 [initials] 首字母。
+/// [size] 控制头像视觉尺寸，[tapTargetSize] 可提供更大的 Material 触控区域。
 class CampaignAvatar extends StatelessWidget {
   const CampaignAvatar({
     this.health = CampaignAvatarHealth.unknown,
     this.imageUrl,
     this.initials = '',
     this.size = 40,
+    this.tapTargetSize,
     this.onTap,
     super.key,
   });
@@ -27,12 +27,21 @@ class CampaignAvatar extends StatelessWidget {
   final String? imageUrl;
   final String initials;
   final double size;
+  final double? tapTargetSize;
   final VoidCallback? onTap;
 
-  /// 按 HP 比例计算健康分级：>50% 健康、>25% 受伤、>0 危险、0 倒地、
-  /// 无 maxHp 未知。供 viewer-aware 投影后的客户端渲染复用。
   static CampaignAvatarHealth healthFromHp(num? current, num? max) {
     return switch (campaignHealthStateFromHp(current, max)) {
+      'healthy' => CampaignAvatarHealth.healthy,
+      'injured' => CampaignAvatarHealth.injured,
+      'critical' => CampaignAvatarHealth.critical,
+      'down' => CampaignAvatarHealth.down,
+      _ => CampaignAvatarHealth.unknown,
+    };
+  }
+
+  static CampaignAvatarHealth healthFromState(String? state) {
+    return switch (state) {
       'healthy' => CampaignAvatarHealth.healthy,
       'injured' => CampaignAvatarHealth.injured,
       'critical' => CampaignAvatarHealth.critical,
@@ -49,73 +58,100 @@ class CampaignAvatar extends StatelessWidget {
         ? initials.characters.first.toUpperCase()
         : '';
     final ringWidth = size * 0.09;
+    final targetSize = tapTargetSize == null
+        ? size
+        : tapTargetSize!.clamp(size, double.infinity).toDouble();
 
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: Stack(
-          fit: StackFit.expand,
-          clipBehavior: Clip.none,
-          children: [
-            CustomPaint(
-              painter: _HealthRingPainter(
-                color: _ringColor(health),
-                strokeWidth: ringWidth,
-                hollow: health == CampaignAvatarHealth.down,
-              ),
-              child: Padding(
-                padding: EdgeInsets.all(ringWidth + 2),
-                child: CircleAvatar(
-                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  backgroundImage: image,
-                  child: image != null
-                      ? null
-                      : Text(
-                          label,
-                          style: TextStyle(
-                            fontSize: size * 0.32,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                ),
-              ),
-            ),
-            if (health == CampaignAvatarHealth.down)
-              Positioned(
-                right: -2,
-                top: -2,
-                child: Tooltip(
-                  message: '倒地',
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.error,
-                      shape: BoxShape.circle,
+    return Semantics(
+      label: '$label，${_healthLabel(health)}',
+      button: onTap != null,
+      container: true,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox.square(
+          key: const Key('campaign-avatar-target'),
+          dimension: targetSize,
+          child: Center(
+            child: SizedBox.square(
+              key: const Key('campaign-avatar-visual'),
+              dimension: size,
+              child: Stack(
+                fit: StackFit.expand,
+                clipBehavior: Clip.none,
+                children: [
+                  CustomPaint(
+                    key: Key('campaign-avatar-ring-${health.name}'),
+                    painter: _HealthRingPainter(
+                      color: _ringColor(theme.colorScheme, health),
+                      strokeWidth: ringWidth,
+                      hollow: health == CampaignAvatarHealth.down,
                     ),
-                    child: Icon(
-                      Icons.close,
-                      size: size * 0.28,
-                      color: theme.colorScheme.onError,
+                    child: Padding(
+                      padding: EdgeInsets.all(ringWidth + 2),
+                      child: CircleAvatar(
+                        backgroundColor:
+                            theme.colorScheme.surfaceContainerHighest,
+                        backgroundImage: image,
+                        child: image != null
+                            ? null
+                            : Text(
+                                label,
+                                style: TextStyle(
+                                  fontSize: size * 0.32,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                      ),
                     ),
                   ),
-                ),
+                  if (health == CampaignAvatarHealth.down)
+                    Positioned(
+                      right: -2,
+                      top: -2,
+                      child: Tooltip(
+                        message: '倒地',
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.error,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.close,
+                            size: size * 0.28,
+                            color: theme.colorScheme.onError,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
-          ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Color _ringColor(CampaignAvatarHealth h) {
-    return switch (h) {
-      CampaignAvatarHealth.healthy => const Color(0xFF1D9E75),
-      CampaignAvatarHealth.injured => const Color(0xFFEF9F27),
-      CampaignAvatarHealth.critical => const Color(0xFFD85A30),
-      CampaignAvatarHealth.down => const Color(0xFFB00020),
-      CampaignAvatarHealth.unknown => const Color(0xFF888780),
+  String _healthLabel(CampaignAvatarHealth health) {
+    return switch (health) {
+      CampaignAvatarHealth.healthy => '健康',
+      CampaignAvatarHealth.injured => '受伤',
+      CampaignAvatarHealth.critical => '濒危',
+      CampaignAvatarHealth.down => '倒地',
+      CampaignAvatarHealth.unknown => '生命值未知',
+    };
+  }
+
+  Color _ringColor(ColorScheme colors, CampaignAvatarHealth health) {
+    return switch (health) {
+      CampaignAvatarHealth.healthy => colors.primary,
+      CampaignAvatarHealth.injured => colors.tertiary,
+      CampaignAvatarHealth.critical || CampaignAvatarHealth.down =>
+        colors.error,
+      CampaignAvatarHealth.unknown => colors.outline,
     };
   }
 }
@@ -140,13 +176,7 @@ class _HealthRingPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
     final radius = (canvasSize.shortestSide - strokeWidth) / 2;
     final center = Offset(canvasSize.width / 2, canvasSize.height / 2);
-    if (hollow) {
-      // 倒地：空心虚线环，避免与实心状态混淆。
-      paint.style = PaintingStyle.stroke;
-      canvas.drawCircle(center, radius, paint);
-    } else {
-      canvas.drawCircle(center, radius, paint);
-    }
+    canvas.drawCircle(center, radius, paint);
   }
 
   @override

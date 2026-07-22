@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/campaign.dart';
-import 'chat_avatar.dart';
+import '../widgets/campaign_avatar.dart';
 import 'chat_helpers.dart';
 
 /// 战役聊天消息泡泡。按 [CampaignChatMessage.kind] 渲染：
@@ -114,10 +114,12 @@ class CampaignChatBubble extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ChatAvatar(
-              name: displayName,
-              avatarUrl: message.avatarUrl,
-              healthState: message.publicHealthState,
+            CampaignAvatar(
+              initials: displayName,
+              imageUrl: message.avatarUrl,
+              health: CampaignAvatar.healthFromState(
+                message.publicHealthState,
+              ),
               onTap: onAvatarTap,
             ),
             const SizedBox(width: 8),
@@ -151,10 +153,12 @@ class CampaignChatBubble extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ChatAvatar(
-              name: displayName,
-              avatarUrl: message.avatarUrl,
-              healthState: message.publicHealthState,
+            CampaignAvatar(
+              initials: displayName,
+              imageUrl: message.avatarUrl,
+              health: CampaignAvatar.healthFromState(
+                message.publicHealthState,
+              ),
               onTap: onAvatarTap,
             ),
             const SizedBox(width: 8),
@@ -217,10 +221,10 @@ class CampaignChatBubble extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ChatAvatar(
-            name: displayName,
-            avatarUrl: message.avatarUrl,
-            healthState: message.publicHealthState,
+          CampaignAvatar(
+            initials: displayName,
+            imageUrl: message.avatarUrl,
+            health: CampaignAvatar.healthFromState(message.publicHealthState),
             onTap: onAvatarTap,
           ),
           const SizedBox(width: 8),

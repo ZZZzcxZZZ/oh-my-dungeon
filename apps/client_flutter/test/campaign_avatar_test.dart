@@ -26,6 +26,31 @@ void main() {
     });
   });
 
+  group('healthFromState', () {
+    test('maps server health projection to the shared avatar grade', () {
+      expect(
+        CampaignAvatar.healthFromState('healthy'),
+        CampaignAvatarHealth.healthy,
+      );
+      expect(
+        CampaignAvatar.healthFromState('injured'),
+        CampaignAvatarHealth.injured,
+      );
+      expect(
+        CampaignAvatar.healthFromState('critical'),
+        CampaignAvatarHealth.critical,
+      );
+      expect(
+        CampaignAvatar.healthFromState('down'),
+        CampaignAvatarHealth.down,
+      );
+      expect(
+        CampaignAvatar.healthFromState(null),
+        CampaignAvatarHealth.unknown,
+      );
+    });
+  });
+
   test('composer health prefers the current campaign actor sheet', () {
     const actorId = 'actor-1';
     const workspace = CampaignWorkspaceContext(
@@ -151,6 +176,36 @@ void main() {
     expect(portrait.width, lessThan(outer.width));
     expect(portrait.center, outer.center);
   });
+
+  testWidgets('keeps a compact portrait inside a material touch target', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: CampaignAvatar(
+            initials: 'A',
+            size: 32,
+            tapTargetSize: 48,
+            health: CampaignAvatarHealth.injured,
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      tester.getSize(find.byKey(const Key('campaign-avatar-target'))),
+      const Size.square(48),
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('campaign-avatar-visual'))),
+      const Size.square(32),
+    );
+    expect(find.bySemanticsLabel('A，受伤'), findsOneWidget);
+    semantics.dispose();
+  });
+
   testWidgets('triggers onTap when tapped', (tester) async {
     var tapped = 0;
     await tester.pumpWidget(

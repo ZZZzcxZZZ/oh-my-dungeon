@@ -42,11 +42,13 @@
 - 修改：`apps/client_flutter/lib/src/features/campaigns/presentation/campaign_chat_page.dart`
 - 修改：`apps/client_flutter/lib/src/features/campaigns/presentation/chat/campaign_chat_bubble.dart`
 - 修改：`apps/client_flutter/lib/src/features/campaigns/presentation/chat/campaign_chat_tool_sheet.dart`
+- 修改：`apps/client_flutter/lib/src/features/campaigns/presentation/chat/campaign_identity_sheet.dart`
+- 修改：`apps/client_flutter/lib/src/features/campaigns/presentation/chat/campaign_member_tile.dart`
 - 修改：`apps/client_flutter/test/campaign_chat_actor_test.dart`
 - 测试：`apps/client_flutter/test/campaign_avatar_test.dart`
 - 删除：`apps/client_flutter/lib/src/features/campaigns/presentation/chat/chat_avatar.dart`
 
-- [ ] **步骤 1：编写失败的统一头像测试**
+- [x] **步骤 1：编写失败的统一头像测试**
 
 测试覆盖字符串状态映射、32px 视觉尺寸、48px 外层点击区域、未知 HP 灰色语义、倒地标记和 Semantics：
 
@@ -73,7 +75,7 @@ testWidgets('campaign avatar exposes health semantics inside a 48px target', (
 });
 ```
 
-- [ ] **步骤 2：运行测试并确认失败**
+- [x] **步骤 2：运行测试并确认失败**
 
 运行：
 
@@ -84,7 +86,7 @@ flutter test test/campaign_avatar_test.dart
 
 预期：FAIL，`tapTargetSize` 和健康 Semantics 尚不存在。
 
-- [ ] **步骤 3：实现统一头像 API**
+- [x] **步骤 3：实现统一头像 API**
 
 为 `CampaignAvatar` 增加 `tapTargetSize`、健康语义和服务端字符串适配：
 
@@ -108,7 +110,7 @@ String get healthLabel => switch (health) {
 
 外层 `SizedBox.square(tapTargetSize)` 居中承载 `SizedBox.square(size)`；生命环颜色使用 `ColorScheme.primary/tertiary/error/outline`。
 
-- [ ] **步骤 4：替换聊天气泡和工具面板引用**
+- [x] **步骤 4：替换聊天气泡和工具面板引用**
 
 将 `CampaignChatPage`、`CampaignChatBubble` 和工具面板中的 `ChatAvatar` 替换为：
 
@@ -123,7 +125,7 @@ CampaignAvatar(
 
 删除 `chat_avatar.dart` 及测试中的旧 import。
 
-- [ ] **步骤 5：运行头像和聊天定向测试**
+- [x] **步骤 5：运行头像和聊天定向测试**
 
 运行：
 
@@ -133,7 +135,7 @@ flutter test test/campaign_avatar_test.dart test/campaign_chat_actor_test.dart
 
 预期：全部 PASS。
 
-- [ ] **步骤 6：提交**
+- [x] **步骤 6：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/features/campaigns/presentation/widgets/campaign_avatar.dart apps/client_flutter/lib/src/features/campaigns/presentation/campaign_chat_page.dart apps/client_flutter/lib/src/features/campaigns/presentation/chat/campaign_chat_bubble.dart apps/client_flutter/lib/src/features/campaigns/presentation/chat/campaign_chat_tool_sheet.dart apps/client_flutter/lib/src/features/campaigns/presentation/chat/chat_avatar.dart apps/client_flutter/test/campaign_avatar_test.dart apps/client_flutter/test/campaign_chat_actor_test.dart

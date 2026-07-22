@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/campaign.dart';
 import '../../domain/campaign_actor.dart';
-import 'chat_avatar.dart';
+import '../widgets/campaign_avatar.dart';
 import 'chat_helpers.dart';
 
 /// 成员列表项：把 CampaignMemberPreview 与对应的 CampaignActor 配对显示。
@@ -21,11 +21,15 @@ class CampaignMemberTile extends StatelessWidget {
     ].where((item) => item.isNotEmpty).join(' · ');
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: ChatAvatar(
-        name: actorName == null || actorName.isEmpty
+      leading: CampaignAvatar(
+        initials: actorName == null || actorName.isEmpty
             ? member.displayName
             : actorName,
-        avatarUrl: actor?.sheet['avatarUrl'] as String?,
+        imageUrl: actor?.sheet['avatarUrl'] as String?,
+        health: CampaignAvatar.healthFromHp(
+          actor?.sheet['currentHp'] as num?,
+          actor?.sheet['maxHp'] as num?,
+        ),
       ),
       title: Text(member.displayName),
       subtitle: subtitle.isEmpty ? null : Text(subtitle),
@@ -46,9 +50,13 @@ class ActorOnlyMemberTile extends StatelessWidget {
     final displayName = name == null || name.isEmpty ? '未命名角色' : name;
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: ChatAvatar(
-        name: displayName,
-        avatarUrl: actor.sheet['avatarUrl'] as String?,
+      leading: CampaignAvatar(
+        initials: displayName,
+        imageUrl: actor.sheet['avatarUrl'] as String?,
+        health: CampaignAvatar.healthFromHp(
+          actor.sheet['currentHp'] as num?,
+          actor.sheet['maxHp'] as num?,
+        ),
       ),
       title: Text(displayName),
       subtitle: Text(actorStatusLine(actor)),

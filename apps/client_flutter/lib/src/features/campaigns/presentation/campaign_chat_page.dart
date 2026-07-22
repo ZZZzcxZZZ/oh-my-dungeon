@@ -23,11 +23,11 @@ import 'chat/campaign_chat_tool_sheet.dart';
 import 'chat/campaign_chat_bubble.dart';
 import 'chat/campaign_composer_identity.dart';
 import 'chat/campaign_identity_sheet.dart';
-import 'chat/chat_avatar.dart';
 import 'chat/chat_helpers.dart';
 import 'chat/chat_mode_picker.dart';
 import 'chat/check_request_sheet.dart';
 import 'content/campaign_content_controller.dart';
+import 'widgets/campaign_avatar.dart';
 
 class CampaignChatPage extends StatefulWidget {
   const CampaignChatPage({
@@ -412,10 +412,12 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                     key: const Key('campaign-chat-identity'),
                     tooltip: '当前身份与跑团工具',
                     onPressed: _showToolPanel,
-                    icon: ChatAvatar(
-                      name: identity.displayName,
-                      avatarUrl: identity.avatarUrl,
-                      healthState: identity.healthState,
+                    icon: CampaignAvatar(
+                      initials: identity.displayName,
+                      imageUrl: identity.avatarUrl,
+                      health: CampaignAvatar.healthFromState(
+                        identity.healthState,
+                      ),
                       size: 24,
                     ),
                   ),
@@ -1036,22 +1038,14 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
 
   void _openCharacterSheet() {
     final identity = _composerIdentity;
-    final character = identity.localCharacter;
-    if (character != null) {
-      Navigator.of(context).push<void>(
-        MaterialPageRoute(
-          builder: (context) => CharacterDetailPage(character: character),
-        ),
-      );
-      return;
-    }
-
     final actorId = identity.actorId;
     final actorController = widget.actorController;
     if (actorId != null && actorController != null) {
-      final actor = actorController.actors
-          .where((candidate) => candidate.id == actorId)
-          .firstOrNull;
+      final actor =
+          identity.campaignActor ??
+          actorController.actors
+              .where((candidate) => candidate.id == actorId)
+              .firstOrNull;
       if (actor != null) {
         openCampaignActorSheet(
           context: context,
@@ -1062,6 +1056,16 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         );
         return;
       }
+    }
+
+    final character = identity.localCharacter;
+    if (character != null) {
+      Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (context) => CharacterDetailPage(character: character),
+        ),
+      );
+      return;
     }
 
     ScaffoldMessenger.of(
@@ -1095,9 +1099,9 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
             for (final actor in actors)
               ListTile(
                 key: Key('campaign-actor-${actor.id}'),
-                leading: ChatAvatar(
-                  name: actor.sheet['name']?.toString() ?? '?',
-                  avatarUrl: actor.sheet['avatarUrl'] as String?,
+                leading: CampaignAvatar(
+                  initials: actor.sheet['name']?.toString() ?? '?',
+                  imageUrl: actor.sheet['avatarUrl'] as String?,
                 ),
                 title: Text(actor.sheet['name']?.toString() ?? '未命名角色'),
                 onTap: () => Navigator.of(context).pop(actor),

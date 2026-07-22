@@ -11,7 +11,7 @@ import 'package:dnd_table_client/src/features/characters/presentation/character_
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_chat_page.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_controller.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/chat/campaign_chat_bubble.dart';
-import 'package:dnd_table_client/src/features/campaigns/presentation/chat/chat_avatar.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/widgets/campaign_avatar.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_controller.dart';
 import 'package:dnd_table_client/src/features/content/data/local/content_repository.dart';
@@ -478,7 +478,7 @@ void main() {
 
       final bubbleAvatar = find.descendant(
         of: find.byType(CampaignChatBubble),
-        matching: find.byType(ChatAvatar),
+        matching: find.byType(CampaignAvatar),
       );
       expect(bubbleAvatar, findsOneWidget);
       await tester.tap(bubbleAvatar);
@@ -516,7 +516,7 @@ void main() {
     await tester.tap(
       find.descendant(
         of: find.byType(CampaignChatBubble),
-        matching: find.byType(ChatAvatar),
+        matching: find.byType(CampaignAvatar),
       ),
     );
     await tester.pumpAndSettle();
@@ -549,7 +549,7 @@ void main() {
 
     final bubbleAvatar = find.descendant(
       of: find.byType(CampaignChatBubble),
-      matching: find.byType(ChatAvatar),
+      matching: find.byType(CampaignAvatar),
     );
     expect(bubbleAvatar, findsOneWidget);
     await tester.tap(bubbleAvatar);
@@ -1236,7 +1236,7 @@ void main() {
   testWidgets('tool panel open character sheet keeps chat page on stage', (
     tester,
   ) async {
-    await pumpChatPage(tester, isDm: true);
+    await pumpChatPage(tester, isDm: true, campaignActorId: 'actor-player');
 
     await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
@@ -1248,6 +1248,11 @@ void main() {
     expect(find.byType(BackButton), findsOneWidget);
     // 角色详情页应可见。
     expect(find.text('Arannis'), findsWidgets);
+    final sheet = tester.widget<CharacterDetailPage>(
+      find.byType(CharacterDetailPage),
+    );
+    expect(sheet.onUpdateRuntime, isNotNull);
+    expect(sheet.onSaveCharacter, isNotNull);
   });
 
   testWidgets('tool panel content library fallback keeps chat page on stage', (

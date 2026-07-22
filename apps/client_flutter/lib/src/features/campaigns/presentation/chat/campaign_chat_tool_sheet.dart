@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../widgets/campaign_avatar.dart';
 import 'campaign_composer_identity.dart';
-import 'chat_avatar.dart';
 
 enum CampaignChatToolAction {
   openCharacterSheet,
@@ -120,10 +120,12 @@ class CampaignChatToolSheet extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 child: ListTile(
                   key: const Key('tool-current-identity'),
-                  leading: ChatAvatar(
-                    name: identity.displayName,
-                    avatarUrl: identity.avatarUrl,
-                    healthState: identity.healthState,
+                  leading: CampaignAvatar(
+                    initials: identity.displayName,
+                    imageUrl: identity.avatarUrl,
+                    health: CampaignAvatar.healthFromState(
+                      identity.healthState,
+                    ),
                   ),
                   title: Text(identity.displayName),
                   subtitle: Text(identity.subtitle),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/database/app_database.dart';
+import 'theme/app_theme.dart';
 import '../features/app_preferences/data/app_preferences_store.dart';
 import '../features/app_preferences/domain/app_preferences.dart';
 import '../features/app_preferences/presentation/app_preferences_controller.dart';
@@ -244,40 +245,14 @@ class _DndTableAppState extends State<DndTableApp> {
     required AppPreferences preferences,
     required Widget home,
   }) {
-    final contrastLevel = preferences.highContrastTheme ? 0.5 : 0.0;
-    final lightScheme = ColorScheme.fromSeed(
-      seedColor: preferences.seedColor,
-      contrastLevel: contrastLevel,
-      dynamicSchemeVariant: _dynamicSchemeVariant(
-        preferences.dynamicSchemeVariant,
-      ),
-    );
-    final darkScheme = ColorScheme.fromSeed(
-      seedColor: preferences.seedColor,
-      brightness: Brightness.dark,
-      contrastLevel: contrastLevel,
-      dynamicSchemeVariant: _dynamicSchemeVariant(
-        preferences.dynamicSchemeVariant,
-      ),
-    );
     return MaterialApp(
       title: 'D&D Table Tool',
       debugShowCheckedModeBanner: false,
       themeMode: preferences.themeMode,
-      theme: ThemeData(useMaterial3: true, colorScheme: lightScheme),
-      darkTheme: ThemeData(useMaterial3: true, colorScheme: darkScheme),
+      theme: AppTheme.light(preferences),
+      darkTheme: AppTheme.dark(preferences),
       home: home,
     );
-  }
-
-  DynamicSchemeVariant _dynamicSchemeVariant(String value) {
-    return switch (value) {
-      'fidelity' => DynamicSchemeVariant.fidelity,
-      'expressive' => DynamicSchemeVariant.expressive,
-      'vibrant' => DynamicSchemeVariant.vibrant,
-      'neutral' => DynamicSchemeVariant.neutral,
-      _ => DynamicSchemeVariant.tonalSpot,
-    };
   }
 }
 

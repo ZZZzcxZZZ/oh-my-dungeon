@@ -32,10 +32,10 @@
 
 ### 任务 2：唯一 AppTheme
 
-- [ ] 在 `app_theme_test.dart` 写失败测试：亮暗主题启用 Material 3；NavigationBar、NavigationRail、AppBar、Input、Dialog、BottomSheet、Chip、Card、Button 均有主题；卡片圆角不超过 8。
-- [ ] 实现 `AppTheme.light(preferences)` 与 `AppTheme.dark(preferences)`，仅通过 `ColorScheme.fromSeed` 生成 tonal palette，禁止把 seed 色直接作为页面背景。
-- [ ] 从 `dnd_table_app.dart` 删除散落主题生成函数，统一调用 `AppTheme`。
-- [ ] 运行 `flutter test test/app_theme_test.dart test/widget_test.dart` 并提交 `feat(v0.1): centralize material theme`。
+- [x] 在 `app_theme_test.dart` 写失败测试：亮暗主题启用 Material 3；NavigationBar、NavigationRail、AppBar、Input、Dialog、BottomSheet、Chip、Card、Button 均有主题；卡片圆角不超过 8。
+- [x] 实现 `AppTheme.light(preferences)` 与 `AppTheme.dark(preferences)`，仅通过 `ColorScheme.fromSeed` 生成 tonal palette，禁止把 seed 色直接作为页面背景。
+- [x] 从 `dnd_table_app.dart` 删除散落主题生成函数，统一调用 `AppTheme`。
+- [x] 运行 `flutter test test/app_theme_test.dart test/widget_test.dart` 并提交 `feat(v0.1): centralize material theme`。
 
 ### 任务 3：设置页信息架构
 

@@ -42,7 +42,7 @@
 
 ### 任务 4：验收
 
-- [ ] 运行 campaign center/overview/characters/archive Flutter 测试。
-- [ ] 运行服务端 archive 单元/e2e、`npm run lint:server`。
-- [ ] 运行 `flutter analyze` 和 `flutter build web --release`。
-- [ ] 在报告中列出仍需聊天/事件协议支持的能力，交给第二波整合，不得越界实现。
+- [x] 运行 campaign center/overview/characters/archive Flutter 测试。
+- [x] 运行服务端 archive 单元/e2e、`npm run lint:server`。
+- [x] 运行 `flutter analyze` 和 `flutter build web --release`。
+- [x] 在报告中列出仍需聊天/事件协议支持的能力，交给第二波整合，不得越界实现。

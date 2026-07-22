@@ -17,10 +17,10 @@
 
 ## 任务 3：收口与验证
 
-- [ ] 检查两份业务页面中的重复壳层代码与未使用 import。
-- [ ] 更新执行状态文档。
-- [ ] 运行 `flutter analyze`、`flutter test`、`flutter build web --release` 和 `npm run doctor`。
-- [ ] 提交角色壳层重构。
+- [x] 检查两份业务页面中的重复壳层代码与未使用 import。
+- [x] 更新执行状态文档。
+- [x] 运行 `flutter analyze`、`flutter test`、`flutter build web --release` 和 `npm run doctor`。
+- [x] 提交角色壳层重构。
 
 ## 后续边界
 

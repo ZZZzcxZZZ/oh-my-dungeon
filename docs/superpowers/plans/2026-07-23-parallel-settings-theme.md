@@ -39,11 +39,11 @@
 
 ### 任务 3：设置页信息架构
 
-- [ ] 在 `settings_tab_page_test.dart` 写失败测试，断言顺序为：外观与体验、资料与存储、服务器与账户、角色模式、关于。
-- [ ] 断言服务器、登录、自动登录和同步只在“服务器与账户”出现一次；没有行为的展示型设置不出现。
-- [ ] 拆出 section widget；页面最大内容宽度 760，禁止 section 外层 Card 和 Card 嵌套。
-- [ ] 自定义取色使用 Dialog：预设色、HSV/颜色输入、局部预览、应用/取消；取消不得写 store。
-- [ ] 运行 `flutter test test/settings_tab_page_test.dart test/widget_test.dart` 并提交 `refactor(v0.1): simplify settings experience`。
+- [x] 在 `settings_tab_page_test.dart` 写失败测试，断言顺序为：外观与体验、资料与存储、服务器与账户、角色模式、关于。
+- [x] 断言服务器、登录、自动登录和同步只在“服务器与账户”出现一次；没有行为的展示型设置不出现。
+- [x] 拆出 section widget；页面最大内容宽度 760，禁止 section 外层 Card 和 Card 嵌套。
+- [x] 自定义取色使用 Dialog：预设色、HSV/颜色输入、局部预览、应用/取消；取消不得写 store。
+- [x] 运行 `flutter test test/settings_tab_page_test.dart test/widget_test.dart` 并提交 `refactor(v0.1): simplify settings experience`。
 
 ### 任务 4：验收
 

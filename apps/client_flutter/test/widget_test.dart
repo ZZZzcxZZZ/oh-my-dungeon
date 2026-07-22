@@ -134,11 +134,11 @@ void main() {
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
 
-    expect(find.text('使用模式'), findsOneWidget);
+    expect(find.text('角色模式'), findsOneWidget);
     expect(find.text('玩家'), findsOneWidget);
     expect(find.text('主持人'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('使用模式'));
+    await tester.ensureVisible(find.text('角色模式'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('主持人'), warnIfMissed: false);
     await tester.pumpAndSettle();
@@ -276,7 +276,7 @@ void main() {
 
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('使用模式'));
+    await tester.ensureVisible(find.text('角色模式'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('主持人'), warnIfMissed: false);
     await tester.pumpAndSettle();
@@ -300,17 +300,14 @@ void main() {
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
 
-    expect(find.text('外观'), findsOneWidget);
-    expect(find.text('Material 3 主题色'), findsOneWidget);
+    expect(find.text('外观与体验'), findsOneWidget);
+    expect(find.text('主题色'), findsOneWidget);
     expect(find.text('高对比 Material 3'), findsOneWidget);
     expect(find.text('默认骰子'), findsOneWidget);
     expect(find.text('掷骰确认'), findsOneWidget);
     expect(find.text('合并连续消息头像'), findsOneWidget);
-    expect(find.text('规则与角色创建'), findsOneWidget);
-    expect(find.text('默认规则集'), findsOneWidget);
     expect(find.text('默认创建方式'), findsOneWidget);
     expect(find.text('显示 Legacy 内容'), findsNothing);
-    expect(find.text('角色卡'), findsOneWidget);
     expect(find.text('默认角色卡标签'), findsOneWidget);
 
     await tester.ensureVisible(find.text('默认角色卡标签'));
@@ -1177,9 +1174,9 @@ void main() {
     await tester.tap(find.text('设置').last);
     await tester.pumpAndSettle();
 
-    expect(find.text('服务器'), findsOneWidget);
+    expect(find.text('服务器与账户'), findsOneWidget);
     expect(find.text('尚未连接服务器'), findsOneWidget);
-    expect(find.text('同步'), findsOneWidget);
+    expect(find.text('离线'), findsOneWidget);
     expect(find.text('仅保存在此设备'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/database/app_database.dart';
+import 'theme/app_theme.dart';
 import '../features/app_preferences/data/app_preferences_store.dart';
 import '../features/app_preferences/domain/app_preferences.dart';
 import '../features/app_preferences/presentation/app_preferences_controller.dart';
@@ -9,6 +10,7 @@ import '../features/auth/data/auth_api_client.dart';
 import '../features/auth/data/auth_token_store.dart';
 import '../features/campaigns/data/campaign_api_client.dart';
 import '../features/campaigns/data/campaign_socket_service.dart';
+import '../features/client_mode/data/client_mode_store.dart';
 import '../features/client_mode/domain/client_mode.dart';
 import '../core/dice/dice_roller.dart';
 import '../features/server_home/domain/active_server_session.dart';
@@ -54,8 +56,8 @@ class DndTableApp extends StatefulWidget {
 }
 
 class _DndTableAppState extends State<DndTableApp> {
-  late final ClientModeController _modeController;
-  late final bool _ownsModeController;
+  late ClientModeController _modeController;
+  late bool _ownsModeController;
   AppPreferencesController? _ownedPreferencesController;
   late final Future<_AppDeps> _depsFuture;
   final ActiveServerSession _session = ActiveServerSession();
@@ -111,6 +113,19 @@ class _DndTableAppState extends State<DndTableApp> {
     }
     if (!appPreferencesController.initialized) {
       await appPreferencesController.initialize();
+    }
+
+    // When the caller did not inject a mode controller, upgrade the
+    // placeholder to a persistent one backed by SharedPreferences so the
+    // chosen DM/Player mode survives app restarts. Skip the upgrade in tests
+    // that opt into the in-memory preference path (no SharedPreferences).
+    if (widget.modeController == null && preferences != null) {
+      final persistent = ClientModeController.withStore(
+        store: SharedPreferencesClientModeStore(preferences),
+      );
+      await persistent.initialize();
+      _modeController.dispose();
+      _modeController = persistent;
     }
 
     final authClient = widget.authClient ?? AuthApiClient();
@@ -230,40 +245,14 @@ class _DndTableAppState extends State<DndTableApp> {
     required AppPreferences preferences,
     required Widget home,
   }) {
-    final contrastLevel = preferences.highContrastTheme ? 0.5 : 0.0;
-    final lightScheme = ColorScheme.fromSeed(
-      seedColor: preferences.seedColor,
-      contrastLevel: contrastLevel,
-      dynamicSchemeVariant: _dynamicSchemeVariant(
-        preferences.dynamicSchemeVariant,
-      ),
-    );
-    final darkScheme = ColorScheme.fromSeed(
-      seedColor: preferences.seedColor,
-      brightness: Brightness.dark,
-      contrastLevel: contrastLevel,
-      dynamicSchemeVariant: _dynamicSchemeVariant(
-        preferences.dynamicSchemeVariant,
-      ),
-    );
     return MaterialApp(
       title: 'D&D Table Tool',
       debugShowCheckedModeBanner: false,
       themeMode: preferences.themeMode,
-      theme: ThemeData(useMaterial3: true, colorScheme: lightScheme),
-      darkTheme: ThemeData(useMaterial3: true, colorScheme: darkScheme),
+      theme: AppTheme.light(preferences),
+      darkTheme: AppTheme.dark(preferences),
       home: home,
     );
-  }
-
-  DynamicSchemeVariant _dynamicSchemeVariant(String value) {
-    return switch (value) {
-      'fidelity' => DynamicSchemeVariant.fidelity,
-      'expressive' => DynamicSchemeVariant.expressive,
-      'vibrant' => DynamicSchemeVariant.vibrant,
-      'neutral' => DynamicSchemeVariant.neutral,
-      _ => DynamicSchemeVariant.tonalSpot,
-    };
   }
 }
 

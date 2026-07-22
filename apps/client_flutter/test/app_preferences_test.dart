@@ -1,4 +1,5 @@
 import 'package:dnd_table_client/src/features/app_preferences/data/app_preferences_store.dart';
+import 'package:dnd_table_client/src/features/app_preferences/domain/app_preferences.dart';
 import 'package:dnd_table_client/src/features/app_preferences/presentation/app_preferences_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -89,4 +90,104 @@ void main() {
       expect((await store.load()).defaultCreationMethod, 'quick');
     },
   );
+
+  test(
+    'rolls back to the previous value when the store throws on save',
+    () async {
+      final store = _ThrowingSaveStore(AppPreferences.defaults);
+      final controller = AppPreferencesController(store: store);
+      await controller.initialize();
+
+      Object? caught;
+      try {
+        await controller.setThemeMode(ThemeMode.dark);
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught, isNotNull);
+      expect(controller.preferences.themeMode, ThemeMode.system);
+      expect(controller.lastError, isNotNull);
+    },
+  );
+
+  test('clears lastError after a successful save', () async {
+    final store = _ThrowingSaveStore(AppPreferences.defaults);
+    final controller = AppPreferencesController(store: store);
+    await controller.initialize();
+
+    try {
+      await controller.setThemeMode(ThemeMode.dark);
+    } catch (_) {
+      // ignore
+    }
+    expect(controller.lastError, isNotNull);
+
+    store.throwOnSave = false;
+    await controller.setThemeMode(ThemeMode.dark);
+
+    expect(controller.preferences.themeMode, ThemeMode.dark);
+    expect(controller.lastError, isNull);
+  });
+
+  test(
+    'keeps every preference after rebuilding the controller from store',
+    () async {
+      final store = InMemoryAppPreferencesStore();
+      final first = AppPreferencesController(store: store);
+      await first.initialize();
+
+      await first.setThemeMode(ThemeMode.dark);
+      await first.setSeedColor(const Color(0xff123456));
+      await first.setDefaultDice('3d6');
+      await first.setCompactLists(true);
+      await first.setConfirmBeforeRoll(true);
+      await first.setDefaultCreationMethod('standard');
+      await first.setShowCharacterSources(false);
+      await first.setShowEncumbrance(true);
+      await first.setDefaultCharacterTab('equipment');
+      await first.setHighContrastTheme(true);
+      await first.setDynamicSchemeVariant('vibrant');
+      await first.setLogCharacterRuntimeChanges(false);
+      await first.setGroupConsecutiveChatMessages(false);
+
+      final reloaded = AppPreferencesController(store: store);
+      await reloaded.initialize();
+
+      expect(reloaded.preferences.themeMode, ThemeMode.dark);
+      expect(
+        reloaded.preferences.seedColorValue,
+        const Color(0xff123456).toARGB32(),
+      );
+      expect(reloaded.preferences.defaultDice, '3d6');
+      expect(reloaded.preferences.compactLists, isTrue);
+      expect(reloaded.preferences.confirmBeforeRoll, isTrue);
+      expect(reloaded.preferences.defaultCreationMethod, 'standard');
+      expect(reloaded.preferences.showCharacterSources, isFalse);
+      expect(reloaded.preferences.showEncumbrance, isTrue);
+      expect(reloaded.preferences.defaultCharacterTab, 'equipment');
+      expect(reloaded.preferences.highContrastTheme, isTrue);
+      expect(reloaded.preferences.dynamicSchemeVariant, 'vibrant');
+      expect(reloaded.preferences.logCharacterRuntimeChanges, isFalse);
+      expect(reloaded.preferences.groupConsecutiveChatMessages, isFalse);
+    },
+  );
+}
+
+class _ThrowingSaveStore implements AppPreferencesStore {
+  _ThrowingSaveStore(AppPreferences initial) : _current = initial;
+
+  AppPreferences _current;
+  bool throwOnSave = true;
+
+  @override
+  Future<AppPreferences> load() async => _current;
+
+  @override
+  Future<void> save(AppPreferences preferences) async {
+    if (throwOnSave) {
+      throw StateError('disk full');
+    }
+    _current = preferences;
+  }
 }

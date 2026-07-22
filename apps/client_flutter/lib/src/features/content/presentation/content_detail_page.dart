@@ -15,6 +15,7 @@ class ContentDetailPage extends StatefulWidget {
     required this.onOpenEntry,
     required this.onImportRequested,
     this.onClose,
+    this.onBack,
     super.key,
   });
 
@@ -23,6 +24,7 @@ class ContentDetailPage extends StatefulWidget {
   final ValueChanged<String> onOpenEntry;
   final VoidCallback onImportRequested;
   final VoidCallback? onClose;
+  final VoidCallback? onBack;
 
   @override
   State<ContentDetailPage> createState() => _ContentDetailPageState();
@@ -33,7 +35,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   bool _isLoading = false;
   bool _isFavorite = false;
   List<ContentEntry> _classFeatures = const [];
-  final TextEditingController _noteController = TextEditingController();
+  List<ContentEntry> _subclasses = const [];
 
   @override
   void initState() {
@@ -51,7 +53,6 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
 
   @override
   void dispose() {
-    _noteController.dispose();
     super.dispose();
   }
 
@@ -71,11 +72,34 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
           ? false
           : await widget.controller.isFavorite(entryKey);
       List<ContentEntry> features = const [];
+      List<ContentEntry> subclasses = const [];
       if (entry != null && entry.type == 'class') {
         final packageId = entry.id.split(':').first;
-        features = await widget.controller.repository.search(
+        final allFeatures = await widget.controller.repository.search(
           ContentQuery(type: 'classFeature', packageId: packageId),
         );
+        // 使用结构化关系 (featureOf) 过滤, 不解析正文字符串.
+        features = allFeatures
+            .where(
+              (feature) => feature.relations.any(
+                (relation) =>
+                    relation.type == 'featureOf' &&
+                    relation.targetId == entry.id,
+              ),
+            )
+            .toList();
+        final allSubclasses = await widget.controller.repository.search(
+          ContentQuery(type: 'subclass', packageId: packageId),
+        );
+        subclasses = allSubclasses
+            .where(
+              (subclass) => subclass.relations.any(
+                (relation) =>
+                    relation.type == 'subclassOf' &&
+                    relation.targetId == entry.id,
+              ),
+            )
+            .toList();
       }
       if (mounted) {
         setState(() {
@@ -83,7 +107,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
           _isLoading = false;
           _isFavorite = isFav;
           _classFeatures = features;
-          _noteController.clear();
+          _subclasses = subclasses;
         });
       }
     } catch (e) {
@@ -103,163 +127,16 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     }
   }
 
-  Future<void> _saveNote() async {
-    final entryKey = widget.entryKey;
-    if (entryKey == null) return;
-    await widget.controller.repository.saveNote(entryKey, _noteController.text);
-  }
-
-  /// Spec §资料库 GUI 增强: 编辑条目名称、摘要等可变字段, 保留 id/slug/type.
-  /// 入口在 AppBar 编辑按钮, 仅本地条目可编辑. 保存时调用 repository
-  /// .updateEntry, 自动 +1 revision 防止与远端同步混淆.
-  Future<void> _showEditDialog() async {
-    final entry = _entry;
-    if (entry == null) return;
-    final nameController = TextEditingController(text: entry.name);
-    final summaryController = TextEditingController(text: entry.summary);
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('编辑条目'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  key: const Key('content-edit-name-field'),
-                  controller: nameController,
-                  decoration: const InputDecoration(labelText: '名称'),
-                  autofocus: true,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  key: const Key('content-edit-summary-field'),
-                  controller: summaryController,
-                  decoration: const InputDecoration(labelText: '摘要'),
-                  minLines: 2,
-                  maxLines: 5,
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('保存'),
-            ),
-          ],
-        );
-      },
-    );
-    // 在 dialog 关闭动画结束前不要 dispose controller, 否则
-    // dialog 退出动画期间 TextField 仍会访问已 dispose 的 controller.
-    // 局部 controller 在 dialog 退出动画完成后会自动被 GC.
-    if (confirmed != true || !mounted) {
-      return;
-    }
-    final newName = nameController.text.trim();
-    final newSummary = summaryController.text.trim();
-
-    if (newName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('名称不能为空')),
-      );
-      return;
-    }
-    final updated = ContentEntry.fromJson({
-      ...entry.toJson(),
-      'name': newName,
-      'summary': newSummary,
-      'revision': entry.revision + 1,
-    });
-    try {
-      await widget.controller.repository.updateEntry(updated);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已保存修改')),
-        );
-        await _loadEntry();
-      }
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存失败: $error')),
-        );
-      }
-    }
-  }
-
-  /// Spec §资料库 GUI 增强: 复制条目. 在同一资料包内创建一个新条目,
-  /// slug 自动加 -copy 后缀, name 由用户输入. 仅本地条目可复制.
-  Future<void> _showDuplicateDialog() async {
-    final entry = _entry;
-    if (entry == null) return;
-    final nameController = TextEditingController(text: '${entry.name}（副本）');
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('复制条目'),
-          content: TextField(
-            key: const Key('content-duplicate-name-field'),
-            controller: nameController,
-            decoration: const InputDecoration(
-              labelText: '新条目名称',
-              hintText: '例如: 火球术（家规副本）',
-            ),
-            autofocus: true,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('创建副本'),
-            ),
-          ],
-        );
-      },
-    );
-    if (confirmed != true || !mounted) {
-      return;
-    }
-    final newName = nameController.text.trim();
-    if (newName.isEmpty) return;
-    try {
-      final duplicate = await widget.controller.repository.duplicateEntry(
-        entry.id,
-        newName: newName,
-      );
-      if (!mounted) return;
-      if (duplicate == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('复制失败: 找不到源条目')),
-        );
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已创建副本: ${duplicate.name}')),
-      );
-      widget.onOpenEntry(duplicate.id);
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('复制失败: $error')),
-        );
-      }
-    }
-  }
-
   Widget? _appBarLeading() {
+    final onBack = widget.onBack;
+    if (onBack != null) {
+      return IconButton(
+        key: const Key('content-detail-back'),
+        tooltip: '返回',
+        onPressed: onBack,
+        icon: const Icon(Icons.arrow_back),
+      );
+    }
     final onClose = widget.onClose;
     if (onClose == null) return null;
     return IconButton(
@@ -330,28 +207,12 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
 
     final definition = ContentTypeRegistry.defaults().definitionFor(entry.type);
     final packageId = entry.id.split(':').first;
-    // Spec §资料库 GUI 增强: 只允许编辑本地条目, 战役条目只读.
-    final canEdit = entry.origin == ContentOrigin.local;
 
     return Scaffold(
       appBar: AppBar(
         leading: _appBarLeading(),
         title: Text(entry.name),
         actions: [
-          if (canEdit)
-            IconButton(
-              key: const Key('content-detail-edit'),
-              tooltip: '编辑条目',
-              onPressed: _showEditDialog,
-              icon: const Icon(Icons.edit_outlined),
-            ),
-          if (canEdit)
-            IconButton(
-              key: const Key('content-detail-duplicate'),
-              tooltip: '复制条目',
-              onPressed: _showDuplicateDialog,
-              icon: const Icon(Icons.content_copy_outlined),
-            ),
           IconButton(
             tooltip: _isFavorite ? '取消收藏' : '收藏',
             onPressed: _toggleFavorite,
@@ -360,6 +221,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
         ],
       ),
       body: SingleChildScrollView(
+        key: PageStorageKey<String>('content-detail-${entry.id}'),
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -398,29 +260,54 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
               onOpenEntry: widget.onOpenEntry,
               showRules: false,
             ),
-            if (entry.type == 'class')
+            if (entry.type == 'class') ...[
               ContentClassFeatureList(
                 classEntry: entry,
                 featureEntries: _classFeatures,
                 onFeatureTap: (feature) => widget.onOpenEntry(feature.id),
               ),
+              if (_subclasses.isNotEmpty)
+                _ContentSubclassList(
+                  subclasses: _subclasses,
+                  onSubclassTap: (subclass) => widget.onOpenEntry(subclass.id),
+                ),
+            ],
             ContentCharacterRulesView(entry: entry),
-            const SizedBox(height: 24),
-            Text('笔记', style: theme.textTheme.titleSmall),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _noteController,
-              minLines: 2,
-              maxLines: 5,
-              decoration: const InputDecoration(
-                labelText: '记录你的笔记…',
-                border: OutlineInputBorder(),
-              ),
-              onSubmitted: (_) => _saveNote(),
-            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ContentSubclassList extends StatelessWidget {
+  const _ContentSubclassList({
+    required this.subclasses,
+    required this.onSubclassTap,
+  });
+
+  final List<ContentEntry> subclasses;
+  final ValueChanged<ContentEntry> onSubclassTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 20),
+        Text('子职业', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 8),
+        for (final subclass in subclasses)
+          ListTile(
+            leading: const Icon(Icons.school_outlined),
+            title: Text(subclass.name),
+            subtitle:
+                subclass.summary.isEmpty ? null : Text(subclass.summary),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => onSubclassTap(subclass),
+          ),
+      ],
     );
   }
 }

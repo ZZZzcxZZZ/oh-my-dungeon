@@ -50,8 +50,7 @@ void main() {
     expect(find.text('等级 1'), findsOneWidget);
     expect(find.text('等级 2'), findsOneWidget);
 
-    await tester.tap(find.text('等级 2'));
-    await tester.pumpAndSettle();
+    // 特性始终可见, 无需展开.
     await tester.tap(find.text('动作如潮'));
 
     expect(opened, actionSurge);

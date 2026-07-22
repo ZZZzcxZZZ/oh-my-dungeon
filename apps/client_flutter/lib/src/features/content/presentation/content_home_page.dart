@@ -6,12 +6,10 @@ import 'content_type_registry.dart';
 class ContentHomePage extends StatelessWidget {
   const ContentHomePage({
     required this.controller,
-    required this.onImportRequested,
     super.key,
   });
 
   final ContentLibraryController controller;
-  final VoidCallback onImportRequested;
 
   static const _categories = <String>[
     'spell',
@@ -33,7 +31,7 @@ class ContentHomePage extends StatelessWidget {
       builder: (context, snapshot) {
         final packages = snapshot.data ?? const [];
         if (packages.isEmpty) {
-          return _EmptyLibraryState(onImportRequested: onImportRequested);
+          return const _EmptyLibraryState();
         }
         return _CategoryGrid();
       },
@@ -42,9 +40,7 @@ class ContentHomePage extends StatelessWidget {
 }
 
 class _EmptyLibraryState extends StatelessWidget {
-  const _EmptyLibraryState({required this.onImportRequested});
-
-  final VoidCallback onImportRequested;
+  const _EmptyLibraryState();
 
   @override
   Widget build(BuildContext context) {
@@ -65,17 +61,11 @@ class _EmptyLibraryState extends StatelessWidget {
             Text('资料库还是空的', style: theme.textTheme.titleLarge),
             const SizedBox(height: 8),
             Text(
-              '导入资料包后即可离线查阅规则、法术与怪物。',
+              '前往「设置 → 资料包」导入资料包后即可离线查阅规则、法术与怪物。',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
               textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: onImportRequested,
-              icon: const Icon(Icons.download_outlined),
-              label: const Text('导入资料包'),
             ),
           ],
         ),

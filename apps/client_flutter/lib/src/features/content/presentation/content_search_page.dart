@@ -5,12 +5,27 @@ import 'content_home_page.dart';
 import 'content_library_controller.dart';
 import 'content_type_registry.dart';
 
-class _TypeFilter {
-  const _TypeFilter({this.value, required this.label});
+class _FacetField {
+  const _FacetField({required this.key, required this.label});
 
-  final String? value;
+  final String key;
   final String label;
 }
+
+const _typeFilters = <String?>[
+  null,
+  'spell',
+  'equipment',
+  'item',
+  'species',
+  'class',
+  'subclass',
+  'background',
+  'feat',
+  'monster',
+  'condition',
+  'rule',
+];
 
 const _spellLevelLabels = <String, String>{
   '0': '戏法',
@@ -24,19 +39,48 @@ const _spellLevelLabels = <String, String>{
   '8': '8环',
   '9': '9环',
 };
-const _typeFilters = <_TypeFilter>[
-  _TypeFilter(value: null, label: '全部'),
-  _TypeFilter(value: 'spell', label: '法术'),
-  _TypeFilter(value: 'equipment', label: '装备'),
-  _TypeFilter(value: 'item', label: '物品'),
-  _TypeFilter(value: 'species', label: '种族'),
-  _TypeFilter(value: 'class', label: '职业'),
-  _TypeFilter(value: 'background', label: '背景'),
-  _TypeFilter(value: 'feat', label: '专长'),
-  _TypeFilter(value: 'monster', label: '怪物'),
-  _TypeFilter(value: 'condition', label: '状态'),
-  _TypeFilter(value: 'rule', label: '规则'),
-];
+
+List<_FacetField> _facetFieldsFor(String? type) {
+  switch (type) {
+    case 'spell':
+      return const [
+        _FacetField(key: 'level', label: '环位'),
+        _FacetField(key: 'school', label: '学派'),
+        _FacetField(key: 'classes', label: '可用职业'),
+      ];
+    case 'subclass':
+      return const [
+        _FacetField(key: 'parentClass', label: '所属职业'),
+      ];
+    case 'equipment':
+      return const [
+        _FacetField(key: 'category', label: '类别'),
+      ];
+    case 'item':
+      return const [
+        _FacetField(key: 'rarity', label: '稀有度'),
+      ];
+    case 'feat':
+      return const [
+        _FacetField(key: 'category', label: '类别'),
+        _FacetField(key: 'prerequisite', label: '先决条件'),
+      ];
+    case 'monster':
+      return const [
+        _FacetField(key: 'challengeRating', label: 'CR'),
+        _FacetField(key: 'type', label: '类型'),
+      ];
+    default:
+      return const [];
+  }
+}
+
+String _facetValueLabel(String type, String field, String value) {
+  if (type == 'spell' && field == 'level') {
+    return _spellLevelLabels[value] ?? value;
+  }
+  return value;
+}
 
 class ContentSearchPage extends StatefulWidget {
   const ContentSearchPage({
@@ -59,18 +103,13 @@ class ContentSearchPage extends StatefulWidget {
 class _ContentSearchPageState extends State<ContentSearchPage> {
   final TextEditingController _searchController = TextEditingController();
   String? _selectedType;
-  String? _selectedSpellLevel;
-  String? _selectedSpellSchool;
-  String? _selectedSpellClass;
-  List<String> _spellSchools = const [];
-  List<String> _spellClasses = const [];
+  Map<String, Set<String>> _facets = const <String, Set<String>>{};
   bool _favoritesOnly = false;
 
   @override
   void initState() {
     super.initState();
     _runSearch();
-    _loadSpellFacetOptions();
   }
 
   @override
@@ -85,115 +124,60 @@ class _ContentSearchPageState extends State<ContentSearchPage> {
       text: text.isEmpty ? null : text,
       type: _selectedType,
       favoritesOnly: _favoritesOnly,
-      facets: <String, Set<String>>{
-        if (_selectedType == 'spell' && _selectedSpellLevel != null)
-          'level': {_selectedSpellLevel!},
-        if (_selectedType == 'spell' && _selectedSpellSchool != null)
-          'school': {_selectedSpellSchool!},
-        if (_selectedType == 'spell' && _selectedSpellClass != null)
-          'classes': {_selectedSpellClass!},
-      },
+      facets: _facets,
     );
-  }
-
-  Future<void> _loadSpellFacetOptions() async {
-    final options = await widget.controller.facetOptions(
-      type: 'spell',
-      fields: const ['school', 'classes'],
-    );
-    if (!mounted) return;
-    setState(() {
-      _spellSchools = options['school'] ?? const [];
-      _spellClasses = options['classes'] ?? const [];
-    });
-  }
-
-  void _clearSpellFilters() {
-    _selectedSpellLevel = null;
-    _selectedSpellSchool = null;
-    _selectedSpellClass = null;
   }
 
   bool get _hasActiveFilter =>
-      (_searchController.text.trim().isNotEmpty) ||
       _selectedType != null ||
       _favoritesOnly ||
-      _selectedSpellLevel != null ||
-      _selectedSpellSchool != null ||
-      _selectedSpellClass != null;
+      _facets.values.any((set) => set.isNotEmpty);
 
-  Widget _buildSpellFilters() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 720;
-        final width = compact
-            ? constraints.maxWidth
-            : (constraints.maxWidth - 16) / 3;
-        return Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            SizedBox(
-              width: width,
-              child: DropdownMenu<String?>(
-                key: const Key('spell-level-filter'),
-                initialSelection: _selectedSpellLevel,
-                expandedInsets: EdgeInsets.zero,
-                label: const Text('环位'),
-                dropdownMenuEntries: [
-                  const DropdownMenuEntry(value: null, label: '全部环位'),
-                  for (final level in _spellLevelLabels.entries)
-                    DropdownMenuEntry(value: level.key, label: level.value),
-                ],
-                onSelected: (value) {
-                  setState(() => _selectedSpellLevel = value);
-                  _runSearch();
-                },
-              ),
-            ),
-            SizedBox(
-              width: width,
-              child: DropdownMenu<String?>(
-                key: const Key('spell-school-filter'),
-                initialSelection: _selectedSpellSchool,
-                expandedInsets: EdgeInsets.zero,
-                label: const Text('学派'),
-                dropdownMenuEntries: [
-                  const DropdownMenuEntry(value: null, label: '全部学派'),
-                  for (final school in _spellSchools)
-                    DropdownMenuEntry(value: school, label: school),
-                ],
-                onSelected: (value) {
-                  setState(() => _selectedSpellSchool = value);
-                  _runSearch();
-                },
-              ),
-            ),
-            SizedBox(
-              width: width,
-              child: DropdownMenu<String?>(
-                key: const Key('spell-class-filter'),
-                initialSelection: _selectedSpellClass,
-                expandedInsets: EdgeInsets.zero,
-                label: const Text('职业'),
-                dropdownMenuEntries: [
-                  const DropdownMenuEntry(value: null, label: '全部职业'),
-                  for (final characterClass in _spellClasses)
-                    DropdownMenuEntry(
-                      value: characterClass,
-                      label: characterClass,
-                    ),
-                ],
-                onSelected: (value) {
-                  setState(() => _selectedSpellClass = value);
-                  _runSearch();
-                },
-              ),
-            ),
-          ],
-        );
-      },
+  void _removeType() {
+    setState(() {
+      _selectedType = null;
+      _facets = const {};
+    });
+    _runSearch();
+  }
+
+  void _toggleFavorites() {
+    setState(() => _favoritesOnly = !_favoritesOnly);
+    _runSearch();
+  }
+
+  void _removeFacet(String field, String value) {
+    setState(() {
+      final current = Set<String>.from(_facets[field] ?? const {});
+      current.remove(value);
+      if (current.isEmpty) {
+        _facets = Map.of(_facets)..remove(field);
+      } else {
+        _facets = Map.of(_facets)..[field] = current;
+      }
+    });
+    _runSearch();
+  }
+
+  Future<void> _openFilterSheet() async {
+    final result = await showModalBottomSheet<_FilterResult>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => _FilterSheet(
+        selectedType: _selectedType,
+        facets: _facets,
+        favoritesOnly: _favoritesOnly,
+        controller: widget.controller,
+      ),
     );
+    if (result != null) {
+      setState(() {
+        _selectedType = result.type;
+        _facets = result.facets;
+        _favoritesOnly = result.favoritesOnly;
+      });
+      _runSearch();
+    }
   }
 
   @override
@@ -215,48 +199,49 @@ class _ContentSearchPageState extends State<ContentSearchPage> {
                   leading: const Icon(Icons.search),
                   onSubmitted: (_) => _runSearch(),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownMenu<String?>(
-                        key: ValueKey('type-filter-$_selectedType'),
-                        initialSelection: _selectedType,
-                        expandedInsets: EdgeInsets.zero,
-                        label: const Text('类型'),
-                        dropdownMenuEntries: [
-                          for (final filter in _typeFilters)
-                            DropdownMenuEntry(
-                              value: filter.value,
-                              label: filter.label,
-                            ),
-                        ],
-                        onSelected: (value) {
-                          setState(() {
-                            _selectedType = value;
-                            if (value != 'spell') _clearSpellFilters();
-                          });
-                          if (value == 'spell') _loadSpellFacetOptions();
-                          _runSearch();
-                        },
+                const SizedBox(height: 8),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      ActionChip(
+                        key: const Key('content-filter-button'),
+                        avatar: const Icon(Icons.tune, size: 18),
+                        label: const Text('筛选'),
+                        onPressed: _openFilterSheet,
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    FilterChip(
-                      avatar: const Icon(Icons.favorite_border, size: 18),
-                      label: const Text('收藏'),
-                      selected: _favoritesOnly,
-                      onSelected: (selected) {
-                        setState(() => _favoritesOnly = selected);
-                        _runSearch();
-                      },
-                    ),
-                  ],
+                      FilterChip(
+                        label: const Text('收藏'),
+                        selected: _favoritesOnly,
+                        onSelected: (_) => _toggleFavorites(),
+                      ),
+                      if (_selectedType != null)
+                        FilterChip(
+                          label: Text(
+                            registry.definitionFor(_selectedType!).label,
+                          ),
+                          onSelected: (_) => _removeType(),
+                        ),
+                      for (final fieldEntry in _facets.entries)
+                        for (final value in fieldEntry.value)
+                          FilterChip(
+                            label: Text(
+                              _selectedType == null
+                                  ? value
+                                  : _facetValueLabel(
+                                      _selectedType!,
+                                      fieldEntry.key,
+                                      value,
+                                    ),
+                            ),
+                            onSelected: (_) =>
+                                _removeFacet(fieldEntry.key, value),
+                          ),
+                    ],
+                  ),
                 ),
-                if (_selectedType == 'spell') ...[
-                  const SizedBox(height: 12),
-                  _buildSpellFilters(),
-                ],
               ],
             ),
           ),
@@ -298,7 +283,6 @@ class _ContentSearchPageState extends State<ContentSearchPage> {
                   }
                   return ContentHomePage(
                     controller: widget.controller,
-                    onImportRequested: widget.onImportRequested,
                   );
                 }
                 return ListView.separated(
@@ -327,6 +311,271 @@ class _ContentSearchPageState extends State<ContentSearchPage> {
                 );
               },
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterResult {
+  const _FilterResult({
+    this.type,
+    required this.facets,
+    this.favoritesOnly = false,
+  });
+
+  final String? type;
+  final Map<String, Set<String>> facets;
+  final bool favoritesOnly;
+}
+
+class _FilterSheet extends StatefulWidget {
+  const _FilterSheet({
+    required this.selectedType,
+    required this.facets,
+    required this.favoritesOnly,
+    required this.controller,
+  });
+
+  final String? selectedType;
+  final Map<String, Set<String>> facets;
+  final bool favoritesOnly;
+  final ContentLibraryController controller;
+
+  @override
+  State<_FilterSheet> createState() => _FilterSheetState();
+}
+
+class _FilterSheetState extends State<_FilterSheet> {
+  late String? _type;
+  late Map<String, Set<String>> _facets;
+  late bool _favoritesOnly;
+  Map<String, List<String>> _facetOptions = const {};
+  bool _loadingFacets = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _type = widget.selectedType;
+    _facets = <String, Set<String>>{
+      for (final entry in widget.facets.entries)
+        entry.key: Set<String>.from(entry.value),
+    };
+    _favoritesOnly = widget.favoritesOnly;
+    if (_type != null) {
+      _loadFacetOptions(_type!);
+    }
+  }
+
+  Future<void> _loadFacetOptions(String type) async {
+    final fields = _facetFieldsFor(type);
+    if (fields.isEmpty) {
+      setState(() {
+        _facetOptions = const {};
+        _loadingFacets = false;
+      });
+      return;
+    }
+    setState(() => _loadingFacets = true);
+    try {
+      final options = await widget.controller.facetOptions(
+        type: type,
+        fields: fields.map((f) => f.key).toList(),
+      );
+      if (mounted) {
+        setState(() {
+          _facetOptions = options;
+          _loadingFacets = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingFacets = false);
+    }
+  }
+
+  void _selectType(String? type) {
+    setState(() {
+      _type = type;
+      _facets = <String, Set<String>>{};
+    });
+    if (type != null) {
+      _loadFacetOptions(type);
+    } else {
+      setState(() => _facetOptions = const {});
+    }
+  }
+
+  void _toggleFacet(String field, String value) {
+    setState(() {
+      final current = Set<String>.from(_facets[field] ?? const {});
+      if (current.contains(value)) {
+        current.remove(value);
+      } else {
+        current.add(value);
+      }
+      if (current.isEmpty) {
+        _facets.remove(field);
+      } else {
+        _facets[field] = current;
+      }
+    });
+  }
+
+  void _clearAll() {
+    setState(() {
+      _type = null;
+      _facets = <String, Set<String>>{};
+      _favoritesOnly = false;
+      _facetOptions = const {};
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final registry = ContentTypeRegistry.defaults();
+    final facetFields = _facetFieldsFor(_type);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        16,
+        16,
+        16 + MediaQuery.viewInsetsOf(context).bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text('筛选', style: theme.textTheme.titleMedium),
+              const Spacer(),
+              TextButton(
+                key: const Key('content-filter-clear'),
+                onPressed: _clearAll,
+                child: const Text('清除'),
+              ),
+            ],
+          ),
+          const Divider(),
+          Flexible(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final type in _typeFilters)
+                        FilterChip(
+                          label: Text(
+                            type == null
+                                ? '全部'
+                                : registry.definitionFor(type).label,
+                          ),
+                          selected: _type == type,
+                          onSelected: (_) => _selectType(type),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  FilterChip(
+                    avatar: const Icon(Icons.favorite_border, size: 18),
+                    label: const Text('收藏'),
+                    selected: _favoritesOnly,
+                    onSelected: (selected) =>
+                        setState(() => _favoritesOnly = selected),
+                  ),
+                  if (_type != null && facetFields.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    if (_loadingFacets)
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else
+                      for (final field in facetFields)
+                        if ((_facetOptions[field.key] ?? const []).isNotEmpty)
+                          _FacetSection(
+                            title: field.label,
+                            values: _facetOptions[field.key]!,
+                            selectedValues: _facets[field.key] ?? const {},
+                            valueLabel: (value) => _facetValueLabel(
+                              _type!,
+                              field.key,
+                              value,
+                            ),
+                            onToggle: (value) =>
+                                _toggleFacet(field.key, value),
+                          ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          FilledButton(
+            key: const Key('content-filter-apply'),
+            onPressed: () {
+              Navigator.of(context).pop(
+                _FilterResult(
+                  type: _type,
+                  facets: _facets,
+                  favoritesOnly: _favoritesOnly,
+                ),
+              );
+            },
+            child: const Text('应用'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FacetSection extends StatelessWidget {
+  const _FacetSection({
+    required this.title,
+    required this.values,
+    required this.selectedValues,
+    required this.valueLabel,
+    required this.onToggle,
+  });
+
+  final String title;
+  final List<String> values;
+  final Set<String> selectedValues;
+  final String Function(String) valueLabel;
+  final ValueChanged<String> onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final value in values)
+                FilterChip(
+                  label: Text(valueLabel(value)),
+                  selected: selectedValues.contains(value),
+                  onSelected: (_) => onToggle(value),
+                ),
+            ],
           ),
         ],
       ),

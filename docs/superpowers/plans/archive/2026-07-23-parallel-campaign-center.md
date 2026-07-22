@@ -21,7 +21,7 @@
 
 - [x] 写失败测试：一级只显示概览、角色、档案；"成员"合入概览；"队伍"改名角色；邀请代码、复制/分享动作和当前成员摘要可见。
 - [x] 概览使用全宽 section 与清晰间距，不使用嵌套 Card；DM 工具和战役设置分区，不与成员列表粘连。
-- [x] 运行 `flutter test test/campaign_center_page_test.dart`（概览面板覆盖在该套件中）。
+- [x] 运行 `flutter test test/campaign_center_page_test.dart test/campaign_overview_panel_test.dart`。
 - [x] 提交 `refactor(v0.1): reorganize campaign center`。
 
 ### 任务 2：角色区管理
@@ -92,16 +92,25 @@ npm run lint:server → clean
 
 ### 权限覆盖
 
+> **修正（2026-07-23 整合审查 P2）**：原表格误将"其他玩家"的"创建新档案"标为 ✅。
+> 服务端 `campaign-archives.service.ts:126` 在 `create()` 内调用 `canManageCampaign`，
+> 客户端 FAB（`campaign_center_page.dart:120` `if (!_canManage) return null`）也仅
+> manager 可见，因此普通玩家既无 UI 入口也会被服务端 403 拒绝。下表为修正后的真实策略。
+
 | 操作 | 创建者 (当前玩家) | Manager (DM) | 其他玩家 |
 |---|---|---|---|
 | 查看档案列表/详情 | ✅ | ✅ | ✅ |
+| 创建新档案 | ❌（无 FAB / 服务端 403） | ✅ (FAB 可见 + `canManageCampaign`) | ❌（无 FAB / 服务端 403） |
 | 编辑自己创建的条目 | ✅ | ✅ | ❌ |
 | 编辑他人创建的条目 | ❌ | ✅ | ❌ |
 | 归档/删除条目 | ✅ (自己的) | ✅ (任意) | ❌ |
-| 创建新档案 | ✅ (有 onUpdate) | ✅ (FAB 可见) | ✅ (有 onUpdate) |
-| 新建档案 FAB 可见性 | n/a | ✅ (`canManageCampaign`) | ❌ |
 
 关键原则：**客户端从不根据 DM 模式自行授权**。`canManage` 仅来自服务端 `capabilities.canManageCampaign`；编辑入口可见性额外基于 `workspaceContext.membership.userId == entry.createdBy`，最终由服务端 `assertCanEdit` 二次校验。
+
+> **产品决策待定（整合审查下一步计划 #4）**：当前实现是严格策略"DM 创建档案、玩家只读"。
+> 若改为"成员可创建自己的条目"，需同步放宽服务端 `create()` 权限为
+> `canViewCampaign` + 将 `createdBy` 设为当前用户，并让客户端 FAB 对所有成员可见。
+> 在产品规则定稿前，保持当前严格策略不变。
 
 ### 暂缓字段或跨模块阻塞
 
@@ -120,3 +129,18 @@ npm run lint:server → clean
 ### 已知无关测试失败
 
 `apps/server_nest/test/campaigns.e2e-spec.ts` 中 1 个测试失败（`returns the campaign for a member` 期望 `lastMessage` 不含 `publicHealthFraction`，但 `campaigns.service.ts` 现在会返回该字段）。此为基线 `bb5b490` 已存在的问题，与本次档案工作无关，且 `campaigns.service.ts` 与 `campaigns.e2e-spec.ts` 均在禁止修改清单内。
+
+---
+
+## 整合审查发现处置（2026-07-23）
+
+| # | 级别 | 发现 | 归属域 | 处置状态 |
+|---|---|---|---|---|
+| 1 | P1 | 子职业筛选仍依赖 `structured.parentClass`；私有资料包若只提供 `subclassOf` 关系，筛选不会命中。`content_repository.dart:32` / `content_library_controller.dart:63` | 资料库 agent | **非本计划范围**。资料库筛选索引由资料库线负责。本计划已交回主线，建议在资料库线纳入 `subclassOf` / `featureOf` 关系型索引。 |
+| 2 | P1 | 战役档案 CRUD 完成但无实时事件广播，在线成员需手动刷新。`campaign-archives.service.ts:104` | 战役中心/档案 | **已在第二波暂缓清单第 1 项**。实时推送需扩展 `campaign:changed` 事件到 archive 域，属于聊天/会话协议边界，本计划禁止修改。已列入"下一步计划 #3 打通战役档案"的首项。 |
+| 3 | P2 | 档案"普通成员能否创建"在报告表格与服务端策略间表述不一致；现状是仅 DM/manager 可创建。`campaign-archives.service.ts:126` | 战役中心/档案 | **已修正**。本计划权限表格原误将"其他玩家 ✅"改为 ❌，并附服务端 `canManageCampaign` + 客户端 FAB 双重证据。产品规则（严格 vs 放宽）列入"下一步计划 #4 收束战役权限"待定。 |
+
+**本计划范围内无新增代码改动**：P2 是报告表述错误（已修文档），P1#2 是已知跨模块暂缓项，P1#1 不在本计划域。
+
+**回归验证**：本次仅修改计划文档，未触碰代码；客户端 129 项 + 服务端 14 项测试结果不变，`flutter analyze` / `npm run lint:server` / Web release 构建仍通过。
+

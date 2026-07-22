@@ -15,10 +15,14 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'support/campaign_test_support.dart';
 
-/// Plan 3 task 2: narrow screens render `NavigationBar`, wide screens render
-/// `NavigationRail`, all four panels (overview/characters/archive/records) are
-/// reachable, and DM-only affordances only appear when server capabilities
-/// allow `canManageCampaign`.
+/// Plan 2026-07-23 task 1: narrow screens render `NavigationBar`, wide
+/// screens render `NavigationRail`. The center keeps only three top-level
+/// destinations — 概览/角色/档案 — so durable information stays focused and
+/// the records search lives in the chat workspace, not the campaign center.
+/// DM-only affordances follow server capabilities, never optimistic client
+/// state. The overview panel renders full-width sections without nested
+/// `Card` wrappers, and DM tools / settings are visually separated from the
+/// member list.
 void main() {
   const apiBaseUrl = 'http://localhost:3000/api';
 
@@ -94,7 +98,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('narrow screen shows NavigationBar with four destinations', (
+  testWidgets('narrow screen shows NavigationBar with three destinations', (
     tester,
   ) async {
     final authController = await buildLoggedInAuthController();
@@ -107,18 +111,19 @@ void main() {
 
     expect(find.byType(NavigationBar), findsOneWidget);
     expect(find.byType(NavigationRail), findsNothing);
-    expect(find.byType(NavigationDestination), findsNWidgets(4));
+    expect(find.byType(NavigationDestination), findsNWidgets(3));
     expect(find.text('概览'), findsWidgets);
     expect(find.text('角色'), findsWidgets);
-    expect(find.text('队伍'), findsNothing);
     expect(find.text('档案'), findsWidgets);
-    expect(find.text('记录'), findsWidgets);
+    // 记录 is intentionally absent — records search lives in the chat
+    // workspace, not the campaign center.
+    expect(find.text('记录'), findsNothing);
 
     controller.dispose();
     authController.dispose();
   });
 
-  testWidgets('wide screen shows NavigationRail with four destinations', (
+  testWidgets('wide screen shows NavigationRail with three destinations', (
     tester,
   ) async {
     final authController = await buildLoggedInAuthController();
@@ -134,9 +139,8 @@ void main() {
     // NavigationRail wraps destinations internally; verify via labels.
     expect(find.text('概览'), findsOneWidget);
     expect(find.text('角色'), findsOneWidget);
-    expect(find.text('队伍'), findsNothing);
     expect(find.text('档案'), findsOneWidget);
-    expect(find.text('记录'), findsOneWidget);
+    expect(find.text('记录'), findsNothing);
 
     controller.dispose();
     authController.dispose();
@@ -160,11 +164,6 @@ void main() {
     await tester.tap(find.text('档案').last);
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('campaign-archive-panel')), findsOneWidget);
-
-    // Switch to records panel.
-    await tester.tap(find.text('记录').last);
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('campaign-records-panel')), findsOneWidget);
 
     // Switch to characters panel.
     await tester.tap(find.text('角色').last);
@@ -288,9 +287,9 @@ void main() {
     dmAuth.dispose();
   });
 
-  // Spec §档案: 新建条目 FAB 只在档案面板出现, 概览/队伍/记录面板都不显示。
+  // Spec §档案: 新建条目 FAB 只在档案面板出现, 概览/角色面板都不显示。
   testWidgets(
-    'create archive FAB only appears on the archive panel, not on overview/team/records',
+    'create archive FAB only appears on the archive panel, not on overview or characters',
     (tester) async {
       final dmAuth = await buildLoggedInAuthController();
       final dmController = await buildCampaignController(
@@ -319,14 +318,6 @@ void main() {
       expect(
         find.byKey(const Key('campaign-create-archive-button')),
         findsOneWidget,
-      );
-
-      // Records panel — no FAB.
-      await tester.tap(find.byIcon(Icons.history_outlined));
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const Key('campaign-create-archive-button')),
-        findsNothing,
       );
 
       dmController.dispose();
@@ -700,6 +691,43 @@ void main() {
     playerController.dispose();
     playerAuth.dispose();
   });
+
+  // Plan 2026-07-23 task 1: 概览使用全宽 section 与清晰间距, 不使用嵌套 Card。
+  // DM 工具和战役设置分区, 不与成员列表粘连。
+  testWidgets(
+    'overview panel does not wrap sections in nested Card widgets',
+    (tester) async {
+      final dmAuth = await buildLoggedInAuthController();
+      final dmController = await buildCampaignController(
+        authController: dmAuth,
+        canManage: true,
+      );
+      await pumpCenterPage(tester, dmController);
+
+      // The DM control entry should NOT be wrapped in a Card — it should be a
+      // full-width section (e.g. ListTile or Container, not Card.filled).
+      final dmControlEntry = find.byKey(
+        const Key('campaign-overview-dm-control-entry'),
+      );
+      expect(dmControlEntry, findsOneWidget);
+      // Walk up from the entry to ensure no ancestor Card exists.
+      final ancestors = tester.widgetList<Card>(
+        find.ancestor(of: dmControlEntry, matching: find.byType(Card)),
+      );
+      expect(ancestors, isEmpty);
+
+      // The invite share should also not be wrapped in a nested Card.
+      final inviteShare = find.byKey(const Key('campaign-invite-share'));
+      expect(inviteShare, findsOneWidget);
+      final inviteAncestors = tester.widgetList<Card>(
+        find.ancestor(of: inviteShare, matching: find.byType(Card)),
+      );
+      expect(inviteAncestors, isEmpty);
+
+      dmController.dispose();
+      dmAuth.dispose();
+    },
+  );
 }
 
 const _campaign = Campaign(
@@ -796,6 +824,7 @@ class _FakeCampaignClient implements CampaignClient {
     required String accessToken,
     required String campaignId,
     String? kind,
+    String? query,
   }) async => const [];
 
   @override
@@ -807,6 +836,10 @@ class _FakeCampaignClient implements CampaignClient {
     required String title,
     String? summary,
     Map<String, Object?>? payload,
+    List<Map<String, Object?>>? bodyBlocks,
+    List<String>? tags,
+    List<Map<String, Object?>>? links,
+    List<Map<String, Object?>>? attachmentRefs,
   }) async => const CampaignArchiveEntry(
     id: 'archive-new',
     campaignId: 'camp-1',
@@ -837,6 +870,10 @@ class _FakeCampaignClient implements CampaignClient {
     String? summary,
     Map<String, Object?>? payload,
     bool? pinned,
+    List<Map<String, Object?>>? bodyBlocks,
+    List<String>? tags,
+    List<Map<String, Object?>>? links,
+    List<Map<String, Object?>>? attachmentRefs,
   }) async => throw UnimplementedError();
 
   @override

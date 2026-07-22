@@ -88,6 +88,7 @@ abstract class CampaignClient {
     required String accessToken,
     required String campaignId,
     String? kind,
+    String? query,
   });
 
   Future<CampaignArchiveEntry> createArchiveEntry({
@@ -98,6 +99,10 @@ abstract class CampaignClient {
     required String title,
     String? summary,
     Map<String, Object?>? payload,
+    List<Map<String, Object?>>? bodyBlocks,
+    List<String>? tags,
+    List<Map<String, Object?>>? links,
+    List<Map<String, Object?>>? attachmentRefs,
   });
 
   Future<CampaignArchiveEntry> updateArchiveEntry({
@@ -110,6 +115,10 @@ abstract class CampaignClient {
     String? summary,
     Map<String, Object?>? payload,
     bool? pinned,
+    List<Map<String, Object?>>? bodyBlocks,
+    List<String>? tags,
+    List<Map<String, Object?>>? links,
+    List<Map<String, Object?>>? attachmentRefs,
   });
 
   Future<void> archiveEntry({
@@ -132,10 +141,14 @@ class CampaignApiClient implements CampaignClient {
     required String accessToken,
     required String campaignId,
     String? kind,
+    String? query,
   }) async {
+    final params = <String, String>{};
+    if (kind != null) params['kind'] = kind;
+    if (query != null && query.trim().isNotEmpty) params['q'] = query.trim();
     final uri = Uri.parse(
       '${_normalize(apiBaseUrl)}/campaigns/$campaignId/archives',
-    ).replace(queryParameters: kind == null ? null : {'kind': kind});
+    ).replace(queryParameters: params.isEmpty ? null : params);
     final response = await _httpClient.get(
       uri,
       headers: {'authorization': 'Bearer $accessToken'},
@@ -159,10 +172,18 @@ class CampaignApiClient implements CampaignClient {
     required String title,
     String? summary,
     Map<String, Object?>? payload,
+    List<Map<String, Object?>>? bodyBlocks,
+    List<String>? tags,
+    List<Map<String, Object?>>? links,
+    List<Map<String, Object?>>? attachmentRefs,
   }) async {
     final body = <String, Object?>{'kind': kind, 'title': title};
     if (summary != null) body['summary'] = summary;
     if (payload != null) body['payload'] = payload;
+    if (bodyBlocks != null) body['bodyBlocks'] = bodyBlocks;
+    if (tags != null) body['tags'] = tags;
+    if (links != null) body['links'] = links;
+    if (attachmentRefs != null) body['attachmentRefs'] = attachmentRefs;
     final response = await _httpClient.post(
       Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/archives'),
       headers: {
@@ -188,6 +209,10 @@ class CampaignApiClient implements CampaignClient {
     String? summary,
     Map<String, Object?>? payload,
     bool? pinned,
+    List<Map<String, Object?>>? bodyBlocks,
+    List<String>? tags,
+    List<Map<String, Object?>>? links,
+    List<Map<String, Object?>>? attachmentRefs,
   }) async {
     final body = <String, Object?>{};
     if (kind != null) body['kind'] = kind;
@@ -195,6 +220,10 @@ class CampaignApiClient implements CampaignClient {
     if (summary != null) body['summary'] = summary;
     if (payload != null) body['payload'] = payload;
     if (pinned != null) body['pinned'] = pinned;
+    if (bodyBlocks != null) body['bodyBlocks'] = bodyBlocks;
+    if (tags != null) body['tags'] = tags;
+    if (links != null) body['links'] = links;
+    if (attachmentRefs != null) body['attachmentRefs'] = attachmentRefs;
     final response = await _httpClient.put(
       Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/archives/$entryId'),
       headers: {

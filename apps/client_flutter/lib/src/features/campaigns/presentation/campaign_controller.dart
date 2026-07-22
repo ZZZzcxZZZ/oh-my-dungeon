@@ -325,8 +325,8 @@ class CampaignController extends ChangeNotifier {
         actorId: actorId,
       );
 
-  Future<void> loadArchives(String campaignId, {String? kind}) =>
-      contextController.loadArchives(campaignId, kind: kind);
+  Future<void> loadArchives(String campaignId, {String? kind, String? query}) =>
+      contextController.loadArchives(campaignId, kind: kind, query: query);
 
   Future<CampaignArchiveEntry?> createArchiveEntry({
     required String campaignId,
@@ -334,6 +334,10 @@ class CampaignController extends ChangeNotifier {
     required String title,
     String? summary,
     Map<String, Object?>? payload,
+    List<Map<String, Object?>>? bodyBlocks,
+    List<String>? tags,
+    List<Map<String, Object?>>? links,
+    List<Map<String, Object?>>? attachmentRefs,
   }) =>
       contextController.createArchiveEntry(
         campaignId: campaignId,
@@ -341,6 +345,10 @@ class CampaignController extends ChangeNotifier {
         title: title,
         summary: summary,
         payload: payload,
+        bodyBlocks: bodyBlocks,
+        tags: tags,
+        links: links,
+        attachmentRefs: attachmentRefs,
       );
 
   Future<CampaignArchiveEntry?> updateArchiveEntry({
@@ -351,6 +359,10 @@ class CampaignController extends ChangeNotifier {
     String? summary,
     Map<String, Object?>? payload,
     bool? pinned,
+    List<Map<String, Object?>>? bodyBlocks,
+    List<String>? tags,
+    List<Map<String, Object?>>? links,
+    List<Map<String, Object?>>? attachmentRefs,
   }) =>
       contextController.updateArchiveEntry(
         campaignId: campaignId,
@@ -360,6 +372,10 @@ class CampaignController extends ChangeNotifier {
         summary: summary,
         payload: payload,
         pinned: pinned,
+        bodyBlocks: bodyBlocks,
+        tags: tags,
+        links: links,
+        attachmentRefs: attachmentRefs,
       );
 
   Future<bool> archiveEntry({

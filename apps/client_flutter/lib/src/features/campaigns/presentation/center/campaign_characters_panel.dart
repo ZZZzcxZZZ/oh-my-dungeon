@@ -55,9 +55,9 @@ class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
   Widget build(BuildContext context) {
     final sections = <(String, String, List<CampaignActor>)>[
       ('player', '玩家角色', _actorsFor('player')),
-      ('npc', 'NPC 与其他角色', _actorsFor('npc')),
+      ('npc', '常驻 NPC', _actorsFor('npc')),
       ('temporary', '临时角色', _actorsFor('temporary')),
-      ('archived', '已归档', _actorsFor('archived')),
+      ('archived', '归档角色', _actorsFor('archived')),
     ].where((section) => section.$3.isNotEmpty).toList(growable: false);
 
     return KeyedSubtree(

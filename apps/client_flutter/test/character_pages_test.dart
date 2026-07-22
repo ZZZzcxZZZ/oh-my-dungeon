@@ -1227,27 +1227,11 @@ void main() {
     );
 
     expect(find.text('创建角色'), findsOneWidget);
-    expect(find.text('快速创建'), findsWidgets);
+    // Task 1.3: "快速创建"卡片已移除, 只保留"标准创建"和"导入或复制"。
+    expect(find.text('快速创建'), findsNothing);
     expect(find.text('标准创建'), findsWidgets);
     expect(find.text('导入或复制'), findsOneWidget);
     expect(find.byKey(const Key('character-name')), findsNothing);
-  });
-
-  testWidgets('new character editor can start from preferred quick build', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: CharacterEditorPage(
-          defaultCreationMethod: 'quick',
-          onSubmit: (_) async => true,
-        ),
-      ),
-    );
-
-    expect(find.text('快速创建角色'), findsOneWidget);
-    expect(find.byKey(const Key('quick-character-name-field')), findsOneWidget);
-    expect(find.text('选择创建方式'), findsNothing);
   });
 
   testWidgets('new character editor can start from preferred standard build', (
@@ -1268,48 +1252,6 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('选择创建方式'), findsNothing);
-  });
-
-  testWidgets('quick build submits a playable 2024 character draft', (
-    tester,
-  ) async {
-    CharacterEditDraft? submitted;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: CharacterEditorPage(
-          onSubmit: (draft) async {
-            submitted = draft;
-            return true;
-          },
-        ),
-      ),
-    );
-
-    await tester.tap(find.widgetWithText(FilledButton, '快速创建'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('快速创建角色'), findsOneWidget);
-    expect(find.text('D&D 2024'), findsOneWidget);
-    expect(find.text('战士'), findsOneWidget);
-    expect(find.text('人类'), findsOneWidget);
-    expect(find.text('士兵'), findsOneWidget);
-
-    await tester.enterText(
-      find.byKey(const Key('quick-character-name-field')),
-      'Kara',
-    );
-    await tester.tap(find.widgetWithText(FilledButton, '创建角色'));
-    await tester.pumpAndSettle();
-
-    expect(submitted, isNotNull);
-    expect(submitted!.name, 'Kara');
-    expect(submitted!.classSummary, '战士');
-    expect(submitted!.raceSummary, '人类');
-    expect(submitted!.level, 1);
-    expect(submitted!.maxHp, greaterThan(0));
-    expect(submitted!.armorClass, greaterThanOrEqualTo(10));
-    expect(submitted!.inventory, isNotEmpty);
-    expect(submitted!.notes, contains('D&D 2024'));
   });
 
   testWidgets('standard build exposes the full guided step outline', (

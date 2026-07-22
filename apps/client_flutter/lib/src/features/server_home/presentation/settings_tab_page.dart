@@ -15,6 +15,7 @@ import '../domain/active_server_session.dart';
 import 'settings/about_section.dart';
 import 'settings/appearance_section.dart';
 import 'settings/content_and_storage_section.dart';
+import 'settings/gameplay_settings_section.dart';
 import 'settings/role_mode_section.dart';
 import 'settings/server_and_account_section.dart';
 
@@ -73,6 +74,8 @@ class SettingsTabPage extends StatelessWidget {
                 children: [
                   AppearanceSection(controller: appPreferencesController),
                   const SizedBox(height: 24),
+                  GameplaySettingsSection(controller: appPreferencesController),
+                  const SizedBox(height: 24),
                   ContentAndStorageSection(
                     contentRepository: contentRepository,
                     contentImporter: contentImporter,
@@ -92,7 +95,6 @@ class SettingsTabPage extends StatelessWidget {
                   const SizedBox(height: 24),
                   RoleModeSection(
                     modeController: modeController,
-                    preferencesController: appPreferencesController,
                   ),
                   const SizedBox(height: 24),
                   const AboutSection(),

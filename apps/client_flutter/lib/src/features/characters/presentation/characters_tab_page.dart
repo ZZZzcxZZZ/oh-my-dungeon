@@ -495,13 +495,9 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
       contentEntries = await repository.search(const ContentQuery());
     }
     if (!mounted) return;
-    final defaultCreationMethod =
-        widget.appPreferencesController?.preferences.defaultCreationMethod ??
-        'fullSheet';
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (context) => CharacterEditorPage(
-          defaultCreationMethod: defaultCreationMethod,
           contentEntries: contentEntries,
           onPickImage: _pickAvatarImage,
           onSubmit: (draft) async {

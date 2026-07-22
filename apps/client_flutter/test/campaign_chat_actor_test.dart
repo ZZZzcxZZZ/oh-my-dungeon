@@ -866,18 +866,16 @@ void main() {
     expect(find.byKey(const Key('draft-identity-name')), findsOneWidget);
   });
 
-  testWidgets('say and action modes are icon-only with semantic labels', (
+  testWidgets('say and action modes show text labels with semantic icons', (
     tester,
   ) async {
     await pumpChatPage(tester, campaignActorId: 'actor-1');
 
-    expect(find.text('说'), findsNothing);
-    expect(find.text('做'), findsNothing);
-
-    final semantics = tester.ensureSemantics();
-    expect(find.bySemanticsLabel('说'), findsOneWidget);
-    expect(find.bySemanticsLabel('做'), findsOneWidget);
-    semantics.dispose();
+    // Task 1.2: 滑块切换动画改为带文字标签（说/做），不再仅显示图标。
+    expect(find.text('说'), findsWidgets);
+    expect(find.text('做'), findsWidgets);
+    expect(find.byKey(const Key('chat-mode-say')), findsOneWidget);
+    expect(find.byKey(const Key('chat-mode-action')), findsOneWidget);
   });
 
   testWidgets(

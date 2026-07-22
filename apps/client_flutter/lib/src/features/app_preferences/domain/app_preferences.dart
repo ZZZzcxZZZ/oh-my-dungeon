@@ -7,7 +7,6 @@ class AppPreferences {
     required this.defaultDice,
     required this.compactLists,
     required this.confirmBeforeRoll,
-    required this.defaultCreationMethod,
     required this.showCharacterSources,
     required this.showEncumbrance,
     required this.defaultCharacterTab,
@@ -15,6 +14,11 @@ class AppPreferences {
     required this.dynamicSchemeVariant,
     required this.logCharacterRuntimeChanges,
     required this.groupConsecutiveChatMessages,
+    required this.defaultRollMode,
+    required this.quickDicePresets,
+    required this.messageDensity,
+    required this.fontScale,
+    required this.hpWarningThreshold,
   });
 
   static const defaults = AppPreferences(
@@ -23,7 +27,6 @@ class AppPreferences {
     defaultDice: '1d20',
     compactLists: false,
     confirmBeforeRoll: false,
-    defaultCreationMethod: 'standard',
     showCharacterSources: true,
     showEncumbrance: false,
     defaultCharacterTab: 'overview',
@@ -31,6 +34,11 @@ class AppPreferences {
     dynamicSchemeVariant: 'tonalSpot',
     logCharacterRuntimeChanges: true,
     groupConsecutiveChatMessages: true,
+    defaultRollMode: 'normal',
+    quickDicePresets: <String>[],
+    messageDensity: 'standard',
+    fontScale: 'system',
+    hpWarningThreshold: 0.3,
   );
 
   final ThemeMode themeMode;
@@ -38,7 +46,6 @@ class AppPreferences {
   final String defaultDice;
   final bool compactLists;
   final bool confirmBeforeRoll;
-  final String defaultCreationMethod;
   final bool showCharacterSources;
   final bool showEncumbrance;
   final String defaultCharacterTab;
@@ -46,6 +53,22 @@ class AppPreferences {
   final String dynamicSchemeVariant;
   final bool logCharacterRuntimeChanges;
   final bool groupConsecutiveChatMessages;
+
+  /// Task 1.3 新增自定义项 — 详见 docs/superpowers/plans/2026-07-23-user-feedback-integration-hardening.md
+  /// 默认掷骰模式：'normal' | 'advantage' | 'disadvantage'
+  final String defaultRollMode;
+
+  /// 快捷骰预设（最多 6 个），UI 由设置页维护；空列表表示使用内置默认。
+  final List<String> quickDicePresets;
+
+  /// 消息密度：'compact' | 'standard' | 'comfortable' — 控制 chat bubble padding 与字号
+  final String messageDensity;
+
+  /// 字体缩放：'system' | 'small' | 'medium' | 'large'
+  final String fontScale;
+
+  /// HP 警告阈值（0.0..1.0，默认 0.3），控制头像生命环颜色变化。
+  final double hpWarningThreshold;
 
   Color get seedColor => Color(seedColorValue);
 
@@ -55,7 +78,6 @@ class AppPreferences {
     'defaultDice': defaultDice,
     'compactLists': compactLists,
     'confirmBeforeRoll': confirmBeforeRoll,
-    'defaultCreationMethod': defaultCreationMethod,
     'showCharacterSources': showCharacterSources,
     'showEncumbrance': showEncumbrance,
     'defaultCharacterTab': defaultCharacterTab,
@@ -63,6 +85,11 @@ class AppPreferences {
     'dynamicSchemeVariant': dynamicSchemeVariant,
     'logCharacterRuntimeChanges': logCharacterRuntimeChanges,
     'groupConsecutiveChatMessages': groupConsecutiveChatMessages,
+    'defaultRollMode': defaultRollMode,
+    'quickDicePresets': quickDicePresets,
+    'messageDensity': messageDensity,
+    'fontScale': fontScale,
+    'hpWarningThreshold': hpWarningThreshold,
   };
 
   AppPreferences copyWith({
@@ -71,7 +98,6 @@ class AppPreferences {
     String? defaultDice,
     bool? compactLists,
     bool? confirmBeforeRoll,
-    String? defaultCreationMethod,
     bool? showCharacterSources,
     bool? showEncumbrance,
     String? defaultCharacterTab,
@@ -79,6 +105,11 @@ class AppPreferences {
     String? dynamicSchemeVariant,
     bool? logCharacterRuntimeChanges,
     bool? groupConsecutiveChatMessages,
+    String? defaultRollMode,
+    List<String>? quickDicePresets,
+    String? messageDensity,
+    String? fontScale,
+    double? hpWarningThreshold,
   }) {
     return AppPreferences(
       themeMode: themeMode ?? this.themeMode,
@@ -86,8 +117,6 @@ class AppPreferences {
       defaultDice: defaultDice ?? this.defaultDice,
       compactLists: compactLists ?? this.compactLists,
       confirmBeforeRoll: confirmBeforeRoll ?? this.confirmBeforeRoll,
-      defaultCreationMethod:
-          defaultCreationMethod ?? this.defaultCreationMethod,
       showCharacterSources: showCharacterSources ?? this.showCharacterSources,
       showEncumbrance: showEncumbrance ?? this.showEncumbrance,
       defaultCharacterTab: defaultCharacterTab ?? this.defaultCharacterTab,
@@ -97,6 +126,11 @@ class AppPreferences {
           logCharacterRuntimeChanges ?? this.logCharacterRuntimeChanges,
       groupConsecutiveChatMessages:
           groupConsecutiveChatMessages ?? this.groupConsecutiveChatMessages,
+      defaultRollMode: defaultRollMode ?? this.defaultRollMode,
+      quickDicePresets: quickDicePresets ?? this.quickDicePresets,
+      messageDensity: messageDensity ?? this.messageDensity,
+      fontScale: fontScale ?? this.fontScale,
+      hpWarningThreshold: hpWarningThreshold ?? this.hpWarningThreshold,
     );
   }
 }

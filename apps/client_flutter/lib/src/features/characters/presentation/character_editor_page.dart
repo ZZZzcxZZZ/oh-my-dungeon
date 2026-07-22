@@ -191,9 +191,6 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
     if (!isEditing && _flow == _CreationFlow.choose) {
       return _buildCreationChoicePage(context);
     }
-    if (!isEditing && _flow == _CreationFlow.quick) {
-      return _QuickBuildPage(onSubmit: _submitQuickBuild);
-    }
     if (!isEditing && _flow == _CreationFlow.standard) {
       return _StandardBuildPage(
         contentEntries: widget.contentEntries,
@@ -599,14 +596,6 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                 ),
                 const SizedBox(height: 16),
                 _CreationChoiceCard(
-                  icon: Icons.flash_on_outlined,
-                  title: '快速创建',
-                  subtitle: '用推荐默认值快速生成 1 级可玩角色。',
-                  actionLabel: '快速创建',
-                  onTap: () => setState(() => _flow = _CreationFlow.quick),
-                ),
-                const SizedBox(height: 12),
-                _CreationChoiceCard(
                   icon: Icons.route_outlined,
                   title: '标准创建',
                   subtitle: '按来源、职业、起源、属性、装备和审核逐步完成。',
@@ -976,7 +965,7 @@ class _UpgradeRuleChoiceSection extends StatelessWidget {
   }
 }
 
-enum _CreationFlow { choose, quick, standard, fullSheet }
+enum _CreationFlow { choose, standard, fullSheet }
 
 const _defaultClassOptions = ['战士', '法师', '游荡者', '牧师'];
 const _defaultSpeciesOptions = ['人类', '精灵', '矮人', '半身人'];
@@ -984,7 +973,6 @@ const _defaultBackgroundOptions = ['士兵', '贤者', '罪犯', '侍祭'];
 
 _CreationFlow _flowFromPreference(String value) {
   return switch (value) {
-    'quick' => _CreationFlow.quick,
     'standard' => _CreationFlow.standard,
     'fullSheet' => _CreationFlow.fullSheet,
     _ => _CreationFlow.choose,
@@ -1035,108 +1023,7 @@ class _CreationChoiceCard extends StatelessWidget {
   }
 }
 
-class _QuickBuildPage extends StatefulWidget {
-  const _QuickBuildPage({required this.onSubmit});
 
-  final Future<void> Function(QuickBuildSelection draft) onSubmit;
-
-  @override
-  State<_QuickBuildPage> createState() => _QuickBuildPageState();
-}
-
-class _QuickBuildPageState extends State<_QuickBuildPage> {
-  final _nameController = TextEditingController();
-  String _className = '战士';
-  String _species = '人类';
-  String _background = '士兵';
-  int _level = 1;
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('快速创建角色')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const _SourceBanner(),
-                const SizedBox(height: 16),
-                TextField(
-                  key: const Key('quick-character-name-field'),
-                  controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: '角色名',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _ChoiceSection(
-                  title: '职业',
-                  selected: _className,
-                  options: const ['战士', '法师', '游荡者', '牧师'],
-                  onSelected: (value) => setState(() => _className = value),
-                ),
-                _ChoiceSection(
-                  title: '物种',
-                  selected: _species,
-                  options: const ['人类', '精灵', '矮人', '半身人'],
-                  onSelected: (value) => setState(() => _species = value),
-                ),
-                _ChoiceSection(
-                  title: '背景',
-                  selected: _background,
-                  options: const ['士兵', '贤者', '罪犯', '侍祭'],
-                  onSelected: (value) => setState(() => _background = value),
-                ),
-                Text('等级', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                SegmentedButton<int>(
-                  segments: const [
-                    ButtonSegment(value: 1, label: Text('1')),
-                    ButtonSegment(value: 3, label: Text('3')),
-                    ButtonSegment(value: 5, label: Text('5')),
-                  ],
-                  selected: {_level},
-                  onSelectionChanged: (selection) {
-                    setState(() => _level = selection.single);
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: FilledButton.icon(
-            onPressed: () => widget.onSubmit(
-              QuickBuildSelection(
-                name: _nameController.text,
-                className: _className,
-                species: _species,
-                background: _background,
-                level: _level,
-              ),
-            ),
-            icon: const Icon(Icons.check),
-            label: const Text('创建角色'),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _StandardBuildPage extends StatefulWidget {
   const _StandardBuildPage({
@@ -2711,21 +2598,6 @@ class _BuildCheck {
 
   final String label;
   final bool done;
-}
-
-class _SourceBanner extends StatelessWidget {
-  const _SourceBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return Card.filled(
-      child: const ListTile(
-        leading: Icon(Icons.auto_stories_outlined),
-        title: Text('D&D 2024'),
-        subtitle: Text('使用物种、背景和 Origin Feat 的新版创建顺序。'),
-      ),
-    );
-  }
 }
 
 class _ChoiceSection extends StatelessWidget {

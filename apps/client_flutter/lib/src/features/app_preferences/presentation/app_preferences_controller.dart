@@ -47,10 +47,6 @@ class AppPreferencesController extends ChangeNotifier {
     return _save(_preferences.copyWith(confirmBeforeRoll: value));
   }
 
-  Future<void> setDefaultCreationMethod(String value) {
-    return _save(_preferences.copyWith(defaultCreationMethod: value));
-  }
-
   Future<void> setShowCharacterSources(bool value) {
     return _save(_preferences.copyWith(showCharacterSources: value));
   }
@@ -77,6 +73,46 @@ class AppPreferencesController extends ChangeNotifier {
 
   Future<void> setGroupConsecutiveChatMessages(bool value) {
     return _save(_preferences.copyWith(groupConsecutiveChatMessages: value));
+  }
+
+  /// Task 1.3 新增自定义项 setter。
+  Future<void> setDefaultRollMode(String value) {
+    final normalized = switch (value) {
+      'advantage' || 'disadvantage' || 'normal' => value,
+      _ => 'normal',
+    };
+    return _save(_preferences.copyWith(defaultRollMode: normalized));
+  }
+
+  Future<void> setQuickDicePresets(List<String> presets) {
+    // 限制最多 6 个，超出按顺序截断（参考 D&D Beyond / Foundry dice tray）。
+    final clamped =
+        presets.length > 6 ? presets.sublist(0, 6) : List<String>.of(presets);
+    return _save(_preferences.copyWith(quickDicePresets: clamped));
+  }
+
+  Future<void> setMessageDensity(String value) {
+    final normalized = switch (value) {
+      'compact' || 'comfortable' || 'standard' => value,
+      _ => 'standard',
+    };
+    return _save(_preferences.copyWith(messageDensity: normalized));
+  }
+
+  Future<void> setFontScale(String value) {
+    final normalized = switch (value) {
+      'small' || 'medium' || 'large' || 'system' => value,
+      _ => 'system',
+    };
+    return _save(_preferences.copyWith(fontScale: normalized));
+  }
+
+  Future<void> setHpWarningThreshold(double value) {
+    // 0.0..1.0 之外做钳制（默认 0.3），控制头像生命环警告色变化。
+    final clamped = value < 0.0
+        ? 0.0
+        : (value > 1.0 ? 1.0 : value);
+    return _save(_preferences.copyWith(hpWarningThreshold: clamped));
   }
 
   /// Clears [lastError] once the UI has surfaced it to the user.

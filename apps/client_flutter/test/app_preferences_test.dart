@@ -3,7 +3,6 @@ import 'package:dnd_table_client/src/features/app_preferences/domain/app_prefere
 import 'package:dnd_table_client/src/features/app_preferences/presentation/app_preferences_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   test('loads defaults when no saved preferences exist', () async {
@@ -17,7 +16,6 @@ void main() {
     expect(controller.preferences.defaultDice, '1d20');
     expect(controller.preferences.compactLists, isFalse);
     expect(controller.preferences.confirmBeforeRoll, isFalse);
-    expect(controller.preferences.defaultCreationMethod, 'standard');
     expect(controller.preferences.showCharacterSources, isTrue);
     expect(controller.preferences.showEncumbrance, isFalse);
     expect(controller.preferences.defaultCharacterTab, 'overview');
@@ -25,6 +23,12 @@ void main() {
     expect(controller.preferences.dynamicSchemeVariant, 'tonalSpot');
     expect(controller.preferences.logCharacterRuntimeChanges, isTrue);
     expect(controller.preferences.groupConsecutiveChatMessages, isTrue);
+    // Task 1.3 新增自定义项的默认值。
+    expect(controller.preferences.defaultRollMode, 'normal');
+    expect(controller.preferences.quickDicePresets, isEmpty);
+    expect(controller.preferences.messageDensity, 'standard');
+    expect(controller.preferences.fontScale, 'system');
+    expect(controller.preferences.hpWarningThreshold, 0.3);
   });
 
   test('persists preference changes and notifies listeners', () async {
@@ -38,7 +42,6 @@ void main() {
     await controller.setDefaultDice('2d20kh1');
     await controller.setCompactLists(true);
     await controller.setConfirmBeforeRoll(true);
-    await controller.setDefaultCreationMethod('standard');
     await controller.setShowCharacterSources(false);
     await controller.setShowEncumbrance(true);
     await controller.setDefaultCharacterTab('equipment');
@@ -46,16 +49,21 @@ void main() {
     await controller.setDynamicSchemeVariant('fidelity');
     await controller.setLogCharacterRuntimeChanges(false);
     await controller.setGroupConsecutiveChatMessages(false);
+    // Task 1.3 新增自定义项。
+    await controller.setDefaultRollMode('advantage');
+    await controller.setQuickDicePresets(const ['1d20+5', '8d6', '2d20kh1']);
+    await controller.setMessageDensity('comfortable');
+    await controller.setFontScale('large');
+    await controller.setHpWarningThreshold(0.5);
 
     final reloaded = AppPreferencesController(store: store);
     await reloaded.initialize();
 
-    expect(notifications, 12);
+    expect(notifications, 16);
     expect(reloaded.preferences.themeMode, ThemeMode.dark);
     expect(reloaded.preferences.defaultDice, '2d20kh1');
     expect(reloaded.preferences.compactLists, isTrue);
     expect(reloaded.preferences.confirmBeforeRoll, isTrue);
-    expect(reloaded.preferences.defaultCreationMethod, 'standard');
     expect(reloaded.preferences.showCharacterSources, isFalse);
     expect(reloaded.preferences.showEncumbrance, isTrue);
     expect(reloaded.preferences.defaultCharacterTab, 'equipment');
@@ -63,33 +71,40 @@ void main() {
     expect(reloaded.preferences.dynamicSchemeVariant, 'fidelity');
     expect(reloaded.preferences.logCharacterRuntimeChanges, isFalse);
     expect(reloaded.preferences.groupConsecutiveChatMessages, isFalse);
+    expect(reloaded.preferences.defaultRollMode, 'advantage');
+    expect(
+      reloaded.preferences.quickDicePresets,
+      ['1d20+5', '8d6', '2d20kh1'],
+    );
+    expect(reloaded.preferences.messageDensity, 'comfortable');
+    expect(reloaded.preferences.fontScale, 'large');
+    expect(reloaded.preferences.hpWarningThreshold, 0.5);
   });
 
-  test(
-    'migrates the previous quick-build default to the standard guide once',
-    () async {
-      SharedPreferences.setMockInitialValues({
-        'app_preferences.default_creation_method': 'quick',
-      });
-      final preferences = await SharedPreferences.getInstance();
-      final store = SharedPreferencesAppPreferencesStore(preferences);
+  test('quickDicePresets rejects more than 6 entries', () async {
+    final store = InMemoryAppPreferencesStore();
+    final controller = AppPreferencesController(store: store);
+    await controller.initialize();
 
-      final migrated = await store.load();
+    await controller.setQuickDicePresets(
+      const ['1d20', '2d6', '3d8', '4d10', '5d12', '6d4', '7d20'],
+    );
 
-      expect(migrated.defaultCreationMethod, 'standard');
-      expect(
-        preferences.getBool('app_preferences.standard_guide_migrated'),
-        isTrue,
-      );
-      expect(
-        preferences.getString('app_preferences.default_creation_method'),
-        'standard',
-      );
+    expect(controller.preferences.quickDicePresets.length, 6);
+    expect(controller.preferences.quickDicePresets.last, '6d4');
+  });
 
-      await store.save(migrated.copyWith(defaultCreationMethod: 'quick'));
-      expect((await store.load()).defaultCreationMethod, 'quick');
-    },
-  );
+  test('hpWarningThreshold clamps to 0..1 range', () async {
+    final store = InMemoryAppPreferencesStore();
+    final controller = AppPreferencesController(store: store);
+    await controller.initialize();
+
+    await controller.setHpWarningThreshold(-0.5);
+    expect(controller.preferences.hpWarningThreshold, 0.0);
+
+    await controller.setHpWarningThreshold(1.5);
+    expect(controller.preferences.hpWarningThreshold, 1.0);
+  });
 
   test(
     'rolls back to the previous value when the store throws on save',
@@ -142,7 +157,6 @@ void main() {
       await first.setDefaultDice('3d6');
       await first.setCompactLists(true);
       await first.setConfirmBeforeRoll(true);
-      await first.setDefaultCreationMethod('standard');
       await first.setShowCharacterSources(false);
       await first.setShowEncumbrance(true);
       await first.setDefaultCharacterTab('equipment');
@@ -150,6 +164,12 @@ void main() {
       await first.setDynamicSchemeVariant('vibrant');
       await first.setLogCharacterRuntimeChanges(false);
       await first.setGroupConsecutiveChatMessages(false);
+      // Task 1.3 新增自定义项。
+      await first.setDefaultRollMode('disadvantage');
+      await first.setQuickDicePresets(const ['1d20', '2d6+3']);
+      await first.setMessageDensity('compact');
+      await first.setFontScale('medium');
+      await first.setHpWarningThreshold(0.25);
 
       final reloaded = AppPreferencesController(store: store);
       await reloaded.initialize();
@@ -162,7 +182,6 @@ void main() {
       expect(reloaded.preferences.defaultDice, '3d6');
       expect(reloaded.preferences.compactLists, isTrue);
       expect(reloaded.preferences.confirmBeforeRoll, isTrue);
-      expect(reloaded.preferences.defaultCreationMethod, 'standard');
       expect(reloaded.preferences.showCharacterSources, isFalse);
       expect(reloaded.preferences.showEncumbrance, isTrue);
       expect(reloaded.preferences.defaultCharacterTab, 'equipment');
@@ -170,6 +189,11 @@ void main() {
       expect(reloaded.preferences.dynamicSchemeVariant, 'vibrant');
       expect(reloaded.preferences.logCharacterRuntimeChanges, isFalse);
       expect(reloaded.preferences.groupConsecutiveChatMessages, isFalse);
+      expect(reloaded.preferences.defaultRollMode, 'disadvantage');
+      expect(reloaded.preferences.quickDicePresets, ['1d20', '2d6+3']);
+      expect(reloaded.preferences.messageDensity, 'compact');
+      expect(reloaded.preferences.fontScale, 'medium');
+      expect(reloaded.preferences.hpWarningThreshold, 0.25);
     },
   );
 }

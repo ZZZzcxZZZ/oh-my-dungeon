@@ -306,7 +306,12 @@ void main() {
     expect(find.text('默认骰子'), findsOneWidget);
     expect(find.text('掷骰确认'), findsOneWidget);
     expect(find.text('合并连续消息头像'), findsOneWidget);
-    expect(find.text('默认创建方式'), findsOneWidget);
+    // Task 1.3: 新增"游戏与跑团"区块, 收纳默认掷骰模式/消息密度/字体缩放/HP 譨戒阈值。
+    expect(find.text('游戏与跑团'), findsOneWidget);
+    expect(find.text('默认掷骰模式'), findsOneWidget);
+    expect(find.text('消息密度'), findsOneWidget);
+    expect(find.text('字体缩放'), findsOneWidget);
+    expect(find.text('HP 警戒阈值'), findsOneWidget);
     expect(find.text('显示 Legacy 内容'), findsNothing);
     expect(find.text('默认角色卡标签'), findsOneWidget);
 
@@ -462,14 +467,13 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('characters tab opens the preferred creation flow', (
+  testWidgets('characters tab opens the creation choice page by default', (
     tester,
   ) async {
     final preferencesController = AppPreferencesController(
       store: InMemoryAppPreferencesStore(),
     );
     await preferencesController.initialize();
-    await preferencesController.setDefaultCreationMethod('standard');
 
     await tester.pumpWidget(
       MaterialApp(
@@ -488,19 +492,11 @@ void main() {
     await tester.tap(find.widgetWithText(FloatingActionButton, '新角色'));
     await tester.pumpAndSettle();
 
-    expect(find.text('标准创建角色'), findsOneWidget);
-    expect(find.text('选择创建方式'), findsNothing);
-    expect(find.text('战士 / Fighter'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('builder-mobile-step-selector')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('3. 物种').last);
-    await tester.pumpAndSettle();
-    expect(find.text('阿斯莫 / Aasimar'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('builder-mobile-step-selector')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('2. 背景').last);
-    await tester.pumpAndSettle();
-    expect(find.text('侍僧 / Acolyte'), findsOneWidget);
+    // Task 1.3: 删除"默认创建方式"偏好后, 编辑器始终从选择页开始。
+    // 用户手动选择"标准创建"才会进入标准构建流程, 不再依赖偏好。
+    expect(find.text('选择创建方式'), findsOneWidget);
+    expect(find.text('标准创建'), findsWidgets);
+    expect(find.text('快速创建'), findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());
     preferencesController.dispose();
@@ -1022,7 +1018,6 @@ void main() {
       store: InMemoryAppPreferencesStore(),
     );
     await preferencesController.initialize();
-    await preferencesController.setDefaultCreationMethod('standard');
     final authController = AuthController(
       tokenStore: InMemoryAuthTokenStore(),
       authClient: _FakeAuthClient(),
@@ -1069,6 +1064,9 @@ void main() {
     await tester.tap(find.widgetWithText(FloatingActionButton, '新角色'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('继续'));
+    await tester.pumpAndSettle();
+    // Task 1.3: 删除"默认创建方式"偏好后, 编辑器先展示选择页, 用户手动选择"标准创建"。
+    await tester.tap(find.text('标准创建').last);
     await tester.pumpAndSettle();
 
     expect(find.text('战役战士 / Campaign Fighter'), findsOneWidget);

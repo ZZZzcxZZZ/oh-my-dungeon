@@ -97,9 +97,10 @@ void main() {
       await tester.tap(find.byKey(const Key('create_character')));
       await tester.pumpAndSettle();
 
-      // No DM popup menu.
+      // No DM popup menu. Task 1.3: 编辑器现在默认打开"选择创建方式"页面,
+      // 不再直接进入完整角色卡。
       expect(find.byKey(const Key('dm-create-quick-npc')), findsNothing);
-      expect(find.byKey(const Key('character-name')), findsOneWidget);
+      expect(find.text('选择创建方式'), findsOneWidget);
 
       actorController.dispose();
       modeController.dispose();
@@ -129,9 +130,9 @@ void main() {
       await tester.tap(find.byKey(const Key('create_character')));
       await tester.pumpAndSettle();
 
-      // No DM popup menu — falls back to full editor path.
+      // No DM popup menu — falls back to the editor's choice page.
       expect(find.byKey(const Key('dm-create-quick-npc')), findsNothing);
-      expect(find.byKey(const Key('character-name')), findsOneWidget);
+      expect(find.text('选择创建方式'), findsOneWidget);
 
       actorController.dispose();
       modeController.dispose();

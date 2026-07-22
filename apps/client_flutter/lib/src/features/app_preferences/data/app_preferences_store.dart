@@ -26,10 +26,6 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
   static const _defaultDiceKey = 'app_preferences.default_dice';
   static const _compactListsKey = 'app_preferences.compact_lists';
   static const _confirmBeforeRollKey = 'app_preferences.confirm_before_roll';
-  static const _defaultCreationMethodKey =
-      'app_preferences.default_creation_method';
-  static const _standardGuideMigrationKey =
-      'app_preferences.standard_guide_migrated';
   static const _showCharacterSourcesKey =
       'app_preferences.show_character_sources';
   static const _showEncumbranceKey = 'app_preferences.show_encumbrance';
@@ -42,22 +38,14 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
       'app_preferences.log_character_runtime_changes';
   static const _groupConsecutiveChatMessagesKey =
       'app_preferences.group_consecutive_chat_messages';
+  static const _defaultRollModeKey = 'app_preferences.default_roll_mode';
+  static const _quickDicePresetsKey = 'app_preferences.quick_dice_presets';
+  static const _messageDensityKey = 'app_preferences.message_density';
+  static const _fontScaleKey = 'app_preferences.font_scale';
+  static const _hpWarningThresholdKey = 'app_preferences.hp_warning_threshold';
 
   @override
   Future<AppPreferences> load() async {
-    var defaultCreationMethod =
-        _preferences.getString(_defaultCreationMethodKey) ??
-        AppPreferences.defaults.defaultCreationMethod;
-    if (!(_preferences.getBool(_standardGuideMigrationKey) ?? false)) {
-      if (defaultCreationMethod == 'quick') {
-        defaultCreationMethod = 'standard';
-        await _preferences.setString(
-          _defaultCreationMethodKey,
-          defaultCreationMethod,
-        );
-      }
-      await _preferences.setBool(_standardGuideMigrationKey, true);
-    }
     return AppPreferences(
       themeMode: _themeModeFromString(_preferences.getString(_themeModeKey)),
       seedColorValue:
@@ -72,7 +60,6 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
       confirmBeforeRoll:
           _preferences.getBool(_confirmBeforeRollKey) ??
           AppPreferences.defaults.confirmBeforeRoll,
-      defaultCreationMethod: defaultCreationMethod,
       showCharacterSources:
           _preferences.getBool(_showCharacterSourcesKey) ??
           AppPreferences.defaults.showCharacterSources,
@@ -94,6 +81,21 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
       groupConsecutiveChatMessages:
           _preferences.getBool(_groupConsecutiveChatMessagesKey) ??
           AppPreferences.defaults.groupConsecutiveChatMessages,
+      defaultRollMode:
+          _preferences.getString(_defaultRollModeKey) ??
+          AppPreferences.defaults.defaultRollMode,
+      quickDicePresets:
+          _preferences.getStringList(_quickDicePresetsKey) ??
+          AppPreferences.defaults.quickDicePresets,
+      messageDensity:
+          _preferences.getString(_messageDensityKey) ??
+          AppPreferences.defaults.messageDensity,
+      fontScale:
+          _preferences.getString(_fontScaleKey) ??
+          AppPreferences.defaults.fontScale,
+      hpWarningThreshold:
+          _preferences.getDouble(_hpWarningThresholdKey) ??
+          AppPreferences.defaults.hpWarningThreshold,
     );
   }
 
@@ -106,10 +108,6 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
     await _preferences.setBool(
       _confirmBeforeRollKey,
       preferences.confirmBeforeRoll,
-    );
-    await _preferences.setString(
-      _defaultCreationMethodKey,
-      preferences.defaultCreationMethod,
     );
     await _preferences.setBool(
       _showCharacterSourcesKey,
@@ -138,6 +136,17 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
     await _preferences.setBool(
       _groupConsecutiveChatMessagesKey,
       preferences.groupConsecutiveChatMessages,
+    );
+    await _preferences.setString(_defaultRollModeKey, preferences.defaultRollMode);
+    await _preferences.setStringList(
+      _quickDicePresetsKey,
+      preferences.quickDicePresets,
+    );
+    await _preferences.setString(_messageDensityKey, preferences.messageDensity);
+    await _preferences.setString(_fontScaleKey, preferences.fontScale);
+    await _preferences.setDouble(
+      _hpWarningThresholdKey,
+      preferences.hpWarningThreshold,
     );
     final repo = syncRepository;
     if (repo != null) {

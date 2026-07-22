@@ -236,6 +236,37 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    for (final width in const [390.0, 700.0]) {
+      testWidgets('centers narrator presentation at ${width.toInt()}px', (
+        tester,
+      ) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = Size(width, 844);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        await _pumpTimeline(
+          tester,
+          messages: [
+            _message(
+              id: 'narration',
+              actorId: 'narrator',
+              speakerMode: 'narrator',
+              createdAt: '2026-07-22T10:00:00Z',
+            ),
+          ],
+        );
+
+        final narratorRect = tester.getRect(
+          find.byKey(const Key('narrator-message')),
+        );
+        final narratorTextRect = tester.getRect(find.text('narration'));
+        expect(narratorRect.center.dx, closeTo(width / 2, 0.1));
+        expect(narratorTextRect.center.dx, closeTo(width / 2, 0.1));
+        expect(tester.takeException(), isNull);
+      });
+    }
+
     for (final size in const [
       Size(360, 800),
       Size(390, 844),
@@ -301,6 +332,7 @@ CampaignChatMessage _message({
   required String createdAt,
   String kind = 'say',
   String senderId = 'user-1',
+  String speakerMode = 'actor',
 }) {
   return CampaignChatMessage(
     id: id,
@@ -309,6 +341,7 @@ CampaignChatMessage _message({
     campaignActorId: actorId,
     displayName: actorId,
     avatarUrl: null,
+    speakerMode: speakerMode,
     kind: kind,
     content: id,
     createdAt: createdAt,

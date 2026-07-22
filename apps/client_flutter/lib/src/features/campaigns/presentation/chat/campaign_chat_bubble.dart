@@ -200,15 +200,9 @@ class _NarratorMessage extends StatelessWidget {
       child: Row(
         children: [
           Expanded(child: Divider(color: theme.colorScheme.outlineVariant)),
-          const SizedBox(width: 10),
-          Icon(
-            Icons.auto_stories_outlined,
-            size: 18,
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            flex: 4,
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
             child: Text(
               content,
               textAlign: TextAlign.center,
@@ -219,7 +213,7 @@ class _NarratorMessage extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(child: Divider(color: theme.colorScheme.outlineVariant)),
         ],
       ),

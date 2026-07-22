@@ -2,10 +2,10 @@
 
 ## 任务 1：提取角色卡响应式壳层
 
-- [ ] 为 390px TabBar、1280px NavigationRail、初始目标和内容切换编写失败测试。
-- [ ] 实现 `character_sheet_shell.dart`。
-- [ ] 将 `CharacterDetailPage` 改为声明 destinations 并交给壳层组装。
-- [ ] 运行 `character_pages_test.dart`。
+- [x] 为 390px TabBar、1280px NavigationRail、初始目标和内容切换编写失败测试。
+- [x] 实现 `character_sheet_shell.dart`。
+- [x] 将 `CharacterDetailPage` 改为声明 destinations 并交给壳层组装。
+- [x] 运行 `character_pages_test.dart`。
 
 ## 任务 2：提取创建向导响应式壳层
 

@@ -11,6 +11,7 @@ import '../domain/character_override_resolver.dart';
 import '../domain/character_profile.dart';
 import '../domain/character_quick_edit_service.dart';
 import '../domain/dnd5e_rules.dart';
+import 'widgets/character_sheet_shell.dart';
 
 typedef CharacterRuntimeUpdate =
     Future<void> Function({
@@ -95,116 +96,129 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 8,
-      initialIndex: _initialTabIndex(widget.initialTab),
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(_character.name),
-          actions: [
-            if (widget.onUpgrade != null && _character.level < 20)
-              IconButton(
-                tooltip: '升级角色',
-                onPressed: _upgrade,
-                icon: const Icon(Icons.upgrade),
-              ),
-            if (widget.onEdit != null)
-              IconButton(
-                tooltip: '编辑角色',
-                onPressed: widget.onEdit,
-                icon: const Icon(Icons.edit_outlined),
-              ),
-          ],
-        ),
-        body: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _CharacterHeader(character: _character),
-            const TabBar(
-              isScrollable: true,
-              tabs: [
-                Tab(text: '总览'),
-                Tab(text: '属性'),
-                Tab(text: '动作'),
-                Tab(text: '法术'),
-                Tab(text: '装备'),
-                Tab(text: '资源'),
-                Tab(text: '特性'),
-                Tab(text: '角色资料'),
-              ],
+    return CharacterSheetShell(
+      title: _character.name,
+      header: _CharacterHeader(character: _character),
+      initialDestinationId: _initialDestinationId(widget.initialTab),
+      actions: [
+        if (widget.onUpgrade != null && _character.level < 20)
+          IconButton(
+            tooltip: '升级角色',
+            onPressed: _upgrade,
+            icon: const Icon(Icons.upgrade),
+          ),
+        if (widget.onEdit != null)
+          IconButton(
+            tooltip: '编辑角色',
+            onPressed: widget.onEdit,
+            icon: const Icon(Icons.edit_outlined),
+          ),
+      ],
+      destinations: [
+        CharacterSheetDestination(
+          id: 'overview',
+          label: '总览',
+          icon: Icons.dashboard_outlined,
+          child: _SheetTab(
+            child: _RuntimePanel(
+              character: _character,
+              onUpdateRuntime: _updateRuntime,
             ),
-            Expanded(
-              child: TabBarView(
-                children: [
-                  _SheetTab(
-                    child: _RuntimePanel(
-                      character: _character,
-                      onUpdateRuntime: _updateRuntime,
-                    ),
-                  ),
-                  _SheetTab(child: _AbilityOverview(character: _character)),
-                  _SheetTab(
-                    child: _ActionsPanel(
-                      character: _character,
-                      diceRoller: widget.diceRoller,
-                      onRoll: widget.onRoll,
-                      onSaveCharacter: _saveCharacter,
-                    ),
-                  ),
-                  _SheetTab(
-                    child: _SpellsPanel(
-                      character: _character,
-                      contentEntries: widget.contentEntries,
-                      onUpdateRuntime: _updateRuntime,
-                      onSaveCharacter: _saveCharacter,
-                    ),
-                  ),
-                  _SheetTab(
-                    child: _EquipmentPanel(
-                      character: _character,
-                      contentEntries: widget.contentEntries,
-                      onUpdateInventory: widget.onUpdateInventory,
-                    ),
-                  ),
-                  _SheetTab(
-                    child: _ResourcesPanel(
-                      character: _character,
-                      onUpdateRuntime: _updateRuntime,
-                      onSaveCharacter: _saveCharacter,
-                    ),
-                  ),
-                  _SheetTab(
-                    child: _FeaturesPanel(
-                      character: _character,
-                      contentEntries: widget.contentEntries,
-                      onSaveCharacter: _saveCharacter,
-                    ),
-                  ),
-                  _SheetTab(
-                    child: _ProfilePanel(
-                      character: _character,
-                      onSaveCharacter: _saveCharacter,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
+        CharacterSheetDestination(
+          id: 'abilities',
+          label: '属性',
+          icon: Icons.tune_outlined,
+          child: _SheetTab(child: _AbilityOverview(character: _character)),
+        ),
+        CharacterSheetDestination(
+          id: 'actions',
+          label: '动作',
+          icon: Icons.bolt_outlined,
+          child: _SheetTab(
+            child: _ActionsPanel(
+              character: _character,
+              diceRoller: widget.diceRoller,
+              onRoll: widget.onRoll,
+              onSaveCharacter: _saveCharacter,
+            ),
+          ),
+        ),
+        CharacterSheetDestination(
+          id: 'spells',
+          label: '法术',
+          icon: Icons.auto_fix_high_outlined,
+          child: _SheetTab(
+            child: _SpellsPanel(
+              character: _character,
+              contentEntries: widget.contentEntries,
+              onUpdateRuntime: _updateRuntime,
+              onSaveCharacter: _saveCharacter,
+            ),
+          ),
+        ),
+        CharacterSheetDestination(
+          id: 'equipment',
+          label: '装备',
+          icon: Icons.backpack_outlined,
+          child: _SheetTab(
+            child: _EquipmentPanel(
+              character: _character,
+              contentEntries: widget.contentEntries,
+              onUpdateInventory: widget.onUpdateInventory,
+            ),
+          ),
+        ),
+        CharacterSheetDestination(
+          id: 'resources',
+          label: '资源',
+          icon: Icons.battery_charging_full_outlined,
+          child: _SheetTab(
+            child: _ResourcesPanel(
+              character: _character,
+              onUpdateRuntime: _updateRuntime,
+              onSaveCharacter: _saveCharacter,
+            ),
+          ),
+        ),
+        CharacterSheetDestination(
+          id: 'features',
+          label: '特性',
+          icon: Icons.workspace_premium_outlined,
+          child: _SheetTab(
+            child: _FeaturesPanel(
+              character: _character,
+              contentEntries: widget.contentEntries,
+              onSaveCharacter: _saveCharacter,
+            ),
+          ),
+        ),
+        CharacterSheetDestination(
+          id: 'profile',
+          label: '角色资料',
+          icon: Icons.notes_outlined,
+          child: _SheetTab(
+            child: _ProfilePanel(
+              character: _character,
+              onSaveCharacter: _saveCharacter,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  static int _initialTabIndex(String tab) {
+  static String _initialDestinationId(String tab) {
     return switch (tab) {
-      'abilities' || 'attributes' => 1,
-      'actions' => 2,
-      'spells' => 3,
-      'equipment' => 4,
-      'resources' => 5,
-      'features' => 6,
-      'profile' || 'details' || 'notes' => 7,
-      _ => 0,
+      'abilities' || 'attributes' => 'abilities',
+      'actions' => 'actions',
+      'spells' => 'spells',
+      'equipment' => 'equipment',
+      'resources' => 'resources',
+      'features' => 'features',
+      'profile' || 'details' || 'notes' => 'profile',
+      _ => 'overview',
     };
   }
 

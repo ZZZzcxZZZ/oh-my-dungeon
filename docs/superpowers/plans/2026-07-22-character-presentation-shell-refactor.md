@@ -9,11 +9,11 @@
 
 ## 任务 2：提取创建向导响应式壳层
 
-- [ ] 为手机步骤选择、桌面 NavigationRail 和动作区编写失败测试。
-- [ ] 实现 `character_builder_shell.dart`。
-- [ ] 用壳层替换 `_StandardBuildPageState` 中的响应式 Scaffold 代码。
-- [ ] 删除旧 `_MobileBuilderStepSelector`，保持规则状态与摘要逻辑不变。
-- [ ] 运行标准创建与规则驱动测试。
+- [x] 为手机步骤选择、桌面 NavigationRail 和动作区编写失败测试。
+- [x] 实现 `character_builder_shell.dart`。
+- [x] 用壳层替换 `_StandardBuildPageState` 中的响应式 Scaffold 代码。
+- [x] 删除旧 `_MobileBuilderStepSelector`，保持规则状态与摘要逻辑不变。
+- [x] 运行标准创建与规则驱动测试。
 
 ## 任务 3：收口与验证
 

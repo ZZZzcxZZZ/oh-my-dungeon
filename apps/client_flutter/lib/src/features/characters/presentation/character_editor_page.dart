@@ -18,6 +18,7 @@ import '../../rules/domain/character_build.dart';
 import '../../rules/domain/character_rule_definition.dart';
 import '../../rules/domain/character_rules_engine.dart';
 import '../../rules/domain/rule_choice_resolver.dart';
+import 'widgets/character_builder_shell.dart';
 
 class CharacterEditorPage extends StatefulWidget {
   const CharacterEditorPage({
@@ -1331,84 +1332,41 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       summary: summary,
     );
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('标准创建角色')),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isWide = constraints.maxWidth >= 1000;
-          final editor = _BuilderStepEditor(
-            step: _currentStep,
-            stepLabel: _steps[_currentStep],
-            stepDescription: _stepDescription(_steps[_currentStep]),
-            nameController: _nameController,
-            onNameChanged: (_) => setState(() {}),
-            child: stepContent,
-          );
-          if (!isWide) {
-            return Column(
-              children: [
-                _MobileBuilderStepSelector(
-                  currentStep: visibleStep,
-                  steps: [
-                    for (final index in visibleStepIndexes) _steps[index],
-                  ],
-                  onSelected: (index) => _selectStep(visibleStepIndexes[index]),
-                ),
-                Expanded(child: editor),
-              ],
-            );
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              NavigationRail(
-                extended: true,
-                scrollable: true,
-                selectedIndex: visibleStep,
-                onDestinationSelected: (index) =>
-                    _selectStep(visibleStepIndexes[index]),
-                labelType: NavigationRailLabelType.none,
-                destinations: [
-                  for (final index in visibleStepIndexes)
-                    NavigationRailDestination(
-                      icon: Icon(
-                        _stepIcons[index],
-                        key: Key('builder-step-$index'),
-                      ),
-                      selectedIcon: Icon(
-                        _stepIcons[index],
-                        key: Key('builder-step-$index-selected'),
-                      ),
-                      label: Text(_steps[index]),
-                    ),
-                ],
-              ),
-              const VerticalDivider(width: 1),
-              Expanded(child: editor),
-              const VerticalDivider(width: 1),
-              SizedBox(
-                width: 300,
-                child: _BuilderSummaryPanel(
-                  summary: summary,
-                  review: review,
-                  level: _level,
-                  className: _className,
-                  abilities: _abilityScores,
-                  selectedSpells: _selectedSpellRefs.length,
-                  selectedItems: _selectedItemRefs.length,
-                  pendingChoices: activeRuleChoices.where((active) {
-                    final selected =
-                        _ruleChoices[active.key] ?? const <String>{};
-                    return selected.length < active.definition.minimum ||
-                        selected.length > active.definition.maximum;
-                  }).length,
-                ),
-              ),
-            ],
-          );
-        },
+    return CharacterBuilderShell(
+      title: '标准创建角色',
+      destinations: [
+        for (final index in visibleStepIndexes)
+          CharacterBuilderDestination(
+            id: index,
+            label: _steps[index],
+            icon: _stepIcons[index],
+          ),
+      ],
+      selectedIndex: visibleStep,
+      onSelected: (index) => _selectStep(visibleStepIndexes[index]),
+      editor: _BuilderStepEditor(
+        step: _currentStep,
+        stepLabel: _steps[_currentStep],
+        stepDescription: _stepDescription(_steps[_currentStep]),
+        nameController: _nameController,
+        onNameChanged: (_) => setState(() {}),
+        child: stepContent,
       ),
-      bottomNavigationBar: SafeArea(
+      summary: _BuilderSummaryPanel(
+        summary: summary,
+        review: review,
+        level: _level,
+        className: _className,
+        abilities: _abilityScores,
+        selectedSpells: _selectedSpellRefs.length,
+        selectedItems: _selectedItemRefs.length,
+        pendingChoices: activeRuleChoices.where((active) {
+          final selected = _ruleChoices[active.key] ?? const <String>{};
+          return selected.length < active.definition.minimum ||
+              selected.length > active.definition.maximum;
+        }).length,
+      ),
+      bottomBar: SafeArea(
         child: _BuilderFooter(
           currentStep: visibleStep,
           lastStep: visibleStepIndexes.length - 1,
@@ -2045,60 +2003,6 @@ class _BuilderStepEditor extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MobileBuilderStepSelector extends StatelessWidget {
-  const _MobileBuilderStepSelector({
-    required this.currentStep,
-    required this.steps,
-    required this.onSelected,
-  });
-
-  final int currentStep;
-  final List<String> steps;
-  final ValueChanged<int> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<int>(
-                      key: const Key('builder-mobile-step-selector'),
-                      value: currentStep,
-                      isExpanded: true,
-                      icon: const Icon(Icons.expand_more),
-                      items: [
-                        for (var index = 0; index < steps.length; index++)
-                          DropdownMenuItem(
-                            value: index,
-                            child: Text('${index + 1}. ${steps[index]}'),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) onSelected(value);
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text('${currentStep + 1}/${steps.length}'),
-              ],
-            ),
-            LinearProgressIndicator(value: (currentStep + 1) / steps.length),
-          ],
         ),
       ),
     );

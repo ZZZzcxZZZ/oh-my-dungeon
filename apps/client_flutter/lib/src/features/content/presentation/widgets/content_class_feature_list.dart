@@ -27,31 +27,37 @@ class ContentClassFeatureList extends StatelessWidget {
     if (levels.isEmpty) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 20),
         Text('等级特性', style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
-        for (final level in levels)
-          ExpansionTile(
-            title: Text(level > 0 ? '等级 $level' : '未分级特性'),
-            children: [
-              for (final feature in grouped[level]!)
-                ListTile(
-                  leading: const Icon(Icons.auto_awesome_outlined),
-                  title: Text(feature.name),
-                  subtitle:
-                      feature.summary.isEmpty ? null : Text(feature.summary),
-                  trailing: onFeatureTap == null
-                      ? null
-                      : const Icon(Icons.chevron_right),
-                  onTap: onFeatureTap == null
-                      ? null
-                      : () => onFeatureTap!(feature),
-                ),
-            ],
+        for (final level in levels) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 4),
+            child: Text(
+              level > 0 ? '等级 $level' : '未分级特性',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
           ),
+          for (final feature in grouped[level]!)
+            ListTile(
+              leading: const Icon(Icons.auto_awesome_outlined),
+              title: Text(feature.name),
+              subtitle:
+                  feature.summary.isEmpty ? null : Text(feature.summary),
+              trailing: onFeatureTap == null
+                  ? null
+                  : const Icon(Icons.chevron_right),
+              onTap: onFeatureTap == null
+                  ? null
+                  : () => onFeatureTap!(feature),
+            ),
+        ],
       ],
     );
   }

@@ -25,11 +25,11 @@
 
 ### 任务 2：补齐类型与职业关联
 
-- [ ] 写失败测试：`subclass`、`classFeature` 可独立搜索；职业 reader 按等级显示特性，并显示 `subclassOf` 指向该职业的子职业。
-- [ ] 扩展 `content_type_registry.dart` 的可检索类型；在 controller/repository 使用结构化关系查询，禁止解析正文字符串推断关系。
-- [ ] 职业特性和子职业点击后压入同一个 reader 浮层导航栈，返回时恢复原职业滚动位置。
-- [ ] 运行 `flutter test test/content_class_navigation_test.dart test/content_class_feature_list_test.dart test/content_entry_reader_test.dart`。
-- [ ] 提交 `feat(v0.1): connect class content navigation`。
+- [x] 写失败测试：`subclass`、`classFeature` 可独立搜索；职业 reader 按等级显示特性，并显示 `subclassOf` 指向该职业的子职业。
+- [x] 扩展 `content_type_registry.dart` 的可检索类型；在 controller/repository 使用结构化关系查询，禁止解析正文字符串推断关系。
+- [x] 职业特性和子职业点击后压入同一个 reader 浮层导航栈，返回时恢复原职业滚动位置。
+- [x] 运行 `flutter test test/content_class_navigation_test.dart test/content_class_feature_list_test.dart test/content_entry_reader_test.dart`。
+- [x] 提交 `feat(v0.1): connect class content navigation`。
 
 ### 任务 3：紧凑筛选系统
 

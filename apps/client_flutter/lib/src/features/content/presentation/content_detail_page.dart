@@ -15,6 +15,7 @@ class ContentDetailPage extends StatefulWidget {
     required this.onOpenEntry,
     required this.onImportRequested,
     this.onClose,
+    this.onBack,
     super.key,
   });
 
@@ -23,6 +24,7 @@ class ContentDetailPage extends StatefulWidget {
   final ValueChanged<String> onOpenEntry;
   final VoidCallback onImportRequested;
   final VoidCallback? onClose;
+  final VoidCallback? onBack;
 
   @override
   State<ContentDetailPage> createState() => _ContentDetailPageState();
@@ -33,6 +35,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   bool _isLoading = false;
   bool _isFavorite = false;
   List<ContentEntry> _classFeatures = const [];
+  List<ContentEntry> _subclasses = const [];
 
   @override
   void initState() {
@@ -69,11 +72,34 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
           ? false
           : await widget.controller.isFavorite(entryKey);
       List<ContentEntry> features = const [];
+      List<ContentEntry> subclasses = const [];
       if (entry != null && entry.type == 'class') {
         final packageId = entry.id.split(':').first;
-        features = await widget.controller.repository.search(
+        final allFeatures = await widget.controller.repository.search(
           ContentQuery(type: 'classFeature', packageId: packageId),
         );
+        // 使用结构化关系 (featureOf) 过滤, 不解析正文字符串.
+        features = allFeatures
+            .where(
+              (feature) => feature.relations.any(
+                (relation) =>
+                    relation.type == 'featureOf' &&
+                    relation.targetId == entry.id,
+              ),
+            )
+            .toList();
+        final allSubclasses = await widget.controller.repository.search(
+          ContentQuery(type: 'subclass', packageId: packageId),
+        );
+        subclasses = allSubclasses
+            .where(
+              (subclass) => subclass.relations.any(
+                (relation) =>
+                    relation.type == 'subclassOf' &&
+                    relation.targetId == entry.id,
+              ),
+            )
+            .toList();
       }
       if (mounted) {
         setState(() {
@@ -81,6 +107,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
           _isLoading = false;
           _isFavorite = isFav;
           _classFeatures = features;
+          _subclasses = subclasses;
         });
       }
     } catch (e) {
@@ -101,6 +128,15 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
   }
 
   Widget? _appBarLeading() {
+    final onBack = widget.onBack;
+    if (onBack != null) {
+      return IconButton(
+        key: const Key('content-detail-back'),
+        tooltip: '返回',
+        onPressed: onBack,
+        icon: const Icon(Icons.arrow_back),
+      );
+    }
     final onClose = widget.onClose;
     if (onClose == null) return null;
     return IconButton(
@@ -185,6 +221,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
         ],
       ),
       body: SingleChildScrollView(
+        key: PageStorageKey<String>('content-detail-${entry.id}'),
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -223,16 +260,54 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
               onOpenEntry: widget.onOpenEntry,
               showRules: false,
             ),
-            if (entry.type == 'class')
+            if (entry.type == 'class') ...[
               ContentClassFeatureList(
                 classEntry: entry,
                 featureEntries: _classFeatures,
                 onFeatureTap: (feature) => widget.onOpenEntry(feature.id),
               ),
+              if (_subclasses.isNotEmpty)
+                _ContentSubclassList(
+                  subclasses: _subclasses,
+                  onSubclassTap: (subclass) => widget.onOpenEntry(subclass.id),
+                ),
+            ],
             ContentCharacterRulesView(entry: entry),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ContentSubclassList extends StatelessWidget {
+  const _ContentSubclassList({
+    required this.subclasses,
+    required this.onSubclassTap,
+  });
+
+  final List<ContentEntry> subclasses;
+  final ValueChanged<ContentEntry> onSubclassTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 20),
+        Text('子职业', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 8),
+        for (final subclass in subclasses)
+          ListTile(
+            leading: const Icon(Icons.school_outlined),
+            title: Text(subclass.name),
+            subtitle:
+                subclass.summary.isEmpty ? null : Text(subclass.summary),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => onSubclassTap(subclass),
+          ),
+      ],
     );
   }
 }

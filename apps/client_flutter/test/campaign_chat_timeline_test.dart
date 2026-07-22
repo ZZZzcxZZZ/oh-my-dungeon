@@ -1,5 +1,8 @@
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/chat/campaign_chat_bubble.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/chat/campaign_chat_timeline.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/chat/campaign_message_grouping.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -94,6 +97,116 @@ void main() {
       expect(presentation.showIdentity, isTrue);
     });
   });
+
+  group('CampaignChatTimeline', () {
+    testWidgets('aligns own messages right and other messages left', (
+      tester,
+    ) async {
+      await _pumpTimeline(
+        tester,
+        messages: [
+          _message(
+            id: 'other',
+            actorId: 'actor-2',
+            senderId: 'user-2',
+            createdAt: '2026-07-22T10:00:00Z',
+          ),
+          _message(
+            id: 'own',
+            actorId: 'actor-1',
+            createdAt: '2026-07-22T10:01:00Z',
+          ),
+        ],
+      );
+
+      expect(
+        tester
+            .widget<Align>(find.byKey(const Key('message-align-other')))
+            .alignment,
+        Alignment.centerLeft,
+      );
+      expect(
+        tester
+            .widget<Align>(find.byKey(const Key('message-align-own')))
+            .alignment,
+        Alignment.centerRight,
+      );
+    });
+
+    testWidgets('hides repeated identity for an adjacent speaker group', (
+      tester,
+    ) async {
+      await _pumpTimeline(
+        tester,
+        messages: [
+          _message(
+            id: 'first',
+            actorId: 'actor-1',
+            createdAt: '2026-07-22T10:00:00Z',
+          ),
+          _message(
+            id: 'second',
+            actorId: 'actor-1',
+            createdAt: '2026-07-22T10:01:00Z',
+          ),
+        ],
+      );
+
+      final bubbles = tester.widgetList<CampaignChatBubble>(
+        find.byType(CampaignChatBubble),
+      );
+      expect(bubbles.map((bubble) => bubble.showIdentity), [isTrue, isFalse]);
+    });
+
+    testWidgets('keeps event cards compact on a wide viewport', (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1280, 720);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpTimeline(
+        tester,
+        messages: [
+          _message(
+            id: 'check',
+            actorId: 'actor-1',
+            kind: 'checkRequest',
+            createdAt: '2026-07-22T10:00:00Z',
+          ),
+        ],
+      );
+
+      expect(
+        tester.getSize(find.byKey(const Key('check-request-message'))).width,
+        lessThanOrEqualTo(640),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  });
+}
+
+Future<void> _pumpTimeline(
+  WidgetTester tester, {
+  required List<CampaignChatMessage> messages,
+}) async {
+  final controller = ScrollController();
+  addTearDown(controller.dispose);
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: CampaignChatTimeline(
+          messages: messages,
+          currentUserId: 'user-1',
+          scrollController: controller,
+          onAvatarTap: (_) => null,
+          canRespondToCheck: (_) => false,
+          hasRespondedToCheck: (_) => false,
+          onRespondToCheck: (_) {},
+        ),
+      ),
+    ),
+  );
+  await tester.pump();
 }
 
 CampaignChatMessage _message({
@@ -101,11 +214,12 @@ CampaignChatMessage _message({
   required String actorId,
   required String createdAt,
   String kind = 'say',
+  String senderId = 'user-1',
 }) {
   return CampaignChatMessage(
     id: id,
     campaignId: 'campaign-1',
-    senderId: 'user-1',
+    senderId: senderId,
     campaignActorId: actorId,
     displayName: actorId,
     avatarUrl: null,

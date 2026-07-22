@@ -233,7 +233,7 @@ git add apps/client_flutter/lib/src/features/campaigns/presentation/chat/campaig
 git commit -m "feat(v0.1): define campaign message grouping rules"
 ```
 
-## 任务 3：提取响应式消息时间线
+## 任务 3：提取响应式消息时间线（已完成）
 
 **文件：**
 
@@ -241,7 +241,7 @@ git commit -m "feat(v0.1): define campaign message grouping rules"
 - 修改：`apps/client_flutter/lib/src/features/campaigns/presentation/chat/campaign_chat_bubble.dart`
 - 修改：`apps/client_flutter/test/campaign_chat_timeline_test.dart`
 
-- [ ] **步骤 1：补充失败的 Widget 测试**
+- [x] **步骤 1：补充失败的 Widget 测试**
 
 覆盖自己的消息靠右、他人靠左、连续消息隐藏重复身份、事件卡限制宽度和三种视口无异常：
 
@@ -266,13 +266,13 @@ testWidgets('aligns own messages right and keeps event cards compact', (tester) 
 });
 ```
 
-- [ ] **步骤 2：运行测试并确认失败**
+- [x] **步骤 2：运行测试并确认失败**
 
 运行：`flutter test test/campaign_chat_timeline_test.dart`
 
 预期：FAIL，时间线组件和方向参数尚不存在。
 
-- [ ] **步骤 3：实现 `CampaignChatTimeline`**
+- [x] **步骤 3：实现 `CampaignChatTimeline`**
 
 组件接收：
 
@@ -291,7 +291,7 @@ const CampaignChatTimeline({
 
 在一次 `ListView.builder` 中调用 `CampaignMessagePresentation.resolve`，为消息设置最大阅读宽度，并将时间分隔、方向和身份可见性传给气泡。
 
-- [ ] **步骤 4：调整气泡结构**
+- [x] **步骤 4：调整气泡结构**
 
 `CampaignChatBubble` 新增：
 
@@ -302,7 +302,7 @@ final bool showIdentity;
 
 普通消息使用 `Row(mainAxisAlignment: isOwn ? end : start)`；自己的消息将头像放在右侧。事件卡使用 `ConstrainedBox(constraints: const BoxConstraints(maxWidth: 640))`，旁白和系统事件保持居中。
 
-- [ ] **步骤 5：运行时间线测试**
+- [x] **步骤 5：运行时间线测试**
 
 运行：`flutter test test/campaign_chat_timeline_test.dart`
 

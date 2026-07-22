@@ -584,7 +584,7 @@ git diff --check
 
 预期：服务端、客户端、Docker Compose 配置和 diff 检查全部通过。
 
-- [ ] **步骤 7：提交**
+- [x] **步骤 7：提交**
 
 ```powershell
 git add apps/client_flutter/test/campaign_chat_composer_test.dart apps/client_flutter/test/campaign_chat_timeline_test.dart apps/client_flutter/test/campaign_chat_actor_test.dart docs/roadmap/current-execution-status.md

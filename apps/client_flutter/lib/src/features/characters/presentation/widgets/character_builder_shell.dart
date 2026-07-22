@@ -39,7 +39,7 @@ class CharacterBuilderShell extends StatelessWidget {
       appBar: AppBar(title: Text(title)),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          if (constraints.maxWidth >= 1000) return _buildWide();
+          if (constraints.maxWidth >= 900) return _buildWide();
           return _buildCompact(context);
         },
       ),

@@ -1637,6 +1637,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       8 => _BuilderReviewStep(
         summary: summary,
         review: review,
+        abilityMethodLabel: _abilityMethodLabel(_abilityMethod),
         pendingRuleChoices: activeRuleChoices
             .where((active) {
               final selected = _ruleChoices[active.key] ?? const <String>{};
@@ -1661,6 +1662,14 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       '详情' => '名字、头像、阵营、外貌与背景。',
       '审核' => '检查缺失项、来源和手动覆盖。',
       _ => '',
+    };
+  }
+
+  static String _abilityMethodLabel(AbilityScoreMethod method) {
+    return switch (method) {
+      AbilityScoreMethod.standardArray => '标准数组',
+      AbilityScoreMethod.pointBuy => '27 点购点',
+      AbilityScoreMethod.rolled => '随机',
     };
   }
 
@@ -2411,11 +2420,13 @@ class _BuilderReviewStep extends StatelessWidget {
     required this.summary,
     required this.review,
     required this.pendingRuleChoices,
+    required this.abilityMethodLabel,
   });
 
   final String summary;
   final _StandardBuildReview review;
   final List<_ActiveRuleChoice> pendingRuleChoices;
+  final String abilityMethodLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -2445,6 +2456,13 @@ class _BuilderReviewStep extends StatelessWidget {
                 leading: const Icon(Icons.fact_check_outlined),
                 title: const Text('审核摘要'),
                 subtitle: Text(summary),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                dense: true,
+                leading: const Icon(Icons.hexagon_outlined),
+                title: const Text('属性生成来源'),
+                trailing: Text(abilityMethodLabel),
               ),
               const Divider(height: 1),
               for (final check in review.checks)

@@ -102,18 +102,30 @@ void main() {
 
     await tester.pumpWidget(buildContentTestApp(entries: entries));
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(DropdownMenu<String?>).first);
+
+    // 打开紧凑筛选面板.
+    await tester.tap(find.byKey(const Key('content-filter-button')));
     await tester.pumpAndSettle();
+
+    // 选择法术类型.
     await tester.tap(find.text('法术').last);
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('spell-level-filter')), findsOneWidget);
-    expect(find.byKey(const Key('spell-school-filter')), findsOneWidget);
-    expect(find.byKey(const Key('spell-class-filter')), findsOneWidget);
+    // 法术的结构化 facet 标题可见.
+    expect(find.text('环位'), findsOneWidget);
+    expect(find.text('学派'), findsOneWidget);
+    expect(find.text('可用职业'), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('spell-level-filter')));
-    await tester.pumpAndSettle();
+    // 法术职业 facet 的具体值可见.
+    expect(find.text('术士'), findsWidgets);
+    expect(find.text('法师'), findsWidgets);
+
+    // 选择 3 环.
     await tester.tap(find.text('3环').last);
+    await tester.pumpAndSettle();
+
+    // 关闭面板.
+    await tester.tap(find.byKey(const Key('content-filter-apply')));
     await tester.pumpAndSettle();
 
     expect(find.text('火球术'), findsOneWidget);

@@ -33,11 +33,11 @@
 
 ### 任务 3：紧凑筛选系统
 
-- [ ] 写失败测试：手机首屏只显示 SearchBar、“筛选”按钮和一行已启用 FilterChip；不显示巨大下拉框。
-- [ ] 为 spell 提供环位、职业、学派；class/subclass 提供所属职业；equipment/item 提供类别；feat 提供等级/前置条件；monster 提供 CR/类型；无字段的 facet 不显示。
-- [ ] 使用底部筛选面板，应用后把选择转换为 controller 的结构化 filter；清除按钮一次清空。
-- [ ] 运行 `flutter test test/content_library_filters_test.dart test/content_wiki_page_test.dart`。
-- [ ] 提交 `feat(v0.1): add compact content facets`。
+- [x] 写失败测试：手机首屏只显示 SearchBar、“筛选”按钮和一行已启用 FilterChip；不显示巨大下拉框。
+- [x] 为 spell 提供环位、职业、学派；class/subclass 提供所属职业；equipment/item 提供类别；feat 提供等级/前置条件；monster 提供 CR/类型；无字段的 facet 不显示。
+- [x] 使用底部筛选面板，应用后把选择转换为 controller 的结构化 filter；清除按钮一次清空。
+- [x] 运行 `flutter test test/content_library_filters_test.dart test/content_wiki_page_test.dart`。
+- [x] 提交 `feat(v0.1): add compact content facets`。
 
 ### 任务 4：验收
 

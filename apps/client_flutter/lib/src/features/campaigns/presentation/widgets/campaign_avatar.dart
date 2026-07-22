@@ -18,6 +18,7 @@ class CampaignAvatar extends StatelessWidget {
   const CampaignAvatar({
     this.health = CampaignAvatarHealth.unknown,
     this.healthFraction,
+    this.useHealthGradeFallback = true,
     this.imageUrl,
     this.initials = '',
     this.size = 40,
@@ -28,6 +29,7 @@ class CampaignAvatar extends StatelessWidget {
 
   final CampaignAvatarHealth health;
   final double? healthFraction;
+  final bool useHealthGradeFallback;
   final String? imageUrl;
   final String initials;
   final double size;
@@ -66,7 +68,8 @@ class CampaignAvatar extends StatelessWidget {
         : '';
     final ringWidth = size * 0.09;
     final ringFraction =
-        healthFraction?.clamp(0, 1).toDouble() ?? _fallbackFraction(health);
+        healthFraction?.clamp(0, 1).toDouble() ??
+        (useHealthGradeFallback ? _fallbackFraction(health) : 0);
     final targetSize = tapTargetSize == null
         ? size
         : tapTargetSize!.clamp(size, double.infinity).toDouble();

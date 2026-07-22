@@ -159,6 +159,7 @@ class _CampaignActorMessage extends StatelessWidget {
             imageUrl: avatarUrl,
             health: CampaignAvatar.healthFromState(healthState),
             healthFraction: healthFraction,
+            useHealthGradeFallback: false,
             tapTargetSize: 48,
             onTap: onAvatarTap,
           )

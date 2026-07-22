@@ -366,6 +366,7 @@ describe("campaigns endpoints", () => {
             delegatedByUserId: null,
             speakerAvatarAssetId: null,
             publicHealthState: null,
+            publicHealthFraction: null,
             ooc: false,
             kind: "say",
             content: "Hello world",

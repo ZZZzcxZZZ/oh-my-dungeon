@@ -511,23 +511,17 @@ class CampaignCapabilities {
   final bool canManageArchive;
 
   factory CampaignCapabilities.fromJson(Map<String, Object?> json) {
-    final canManageCampaign =
-        json['canManageCampaign'] as bool? ?? false;
+    final canManageCampaign = json['canManageCampaign'] as bool? ?? false;
     return CampaignCapabilities(
       canManageCampaign: canManageCampaign,
       canManageMembers: json['canManageMembers'] as bool? ?? false,
-      canInviteMembers:
-          json['canInviteMembers'] as bool? ?? canManageCampaign,
+      canInviteMembers: json['canInviteMembers'] as bool? ?? canManageCampaign,
       canCreateActors: json['canCreateActors'] as bool? ?? false,
-      canManageActors:
-          json['canManageActors'] as bool? ?? canManageCampaign,
-      canEditAnyActor:
-          json['canEditAnyActor'] as bool? ?? canManageCampaign,
+      canManageActors: json['canManageActors'] as bool? ?? canManageCampaign,
+      canEditAnyActor: json['canEditAnyActor'] as bool? ?? canManageCampaign,
       canSpeakAsNarrator: json['canSpeakAsNarrator'] as bool? ?? false,
-      canCreateArchive:
-          json['canCreateArchive'] as bool? ?? canManageCampaign,
-      canManageArchive:
-          json['canManageArchive'] as bool? ?? canManageCampaign,
+      canCreateArchive: json['canCreateArchive'] as bool? ?? canManageCampaign,
+      canManageArchive: json['canManageArchive'] as bool? ?? canManageCampaign,
     );
   }
 }

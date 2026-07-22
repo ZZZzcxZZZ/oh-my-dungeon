@@ -156,6 +156,26 @@ void main() {
     expect(top.r, greaterThan(top.b));
     expect(bottom.b, greaterThan(bottom.r));
   });
+
+  testWidgets('legacy message rings do not invent a representative fraction', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: CampaignAvatar(
+          initials: 'A',
+          health: CampaignAvatarHealth.healthy,
+          useHealthGradeFallback: false,
+        ),
+      ),
+    );
+
+    final paint = tester.widget<CustomPaint>(
+      find.byKey(const Key('campaign-avatar-ring-healthy')),
+    );
+    expect((paint.painter! as CampaignHealthRingPainter).fraction, 0);
+  });
+
   testWidgets('shows first initial when no image is provided', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(

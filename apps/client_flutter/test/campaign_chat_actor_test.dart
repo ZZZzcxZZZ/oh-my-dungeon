@@ -11,6 +11,8 @@ import 'package:dnd_table_client/src/features/characters/presentation/character_
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_chat_page.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_controller.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/chat/campaign_chat_bubble.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/chat/campaign_chat_composer.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/chat/campaign_chat_timeline.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/widgets/campaign_avatar.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_controller.dart';
@@ -1143,19 +1145,31 @@ void main() {
     expect(call.title, 'NPC关系图');
   });
 
-  // Spec §顶部: 聊天顶部只显示返回、战役名称+在线状态、搜索、战役中心。
-  testWidgets('chat AppBar only exposes search and campaign center actions', (
+  testWidgets('chat shell only exposes campaign navigation', (
     tester,
   ) async {
+    campaignClient.messages = const [
+      CampaignChatMessage(
+        id: 'shell-message',
+        campaignId: 'camp-1',
+        senderId: 'user-2',
+        campaignActorId: null,
+        displayName: 'Player Two',
+        avatarUrl: null,
+        kind: 'say',
+        content: '准备出发',
+        createdAt: '2026-07-09T00:00:00.000Z',
+      ),
+    ];
     await pumpChatPage(tester);
 
-    // Must have search and campaign center entries.
-    expect(find.byTooltip('搜索'), findsOneWidget);
     expect(find.byKey(const Key('campaign-open-center')), findsOneWidget);
-
-    // Must NOT expose 战役资料 or 成员 as direct AppBar buttons.
+    expect(find.byKey(const Key('campaign-chat-search')), findsNothing);
+    expect(find.byKey(const Key('campaign-chat-subtitle')), findsNothing);
     expect(find.byTooltip('战役资料'), findsNothing);
     expect(find.byTooltip('成员'), findsNothing);
+    expect(find.byType(CampaignChatTimeline), findsOneWidget);
+    expect(find.byType(CampaignChatComposer), findsOneWidget);
   });
 
   // Spec §输入栏: 战役资料入口迁移到头像快捷面板第 6 项"资料条目"，
@@ -1270,73 +1284,6 @@ void main() {
     // 资料库 sheet 出现时聊天页输入框仍应在栈中。
     expect(find.byKey(const Key('campaign-chat-input')), findsOneWidget);
   });
-
-  // Spec §顶部: 搜索结果点击后应跳转到对应消息气泡并高亮 800ms。
-  testWidgets('chat search result tap jumps to message and highlights it', (
-    tester,
-  ) async {
-    campaignClient.messages = const [
-      CampaignChatMessage(
-        id: 'msg-target',
-        campaignId: 'camp-1',
-        senderId: 'user-2',
-        campaignActorId: null,
-        displayName: 'Player Two',
-        avatarUrl: null,
-        kind: 'say',
-        content: '我发现了一个线索',
-        createdAt: '2026-07-09T00:00:00.000Z',
-      ),
-    ];
-    await pumpChatPage(tester);
-
-    // 打开搜索面板。
-    await tester.tap(find.byTooltip('搜索'));
-    await tester.pumpAndSettle();
-
-    // 输入关键词触发搜索 (FakeClient.listMessages 直接返回 messages)。
-    await tester.enterText(
-      find.byKey(const Key('campaign-chat-search-field')),
-      '线索',
-    );
-    await tester.pumpAndSettle();
-
-    // 搜索结果应可点击。
-    expect(
-      find.byKey(const Key('campaign-chat-search-result-msg-target')),
-      findsOneWidget,
-    );
-
-    // 点击结果, sheet 应关闭, 聊天页仍可见, 目标消息高亮。
-    await tester.tap(
-      find.byKey(const Key('campaign-chat-search-result-msg-target')),
-    );
-    await tester.pumpAndSettle();
-
-    // 搜索 sheet 应当关闭。
-    expect(find.byKey(const Key('campaign-chat-search-field')), findsNothing);
-    // 聊天页仍在栈中。
-    expect(find.byKey(const Key('campaign-chat-input')), findsOneWidget);
-    // 目标消息气泡可见。
-    expect(find.text('我发现了一个线索'), findsOneWidget);
-  });
-
-  // Spec §顶部: AppBar 副标题应显示简要在线状态 (成员数 + 当前发言身份),
-  // 而不是静态 "战役聊天室" 文案。
-  testWidgets(
-    'chat AppBar subtitle shows online status instead of static label',
-    (tester) async {
-      await pumpChatPage(tester);
-
-      // 副标题 widget 应当存在, 且文本包含 "位成员"。
-      final subtitle = tester.widget<Text>(
-        find.byKey(const Key('campaign-chat-subtitle')),
-      );
-      expect(subtitle.data, contains('位成员'));
-      // 不应再是旧的静态文案。
-      expect(subtitle.data, isNot('战役聊天室'));
-    },
-  );
 
   // Spec §全局设置: 战役名称/所有权转移/战役归档/离开战役四项低频操作
   // 已从聊天页右上角三点菜单迁移到战役中心 → 概览面板的"战役设置"区块。

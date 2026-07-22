@@ -389,21 +389,21 @@ class CampaignChatComposer extends StatelessWidget {
 
 预期：全部 PASS。
 
-- [ ] **步骤 6：提交**
+- [x] **步骤 6：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/features/campaigns/presentation/chat/campaign_chat_composer.dart apps/client_flutter/lib/src/features/campaigns/presentation/chat/chat_mode_picker.dart apps/client_flutter/test/campaign_chat_composer_test.dart
 git commit -m "feat(v0.1): rebuild campaign chat composer"
 ```
 
-## 任务 5：精简顶栏并组装页面
+## 任务 5：精简顶栏并组装页面（已完成）
 
 **文件：**
 
 - 修改：`apps/client_flutter/lib/src/features/campaigns/presentation/campaign_chat_page.dart`
 - 修改：`apps/client_flutter/test/campaign_chat_actor_test.dart`
 
-- [ ] **步骤 1：编写失败的页面结构测试**
+- [x] **步骤 1：编写失败的页面结构测试**
 
 ```dart
 testWidgets('chat app bar only exposes campaign navigation', (tester) async {
@@ -417,7 +417,7 @@ testWidgets('chat app bar only exposes campaign navigation', (tester) async {
 
 同时断言页面使用 `CampaignChatTimeline` 和 `CampaignChatComposer`，最后一条消息在 390x844 下不被 Composer 遮挡。
 
-- [ ] **步骤 2：运行页面测试并确认失败**
+- [x] **步骤 2：运行页面测试并确认失败**
 
 运行：
 
@@ -427,7 +427,7 @@ flutter test test/campaign_chat_actor_test.dart --plain-name "chat app bar only 
 
 预期：FAIL，旧搜索按钮和副标题仍存在。
 
-- [ ] **步骤 3：替换页面内联 UI**
+- [x] **步骤 3：替换页面内联 UI**
 
 - AppBar 只保留战役名称和 `campaign-open-center`。
 - `_buildChat` 改为组装 `CampaignChatTimeline` 与 `CampaignChatComposer`。
@@ -435,7 +435,7 @@ flutter test test/campaign_chat_actor_test.dart --plain-name "chat app bar only 
 - `_send` 改为返回 `Future<bool>`，成功后清空输入并滚动到底部。
 - 删除 `_buildInputBar`、`_onlineStatusLine`、`_openSearch` 和 `_CampaignChatSearchSheet`。
 
-- [ ] **步骤 4：运行页面级聊天测试**
+- [x] **步骤 4：运行页面级聊天测试**
 
 运行：`flutter test test/campaign_chat_actor_test.dart`
 

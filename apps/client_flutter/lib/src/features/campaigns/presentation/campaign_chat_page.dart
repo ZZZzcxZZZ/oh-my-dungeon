@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../characters/domain/character.dart';
@@ -19,8 +17,9 @@ import 'campaign_controller.dart';
 import 'campaign_center_page.dart';
 import 'campaign_workspace_mutation_coordinator.dart';
 import 'chat/campaign_archive_create_dialog.dart';
+import 'chat/campaign_chat_composer.dart';
 import 'chat/campaign_chat_tool_sheet.dart';
-import 'chat/campaign_chat_bubble.dart';
+import 'chat/campaign_chat_timeline.dart';
 import 'chat/campaign_composer_identity.dart';
 import 'chat/campaign_identity_sheet.dart';
 import 'chat/chat_helpers.dart';
@@ -62,14 +61,9 @@ class CampaignChatPage extends StatefulWidget {
 class _CampaignChatPageState extends State<CampaignChatPage> {
   final _controller = TextEditingController();
   final ScrollController _chatScrollController = ScrollController();
-  final Map<String, GlobalKey> _messageKeys = {};
   ChatMode _mode = ChatMode.say;
   bool _sending = false;
   _TemporaryIdentityDraft? _draftIdentity;
-  // Spec §顶部: 搜索结果跳转后高亮的目标 messageId, 由 AnimatedSwitcher 在
-  // 800ms 后清空。
-  String? _highlightedMessageId;
-  Timer? _highlightTimer;
 
   @override
   void initState() {
@@ -84,65 +78,10 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
 
   @override
   void dispose() {
-    _highlightTimer?.cancel();
     _controller.dispose();
     _chatScrollController.dispose();
     widget.campaignController.disconnectCampaignChat();
     super.dispose();
-  }
-
-  /// Spec §顶部: 搜索结果跳转。先确保消息加载, 再用 GlobalKey 调
-  /// Scrollable.ensureVisible 滚动到目标气泡, 然后高亮 800ms。
-  Future<void> _scrollToMessage(String messageId) async {
-    final messages = widget.campaignController.messages;
-    if (!messages.any((m) => m.id == messageId)) {
-      // 消息不在当前时间线 (可能未加载), 简单提示用户。
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('该消息不在当前加载范围')));
-      return;
-    }
-    // 等待一帧让气泡 GlobalKey 注册到树中。
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) return;
-    final key = _messageKeys[messageId];
-    final ctx = key?.currentContext;
-    if (ctx == null) {
-      // 气泡可能在屏幕外未构建 (ListView.builder lazy), 暂未实现强制构建,
-      // 这里给出提示而非静默失败。
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('消息已找到, 请手动滚动查看')));
-      return;
-    }
-    // ctx 来自 GlobalKey.currentContext, 不是 widget build context。
-    // 转为 Object 避免触发 use_build_context_synchronously lint 误报。
-    final ctxAsObject = ctx as Object;
-    final pending = _ensureVisibleOf(ctxAsObject as BuildContext);
-    await pending;
-    if (!mounted) return;
-    setState(() => _highlightedMessageId = messageId);
-    _highlightTimer?.cancel();
-    _highlightTimer = Timer(const Duration(milliseconds: 800), () {
-      if (!mounted) return;
-      setState(() {
-        if (_highlightedMessageId == messageId) {
-          _highlightedMessageId = null;
-        }
-      });
-    });
-  }
-
-  /// 独立 helper: 把 GlobalKey.currentContext 滚动到可视区域。
-  /// ctx 不是 widget build context, 用独立函数避免 lint 误报。
-  Future<void> _ensureVisibleOf(BuildContext ctx) {
-    return Scrollable.ensureVisible(
-      ctx,
-      duration: const Duration(milliseconds: 240),
-      curve: Curves.easeOutCubic,
-      alignment: 0.4,
-    );
   }
 
   @override
@@ -154,31 +93,10 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       ]),
       builder: (context, _) {
         final messages = widget.campaignController.messages;
-        final workspace = widget.campaignController.workspaceContext;
-        final memberCount =
-            workspace?.members.length ?? widget.campaign.memberPreview.length;
-        final speakerMode = workspace?.membership.speakerMode;
-        final subtitle = _onlineStatusLine(memberCount, speakerMode);
         return Scaffold(
           appBar: AppBar(
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(widget.campaign.name),
-                Text(
-                  subtitle,
-                  key: const Key('campaign-chat-subtitle'),
-                  style: Theme.of(context).textTheme.labelSmall,
-                ),
-              ],
-            ),
+            title: Text(widget.campaign.name),
             actions: [
-              IconButton(
-                key: const Key('campaign-chat-search'),
-                tooltip: chatText('search'),
-                onPressed: _openSearch,
-                icon: const Icon(Icons.search),
-              ),
               IconButton(
                 key: const Key('campaign-open-center'),
                 tooltip: '战役中心',
@@ -231,41 +149,28 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                     ),
                   ),
                 )
-              : ListView.builder(
-                  controller: _chatScrollController,
-                  padding: const EdgeInsets.all(12),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final message = messages[index];
-                    final key = _messageKeys.putIfAbsent(
-                      message.id,
-                      () => GlobalKey(),
-                    );
-                    final isHighlighted = _highlightedMessageId == message.id;
-                    return AnimatedContainer(
-                      key: key,
-                      duration: const Duration(milliseconds: 320),
-                      curve: Curves.easeOut,
-                      decoration: BoxDecoration(
-                        color: isHighlighted
-                            ? Theme.of(context).colorScheme.primaryContainer
-                                  .withValues(alpha: 0.6)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: CampaignChatBubble(
-                        message: message,
-                        onRespondCheckRequest: _canRespondToCheck(message)
-                            ? () => _respondToCheckRequest(message)
-                            : null,
-                        hasResponded: _hasRespondedToCheck(message),
-                        onAvatarTap: _resolveAvatarTap(message),
-                      ),
-                    );
-                  },
+              : CampaignChatTimeline(
+                  messages: messages,
+                  currentUserId:
+                      widget.campaignController.authController.user?.id,
+                  scrollController: _chatScrollController,
+                  onAvatarTap: _resolveAvatarTap,
+                  canRespondToCheck: _canRespondToCheck,
+                  hasRespondedToCheck: _hasRespondedToCheck,
+                  onRespondToCheck: _respondToCheckRequest,
                 ),
         ),
-        _buildInputBar(),
+        CampaignChatComposer(
+          identity: _composerIdentity,
+          mode: _mode,
+          controller: _controller,
+          sending: _sending,
+          onIdentityTap: _showToolPanel,
+          onModeChanged: (mode) => setState(() => _mode = mode),
+          onSend: _send,
+          draftIdentityName: _draftIdentity?.displayName,
+          onDiscardDraft: () => setState(() => _draftIdentity = null),
+        ),
       ],
     );
   }
@@ -300,19 +205,6 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     );
   }
 
-  /// Spec §顶部: AppBar 副标题显示简要在线状态 — 成员数 + 当前发言身份。
-  String _onlineStatusLine(int memberCount, String? speakerMode) {
-    final memberPart = '$memberCount 位成员';
-    final speakerPart = switch (speakerMode) {
-      'narrator' => ' · 旁白',
-      'ooc' => ' · 场外',
-      'actor' => ' · 角色发言',
-      'boundActor' => ' · 绑定角色',
-      _ => '',
-    };
-    return '$memberPart$speakerPart';
-  }
-
   /// 解析消息头像点击：只有能解析到战役 Actor 时才打开统一完整角色卡。
   VoidCallback? _resolveAvatarTap(CampaignChatMessage message) {
     final actorId = message.campaignActorId;
@@ -339,137 +231,9 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     );
   }
 
-  /// Spec §顶部: 聊天顶部搜索入口。打开轻量搜索面板，直接调用
-  /// `searchMessages` 检索战役历史消息，不替换实时聊天时间线。
-  /// 选中搜索结果后关闭面板并跳转到对应消息气泡。
-  Future<void> _openSearch() async {
-    final selected = await showModalBottomSheet<CampaignChatMessage>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (sheetContext) => _CampaignChatSearchSheet(
-        campaignId: widget.campaign.id,
-        controller: widget.campaignController,
-      ),
-    );
-    if (selected == null || !mounted) return;
-    await _scrollToMessage(selected.id);
-  }
-
-  Widget _buildInputBar() {
-    final draft = _draftIdentity;
-    final identity = _composerIdentity;
-    final colorScheme = Theme.of(context).colorScheme;
-    return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (draft != null)
-            Container(
-              key: const Key('draft-identity-banner'),
-              margin: const EdgeInsets.fromLTRB(8, 6, 8, 0),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: colorScheme.secondaryContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.person_add_alt_1_outlined,
-                    size: 18,
-                    color: colorScheme.onSecondaryContainer,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '临时身份草稿：${draft.displayName}',
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: colorScheme.onSecondaryContainer,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: '放弃草稿',
-                    onPressed: _sending
-                        ? null
-                        : () => setState(() => _draftIdentity = null),
-                    icon: Icon(
-                      Icons.close,
-                      size: 18,
-                      color: colorScheme.onSecondaryContainer,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          LayoutBuilder(
-            builder: (context, constraints) => Padding(
-              padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-              child: Row(
-                children: [
-                  IconButton.filledTonal(
-                    key: const Key('campaign-chat-identity'),
-                    tooltip: '当前身份与跑团工具',
-                    onPressed: _showToolPanel,
-                    icon: CampaignAvatar(
-                      initials: identity.displayName,
-                      imageUrl: identity.avatarUrl,
-                      health: CampaignAvatar.healthFromState(
-                        identity.healthState,
-                      ),
-                      size: 24,
-                    ),
-                  ),
-                  if (!identity.isOoc) ...[
-                    const SizedBox(width: 6),
-                    SizedBox(
-                      width: constraints.maxWidth >= 480 ? 104 : 76,
-                      child: ChatModePicker(
-                        mode: _mode,
-                        enabled: !_sending,
-                        onChanged: (mode) => setState(() => _mode = mode),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: TextField(
-                      key: const Key('campaign-chat-input'),
-                      controller: _controller,
-                      enabled: !_sending,
-                      decoration: InputDecoration(
-                        hintText: draft != null
-                            ? '以 ${draft.displayName} 发言'
-                            : identity.isOoc
-                            ? '发送场外消息'
-                            : (_mode == ChatMode.say
-                                  ? chatText('sayHint')
-                                  : chatText('actHint')),
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      onSubmitted: _sending ? null : (_) => _send(),
-                    ),
-                  ),
-                  IconButton.filled(
-                    key: const Key('campaign-chat-send'),
-                    tooltip: chatText('send'),
-                    onPressed: _sending ? null : _send,
-                    icon: const Icon(Icons.send_rounded),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _send() async {
-    final content = _controller.text.trim();
-    if (content.isEmpty || _sending) return;
+  Future<bool> _send(String submittedContent) async {
+    final content = submittedContent.trim();
+    if (content.isEmpty || _sending) return false;
 
     final draft = _draftIdentity;
     final identity = _composerIdentity;
@@ -485,7 +249,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
           ? null
           : <String, Object?>{'displayName': draft.displayName},
     );
-    if (!mounted) return;
+    if (!mounted) return sent;
     setState(() => _sending = false);
     if (sent) {
       _controller.clear();
@@ -503,12 +267,25 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
           ).refreshAfterActorMutation(widget.campaign.id);
         }
       }
+      await WidgetsBinding.instance.endOfFrame;
+      if (_chatScrollController.hasClients) {
+        await _chatScrollController.animateTo(
+          _chatScrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
     } else if (draft != null) {
       // Spec: failed draft send keeps the draft and shows the spec error.
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('临时角色创建失败，消息尚未发送。')));
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(chatText('sendFailed'))));
     }
+    return sent;
   }
 
   /// Spec §输入栏: 当前身份头像取代原有独立 `+` 按钮。点击后打开底部快捷面板，
@@ -1334,99 +1111,6 @@ class _DraftIdentityFormSheetState extends State<_DraftIdentityFormSheet> {
               key: const Key('draft-identity-confirm'),
               onPressed: _submit,
               child: const Text('确认使用此身份'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Spec §顶部: 聊天搜索面板。从聊天页 AppBar 搜索入口打开，调用
-/// `CampaignController.searchMessages` 检索战役历史消息，不替换
-/// 实时聊天时间线。
-class _CampaignChatSearchSheet extends StatefulWidget {
-  const _CampaignChatSearchSheet({
-    required this.campaignId,
-    required this.controller,
-  });
-
-  final String campaignId;
-  final CampaignController controller;
-
-  @override
-  State<_CampaignChatSearchSheet> createState() =>
-      _CampaignChatSearchSheetState();
-}
-
-class _CampaignChatSearchSheetState extends State<_CampaignChatSearchSheet> {
-  final _searchController = TextEditingController();
-  List<CampaignChatMessage> _results = const [];
-  bool _searching = false;
-  int _request = 0;
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _onChanged(String value) async {
-    final query = value.trim();
-    final request = ++_request;
-    setState(() {
-      _searching = query.isNotEmpty;
-      if (query.isEmpty) _results = const [];
-    });
-    if (query.isEmpty) return;
-    final results = await widget.controller.searchMessages(
-      widget.campaignId,
-      query: query,
-    );
-    if (!mounted || request != _request) return;
-    setState(() {
-      _results = results;
-      _searching = false;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: SearchBar(
-                key: const Key('campaign-chat-search-field'),
-                hintText: '搜索发言者、消息内容',
-                leading: const Icon(Icons.search),
-                controller: _searchController,
-                onChanged: _onChanged,
-              ),
-            ),
-            SizedBox(
-              height: 320,
-              child: _searching
-                  ? const Center(child: CircularProgressIndicator())
-                  : _results.isEmpty
-                  ? const Center(child: Text('输入关键词搜索战役消息'))
-                  : ListView.builder(
-                      itemCount: _results.length,
-                      itemBuilder: (context, index) {
-                        final message = _results[index];
-                        return ListTile(
-                          key: Key('campaign-chat-search-result-${message.id}'),
-                          leading: const Icon(Icons.history),
-                          title: Text(message.content),
-                          subtitle: Text(message.displayName),
-                          onTap: () => Navigator.of(context).pop(message),
-                        );
-                      },
-                    ),
             ),
           ],
         ),

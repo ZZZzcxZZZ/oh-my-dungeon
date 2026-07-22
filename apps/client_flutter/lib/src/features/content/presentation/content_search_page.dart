@@ -78,6 +78,21 @@ List<_FacetField> _facetFieldsFor(String? type) {
         _FacetField(key: 'challengeRating', label: 'CR'),
         _FacetField(key: 'type', label: '类型'),
       ];
+    // Task 2.3: 扩展 species/background/condition/rule 的 facet 字段,
+    // 覆盖之前缺失的检索维度 (size/speed/skillProficiencies/duration/category).
+    case 'species':
+      return const [
+        _FacetField(key: 'size', label: '体型'),
+        _FacetField(key: 'speed', label: '速度'),
+      ];
+    case 'background':
+      return const [
+        _FacetField(key: 'skillProficiencies', label: '技能熟练'),
+      ];
+    case 'condition':
+      return const [_FacetField(key: 'duration', label: '持续')];
+    case 'rule':
+      return const [_FacetField(key: 'category', label: '分类')];
     default:
       return const [];
   }
@@ -91,6 +106,7 @@ String _facetValueLabel(String type, String field, String value) {
 }
 
 /// Task 2.2: facet section 标题旁的语义化图标, 参考 Material 3 规范.
+/// Task 2.3: 补充 species/background/condition/rule 新增字段的图标.
 IconData _facetFieldIcon(String field) {
   switch (field) {
     case 'level':
@@ -116,6 +132,14 @@ IconData _facetFieldIcon(String field) {
       return Icons.warning_amber;
     case 'type':
       return Icons.pets;
+    case 'size':
+      return Icons.height;
+    case 'speed':
+      return Icons.directions_run;
+    case 'skillProficiencies':
+      return Icons.school;
+    case 'duration':
+      return Icons.timer;
     default:
       return Icons.tag;
   }

@@ -136,15 +136,38 @@ class CampaignOverviewPanel extends StatelessWidget {
           if (canManage && onOpenDmControl != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: Card.filled(
-                margin: EdgeInsets.zero,
-                child: ListTile(
+              child: Material(
+                color: colors.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
                   key: const Key('campaign-overview-dm-control-entry'),
-                  leading: const Icon(Icons.admin_panel_settings_outlined),
-                  title: const Text('主持工具'),
-                  subtitle: const Text('遭遇、成员状态与 DM 私有工具'),
-                  trailing: const Icon(Icons.chevron_right),
+                  borderRadius: BorderRadius.circular(12),
                   onTap: onOpenDmControl,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.admin_panel_settings_outlined),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text('主持工具'),
+                              Text(
+                                '遭遇、成员状态与 DM 私有工具',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -315,23 +338,46 @@ class _CampaignInviteShare extends StatelessWidget {
     final current = invites
         .where((invite) => invite.usedCount < invite.maxUses)
         .firstOrNull;
-    return Card.filled(
+    return Material(
       key: const Key('campaign-invite-share'),
-      margin: EdgeInsets.zero,
       color: Theme.of(context).colorScheme.secondaryContainer,
-      child: ListTile(
-        leading: const Icon(Icons.person_add_alt_1_outlined),
-        title: const Text('邀请玩家'),
-        subtitle: Text(
-          current == null ? '创建邀请码并分享服务器信息' : '邀请码  ${current.code}',
-          style: current == null
-              ? null
-              : const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        trailing: Icon(
-          current == null ? Icons.add_link_outlined : Icons.ios_share_outlined,
-        ),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
         onTap: () => _share(context, current),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              const Icon(Icons.person_add_alt_1_outlined),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('邀请玩家'),
+                    Text(
+                      current == null
+                          ? '创建邀请码并分享服务器信息'
+                          : '邀请码  ${current.code}',
+                      style: current == null
+                          ? const TextStyle(fontSize: 12)
+                          : const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                current == null
+                    ? Icons.add_link_outlined
+                    : Icons.ios_share_outlined,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

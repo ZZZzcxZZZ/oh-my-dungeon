@@ -19,10 +19,10 @@
 
 ### 任务 1：战役中心信息架构
 
-- [ ] 写失败测试：一级只显示概览、角色、档案；“成员”合入概览；“队伍”改名角色；邀请代码、复制/分享动作和当前成员摘要可见。
-- [ ] 概览使用全宽 section 与清晰间距，不使用嵌套 Card；DM 工具和战役设置分区，不与成员列表粘连。
-- [ ] 运行 `flutter test test/campaign_center_page_test.dart test/campaign_overview_panel_test.dart`。
-- [ ] 提交 `refactor(v0.1): reorganize campaign center`。
+- [x] 写失败测试：一级只显示概览、角色、档案；"成员"合入概览；"队伍"改名角色；邀请代码、复制/分享动作和当前成员摘要可见。
+- [x] 概览使用全宽 section 与清晰间距，不使用嵌套 Card；DM 工具和战役设置分区，不与成员列表粘连。
+- [x] 运行 `flutter test test/campaign_center_page_test.dart test/campaign_overview_panel_test.dart`。
+- [x] 提交 `refactor(v0.1): reorganize campaign center`。
 
 ### 任务 2：角色区管理
 

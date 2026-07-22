@@ -13,16 +13,16 @@ import 'campaign_detail_page.dart';
 import 'center/campaign_archive_panel.dart';
 import 'center/campaign_characters_panel.dart';
 import 'center/campaign_overview_panel.dart';
-import 'center/campaign_records_panel.dart';
 
 /// The campaign's non-chat workspace. Chat stays fast and focused; durable
 /// information lives here behind an adaptive Material 3 navigation shell —
 /// `NavigationBar` on phones, `NavigationRail` on tablets/desktop.
 ///
-/// Plan 3 task 2: the four panels (overview/team/archive/records) are
-/// extracted into `center/` widgets so they can be reused and tested
-/// independently. DM-only affordances follow server capabilities, never
-/// optimistic client state.
+/// Plan 2026-07-23 task 1: the center keeps only three top-level destinations
+/// — 概览 / 角色 / 档案. Records search lives in the chat workspace, not here.
+/// DM-only affordances follow server capabilities, never optimistic client
+/// state. Overview sections use full-width layouts without nested `Card`
+/// wrappers so the information hierarchy stays flat and scannable.
 class CampaignCenterPage extends StatefulWidget {
   const CampaignCenterPage({
     required this.campaign,
@@ -40,8 +40,7 @@ class CampaignCenterPage extends StatefulWidget {
   final ContentRepository? contentRepository;
   final EncounterController? encounterController;
 
-  /// 初始选中的面板下标。0=概览 1=队伍 2=档案 3=记录。
-  /// 聊天页工具菜单的"战役记录"入口会传 3 直接跳到记录面板。
+  /// 初始选中的面板下标。0=概览 1=角色 2=档案。
   final int initialTab;
 
   @override
@@ -58,7 +57,7 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialTab.clamp(0, 3);
+    _currentIndex = widget.initialTab.clamp(0, 2);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialData();
     });
@@ -189,11 +188,6 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
           selectedIcon: Icon(Icons.folder),
           label: '档案',
         ),
-        NavigationDestination(
-          icon: Icon(Icons.history_outlined),
-          selectedIcon: Icon(Icons.history),
-          label: '记录',
-        ),
       ],
     );
   }
@@ -222,11 +216,6 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
               icon: Icon(Icons.folder_outlined),
               selectedIcon: Icon(Icons.folder),
               label: Text('档案'),
-            ),
-            NavigationRailDestination(
-              icon: Icon(Icons.history_outlined),
-              selectedIcon: Icon(Icons.history),
-              label: Text('记录'),
             ),
           ],
         ),
@@ -371,14 +360,6 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
           onArchive: (entry) => widget.controller.archiveEntry(
             campaignId: widget.campaign.id,
             entryId: entry.id,
-          ),
-        );
-      case 3:
-        return CampaignRecordsPanel(
-          messages: widget.controller.messages,
-          onSearch: (query) => widget.controller.searchMessages(
-            widget.campaign.id,
-            query: query,
           ),
         );
       default:

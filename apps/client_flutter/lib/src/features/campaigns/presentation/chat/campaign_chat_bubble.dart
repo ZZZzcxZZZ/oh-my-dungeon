@@ -151,13 +151,15 @@ class _CampaignActorMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avatar = CampaignAvatar(
-      initials: displayName,
-      imageUrl: avatarUrl,
-      health: CampaignAvatar.healthFromState(healthState),
-      tapTargetSize: 48,
-      onTap: onAvatarTap,
-    );
+    final avatar = showIdentity
+        ? CampaignAvatar(
+            initials: displayName,
+            imageUrl: avatarUrl,
+            health: CampaignAvatar.healthFromState(healthState),
+            tapTargetSize: 48,
+            onTap: onAvatarTap,
+          )
+        : const SizedBox.square(dimension: 48);
     final content = Flexible(
       child: Column(
         crossAxisAlignment:
@@ -174,6 +176,8 @@ class _CampaignActorMessage extends StatelessWidget {
       padding: EdgeInsets.only(top: showIdentity ? 6 : 1, bottom: 1),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment:
+            isOwn ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: isOwn
             ? [content, const SizedBox(width: 8), avatar]
             : [avatar, const SizedBox(width: 8), content],

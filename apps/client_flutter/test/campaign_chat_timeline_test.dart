@@ -2,6 +2,7 @@ import 'package:dnd_table_client/src/features/campaigns/domain/campaign.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/chat/campaign_chat_bubble.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/chat/campaign_chat_timeline.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/chat/campaign_message_grouping.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/widgets/campaign_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -133,6 +134,47 @@ void main() {
       );
     });
 
+    testWidgets('anchors actor rows to opposite edges on a phone viewport', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpTimeline(
+        tester,
+        messages: [
+          _message(
+            id: 'other',
+            actorId: 'other-actor',
+            senderId: 'user-2',
+            createdAt: '2026-07-22T10:00:00Z',
+          ),
+          _message(
+            id: 'own',
+            actorId: 'own-actor',
+            createdAt: '2026-07-22T10:01:00Z',
+          ),
+        ],
+      );
+
+      final otherAvatar = find.descendant(
+        of: find.byKey(const Key('message-align-other')),
+        matching: find.byType(CampaignAvatar),
+      );
+      final ownAvatar = find.descendant(
+        of: find.byKey(const Key('message-align-own')),
+        matching: find.byType(CampaignAvatar),
+      );
+      final otherRect = tester.getRect(otherAvatar);
+      final ownRect = tester.getRect(ownAvatar);
+
+      expect(otherRect.left, lessThanOrEqualTo(16));
+      expect(ownRect.right, greaterThanOrEqualTo(374));
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('hides repeated identity for an adjacent speaker group', (
       tester,
     ) async {
@@ -166,6 +208,7 @@ void main() {
       );
       expect(first.showIdentity, isTrue);
       expect(second.showIdentity, isFalse);
+      expect(find.byType(CampaignAvatar), findsOneWidget);
     });
 
     testWidgets('keeps event cards compact on a wide viewport', (tester) async {

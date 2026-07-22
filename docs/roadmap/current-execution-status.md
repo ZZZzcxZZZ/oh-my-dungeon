@@ -1,5 +1,39 @@
 # 当前执行状态与版本推进计划
 
+## 0.1 四线并行收束（2026-07-23）
+
+四条并行成果已全部整合进 `offline-first-0.1` 主线：
+
+- **设置重构**：设置持久化修复（失败回滚）、ClientMode 独立 store、统一 `AppTheme` 唯一 Material 3 主题入口、设置页拆为独立 section。
+- **资料库收敛**：资料库转为只读查阅平台，补齐子职业、职业特性与装备方案的结构化筛选；修复 `parentClass`/`subclassOf`/`featureOf` 关系型筛选遗漏。
+- **角色卡密度**：收紧角色卡信息层级，统一角色业务列表组件；创建/升级向导清晰区分自动授予、必选项与阻断原因。
+- **战役中心与档案 Wiki**：战役中心重排为概览/角色/档案三栏；档案升级为结构化 Wiki（正文 blocks、标签、关联、附件引用），创建者或 DM 可编辑；详情自适应 BottomSheet/Dialog。
+- 修复聊天历史消息伪造 75% 生命环的问题，历史消息只使用发送时的真实快照。
+- 保留「合并连续消息头像」偏好，避免设置合并时回归。
+
+验证：客户端整合回归 140 项通过，服务端战役与档案 78 项通过，`flutter analyze`、服务端 lint、Web release 构建均通过。Web 构建仅保留 `socket_io_common` 的第三方 WASM dry-run 警告。
+
+设计与实施记录见：
+
+- `docs/superpowers/plans/archive/2026-07-23-parallel-settings-theme.md`
+- `docs/superpowers/plans/archive/2026-07-23-parallel-content-library.md`
+- `docs/superpowers/plans/archive/2026-07-23-parallel-character-experience.md`
+- `docs/superpowers/plans/archive/2026-07-23-parallel-campaign-center.md`
+
+整合审查发现与暂缓项详见各计划末尾的「最终报告」与「整合审查发现处置」段。
+
+## 0.1 高频界面减负（2026-07-23）
+
+- 主壳收敛为战役、角色、资料库、设置四个入口；删除无效首页。
+- 说/做切换恢复为两个紧凑图标按钮，保留 `68×48` 交互层和独立语义。
+- 战役归档角色默认折叠。
+- 生命环改为真实 HP 圆弧，历史消息固定使用发送时健康快照。
+- Composer 改为头像、统一输入表面、发送键三段布局。
+- 连续消息头像合并可在设置中关闭并持久化。
+- 待办：战役中心区块间距与层级推迟到 P0 收尾批次。
+
+设计与实施记录见：`docs/superpowers/plans/archive/2026-07-23-high-frequency-ui-simplification.md`
+
 ## 0.1 战役与规则全链路加固（2026-07-18）
 
 - 聊天身份链路已收敛：DM 切换旁白后由服务端固定保存「旁白 / DM」快照，客户端使用独立居中系统样式；角色发言继续使用 Actor 身份与头像。

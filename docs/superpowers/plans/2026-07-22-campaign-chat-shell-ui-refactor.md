@@ -149,7 +149,7 @@ git commit -m "refactor(v0.1): unify campaign health avatars"
 - 创建：`apps/client_flutter/lib/src/features/campaigns/presentation/chat/campaign_message_grouping.dart`
 - 测试：`apps/client_flutter/test/campaign_chat_timeline_test.dart`
 
-- [ ] **步骤 1：编写失败的纯规则测试**
+- [x] **步骤 1：编写失败的纯规则测试**
 
 ```dart
 test('groups adjacent ordinary messages from the same speaker', () {
@@ -172,7 +172,7 @@ test('does not group events or messages separated by ten minutes', () {
 });
 ```
 
-- [ ] **步骤 2：运行测试并确认失败**
+- [x] **步骤 2：运行测试并确认失败**
 
 运行：
 
@@ -182,7 +182,7 @@ flutter test test/campaign_chat_timeline_test.dart
 
 预期：FAIL，`CampaignMessagePresentation` 尚不存在。
 
-- [ ] **步骤 3：实现不可变展示模型**
+- [x] **步骤 3：实现不可变展示模型**
 
 ```dart
 class CampaignMessagePresentation {
@@ -220,13 +220,13 @@ class CampaignMessagePresentation {
 }
 ```
 
-- [ ] **步骤 4：运行规则测试并确认通过**
+- [x] **步骤 4：运行规则测试并确认通过**
 
 运行：`flutter test test/campaign_chat_timeline_test.dart`
 
 预期：PASS。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/features/campaigns/presentation/chat/campaign_message_grouping.dart apps/client_flutter/test/campaign_chat_timeline_test.dart

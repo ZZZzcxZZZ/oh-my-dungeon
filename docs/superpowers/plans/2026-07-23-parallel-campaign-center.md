@@ -21,7 +21,7 @@
 
 - [x] 写失败测试：一级只显示概览、角色、档案；"成员"合入概览；"队伍"改名角色；邀请代码、复制/分享动作和当前成员摘要可见。
 - [x] 概览使用全宽 section 与清晰间距，不使用嵌套 Card；DM 工具和战役设置分区，不与成员列表粘连。
-- [x] 运行 `flutter test test/campaign_center_page_test.dart test/campaign_overview_panel_test.dart`。
+- [x] 运行 `flutter test test/campaign_center_page_test.dart`（概览面板覆盖在该套件中）。
 - [x] 提交 `refactor(v0.1): reorganize campaign center`。
 
 ### 任务 2：角色区管理
@@ -120,4 +120,3 @@ npm run lint:server → clean
 ### 已知无关测试失败
 
 `apps/server_nest/test/campaigns.e2e-spec.ts` 中 1 个测试失败（`returns the campaign for a member` 期望 `lastMessage` 不含 `publicHealthFraction`，但 `campaigns.service.ts` 现在会返回该字段）。此为基线 `bb5b490` 已存在的问题，与本次档案工作无关，且 `campaigns.service.ts` 与 `campaigns.e2e-spec.ts` 均在禁止修改清单内。
-

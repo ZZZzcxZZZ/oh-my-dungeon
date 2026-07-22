@@ -20,8 +20,10 @@ const _typeFilters = <String?>[
   'species',
   'class',
   'subclass',
+  'classFeature',
   'background',
   'feat',
+  'equipmentBundle',
   'monster',
   'condition',
   'rule',
@@ -49,17 +51,23 @@ List<_FacetField> _facetFieldsFor(String? type) {
         _FacetField(key: 'classes', label: '可用职业'),
       ];
     case 'subclass':
+      return const [_FacetField(key: 'parentClass', label: '所属职业')];
+    case 'class':
       return const [
-        _FacetField(key: 'parentClass', label: '所属职业'),
+        _FacetField(key: 'hitDie', label: '生命骰'),
+        _FacetField(key: 'primaryAbility', label: '主属性'),
+      ];
+    case 'classFeature':
+      return const [
+        _FacetField(key: 'class', label: '职业'),
+        _FacetField(key: 'level', label: '等级'),
       ];
     case 'equipment':
-      return const [
-        _FacetField(key: 'category', label: '类别'),
-      ];
+      return const [_FacetField(key: 'category', label: '类别')];
     case 'item':
-      return const [
-        _FacetField(key: 'rarity', label: '稀有度'),
-      ];
+      return const [_FacetField(key: 'rarity', label: '稀有度')];
+    case 'equipmentBundle':
+      return const [_FacetField(key: 'source', label: '来源')];
     case 'feat':
       return const [
         _FacetField(key: 'category', label: '类别'),
@@ -281,9 +289,7 @@ class _ContentSearchPageState extends State<ContentSearchPage> {
                       ),
                     );
                   }
-                  return ContentHomePage(
-                    controller: widget.controller,
-                  );
+                  return ContentHomePage(controller: widget.controller);
                 }
                 return ListView.separated(
                   padding: const EdgeInsets.symmetric(vertical: 4),
@@ -502,13 +508,9 @@ class _FilterSheetState extends State<_FilterSheet> {
                             title: field.label,
                             values: _facetOptions[field.key]!,
                             selectedValues: _facets[field.key] ?? const {},
-                            valueLabel: (value) => _facetValueLabel(
-                              _type!,
-                              field.key,
-                              value,
-                            ),
-                            onToggle: (value) =>
-                                _toggleFacet(field.key, value),
+                            valueLabel: (value) =>
+                                _facetValueLabel(_type!, field.key, value),
+                            onToggle: (value) => _toggleFacet(field.key, value),
                           ),
                   ],
                 ],

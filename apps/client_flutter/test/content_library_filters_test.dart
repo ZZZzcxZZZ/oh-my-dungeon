@@ -79,8 +79,22 @@ void main() {
       },
     );
 
+    testWidgets('tapping filter button opens bottom sheet with type options', (
+      tester,
+    ) async {
+      await tester.pumpWidget(buildContentTestApp(entries: _spellEntries()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('content-filter-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(BottomSheet), findsOneWidget);
+      // 类型选项可见.
+      expect(find.text('法术'), findsWidgets);
+    });
+
     testWidgets(
-      'tapping filter button opens bottom sheet with type options',
+      'type picker exposes registered class features and equipment bundles',
       (tester) async {
         await tester.pumpWidget(buildContentTestApp(entries: _spellEntries()));
         await tester.pumpAndSettle();
@@ -88,9 +102,8 @@ void main() {
         await tester.tap(find.byKey(const Key('content-filter-button')));
         await tester.pumpAndSettle();
 
-        expect(find.byType(BottomSheet), findsOneWidget);
-        // 类型选项可见.
-        expect(find.text('法术'), findsWidgets);
+        expect(find.text('职业特性'), findsOneWidget);
+        expect(find.text('装备方案'), findsOneWidget);
       },
     );
 
@@ -152,8 +165,9 @@ void main() {
       },
     );
 
-    testWidgets('clear button in bottom sheet clears all filters',
-        (tester) async {
+    testWidgets('clear button in bottom sheet clears all filters', (
+      tester,
+    ) async {
       await tester.pumpWidget(buildContentTestApp(entries: _spellEntries()));
       await tester.pumpAndSettle();
 
@@ -184,35 +198,34 @@ void main() {
       expect(find.text('飞行术'), findsOneWidget);
     });
 
-    testWidgets(
-      'tapping a FilterChip label removes that filter',
-      (tester) async {
-        await tester.pumpWidget(buildContentTestApp(entries: _spellEntries()));
-        await tester.pumpAndSettle();
+    testWidgets('tapping a FilterChip label removes that filter', (
+      tester,
+    ) async {
+      await tester.pumpWidget(buildContentTestApp(entries: _spellEntries()));
+      await tester.pumpAndSettle();
 
-        // 设置类型筛选.
-        await tester.tap(find.byKey(const Key('content-filter-button')));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('法术').last);
-        await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const Key('content-filter-apply')));
-        await tester.pumpAndSettle();
+      // 设置类型筛选.
+      await tester.tap(find.byKey(const Key('content-filter-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('法术').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('content-filter-apply')));
+      await tester.pumpAndSettle();
 
-        // 类型 FilterChip 可见.
-        final typeChip = find.descendant(
-          of: find.byType(FilterChip),
-          matching: find.textContaining('法术'),
-        );
-        expect(typeChip, findsOneWidget);
+      // 类型 FilterChip 可见.
+      final typeChip = find.descendant(
+        of: find.byType(FilterChip),
+        matching: find.textContaining('法术'),
+      );
+      expect(typeChip, findsOneWidget);
 
-        // 点击 FilterChip 移除类型筛选.
-        await tester.tap(typeChip);
-        await tester.pumpAndSettle();
+      // 点击 FilterChip 移除类型筛选.
+      await tester.tap(typeChip);
+      await tester.pumpAndSettle();
 
-        // 类型筛选被移除, 战士也可见 (如果有).
-        // 这里只验证 FilterChip 消失.
-        expect(typeChip, findsNothing);
-      },
-    );
+      // 类型筛选被移除, 战士也可见 (如果有).
+      // 这里只验证 FilterChip 消失.
+      expect(typeChip, findsNothing);
+    });
   });
 }

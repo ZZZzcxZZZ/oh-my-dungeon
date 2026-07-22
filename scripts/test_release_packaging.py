@@ -24,6 +24,17 @@ class ReleasePackagingTest(unittest.TestCase):
         self.assertIn("build_private_client.ps1", script)
         self.assertIn("phb-2024-v2", script)
 
+    def test_private_client_builder_checks_the_powershell_invocation_status(self):
+        script = (ROOT / "scripts" / "build_private_client.ps1").read_text(
+            encoding="utf-8"
+        )
+        aggregation = script.split(
+            "& $bundleBuilderPath -SourceDirectory $privateImportDir"
+        )[1].split("$bundleJson =", 1)[0]
+
+        self.assertIn("if (-not $?)", aggregation)
+        self.assertNotIn("$LASTEXITCODE", aggregation)
+
     def test_private_apk_builder_stages_then_restores_the_placeholder(self):
         script = (ROOT / "scripts" / "build-private-test-apk.ps1").read_text(
             encoding="utf-8"

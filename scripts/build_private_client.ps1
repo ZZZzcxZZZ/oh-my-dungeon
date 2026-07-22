@@ -105,7 +105,7 @@ Write-Done "前置检查通过"
 Write-Step "合并 manifest + entries/*.json 为单文件 bundle"
 
 & $bundleBuilderPath -SourceDirectory $privateImportDir -OutputPath $privateBundlePath
-if ($LASTEXITCODE -ne 0) {
+if (-not $?) {
     throw "私人资料包聚合失败"
 }
 $bundleJson = Get-Content -LiteralPath $privateBundlePath -Raw -Encoding UTF8

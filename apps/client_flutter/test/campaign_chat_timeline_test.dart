@@ -152,10 +152,20 @@ void main() {
         ],
       );
 
-      final bubbles = tester.widgetList<CampaignChatBubble>(
-        find.byType(CampaignChatBubble),
+      final first = tester.widget<CampaignChatBubble>(
+        find.descendant(
+          of: find.byKey(const Key('message-align-first')),
+          matching: find.byType(CampaignChatBubble),
+        ),
       );
-      expect(bubbles.map((bubble) => bubble.showIdentity), [isTrue, isFalse]);
+      final second = tester.widget<CampaignChatBubble>(
+        find.descendant(
+          of: find.byKey(const Key('message-align-second')),
+          matching: find.byType(CampaignChatBubble),
+        ),
+      );
+      expect(first.showIdentity, isTrue);
+      expect(second.showIdentity, isFalse);
     });
 
     testWidgets('keeps event cards compact on a wide viewport', (tester) async {
@@ -182,6 +192,39 @@ void main() {
       );
       expect(tester.takeException(), isNull);
     });
+
+    for (final size in const [
+      Size(360, 800),
+      Size(390, 844),
+      Size(1280, 720),
+    ]) {
+      testWidgets('starts at the latest message at ${size.width}x${size.height}', (
+        tester,
+      ) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = size;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        await _pumpTimeline(
+          tester,
+          messages: [
+            for (var index = 0; index < 30; index++)
+              _message(
+                id: index == 29
+                    ? 'latest-message'
+                    : 'message-$index',
+                actorId:
+                    '一位拥有非常非常长名称的角色-$index-without-spaces',
+                createdAt: '2026-07-22T10:${index.toString().padLeft(2, '0')}:00Z',
+              ),
+          ],
+        );
+
+        expect(find.text('latest-message'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
   });
 }
 

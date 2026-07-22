@@ -270,7 +270,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       await WidgetsBinding.instance.endOfFrame;
       if (_chatScrollController.hasClients) {
         await _chatScrollController.animateTo(
-          _chatScrollController.position.maxScrollExtent,
+          _chatScrollController.position.minScrollExtent,
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
         );

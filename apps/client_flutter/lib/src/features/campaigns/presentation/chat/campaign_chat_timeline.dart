@@ -37,12 +37,16 @@ class CampaignChatTimeline extends StatelessWidget {
         return ListView.builder(
           key: const Key('campaign-chat-timeline'),
           controller: scrollController,
+          reverse: true,
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
           itemCount: messages.length,
           itemBuilder: (context, index) {
-            final message = messages[index];
+            final messageIndex = messages.length - 1 - index;
+            final message = messages[messageIndex];
             final presentation = CampaignMessagePresentation.resolve(
-              previous: index == 0 ? null : messages[index - 1],
+              previous: messageIndex == 0
+                  ? null
+                  : messages[messageIndex - 1],
               current: message,
               currentUserId: currentUserId,
             );

@@ -68,6 +68,33 @@ void main() {
     await tester.tap(find.byKey(const Key('discard-draft-identity')));
     expect(discarded, isTrue);
   });
+
+  for (final size in const [Size(390, 844), Size(1280, 720)]) {
+    testWidgets('handles long content at ${size.width}x${size.height}', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = size;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final text = TextEditingController(
+        text: 'verylongunbrokenchatdraft' * 8,
+      );
+      addTearDown(text.dispose);
+
+      await tester.pumpWidget(
+        _harness(
+          controller: text,
+          draftIdentityName: '一位拥有非常非常长名称的临时战役角色',
+          onDiscardDraft: () {},
+          onSend: (_) async => true,
+        ),
+      );
+
+      expect(find.byKey(const Key('campaign-chat-input')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
 }
 
 Widget _harness({

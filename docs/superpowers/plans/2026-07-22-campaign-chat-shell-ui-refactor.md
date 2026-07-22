@@ -495,14 +495,14 @@ testWidgets('tool sheet keeps the current UI but groups actions by frequency', (
 
 预期：全部 PASS。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add apps/client_flutter/lib/src/features/campaigns/presentation/chat/campaign_chat_tool_sheet.dart apps/client_flutter/test/campaign_chat_actor_test.dart
 git commit -m "refactor(v0.1): clarify campaign chat tool hierarchy"
 ```
 
-## 任务 7：响应式验收、清理与文档收口
+## 任务 7：响应式验收、清理与文档收口（已完成）
 
 **文件：**
 
@@ -511,7 +511,7 @@ git commit -m "refactor(v0.1): clarify campaign chat tool hierarchy"
 - 修改：`apps/client_flutter/test/campaign_chat_actor_test.dart`
 - 修改：`docs/roadmap/current-execution-status.md`
 
-- [ ] **步骤 1：补齐目标尺寸和长内容回归测试**
+- [x] **步骤 1：补齐目标尺寸和长内容回归测试**
 
 参数化执行 360x800、390x844、1280x720，覆盖长角色名、无空格长文本、五种生命状态、横屏工具面板和最后消息可见性：
 
@@ -534,7 +534,7 @@ for (final size in const [
 }
 ```
 
-- [ ] **步骤 2：运行聊天测试集合**
+- [x] **步骤 2：运行聊天测试集合**
 
 运行：
 
@@ -544,7 +544,7 @@ flutter test test/campaign_avatar_test.dart test/campaign_chat_composer_test.dar
 
 预期：全部 PASS。
 
-- [ ] **步骤 3：清理聊天页冗余**
+- [x] **步骤 3：清理聊天页冗余**
 
 运行引用检查：
 
@@ -554,11 +554,11 @@ rg -n "ChatAvatar|_CampaignChatSearchSheet|_buildInputBar|_onlineStatusLine" app
 
 预期：无结果。删除未使用 import、重复 helper 和失效 key，不重构无关页面。
 
-- [ ] **步骤 4：更新执行状态文档**
+- [x] **步骤 4：更新执行状态文档**
 
 在 `docs/roadmap/current-execution-status.md` 增加 2026-07-22 聊天壳层收口条目，记录组件边界、响应式尺寸和实际验证结果。
 
-- [ ] **步骤 5：运行完整客户端门禁**
+- [x] **步骤 5：运行完整客户端门禁**
 
 运行：
 
@@ -572,7 +572,7 @@ flutter build web --release
 
 预期：analyze 无问题；全部测试通过；生成 `build/web`。
 
-- [ ] **步骤 6：运行仓库门禁**
+- [x] **步骤 6：运行仓库门禁**
 
 运行：
 

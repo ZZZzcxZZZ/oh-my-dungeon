@@ -85,7 +85,7 @@ void main() {
 class _ThrowingClientModeStore implements ClientModeStore {
   _ThrowingClientModeStore(this._mode);
 
-  ClientMode _mode;
+  final ClientMode _mode;
 
   @override
   Future<ClientMode> load() async => _mode;

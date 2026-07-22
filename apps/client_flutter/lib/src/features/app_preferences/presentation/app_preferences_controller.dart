@@ -93,7 +93,7 @@ class AppPreferencesController extends ChangeNotifier {
       _preferences = previous;
       _lastError = error;
       notifyListeners();
-      throw error;
+      rethrow;
     }
   }
 }

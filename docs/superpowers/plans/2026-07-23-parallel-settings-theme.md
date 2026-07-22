@@ -47,7 +47,18 @@
 
 ### 任务 4：验收
 
-- [ ] 运行 `flutter analyze`。
-- [ ] 运行 `flutter test test/app_preferences_test.dart test/client_mode_test.dart test/app_theme_test.dart test/settings_tab_page_test.dart test/widget_test.dart`。
-- [ ] 运行 `flutter build web --release`。
-- [ ] 在计划文件勾选完成项并记录实际通过数，不修改其他路线图。
+- [x] 运行 `flutter analyze`。
+- [x] 运行 `flutter test test/app_preferences_test.dart test/client_mode_test.dart test/app_theme_test.dart test/settings_tab_page_test.dart test/widget_test.dart`。
+- [x] 运行 `flutter build web --release`。
+- [x] 在计划文件勾选完成项并记录实际通过数，不修改其他路线图。
+
+## 验收结果
+
+- `flutter analyze`：No issues found!
+- `flutter test`（5 个文件共 57 个测试全部通过）：
+  - `app_preferences_test.dart`：6 通过
+  - `client_mode_test.dart`：7 通过
+  - `app_theme_test.dart`：8 通过
+  - `settings_tab_page_test.dart`：7 通过
+  - `widget_test.dart`：29 通过
+- `flutter build web --release`：√ Built build\web

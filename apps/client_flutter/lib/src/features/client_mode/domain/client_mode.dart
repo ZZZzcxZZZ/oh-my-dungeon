@@ -67,7 +67,7 @@ class ClientModeController extends ChangeNotifier {
       _mode = previous;
       _lastError = error;
       notifyListeners();
-      throw error;
+      rethrow;
     }
   }
 

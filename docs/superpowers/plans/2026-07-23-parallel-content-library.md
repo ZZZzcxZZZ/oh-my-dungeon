@@ -41,6 +41,6 @@
 
 ### 任务 4：验收
 
-- [ ] 运行所有 `test/content_*_test.dart` 与 `test/content_repository_test.dart`。
-- [ ] 运行 `flutter analyze` 和 `flutter build web --release`。
-- [ ] 验证 360、390、900、1280 宽度无 overflow，记录测试结果。
+- [x] 运行所有 `test/content_*_test.dart` 与 `test/content_repository_test.dart`。
+- [x] 运行 `flutter analyze` 和 `flutter build web --release`。
+- [x] 验证 360、390、900、1280 宽度无 overflow，记录测试结果。

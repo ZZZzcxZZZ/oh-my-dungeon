@@ -175,4 +175,87 @@ void main() {
     expect(find.text('回气'), findsOneWidget);
     expect(find.text('战斗风格'), findsOneWidget);
   });
+
+  // 验收: 验证 360/390/900/1280 宽度下搜索页与详情浮层无 overflow.
+  for (final width in [360.0, 390.0, 900.0, 1280.0]) {
+    testWidgets('search page renders without overflow at width $width', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(width, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      final entries = [
+        ContentEntry.fromJson({
+          'id': 'example:spell/fireball',
+          'type': 'spell',
+          'slug': 'fireball',
+          'name': '火球术',
+          'body': <Map<String, Object?>>[],
+          'structured': {
+            'level': 3,
+            'school': '塑能',
+            'classes': ['术士', '法师'],
+          },
+          'revision': 1,
+        }),
+        ContentEntry.fromJson({
+          'id': 'example:spell/fire-bolt',
+          'type': 'spell',
+          'slug': 'fire-bolt',
+          'name': '火焰箭',
+          'body': <Map<String, Object?>>[],
+          'structured': {
+            'level': 0,
+            'school': '塑能',
+            'classes': ['术士', '法师'],
+          },
+          'revision': 1,
+        }),
+      ];
+
+      await tester.pumpWidget(buildContentTestApp(entries: entries));
+      await tester.pumpAndSettle();
+
+      // 搜索栏与筛选按钮可见.
+      expect(find.byType(SearchBar), findsOneWidget);
+      expect(find.byKey(const Key('content-filter-button')), findsOneWidget);
+
+      // 打开筛选面板, 选择法术 + 3环, 应用.
+      await tester.tap(find.byKey(const Key('content-filter-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('法术').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('3环').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('content-filter-apply')));
+      await tester.pumpAndSettle();
+
+      // 启用的 FilterChip 行可见.
+      expect(
+        find.descendant(
+          of: find.byType(FilterChip),
+          matching: find.textContaining('3环'),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('detail dialog renders without overflow at width $width', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(width, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        buildContentTestApp(entries: [testFighterEntry()]),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('战士'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Dialog), findsOneWidget);
+      expect(find.text('战士'), findsWidgets);
+    });
+  }
 }

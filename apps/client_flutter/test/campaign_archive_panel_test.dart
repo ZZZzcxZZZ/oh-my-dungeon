@@ -77,6 +77,7 @@ void main() {
       },
       'pinned': false,
       'updatedAt': '2026-07-23T00:00:00.000Z',
+      // ignore: use_null_aware_elements
       if (createdBy != null) 'createdBy': createdBy,
     });
   }

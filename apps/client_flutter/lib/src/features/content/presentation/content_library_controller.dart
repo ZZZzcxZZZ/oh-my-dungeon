@@ -4,6 +4,14 @@ import '../data/local/content_repository.dart';
 import '../domain/content_entry.dart';
 import '../domain/content_package_manifest.dart';
 
+/// Task 2.2: facet 可选值及其命中条目数, 用于筛选面板 chip 标签展示计数.
+class FacetOption {
+  const FacetOption({required this.value, required this.count});
+
+  final String value;
+  final int count;
+}
+
 class ContentLibraryController extends ChangeNotifier {
   ContentLibraryController({required this.repository});
 
@@ -93,10 +101,25 @@ class ContentLibraryController extends ChangeNotifier {
     required String type,
     required Iterable<String> fields,
   }) async {
+    final withCounts = await facetOptionsWithCounts(type: type, fields: fields);
+    return {
+      for (final entry in withCounts.entries)
+        entry.key: entry.value.map((option) => option.value).toList(),
+    };
+  }
+
+  /// Task 2.2: 返回每个 facet 字段的可选值及其命中条目数, 用于筛选面板
+  /// chip 标签展示计数 (如「塑能 (2)」). 计数按"每条目至多贡献一次"统计:
+  /// 若一条目的 classes 字段含多个职业, 该条目对每个职业各 +1,
+  /// 但对同一职业不重复计数. 排序沿用 [facetOptions] 的 Unicode 序.
+  Future<Map<String, List<FacetOption>>> facetOptionsWithCounts({
+    required String type,
+    required Iterable<String> fields,
+  }) async {
     final fieldList = fields.toList();
     final entries = await repository.search(ContentQuery(type: type));
-    final values = <String, Set<String>>{
-      for (final field in fieldList) field: <String>{},
+    final counts = <String, Map<String, int>>{
+      for (final field in fieldList) field: <String, int>{},
     };
 
     // Task 2.1: parentClass 字段仅在 subclass 类型下走 subclassOf 关系解析.
@@ -109,24 +132,35 @@ class ContentLibraryController extends ChangeNotifier {
 
     for (final entry in entries) {
       for (final field in fieldList) {
+        Set<String> entryValues;
         if (field == _parentClassField && type == 'subclass') {
           final parentClassId = _parentClassIdOf(entry);
           if (parentClassId == null) continue;
           final name = classIdToName?[parentClassId] ?? parentClassId;
-          values[field]!.add(name);
-          continue;
+          entryValues = {name};
+        } else {
+          final raw = entry.structured[field];
+          if (raw is Iterable) {
+            entryValues = raw.map((value) => '$value').toSet();
+          } else if (raw != null) {
+            entryValues = {'$raw'};
+          } else {
+            continue;
+          }
         }
-        final raw = entry.structured[field];
-        if (raw is Iterable) {
-          values[field]!.addAll(raw.map((value) => '$value'));
-        } else if (raw != null) {
-          values[field]!.add('$raw');
+        final fieldCounts = counts[field]!;
+        for (final value in entryValues) {
+          fieldCounts[value] = (fieldCounts[value] ?? 0) + 1;
         }
       }
     }
+
     return {
-      for (final entry in values.entries)
-        entry.key: entry.value.toList()..sort(),
+      for (final field in fieldList)
+        field: (counts[field]!.entries.toList()
+              ..sort((a, b) => a.key.compareTo(b.key)))
+            .map((e) => FacetOption(value: e.key, count: e.value))
+            .toList(),
     };
   }
 

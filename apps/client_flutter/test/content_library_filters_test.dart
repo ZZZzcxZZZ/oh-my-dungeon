@@ -141,8 +141,8 @@ void main() {
         await tester.tap(find.text('法术').last);
         await tester.pumpAndSettle();
 
-        // 选择 3 环.
-        await tester.tap(find.text('3环').last);
+        // 选择 3 环. Task 2.2: facet chip 带计数后缀 (如 "3环 (2)"), 改用 textContaining.
+        await tester.tap(find.textContaining('3环').last);
         await tester.pumpAndSettle();
 
         // 关闭面板.
@@ -176,7 +176,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('法术').last);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('3环').last);
+      // Task 2.2: facet chip 带计数后缀, 改用 textContaining.
+      await tester.tap(find.textContaining('3环').last);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('content-filter-apply')));
       await tester.pumpAndSettle();

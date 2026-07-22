@@ -116,12 +116,12 @@ void main() {
     expect(find.text('学派'), findsOneWidget);
     expect(find.text('可用职业'), findsOneWidget);
 
-    // 法术职业 facet 的具体值可见.
-    expect(find.text('术士'), findsWidgets);
-    expect(find.text('法师'), findsWidgets);
+    // 法术职业 facet 的具体值可见. Task 2.2: chip 带计数后缀, 改用 textContaining.
+    expect(find.textContaining('术士'), findsWidgets);
+    expect(find.textContaining('法师'), findsWidgets);
 
     // 选择 3 环.
-    await tester.tap(find.text('3环').last);
+    await tester.tap(find.textContaining('3环').last);
     await tester.pumpAndSettle();
 
     // 关闭面板.
@@ -225,7 +225,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('法术').last);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('3环').last);
+      // Task 2.2: facet chip 带计数后缀, 改用 textContaining.
+      await tester.tap(find.textContaining('3环').last);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('content-filter-apply')));
       await tester.pumpAndSettle();

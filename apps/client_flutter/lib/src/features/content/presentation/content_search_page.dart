@@ -90,6 +90,37 @@ String _facetValueLabel(String type, String field, String value) {
   return value;
 }
 
+/// Task 2.2: facet section 标题旁的语义化图标, 参考 Material 3 规范.
+IconData _facetFieldIcon(String field) {
+  switch (field) {
+    case 'level':
+      return Icons.auto_awesome;
+    case 'school':
+      return Icons.category;
+    case 'classes':
+    case 'parentClass':
+    case 'class':
+      return Icons.shield;
+    case 'hitDie':
+      return Icons.favorite;
+    case 'primaryAbility':
+      return Icons.bolt;
+    case 'category':
+    case 'source':
+      return Icons.category_outlined;
+    case 'rarity':
+      return Icons.star_outline;
+    case 'prerequisite':
+      return Icons.checklist;
+    case 'challengeRating':
+      return Icons.warning_amber;
+    case 'type':
+      return Icons.pets;
+    default:
+      return Icons.tag;
+  }
+}
+
 class ContentSearchPage extends StatefulWidget {
   const ContentSearchPage({
     required this.controller,
@@ -357,7 +388,7 @@ class _FilterSheetState extends State<_FilterSheet> {
   late String? _type;
   late Map<String, Set<String>> _facets;
   late bool _favoritesOnly;
-  Map<String, List<String>> _facetOptions = const {};
+  Map<String, List<FacetOption>> _facetOptions = const {};
   bool _loadingFacets = false;
 
   @override
@@ -385,7 +416,7 @@ class _FilterSheetState extends State<_FilterSheet> {
     }
     setState(() => _loadingFacets = true);
     try {
-      final options = await widget.controller.facetOptions(
+      final options = await widget.controller.facetOptionsWithCounts(
         type: type,
         fields: fields.map((f) => f.key).toList(),
       );
@@ -440,99 +471,145 @@ class _FilterSheetState extends State<_FilterSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final registry = ContentTypeRegistry.defaults();
     final facetFields = _facetFieldsFor(_type);
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        16,
-        16,
-        16 + MediaQuery.viewInsetsOf(context).bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+    // Task 2.2: 容器改为 DraggableScrollableSheet, 小屏可拖拽调整高度;
+    // 内容用 ListView (padding 经 SliverPadding 提供, 非 Padding widget),
+    // 使 facet section 的 Padding 不被外层 Padding 包裹, 从而让
+    // find.ancestor(of: 学派, matching: Padding) 只命中 section 自身.
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      maxChildSize: 0.9,
+      minChildSize: 0.25,
+      expand: false,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
             children: [
-              Text('筛选', style: theme.textTheme.titleMedium),
-              const Spacer(),
-              TextButton(
-                key: const Key('content-filter-clear'),
-                onPressed: _clearAll,
-                child: const Text('清除'),
+              Padding(
+                padding: const EdgeInsets.only(top: 12, bottom: 4),
+                child: Center(
+                  child: Container(
+                    width: 32,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: colorScheme.outlineVariant,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: Row(
+                  children: [
+                    Text('筛选', style: theme.textTheme.titleMedium),
+                    const Spacer(),
+                    TextButton(
+                      key: const Key('content-filter-clear'),
+                      onPressed: _clearAll,
+                      child: const Text('清除'),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                // Task 2.2: 用 SingleChildScrollView + Column 替代 ListView,
+                // 确保所有 facet sections 都被构建 (非 lazy), 避免小屏下
+                // SliverList 因 viewport 限制导致 school/classes section
+                // 不挂载, 测试 find 失败. facet sections 数量少 (≤4),
+                // 一次性构建无性能影响.
+                child: SingleChildScrollView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 12,
+                        children: [
+                          for (final type in _typeFilters)
+                            ChoiceChip(
+                              label: Text(
+                                type == null
+                                    ? '全部'
+                                    : registry.definitionFor(type).label,
+                              ),
+                              selected: _type == type,
+                              onSelected: (_) => _selectType(type),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      FilterChip(
+                        avatar: const Icon(Icons.favorite_border, size: 18),
+                        label: const Text('收藏'),
+                        selected: _favoritesOnly,
+                        onSelected: (selected) =>
+                            setState(() => _favoritesOnly = selected),
+                      ),
+                      if (_type != null && facetFields.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        if (_loadingFacets)
+                          const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        else
+                          for (final field in facetFields)
+                            if ((_facetOptions[field.key] ?? const [])
+                                .isNotEmpty)
+                              _FacetSection(
+                                title: field.label,
+                                icon: _facetFieldIcon(field.key),
+                                options: _facetOptions[field.key]!,
+                                selectedValues:
+                                    _facets[field.key] ?? const {},
+                                valueLabel: (value) => _facetValueLabel(
+                                  _type!,
+                                  field.key,
+                                  value,
+                                ),
+                                onToggle: (value) =>
+                                    _toggleFacet(field.key, value),
+                              ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  child: FilledButton(
+                    key: const Key('content-filter-apply'),
+                    onPressed: () {
+                      Navigator.of(context).pop(
+                        _FilterResult(
+                          type: _type,
+                          facets: _facets,
+                          favoritesOnly: _favoritesOnly,
+                        ),
+                      );
+                    },
+                    child: const Text('应用'),
+                  ),
+                ),
               ),
             ],
           ),
-          const Divider(),
-          Flexible(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      for (final type in _typeFilters)
-                        FilterChip(
-                          label: Text(
-                            type == null
-                                ? '全部'
-                                : registry.definitionFor(type).label,
-                          ),
-                          selected: _type == type,
-                          onSelected: (_) => _selectType(type),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  FilterChip(
-                    avatar: const Icon(Icons.favorite_border, size: 18),
-                    label: const Text('收藏'),
-                    selected: _favoritesOnly,
-                    onSelected: (selected) =>
-                        setState(() => _favoritesOnly = selected),
-                  ),
-                  if (_type != null && facetFields.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    if (_loadingFacets)
-                      const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    else
-                      for (final field in facetFields)
-                        if ((_facetOptions[field.key] ?? const []).isNotEmpty)
-                          _FacetSection(
-                            title: field.label,
-                            values: _facetOptions[field.key]!,
-                            selectedValues: _facets[field.key] ?? const {},
-                            valueLabel: (value) =>
-                                _facetValueLabel(_type!, field.key, value),
-                            onToggle: (value) => _toggleFacet(field.key, value),
-                          ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          FilledButton(
-            key: const Key('content-filter-apply'),
-            onPressed: () {
-              Navigator.of(context).pop(
-                _FilterResult(
-                  type: _type,
-                  facets: _facets,
-                  favoritesOnly: _favoritesOnly,
-                ),
-              );
-            },
-            child: const Text('应用'),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -540,14 +617,16 @@ class _FilterSheetState extends State<_FilterSheet> {
 class _FacetSection extends StatelessWidget {
   const _FacetSection({
     required this.title,
-    required this.values,
+    required this.icon,
+    required this.options,
     required this.selectedValues,
     required this.valueLabel,
     required this.onToggle,
   });
 
   final String title;
-  final List<String> values;
+  final IconData icon;
+  final List<FacetOption> options;
   final Set<String> selectedValues;
   final String Function(String) valueLabel;
   final ValueChanged<String> onToggle;
@@ -555,27 +634,36 @@ class _FacetSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
+          Row(
             children: [
-              for (final value in values)
+              Icon(icon, size: 18, color: colorScheme.onSurfaceVariant),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 12,
+            children: [
+              for (final option in options)
                 FilterChip(
-                  label: Text(valueLabel(value)),
-                  selected: selectedValues.contains(value),
-                  onSelected: (_) => onToggle(value),
+                  label: Text(
+                    '${valueLabel(option.value)} (${option.count})',
+                  ),
+                  selected: selectedValues.contains(option.value),
+                  onSelected: (_) => onToggle(option.value),
                 ),
             ],
           ),

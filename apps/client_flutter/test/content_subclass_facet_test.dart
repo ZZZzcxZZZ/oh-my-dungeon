@@ -156,12 +156,13 @@ void main() {
       // 所属职业 facet 区块可见, 且列出父职业名 (而非裸 entryKey).
       // 注意: 主页背景 ListView 也展示了 "战士"/"法师" 职业条目,
       // 所以断言要限定在 BottomSheet 后代内.
+      // Task 2.2: facet chip 标签带计数后缀 (如 "战士 (1)"), 改用 textContaining.
       final sheet = find.byType(BottomSheet);
       expect(find.descendant(of: sheet, matching: find.text('所属职业')),
           findsOneWidget);
-      expect(find.descendant(of: sheet, matching: find.text('战士')),
+      expect(find.descendant(of: sheet, matching: find.textContaining('战士')),
           findsOneWidget);
-      expect(find.descendant(of: sheet, matching: find.text('法师')),
+      expect(find.descendant(of: sheet, matching: find.textContaining('法师')),
           findsOneWidget);
     });
 
@@ -187,10 +188,16 @@ void main() {
       await tester.tap(find.text('子职').last);
       await tester.pumpAndSettle();
       // 选择战士作为所属职业 (限定在 BottomSheet 后代内, 避免命中背景 ListView).
+      // Task 2.2: facet chip 标签带计数后缀 (如 "战士 (1)"), 改用 textContaining;
+      // DraggableScrollableSheet 内容可能超出可视区, 先 ensureVisible 再 tap.
       final sheet = find.byType(BottomSheet);
-      await tester.tap(
-        find.descendant(of: sheet, matching: find.text('战士')).last,
+      final fighterText = find.descendant(
+        of: sheet,
+        matching: find.textContaining('战士'),
       );
+      await tester.ensureVisible(fighterText);
+      await tester.pumpAndSettle();
+      await tester.tap(fighterText);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('content-filter-apply')));
       await tester.pumpAndSettle();

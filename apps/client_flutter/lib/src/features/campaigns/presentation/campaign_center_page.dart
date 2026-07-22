@@ -117,13 +117,16 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
 
   Widget? _buildManageFab() {
     // Spec §档案: 新建条目 FAB 只在档案面板出现, 概览/队伍/记录面板不显示。
+    // Plan 2026-07-23 Task 1.4: 统一为 FAB.extended + 语义化图标，与角色
+    // 新建按钮风格一致。
     if (!_canManage) return null;
     if (_currentIndex != 2) return null;
-    return FloatingActionButton(
+    return FloatingActionButton.extended(
       key: const Key('campaign-create-archive-button'),
-      tooltip: '新建条目',
+      heroTag: 'campaign-create-archive',
       onPressed: _showCreateArchiveTypeMenu,
-      child: const Icon(Icons.add),
+      icon: const Icon(Icons.post_add),
+      label: const Text('新条目'),
     );
   }
 

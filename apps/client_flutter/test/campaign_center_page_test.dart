@@ -728,6 +728,32 @@ void main() {
       dmAuth.dispose();
     },
   );
+
+  // Plan 2026-07-23 Wave 1 Task 1.4: 档案新建 FAB 与角色新建 FAB 风格一致，
+  // 都使用 FloatingActionButton.extended + 语义化图标 + 文字标签。
+  testWidgets(
+    'archive create FAB uses FloatingActionButton.extended with label',
+    (tester) async {
+      final dmAuth = await buildLoggedInAuthController();
+      final dmController = await buildCampaignController(
+        authController: dmAuth,
+        canManage: true,
+      );
+      await pumpCenterPage(tester, dmController);
+      // Navigate to archive panel where FAB appears.
+      await tester.tap(find.text('档案').last);
+      await tester.pumpAndSettle();
+
+      final fab = find.byKey(const Key('campaign-create-archive-button'));
+      expect(fab, findsOneWidget);
+      // Plan 2026-07-23 Task 1.4: FAB 必须是 extended 变体（带可见文字标签），
+      // 不是仅图标的普通 FAB。
+      expect(find.text('新条目'), findsOneWidget);
+
+      dmController.dispose();
+      dmAuth.dispose();
+    },
+  );
 }
 
 const _campaign = Campaign(

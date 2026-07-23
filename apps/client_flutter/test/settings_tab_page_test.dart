@@ -236,6 +236,115 @@ void main() {
     expect(find.textContaining('D&D Table Tool'), findsWidgets);
     expect(find.textContaining('0.1.0'), findsWidgets);
   });
+
+  testWidgets('quick dice preset editor adds and deletes presets (Task 3.2)', (
+    tester,
+  ) async {
+    await pumpSettings(tester);
+
+    // Scroll to the preset editor card.
+    await tester.scrollUntilVisible(
+      find.text('快捷骰预设'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('还没有自定义预设'), findsOneWidget);
+
+    // Add a preset.
+    await tester.tap(find.byKey(const Key('quick-dice-preset-add')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('quick-dice-preset-input')),
+      '1d20+5',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('quick-dice-preset-confirm')));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(preferencesController.preferences.quickDicePresets, ['1d20+5']);
+
+    // Scroll to make sure the preset chip is visible.
+    await tester.scrollUntilVisible(
+      find.text('1d20+5'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('1d20+5'), findsOneWidget);
+    expect(find.text('1/6'), findsOneWidget);
+
+    // Add a second preset.
+    await tester.tap(find.byKey(const Key('quick-dice-preset-add')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('quick-dice-preset-input')),
+      '2d6+3',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('quick-dice-preset-confirm')));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(
+      preferencesController.preferences.quickDicePresets,
+      ['1d20+5', '2d6+3'],
+    );
+    expect(find.text('2/6'), findsOneWidget);
+
+    // Delete the first preset. Tap the delete icon inside the chip.
+    await tester.tap(find.descendant(
+      of: find.byKey(const Key('quick-dice-preset-0')),
+      matching: find.byIcon(Icons.cancel),
+    ));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(
+      preferencesController.preferences.quickDicePresets,
+      ['2d6+3'],
+    );
+    expect(find.text('1/6'), findsOneWidget);
+  });
+
+  testWidgets('quick dice preset editor rejects invalid expressions', (
+    tester,
+  ) async {
+    await pumpSettings(tester);
+
+    await tester.scrollUntilVisible(
+      find.text('快捷骰预设'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('quick-dice-preset-add')));
+    await tester.pumpAndSettle();
+
+    // Enter an invalid expression.
+    await tester.enterText(
+      find.byKey(const Key('quick-dice-preset-input')),
+      'not-a-dice',
+    );
+    await tester.tap(find.byKey(const Key('quick-dice-preset-confirm')));
+    await tester.pumpAndSettle();
+
+    // Dialog stays open with error text.
+    expect(find.text('添加快捷骰预设'), findsOneWidget);
+    expect(find.textContaining('格式无效'), findsOneWidget);
+    expect(
+      preferencesController.preferences.quickDicePresets,
+      isEmpty,
+    );
+
+    // Cancel.
+    await tester.tap(find.widgetWithText(TextButton, '取消'));
+    await tester.pumpAndSettle();
+  });
 }
 
 class _StubAuthClient implements AuthClient {

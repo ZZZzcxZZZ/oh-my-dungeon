@@ -10,6 +10,7 @@ import '../../content/presentation/content_detail_page.dart';
 import '../../content/presentation/content_library_controller.dart';
 import '../../encounters/presentation/encounter_controller.dart';
 import '../../../core/dice/dice_roller.dart';
+import '../../../core/dice/dice_tray_dialog.dart';
 import '../domain/campaign.dart';
 import '../domain/campaign_actor.dart';
 import 'actors/campaign_actor_controller.dart';
@@ -488,12 +489,17 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
 
   Future<void> _showRollSheet() {
     // Spec §输入栏: 关闭工具 sheet 由调用方负责, helper 不应自行 pop。
+    // Task 3.2: 顶部保留快速掷骰 (单骰一键), 下方接入组合式骰子编辑器.
+    final quickPresets =
+        widget.appPreferencesController?.preferences.quickDicePresets ??
+        const <String>[];
     return showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (context) {
         return SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -517,6 +523,12 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                         label: Text(notation),
                       ),
                   ],
+                ),
+                const SizedBox(height: 8),
+                DiceTrayDialog(
+                  diceRoller: widget.diceRoller ?? DiceRoller(),
+                  quickPresets: quickPresets,
+                  onSend: _sendDiceTrayResult,
                 ),
               ],
             ),
@@ -617,6 +629,36 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       messenger.showSnackBar(
         SnackBar(content: Text('${chatText('invalidDice')}$error')),
       );
+    }
+  }
+
+  /// Task 3.2: 处理组合式骰子编辑器的发送结果.
+  /// 携带结构化 eventData (notation/total/rollMode/dc/success) 供聊天渲染检定卡片.
+  Future<void> _sendDiceTrayResult(DiceTrayResult result) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final label = result.dc == null
+        ? '${result.notation} = ${result.total}'
+        : '${result.notation} = ${result.total} '
+            '${result.success == true ? '✓' : '✗'} DC ${result.dc}';
+    Navigator.of(context).pop();
+    setState(() => _sending = true);
+    final sent = await widget.campaignController.sendMessage(
+      campaignId: widget.campaign.id,
+      kind: 'roll',
+      content: label,
+      campaignActorId: _activeSpeakerActorId,
+      eventData: <String, Object?>{
+        'notation': result.notation,
+        'total': result.total,
+        'rollMode': result.rollMode,
+        if (result.dc != null) 'dc': result.dc,
+        if (result.success != null) 'success': result.success,
+      },
+    );
+    if (!mounted) return;
+    setState(() => _sending = false);
+    if (!sent) {
+      messenger.showSnackBar(SnackBar(content: Text(chatText('sendFailed'))));
     }
   }
 

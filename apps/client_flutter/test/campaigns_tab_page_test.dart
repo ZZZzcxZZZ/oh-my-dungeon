@@ -601,6 +601,264 @@ void main() {
       session.dispose();
     },
   );
+
+  // ---- Plan 2026-07-23 task 5.1: expandable campaign card ----
+
+  /// Expanded card reveals description, member count summary, unread badge
+  /// summary, and quick entries (main chat / private chats / group chats /
+  /// create private chat). Tapping the chevron toggles expansion; only one
+  /// card may be expanded at a time.
+  group('expandable campaign card (task 5.1)', () {
+    final expandedCampaign = Campaign(
+      id: 'camp-expand',
+      name: 'Misty Mountain',
+      description: '穿越迷雾山脉的冒险',
+      system: 'dnd5e',
+      ownerId: 'user-1',
+      status: 'active',
+      createdAt: '2026-07-09T00:00:00.000Z',
+      updatedAt: '2026-07-09T00:00:00.000Z',
+      unreadCount: 7,
+      memberPreview: const [
+        CampaignMemberPreview(
+          userId: 'user-1',
+          displayName: 'DM',
+          role: 'owner',
+        ),
+        CampaignMemberPreview(
+          userId: 'user-2',
+          displayName: 'Arannis',
+          role: 'player',
+        ),
+        CampaignMemberPreview(
+          userId: 'user-3',
+          displayName: 'Briv',
+          role: 'player',
+        ),
+      ],
+    );
+
+    testWidgets('card is collapsed by default and hides expanded content',
+        (tester) async {
+      final auth = await buildLoggedInAuthController();
+      final campaignController = CampaignController(
+        apiBaseUrl: apiBaseUrl,
+        authController: auth,
+        campaignClient: _FakeCampaignClient(campaigns: [expandedCampaign]),
+      );
+      await campaignController.loadCampaigns();
+      final modeController = ClientModeController(
+        initialMode: ClientMode.dungeonMaster,
+      );
+      final prefs = buildAppPreferencesController();
+      final session = buildActiveServerSession();
+      await pumpCampaignsTab(
+        tester,
+        authController: auth,
+        campaignController: campaignController,
+        modeController: modeController,
+        appPreferencesController: prefs,
+        session: session,
+      );
+
+      // Expanded-only affordances should be hidden in collapsed state.
+      expect(find.text('进入主聊天室'), findsNothing);
+      expect(find.text('未读 7'), findsNothing);
+
+      modeController.dispose();
+      prefs.dispose();
+      campaignController.dispose();
+      auth.dispose();
+      session.dispose();
+    });
+
+    testWidgets('tapping the expand chevron reveals expanded content',
+        (tester) async {
+      final auth = await buildLoggedInAuthController();
+      final campaignController = CampaignController(
+        apiBaseUrl: apiBaseUrl,
+        authController: auth,
+        campaignClient: _FakeCampaignClient(campaigns: [expandedCampaign]),
+      );
+      await campaignController.loadCampaigns();
+      final modeController = ClientModeController(
+        initialMode: ClientMode.dungeonMaster,
+      );
+      final prefs = buildAppPreferencesController();
+      final session = buildActiveServerSession();
+      await pumpCampaignsTab(
+        tester,
+        authController: auth,
+        campaignController: campaignController,
+        modeController: modeController,
+        appPreferencesController: prefs,
+        session: session,
+      );
+
+      // Expand the card.
+      await tester.tap(find.byKey(const Key('campaign-card-expand-toggle')));
+      await tester.pumpAndSettle();
+
+      // Expanded-only content should now be visible. (Note: '3 位成员'
+      // also appears in the collapsed subtitle, so we assert on expanded-only
+      // labels: description, unread summary, and the main-chat entry.)
+      expect(find.text('穿越迷雾山脉的冒险'), findsOneWidget);
+      expect(find.text('未读 7'), findsOneWidget);
+      expect(find.text('进入主聊天室'), findsOneWidget);
+
+      modeController.dispose();
+      prefs.dispose();
+      campaignController.dispose();
+      auth.dispose();
+      session.dispose();
+    });
+
+    testWidgets('tapping the expand toggle again collapses the card',
+        (tester) async {
+      final auth = await buildLoggedInAuthController();
+      final campaignController = CampaignController(
+        apiBaseUrl: apiBaseUrl,
+        authController: auth,
+        campaignClient: _FakeCampaignClient(campaigns: [expandedCampaign]),
+      );
+      await campaignController.loadCampaigns();
+      final modeController = ClientModeController(
+        initialMode: ClientMode.dungeonMaster,
+      );
+      final prefs = buildAppPreferencesController();
+      final session = buildActiveServerSession();
+      await pumpCampaignsTab(
+        tester,
+        authController: auth,
+        campaignController: campaignController,
+        modeController: modeController,
+        appPreferencesController: prefs,
+        session: session,
+      );
+
+      await tester.tap(find.byKey(const Key('campaign-card-expand-toggle')));
+      await tester.pumpAndSettle();
+      expect(find.text('进入主聊天室'), findsOneWidget);
+
+      // Tap again to collapse.
+      await tester.tap(find.byKey(const Key('campaign-card-expand-toggle')));
+      await tester.pumpAndSettle();
+      expect(find.text('进入主聊天室'), findsNothing);
+
+      modeController.dispose();
+      prefs.dispose();
+      campaignController.dispose();
+      auth.dispose();
+      session.dispose();
+    });
+
+    testWidgets('only one card is expanded at a time', (tester) async {
+      final secondCampaign = Campaign(
+        id: 'camp-second',
+        name: 'Second Campaign',
+        description: '第二条战役',
+        system: 'dnd5e',
+        ownerId: 'user-1',
+        status: 'active',
+        createdAt: '2026-07-09T00:00:00.000Z',
+        updatedAt: '2026-07-09T00:00:00.000Z',
+      );
+      final auth = await buildLoggedInAuthController();
+      final campaignController = CampaignController(
+        apiBaseUrl: apiBaseUrl,
+        authController: auth,
+        campaignClient:
+            _FakeCampaignClient(campaigns: [expandedCampaign, secondCampaign]),
+      );
+      await campaignController.loadCampaigns();
+      final modeController = ClientModeController(
+        initialMode: ClientMode.dungeonMaster,
+      );
+      final prefs = buildAppPreferencesController();
+      final session = buildActiveServerSession();
+      await pumpCampaignsTab(
+        tester,
+        authController: auth,
+        campaignController: campaignController,
+        modeController: modeController,
+        appPreferencesController: prefs,
+        session: session,
+      );
+
+      // Expand the first card.
+      await tester.tap(
+        find.byKey(const Key('campaign-card-expand-toggle')).first,
+      );
+      await tester.pumpAndSettle();
+      // Only one card's expanded content (进入主聊天室) should be visible.
+      expect(find.text('进入主聊天室'), findsOneWidget);
+
+      // Expand the second card — the first should collapse.
+      await tester.tap(
+        find.byKey(const Key('campaign-card-expand-toggle')).at(1),
+      );
+      await tester.pumpAndSettle();
+      // Still only one expanded card.
+      expect(find.text('进入主聊天室'), findsOneWidget);
+      // The first card's expanded-only description should now be hidden.
+      expect(find.text('穿越迷雾山脉的冒险'), findsNothing);
+
+      modeController.dispose();
+      prefs.dispose();
+      campaignController.dispose();
+      auth.dispose();
+      session.dispose();
+    });
+
+    testWidgets('tapping "进入主聊天室" triggers the main onCampaignOpened callback',
+        (tester) async {
+      final auth = await buildLoggedInAuthController();
+      final campaignController = CampaignController(
+        apiBaseUrl: apiBaseUrl,
+        authController: auth,
+        campaignClient: _FakeCampaignClient(campaigns: [expandedCampaign]),
+      );
+      await campaignController.loadCampaigns();
+      final modeController = ClientModeController(
+        initialMode: ClientMode.dungeonMaster,
+      );
+      final prefs = buildAppPreferencesController();
+      final session = buildActiveServerSession();
+
+      var opened = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CampaignsTabPage(
+            session: session,
+            authController: auth,
+            campaignController: campaignController,
+            characterController: CharacterController(
+              repository: EmptyCharacterRepository(),
+            ),
+            contentRepository: EmptyContentRepository(),
+            modeController: modeController,
+            appPreferencesController: prefs,
+            onCampaignOpened: (_) async => opened = true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('campaign-card-expand-toggle')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('进入主聊天室'));
+      await tester.pumpAndSettle();
+
+      expect(opened, isTrue);
+
+      modeController.dispose();
+      prefs.dispose();
+      campaignController.dispose();
+      auth.dispose();
+      session.dispose();
+    });
+  });
 }
 
 const _user = AuthUser(

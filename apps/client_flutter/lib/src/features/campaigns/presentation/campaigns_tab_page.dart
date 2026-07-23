@@ -58,6 +58,10 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
   /// 的战役 ID 加入此集合后不再弹窗，避免反复打扰用户。
   final Set<String> _modePromptShownCampaignIds = <String>{};
 
+  /// Plan 2026-07-23 task 5.1: 同一时间只允许一个卡片展开（accordion）。
+  /// null 表示全部收起。
+  String? _expandedCampaignId;
+
   @override
   void initState() {
     super.initState();
@@ -237,6 +241,12 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
           character: character,
           isOwner: isOwner,
           compact: compact,
+          isExpanded: _expandedCampaignId == campaign.id,
+          onExpandToggle: () => setState(() {
+            // Toggle this card; if another card was expanded, it collapses.
+            _expandedCampaignId =
+                _expandedCampaignId == campaign.id ? null : campaign.id;
+          }),
           onTap: () => _openCampaignChat(campaign, character),
         );
       },
@@ -675,6 +685,8 @@ class _CampaignChatListItem extends StatelessWidget {
     required this.character,
     required this.isOwner,
     required this.compact,
+    required this.isExpanded,
+    required this.onExpandToggle,
     required this.onTap,
   });
 
@@ -682,6 +694,8 @@ class _CampaignChatListItem extends StatelessWidget {
   final CharacterSheet? character;
   final bool isOwner;
   final bool compact;
+  final bool isExpanded;
+  final VoidCallback onExpandToggle;
   final VoidCallback onTap;
 
   static const _memberAvatarOverlap = 14.0;
@@ -701,26 +715,164 @@ class _CampaignChatListItem extends StatelessWidget {
           horizontal: compact ? 8 : 12,
           vertical: compact ? 6 : 10,
         ),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildLeading(context),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildHeader(theme),
-                  const SizedBox(height: 4),
-                  _buildSubtitle(theme, lastMessage, memberPreview),
-                ],
-              ),
+            // Collapsed row — always visible.
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildLeading(context),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeader(theme),
+                      const SizedBox(height: 4),
+                      _buildSubtitle(theme, lastMessage, memberPreview),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _buildTrailing(theme, lastMessage),
+                // Plan 2026-07-23 task 5.1: expand/collapse chevron.
+                IconButton(
+                  key: const Key('campaign-card-expand-toggle'),
+                  icon: Icon(
+                    isExpanded
+                        ? Icons.expand_less
+                        : Icons.expand_more,
+                    size: 22,
+                  ),
+                  tooltip: isExpanded ? '收起' : '展开',
+                  onPressed: onExpandToggle,
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            _buildTrailing(theme, lastMessage),
+            // Plan 2026-07-23 task 5.1: expanded content with smooth size
+            // animation. AnimatedSize handles the reveal/collapse transition.
+            AnimatedSize(
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeInOutCubic,
+              alignment: Alignment.topCenter,
+              child: isExpanded
+                  ? _buildExpandedContent(theme)
+                  : const SizedBox(width: double.infinity, height: 0),
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Expanded content: description, member count, unread summary, and quick
+  /// entries (main chat / private chats / group chats / create private chat).
+  /// Plan 2026-07-23 task 5.1.
+  Widget _buildExpandedContent(ThemeData theme) {
+    final colorScheme = theme.colorScheme;
+    final memberCount = campaign.memberPreview.length;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (campaign.description.isNotEmpty)
+            Text(
+              campaign.description,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 12,
+            runSpacing: 4,
+            children: [
+              if (memberCount > 0)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.group_outlined,
+                      size: 14,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$memberCount 位成员',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              if (campaign.unreadCount > 0)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.mark_chat_unread_outlined,
+                      size: 14,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '未读 ${campaign.unreadCount}',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Main chat entry — primary action.
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onTap,
+              icon: const Icon(Icons.forum_outlined, size: 18),
+              label: const Text('进入主聊天室'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Secondary entries: private chats / group chats. Badges show count
+          // when available. Until Task 5.3 lands the server Conversation model,
+          // these stay as placeholders showing "暂无".
+          Row(
+            children: [
+              Expanded(
+                child: _SecondaryEntryButton(
+                  icon: Icons.person_outline,
+                  label: '私聊',
+                  countText: '暂无',
+                  onPressed: () {},
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _SecondaryEntryButton(
+                  icon: Icons.groups_outlined,
+                  label: '小群',
+                  countText: '暂无',
+                  onPressed: () {},
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -879,6 +1031,61 @@ class _CampaignChatListItem extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// Secondary entry button (private chat / group chat) in the expanded card.
+/// Shows an icon + label + count badge. Plan 2026-07-23 task 5.1.
+class _SecondaryEntryButton extends StatelessWidget {
+  const _SecondaryEntryButton({
+    required this.icon,
+    required this.label,
+    required this.countText,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final String countText;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        visualDensity: VisualDensity.compact,
+      ),
+      icon: Icon(icon, size: 18, color: colorScheme.onSurfaceVariant),
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            decoration: BoxDecoration(
+              color: colorScheme.secondaryContainer,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              countText,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSecondaryContainer,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

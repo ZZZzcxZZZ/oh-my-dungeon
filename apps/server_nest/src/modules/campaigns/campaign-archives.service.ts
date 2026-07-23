@@ -134,20 +134,45 @@ export class CampaignArchivesService {
           return entryTags.some((t) => requested.includes(t));
         })
       : entries;
-    if (!q || !q.trim()) return filteredByTags;
-    const needle = q.trim().toLowerCase();
-    return filteredByTags.filter((entry) => {
-      const title = (entry.title ?? '').toLowerCase();
-      const summary = (entry.summary ?? '').toLowerCase();
-      const body = extractBodyText(entry.payload).toLowerCase();
-      const entryTags = extractTags(entry.payload).map((t) => t.toLowerCase());
-      return (
-        title.includes(needle) ||
-        summary.includes(needle) ||
-        body.includes(needle) ||
-        entryTags.some((t) => t.includes(needle))
-      );
-    });
+    const needle = q && q.trim() ? q.trim().toLowerCase() : null;
+    const textFiltered = needle
+      ? filteredByTags.filter((entry) => {
+          const title = (entry.title ?? '').toLowerCase();
+          const summary = (entry.summary ?? '').toLowerCase();
+          const body = extractBodyText(entry.payload).toLowerCase();
+          const entryTags = extractTags(entry.payload).map((t) => t.toLowerCase());
+          return (
+            title.includes(needle) ||
+            summary.includes(needle) ||
+            body.includes(needle) ||
+            entryTags.some((t) => t.includes(needle))
+          );
+        })
+      : filteredByTags;
+    if (textFiltered.length === 0) return [];
+    // Plan 2026-07-23 task 4.3: attach editor display name snapshots.
+    // Batched lookup so all entries share a single user query regardless
+    // of how many distinct editors / creators exist.
+    const userIds = new Set<string>();
+    for (const entry of textFiltered) {
+      if (entry.createdBy) userIds.add(entry.createdBy);
+      if (entry.updatedBy) userIds.add(entry.updatedBy);
+    }
+    const users = userIds.size > 0
+      ? await this.prisma.user.findMany({
+          where: { id: { in: Array.from(userIds) } },
+          select: { id: true, username: true, displayName: true },
+        })
+      : [];
+    const nameById = new Map<string, string>();
+    for (const user of users) {
+      nameById.set(user.id, user.displayName ?? user.username);
+    }
+    return textFiltered.map((entry) => ({
+      ...entry,
+      createdByName: nameById.get(entry.createdBy) ?? null,
+      updatedByName: entry.updatedBy ? (nameById.get(entry.updatedBy) ?? null) : null,
+    }));
   }
 
   async create(actor: AccessTokenPayload, campaignId: string, input: ArchiveCreateInput) {

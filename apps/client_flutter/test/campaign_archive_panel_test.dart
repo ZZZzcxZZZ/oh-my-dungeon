@@ -695,4 +695,120 @@ void main() {
       expect(find.text('清除标签'), findsNothing);
     },
   );
+
+  // ---- Time formatting + editor display name (Plan 2026-07-23 task 4.3) ----
+
+  /// Detail footer should read `更新于 2026-07-23 · 由 张三` — the ISO
+  /// timestamp is collapsed to a yMd date via `intl.DateFormat`, and the
+  /// server-provided `updatedByName` snapshot is appended when present.
+  testWidgets(
+    'detail footer shows formatted date and editor name when updatedByName is present',
+    (tester) async {
+      final entry = CampaignArchiveEntry.fromJson({
+        'id': 'archive-1',
+        'campaignId': 'camp-1',
+        'kind': 'document',
+        'title': '古老笔记',
+        'summary': '',
+        'payload': const {},
+        'pinned': false,
+        'updatedAt': '2026-07-23T14:32:11.000Z',
+        'updatedByName': '张三',
+      });
+
+      await pumpPanel(tester, entries: [entry]);
+      await tester.tap(find.text('古老笔记'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('更新于 2026-07-23 · 由 张三'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'detail footer omits editor suffix when updatedByName is null',
+    (tester) async {
+      final entry = CampaignArchiveEntry.fromJson({
+        'id': 'archive-1',
+        'campaignId': 'camp-1',
+        'kind': 'document',
+        'title': '无署名笔记',
+        'summary': '',
+        'payload': const {},
+        'pinned': false,
+        'updatedAt': '2026-07-23T14:32:11.000Z',
+      });
+
+      await pumpPanel(tester, entries: [entry]);
+      await tester.tap(find.text('无署名笔记'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('更新于 2026-07-23'), findsOneWidget);
+      expect(find.textContaining('由'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'detail footer falls back to createdByName when updatedByName is absent',
+    (tester) async {
+      final entry = CampaignArchiveEntry.fromJson({
+        'id': 'archive-1',
+        'campaignId': 'camp-1',
+        'kind': 'document',
+        'title': '创建者署名',
+        'summary': '',
+        'payload': const {},
+        'pinned': false,
+        'updatedAt': '2026-07-23T14:32:11.000Z',
+        'createdByName': '李四',
+      });
+
+      await pumpPanel(tester, entries: [entry]);
+      await tester.tap(find.text('创建者署名'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('更新于 2026-07-23 · 由 李四'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'list row shows editor name and formatted date metadata',
+    (tester) async {
+      final entry = CampaignArchiveEntry.fromJson({
+        'id': 'archive-1',
+        'campaignId': 'camp-1',
+        'kind': 'document',
+        'title': '行元数据',
+        'summary': '',
+        'payload': const {},
+        'pinned': false,
+        'updatedAt': '2026-07-23T14:32:11.000Z',
+        'updatedByName': '王五',
+      });
+
+      await pumpPanel(tester, entries: [entry]);
+
+      expect(find.text('由 王五 · 2026-07-23'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'list row shows only formatted date when editor name is unknown',
+    (tester) async {
+      final entry = CampaignArchiveEntry.fromJson({
+        'id': 'archive-1',
+        'campaignId': 'camp-1',
+        'kind': 'document',
+        'title': '无名行',
+        'summary': '',
+        'payload': const {},
+        'pinned': false,
+        'updatedAt': '2026-07-23T14:32:11.000Z',
+      });
+
+      await pumpPanel(tester, entries: [entry]);
+
+      expect(find.text('2026-07-23'), findsOneWidget);
+      expect(find.textContaining('由'), findsNothing);
+    },
+  );
 }

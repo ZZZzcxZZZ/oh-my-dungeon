@@ -4,6 +4,11 @@
 /// 正文以 `bodyBlocks` 结构化存储，辅以 `tags`、`links`、`attachmentRefs`。
 /// 这些字段存储在服务端的 `payload` JSON 中，客户端通过类型安全的
 /// getter 访问。
+///
+/// Plan 2026-07-23 task 4.3: 服务端在 list 响应中附带编辑者/创建者署名
+/// 快照（`updatedByName`/`createdByName`），客户端据此在详情页底部与
+/// 列表行展示「由 张三」字样。署名为服务端快照，避免每次渲染都发起
+/// 用户查询；用户改名后下次 list 刷新即更新。
 class CampaignArchiveEntry {
   const CampaignArchiveEntry({
     required this.id,
@@ -15,6 +20,8 @@ class CampaignArchiveEntry {
     required this.pinned,
     required this.updatedAt,
     this.createdBy,
+    this.createdByName,
+    this.updatedByName,
   });
   final String id;
   final String campaignId;
@@ -25,6 +32,18 @@ class CampaignArchiveEntry {
   final bool pinned;
   final String updatedAt;
   final String? createdBy;
+
+  /// 创建者显示名快照（来自服务端 list 响应）。可能为 null：服务端
+  /// 未提供该字段，或对应用户已不存在。
+  final String? createdByName;
+
+  /// 最后修改者显示名快照（来自服务端 list 响应）。可能为 null。
+  /// 详情页底部优先使用此字段；缺失时回退到 [createdByName]。
+  final String? updatedByName;
+
+  /// 详情页与列表行使用的署名：优先 [updatedByName]，其次
+  /// [createdByName]，均缺失时返回 null（UI 不展示「由 ...」字样）。
+  String? get editorName => updatedByName ?? createdByName;
 
   /// 结构化正文 blocks。每个 block 至少包含 `type` 和 `text` 字段。
   List<Map<String, Object?>> get bodyBlocks {
@@ -92,6 +111,8 @@ class CampaignArchiveEntry {
         pinned: json['pinned'] as bool? ?? false,
         updatedAt: json['updatedAt']! as String,
         createdBy: json['createdBy'] as String?,
+        createdByName: json['createdByName'] as String?,
+        updatedByName: json['updatedByName'] as String?,
       );
 
   Map<String, Object?> toJson() => {
@@ -104,5 +125,7 @@ class CampaignArchiveEntry {
         'pinned': pinned,
         'updatedAt': updatedAt,
         if (createdBy != null) 'createdBy': createdBy,
+        if (createdByName != null) 'createdByName': createdByName,
+        if (updatedByName != null) 'updatedByName': updatedByName,
       };
 }

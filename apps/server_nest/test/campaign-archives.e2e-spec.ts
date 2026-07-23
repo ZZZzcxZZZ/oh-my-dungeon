@@ -34,6 +34,7 @@ describe("campaign archive wiki endpoints", () => {
       count: jest.fn(),
       findFirst: jest.fn(),
       findUnique: jest.fn(),
+      findMany: jest.fn(),
       create: jest.fn(),
     },
     serverAdmin: { create: jest.fn(), findUnique: jest.fn() },
@@ -123,6 +124,10 @@ describe("campaign archive wiki endpoints", () => {
     prismaService.user.count.mockResolvedValue(1);
     prismaService.user.findFirst.mockResolvedValue(null);
     prismaService.user.findUnique.mockResolvedValue(null);
+    // Plan 2026-07-23 task 4.3: default to empty editor-name snapshot
+    // so legacy tests that don't mock user.findMany still get null
+    // updatedByName/createdByName (backward-compatible).
+    prismaService.user.findMany.mockResolvedValue([]);
     prismaService.user.create.mockResolvedValue(storedDm);
     prismaService.serverAdmin.create.mockResolvedValue({});
     prismaService.refreshToken.create.mockResolvedValue({});
@@ -647,6 +652,116 @@ describe("campaign archive wiki endpoints", () => {
           expect(body).toHaveLength(1);
           expect(body[0].id).toBe("a-2");
         });
+    });
+  });
+
+  // Plan 2026-07-23 task 4.3: time formatting is a client concern, but
+  // the list response must carry an `updatedByName` snapshot so the
+  // client can render "更新于 2026-07-23 · 由 张三" without an extra
+  // round-trip. The snapshot is populated from the User.displayName
+  // (fallback to username when displayName is null).
+  describe("editor display name snapshot", () => {
+    const entries = [
+      {
+        id: "a-1",
+        campaignId: "camp-1",
+        kind: "document",
+        title: "Vallaki Gazetteer",
+        summary: "",
+        payload: {},
+        pinned: false,
+        createdBy: "dm-1",
+        updatedBy: "dm-1",
+        updatedAt: "2026-07-16T00:00:00.000Z",
+        deletedAt: null,
+      },
+      {
+        id: "a-2",
+        campaignId: "camp-1",
+        kind: "clue",
+        title: "Silver Key",
+        summary: "",
+        payload: {},
+        pinned: false,
+        createdBy: "player-1",
+        updatedBy: "player-1",
+        updatedAt: "2026-07-16T01:00:00.000Z",
+        deletedAt: null,
+      },
+    ];
+
+    it("attaches updatedByName and createdByName to every list entry", async () => {
+      const token = await loginAs(storedPlayer);
+      prismaService.campaignArchiveEntry.findMany.mockResolvedValueOnce(entries);
+      prismaService.user.findMany.mockResolvedValueOnce([
+        { id: "dm-1", username: "dm", displayName: "DM" },
+        { id: "player-1", username: "player", displayName: "Arannis" },
+      ]);
+
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/archives")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body).toHaveLength(2);
+          expect(body[0].updatedByName).toBe("DM");
+          expect(body[0].createdByName).toBe("DM");
+          expect(body[1].updatedByName).toBe("Arannis");
+          expect(body[1].createdByName).toBe("Arannis");
+        });
+    });
+
+    it("falls back to username when displayName is null", async () => {
+      const token = await loginAs(storedPlayer);
+      prismaService.campaignArchiveEntry.findMany.mockResolvedValueOnce(entries);
+      prismaService.user.findMany.mockResolvedValueOnce([
+        { id: "dm-1", username: "dm", displayName: null },
+        { id: "player-1", username: "player", displayName: null },
+      ]);
+
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/archives")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body[0].updatedByName).toBe("dm");
+          expect(body[0].createdByName).toBe("dm");
+        });
+    });
+
+    it("returns null snapshots when the user no longer exists", async () => {
+      const token = await loginAs(storedPlayer);
+      prismaService.campaignArchiveEntry.findMany.mockResolvedValueOnce(entries);
+      prismaService.user.findMany.mockResolvedValueOnce([]);
+
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/archives")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body[0].updatedByName).toBeNull();
+          expect(body[0].createdByName).toBeNull();
+        });
+    });
+
+    it("survives entries that share the same editor without duplicate lookups", async () => {
+      const token = await loginAs(storedPlayer);
+      prismaService.campaignArchiveEntry.findMany.mockResolvedValueOnce(entries);
+      prismaService.user.findMany.mockResolvedValueOnce([
+        { id: "dm-1", username: "dm", displayName: "DM" },
+        { id: "player-1", username: "player", displayName: "Arannis" },
+      ]);
+
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/archives")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200);
+
+      // Single batched lookup — the service should ask for unique ids only.
+      const findManyArgs = prismaService.user.findMany.mock.calls[0][0];
+      const requestedIds = findManyArgs.where.id.in;
+      expect(requestedIds).toHaveLength(2);
+      expect(requestedIds.sort()).toEqual(["dm-1", "player-1"]);
     });
   });
 

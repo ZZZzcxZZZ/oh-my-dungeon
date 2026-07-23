@@ -1,6 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../domain/campaign_archive_entry.dart';
+
+/// Plan 2026-07-23 task 4.3: 将服务端 ISO 时间戳格式化为 `yyyy-MM-dd`，
+/// 去除时分秒。使用显式 pattern 而非 `DateFormat.yMd()`，避免 locale
+/// 差异导致格式不一致（en_US -> 7/23/2026，zh_CN -> 2026/7/23）。
+/// ISO 风格在战役档案这种跨用户共享的场景中歧义最小。
+String _formatArchiveDate(String isoTimestamp) {
+  try {
+    final parsed = DateTime.parse(isoTimestamp);
+    return DateFormat('yyyy-MM-dd').format(parsed);
+  } catch (_) {
+    // 解析失败时回退到原始字符串，避免 UI 崩溃。
+    return isoTimestamp;
+  }
+}
+
+/// 详情页底部 footer：`更新于 yyyy-MM-dd` 或 `更新于 yyyy-MM-dd · 由 编辑者`。
+/// 编辑者署名优先 `updatedByName`，回退 `createdByName`。
+String _archiveFooter(CampaignArchiveEntry entry) {
+  final date = _formatArchiveDate(entry.updatedAt);
+  final name = entry.editorName;
+  if (name == null || name.isEmpty) return '更新于 $date';
+  return '更新于 $date · 由 $name';
+}
+
+/// 列表行底部元数据：`由 编辑者 · yyyy-MM-dd` 或仅 `yyyy-MM-dd`。
+String _archiveRowMetadata(CampaignArchiveEntry entry) {
+  final date = _formatArchiveDate(entry.updatedAt);
+  final name = entry.editorName;
+  if (name == null || name.isEmpty) return date;
+  return '由 $name · $date';
+}
 
 /// Archive panel: lists shared campaign archives with kind filter chips,
 /// pull-to-refresh, structured wiki content, and per-entry edit actions.
@@ -321,6 +353,15 @@ class _ArchiveListRow extends StatelessWidget {
                         ],
                       ),
                     ],
+                    // Plan 2026-07-23 task 4.3: 行底部元数据「由 编辑者 · yyyy-MM-dd」。
+                    const SizedBox(height: 6),
+                    Text(
+                      _archiveRowMetadata(entry),
+                      key: const Key('archive-row-metadata'),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                    ),
                   ],
                 ),
               ),
@@ -588,8 +629,12 @@ class _ArchiveDetailContent extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 16),
+            // Plan 2026-07-23 task 4.3: footer 显示「更新于 yyyy-MM-dd · 由 编辑者」。
+            // 时间戳去除时分秒；署名优先 updatedByName，回退 createdByName，
+            // 均缺失时不展示「由 ...」后缀。
             Text(
-              '更新于 ${entry.updatedAt}',
+              _archiveFooter(entry),
+              key: const Key('archive-detail-footer'),
               style: theme.textTheme.labelSmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),

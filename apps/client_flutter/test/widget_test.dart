@@ -1118,7 +1118,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('遭遇控场'), findsOneWidget);
-    expect(find.text('成员状态'), findsOneWidget);
+    expect(find.text('快捷操作'), findsOneWidget);
   });
 
   testWidgets('player campaign chat hides dm-only table tools', (tester) async {

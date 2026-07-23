@@ -4,12 +4,15 @@ import '../../content/data/local/content_repository.dart';
 import '../../encounters/presentation/encounter_controller.dart';
 import '../../encounters/presentation/encounter_panel_page.dart';
 
+import '../data/sync/campaign_sync_api_client.dart';
 import '../domain/campaign.dart';
 import '../domain/campaign_actor.dart';
 import 'actors/campaign_actor_controller.dart';
 import 'actors/campaign_actor_sheet_launcher.dart';
+import 'actors/dm_quick_ops_sheet.dart';
 import 'campaign_controller.dart';
 import 'campaign_detail_page.dart';
+import 'campaign_event_dispatcher.dart';
 import 'center/campaign_archive_panel.dart';
 import 'center/campaign_characters_panel.dart';
 import 'center/campaign_overview_panel.dart';
@@ -544,7 +547,7 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
               children: [
                 Text('DM 控场', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 8),
-                const Text('遭遇、成员状态等控场工具集中在此处。'),
+                const Text('遭遇、快捷操作等控场工具集中在此处。'),
                 const SizedBox(height: 12),
                 ListTile(
                   leading: const Icon(Icons.shield_outlined),
@@ -557,12 +560,13 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.group_outlined),
-                  title: const Text('成员状态'),
-                  subtitle: const Text('查看角色 HP、AC、状态和可见信息'),
+                  leading: const Icon(Icons.bolt_outlined),
+                  title: const Text('快捷操作'),
+                  subtitle: const Text('批量扣血、给予装备、快速检定'),
+                  enabled: widget.actorController != null,
                   onTap: () {
                     Navigator.of(sheetContext).pop();
-                    _showNotImplemented();
+                    _openDmQuickOps();
                   },
                 ),
               ],
@@ -570,6 +574,38 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
           ),
         );
       },
+    );
+  }
+
+  /// Task 3.4 — 打开 DM 快捷操作面板. 包含批量扣血、给予装备、快速检定
+  /// 三个原子操作. dispatcher 用 CampaignController 的 apiBaseUrl 和
+  /// accessTokenProvider 按需构造, 避免向上层传新依赖.
+  Future<void> _openDmQuickOps() async {
+    final actorController = widget.actorController;
+    if (actorController == null) return;
+    final dispatcher = CampaignEventDispatcher(
+      apiClient: HttpCampaignSyncApiClient(),
+      apiBaseUrlProvider: () => widget.controller.apiBaseUrl,
+      accessTokenProvider: () => widget.controller.accessToken ?? '',
+      onActorChanged: (actorSummary) async {
+        // 服务端原子完成 HP/物品变更后, 触发 actorController 增量拉取,
+        // 保证本地缓存与服务端一致.
+        await actorController.pullUntilCurrent();
+      },
+    );
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => SafeArea(
+        child: DmQuickOpsSheet(
+          campaignId: widget.campaign.id,
+          actorController: actorController,
+          eventDispatcher: dispatcher,
+          campaignController: widget.controller,
+          contentRepository: widget.contentRepository,
+        ),
+      ),
     );
   }
 

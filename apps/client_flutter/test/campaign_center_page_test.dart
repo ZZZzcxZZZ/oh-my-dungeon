@@ -278,10 +278,10 @@ void main() {
     await tester.pumpAndSettle();
 
     // DM control sheet should appear with its characteristic title and
-    // submenu entries (遭遇控场 / 成员状态).
+    // submenu entries (遭遇控场 / 快捷操作).
     expect(find.text('DM 控场'), findsWidgets);
     expect(find.text('遭遇控场'), findsOneWidget);
-    expect(find.text('成员状态'), findsOneWidget);
+    expect(find.text('快捷操作'), findsOneWidget);
 
     dmController.dispose();
     dmAuth.dispose();

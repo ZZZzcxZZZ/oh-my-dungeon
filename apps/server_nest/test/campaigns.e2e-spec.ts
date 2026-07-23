@@ -1230,7 +1230,12 @@ describe("campaigns endpoints", () => {
         .expect(403);
     });
 
-    it("atomically creates a temporary actor with the first draft message", async () => {
+    // Plan 2026-07-23 task 5.2: temporary identity is now a use-once speaker
+    // snapshot. The server writes displayName/avatarUrl directly onto the
+    // message row WITHOUT creating a CampaignActor and WITHOUT mutating the
+    // DM's activeSpeakerActorId. The snapshot is discarded after the message
+    // is sent; the DM's next message uses their previously selected actor.
+    it("writes a speaker snapshot message without creating a temporary actor", async () => {
       const token = await loginAsDm();
       prismaService.campaign.findUnique.mockResolvedValueOnce({
         ...campaignWithOwner,
@@ -1244,38 +1249,18 @@ describe("campaigns endpoints", () => {
           },
         ],
       });
-      const createdActorRow = {
-        id: "temp-actor-1",
-        campaignId: "camp-1",
-        ownerUserId: null,
-        sourceCharacterId: null,
-        actorType: "npc",
-        status: "active",
-        lifecycle: "temporary",
-        avatarAssetId: null,
-        healthVisibility: "ownerAndDm",
-        sheetJson: { name: "旅店老板", currentHp: 1, maxHp: 1, avatarUrl: null },
-        revision: 1,
-        updatedBy: "user-1",
-      };
-      prismaService.campaignActor.create.mockResolvedValueOnce(createdActorRow);
-      prismaService.campaignMember.update.mockResolvedValueOnce({
-        userId: "user-1",
-        activeSpeakerActorId: "temp-actor-1",
-        speakerMode: "actor",
-      });
       prismaService.campaignChatMessage.create.mockResolvedValueOnce({
-        id: "msg-draft-1",
+        id: "msg-snapshot-1",
         campaignId: "camp-1",
         senderId: "user-1",
-        campaignActorId: "temp-actor-1",
+        campaignActorId: null,
         displayName: "旅店老板",
         avatarUrl: null,
-        speakerMode: "actor",
+        speakerMode: "snapshot",
         delegatedByUserId: null,
         speakerAvatarAssetId: null,
-        publicHealthState: "healthy",
-        publicHealthFraction: 1,
+        publicHealthState: null,
+        publicHealthFraction: null,
         ooc: false,
         kind: "say",
         content: "欢迎光临",
@@ -1290,36 +1275,31 @@ describe("campaigns endpoints", () => {
         .send({
           kind: "say",
           content: "欢迎光临",
-          draftActor: { displayName: "旅店老板" },
+          speakerSnapshot: { displayName: "旅店老板" },
         })
         .expect(201)
         .expect(({ body }) => {
-          expect(body.campaignActorId).toBe("temp-actor-1");
+          expect(body.campaignActorId).toBeNull();
           expect(body.displayName).toBe("旅店老板");
-          expect(body.speakerMode).toBe("actor");
-          expect(body.publicHealthState).toBe("healthy");
-          expect(body.publicHealthFraction).toBe(1);
+          expect(body.speakerMode).toBe("snapshot");
+          expect(body.publicHealthState).toBeNull();
+          expect(body.publicHealthFraction).toBeNull();
         });
 
-      const actorCreateArgs = prismaService.campaignActor.create.mock.calls[0][0];
-      expect(actorCreateArgs.data.lifecycle).toBe("temporary");
-      expect(actorCreateArgs.data.actorType).toBe("npc");
-      expect(actorCreateArgs.data.sheetJson.name).toBe("旅店老板");
-      expect(actorCreateArgs.data.status).toBe("active");
-
-      const memberUpdateArgs =
-        prismaService.campaignMember.update.mock.calls[0][0];
-      expect(memberUpdateArgs.data.activeSpeakerActorId).toBe("temp-actor-1");
-      expect(memberUpdateArgs.data.speakerMode).toBe("actor");
+      // No actor must be created and the DM's active speaker must NOT be
+      // mutated — the snapshot is use-once and discarded.
+      expect(prismaService.campaignActor.create).not.toHaveBeenCalled();
+      expect(prismaService.campaignMember.update).not.toHaveBeenCalled();
 
       const messageCreateArgs =
         prismaService.campaignChatMessage.create.mock.calls[0][0];
-      expect(messageCreateArgs.data.campaignActorId).toBe("temp-actor-1");
+      expect(messageCreateArgs.data.campaignActorId).toBeNull();
       expect(messageCreateArgs.data.displayName).toBe("旅店老板");
+      expect(messageCreateArgs.data.speakerMode).toBe("snapshot");
       expect(messageCreateArgs.data.kind).toBe("say");
     });
 
-    it("rejects draftActor from non-managers", async () => {
+    it("rejects speakerSnapshot from non-managers", async () => {
       const token = await loginAs(storedPlayerUser);
       prismaService.campaign.findUnique.mockResolvedValueOnce({
         ...campaignWithOwner,
@@ -1344,7 +1324,7 @@ describe("campaigns endpoints", () => {
         .send({
           kind: "say",
           content: "测试",
-          draftActor: { displayName: "伪装者" },
+          speakerSnapshot: { displayName: "伪装者" },
         })
         .expect(403);
 
@@ -1352,7 +1332,7 @@ describe("campaigns endpoints", () => {
       expect(prismaService.campaignChatMessage.create).not.toHaveBeenCalled();
     });
 
-    it("leaves no orphan actor when the draft transaction fails", async () => {
+    it("rejects speakerSnapshot for ooc messages", async () => {
       const token = await loginAsDm();
       prismaService.campaign.findUnique.mockResolvedValueOnce({
         ...campaignWithOwner,
@@ -1366,19 +1346,16 @@ describe("campaigns endpoints", () => {
           },
         ],
       });
-      prismaService.campaignActor.create.mockRejectedValueOnce(
-        new Error("db write failure"),
-      );
 
       await request(app.getHttpServer())
         .post("/api/campaigns/camp-1/messages")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          kind: "say",
-          content: "欢迎光临",
-          draftActor: { displayName: "旅店老板" },
+          kind: "ooc",
+          content: "测试",
+          speakerSnapshot: { displayName: "旅店老板" },
         })
-        .expect(500);
+        .expect(400);
 
       expect(prismaService.campaignChatMessage.create).not.toHaveBeenCalled();
     });

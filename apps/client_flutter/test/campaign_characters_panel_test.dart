@@ -61,11 +61,9 @@ void main() {
 
     expect(find.text('玩家角色'), findsWidgets);
     expect(find.text('常驻 NPC'), findsOneWidget);
-    expect(find.text('临时角色'), findsOneWidget);
     expect(find.text('归档角色'), findsOneWidget);
     expect(find.byKey(const Key('actor-row-player-1')), findsOneWidget);
     expect(find.byKey(const Key('actor-row-npc-1')), findsOneWidget);
-    expect(find.byKey(const Key('actor-row-temp-1')), findsOneWidget);
     expect(find.byKey(const Key('actor-row-archived-1')), findsNothing);
 
     await tester.tap(find.byKey(const Key('archived-section-toggle')));

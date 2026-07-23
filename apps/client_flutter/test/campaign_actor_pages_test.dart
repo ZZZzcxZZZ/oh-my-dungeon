@@ -121,32 +121,6 @@ void main() {
     controller.dispose();
   });
 
-  test('creates a temporary NPC with a minimal usable combat sheet', () async {
-    final apiClient = MemoryCampaignSyncApiClient();
-    final controller = CampaignActorController(
-      cacheRepository: MemoryCampaignCacheRepository(),
-      apiClient: apiClient,
-      apiBaseUrl: 'https://example.test',
-      accessToken: 'access-token',
-      currentUserId: 'dm-1',
-    );
-    await controller.selectCampaign('campaign-1');
-
-    final created = await controller.createTemporaryNpc(
-      name: 'Street informant',
-      maxHp: 9,
-    );
-
-    expect(created, isTrue);
-    expect(apiClient.createActorCalls.single['lifecycle'], 'temporary');
-    expect(apiClient.createActorCalls.single['sheet'], {
-      'name': 'Street informant',
-      'currentHp': 9,
-      'maxHp': 9,
-    });
-    controller.dispose();
-  });
-
   // Spec compliance: DM must be able to create persistent NPC/monster/companion
   // actors via the DM create endpoint (/actors), not the self-publish endpoint
   // (/actors/publish) which rejects non-player types. See

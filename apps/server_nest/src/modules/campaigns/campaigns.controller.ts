@@ -19,9 +19,9 @@ import type {
   CampaignJournalEntryView,
   CampaignWorkspaceContextView,
   CampaignView,
-  DraftActorInput,
   InviteView,
   MembershipView,
+  SpeakerSnapshotInput,
 } from "./campaigns.types";
 
 interface CreateCampaignBody {
@@ -44,7 +44,7 @@ interface CreateCampaignChatMessageBody {
   campaignActorId?: unknown;
   actionId?: unknown;
   eventData?: unknown;
-  draftActor?: unknown;
+  speakerSnapshot?: unknown;
 }
 
 interface UpdateMemberBindingBody {
@@ -129,7 +129,7 @@ export class CampaignsController {
         typeof body.campaignActorId === "string" ? body.campaignActorId : null,
       actionId: typeof body.actionId === "string" ? body.actionId : null,
       eventData: isRecord(body.eventData) ? body.eventData : null,
-      draftActor: parseDraftActor(body.draftActor),
+      speakerSnapshot: parseSpeakerSnapshot(body.speakerSnapshot),
     });
   }
 
@@ -238,11 +238,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
-function parseDraftActor(value: unknown): DraftActorInput | null {
+function parseSpeakerSnapshot(value: unknown): SpeakerSnapshotInput | null {
   if (!isRecord(value)) return null;
   const displayName = value.displayName;
   if (!isNonEmptyString(displayName)) {
-    throw new BadRequestException("draftActor.displayName is required");
+    throw new BadRequestException("speakerSnapshot.displayName is required");
   }
   const avatarUrl =
     typeof value.avatarUrl === "string" ? value.avatarUrl : null;

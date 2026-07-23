@@ -19,7 +19,6 @@ import 'campaign_controller.dart';
 import 'campaign_center_page.dart';
 import 'center/campaign_archive_editor_page.dart';
 import 'character_roll_sink.dart';
-import 'campaign_workspace_mutation_coordinator.dart';
 import 'chat/campaign_chat_composer.dart';
 import 'chat/campaign_chat_tool_sheet.dart';
 import 'chat/campaign_chat_timeline.dart';
@@ -263,7 +262,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
           : (_mode == ChatMode.act ? 'action' : 'say'),
       content: content,
       campaignActorId: draft == null ? identity.actorId : null,
-      draftActor: draft == null
+      speakerSnapshot: draft == null
           ? null
           : <String, Object?>{'displayName': draft.displayName},
     );
@@ -272,18 +271,10 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     if (sent) {
       _controller.clear();
       if (draft != null) {
+        // Plan 2026-07-23 task 5.2: the snapshot is use-once — clear the draft
+        // and do NOT refresh the workspace/actor list (no actor was created,
+        // so the DM's previously selected speaker is still active).
         _draftIdentity = null;
-        final actorController = widget.actorController;
-        if (actorController == null) {
-          await widget.campaignController.loadWorkspaceContext(
-            widget.campaign.id,
-          );
-        } else {
-          await CampaignWorkspaceMutationCoordinator(
-            pullActors: actorController.pullUntilCurrent,
-            loadWorkspace: widget.campaignController.loadWorkspaceContext,
-          ).refreshAfterActorMutation(widget.campaign.id);
-        }
       }
       await WidgetsBinding.instance.endOfFrame;
       if (_chatScrollController.hasClients) {
@@ -297,7 +288,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       // Spec: failed draft send keeps the draft and shows the spec error.
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('临时角色创建失败，消息尚未发送。')));
+      ).showSnackBar(const SnackBar(content: Text('临时身份发送失败，消息尚未发送。')));
     } else {
       ScaffoldMessenger.of(
         context,
@@ -1188,7 +1179,7 @@ class _DraftIdentityFormSheetState extends State<_DraftIdentityFormSheet> {
             Text('快速临时身份', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             Text(
-              '只需填写显示名称即可。发送第一条消息时，服务器会在一个事务中创建临时角色并写入消息。',
+              '只需填写显示名称即可。发送消息时，该名称会直接写入消息行，不会创建常驻角色。',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),

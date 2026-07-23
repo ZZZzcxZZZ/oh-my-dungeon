@@ -166,31 +166,4 @@ void main() {
       modeController.dispose();
     },
   );
-
-  testWidgets(
-    'DM quick temporary option opens the quick temporary form',
-    (tester) async {
-      final modeController = ClientModeController(
-        initialMode: ClientMode.dungeonMaster,
-      );
-      final actorController = await buildActorController();
-      await pumpPage(
-        tester,
-        modeController: modeController,
-        actorController: actorController,
-      );
-
-      await tester.tap(find.byKey(const Key('create_character')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('dm-create-quick-temporary')));
-      await tester.pumpAndSettle();
-
-      expect(find.text('快速创建一次性角色'), findsOneWidget);
-      expect(find.byKey(const Key('quick-temporary-name')), findsOneWidget);
-      expect(find.byKey(const Key('quick-temporary-confirm')), findsOneWidget);
-
-      actorController.dispose();
-      modeController.dispose();
-    },
-  );
 }

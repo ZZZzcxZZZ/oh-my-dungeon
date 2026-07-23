@@ -667,8 +667,8 @@ void main() {
 
       expect(campaignClient.sendMessageCalls, hasLength(1));
       final call = campaignClient.sendMessageCalls.single;
-      expect(call.draftActor, isNotNull);
-      expect(call.draftActor!['displayName'], '旅店老板');
+      expect(call.speakerSnapshot, isNotNull);
+      expect(call.speakerSnapshot!['displayName'], '旅店老板');
       expect(call.campaignActorId, isNull);
       expect(call.kind, anyOf('say', 'action'));
       expect(call.content, '欢迎光临');
@@ -703,10 +703,10 @@ void main() {
       await tester.tap(find.byKey(const Key('campaign-chat-send')));
       await tester.pumpAndSettle();
 
-      expect(find.text('临时角色创建失败，消息尚未发送。'), findsOneWidget);
+      expect(find.text('临时身份发送失败，消息尚未发送。'), findsOneWidget);
       expect(campaignClient.sendMessageCalls, hasLength(1));
       expect(
-        campaignClient.sendMessageCalls.single.draftActor?['displayName'],
+        campaignClient.sendMessageCalls.single.speakerSnapshot?['displayName'],
         '神秘人',
       );
     },
@@ -1595,7 +1595,7 @@ class _RecordingCampaignClient implements CampaignClient {
     String? campaignActorId,
     String? actionId,
     Map<String, Object?>? eventData,
-    Map<String, Object?>? draftActor,
+    Map<String, Object?>? speakerSnapshot,
   }) async {
     sendMessageCalls.add(
       _SentMessageCall(
@@ -1604,7 +1604,7 @@ class _RecordingCampaignClient implements CampaignClient {
         campaignActorId: campaignActorId,
         actionId: actionId,
         eventData: eventData,
-        draftActor: draftActor,
+        speakerSnapshot: speakerSnapshot,
       ),
     );
     final exception = sendMessageException;
@@ -1642,7 +1642,7 @@ class _SentMessageCall {
     required this.campaignActorId,
     required this.actionId,
     required this.eventData,
-    required this.draftActor,
+    required this.speakerSnapshot,
   });
 
   final String kind;
@@ -1650,7 +1650,7 @@ class _SentMessageCall {
   final String? campaignActorId;
   final String? actionId;
   final Map<String, Object?>? eventData;
-  final Map<String, Object?>? draftActor;
+  final Map<String, Object?>? speakerSnapshot;
 }
 
 class _CreatedArchiveCall {

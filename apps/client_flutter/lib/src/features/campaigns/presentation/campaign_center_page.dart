@@ -311,18 +311,6 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
                       : (widget.actorController!.error ?? '归档失败');
                 }
               : null,
-          onConvertToPersistent: _canManage && widget.actorController != null
-              ? ({required CampaignActor actor}) async {
-                  final token = await widget.controller.authController
-                      .ensureValidAccessToken();
-                  if (token == null) return '登录已过期，请重新登录';
-                  final success = await widget.actorController!
-                      .convertToPersistent(actor);
-                  return success
-                      ? null
-                      : (widget.actorController!.error ?? '转为常驻失败');
-                }
-              : null,
           onBatchArchive: _canManage && widget.actorController != null
               ? ({required List<String> actorIds}) async {
                   final token = await widget.controller.authController

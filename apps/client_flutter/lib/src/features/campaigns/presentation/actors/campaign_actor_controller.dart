@@ -329,45 +329,6 @@ class CampaignActorController extends ChangeNotifier {
     }
   }
 
-  /// Creates a throwaway DM persona with enough state to be used in chat and
-  /// later added to an encounter without opening the full character editor.
-  Future<bool> createTemporaryNpc({required String name, int maxHp = 1}) async {
-    final campaignId = _selectedCampaignId;
-    final normalizedName = name.trim();
-    if (campaignId == null || normalizedName.isEmpty) return false;
-
-    _error = null;
-    try {
-      final hp = maxHp < 0 ? 0 : maxHp;
-      final created = await _apiClient.createActor(
-        apiBaseUrl: _apiBaseUrl,
-        accessToken: _accessToken,
-        campaignId: campaignId,
-        actorType: 'npc',
-        lifecycle: 'temporary',
-        sheet: {'name': normalizedName, 'currentHp': hp, 'maxHp': hp},
-      );
-      await _cacheRepository.applyPage(
-        campaignId,
-        _singleChangePage(created, 'upsert'),
-      );
-      _upsertActor(created);
-      return true;
-    } on CampaignConflictException catch (error) {
-      _conflict = error;
-      notifyListeners();
-      return false;
-    } on CampaignSyncException catch (e) {
-      _error = _describeSyncException(e);
-      notifyListeners();
-      return false;
-    } catch (_) {
-      _error = '创建临时角色失败：网络错误，请检查服务器连接';
-      notifyListeners();
-      return false;
-    }
-  }
-
   Future<bool> updateActor(
     CampaignActor actor,
     Map<String, Object?> sheet, {
@@ -407,16 +368,6 @@ class CampaignActorController extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-  }
-
-  /// Spec §完整管理: 转为常驻 — DM 把 temporary 角色升级为 persistent。
-  /// 仅发送 lifecycle 变更，sheet 保持原样。服务端要求 canManageCampaign。
-  Future<bool> convertToPersistent(CampaignActor actor) {
-    return updateActor(
-      actor,
-      Map<String, Object?>.from(actor.sheet),
-      lifecycle: 'persistent',
-    );
   }
 
   Future<bool> archiveActor(CampaignActor actor) async {

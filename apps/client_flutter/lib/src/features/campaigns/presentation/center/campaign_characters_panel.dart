@@ -23,7 +23,6 @@ class CampaignCharactersPanel extends StatefulWidget {
     required this.isManager,
     required this.onOpenActor,
     this.onCreateActor,
-    this.onConvertToPersistent,
     this.onArchiveActor,
     this.onBatchArchive,
     this.onSetActiveSpeaker,
@@ -35,7 +34,6 @@ class CampaignCharactersPanel extends StatefulWidget {
   final bool isManager;
   final ValueChanged<CampaignActor> onOpenActor;
   final CreateCampaignActor? onCreateActor;
-  final CampaignActorAction? onConvertToPersistent;
   final CampaignActorAction? onArchiveActor;
   final BatchCampaignActorAction? onBatchArchive;
   final CampaignActorAction? onSetActiveSpeaker;
@@ -56,7 +54,6 @@ class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
     final sections = <(String, String, List<CampaignActor>)>[
       ('player', '玩家角色', _actorsFor('player')),
       ('npc', '常驻 NPC', _actorsFor('npc')),
-      ('temporary', '临时角色', _actorsFor('temporary')),
       ('archived', '归档角色', _actorsFor('archived')),
     ].where((section) => section.$3.isNotEmpty).toList(growable: false);
 
@@ -168,9 +165,6 @@ class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
                   _ActorMenu(
                     actor: actor,
                     canSetActive: widget.onSetActiveSpeaker != null && !active,
-                    canConvert:
-                        widget.onConvertToPersistent != null &&
-                        actor.lifecycle == 'temporary',
                     canArchive: widget.onArchiveActor != null,
                     onSelected: (action) => _runActorAction(actor, action),
                   )
@@ -186,7 +180,7 @@ class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
         .where((actor) {
           if (section == 'archived') return actor.status == 'archived';
           if (actor.status == 'archived') return false;
-          if (section == 'temporary') return actor.lifecycle == 'temporary';
+          // 临时角色已废弃（改用 speakerSnapshot），遗留数据不展示。
           if (actor.lifecycle == 'temporary') return false;
           if (section == 'player') return actor.actorType == 'player';
           return actor.actorType != 'player';
@@ -202,7 +196,6 @@ class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
 
   String _actorSubtitle(CampaignActor actor, {required bool active}) {
     final parts = <String>[_actorTypeLabel(actor.actorType)];
-    if (actor.lifecycle == 'temporary') parts.add('临时');
     if (actor.status == 'archived') parts.add('已归档');
     if (active) parts.add('当前发言身份');
     return parts.join(' · ');
@@ -220,7 +213,6 @@ class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
   ) async {
     final callback = switch (action) {
       _ActorMenuAction.setActive => widget.onSetActiveSpeaker,
-      _ActorMenuAction.convert => widget.onConvertToPersistent,
       _ActorMenuAction.archive => widget.onArchiveActor,
     };
     if (callback == null) return;
@@ -270,7 +262,6 @@ class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
 
   String _successMessage(_ActorMenuAction action) => switch (action) {
     _ActorMenuAction.setActive => '已切换发言身份',
-    _ActorMenuAction.convert => '已转为常驻角色',
     _ActorMenuAction.archive => '角色已归档',
   };
 }
@@ -329,20 +320,18 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-enum _ActorMenuAction { setActive, convert, archive }
+enum _ActorMenuAction { setActive, archive }
 
 class _ActorMenu extends StatelessWidget {
   const _ActorMenu({
     required this.actor,
     required this.canSetActive,
-    required this.canConvert,
     required this.canArchive,
     required this.onSelected,
   });
 
   final CampaignActor actor;
   final bool canSetActive;
-  final bool canConvert;
   final bool canArchive;
   final ValueChanged<_ActorMenuAction> onSelected;
 
@@ -358,14 +347,6 @@ class _ActorMenu extends StatelessWidget {
             child: ListTile(
               leading: Icon(Icons.record_voice_over_outlined),
               title: Text('设为发言身份'),
-            ),
-          ),
-        if (canConvert)
-          const PopupMenuItem(
-            value: _ActorMenuAction.convert,
-            child: ListTile(
-              leading: Icon(Icons.push_pin_outlined),
-              title: Text('转为常驻角色'),
             ),
           ),
         if (canArchive)
@@ -406,7 +387,6 @@ class _CreateActorDialogState extends State<_CreateActorDialog> {
   final _nameController = TextEditingController();
   final _hpController = TextEditingController();
   String _actorType = 'npc';
-  bool _temporary = false;
 
   @override
   void dispose() {
@@ -445,12 +425,6 @@ class _CreateActorDialogState extends State<_CreateActorDialog> {
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: '最大生命值（可选）'),
             ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('临时角色'),
-              value: _temporary,
-              onChanged: (value) => setState(() => _temporary = value),
-            ),
           ],
         ),
       ),
@@ -467,7 +441,7 @@ class _CreateActorDialogState extends State<_CreateActorDialog> {
               _ActorDraft(
                 actorType: _actorType,
                 displayName: name,
-                lifecycle: _temporary ? 'temporary' : 'persistent',
+                lifecycle: 'persistent',
                 maxHp: int.tryParse(_hpController.text.trim()),
               ),
             );

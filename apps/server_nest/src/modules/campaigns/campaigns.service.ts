@@ -26,7 +26,7 @@ import type {
   CreateCampaignChatMessageInput,
   CreateCampaignInput,
   CreateInviteInput,
-  DraftActorInput,
+  SpeakerSnapshotInput,
   InviteView,
   MembershipView,
 } from "./campaigns.types";
@@ -407,15 +407,15 @@ export class CampaignsService {
     const capabilities = this.policy.capabilitiesFor(actor, campaign.context);
     const requestedActorId = input.campaignActorId ?? null;
 
-    if (input.draftActor) {
-      return this.sendDraftActorMessage(
+    if (input.speakerSnapshot) {
+      return this.sendSpeakerSnapshotMessage(
         actor,
         campaignId,
         {
           kind,
           content,
           eventData,
-          draftActor: input.draftActor,
+          speakerSnapshot: input.speakerSnapshot,
           membership,
           capabilities,
         },
@@ -615,92 +615,62 @@ export class CampaignsService {
   }
 
   /**
-   * DM-only atomic path: creates a temporary CampaignActor, updates the DM's
-   * active speaker, and writes the first message — all inside one transaction.
-   * If any step fails, nothing persists (no orphan actor). Spec:
-   * docs/superpowers/specs/2026-07-16-campaign-workspace-refactor-design.md
-   * §快速临时身份.
+   * DM-only path: writes a single message under a use-once speaker snapshot.
+   * Plan 2026-07-23 task 5.2: no CampaignActor is created and the DM's
+   * activeSpeakerActorId is NOT mutated — the snapshot lives only on this one
+   * message row. The DM's next message uses whichever actor they had selected
+   * before. Replaces the old sendDraftActorMessage which persisted a temporary
+   * actor and switched the active speaker.
    */
-  private async sendDraftActorMessage(
+  private async sendSpeakerSnapshotMessage(
     actor: AccessTokenPayload,
     campaignId: string,
     input: {
       kind: string;
       content: string;
       eventData: Record<string, unknown> | null;
-      draftActor: DraftActorInput;
+      speakerSnapshot: SpeakerSnapshotInput;
       membership: { id: string };
       capabilities: { canManageCampaign: boolean };
     },
   ): Promise<CampaignChatMessageView> {
     if (!input.capabilities.canManageCampaign) {
       throw new ForbiddenException(
-        "Only managers may create temporary identities",
+        "Only managers may send speaker snapshot messages",
       );
     }
     if (input.kind === "ooc") {
       throw new BadRequestException(
-        "Temporary identity cannot be used for out-of-character messages",
+        "Speaker snapshot cannot be used for out-of-character messages",
       );
     }
-    const displayName = input.draftActor.displayName.trim();
+    const displayName = input.speakerSnapshot.displayName.trim();
     if (!displayName) {
-      throw new BadRequestException("draftActor.displayName is required");
+      throw new BadRequestException("speakerSnapshot.displayName is required");
     }
-    const avatarUrl = input.draftActor.avatarUrl ?? null;
-    const sheet: Record<string, unknown> = {
-      name: displayName,
-      currentHp: 1,
-      maxHp: 1,
-      avatarUrl,
-    };
-    const publicHealthState = resolvePublicHealthState(sheet);
-    const publicHealthFraction = resolvePublicHealthFraction(sheet);
+    const avatarUrl = input.speakerSnapshot.avatarUrl ?? null;
 
-    const created = await this.prismaService.$transaction(async (tx) => {
-      const tempActor = await tx.campaignActor.create({
-        data: {
-          campaignId,
-          ownerUserId: null,
-          sourceCharacterId: null,
-          actorType: "npc",
-          status: "active",
-          lifecycle: "temporary",
-          avatarAssetId: null,
-          healthVisibility: "ownerAndDm",
-          sheetJson: sheet as unknown as Prisma.InputJsonValue,
-          revision: 1,
-          updatedBy: actor.userId,
-        },
-      });
-      await tx.campaignMember.update({
-        where: { id: input.membership.id },
-        data: {
-          activeSpeakerActorId: tempActor.id,
-          speakerMode: "actor",
-        },
-      });
-      const message = await tx.campaignChatMessage.create({
-        data: {
-          campaignId,
-          senderId: actor.userId,
-          campaignActorId: tempActor.id,
-          displayName,
-          avatarUrl,
-          speakerMode: "actor",
-          delegatedByUserId: null,
-          speakerAvatarAssetId: null,
-          publicHealthState,
-          publicHealthFraction,
-          ooc: false,
-          kind: input.kind,
-          content: input.content,
-          ...(input.eventData
-            ? { eventData: input.eventData as Prisma.InputJsonValue }
-            : {}),
-        },
-      });
-      return message;
+    // No transaction needed: a single row write. No actor creation, no
+    // membership mutation — the snapshot is self-contained on the message.
+    const created = await this.prismaService.campaignChatMessage.create({
+      data: {
+        campaignId,
+        senderId: actor.userId,
+        campaignActorId: null,
+        displayName,
+        avatarUrl,
+        speakerMode: "snapshot",
+        delegatedByUserId: null,
+        speakerAvatarAssetId: null,
+        publicHealthState: null,
+        publicHealthFraction: null,
+        ooc: false,
+        kind: input.kind,
+        content: input.content,
+        ...(input.eventData
+          ? { eventData: input.eventData as Prisma.InputJsonValue }
+          : {}),
+      },
     });
 
     const view = toCampaignChatMessageView(created);

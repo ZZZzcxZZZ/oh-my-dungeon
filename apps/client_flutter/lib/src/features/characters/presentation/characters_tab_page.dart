@@ -244,9 +244,9 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
 
   /// Spec §DM 角色生命周期: DM 模式下角色栏 FAB 弹出菜单, 提供:
   /// 1. 快速创建 NPC (常驻, name + HP + type)
-  /// 2. 快速创建一次性角色 (临时, name only)
-  /// 3. 完整创建角色 (existing full character editor)
+  /// 2. 完整创建角色 (existing full character editor)
   /// 仅当 DM 模式且已选中战役时启用。
+  /// 一次性发言身份改用 speakerSnapshot 直接写入消息，不再创建 Actor。
   bool get _isDmModeWithCampaign {
     final isDm = widget.modeController?.mode == ClientMode.dungeonMaster;
     final campaignId = widget.actorController?.selectedCampaignId;
@@ -269,15 +269,6 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
             ),
           ),
           SimpleDialogOption(
-            key: const Key('dm-create-quick-temporary'),
-            onPressed: () => Navigator.of(context).pop('quickTemporary'),
-            child: const ListTile(
-              leading: Icon(Icons.flash_on_outlined),
-              title: Text('快速创建一次性角色'),
-              subtitle: Text('只输入名称，创建临时角色'),
-            ),
-          ),
-          SimpleDialogOption(
             key: const Key('dm-create-full'),
             onPressed: () => Navigator.of(context).pop('full'),
             child: const ListTile(
@@ -293,8 +284,6 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     switch (selected) {
       case 'quickNpc':
         await _showQuickNpcForm();
-      case 'quickTemporary':
-        await _showQuickTemporaryForm();
       case 'full':
         await _openCreatePage();
     }
@@ -413,67 +402,6 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
         content: Text(
           success ? '已创建常驻 NPC' : (actorController.error ?? '创建失败'),
         ),
-      ),
-    );
-  }
-
-  Future<void> _showQuickTemporaryForm() async {
-    final actorController = widget.actorController;
-    if (actorController == null) return;
-
-    final nameController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('快速创建一次性角色'),
-        content: Form(
-          key: formKey,
-          child: TextFormField(
-            key: const Key('quick-temporary-name'),
-            controller: nameController,
-            autofocus: true,
-            decoration: const InputDecoration(labelText: '显示名称'),
-            validator: (value) =>
-                value == null || value.trim().isEmpty ? '请输入名称' : null,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            key: const Key('quick-temporary-confirm'),
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.of(context).pop(true);
-              }
-            },
-            child: const Text('创建'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) {
-      nameController.dispose();
-      return;
-    }
-    if (!mounted) {
-      nameController.dispose();
-      return;
-    }
-    final messenger = ScaffoldMessenger.of(context);
-    final success = await actorController.createTemporaryNpc(
-      name: nameController.text.trim(),
-    );
-    nameController.dispose();
-    if (!mounted) return;
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(success ? '已创建临时角色' : (actorController.error ?? '创建失败')),
       ),
     );
   }

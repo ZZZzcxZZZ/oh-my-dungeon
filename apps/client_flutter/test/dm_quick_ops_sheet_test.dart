@@ -264,7 +264,7 @@ class _RecordingCampaignClient implements CampaignClient {
   @override
   Future<CampaignInvite> createInvite({required String apiBaseUrl, required String accessToken, required String campaignId, int? maxUses}) => throw UnimplementedError();
   @override
-  Future<CampaignChatMessage> sendMessage({required String apiBaseUrl, required String accessToken, required String campaignId, required String kind, required String content, String? campaignActorId, String? actionId, Map<String, Object?>? eventData, Map<String, Object?>? draftActor}) async {
+  Future<CampaignChatMessage> sendMessage({required String apiBaseUrl, required String accessToken, required String campaignId, required String kind, required String content, String? campaignActorId, String? actionId, Map<String, Object?>? eventData, Map<String, Object?>? speakerSnapshot}) async {
     final msg = _SentMessage(kind: kind, content: content, campaignActorId: campaignActorId, eventData: eventData);
     sentMessages.add(msg);
     return CampaignChatMessage(

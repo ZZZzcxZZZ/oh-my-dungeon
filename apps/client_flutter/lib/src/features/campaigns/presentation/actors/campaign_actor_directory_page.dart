@@ -81,61 +81,9 @@ class CampaignActorDirectoryPage extends StatelessWidget {
               onChanged: controller.setQuery,
             ),
           ),
-          const SizedBox(width: 4),
-          IconButton(
-            key: const Key('create-temporary-actor'),
-            tooltip: '创建临时角色',
-            icon: const Icon(Icons.person_add_alt_1_outlined),
-            onPressed: () => _showTemporaryActorDialog(context),
-          ),
         ],
       ),
     );
-  }
-
-  Future<void> _showTemporaryActorDialog(BuildContext context) async {
-    final nameController = TextEditingController();
-    final hpController = TextEditingController(text: '1');
-    final created = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('创建临时角色'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: '名称'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: hpController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: '生命值'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('创建'),
-          ),
-        ],
-      ),
-    );
-    if (created == true) {
-      await controller.createTemporaryNpc(
-        name: nameController.text,
-        maxHp: int.tryParse(hpController.text) ?? 1,
-      );
-    }
-    nameController.dispose();
-    hpController.dispose();
   }
 
   Widget _buildFilterChips(BuildContext context) {

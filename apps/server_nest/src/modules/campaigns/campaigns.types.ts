@@ -38,7 +38,14 @@ export interface CampaignChatMessageView {
   createdAt: string;
 }
 
-export interface DraftActorInput {
+/**
+ * Use-once speaker snapshot. Plan 2026-07-23 task 5.2: a DM may send a single
+ * message under a throwaway identity (e.g. an NPC the party just met) without
+ * persisting a CampaignActor. The snapshot is written onto the message row
+ * directly and discarded — no actor is created and the DM's active speaker is
+ * not mutated.
+ */
+export interface SpeakerSnapshotInput {
   displayName: string;
   avatarUrl?: string | null;
 }
@@ -49,7 +56,7 @@ export interface CreateCampaignChatMessageInput {
   campaignActorId?: string | null;
   actionId?: string | null;
   eventData?: Record<string, unknown> | null;
-  draftActor?: DraftActorInput | null;
+  speakerSnapshot?: SpeakerSnapshotInput | null;
 }
 
 export interface CreateCampaignInput {

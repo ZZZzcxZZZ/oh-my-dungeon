@@ -5,6 +5,7 @@ import 'package:dnd_table_client/src/features/campaigns/data/sync/campaign_sync_
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_actor.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_actor_audit.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_change.dart';
+import 'package:dnd_table_client/src/features/campaigns/domain/campaign_event.dart';
 
 CampaignActor testCampaignActor({
   String id = 'actor-1',
@@ -202,6 +203,16 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
   final List<Map<String, Object?>> updateEntryCalls = [];
   final List<String> deleteEntryCalls = [];
   final List<String> listActorAuditCalls = [];
+
+  /// Task 3.1 — CampaignEvent 原子事件调用记录, 便于测试断言.
+  final List<Map<String, Object?>> changeActorHpCalls = [];
+  final List<Map<String, Object?>> grantItemCalls = [];
+
+  /// 注入下一次 `changeActorHp` 调用要抛出的异常; 用于 409/403 错误路径测试.
+  Object? nextChangeActorHpException;
+
+  /// 注入下一次 `grantItem` 调用要抛出的异常; 用于 409/403 错误路径测试.
+  Object? nextGrantItemException;
 
   @override
   Future<CampaignChangePage> listChanges({
@@ -422,4 +433,160 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
     required String name,
     required Map<String, Object?> entry,
   }) async => {'valid': true, 'errors': <String>[]};
+
+  @override
+  Future<CampaignEventResult> changeActorHp({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String actorId,
+    required int delta,
+    String? reason,
+    int? baseRevision,
+  }) async {
+    changeActorHpCalls.add({
+      'campaignId': campaignId,
+      'actorId': actorId,
+      'delta': delta,
+      'reason': reason,
+      'baseRevision': baseRevision,
+    });
+    final exception = nextChangeActorHpException;
+    if (exception != null) {
+      nextChangeActorHpException = null;
+      throw exception;
+    }
+    final baseRevisionValue = baseRevision ?? 1;
+    return _buildHpEventResult(
+      campaignId: campaignId,
+      actorId: actorId,
+      delta: delta,
+      newRevision: baseRevisionValue + 1,
+      reason: reason,
+    );
+  }
+
+  @override
+  Future<CampaignEventResult> grantItem({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String actorId,
+    required String itemId,
+    required String name,
+    int quantity = 1,
+    int? baseRevision,
+  }) async {
+    grantItemCalls.add({
+      'campaignId': campaignId,
+      'actorId': actorId,
+      'itemId': itemId,
+      'name': name,
+      'quantity': quantity,
+      'baseRevision': baseRevision,
+    });
+    final exception = nextGrantItemException;
+    if (exception != null) {
+      nextGrantItemException = null;
+      throw exception;
+    }
+    final baseRevisionValue = baseRevision ?? 1;
+    return _buildItemGrantedEventResult(
+      campaignId: campaignId,
+      actorId: actorId,
+      itemId: itemId,
+      itemName: name,
+      quantity: quantity,
+      newRevision: baseRevisionValue + 1,
+    );
+  }
+
+  /// 构造 actor.hp_changed 事件返回. 内存实现不做 clamp, 由服务端负责.
+  CampaignEventResult _buildHpEventResult({
+    required String campaignId,
+    required String actorId,
+    required int delta,
+    required int newRevision,
+    String? reason,
+  }) {
+    final previousHp = 20;
+    final newHp = previousHp + delta;
+    return CampaignEventResult(
+      actor: {
+        'id': actorId,
+        'campaignId': campaignId,
+        'actorType': 'player',
+        'status': 'active',
+        'lifecycle': 'persistent',
+        'sheet': <String, Object?>{
+          'name': 'Arannis',
+          'currentHp': newHp,
+          'maxHp': 20,
+        },
+        'revision': newRevision,
+      },
+      event: CampaignEvent(
+        id: 'event-${DateTime.now().microsecondsSinceEpoch}',
+        campaignId: campaignId,
+        senderId: 'dm-1',
+        campaignActorId: actorId,
+        displayName: 'DM',
+        kind: 'system',
+        content: 'Arannis $delta HP ($previousHp → $newHp)',
+        eventData: <String, Object?>{
+          'eventType': CampaignEventTypes.actorHpChanged,
+          'actorId': actorId,
+          'delta': delta,
+          'previousHp': previousHp,
+          'newHp': newHp,
+          'reason': reason,
+        },
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+      ),
+    );
+  }
+
+  /// 构造 actor.item_granted 事件返回.
+  CampaignEventResult _buildItemGrantedEventResult({
+    required String campaignId,
+    required String actorId,
+    required String itemId,
+    required String itemName,
+    required int quantity,
+    required int newRevision,
+  }) {
+    return CampaignEventResult(
+      actor: {
+        'id': actorId,
+        'campaignId': campaignId,
+        'actorType': 'player',
+        'status': 'active',
+        'lifecycle': 'persistent',
+        'sheet': <String, Object?>{
+          'name': 'Arannis',
+          'inventory': <Map<String, Object?>>[
+            {'itemId': itemId, 'name': itemName, 'quantity': quantity},
+          ],
+        },
+        'revision': newRevision,
+      },
+      event: CampaignEvent(
+        id: 'event-${DateTime.now().microsecondsSinceEpoch}',
+        campaignId: campaignId,
+        senderId: 'dm-1',
+        campaignActorId: actorId,
+        displayName: 'DM',
+        kind: 'system',
+        content: '给 Arannis $itemName ×$quantity',
+        eventData: <String, Object?>{
+          'eventType': CampaignEventTypes.actorItemGranted,
+          'actorId': actorId,
+          'itemId': itemId,
+          'itemName': itemName,
+          'quantity': quantity,
+        },
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+      ),
+    );
+  }
 }

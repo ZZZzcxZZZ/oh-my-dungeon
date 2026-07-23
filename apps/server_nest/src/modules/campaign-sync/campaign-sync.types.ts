@@ -154,3 +154,92 @@ export interface ContentValidationError {
   path: string;
   message: string;
 }
+
+// ---------------------------------------------------------------------------
+// Task 3.1 — CampaignEvent 事件层类型
+//
+// 这些类型形式化战役事件的命名空间, 用于在 kind='system' 消息的 eventData
+// 字段中区分事件类型. 服务端持久化仍使用现有 CampaignChatMessage 表, 不需要
+// schema 迁移; 客户端可通过 eventData.eventType 字段分发渲染.
+// ---------------------------------------------------------------------------
+
+/**
+ * 战役事件类型枚举 (最小集合). 沿用路线图第三节定义的命名空间:
+ *   message.* / roll.* / actor.* / archive.* / system.*
+ * 当前已实现: actor.hp_changed, actor.item_granted.
+ * 已有但未形式化的 kind (say/action/roll/checkRequest/archivePublished)
+ * 保留原 kind 字段, 不强制改名为 message.say 等, 避免破坏存量数据.
+ */
+export type CampaignEventKind =
+  | "message.say"
+  | "message.act"
+  | "message.narration"
+  | "roll.dice"
+  | "roll.check"
+  | "roll.save"
+  | "roll.initiative"
+  | "actor.hp_changed"
+  | "actor.item_granted"
+  | "archive.published"
+  | "system.notice";
+
+/** HP 变化事件 payload. 存储在 CampaignChatMessage.eventData 中. */
+export interface ActorHpChangedEvent {
+  eventType: "actor.hp_changed";
+  actorId: string;
+  actorName: string;
+  /** 客户端请求的原始 delta (可被 clamp 修正). */
+  delta: number;
+  /** clamp 前的 currentHp. */
+  from: number;
+  /** clamp 后的 currentHp. */
+  to: number;
+  /** 可选的 DM 备注 (例如伤害来源). */
+  reason: string | null;
+}
+
+/** 给予物品事件 payload. */
+export interface ActorItemGrantedEvent {
+  eventType: "actor.item_granted";
+  actorId: string;
+  actorName: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+}
+
+/** HP 变化请求. delta < 0 为伤害, > 0 为治疗, 0 拒绝. */
+export interface ChangeActorHpInput {
+  delta: number;
+  /** 可选 DM 备注. */
+  reason?: string;
+  /** 可选乐观锁; 提供时必须与当前 actor revision 一致. */
+  baseRevision?: number;
+}
+
+/** 给予物品请求. */
+export interface GrantItemInput {
+  itemId: string;
+  name: string;
+  /** 默认 1. 必须是正整数. */
+  quantity?: number;
+  /** 可选乐观锁. */
+  baseRevision?: number;
+}
+
+/** 原子事件操作的返回: 同时返回更新后的 actor 和追加的事件消息. */
+export interface CampaignEventResult {
+  actor: CampaignActorSummary;
+  /** kind='system' 的 CampaignChatMessage view. */
+  event: {
+    id: string;
+    campaignId: string;
+    senderId: string;
+    campaignActorId: string | null;
+    displayName: string;
+    kind: string;
+    content: string;
+    eventData: Record<string, unknown>;
+    createdAt: string;
+  };
+}

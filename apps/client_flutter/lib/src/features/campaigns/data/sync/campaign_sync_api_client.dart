@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../../domain/campaign_actor.dart';
 import '../../domain/campaign_actor_audit.dart';
 import '../../domain/campaign_change.dart';
+import '../../domain/campaign_event.dart';
 
 /// 战役同步 HTTP 接口的通用错误。
 class CampaignSyncException implements Exception {
@@ -130,6 +131,31 @@ abstract interface class CampaignSyncApiClient {
     required String slug,
     required String name,
     required Map<String, Object?> entry,
+  });
+
+  // Task 3.1 — CampaignEvent 原子事件端点.
+
+  /// 调整 actor HP (delta < 0 伤害, > 0 治疗), 同事务追加 actor.hp_changed 事件.
+  Future<CampaignEventResult> changeActorHp({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String actorId,
+    required int delta,
+    String? reason,
+    int? baseRevision,
+  });
+
+  /// 给予 actor 物品, 同事务追加 actor.item_granted 事件.
+  Future<CampaignEventResult> grantItem({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String actorId,
+    required String itemId,
+    required String name,
+    int quantity,
+    int? baseRevision,
   });
 }
 
@@ -453,6 +479,74 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
       throw _toException(response);
     }
     return Map<String, Object?>.from(jsonDecode(response.body) as Map);
+  }
+
+  // Task 3.1 — CampaignEvent 原子事件端点实现.
+
+  @override
+  Future<CampaignEventResult> changeActorHp({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String actorId,
+    required int delta,
+    String? reason,
+    int? baseRevision,
+  }) async {
+    final body = <String, Object?>{'delta': delta};
+    if (reason != null && reason.trim().isNotEmpty) body['reason'] = reason.trim();
+    if (baseRevision != null) body['baseRevision'] = baseRevision;
+    final response = await _client.post(
+      Uri.parse(
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/actors/$actorId/hp',
+      ),
+      headers: _headers(accessToken),
+      body: jsonEncode(body),
+    );
+    if (response.statusCode == 409) {
+      throw CampaignConflictException(_decodeConflict(response));
+    }
+    if (response.statusCode != 201) {
+      throw _toException(response);
+    }
+    return CampaignEventResult.fromJson(
+      jsonDecode(response.body) as Map<String, Object?>,
+    );
+  }
+
+  @override
+  Future<CampaignEventResult> grantItem({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String actorId,
+    required String itemId,
+    required String name,
+    int quantity = 1,
+    int? baseRevision,
+  }) async {
+    final body = <String, Object?>{
+      'itemId': itemId,
+      'name': name,
+      'quantity': quantity,
+    };
+    if (baseRevision != null) body['baseRevision'] = baseRevision;
+    final response = await _client.post(
+      Uri.parse(
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/actors/$actorId/items',
+      ),
+      headers: _headers(accessToken),
+      body: jsonEncode(body),
+    );
+    if (response.statusCode == 409) {
+      throw CampaignConflictException(_decodeConflict(response));
+    }
+    if (response.statusCode != 201) {
+      throw _toException(response);
+    }
+    return CampaignEventResult.fromJson(
+      jsonDecode(response.body) as Map<String, Object?>,
+    );
   }
 
   Map<String, String> _headers(String accessToken) => {

@@ -900,6 +900,69 @@ void main() {
     },
   );
 
+  // Task 3.3: 属性 Tab 中的豁免/技能 _RollChip 应将检定结果转发到 CampaignActionSink,
+  // 从而让战役聊天显示检定卡片. 此前属性 Tab 的 _RollChip 不接收 diceRoller/onRoll,
+  // 仅本地掷骰 + SnackBar.
+  testWidgets(
+    'attributes tab roll chip routes to CampaignActionSink (Task 3.3)',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final sink = _RecordingSink();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterDetailPage(
+            character: _character,
+            diceRoller: DiceRoller(nextInt: (max) => max - 1),
+            sink: sink,
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('属性'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('察觉 +4'));
+      await tester.pumpAndSettle();
+
+      expect(sink.events, hasLength(1));
+      expect(sink.events.single.label, '察觉');
+      expect(sink.events.single.notation, 'd20+4');
+      expect(sink.events.single.total, 24);
+      expect(sink.events.single.summary, '察觉：d20+4 = 24');
+    },
+  );
+
+  testWidgets(
+    'attributes tab roll chip still shows SnackBar without sink (Task 3.3)',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterDetailPage(
+            character: _character,
+            diceRoller: DiceRoller(nextInt: (max) => max - 1),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('属性'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('察觉 +4'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('察觉：d20+4 = 24'), findsOneWidget);
+    },
+  );
+
   testWidgets('character detail actions tab rolls weapon attacks', (
     tester,
   ) async {
@@ -2393,6 +2456,19 @@ const _character = CharacterSheet(
   createdAt: '2026-07-09T00:00:00.000Z',
   updatedAt: '2026-07-09T00:00:00.000Z',
 );
+
+/// Task 3.3 — 记录 dispatchRoll 调用, 用于验证角色卡检定转发到战役动作接收端.
+class _RecordingSink implements CampaignActionSink {
+  final List<CharacterRollEvent> events = [];
+
+  @override
+  String? get campaignActorId => 'actor-rec';
+
+  @override
+  Future<void> dispatchRoll(CharacterRollEvent event) async {
+    events.add(event);
+  }
+}
 
 const _fighterContent = ContentEntry(
   id: 'content-class-fighter',

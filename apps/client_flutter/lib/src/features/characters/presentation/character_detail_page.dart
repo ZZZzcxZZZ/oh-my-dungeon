@@ -49,6 +49,19 @@ class CharacterRollEvent {
   final String summary;
 }
 
+/// Task 3.3 — 战役动作接收端抽象.
+///
+/// 角色卡内的检定/扣血/给予装备等动作通过此接口转发到战役聊天与 Actor 同步.
+/// `CharacterDetailPage` 在战役上下文中接收一个具体实现 (如 `CharacterRollSink`),
+/// 在本地角色卡上下文中保持 null, 仅本地 SnackBar 反馈.
+abstract class CampaignActionSink {
+  /// 关联的 CampaignActor ID (如有). 用于在聊天消息中标记来源 Actor.
+  String? get campaignActorId;
+
+  /// 派发一次检定结果到战役聊天.
+  Future<void> dispatchRoll(CharacterRollEvent event);
+}
+
 class CharacterDetailPage extends StatefulWidget {
   const CharacterDetailPage({
     required this.character,
@@ -60,6 +73,7 @@ class CharacterDetailPage extends StatefulWidget {
     this.contentEntries = const <ContentEntry>[],
     this.diceRoller,
     this.onRoll,
+    this.sink,
     this.initialTab = 'overview',
     super.key,
   });
@@ -73,6 +87,7 @@ class CharacterDetailPage extends StatefulWidget {
   final List<ContentEntry> contentEntries;
   final DiceRoller? diceRoller;
   final CharacterRollCallback? onRoll;
+  final CampaignActionSink? sink;
   final String initialTab;
 
   @override
@@ -96,6 +111,10 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Task 3.3: 显式 onRoll 优先, 否则回退到 sink.dispatchRoll (Future<void> Function
+    // 可赋值给 void Function). 本地角色卡 (sink == null) 退化为纯本地 SnackBar.
+    final effectiveRoll =
+        widget.onRoll ?? widget.sink?.dispatchRoll;
     return CharacterSheetShell(
       title: _character.name,
       header: _CharacterHeader(character: _character),
@@ -130,7 +149,13 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
           id: 'abilities',
           label: '属性',
           icon: Icons.tune_outlined,
-          child: _SheetTab(child: _AbilityOverview(character: _character)),
+          child: _SheetTab(
+            child: _AbilityOverview(
+              character: _character,
+              diceRoller: widget.diceRoller,
+              onRoll: effectiveRoll,
+            ),
+          ),
         ),
         CharacterSheetDestination(
           id: 'actions',
@@ -140,7 +165,7 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
             child: _ActionsPanel(
               character: _character,
               diceRoller: widget.diceRoller,
-              onRoll: widget.onRoll,
+              onRoll: effectiveRoll,
               onSaveCharacter: _saveCharacter,
             ),
           ),
@@ -384,9 +409,15 @@ class _SheetTab extends StatelessWidget {
 }
 
 class _AbilityOverview extends StatelessWidget {
-  const _AbilityOverview({required this.character});
+  const _AbilityOverview({
+    required this.character,
+    this.diceRoller,
+    this.onRoll,
+  });
 
   final CharacterSheet character;
+  final DiceRoller? diceRoller;
+  final CharacterRollCallback? onRoll;
 
   @override
   Widget build(BuildContext context) {
@@ -428,6 +459,8 @@ class _AbilityOverview extends StatelessWidget {
                     proficient: character.saveMap[entry.key] == true,
                   ),
                   proficient: character.saveMap[entry.key] == true,
+                  diceRoller: diceRoller,
+                  onRoll: onRoll,
                 ),
             ],
           ),
@@ -449,6 +482,8 @@ class _AbilityOverview extends StatelessWidget {
                     proficient: character.skillMap[skill.name] == true,
                   ),
                   proficient: character.skillMap[skill.name] == true,
+                  diceRoller: diceRoller,
+                  onRoll: onRoll,
                 ),
             ],
           ),

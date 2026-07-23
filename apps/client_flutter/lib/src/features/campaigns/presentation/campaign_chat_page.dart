@@ -17,6 +17,7 @@ import 'actors/campaign_actor_controller.dart';
 import 'actors/campaign_actor_sheet_launcher.dart';
 import 'campaign_controller.dart';
 import 'campaign_center_page.dart';
+import 'character_roll_sink.dart';
 import 'campaign_workspace_mutation_coordinator.dart';
 import 'chat/campaign_archive_create_dialog.dart';
 import 'chat/campaign_chat_composer.dart';
@@ -240,6 +241,11 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       actor: actor,
       canEditAnyActor: _canManageCampaign,
       contentRepository: widget.contentRepository,
+      sink: CharacterRollSink(
+        campaignId: widget.campaign.id,
+        campaignController: widget.campaignController,
+        campaignActorId: actor.id,
+      ),
     );
   }
 
@@ -885,6 +891,11 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
           actor: actor,
           canEditAnyActor: _canManageCampaign,
           contentRepository: widget.contentRepository,
+          sink: CharacterRollSink(
+            campaignId: widget.campaign.id,
+            campaignController: widget.campaignController,
+            campaignActorId: actor.id,
+          ),
         );
         return;
       }
@@ -894,7 +905,14 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     if (character != null) {
       Navigator.of(context).push<void>(
         MaterialPageRoute(
-          builder: (context) => CharacterDetailPage(character: character),
+          builder: (context) => CharacterDetailPage(
+            character: character,
+            sink: CharacterRollSink(
+              campaignId: widget.campaign.id,
+              campaignController: widget.campaignController,
+              campaignActorId: _activeSpeakerActorId,
+            ),
+          ),
         ),
       );
       return;

@@ -58,6 +58,7 @@ Future<void> openCampaignActorSheet({
   required CampaignActor actor,
   required bool canEditAnyActor,
   ContentRepository? contentRepository,
+  CampaignActionSink? sink,
 }) async {
   final canEdit = canEditCampaignActor(
     actor: actor,
@@ -74,6 +75,7 @@ Future<void> openCampaignActorSheet({
         actorId: actor.id,
         canEdit: canEdit,
         contentEntries: contentEntries,
+        sink: sink,
       ),
     ),
   );
@@ -85,6 +87,7 @@ class CampaignActorFullSheetPage extends StatefulWidget {
     required this.actorId,
     required this.canEdit,
     required this.contentEntries,
+    this.sink,
     super.key,
   });
 
@@ -92,6 +95,7 @@ class CampaignActorFullSheetPage extends StatefulWidget {
   final String actorId;
   final bool canEdit;
   final List<ContentEntry> contentEntries;
+  final CampaignActionSink? sink;
 
   @override
   State<CampaignActorFullSheetPage> createState() =>
@@ -171,6 +175,7 @@ class _CampaignActorFullSheetPageState
       key: const Key('campaign-actor-full-sheet'),
       character: character,
       contentEntries: widget.contentEntries,
+      sink: widget.sink,
       onUpdateRuntime: widget.canEdit
           ? ({
               currentHp,

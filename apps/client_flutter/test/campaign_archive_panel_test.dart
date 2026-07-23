@@ -19,6 +19,8 @@ void main() {
     String? currentUserId,
     String? error,
     bool isLoading = false,
+    List<String> selectedTags = const [],
+    ValueChanged<List<String>>? onTagsChanged,
     Future<bool> Function(
       CampaignArchiveEntry entry, {
       String? title,
@@ -39,6 +41,8 @@ void main() {
             currentUserId: currentUserId,
             selectedKind: null,
             onKindChanged: (_) {},
+            selectedTags: selectedTags,
+            onTagsChanged: onTagsChanged ?? (_) {},
             onRefresh: () async {},
             onArchive: onArchive ?? (_) async => true,
             onUpdate: onUpdate,
@@ -473,8 +477,222 @@ void main() {
 
     await pumpPanel(tester, entries: [entry]);
 
-    // Before opening detail: list row should already show tags.
-    expect(find.text('lore'), findsOneWidget);
-    expect(find.text('map'), findsOneWidget);
+    // List row chips should be present inside Card rows (not the filter area).
+    final cards = find.byType(Card);
+    expect(cards, findsWidgets);
+    expect(
+      find.descendant(of: cards.first, matching: find.text('lore')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: cards.first, matching: find.text('map')),
+      findsOneWidget,
+    );
   });
+
+  // ---- Tag-based filtering (Plan 2026-07-23 task 4.2) ----
+
+  /// Stateful test wrapper that holds the selectedTags list and re-pumps
+  /// the panel whenever onTagsChanged fires. Without this, the stateless
+  /// panel cannot reflect the selection state after a tap.
+  Future<void> pumpStatefulPanel(
+    WidgetTester tester, {
+    required List<CampaignArchiveEntry> entries,
+    List<String> initialSelectedTags = const [],
+  }) async {
+    List<String> selectedTags = List<String>.from(initialSelectedTags);
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (context, setState) {
+          return MaterialApp(
+            home: Scaffold(
+              body: CampaignArchivePanel(
+                entries: entries,
+                isLoading: false,
+                error: null,
+                canManage: false,
+                selectedKind: null,
+                onKindChanged: (_) {},
+                selectedTags: selectedTags,
+                onTagsChanged: (next) {
+                  setState(() {
+                    selectedTags = List<String>.from(next);
+                  });
+                },
+                onRefresh: () async {},
+                onArchive: (_) async => true,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets(
+    'tag filter area shows every distinct tag as a selectable FilterChip',
+    (tester) async {
+      final entries = [
+        CampaignArchiveEntry.fromJson({
+          'id': 'a-1',
+          'campaignId': 'camp-1',
+          'kind': 'document',
+          'title': 'Entry A',
+          'summary': '',
+          'payload': {'tags': ['lore', 'map']},
+          'pinned': false,
+          'updatedAt': '2026-07-23T00:00:00.000Z',
+        }),
+        CampaignArchiveEntry.fromJson({
+          'id': 'a-2',
+          'campaignId': 'camp-1',
+          'kind': 'clue',
+          'title': 'Entry B',
+          'summary': '',
+          'payload': {'tags': ['map']},
+          'pinned': false,
+          'updatedAt': '2026-07-23T00:00:00.000Z',
+        }),
+      ];
+
+      await pumpStatefulPanel(tester, entries: entries);
+
+      // Each distinct tag should render as a FilterChip.
+      expect(find.widgetWithText(FilterChip, 'lore'), findsOneWidget);
+      expect(find.widgetWithText(FilterChip, 'map'), findsOneWidget);
+      // Tag chips live inside the filter area, not inside list rows.
+      final filterArea = find.byKey(const Key('archive-tag-filter-area'));
+      expect(filterArea, findsOneWidget);
+      expect(
+        find.descendant(of: filterArea, matching: find.byType(FilterChip)),
+        findsNWidgets(2),
+      );
+    },
+  );
+
+  testWidgets(
+    'tapping a tag FilterChip toggles selection and reflects in the chip state',
+    (tester) async {
+      final entries = [
+        CampaignArchiveEntry.fromJson({
+          'id': 'a-1',
+          'campaignId': 'camp-1',
+          'kind': 'document',
+          'title': 'Entry A',
+          'summary': '',
+          'payload': {'tags': ['lore']},
+          'pinned': false,
+          'updatedAt': '2026-07-23T00:00:00.000Z',
+        }),
+      ];
+
+      await pumpStatefulPanel(tester, entries: entries);
+
+      final chip = find.widgetWithText(FilterChip, 'lore');
+      expect(chip, findsOneWidget);
+      // Initially unselected.
+      expect((tester.widget<FilterChip>(chip)).selected, isFalse);
+
+      await tester.tap(chip);
+      await tester.pumpAndSettle();
+
+      // After tap: the chip should now be selected.
+      expect((tester.widget<FilterChip>(chip)).selected, isTrue);
+    },
+  );
+
+  testWidgets(
+    'tapping a selected tag FilterChip removes it from the selection',
+    (tester) async {
+      final entries = [
+        CampaignArchiveEntry.fromJson({
+          'id': 'a-1',
+          'campaignId': 'camp-1',
+          'kind': 'document',
+          'title': 'Entry A',
+          'summary': '',
+          'payload': {'tags': ['lore', 'map']},
+          'pinned': false,
+          'updatedAt': '2026-07-23T00:00:00.000Z',
+        }),
+      ];
+
+      await pumpStatefulPanel(
+        tester,
+        entries: entries,
+        initialSelectedTags: const ['lore', 'map'],
+      );
+
+      final loreChip = find.widgetWithText(FilterChip, 'lore');
+      final mapChip = find.widgetWithText(FilterChip, 'map');
+      expect((tester.widget<FilterChip>(loreChip)).selected, isTrue);
+      expect((tester.widget<FilterChip>(mapChip)).selected, isTrue);
+
+      await tester.tap(loreChip);
+      await tester.pumpAndSettle();
+
+      expect((tester.widget<FilterChip>(loreChip)).selected, isFalse);
+      expect((tester.widget<FilterChip>(mapChip)).selected, isTrue);
+    },
+  );
+
+  testWidgets(
+    'tag filter area is hidden when no entries carry tags',
+    (tester) async {
+      final entries = [
+        CampaignArchiveEntry.fromJson({
+          'id': 'a-1',
+          'campaignId': 'camp-1',
+          'kind': 'document',
+          'title': 'Untagged',
+          'summary': '',
+          'payload': {},
+          'pinned': false,
+          'updatedAt': '2026-07-23T00:00:00.000Z',
+        }),
+      ];
+
+      await pumpStatefulPanel(tester, entries: entries);
+
+      expect(find.byKey(const Key('archive-tag-filter-area')), findsNothing);
+      expect(find.byType(FilterChip), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'selected tag chips show a clear-all action that empties the selection',
+    (tester) async {
+      final entries = [
+        CampaignArchiveEntry.fromJson({
+          'id': 'a-1',
+          'campaignId': 'camp-1',
+          'kind': 'document',
+          'title': 'Entry A',
+          'summary': '',
+          'payload': {'tags': ['lore']},
+          'pinned': false,
+          'updatedAt': '2026-07-23T00:00:00.000Z',
+        }),
+      ];
+
+      await pumpStatefulPanel(
+        tester,
+        entries: entries,
+        initialSelectedTags: const ['lore'],
+      );
+
+      expect(find.text('清除标签'), findsOneWidget);
+
+      await tester.tap(find.text('清除标签'));
+      await tester.pumpAndSettle();
+
+      // After clearing: no chips are selected and the clear button is gone.
+      expect(
+        (tester.widget<FilterChip>(find.widgetWithText(FilterChip, 'lore'))).selected,
+        isFalse,
+      );
+      expect(find.text('清除标签'), findsNothing);
+    },
+  );
 }

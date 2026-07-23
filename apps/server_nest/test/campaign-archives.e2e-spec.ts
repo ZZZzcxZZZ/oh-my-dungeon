@@ -649,4 +649,159 @@ describe("campaign archive wiki endpoints", () => {
         });
     });
   });
+
+  // Plan 2026-07-23 task 4.2: tag-based filtering. The `tags` query
+  // parameter accepts a comma-separated list. Semantics are OR: an
+  // entry matches if it carries ANY of the requested tags. This
+  // matches the multi-select UX on the client (FilterChip wrap).
+  describe("tag-based filtering", () => {
+    const entries = [
+      {
+        id: "a-1",
+        campaignId: "camp-1",
+        kind: "document",
+        title: "Vallaki Gazetteer",
+        summary: "Notes on the town.",
+        payload: { tags: ["vallaki", "barovia"] },
+        pinned: false,
+        createdBy: "dm-1",
+        updatedAt: "2026-07-16T00:00:00.000Z",
+        deletedAt: null,
+      },
+      {
+        id: "a-2",
+        campaignId: "camp-1",
+        kind: "clue",
+        title: "The Silver Key",
+        summary: "Found in the chapel.",
+        payload: { tags: ["crypt", "key"] },
+        pinned: true,
+        createdBy: "dm-1",
+        updatedAt: "2026-07-16T01:00:00.000Z",
+        deletedAt: null,
+      },
+      {
+        id: "a-3",
+        campaignId: "camp-1",
+        kind: "location",
+        title: "Castle Ravenloft",
+        summary: "Strahd's domain.",
+        payload: { tags: ["ravenloft"] },
+        pinned: false,
+        createdBy: "dm-1",
+        updatedAt: "2026-07-16T02:00:00.000Z",
+        deletedAt: null,
+      },
+      {
+        id: "a-4",
+        campaignId: "camp-1",
+        kind: "document",
+        title: "Untagged note",
+        summary: "",
+        payload: {},
+        pinned: false,
+        createdBy: "dm-1",
+        updatedAt: "2026-07-16T03:00:00.000Z",
+        deletedAt: null,
+      },
+    ];
+
+    it("filters by a single tag", async () => {
+      const token = await loginAs(storedPlayer);
+      prismaService.campaignArchiveEntry.findMany.mockResolvedValueOnce(entries);
+
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/archives?tags=vallaki")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body).toHaveLength(1);
+          expect(body[0].id).toBe("a-1");
+        });
+    });
+
+    it("returns entries matching any of the requested tags (OR semantics)", async () => {
+      const token = await loginAs(storedPlayer);
+      prismaService.campaignArchiveEntry.findMany.mockResolvedValueOnce(entries);
+
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/archives?tags=vallaki,ravenloft")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body.map((e: { id: string }) => e.id).sort()).toEqual(["a-1", "a-3"]);
+        });
+    });
+
+    it("excludes entries with no tags", async () => {
+      const token = await loginAs(storedPlayer);
+      prismaService.campaignArchiveEntry.findMany.mockResolvedValueOnce(entries);
+
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/archives?tags=crypt")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body).toHaveLength(1);
+          expect(body[0].id).toBe("a-2");
+        });
+    });
+
+    it("returns an empty list when no tag matches", async () => {
+      const token = await loginAs(storedPlayer);
+      prismaService.campaignArchiveEntry.findMany.mockResolvedValueOnce(entries);
+
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/archives?tags=nonexistent")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body).toHaveLength(0);
+        });
+    });
+
+    it("combines tag filter with kind filter", async () => {
+      const token = await loginAs(storedPlayer);
+      prismaService.campaignArchiveEntry.findMany.mockResolvedValueOnce(
+        entries.filter((e) => e.kind === "document"),
+      );
+
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/archives?kind=document&tags=vallaki")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body).toHaveLength(1);
+          expect(body[0].id).toBe("a-1");
+        });
+    });
+
+    it("combines tag filter with text search query", async () => {
+      const token = await loginAs(storedPlayer);
+      prismaService.campaignArchiveEntry.findMany.mockResolvedValueOnce(entries);
+
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/archives?tags=crypt&q=silver")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body).toHaveLength(1);
+          expect(body[0].id).toBe("a-2");
+        });
+    });
+
+    it("ignores empty tag tokens in the comma-separated list", async () => {
+      const token = await loginAs(storedPlayer);
+      prismaService.campaignArchiveEntry.findMany.mockResolvedValueOnce(entries);
+
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/archives?tags=,,vallaki,")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body).toHaveLength(1);
+          expect(body[0].id).toBe("a-1");
+        });
+    });
+  });
 });

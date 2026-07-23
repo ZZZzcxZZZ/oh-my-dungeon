@@ -26,6 +26,8 @@ class CampaignArchivePanel extends StatelessWidget {
     required this.onArchive,
     this.currentUserId,
     this.onUpdate,
+    this.selectedTags = const [],
+    this.onTagsChanged,
     super.key,
   });
 
@@ -52,6 +54,14 @@ class CampaignArchivePanel extends StatelessWidget {
   /// the per-entry edit button should be shown (creator-or-manager rule).
   final String? currentUserId;
 
+  /// Currently selected tag filters. Empty list means no tag filter is
+  /// active. Plan 2026-07-23 task 4.2.
+  final List<String> selectedTags;
+
+  /// Invoked when the user toggles a tag FilterChip or clears the selection.
+  /// Receives the new full list of selected tags (after the change).
+  final ValueChanged<List<String>>? onTagsChanged;
+
   static const double _wideBreakpoint = 600;
   static const double _wideDialogMaxWidth = 760;
 
@@ -63,8 +73,25 @@ class CampaignArchivePanel extends StatelessWidget {
     return creator == currentUserId;
   }
 
+  /// Distinct tags across every entry, sorted alphabetically and stable
+  /// across rebuilds. Used to render the FilterChip row.
+  List<String> _collectDistinctTags() {
+    final set = <String>{};
+    for (final entry in entries) {
+      set.addAll(entry.tags);
+    }
+    final list = set.toList()..sort();
+    return list;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final distinctTags = _collectDistinctTags();
+    final showTagFilter = distinctTags.isNotEmpty;
+    final hasSelectedTags = selectedTags.isNotEmpty;
+
     return KeyedSubtree(
       key: key ?? const Key('campaign-archive-panel'),
       child: Column(
@@ -92,6 +119,64 @@ class CampaignArchivePanel extends StatelessWidget {
               ],
             ),
           ),
+          if (showTagFilter)
+            Padding(
+              key: const Key('archive-tag-filter-area'),
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.label_outline,
+                        size: 16,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '按标签筛选',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (hasSelectedTags)
+                        TextButton(
+                          key: const Key('archive-tag-clear'),
+                          onPressed: onTagsChanged == null
+                              ? null
+                              : () => onTagsChanged!(const []),
+                          child: const Text('清除标签'),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      for (final tag in distinctTags)
+                        FilterChip(
+                          label: Text(tag),
+                          selected: selectedTags.contains(tag),
+                          onSelected: onTagsChanged == null
+                              ? null
+                              : (selected) {
+                                  final next = List<String>.from(selectedTags);
+                                  if (selected) {
+                                    if (!next.contains(tag)) next.add(tag);
+                                  } else {
+                                    next.remove(tag);
+                                  }
+                                  onTagsChanged!(next);
+                                },
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           Expanded(
             child: _buildBody(context),
           ),

@@ -30,8 +30,14 @@ export class CampaignArchivesController {
     @Param('campaignId') campaignId: string,
     @Query('kind') kind?: string,
     @Query('q') q?: string,
+    @Query('tags') tags?: string,
   ) {
-    return this.archives.list(user, campaignId, kind, q);
+    // Plan 2026-07-23 task 4.2: tags is a comma-separated list. Empty
+    // tokens are dropped so `?tags=,,a,` is equivalent to `?tags=a`.
+    const tagList = tags
+      ? tags.split(',').map((t) => t.trim()).filter((t) => t.length > 0)
+      : undefined;
+    return this.archives.list(user, campaignId, kind, q, tagList);
   }
 
   @Post()

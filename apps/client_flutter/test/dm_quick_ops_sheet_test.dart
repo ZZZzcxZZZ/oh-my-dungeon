@@ -239,7 +239,7 @@ class _RecordingCampaignClient implements CampaignClient {
   Future<CampaignMembership> updateSpeaker({required String apiBaseUrl, required String accessToken, required String campaignId, required String speakerMode, String? actorId}) =>
       throw UnimplementedError();
   @override
-  Future<List<CampaignArchiveEntry>> listArchives({required String apiBaseUrl, required String accessToken, required String campaignId, String? kind, String? query}) async => const [];
+  Future<List<CampaignArchiveEntry>> listArchives({required String apiBaseUrl, required String accessToken, required String campaignId, String? kind, String? query, List<String>? tags}) async => const [];
   @override
   Future<CampaignArchiveEntry> createArchiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String kind, required String title, String? summary, Map<String, Object?>? payload, List<Map<String, Object?>>? bodyBlocks, List<String>? tags, List<Map<String, Object?>>? links, List<Map<String, Object?>>? attachmentRefs}) =>
       throw UnimplementedError();

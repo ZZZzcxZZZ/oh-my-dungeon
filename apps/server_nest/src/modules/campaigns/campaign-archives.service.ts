@@ -110,25 +110,42 @@ function extractTags(payload: unknown): string[] {
 export class CampaignArchivesService {
   constructor(private readonly prisma: PrismaService, private readonly policy: CampaignPolicy) {}
 
-  async list(actor: AccessTokenPayload, campaignId: string, kind?: string, q?: string) {
+  async list(
+    actor: AccessTokenPayload,
+    campaignId: string,
+    kind?: string,
+    q?: string,
+    tags?: string[],
+  ) {
     const campaign = await this.context(campaignId);
     this.policy.canViewCampaign(actor, campaign);
     const entries = await this.prisma.campaignArchiveEntry.findMany({
       where: { campaignId, deletedAt: null, ...(kind ? { kind } : {}) },
       orderBy: [{ pinned: 'desc' }, { updatedAt: 'desc' }],
     });
-    if (!q || !q.trim()) return entries;
+    // Plan 2026-07-23 task 4.2: tag filter (OR semantics — entry matches
+    // if it carries ANY of the requested tags). Applied in memory because
+    // tags live inside the JSON payload column.
+    const filteredByTags = tags && tags.length > 0
+      ? entries.filter((entry) => {
+          const entryTags = extractTags(entry.payload).map((t) => t.toLowerCase());
+          if (entryTags.length === 0) return false;
+          const requested = tags.map((t) => t.toLowerCase());
+          return entryTags.some((t) => requested.includes(t));
+        })
+      : entries;
+    if (!q || !q.trim()) return filteredByTags;
     const needle = q.trim().toLowerCase();
-    return entries.filter((entry) => {
+    return filteredByTags.filter((entry) => {
       const title = (entry.title ?? '').toLowerCase();
       const summary = (entry.summary ?? '').toLowerCase();
       const body = extractBodyText(entry.payload).toLowerCase();
-      const tags = extractTags(entry.payload).map((t) => t.toLowerCase());
+      const entryTags = extractTags(entry.payload).map((t) => t.toLowerCase());
       return (
         title.includes(needle) ||
         summary.includes(needle) ||
         body.includes(needle) ||
-        tags.some((t) => t.includes(needle))
+        entryTags.some((t) => t.includes(needle))
       );
     });
   }

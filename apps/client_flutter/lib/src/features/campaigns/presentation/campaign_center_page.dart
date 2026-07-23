@@ -56,6 +56,7 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
 
   late int _currentIndex;
   String? _archiveKind;
+  List<String> _archiveSelectedTags = const [];
 
   @override
   void initState() {
@@ -367,9 +368,26 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
           selectedKind: _archiveKind,
           onKindChanged: (kind) {
             setState(() => _archiveKind = kind);
-            widget.controller.loadArchives(widget.campaign.id, kind: kind);
+            widget.controller.loadArchives(
+              widget.campaign.id,
+              kind: kind,
+              tags: _archiveSelectedTags,
+            );
           },
-          onRefresh: () => widget.controller.loadArchives(widget.campaign.id),
+          selectedTags: _archiveSelectedTags,
+          onTagsChanged: (tags) {
+            setState(() => _archiveSelectedTags = tags);
+            widget.controller.loadArchives(
+              widget.campaign.id,
+              kind: _archiveKind,
+              tags: tags,
+            );
+          },
+          onRefresh: () => widget.controller.loadArchives(
+            widget.campaign.id,
+            kind: _archiveKind,
+            tags: _archiveSelectedTags,
+          ),
           onArchive: (entry) => widget.controller.archiveEntry(
             campaignId: widget.campaign.id,
             entryId: entry.id,

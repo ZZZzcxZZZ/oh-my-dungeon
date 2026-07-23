@@ -851,6 +851,7 @@ class _FakeCampaignClient implements CampaignClient {
     required String campaignId,
     String? kind,
     String? query,
+    List<String>? tags,
   }) async => const [];
 
   @override

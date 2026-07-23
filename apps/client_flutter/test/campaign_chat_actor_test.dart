@@ -1418,6 +1418,7 @@ class _RecordingCampaignClient implements CampaignClient {
     required String campaignId,
     String? kind,
     String? query,
+    List<String>? tags,
   }) async => const [];
   final List<_CreatedArchiveCall> createArchiveEntryCalls = [];
   @override

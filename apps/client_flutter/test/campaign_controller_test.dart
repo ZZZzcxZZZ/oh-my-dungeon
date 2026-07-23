@@ -222,7 +222,7 @@ class _FakeCampaignClient implements CampaignClient {
   @override
   Future<CampaignMembership> updateSpeaker({required String apiBaseUrl, required String accessToken, required String campaignId, required String speakerMode, String? actorId}) => throw UnimplementedError();
   @override
-  Future<List<CampaignArchiveEntry>> listArchives({required String apiBaseUrl, required String accessToken, required String campaignId, String? kind, String? query}) async => const [
+  Future<List<CampaignArchiveEntry>> listArchives({required String apiBaseUrl, required String accessToken, required String campaignId, String? kind, String? query, List<String>? tags}) async => const [
     CampaignArchiveEntry(
       id: 'archive-1',
       campaignId: 'camp-1',

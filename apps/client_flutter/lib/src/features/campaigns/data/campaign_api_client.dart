@@ -89,6 +89,7 @@ abstract class CampaignClient {
     required String campaignId,
     String? kind,
     String? query,
+    List<String>? tags,
   });
 
   Future<CampaignArchiveEntry> createArchiveEntry({
@@ -142,10 +143,20 @@ class CampaignApiClient implements CampaignClient {
     required String campaignId,
     String? kind,
     String? query,
+    List<String>? tags,
   }) async {
     final params = <String, String>{};
     if (kind != null) params['kind'] = kind;
     if (query != null && query.trim().isNotEmpty) params['q'] = query.trim();
+    // Plan 2026-07-23 task 4.2: tags are sent as a single comma-separated
+    // query param to match the server-side parser. Empty tags are skipped.
+    if (tags != null) {
+      final joined = tags
+          .map((t) => t.trim())
+          .where((t) => t.isNotEmpty)
+          .join(',');
+      if (joined.isNotEmpty) params['tags'] = joined;
+    }
     final uri = Uri.parse(
       '${_normalize(apiBaseUrl)}/campaigns/$campaignId/archives',
     ).replace(queryParameters: params.isEmpty ? null : params);

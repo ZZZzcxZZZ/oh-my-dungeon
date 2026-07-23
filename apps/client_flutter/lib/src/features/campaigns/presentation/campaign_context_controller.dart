@@ -98,7 +98,12 @@ class CampaignContextController extends ChangeNotifier {
     return false;
   }
 
-  Future<void> loadArchives(String campaignId, {String? kind, String? query}) async {
+  Future<void> loadArchives(
+    String campaignId, {
+    String? kind,
+    String? query,
+    List<String>? tags,
+  }) async {
     final token = await authController.ensureValidAccessToken();
     if (token == null) return;
     _archivesLoading = true;
@@ -111,6 +116,7 @@ class CampaignContextController extends ChangeNotifier {
         campaignId: campaignId,
         kind: kind,
         query: query,
+        tags: tags,
       );
     } on CampaignApiException catch (error) {
       _archivesError = _archiveLoadErrorMessage(error);

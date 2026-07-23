@@ -325,8 +325,13 @@ class CampaignController extends ChangeNotifier {
         actorId: actorId,
       );
 
-  Future<void> loadArchives(String campaignId, {String? kind, String? query}) =>
-      contextController.loadArchives(campaignId, kind: kind, query: query);
+  Future<void> loadArchives(
+    String campaignId, {
+    String? kind,
+    String? query,
+    List<String>? tags,
+  }) =>
+      contextController.loadArchives(campaignId, kind: kind, query: query, tags: tags);
 
   Future<CampaignArchiveEntry?> createArchiveEntry({
     required String campaignId,

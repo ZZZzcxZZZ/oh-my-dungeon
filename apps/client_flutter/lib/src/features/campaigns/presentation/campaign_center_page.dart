@@ -13,6 +13,7 @@ import 'actors/dm_quick_ops_sheet.dart';
 import 'campaign_controller.dart';
 import 'campaign_detail_page.dart';
 import 'campaign_event_dispatcher.dart';
+import 'center/campaign_archive_editor_page.dart';
 import 'center/campaign_archive_panel.dart';
 import 'center/campaign_characters_panel.dart';
 import 'center/campaign_overview_panel.dart';
@@ -430,123 +431,55 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
   }
 
   Future<void> _showCreateArchiveDialog({String initialKind = 'clue'}) async {
-    var kind = initialKind;
-    final title = TextEditingController();
-    final summary = TextEditingController();
-    final body = TextEditingController();
-    final tags = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    final create = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('新建战役条目'),
-        content: SingleChildScrollView(
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<String>(
-                  initialValue: kind,
-                  decoration: const InputDecoration(labelText: '类型'),
-                  items: const [
-                    DropdownMenuItem(value: 'clue', child: Text('线索')),
-                    DropdownMenuItem(value: 'location', child: Text('地点')),
-                    DropdownMenuItem(value: 'document', child: Text('文档')),
-                    DropdownMenuItem(value: 'file', child: Text('文件')),
-                  ],
-                  onChanged: (value) => kind = value ?? kind,
-                ),
-                TextFormField(
-                  controller: title,
-                  autofocus: true,
-                  decoration: const InputDecoration(labelText: '名称'),
-                  validator: (value) =>
-                      value == null || value.trim().isEmpty ? '请输入名称' : null,
-                ),
-                TextField(
-                  controller: summary,
-                  minLines: 2,
-                  maxLines: 4,
-                  decoration: const InputDecoration(labelText: '说明（可选）'),
-                ),
-                TextField(
-                  key: const Key('archive-create-body'),
-                  controller: body,
-                  minLines: 4,
-                  maxLines: 10,
-                  decoration: const InputDecoration(
-                    labelText: '正文（可选）',
-                    helperText: '每个换行表示一个段落',
-                    alignLabelWithHint: true,
-                  ),
-                ),
-                TextField(
-                  key: const Key('archive-create-tags'),
-                  controller: tags,
-                  decoration: const InputDecoration(
-                    labelText: '标签（可选）',
-                    helperText: '用英文逗号分隔，例如：lore, map',
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.of(context).pop(true);
+    // Plan 2026-07-23 task 4.4: 合并为单一 CampaignArchiveEditorPage。
+    // 草稿由编辑器收集，调用方负责把 draft 转成服务端调用。
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => CampaignArchiveEditorPage(
+          initialKind: initialKind,
+          existingEntries: widget.controller.archives,
+          onSubmit: (draft) async {
+            final linksPayload = draft.linkedEntryIds.isEmpty
+                ? null
+                : draft.linkedEntryIds
+                    .map((id) => <String, Object?>{'kind': 'archive', 'id': id})
+                    .toList(growable: false);
+            final entry = await widget.controller.createArchiveEntry(
+              campaignId: widget.campaign.id,
+              kind: draft.kind,
+              title: draft.title,
+              summary: draft.summary,
+              bodyBlocks:
+                  draft.bodyBlocks.isEmpty ? null : draft.bodyBlocks,
+              tags: draft.tags.isEmpty ? null : draft.tags,
+              links: linksPayload,
+            );
+            if (entry != null) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('已保存到战役档案')),
+                );
               }
-            },
-            child: const Text('创建'),
-          ),
-        ],
+              return true;
+            }
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    widget.controller.archivesError ?? '创建失败',
+                  ),
+                ),
+              );
+            }
+            return false;
+          },
+        ),
       ),
     );
-    if (create != true || !mounted) {
-      title.dispose();
-      summary.dispose();
-      body.dispose();
-      tags.dispose();
-      return;
+    if (created == true && mounted) {
+      // 创建成功后刷新列表，确保新条目立刻可见。
+      await widget.controller.loadArchives(widget.campaign.id);
     }
-    // Convert body text into structured paragraph blocks; parse tags list.
-    final bodyBlocks = body.text
-        .split('\n')
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
-        .map((line) => <String, Object?>{
-              'type': 'paragraph',
-              'text': line,
-            })
-        .toList(growable: false);
-    final tagList = tags.text
-        .split(',')
-        .map((part) => part.trim())
-        .where((part) => part.isNotEmpty)
-        .toList(growable: false);
-    final entry = await widget.controller.createArchiveEntry(
-      campaignId: widget.campaign.id,
-      kind: kind,
-      title: title.text.trim(),
-      summary: summary.text.trim(),
-      bodyBlocks: bodyBlocks.isEmpty ? null : bodyBlocks,
-      tags: tagList.isEmpty ? null : tagList,
-    );
-    title.dispose();
-    summary.dispose();
-    body.dispose();
-    tags.dispose();
-    if (!mounted || entry != null) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(widget.controller.archivesError ?? '创建失败')),
-    );
   }
 
   /// Spec §概览: DM 在概览面板看到控场摘要、群体检定和遭遇准备入口。

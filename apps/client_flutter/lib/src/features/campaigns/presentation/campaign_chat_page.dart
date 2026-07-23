@@ -17,9 +17,9 @@ import 'actors/campaign_actor_controller.dart';
 import 'actors/campaign_actor_sheet_launcher.dart';
 import 'campaign_controller.dart';
 import 'campaign_center_page.dart';
+import 'center/campaign_archive_editor_page.dart';
 import 'character_roll_sink.dart';
 import 'campaign_workspace_mutation_coordinator.dart';
-import 'chat/campaign_archive_create_dialog.dart';
 import 'chat/campaign_chat_composer.dart';
 import 'chat/campaign_chat_tool_sheet.dart';
 import 'chat/campaign_chat_timeline.dart';
@@ -465,32 +465,57 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
 
   /// Spec §档案: 资料、地点、线索和文件统一属于战役档案。聊天工具栏的
   /// 记录线索/分享地点/群文件 项跳转到档案创建表单, 预填入对应类型。
+  ///
+  /// Plan 2026-07-23 task 4.4: 统一使用 CampaignArchiveEditorPage（原
+  /// CampaignArchiveCreateDialog 已退役）。聊天工具栏发起的快速归档
+  /// 也走完整编辑器，让玩家可以一次性补齐正文、标签与关联条目。
   Future<void> _showArchiveCreationForm({required String initialKind}) async {
-    final draft = await showDialog<CampaignArchiveDraft>(
-      context: context,
-      builder: (context) =>
-          CampaignArchiveCreateDialog(initialKind: initialKind),
-    );
-    if (draft == null || !mounted) return;
-
-    final entry = await widget.campaignController.createArchiveEntry(
-      campaignId: widget.campaign.id,
-      kind: draft.kind,
-      title: draft.title,
-      summary: draft.summary,
-    );
-    if (!mounted) return;
-    if (entry != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('已保存到战役档案')));
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(widget.campaignController.archivesError ?? '创建失败'),
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => CampaignArchiveEditorPage(
+          initialKind: initialKind,
+          existingEntries: widget.campaignController.archives,
+          onSubmit: (draft) async {
+            final linksPayload = draft.linkedEntryIds.isEmpty
+                ? null
+                : draft.linkedEntryIds
+                    .map((id) => <String, Object?>{'kind': 'archive', 'id': id})
+                    .toList(growable: false);
+            final entry = await widget.campaignController.createArchiveEntry(
+              campaignId: widget.campaign.id,
+              kind: draft.kind,
+              title: draft.title,
+              summary: draft.summary,
+              bodyBlocks:
+                  draft.bodyBlocks.isEmpty ? null : draft.bodyBlocks,
+              tags: draft.tags.isEmpty ? null : draft.tags,
+              links: linksPayload,
+            );
+            if (entry != null) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('已保存到战役档案')),
+                );
+              }
+              return true;
+            }
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    widget.campaignController.archivesError ?? '创建失败',
+                  ),
+                ),
+              );
+            }
+            return false;
+          },
+        ),
       ),
     );
+    if (created == true && mounted) {
+      await widget.campaignController.loadArchives(widget.campaign.id);
+    }
   }
 
   Future<void> _showRollSheet() {

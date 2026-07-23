@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../domain/campaign.dart';
 import '../domain/campaign_archive_entry.dart';
+import '../domain/campaign_conversation.dart';
 
 abstract class CampaignClient {
   Future<Campaign> createCampaign({
@@ -69,6 +70,7 @@ abstract class CampaignClient {
     required String accessToken,
     required String campaignId,
     String? query,
+    String? conversationId,
   });
 
   Future<CampaignChatMessage> sendMessage({
@@ -81,6 +83,38 @@ abstract class CampaignClient {
     String? actionId,
     Map<String, Object?>? eventData,
     Map<String, Object?>? speakerSnapshot,
+    String? conversationId,
+  });
+
+  // Plan 2026-07-23 task 5.3: campaign conversations (main / direct / group).
+  Future<List<CampaignConversation>> listConversations({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+  });
+
+  Future<CampaignConversation> createDirectConversation({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String otherUserId,
+  });
+
+  Future<CampaignConversation> createGroupConversation({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String title,
+    required List<String> participantIds,
+  });
+
+  Future<CampaignConversation> updateConversation({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String conversationId,
+    String? title,
+    bool? archived,
   });
 
   Future<List<CampaignArchiveEntry>> listArchives({
@@ -463,10 +497,18 @@ class CampaignApiClient implements CampaignClient {
     required String accessToken,
     required String campaignId,
     String? query,
+    String? conversationId,
   }) async {
+    final params = <String, String>{};
+    if (query != null && query.trim().isNotEmpty) {
+      params['query'] = query.trim();
+    }
+    if (conversationId != null && conversationId.isNotEmpty) {
+      params['conversationId'] = conversationId;
+    }
     final response = await _httpClient.get(
       Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/messages')
-          .replace(queryParameters: query == null || query.trim().isEmpty ? null : {'query': query.trim()}),
+          .replace(queryParameters: params.isEmpty ? null : params),
       headers: {'authorization': 'Bearer $accessToken'},
     );
 
@@ -493,6 +535,7 @@ class CampaignApiClient implements CampaignClient {
     String? actionId,
     Map<String, Object?>? eventData,
     Map<String, Object?>? speakerSnapshot,
+    String? conversationId,
   }) async {
     final body = <String, Object?>{
       'kind': kind,
@@ -502,6 +545,9 @@ class CampaignApiClient implements CampaignClient {
     if (actionId != null) body['actionId'] = actionId;
     if (eventData != null) body['eventData'] = eventData;
     if (speakerSnapshot != null) body['speakerSnapshot'] = speakerSnapshot;
+    if (conversationId != null && conversationId.isNotEmpty) {
+      body['conversationId'] = conversationId;
+    }
     final response = await _httpClient.post(
       Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/messages'),
       headers: {
@@ -516,6 +562,109 @@ class CampaignApiClient implements CampaignClient {
     }
 
     return CampaignChatMessage.fromJson(
+      jsonDecode(response.body) as Map<String, Object?>,
+    );
+  }
+
+  // Plan 2026-07-23 task 5.3: campaign conversations.
+
+  @override
+  Future<List<CampaignConversation>> listConversations({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+  }) async {
+    final response = await _httpClient.get(
+      Uri.parse(
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/conversations',
+      ),
+      headers: {'authorization': 'Bearer $accessToken'},
+    );
+    if (response.statusCode != 200) throw _toException(response);
+    final decoded = jsonDecode(response.body) as List<Object?>;
+    return decoded
+        .map(
+          (item) => CampaignConversation.fromJson(
+            item as Map<String, Object?>,
+          ),
+        )
+        .toList();
+  }
+
+  @override
+  Future<CampaignConversation> createDirectConversation({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String otherUserId,
+  }) async {
+    final response = await _httpClient.post(
+      Uri.parse(
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/conversations/direct',
+      ),
+      headers: {
+        'content-type': 'application/json',
+        'authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({'otherUserId': otherUserId}),
+    );
+    if (response.statusCode != 201) throw _toException(response);
+    return CampaignConversation.fromJson(
+      jsonDecode(response.body) as Map<String, Object?>,
+    );
+  }
+
+  @override
+  Future<CampaignConversation> createGroupConversation({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String title,
+    required List<String> participantIds,
+  }) async {
+    final response = await _httpClient.post(
+      Uri.parse(
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/conversations/group',
+      ),
+      headers: {
+        'content-type': 'application/json',
+        'authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'title': title,
+        'participantIds': participantIds,
+      }),
+    );
+    if (response.statusCode != 201) throw _toException(response);
+    return CampaignConversation.fromJson(
+      jsonDecode(response.body) as Map<String, Object?>,
+    );
+  }
+
+  @override
+  Future<CampaignConversation> updateConversation({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String conversationId,
+    String? title,
+    bool? archived,
+  }) async {
+    final body = <String, Object?>{};
+    if (title != null) body['title'] = title;
+    if (archived != null) body['archived'] = archived;
+    final response = await _httpClient.patch(
+      Uri.parse(
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/conversations/$conversationId',
+      ),
+      headers: {
+        'content-type': 'application/json',
+        'authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode(body),
+    );
+    if (response.statusCode != 200) throw _toException(response);
+    return CampaignConversation.fromJson(
       jsonDecode(response.body) as Map<String, Object?>,
     );
   }

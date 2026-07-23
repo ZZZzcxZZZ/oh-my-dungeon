@@ -22,6 +22,7 @@ import '../../../features/campaigns/data/sync/campaign_actor_backlink_service.da
 import '../../../features/campaigns/data/sync/campaign_sync_service.dart';
 import '../../../features/campaigns/presentation/actors/campaign_actor_controller.dart';
 import '../../../features/campaigns/presentation/content/campaign_content_controller.dart';
+import '../../../features/campaigns/presentation/conversation_controller.dart';
 import '../../../features/campaigns/presentation/campaign_controller.dart';
 import '../../../features/campaigns/presentation/campaigns_tab_page.dart';
 import '../../../features/characters/data/character_repository.dart';
@@ -108,6 +109,7 @@ class _MainShellState extends State<MainShell> {
   late final CampaignActorController _actorController;
   late final CampaignContentController _campaignContentController;
   late final EncounterController _encounterController;
+  late final ConversationController _conversationController;
   CampaignActorBacklinkService? _backlinkService;
   CampaignSyncService? _campaignSyncService;
   CharacterConflictBannerController? _conflictBannerController;
@@ -207,6 +209,13 @@ class _MainShellState extends State<MainShell> {
       authController: _authController,
       encounterClient: EncounterApiClient(),
     );
+    // Plan 2026-07-23 task 5.3: conversation list + active conversation state
+    // for the campaign chat page (main / direct / group).
+    _conversationController = ConversationController(
+      apiBaseUrl: profile?.apiBaseUrl ?? '',
+      authController: _authController,
+      campaignClient: widget.campaignClient,
+    );
     if (widget.database != null && widget.enableBackgroundSync) {
       _campaignSyncService = CampaignSyncService(
         cacheRepository: _campaignCacheRepository,
@@ -234,6 +243,7 @@ class _MainShellState extends State<MainShell> {
     _actorController.dispose();
     _campaignContentController.dispose();
     _encounterController.dispose();
+    _conversationController.dispose();
     _libraryController.dispose();
     _characterController.dispose();
     _campaignController.dispose();
@@ -309,6 +319,9 @@ class _MainShellState extends State<MainShell> {
         _campaignContentController.selectCampaign(campaignId),
       ]);
     }
+    // Plan 2026-07-23 task 5.3: load conversations when entering a campaign
+    // so the chat page can scope to main/direct/group.
+    await _conversationController.loadConversations(campaignId);
 
     final profile = widget.session.profile;
     final token = _authController.accessToken;
@@ -367,6 +380,7 @@ class _MainShellState extends State<MainShell> {
         campaignContentController: _campaignContentController,
         actorController: _actorController,
         encounterController: _encounterController,
+        conversationController: _conversationController,
       ),
       CharactersTabPage(
         controller: _characterController,

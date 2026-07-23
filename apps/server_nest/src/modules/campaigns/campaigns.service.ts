@@ -70,6 +70,20 @@ export class CampaignsService {
         },
       });
 
+      // Plan 2026-07-23 task 5.3: seed the main campaign conversation so
+      // every campaign has a default chat room from creation. mainKey is
+      // the unique dedupe key for the [campaignId, mainKey] constraint.
+      await tx.campaignConversation.create({
+        data: {
+          campaignId: created.id,
+          kind: "main",
+          title: "",
+          mainKey: "main",
+          participantIds: [],
+          createdBy: actor.userId,
+        },
+      });
+
       return created;
     });
 
@@ -292,14 +306,22 @@ export class CampaignsService {
     actor: AccessTokenPayload,
     campaignId: string,
     query?: string,
+    conversationId?: string,
   ): Promise<CampaignChatMessageView[]> {
     const campaign = await this.fetchCampaignContext(campaignId);
     this.policy.canViewCampaign(actor, campaign.context);
+
+    const conversationFilter = await this.resolveConversationFilter(
+      actor.userId,
+      campaignId,
+      conversationId,
+    );
 
     const normalizedQuery = query?.trim();
     const messages = await this.prismaService.campaignChatMessage.findMany({
       where: {
         campaignId,
+        ...conversationFilter,
         ...(normalizedQuery
           ? { content: { contains: normalizedQuery, mode: "insensitive" } }
           : {}),
@@ -407,6 +429,15 @@ export class CampaignsService {
     const capabilities = this.policy.capabilitiesFor(actor, campaign.context);
     const requestedActorId = input.campaignActorId ?? null;
 
+    // Plan 2026-07-23 task 5.3: route the message to a conversation. If the
+    // caller did not specify one, default to the campaign's main room
+    // (creating it for legacy campaigns predating task 5.3).
+    const conversationId = await this.resolveMessageConversationId(
+      actor.userId,
+      campaignId,
+      input.conversationId,
+    );
+
     if (input.speakerSnapshot) {
       return this.sendSpeakerSnapshotMessage(
         actor,
@@ -418,6 +449,7 @@ export class CampaignsService {
           speakerSnapshot: input.speakerSnapshot,
           membership,
           capabilities,
+          conversationId,
         },
       );
     }
@@ -576,6 +608,7 @@ export class CampaignsService {
       ooc,
       kind,
       content,
+      conversationId,
       ...(actionSnapshot
         ? {
             actionSnapshot: actionSnapshot as Prisma.InputJsonValue,
@@ -632,6 +665,7 @@ export class CampaignsService {
       speakerSnapshot: SpeakerSnapshotInput;
       membership: { id: string };
       capabilities: { canManageCampaign: boolean };
+      conversationId: string;
     },
   ): Promise<CampaignChatMessageView> {
     if (!input.capabilities.canManageCampaign) {
@@ -667,6 +701,7 @@ export class CampaignsService {
         ooc: false,
         kind: input.kind,
         content: input.content,
+        conversationId: input.conversationId,
         ...(input.eventData
           ? { eventData: input.eventData as Prisma.InputJsonValue }
           : {}),
@@ -784,6 +819,87 @@ export class CampaignsService {
     });
 
     return toMembershipView(membership);
+  }
+
+  private async loadAccessibleConversation(
+    userId: string,
+    campaignId: string,
+    conversationId: string,
+  ) {
+    const conversation = await this.prismaService.campaignConversation.findFirst({
+      where: { id: conversationId, campaignId },
+    });
+    if (!conversation) {
+      throw new NotFoundException("Conversation not found");
+    }
+    // Main is open to all campaign members (membership already verified by
+    // canViewCampaign upstream). Direct/group require explicit participation.
+    if (
+      conversation.kind !== "main" &&
+      !conversation.participantIds.includes(userId)
+    ) {
+      throw new ForbiddenException("You cannot access this conversation");
+    }
+    return conversation;
+  }
+
+  /**
+   * Plan 2026-07-23 task 5.3: resolve the conversation a new message is
+   * posted to. An explicit conversationId is access-checked; a missing one
+   * defaults to the main room, creating it for legacy campaigns that predate
+   * the seeded main conversation in createCampaign.
+   */
+  private async resolveMessageConversationId(
+    userId: string,
+    campaignId: string,
+    conversationId: string | null | undefined,
+  ): Promise<string> {
+    if (conversationId) {
+      const conversation = await this.loadAccessibleConversation(
+        userId,
+        campaignId,
+        conversationId,
+      );
+      return conversation.id;
+    }
+    const main = await this.prismaService.campaignConversation.findFirst({
+      where: { campaignId, kind: "main" },
+    });
+    if (main) return main.id;
+    const created = await this.prismaService.campaignConversation.create({
+      data: {
+        campaignId,
+        kind: "main",
+        title: "",
+        mainKey: "main",
+        participantIds: [],
+        createdBy: userId,
+      },
+    });
+    return created.id;
+  }
+
+  /**
+   * Builds the conversation filter for listMessages. When no conversationId is
+   * requested, the main room is shown — including legacy messages that carry a
+   * null conversationId from before task 5.3.
+   */
+  private async resolveConversationFilter(
+    userId: string,
+    campaignId: string,
+    conversationId: string | undefined,
+  ): Promise<Prisma.CampaignChatMessageWhereInput> {
+    if (conversationId) {
+      await this.loadAccessibleConversation(userId, campaignId, conversationId);
+      return { conversationId };
+    }
+    const main = await this.prismaService.campaignConversation.findFirst({
+      where: { campaignId, kind: "main" },
+    });
+    if (main) {
+      return { OR: [{ conversationId: main.id }, { conversationId: null }] };
+    }
+    return { conversationId: null };
   }
 
   private async fetchCampaignContext(campaignId: string): Promise<{

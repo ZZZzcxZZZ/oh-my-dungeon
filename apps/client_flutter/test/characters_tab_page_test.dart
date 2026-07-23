@@ -11,8 +11,8 @@ import 'support/character_test_support.dart';
 
 /// Spec §DM 角色生命周期: DM 模式下角色栏 FAB 应弹出菜单提供:
 /// 1. 快速创建 NPC (常驻)
-/// 2. 快速创建一次性角色 (临时)
-/// 3. 完整创建角色
+/// 2. 完整创建角色
+/// 一次性发言身份改用 speakerSnapshot 直接写入消息（Task 5.2），不再创建 Actor。
 void main() {
   const apiBaseUrl = 'http://localhost:3000/api';
 
@@ -52,7 +52,7 @@ void main() {
   }
 
   testWidgets(
-    'DM mode with selected campaign shows popup menu with three create options',
+    'DM mode with selected campaign shows popup menu with two create options',
     (tester) async {
       final modeController = ClientModeController(
         initialMode: ClientMode.dungeonMaster,
@@ -70,13 +70,14 @@ void main() {
       expect(find.text('创建角色'), findsOneWidget);
       expect(find.byKey(const Key('dm-create-quick-npc')), findsOneWidget);
       expect(find.text('快速创建 NPC'), findsOneWidget);
-      expect(
-        find.byKey(const Key('dm-create-quick-temporary')),
-        findsOneWidget,
-      );
-      expect(find.text('快速创建一次性角色'), findsOneWidget);
       expect(find.byKey(const Key('dm-create-full')), findsOneWidget);
       expect(find.text('完整创建角色'), findsOneWidget);
+      // Task 5.2: 一次性发言身份改用 speaker snapshot, 不再在此菜单创建临时角色.
+      expect(
+        find.byKey(const Key('dm-create-quick-temporary')),
+        findsNothing,
+      );
+      expect(find.text('快速创建一次性角色'), findsNothing);
 
       actorController.dispose();
       modeController.dispose();

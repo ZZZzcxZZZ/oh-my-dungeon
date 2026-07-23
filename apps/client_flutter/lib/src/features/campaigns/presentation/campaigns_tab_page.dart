@@ -10,10 +10,12 @@ import '../../encounters/presentation/encounter_controller.dart';
 import '../../../core/dice/dice_roller.dart';
 import '../../server_home/domain/active_server_session.dart';
 import '../domain/campaign.dart';
+import '../domain/campaign_conversation.dart';
 import 'actors/campaign_actor_controller.dart';
 import 'campaign_chat_page.dart';
 import 'campaign_controller.dart';
 import 'content/campaign_content_controller.dart';
+import 'conversation_controller.dart';
 
 /// Top-level "战役" tab.
 ///
@@ -33,6 +35,7 @@ class CampaignsTabPage extends StatefulWidget {
     this.campaignContentController,
     this.actorController,
     this.encounterController,
+    this.conversationController,
     super.key,
   });
 
@@ -48,6 +51,7 @@ class CampaignsTabPage extends StatefulWidget {
   final CampaignContentController? campaignContentController;
   final CampaignActorController? actorController;
   final EncounterController? encounterController;
+  final ConversationController? conversationController;
 
   @override
   State<CampaignsTabPage> createState() => _CampaignsTabPageState();
@@ -84,6 +88,8 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
         widget.modeController,
         widget.appPreferencesController,
         widget.session,
+        if (widget.conversationController != null)
+          widget.conversationController!,
       ]),
       builder: (context, _) {
         if (!widget.session.isConfigured) {
@@ -236,18 +242,41 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
         final campaign = campaigns[index];
         final isOwner = campaign.ownerId == currentUserId;
         final character = _primaryCharacter();
+        // Plan 2026-07-23 task 5.3: conversations are scoped to the active
+        // campaign in the conversation controller. When the controller tracks
+        // a different campaign, fall back to an empty list (the card still
+        // shows the main entry from Task 5.1).
+        final conversationController = widget.conversationController;
+        final conversations = conversationController != null &&
+                conversationController.activeCampaignId == campaign.id
+            ? conversationController.conversations
+            : const <CampaignConversation>[];
         return _CampaignChatListItem(
           campaign: campaign,
           character: character,
           isOwner: isOwner,
           compact: compact,
           isExpanded: _expandedCampaignId == campaign.id,
-          onExpandToggle: () => setState(() {
-            // Toggle this card; if another card was expanded, it collapses.
-            _expandedCampaignId =
-                _expandedCampaignId == campaign.id ? null : campaign.id;
-          }),
+          conversations: conversations,
+          onExpandToggle: () {
+            // Load conversations lazily when the card is first expanded so
+            // the list shows direct/group entries alongside the main room.
+            if (widget.conversationController != null &&
+                widget.conversationController!.activeCampaignId !=
+                    campaign.id) {
+              widget.conversationController!.loadConversations(campaign.id);
+            }
+            setState(() {
+              // Toggle this card; if another card was expanded, it collapses.
+              _expandedCampaignId =
+                  _expandedCampaignId == campaign.id ? null : campaign.id;
+            });
+          },
           onTap: () => _openCampaignChat(campaign, character),
+          onConversationTap: (conversation) =>
+              _openCampaignChat(campaign, character, conversation: conversation),
+          onCreateDirect: () => _showCreateDirectDialog(campaign),
+          onCreateGroup: () => _showCreateGroupDialog(campaign),
         );
       },
     );
@@ -261,8 +290,9 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
 
   Future<void> _openCampaignChat(
     Campaign campaign,
-    CharacterSheet? character,
-  ) async {
+    CharacterSheet? character, {
+    CampaignConversation? conversation,
+  }) async {
     // Spec §客户端工作模式: 进入战役前根据用户角色与当前模式给出提示。
     // - owner/dm 在 Player 模式：提示一键切换 DM 模式
     // - 非 owner 在 DM 模式：提示只能以玩家身份参与
@@ -272,6 +302,12 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
 
     await widget.onCampaignOpened?.call(campaign.id);
     if (!mounted) return;
+    // Plan 2026-07-23 task 5.3: pre-select the tapped conversation so the
+    // chat page scopes messages to it on load.
+    if (conversation != null && widget.conversationController != null) {
+      widget.conversationController!
+          .setActiveConversation(conversation.isMain ? null : conversation.id);
+    }
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => CampaignChatPage(
@@ -286,6 +322,7 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
           appPreferencesController: widget.appPreferencesController,
           campaignActorId: null,
           diceRoller: widget.diceRoller,
+          conversationController: widget.conversationController,
         ),
       ),
     );
@@ -450,6 +487,181 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
       messenger.showSnackBar(
         SnackBar(
           content: Text('加入失败：${widget.campaignController.error ?? '未知错误'}'),
+        ),
+      );
+    }
+  }
+
+  /// Plan 2026-07-23 task 5.3: pick a campaign member to start a 1:1 chat.
+  Future<void> _showCreateDirectDialog(Campaign campaign) async {
+    final controller = widget.conversationController;
+    if (controller == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final currentUserId = widget.authController.user?.id;
+    final candidates = campaign.memberPreview
+        .where((m) => m.userId != currentUserId)
+        .toList();
+    if (candidates.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('暂无其他成员可发起私聊')),
+      );
+      return;
+    }
+    final selected = await showDialog<CampaignMemberPreview>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('发起私聊'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: candidates.length,
+              itemBuilder: (context, index) {
+                final member = candidates[index];
+                return ListTile(
+                  leading: const Icon(Icons.person_outline),
+                  title: Text(
+                    member.displayName.isEmpty
+                        ? '玩家 ${member.userId.substring(0, 4)}'
+                        : member.displayName,
+                  ),
+                  subtitle: Text(member.role),
+                  onTap: () => Navigator.of(context).pop(member),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+          ],
+        );
+      },
+    );
+    if (selected == null || !mounted) return;
+
+    final conversation = await controller.createDirectConversation(
+      campaignId: campaign.id,
+      otherUserId: selected.userId,
+    );
+    if (!mounted) return;
+    if (conversation != null) {
+      final character = _primaryCharacter();
+      await _openCampaignChat(campaign, character, conversation: conversation);
+    } else {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('创建私聊失败：${controller.error ?? '未知错误'}'),
+        ),
+      );
+    }
+  }
+
+  /// Plan 2026-07-23 task 5.3: DM-only group conversation creation.
+  Future<void> _showCreateGroupDialog(Campaign campaign) async {
+    final controller = widget.conversationController;
+    if (controller == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final currentUserId = widget.authController.user?.id;
+    final candidates = campaign.memberPreview
+        .where((m) => m.userId != currentUserId)
+        .toList();
+    final titleController = TextEditingController();
+    final selectedIds = <String>{};
+    final result = await showDialog<({String title, List<String> ids})>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('创建小群'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: titleController,
+                      decoration: const InputDecoration(
+                        labelText: '小群名称',
+                        border: OutlineInputBorder(),
+                      ),
+                      autofocus: true,
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: candidates.isEmpty
+                          ? const Center(child: Text('暂无其他成员'))
+                          : ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: candidates.length,
+                              itemBuilder: (context, index) {
+                                final member = candidates[index];
+                                return CheckboxListTile(
+                                  value: selectedIds.contains(member.userId),
+                                  onChanged: (checked) {
+                                    setState(() {
+                                      if (checked == true) {
+                                        selectedIds.add(member.userId);
+                                      } else {
+                                        selectedIds.remove(member.userId);
+                                      }
+                                    });
+                                  },
+                                  title: Text(
+                                    member.displayName.isEmpty
+                                        ? '玩家 ${member.userId.substring(0, 4)}'
+                                        : member.displayName,
+                                  ),
+                                  subtitle: Text(member.role),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: titleController.text.trim().isEmpty
+                      ? null
+                      : () => Navigator.of(context).pop(
+                            (
+                              title: titleController.text.trim(),
+                              ids: selectedIds.toList(),
+                            ),
+                          ),
+                  child: const Text('创建'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    titleController.dispose();
+    if (result == null || !mounted) return;
+
+    final conversation = await controller.createGroupConversation(
+      campaignId: campaign.id,
+      title: result.title,
+      participantIds: result.ids,
+    );
+    if (!mounted) return;
+    if (conversation != null) {
+      final character = _primaryCharacter();
+      await _openCampaignChat(campaign, character, conversation: conversation);
+    } else {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('创建小群失败：${controller.error ?? '未知错误'}'),
         ),
       );
     }
@@ -686,8 +898,12 @@ class _CampaignChatListItem extends StatelessWidget {
     required this.isOwner,
     required this.compact,
     required this.isExpanded,
+    required this.conversations,
     required this.onExpandToggle,
     required this.onTap,
+    required this.onConversationTap,
+    required this.onCreateDirect,
+    required this.onCreateGroup,
   });
 
   final Campaign campaign;
@@ -695,8 +911,12 @@ class _CampaignChatListItem extends StatelessWidget {
   final bool isOwner;
   final bool compact;
   final bool isExpanded;
+  final List<CampaignConversation> conversations;
   final VoidCallback onExpandToggle;
   final VoidCallback onTap;
+  final ValueChanged<CampaignConversation> onConversationTap;
+  final VoidCallback onCreateDirect;
+  final VoidCallback onCreateGroup;
 
   static const _memberAvatarOverlap = 14.0;
   static const _memberAvatarSize = 22.0;
@@ -774,12 +994,25 @@ class _CampaignChatListItem extends StatelessWidget {
     );
   }
 
-  /// Expanded content: description, member count, unread summary, and quick
-  /// entries (main chat / private chats / group chats / create private chat).
-  /// Plan 2026-07-23 task 5.1.
+  /// Expanded content: description, member count, unread summary, the pinned
+  /// main chat entry, and any direct/group conversations the user can see.
+  /// Plan 2026-07-23 task 5.1 + task 5.3.
   Widget _buildExpandedContent(ThemeData theme) {
     final colorScheme = theme.colorScheme;
     final memberCount = campaign.memberPreview.length;
+    final mainConversation = conversations.where((c) => c.isMain).toList();
+    final directConversations = conversations
+        .where((c) => c.kind == 'direct' && !c.isArchived)
+        .toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final groupConversations = conversations
+        .where((c) => c.kind == 'group' && !c.isArchived)
+        .toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final mainConversationObj =
+        mainConversation.isNotEmpty ? mainConversation.first : null;
+    final directCount = directConversations.length;
+    final groupCount = groupConversations.length;
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Column(
@@ -838,36 +1071,63 @@ class _CampaignChatListItem extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          // Main chat entry — primary action.
+          // Pinned main chat entry — primary action.
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: onTap,
-              icon: const Icon(Icons.forum_outlined, size: 18),
-              label: const Text('进入主聊天室'),
+              key: const Key('campaign-card-main-chat-entry'),
+              onPressed: mainConversationObj == null
+                  ? onTap
+                  : () => onConversationTap(mainConversationObj),
+              icon: const Icon(Icons.push_pin_outlined, size: 18),
+              label: const Text('主聊天室'),
             ),
           ),
+          if (directCount > 0) ...[
+            const SizedBox(height: 12),
+            _ConversationSectionHeader(
+              icon: Icons.person_outline,
+              label: '私聊 ($directCount)',
+            ),
+            ...directConversations.map(
+              (c) => _ConversationRow(
+                conversation: c,
+                onTap: () => onConversationTap(c),
+              ),
+            ),
+          ],
+          if (groupCount > 0) ...[
+            const SizedBox(height: 12),
+            _ConversationSectionHeader(
+              icon: Icons.groups_outlined,
+              label: '小群 ($groupCount)',
+            ),
+            ...groupConversations.map(
+              (c) => _ConversationRow(
+                conversation: c,
+                onTap: () => onConversationTap(c),
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
-          // Secondary entries: private chats / group chats. Badges show count
-          // when available. Until Task 5.3 lands the server Conversation model,
-          // these stay as placeholders showing "暂无".
+          // Secondary entries: create private chat / create group chat.
           Row(
             children: [
               Expanded(
                 child: _SecondaryEntryButton(
-                  icon: Icons.person_outline,
-                  label: '私聊',
-                  countText: '暂无',
-                  onPressed: () {},
+                  icon: Icons.person_add_alt_1_outlined,
+                  label: '发起私聊',
+                  countText: directCount == 0 ? '0' : '$directCount',
+                  onPressed: onCreateDirect,
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: _SecondaryEntryButton(
-                  icon: Icons.groups_outlined,
-                  label: '小群',
-                  countText: '暂无',
-                  onPressed: () {},
+                  icon: Icons.group_add_outlined,
+                  label: '创建小群',
+                  countText: groupCount == 0 ? '0' : '$groupCount',
+                  onPressed: onCreateGroup,
                 ),
               ),
             ],
@@ -1085,6 +1345,139 @@ class _SecondaryEntryButton extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Plan 2026-07-23 task 5.3: section header for direct/group conversation
+/// groups inside the expanded card.
+class _ConversationSectionHeader extends StatelessWidget {
+  const _ConversationSectionHeader({
+    required this.icon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: colorScheme.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Plan 2026-07-23 task 5.3: a single conversation row inside the expanded
+/// card. Shows the conversation title (or a fallback), the last message
+/// preview, time, and an unread badge. Tapping opens that conversation.
+class _ConversationRow extends StatelessWidget {
+  const _ConversationRow({
+    required this.conversation,
+    required this.onTap,
+  });
+
+  final CampaignConversation conversation;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final lastMessage = conversation.lastMessage;
+    final lastMessageText = lastMessage == null
+        ? '暂无消息'
+        : lastMessage.kind == 'action'
+            ? '* ${lastMessage.content}'
+            : lastMessage.content;
+    final title = conversation.kind == 'group'
+        ? (conversation.title.isEmpty ? '未命名小群' : conversation.title)
+        : (conversation.title.isEmpty ? '私聊' : conversation.title);
+    final timeText = _formatListTime(lastMessage?.createdAt ?? conversation.updatedAt);
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 14,
+              backgroundColor: colorScheme.secondaryContainer,
+              child: Icon(
+                conversation.kind == 'group'
+                    ? Icons.groups_outlined
+                    : Icons.person_outline,
+                size: 16,
+                color: colorScheme.onSecondaryContainer,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Text(
+                    lastMessageText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (timeText != null)
+                  Text(
+                    timeText,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                if (conversation.unreadCount > 0) ...[
+                  const SizedBox(height: 2),
+                  Badge(
+                    label: Text(
+                      conversation.unreadCount > 99
+                          ? '99+'
+                          : '${conversation.unreadCount}',
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

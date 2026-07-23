@@ -45,6 +45,7 @@ interface CreateCampaignChatMessageBody {
   actionId?: unknown;
   eventData?: unknown;
   speakerSnapshot?: unknown;
+  conversationId?: unknown;
 }
 
 interface UpdateMemberBindingBody {
@@ -90,8 +91,14 @@ export class CampaignsController {
     @CurrentUser() user: AccessTokenPayload,
     @Param("id") campaignId: string,
     @Query("query") query?: string,
+    @Query("conversationId") conversationId?: string,
   ): Promise<CampaignChatMessageView[]> {
-    return this.campaignsService.listMessages(user, campaignId, query);
+    return this.campaignsService.listMessages(
+      user,
+      campaignId,
+      query,
+      conversationId,
+    );
   }
 
   @Get(":id/check-requests")
@@ -130,6 +137,8 @@ export class CampaignsController {
       actionId: typeof body.actionId === "string" ? body.actionId : null,
       eventData: isRecord(body.eventData) ? body.eventData : null,
       speakerSnapshot: parseSpeakerSnapshot(body.speakerSnapshot),
+      conversationId:
+        typeof body.conversationId === "string" ? body.conversationId : null,
     });
   }
 

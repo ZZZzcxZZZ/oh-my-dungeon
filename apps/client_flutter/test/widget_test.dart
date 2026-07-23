@@ -7,6 +7,7 @@ import 'package:dnd_table_client/src/features/auth/presentation/auth_controller.
 import 'package:dnd_table_client/src/features/campaigns/data/campaign_api_client.dart';
 import 'package:dnd_table_client/src/features/campaigns/data/campaign_socket_service.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign.dart';
+import 'package:dnd_table_client/src/features/campaigns/domain/campaign_conversation.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_archive_entry.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_controller.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaigns_tab_page.dart';
@@ -1448,6 +1449,7 @@ class _FakeCampaignClient implements CampaignClient {
     required String accessToken,
     required String campaignId,
     String? query,
+    String? conversationId,
   }) async {
     return _messages
         .where((message) => message.campaignId == campaignId)
@@ -1465,6 +1467,7 @@ class _FakeCampaignClient implements CampaignClient {
     String? actionId,
     Map<String, Object?>? eventData,
     Map<String, Object?>? speakerSnapshot,
+    String? conversationId,
   }) async {
     sentMessages.add(
       _SentCampaignMessage(
@@ -1486,6 +1489,75 @@ class _FakeCampaignClient implements CampaignClient {
     );
     _messages.add(message);
     return message;
+  }
+
+  @override
+  Future<List<CampaignConversation>> listConversations({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<CampaignConversation> createDirectConversation({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String otherUserId,
+  }) async {
+    return CampaignConversation(
+      id: 'direct-1',
+      campaignId: campaignId,
+      kind: 'direct',
+      title: '',
+      participantIds: [otherUserId],
+      createdBy: 'user-1',
+      createdAt: '2026-07-23T00:00:00.000Z',
+      updatedAt: '2026-07-23T00:00:00.000Z',
+    );
+  }
+
+  @override
+  Future<CampaignConversation> createGroupConversation({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String title,
+    required List<String> participantIds,
+  }) async {
+    return CampaignConversation(
+      id: 'group-1',
+      campaignId: campaignId,
+      kind: 'group',
+      title: title,
+      participantIds: participantIds,
+      createdBy: 'user-1',
+      createdAt: '2026-07-23T00:00:00.000Z',
+      updatedAt: '2026-07-23T00:00:00.000Z',
+    );
+  }
+
+  @override
+  Future<CampaignConversation> updateConversation({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String conversationId,
+    String? title,
+    bool? archived,
+  }) async {
+    return CampaignConversation(
+      id: conversationId,
+      campaignId: campaignId,
+      kind: 'group',
+      title: title ?? '',
+      participantIds: const [],
+      createdBy: 'user-1',
+      createdAt: '2026-07-23T00:00:00.000Z',
+      updatedAt: '2026-07-23T00:00:00.000Z',
+    );
   }
 }
 

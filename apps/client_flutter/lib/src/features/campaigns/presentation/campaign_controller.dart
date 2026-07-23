@@ -238,7 +238,10 @@ class CampaignController extends ChangeNotifier {
     }
   }
 
-  Future<void> loadMessages(String campaignId) async {
+  Future<void> loadMessages(
+    String campaignId, {
+    String? conversationId,
+  }) async {
     final token = await authController.ensureValidAccessToken();
     if (token == null) return;
 
@@ -251,6 +254,7 @@ class CampaignController extends ChangeNotifier {
         apiBaseUrl: apiBaseUrl,
         accessToken: token,
         campaignId: campaignId,
+        conversationId: conversationId,
       );
     } on CampaignApiException catch (e) {
       _messagesError = e.message;
@@ -400,6 +404,7 @@ class CampaignController extends ChangeNotifier {
     String? actionId,
     Map<String, Object?>? eventData,
     Map<String, Object?>? speakerSnapshot,
+    String? conversationId,
   }) async {
     final token = await authController.ensureValidAccessToken();
     if (token == null) return false;
@@ -416,6 +421,7 @@ class CampaignController extends ChangeNotifier {
         actionId: actionId,
         eventData: eventData,
         speakerSnapshot: speakerSnapshot,
+        conversationId: conversationId,
       );
       _appendMessage(message);
       notifyListeners();

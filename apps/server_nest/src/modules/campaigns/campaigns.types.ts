@@ -57,6 +57,7 @@ export interface CreateCampaignChatMessageInput {
   actionId?: string | null;
   eventData?: Record<string, unknown> | null;
   speakerSnapshot?: SpeakerSnapshotInput | null;
+  conversationId?: string | null;
 }
 
 export interface CreateCampaignInput {
@@ -153,4 +154,32 @@ export interface CampaignJournalEntryView {
   summary: string;
   refId: string | null;
   createdAt: string;
+}
+
+export interface CampaignConversationView {
+  id: string;
+  campaignId: string;
+  kind: string;
+  title: string;
+  participantIds: string[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt: string | null;
+  lastMessage: CampaignChatMessageView | null;
+  unreadCount: number;
+}
+
+export interface CreateDirectConversationInput {
+  otherUserId: string;
+}
+
+export interface CreateGroupConversationInput {
+  title: string;
+  participantIds: string[];
+}
+
+export interface UpdateConversationInput {
+  title?: string;
+  archived?: boolean;
 }

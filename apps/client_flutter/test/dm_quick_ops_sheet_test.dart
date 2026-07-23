@@ -2,6 +2,7 @@ import 'package:dnd_table_client/src/core/dice/dice_roller.dart';
 import 'package:dnd_table_client/src/features/campaigns/data/campaign_api_client.dart';
 import 'package:dnd_table_client/src/features/campaigns/data/campaign_socket_service.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign.dart';
+import 'package:dnd_table_client/src/features/campaigns/domain/campaign_conversation.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_archive_entry.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_controller.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/actors/dm_quick_ops_sheet.dart';
@@ -260,11 +261,11 @@ class _RecordingCampaignClient implements CampaignClient {
   @override
   Future<CampaignMembership> joinCampaign({required String apiBaseUrl, required String accessToken, required String code}) => throw UnimplementedError();
   @override
-  Future<List<CampaignChatMessage>> listMessages({required String apiBaseUrl, required String accessToken, required String campaignId, String? query}) async => const [];
+  Future<List<CampaignChatMessage>> listMessages({required String apiBaseUrl, required String accessToken, required String campaignId, String? query, String? conversationId}) async => const [];
   @override
   Future<CampaignInvite> createInvite({required String apiBaseUrl, required String accessToken, required String campaignId, int? maxUses}) => throw UnimplementedError();
   @override
-  Future<CampaignChatMessage> sendMessage({required String apiBaseUrl, required String accessToken, required String campaignId, required String kind, required String content, String? campaignActorId, String? actionId, Map<String, Object?>? eventData, Map<String, Object?>? speakerSnapshot}) async {
+  Future<CampaignChatMessage> sendMessage({required String apiBaseUrl, required String accessToken, required String campaignId, required String kind, required String content, String? campaignActorId, String? actionId, Map<String, Object?>? eventData, Map<String, Object?>? speakerSnapshot, String? conversationId}) async {
     final msg = _SentMessage(kind: kind, content: content, campaignActorId: campaignActorId, eventData: eventData);
     sentMessages.add(msg);
     return CampaignChatMessage(
@@ -282,6 +283,74 @@ class _RecordingCampaignClient implements CampaignClient {
   }
   @override
   Future<Campaign> createCampaign({required String apiBaseUrl, required String accessToken, required String name, String? description, String? system}) => throw UnimplementedError();
+  @override
+  Future<List<CampaignConversation>> listConversations({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<CampaignConversation> createDirectConversation({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String otherUserId,
+  }) async {
+    return CampaignConversation(
+      id: 'direct-1',
+      campaignId: campaignId,
+      kind: 'direct',
+      title: '',
+      participantIds: [otherUserId],
+      createdBy: 'user-1',
+      createdAt: '2026-07-23T00:00:00.000Z',
+      updatedAt: '2026-07-23T00:00:00.000Z',
+    );
+  }
+
+  @override
+  Future<CampaignConversation> createGroupConversation({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String title,
+    required List<String> participantIds,
+  }) async {
+    return CampaignConversation(
+      id: 'group-1',
+      campaignId: campaignId,
+      kind: 'group',
+      title: title,
+      participantIds: participantIds,
+      createdBy: 'user-1',
+      createdAt: '2026-07-23T00:00:00.000Z',
+      updatedAt: '2026-07-23T00:00:00.000Z',
+    );
+  }
+
+  @override
+  Future<CampaignConversation> updateConversation({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String conversationId,
+    String? title,
+    bool? archived,
+  }) async {
+    return CampaignConversation(
+      id: conversationId,
+      campaignId: campaignId,
+      kind: 'group',
+      title: title ?? '',
+      participantIds: const [],
+      createdBy: 'user-1',
+      createdAt: '2026-07-23T00:00:00.000Z',
+      updatedAt: '2026-07-23T00:00:00.000Z',
+    );
+  }
 }
 
 class _SentMessage {

@@ -13,6 +13,7 @@ import '../../../core/dice/dice_roller.dart';
 import '../../../core/dice/dice_tray_dialog.dart';
 import '../domain/campaign.dart';
 import '../domain/campaign_actor.dart';
+import '../domain/campaign_conversation.dart';
 import 'actors/campaign_actor_controller.dart';
 import 'actors/campaign_actor_sheet_launcher.dart';
 import 'campaign_controller.dart';
@@ -28,6 +29,7 @@ import 'chat/chat_helpers.dart';
 import 'chat/chat_mode_picker.dart';
 import 'chat/check_request_sheet.dart';
 import 'content/campaign_content_controller.dart';
+import 'conversation_controller.dart';
 import 'widgets/campaign_avatar.dart';
 
 class CampaignChatPage extends StatefulWidget {
@@ -43,6 +45,8 @@ class CampaignChatPage extends StatefulWidget {
     this.actorController,
     this.encounterController,
     this.appPreferencesController,
+    this.conversationController,
+    this.conversationId,
     super.key,
   });
 
@@ -58,6 +62,13 @@ class CampaignChatPage extends StatefulWidget {
   final EncounterController? encounterController;
   final AppPreferencesController? appPreferencesController;
 
+  /// Plan 2026-07-23 task 5.3: optional conversation scoping. When provided,
+  /// messages are loaded/sent into this conversation (main/direct/group).
+  /// When null, the page falls back to the conversation controller's active
+  /// conversation, or the campaign-wide main room (legacy behaviour).
+  final ConversationController? conversationController;
+  final String? conversationId;
+
   @override
   State<CampaignChatPage> createState() => _CampaignChatPageState();
 }
@@ -69,12 +80,41 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
   bool _sending = false;
   _TemporaryIdentityDraft? _draftIdentity;
 
+  /// The conversation id to scope message load/send with. Resolved from the
+  /// explicit widget param, then the conversation controller's active id,
+  /// then null (main room / legacy behaviour).
+  String? get _conversationId {
+    final explicit = widget.conversationId;
+    if (explicit != null && explicit.isNotEmpty) return explicit;
+    final controller = widget.conversationController;
+    if (controller != null) {
+      final active = controller.activeConversationId;
+      if (active != null && active.isNotEmpty) return active;
+    }
+    return null;
+  }
+
+  /// The active conversation object, if a controller is wired in.
+  CampaignConversation? get _activeConversation {
+    final controller = widget.conversationController;
+    if (controller == null) return null;
+    final id = _conversationId;
+    if (id == null) return controller.mainConversation;
+    for (final c in controller.conversations) {
+      if (c.id == id) return c;
+    }
+    return null;
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      widget.campaignController.loadMessages(widget.campaign.id);
+      widget.campaignController.loadMessages(
+        widget.campaign.id,
+        conversationId: _conversationId,
+      );
       widget.campaignController.loadWorkspaceContext(widget.campaign.id);
       widget.campaignController.connectCampaignChat(widget.campaign.id);
     });
@@ -96,12 +136,14 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         if (widget.actorController != null) widget.actorController!,
         if (widget.appPreferencesController != null)
           widget.appPreferencesController!,
+        if (widget.conversationController != null)
+          widget.conversationController!,
       ]),
       builder: (context, _) {
         final messages = widget.campaignController.messages;
         return Scaffold(
           appBar: AppBar(
-            title: Text(widget.campaign.name),
+            title: Text(_appBarTitle()),
             actions: [
               IconButton(
                 key: const Key('campaign-open-center'),
@@ -125,6 +167,18 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         );
       },
     );
+  }
+
+  /// Plan 2026-07-23 task 5.3: AppBar shows campaign name for the main room,
+  /// or campaign name + conversation title for direct/group rooms.
+  String _appBarTitle() {
+    final conversation = _activeConversation;
+    if (conversation == null || conversation.isMain) {
+      return widget.campaign.name;
+    }
+    final title = conversation.title;
+    if (title.isEmpty) return widget.campaign.name;
+    return '${widget.campaign.name} · $title';
   }
 
   Widget _buildChat(List<CampaignChatMessage> messages) {
@@ -244,6 +298,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         campaignId: widget.campaign.id,
         campaignController: widget.campaignController,
         campaignActorId: actor.id,
+        conversationId: _conversationId,
       ),
     );
   }
@@ -265,6 +320,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       speakerSnapshot: draft == null
           ? null
           : <String, Object?>{'displayName': draft.displayName},
+      conversationId: _conversationId,
     );
     if (!mounted) return sent;
     setState(() => _sending = false);
@@ -619,6 +675,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       content: action['name']! as String,
       campaignActorId: _activeSpeakerActorId,
       actionId: action['id']! as String,
+      conversationId: _conversationId,
     );
     if (!mounted) return;
     setState(() => _sending = false);
@@ -640,6 +697,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         kind: 'roll',
         content: roll.label,
         campaignActorId: _activeSpeakerActorId,
+        conversationId: _conversationId,
       );
       if (!mounted) return;
       setState(() => _sending = false);
@@ -669,6 +727,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       kind: 'roll',
       content: label,
       campaignActorId: _activeSpeakerActorId,
+      conversationId: _conversationId,
       eventData: <String, Object?>{
         'notation': result.notation,
         'total': result.total,
@@ -1022,6 +1081,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       content:
           '$actorName · ${draft.label}：$die ${Dnd5eRules.formatModifier(modifier)} = $total',
       campaignActorId: actor.id,
+      conversationId: _conversationId,
       eventData: {
         'targetActorId': actor.id,
         'checkType': draft.type,
@@ -1107,6 +1167,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       kind: 'roll',
       content: '$label：$die ${Dnd5eRules.formatModifier(modifier)} = $total',
       campaignActorId: widget.campaignActorId,
+      conversationId: _conversationId,
       eventData: {
         'requestId': message.id,
         'notation': 'd20',

@@ -70,6 +70,13 @@ describe("campaigns endpoints", () => {
       findFirst: jest.fn(),
       update: jest.fn(),
     },
+    campaignConversation: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      upsert: jest.fn(),
+      update: jest.fn(),
+    },
     $transaction: jest.fn(),
     $queryRaw: jest.fn().mockResolvedValue([{ health_check: 1 }]),
   };
@@ -188,6 +195,37 @@ describe("campaigns endpoints", () => {
     prismaService.campaignArchiveEntry.findMany.mockResolvedValue([]);
     prismaService.campaignArchiveEntry.findFirst.mockResolvedValue(null);
     prismaService.campaignArchiveEntry.update.mockResolvedValue({});
+    // Plan 2026-07-23 task 5.3: sendMessage now resolves a conversationId
+    // (defaulting to the main room) and createCampaign seeds a main row, so
+    // the mock PrismaService must carry campaignConversation defaults.
+    const mainConversationRow = {
+      id: "conv-main",
+      campaignId: "camp-1",
+      kind: "main",
+      title: "",
+      mainKey: "main",
+      directKey: null,
+      participantIds: [],
+      createdBy: "user-1",
+      createdAt: "2026-07-09T00:00:00.000Z",
+      updatedAt: "2026-07-09T00:00:00.000Z",
+      archivedAt: null,
+    };
+    prismaService.campaignConversation.create.mockResolvedValue(
+      mainConversationRow,
+    );
+    prismaService.campaignConversation.findFirst.mockResolvedValue(
+      mainConversationRow,
+    );
+    prismaService.campaignConversation.findMany.mockResolvedValue([
+      mainConversationRow,
+    ]);
+    prismaService.campaignConversation.upsert.mockResolvedValue(
+      mainConversationRow,
+    );
+    prismaService.campaignConversation.update.mockResolvedValue(
+      mainConversationRow,
+    );
   });
 
   async function loginAsDm(): Promise<string> {
@@ -845,7 +883,13 @@ describe("campaigns endpoints", () => {
 
       expect(prismaService.campaignChatMessage.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { campaignId: "camp-1", content: { contains: "chapel", mode: "insensitive" } },
+          // Plan 2026-07-23 task 5.3: listMessages now also applies a
+          // conversation filter (main room + legacy null), so only assert
+          // the search-specific where clauses rather than the full object.
+          where: expect.objectContaining({
+            campaignId: "camp-1",
+            content: { contains: "chapel", mode: "insensitive" },
+          }),
         }),
       );
     });

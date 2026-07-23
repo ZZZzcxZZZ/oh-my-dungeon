@@ -11,6 +11,7 @@ class CharacterRollSink implements CampaignActionSink {
     required this.campaignId,
     required this.campaignController,
     this.campaignActorId,
+    this.conversationId,
   });
 
   final String campaignId;
@@ -19,6 +20,10 @@ class CharacterRollSink implements CampaignActionSink {
   @override
   final String? campaignActorId;
 
+  /// Plan 2026-07-23 task 5.3: optional conversation scoping. When null,
+  /// rolls are broadcast to the campaign-wide main room (legacy behaviour).
+  final String? conversationId;
+
   @override
   Future<void> dispatchRoll(CharacterRollEvent event) async {
     await campaignController.sendMessage(
@@ -26,6 +31,7 @@ class CharacterRollSink implements CampaignActionSink {
       kind: 'roll',
       content: event.summary,
       campaignActorId: campaignActorId,
+      conversationId: conversationId,
       eventData: <String, Object?>{
         'notation': event.notation,
         'label': event.label,

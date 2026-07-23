@@ -136,6 +136,7 @@ model Campaign {
   contentEntries    CampaignContentEntry[]
   changes           CampaignChange[]
   archiveEntries    CampaignArchiveEntry[]
+  conversations     CampaignConversation[]
 }
 
 model CampaignArchiveEntry {
@@ -255,29 +256,52 @@ model CampaignChange {
 }
 
 model CampaignChatMessage {
-  id               String         @id @default(uuid())
+  id               String              @id @default(uuid())
   campaignId       String
+  conversationId   String?
   senderId         String
   campaignActorId  String?
-  displayName      String         @default("")
+  displayName      String              @default("")
   avatarUrl        String?
-  speakerMode      String         @default("actor")
+  speakerMode      String              @default("actor")
   delegatedByUserId String?
   speakerAvatarAssetId String?
   publicHealthState String?
   publicHealthFraction Float?
-  ooc              Boolean        @default(false)
-  kind             String         @default("say")
+  ooc              Boolean             @default(false)
+  kind             String              @default("say")
   content          String
   actionSnapshot   Json?
   eventData        Json?
-  createdAt        DateTime       @default(now())
-  campaign         Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  campaignActor    CampaignActor? @relation(fields: [campaignActorId], references: [id], onDelete: SetNull)
+  createdAt        DateTime            @default(now())
+  campaign         Campaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignActor    CampaignActor?      @relation(fields: [campaignActorId], references: [id], onDelete: SetNull)
+  conversation     CampaignConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
 
   @@index([campaignId, createdAt])
   @@index([senderId])
   @@index([campaignActorId])
+  @@index([conversationId, createdAt])
+}
+
+model CampaignConversation {
+  id             String   @id @default(uuid())
+  campaignId     String
+  kind           String   @default("main")
+  title          String   @default("")
+  mainKey        String?
+  directKey      String?
+  participantIds String[]
+  createdBy      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  archivedAt     DateTime?
+  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  messages       CampaignChatMessage[]
+
+  @@unique([campaignId, mainKey])
+  @@unique([campaignId, directKey])
+  @@index([campaignId, kind])
 }
 
 model CampaignMember {

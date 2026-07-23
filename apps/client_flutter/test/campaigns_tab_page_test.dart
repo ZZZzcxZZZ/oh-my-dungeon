@@ -6,9 +6,11 @@ import 'package:dnd_table_client/src/features/auth/domain/auth_session.dart';
 import 'package:dnd_table_client/src/features/auth/presentation/auth_controller.dart';
 import 'package:dnd_table_client/src/features/campaigns/data/campaign_api_client.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign.dart';
+import 'package:dnd_table_client/src/features/campaigns/domain/campaign_conversation.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_archive_entry.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_controller.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaigns_tab_page.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/conversation_controller.dart';
 import 'package:dnd_table_client/src/features/characters/data/character_repository.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_controller.dart';
 import 'package:dnd_table_client/src/features/client_mode/domain/client_mode.dart';
@@ -80,6 +82,7 @@ void main() {
     required ClientModeController modeController,
     required AppPreferencesController appPreferencesController,
     required ActiveServerSession session,
+    ConversationController? conversationController,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -93,6 +96,7 @@ void main() {
           contentRepository: EmptyContentRepository(),
           modeController: modeController,
           appPreferencesController: appPreferencesController,
+          conversationController: conversationController,
         ),
       ),
     );
@@ -662,7 +666,7 @@ void main() {
       );
 
       // Expanded-only affordances should be hidden in collapsed state.
-      expect(find.text('进入主聊天室'), findsNothing);
+      expect(find.text('主聊天室'), findsNothing);
       expect(find.text('未读 7'), findsNothing);
 
       modeController.dispose();
@@ -704,7 +708,7 @@ void main() {
       // labels: description, unread summary, and the main-chat entry.)
       expect(find.text('穿越迷雾山脉的冒险'), findsOneWidget);
       expect(find.text('未读 7'), findsOneWidget);
-      expect(find.text('进入主聊天室'), findsOneWidget);
+      expect(find.text('主聊天室'), findsOneWidget);
 
       modeController.dispose();
       prefs.dispose();
@@ -738,12 +742,12 @@ void main() {
 
       await tester.tap(find.byKey(const Key('campaign-card-expand-toggle')));
       await tester.pumpAndSettle();
-      expect(find.text('进入主聊天室'), findsOneWidget);
+      expect(find.text('主聊天室'), findsOneWidget);
 
       // Tap again to collapse.
       await tester.tap(find.byKey(const Key('campaign-card-expand-toggle')));
       await tester.pumpAndSettle();
-      expect(find.text('进入主聊天室'), findsNothing);
+      expect(find.text('主聊天室'), findsNothing);
 
       modeController.dispose();
       prefs.dispose();
@@ -790,8 +794,8 @@ void main() {
         find.byKey(const Key('campaign-card-expand-toggle')).first,
       );
       await tester.pumpAndSettle();
-      // Only one card's expanded content (进入主聊天室) should be visible.
-      expect(find.text('进入主聊天室'), findsOneWidget);
+      // Only one card's expanded content (主聊天室) should be visible.
+      expect(find.text('主聊天室'), findsOneWidget);
 
       // Expand the second card — the first should collapse.
       await tester.tap(
@@ -799,7 +803,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       // Still only one expanded card.
-      expect(find.text('进入主聊天室'), findsOneWidget);
+      expect(find.text('主聊天室'), findsOneWidget);
       // The first card's expanded-only description should now be hidden.
       expect(find.text('穿越迷雾山脉的冒险'), findsNothing);
 
@@ -810,7 +814,7 @@ void main() {
       session.dispose();
     });
 
-    testWidgets('tapping "进入主聊天室" triggers the main onCampaignOpened callback',
+    testWidgets('tapping "主聊天室" triggers the main onCampaignOpened callback',
         (tester) async {
       final auth = await buildLoggedInAuthController();
       final campaignController = CampaignController(
@@ -847,7 +851,7 @@ void main() {
       await tester.tap(find.byKey(const Key('campaign-card-expand-toggle')));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('进入主聊天室'));
+      await tester.tap(find.text('主聊天室'));
       await tester.pumpAndSettle();
 
       expect(opened, isTrue);
@@ -858,6 +862,367 @@ void main() {
       auth.dispose();
       session.dispose();
     });
+  });
+
+  // Plan 2026-07-23 task 5.3: 战役卡片展开后显示主聊/私聊/小群会话列表,
+  // 并提供发起私聊/创建小群入口.
+  group('conversation list in expanded card (task 5.3)', () {
+    final conversationCampaign = Campaign(
+      id: 'camp-conv',
+      name: 'Conversation Campaign',
+      description: '会话列表测试',
+      system: 'dnd5e',
+      ownerId: 'user-1',
+      status: 'active',
+      createdAt: '2026-07-09T00:00:00.000Z',
+      updatedAt: '2026-07-09T00:00:00.000Z',
+      memberPreview: const [
+        CampaignMemberPreview(
+          userId: 'user-1',
+          displayName: 'DM',
+          role: 'owner',
+        ),
+        CampaignMemberPreview(
+          userId: 'user-2',
+          displayName: 'Arannis',
+          role: 'player',
+        ),
+        CampaignMemberPreview(
+          userId: 'user-3',
+          displayName: 'Briv',
+          role: 'player',
+        ),
+      ],
+    );
+
+    final mainConv = CampaignConversation(
+      id: 'main-1',
+      campaignId: 'camp-conv',
+      kind: 'main',
+      title: '主聊天室',
+      participantIds: const [],
+      createdBy: 'user-1',
+      createdAt: '2026-07-23T00:00:00.000Z',
+      updatedAt: '2026-07-23T08:00:00.000Z',
+    );
+    final directConv = CampaignConversation(
+      id: 'direct-1',
+      campaignId: 'camp-conv',
+      kind: 'direct',
+      title: 'Arannis',
+      participantIds: const ['user-2'],
+      createdBy: 'user-1',
+      createdAt: '2026-07-23T00:00:00.000Z',
+      updatedAt: '2026-07-23T10:00:00.000Z',
+    );
+    final groupConv = CampaignConversation(
+      id: 'group-1',
+      campaignId: 'camp-conv',
+      kind: 'group',
+      title: '突袭小队',
+      participantIds: const ['user-2', 'user-3'],
+      createdBy: 'user-1',
+      createdAt: '2026-07-23T00:00:00.000Z',
+      updatedAt: '2026-07-23T11:00:00.000Z',
+    );
+
+    testWidgets(
+      'expanded card shows main chat entry and create buttons when no conversations',
+      (tester) async {
+        final auth = await buildLoggedInAuthController();
+        final client = _FakeCampaignClient(campaigns: [conversationCampaign]);
+        final campaignController = CampaignController(
+          apiBaseUrl: apiBaseUrl,
+          authController: auth,
+          campaignClient: client,
+        );
+        await campaignController.loadCampaigns();
+        final modeController = ClientModeController(
+          initialMode: ClientMode.dungeonMaster,
+        );
+        final prefs = buildAppPreferencesController();
+        await prefs.initialize();
+        final session = buildActiveServerSession();
+        final conversationController = ConversationController(
+          apiBaseUrl: apiBaseUrl,
+          authController: auth,
+          campaignClient: client,
+        );
+
+        await pumpCampaignsTab(
+          tester,
+          authController: auth,
+          campaignController: campaignController,
+          modeController: modeController,
+          appPreferencesController: prefs,
+          session: session,
+          conversationController: conversationController,
+        );
+
+        // Expand the card — this triggers loadConversations.
+        await tester.tap(
+          find.byKey(const Key('campaign-card-expand-toggle')),
+        );
+        await tester.pumpAndSettle();
+
+        // Main chat entry button always present.
+        expect(find.byKey(const Key('campaign-card-main-chat-entry')),
+            findsOneWidget);
+        // Secondary create buttons present even with zero conversations.
+        expect(find.text('发起私聊'), findsOneWidget);
+        expect(find.text('创建小群'), findsOneWidget);
+        // No direct/group section headers since there are no conversations.
+        expect(find.textContaining('私聊 ('), findsNothing);
+        expect(find.textContaining('小群 ('), findsNothing);
+
+        modeController.dispose();
+        prefs.dispose();
+        campaignController.dispose();
+        conversationController.dispose();
+        auth.dispose();
+        session.dispose();
+      },
+    );
+
+    testWidgets(
+      'expanded card lists direct and group conversations after load',
+      (tester) async {
+        final auth = await buildLoggedInAuthController();
+        final client = _FakeCampaignClient(
+          campaigns: [conversationCampaign],
+          conversations: [mainConv, directConv, groupConv],
+        );
+        final campaignController = CampaignController(
+          apiBaseUrl: apiBaseUrl,
+          authController: auth,
+          campaignClient: client,
+        );
+        await campaignController.loadCampaigns();
+        final modeController = ClientModeController(
+          initialMode: ClientMode.dungeonMaster,
+        );
+        final prefs = buildAppPreferencesController();
+        await prefs.initialize();
+        final session = buildActiveServerSession();
+        final conversationController = ConversationController(
+          apiBaseUrl: apiBaseUrl,
+          authController: auth,
+          campaignClient: client,
+        );
+
+        await pumpCampaignsTab(
+          tester,
+          authController: auth,
+          campaignController: campaignController,
+          modeController: modeController,
+          appPreferencesController: prefs,
+          session: session,
+          conversationController: conversationController,
+        );
+
+        await tester.tap(
+          find.byKey(const Key('campaign-card-expand-toggle')),
+        );
+        await tester.pumpAndSettle();
+
+        // Section headers show counts.
+        expect(find.text('私聊 (1)'), findsOneWidget);
+        expect(find.text('小群 (1)'), findsOneWidget);
+        // Group conversation title is rendered as a row.
+        expect(find.text('突袭小队'), findsOneWidget);
+        // Direct conversation title (resolved from CampaignConversation.title).
+        expect(find.text('Arannis'), findsOneWidget);
+        // Create buttons still present.
+        expect(find.text('发起私聊'), findsOneWidget);
+        expect(find.text('创建小群'), findsOneWidget);
+
+        modeController.dispose();
+        prefs.dispose();
+        campaignController.dispose();
+        conversationController.dispose();
+        auth.dispose();
+        session.dispose();
+      },
+    );
+
+    testWidgets(
+      'tapping 发起私聊 opens the member picker dialog',
+      (tester) async {
+        final auth = await buildLoggedInAuthController();
+        final client = _FakeCampaignClient(
+          campaigns: [conversationCampaign],
+          conversations: [mainConv],
+        );
+        final campaignController = CampaignController(
+          apiBaseUrl: apiBaseUrl,
+          authController: auth,
+          campaignClient: client,
+        );
+        await campaignController.loadCampaigns();
+        final modeController = ClientModeController(
+          initialMode: ClientMode.dungeonMaster,
+        );
+        final prefs = buildAppPreferencesController();
+        await prefs.initialize();
+        final session = buildActiveServerSession();
+        final conversationController = ConversationController(
+          apiBaseUrl: apiBaseUrl,
+          authController: auth,
+          campaignClient: client,
+        );
+
+        await pumpCampaignsTab(
+          tester,
+          authController: auth,
+          campaignController: campaignController,
+          modeController: modeController,
+          appPreferencesController: prefs,
+          session: session,
+          conversationController: conversationController,
+        );
+
+        await tester.tap(
+          find.byKey(const Key('campaign-card-expand-toggle')),
+        );
+        await tester.pumpAndSettle();
+
+        // Tap 发起私聊 — should open a dialog listing other members.
+        await tester.tap(find.text('发起私聊'));
+        await tester.pumpAndSettle();
+
+        // Dialog title and button both render '发起私聊', so two matches.
+        expect(find.text('发起私聊'), findsNWidgets(2));
+        // Other members (excluding current user) appear as candidates.
+        expect(find.text('Arannis'), findsOneWidget);
+        expect(find.text('Briv'), findsOneWidget);
+        expect(find.text('取消'), findsOneWidget);
+
+        modeController.dispose();
+        prefs.dispose();
+        campaignController.dispose();
+        conversationController.dispose();
+        auth.dispose();
+        session.dispose();
+      },
+    );
+
+    testWidgets(
+      'tapping 创建小群 opens the group creation dialog',
+      (tester) async {
+        final auth = await buildLoggedInAuthController();
+        final client = _FakeCampaignClient(
+          campaigns: [conversationCampaign],
+          conversations: [mainConv],
+        );
+        final campaignController = CampaignController(
+          apiBaseUrl: apiBaseUrl,
+          authController: auth,
+          campaignClient: client,
+        );
+        await campaignController.loadCampaigns();
+        final modeController = ClientModeController(
+          initialMode: ClientMode.dungeonMaster,
+        );
+        final prefs = buildAppPreferencesController();
+        await prefs.initialize();
+        final session = buildActiveServerSession();
+        final conversationController = ConversationController(
+          apiBaseUrl: apiBaseUrl,
+          authController: auth,
+          campaignClient: client,
+        );
+
+        await pumpCampaignsTab(
+          tester,
+          authController: auth,
+          campaignController: campaignController,
+          modeController: modeController,
+          appPreferencesController: prefs,
+          session: session,
+          conversationController: conversationController,
+        );
+
+        await tester.tap(
+          find.byKey(const Key('campaign-card-expand-toggle')),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('创建小群'));
+        await tester.pumpAndSettle();
+
+        // Dialog title and button both render '创建小群', so two matches.
+        expect(find.text('创建小群'), findsNWidgets(2));
+        // Title field and member checkboxes are present.
+        expect(find.text('小群名称'), findsOneWidget);
+        expect(find.text('Arannis'), findsOneWidget);
+        expect(find.text('Briv'), findsOneWidget);
+        expect(find.text('创建'), findsOneWidget);
+
+        modeController.dispose();
+        prefs.dispose();
+        campaignController.dispose();
+        conversationController.dispose();
+        auth.dispose();
+        session.dispose();
+      },
+    );
+
+    testWidgets(
+      'expanding the card triggers loadConversations on the controller',
+      (tester) async {
+        final auth = await buildLoggedInAuthController();
+        final client = _FakeCampaignClient(
+          campaigns: [conversationCampaign],
+          conversations: [mainConv, directConv],
+        );
+        final campaignController = CampaignController(
+          apiBaseUrl: apiBaseUrl,
+          authController: auth,
+          campaignClient: client,
+        );
+        await campaignController.loadCampaigns();
+        final modeController = ClientModeController(
+          initialMode: ClientMode.dungeonMaster,
+        );
+        final prefs = buildAppPreferencesController();
+        await prefs.initialize();
+        final session = buildActiveServerSession();
+        final conversationController = ConversationController(
+          apiBaseUrl: apiBaseUrl,
+          authController: auth,
+          campaignClient: client,
+        );
+
+        await pumpCampaignsTab(
+          tester,
+          authController: auth,
+          campaignController: campaignController,
+          modeController: modeController,
+          appPreferencesController: prefs,
+          session: session,
+          conversationController: conversationController,
+        );
+
+        // Before expanding, the controller has no active campaign.
+        expect(conversationController.activeCampaignId, isNull);
+
+        await tester.tap(
+          find.byKey(const Key('campaign-card-expand-toggle')),
+        );
+        await tester.pumpAndSettle();
+
+        // After expanding, conversations are loaded for the campaign.
+        expect(conversationController.activeCampaignId, 'camp-conv');
+        expect(conversationController.conversations, hasLength(2));
+
+        modeController.dispose();
+        prefs.dispose();
+        campaignController.dispose();
+        conversationController.dispose();
+        auth.dispose();
+        session.dispose();
+      },
+    );
   });
 }
 
@@ -922,10 +1287,15 @@ class _FakeAuthClient implements AuthClient {
 }
 
 class _FakeCampaignClient implements CampaignClient {
-  _FakeCampaignClient({List<Campaign> campaigns = const [_campaign]})
-    : _campaigns = campaigns;
+  _FakeCampaignClient({
+    List<Campaign> campaigns = const [_campaign],
+    this.conversations = const [],
+  }) : _campaigns = campaigns;
 
   final List<Campaign> _campaigns;
+
+  /// Plan 2026-07-23 task 5.3: conversations returned by listConversations.
+  final List<CampaignConversation> conversations;
 
   @override
   Future<CampaignWorkspaceContext> getWorkspaceContext({
@@ -1036,6 +1406,7 @@ class _FakeCampaignClient implements CampaignClient {
     required String accessToken,
     required String campaignId,
     String? query,
+    String? conversationId,
   }) async =>
       const [];
 
@@ -1067,6 +1438,7 @@ class _FakeCampaignClient implements CampaignClient {
     String? actionId,
     Map<String, Object?>? eventData,
     Map<String, Object?>? speakerSnapshot,
+    String? conversationId,
   }) async =>
       throw UnimplementedError();
 
@@ -1077,4 +1449,73 @@ class _FakeCampaignClient implements CampaignClient {
     required String campaignId,
   }) async =>
       const [];
+
+  @override
+  Future<List<CampaignConversation>> listConversations({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+  }) async {
+    return conversations;
+  }
+
+  @override
+  Future<CampaignConversation> createDirectConversation({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String otherUserId,
+  }) async {
+    return CampaignConversation(
+      id: 'direct-1',
+      campaignId: campaignId,
+      kind: 'direct',
+      title: '',
+      participantIds: [otherUserId],
+      createdBy: 'user-1',
+      createdAt: '2026-07-23T00:00:00.000Z',
+      updatedAt: '2026-07-23T00:00:00.000Z',
+    );
+  }
+
+  @override
+  Future<CampaignConversation> createGroupConversation({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String title,
+    required List<String> participantIds,
+  }) async {
+    return CampaignConversation(
+      id: 'group-1',
+      campaignId: campaignId,
+      kind: 'group',
+      title: title,
+      participantIds: participantIds,
+      createdBy: 'user-1',
+      createdAt: '2026-07-23T00:00:00.000Z',
+      updatedAt: '2026-07-23T00:00:00.000Z',
+    );
+  }
+
+  @override
+  Future<CampaignConversation> updateConversation({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String conversationId,
+    String? title,
+    bool? archived,
+  }) async {
+    return CampaignConversation(
+      id: conversationId,
+      campaignId: campaignId,
+      kind: 'group',
+      title: title ?? '',
+      participantIds: const [],
+      createdBy: 'user-1',
+      createdAt: '2026-07-23T00:00:00.000Z',
+      updatedAt: '2026-07-23T00:00:00.000Z',
+    );
+  }
 }

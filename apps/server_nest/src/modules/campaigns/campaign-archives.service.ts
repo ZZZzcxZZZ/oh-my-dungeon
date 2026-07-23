@@ -37,6 +37,18 @@ function validateWikiFields(input: ArchiveWikiInput): {
   const result: { bodyBlocks?: unknown[]; tags?: string[]; links?: unknown[]; attachmentRefs?: unknown[] } = {};
   if (input.bodyBlocks !== undefined) {
     if (!Array.isArray(input.bodyBlocks)) throw new BadRequestException('bodyBlocks must be an array');
+    // Plan 2026-07-23 task 4.1: element-level validation. The client
+    // renders blocks by reading `block['type']`; without a `type` field
+    // the entry silently disappears from the detail view.
+    for (const block of input.bodyBlocks) {
+      if (!block || typeof block !== 'object' || Array.isArray(block)) {
+        throw new BadRequestException('bodyBlocks elements must be objects');
+      }
+      const obj = block as Record<string, unknown>;
+      if (typeof obj['type'] !== 'string') {
+        throw new BadRequestException('bodyBlocks elements must have a string type field');
+      }
+    }
     result.bodyBlocks = input.bodyBlocks;
   }
   if (input.tags !== undefined) {

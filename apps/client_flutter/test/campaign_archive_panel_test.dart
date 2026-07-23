@@ -193,6 +193,72 @@ void main() {
     },
   );
 
+  // Plan 2026-07-23 task 4.1: defensive fallback for legacy bad data.
+  // bodyBlocks may contain malformed entries (strings or objects without
+  // a `type` field) from before the server-side strict validation. The
+  // panel should still surface the body text rather than silently
+  // rendering an empty body section.
+  testWidgets(
+    'archive detail renders legacy body when bodyBlocks contains only malformed entries',
+    (tester) async {
+      final entry = CampaignArchiveEntry.fromJson({
+        'id': 'archive-malformed',
+        'campaignId': 'camp-1',
+        'kind': 'document',
+        'title': '损坏档案',
+        'summary': '正文格式异常的历史数据',
+        'payload': {
+          // Malformed: bodyBlocks is a list but elements are not Maps.
+          'bodyBlocks': ['第一段旧字符串', '第二段旧字符串'],
+          // Legacy body fallback — should win when bodyBlocks filters empty.
+          'body': '回退到 legacy body。',
+        },
+        'pinned': false,
+        'updatedAt': '2026-07-17T00:00:00.000Z',
+      });
+
+      await pumpPanel(tester, entries: [entry]);
+
+      await tester.tap(find.text('损坏档案'));
+      await tester.pumpAndSettle();
+
+      // Legacy body should win — user sees text rather than an empty body.
+      expect(find.text('回退到 legacy body。'), findsOneWidget);
+      // Malformed strings should NOT appear as paragraph blocks.
+      expect(find.text('第一段旧字符串'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'archive detail surfaces malformed bodyBlocks strings when no legacy body exists',
+    (tester) async {
+      final entry = CampaignArchiveEntry.fromJson({
+        'id': 'archive-malformed-only',
+        'campaignId': 'camp-1',
+        'kind': 'document',
+        'title': '只剩坏数据',
+        'summary': '正文格式异常且无 legacy body',
+        'payload': {
+          // Malformed bodyBlocks with no `body` fallback — the joined
+          // strings should be shown so the user sees *something*.
+          'bodyBlocks': ['孤立段落一', '孤立段落二'],
+        },
+        'pinned': false,
+        'updatedAt': '2026-07-17T00:00:00.000Z',
+      });
+
+      await pumpPanel(tester, entries: [entry]);
+
+      await tester.tap(find.text('只剩坏数据'));
+      await tester.pumpAndSettle();
+
+      // The body section should appear with the malformed strings joined.
+      expect(find.text('正文'), findsOneWidget);
+      expect(find.textContaining('孤立段落一'), findsOneWidget);
+      expect(find.textContaining('孤立段落二'), findsOneWidget);
+    },
+  );
+
   // ---- Wiki content rendering ----
 
   testWidgets(

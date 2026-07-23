@@ -305,6 +305,92 @@ describe("campaign archive wiki endpoints", () => {
         })
         .expect(400);
     });
+
+    // Plan 2026-07-23 task 4.1: element-level validation for bodyBlocks.
+    // Without this, malformed bodyBlocks entries silently filter out on
+    // the client (whereType<Map>) and the body section disappears.
+    it("rejects bodyBlocks with non-object elements", async () => {
+      const token = await loginAs(storedDm);
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/archives")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          kind: "document",
+          title: "Bad blocks",
+          bodyBlocks: ["just a string"],
+        })
+        .expect(400);
+    });
+
+    it("rejects bodyBlocks elements missing the type field", async () => {
+      const token = await loginAs(storedDm);
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/archives")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          kind: "document",
+          title: "Bad blocks",
+          bodyBlocks: [{ text: "missing type field" }],
+        })
+        .expect(400);
+    });
+
+    it("rejects bodyBlocks elements with non-string type field", async () => {
+      const token = await loginAs(storedDm);
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/archives")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          kind: "document",
+          title: "Bad blocks",
+          bodyBlocks: [{ type: 123, text: "wrong type" }],
+        })
+        .expect(400);
+    });
+
+    it("accepts well-formed bodyBlocks with paragraph and heading types", async () => {
+      const token = await loginAs(storedDm);
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/archives")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          kind: "document",
+          title: "Good blocks",
+          bodyBlocks: [
+            { type: "paragraph", text: "Hello world." },
+            { type: "heading", text: "Section", level: 2 },
+            { type: "list", items: ["a", "b"] },
+          ],
+        })
+        .expect(201);
+    });
+
+    it("rejects malformed bodyBlocks on update", async () => {
+      const token = await loginAs(storedDm);
+      prismaService.campaignArchiveEntry.findFirst.mockResolvedValueOnce({
+        id: "archive-1",
+        campaignId: "camp-1",
+        kind: "document",
+        title: "Existing",
+        summary: "",
+        payload: {},
+        pinned: false,
+        createdBy: "dm-1",
+        deletedAt: null,
+      });
+
+      await request(app.getHttpServer())
+        .put("/api/campaigns/camp-1/archives/archive-1")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          bodyBlocks: [{ missing: "type" }],
+        })
+        .expect(400);
+    });
   });
 
   describe("creator-based edit permissions", () => {

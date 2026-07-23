@@ -64,7 +64,20 @@ class CampaignArchiveEntry {
   }
 
   /// 兼容旧数据：从 `payload.body` 读取纯文本正文。
-  String get legacyBody => payload['body'] as String? ?? '';
+  ///
+  /// Plan 2026-07-23 task 4.1: 当 `body` 缺失但 `bodyBlocks` 存在历史脏数据
+  /// （元素为字符串而非对象，客户端 `whereType<Map>` 会全部过滤掉）时，
+  /// 把字符串元素拼接为正文，避免详情页正文静默消失。
+  String get legacyBody {
+    final direct = payload['body'];
+    if (direct is String) return direct;
+    final raw = payload['bodyBlocks'];
+    if (raw is List) {
+      final strings = raw.whereType<String>().toList(growable: false);
+      if (strings.isNotEmpty) return strings.join('\n\n');
+    }
+    return '';
+  }
 
   factory CampaignArchiveEntry.fromJson(Map<String, Object?> json) =>
       CampaignArchiveEntry(

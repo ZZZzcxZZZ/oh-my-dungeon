@@ -22,6 +22,9 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 COPY --from=build /app/apps/server_nest/prisma ./prisma
 COPY --from=build /app/apps/server_nest/prisma.config.ts ./
 COPY --from=build /app/apps/server_nest/dist ./dist
+# runtime 镜像没有 prisma CLI, 也不会触发 postinstall; 把 build 阶段 `prisma generate`
+# 生成的客户端复制过来, 让运行时和 seed 脚本都能 require('@prisma/client').
+COPY --from=build /app/apps/server_nest/node_modules/.prisma ./node_modules/.prisma
 
 # node:22-alpine 自带非 root 用户 `node`, 切换以避免容器以 root 运行.
 RUN mkdir -p /app/uploads && chown -R node:node /app

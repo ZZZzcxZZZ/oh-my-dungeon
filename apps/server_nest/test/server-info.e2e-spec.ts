@@ -49,7 +49,7 @@ describe('server metadata endpoints', () => {
         expect(body.name).toBe('D&D Table Tool');
         expect(body.version).toBe('0.1.0');
         expect(body.apiBaseUrl).toBe('http://localhost:3000/api');
-        expect(body.websocketUrl).toBe('ws://localhost:3000/realtime');
+        expect(body.websocketUrl).toBe('ws://localhost:3000/campaigns');
         expect(body.registrationEnabled).toBe(true);
         expect(body.supportedSystems).toEqual(['dnd5e']);
         expect(body.apiVersion).toBe('1');

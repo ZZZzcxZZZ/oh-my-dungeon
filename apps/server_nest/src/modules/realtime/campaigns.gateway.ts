@@ -26,7 +26,13 @@ export interface CampaignAck {
 
 @WebSocketGateway({
   namespace: 'campaigns',
-  cors: { origin: '*' }
+  cors: {
+    // 默认与 HTTP CORS 一致: 不允许任意来源. 通过 CORS_ORIGIN 显式白名单.
+    origin: (process.env.CORS_ORIGIN ?? '').length > 0
+      ? process.env.CORS_ORIGIN!.split(',').map((s) => s.trim())
+      : false,
+    credentials: (process.env.CORS_ORIGIN ?? '').length > 0
+  }
 })
 export class CampaignsGateway {
   @WebSocketServer()

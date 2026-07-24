@@ -6,3 +6,16 @@
 **/.idea
 **/.vscode
 *.log
+.env
+.env.*
+!.env.example
+private-imports/
+postgres-data/
+uploads/
+apps/client_flutter
+.trae/
+.workbuddy/
+.superpowers/
+docs/
+README.md
+AGENTS.md

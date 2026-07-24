@@ -32,9 +32,12 @@ export class ServerInfoService {
   }
 
   private toWebSocketUrl(publicBaseUrl: string): string {
+    // WS 路径必须与 CampaignsGateway 的 namespace 一致 (apps/server_nest/src/modules/realtime/campaigns.gateway.ts).
+    // 客户端 socket_io_campaign_socket_service.dart 直接拼接 `${origin}/campaigns`, 不读取此字段,
+    // 但保留此字段以避免破坏 server_profiles 持久化结构与已有客户端.
     const url = new URL(publicBaseUrl);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    url.pathname = '/realtime';
+    url.pathname = '/campaigns';
     return url.toString().replace(/\/$/, '');
   }
 }

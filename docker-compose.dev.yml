@@ -1,7 +1,8 @@
 services:
   postgres:
     ports:
-      - "5432:5432"
+      # 即使在 dev 模式也只暴露到 localhost, 防止开发机数据库外泄.
+      - "127.0.0.1:5432:5432"
 
   server:
     ports:

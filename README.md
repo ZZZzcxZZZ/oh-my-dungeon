@@ -107,18 +107,29 @@ npm run docker:config
 
 ## 自托管部署草案
 
-项目提供 Docker Compose 配置：
+### Linux 一键部署（推荐）
 
 ```bash
-cp .env.example .env
-docker compose up -d
+git clone <repo-url> dnd-table-tool
+cd dnd-table-tool
+./infra/linux-server/start.sh
 ```
 
-安装 Docker Desktop 后可运行：
+`start.sh` 会自动：复制 `.env.example` 为 `.env`、生成随机 `POSTGRES_PASSWORD` 与 `JWT_SECRET`、探测公网 IP 写入 `PUBLIC_BASE_URL`、构建并启动 Docker 容器、轮询 `/health` 直到就绪。
+
+### 本机开发直连
+
+```bash
+cp .env.example .env   # 按需修改 DATABASE_URL 主机名为 localhost
+docker compose up -d    # 或 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+```
+
+> **安全提示**：直接 `docker compose up` 会保留 `.env.example` 中的 `change-me` 占位密码与密钥，仅适合本机开发；公网部署请走 `start.sh`。
+
+### Docker 配置校验
 
 ```bash
 docker compose config
-docker compose up -d
 ```
 
 ## 文档索引

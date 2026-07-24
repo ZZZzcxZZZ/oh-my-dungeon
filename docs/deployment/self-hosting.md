@@ -178,7 +178,7 @@ uploads 目录
 2. 拉取新 tag 或新镜像。
 3. 执行 `docker compose up -d --build`。
 4. 检查 `/health`。
-5. 用客户端登录并检查战役、场次、角色、内容库和日志。
+5. 用客户端登录并检查战役、角色、内容库和战役档案。
 
 服务端启动时应检查：
 
@@ -197,7 +197,7 @@ uploads 目录
 - HTTP API：`/api/*`
 - 服务器发现：`/.well-known/dnd-tool-server`
 - 健康检查：`/health`
-- WebSocket：`/sessions`
+- WebSocket：`/campaigns`（socket.io namespace 路径，与 `apps/server_nest/src/modules/realtime/campaigns.gateway.ts` 一致）
 
 反向代理必须保留 WebSocket upgrade headers。公开域名应与 `.env` 中的 `PUBLIC_BASE_URL` 保持一致。
 

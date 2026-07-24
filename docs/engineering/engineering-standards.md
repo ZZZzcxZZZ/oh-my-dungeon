@@ -92,7 +92,7 @@ features/characters/
 ### 4.2 客户端约束
 
 - 页面不直接调用 Dio。
-- 页面通过 Riverpod provider 读取状态。
+- 页面通过 ChangeNotifier / StatefulWidget 管理状态，控制器随页面生命周期 `dispose`。
 - 业务计算放 domain。
 - REST 调用放 data。
 - 可复用 Material 组件放 core/widgets。
@@ -147,7 +147,6 @@ WebSocket 事件在 `docs/architecture/api-realtime-boundary.md` 中维护。每
 - 创建战役。
 - 邀请码加入战役。
 - 创建角色并绑定战役。
-- 创建 Session。
 - 发送骰子事件。
 - DM 暗骰可见性。
 
@@ -188,7 +187,6 @@ Flutter：
 
 - freezed
 - json_serializable
-- riverpod_generator 可选
 - go_router_builder 可选
 
 服务端：
@@ -207,7 +205,7 @@ Flutter：
 ```text
 CampaignCreated
 CampaignMemberJoined
-SessionStarted
+CampaignChatMessageSent
 DiceRolled
 RollRequestCreated
 CharacterHpChanged

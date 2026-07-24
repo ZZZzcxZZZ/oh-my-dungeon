@@ -18,14 +18,13 @@ Before implementing, read these files in order:
 
 1. `README.md`
 2. `docs/roadmap/current-execution-status.md`
-3. `docs/roadmap/v0.1-release-checklist.md`
-4. `docs/roadmap/v0.2-execution-plan.md`
-5. `docs/roadmap/mvp-roadmap.md`
-6. `docs/agents/agent-execution-guide.md`
-7. `docs/engineering/engineering-standards.md`
-8. `docs/architecture/system-architecture.md`
-9. `docs/architecture/domain-model.md`
-10. `docs/architecture/api-realtime-boundary.md`
+3. `docs/roadmap/2026-07-23-integrated-product-hardening-roadmap.md`
+4. `docs/roadmap/mvp-roadmap.md`
+5. `docs/agents/agent-execution-guide.md`
+6. `docs/engineering/engineering-standards.md`
+7. `docs/architecture/system-architecture.md`
+8. `docs/architecture/domain-model.md`
+9. `docs/architecture/api-realtime-boundary.md`
 
 If the task involves deployment, also read:
 
@@ -56,9 +55,9 @@ docs/deployment/self-hosting.md
 - Prefer commit messages with version scope, for example:
 
 ```text
-feat(v0.2): add auth data model
-feat(v0.2): add register endpoint
-docs(v0.2): update auth plan
+feat(0.1): add campaign conversations model
+feat(0.1-chat-01): implement speaker snapshot
+docs(0.1): update hardening plan
 ```
 
 ## Verification Rules

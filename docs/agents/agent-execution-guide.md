@@ -5,20 +5,21 @@
 任何开发 agent 在开始实现前必须按顺序阅读：
 
 1. `README.md`
-2. `docs/product/overall-plan.md`
+2. `AGENTS.md`
 3. `docs/architecture/system-architecture.md`
 4. `docs/architecture/domain-model.md`
 5. `docs/architecture/api-realtime-boundary.md`
 6. `docs/architecture/offline-data-and-sync.md`
 7. `docs/engineering/engineering-standards.md`
 8. `docs/roadmap/current-execution-status.md`
-9. `docs/roadmap/v0.1-unified-mvp-plan.md`
-10. `docs/content/private-phb-import-policy.md`
-11. `docs/content/phb-2024-private-import-notes.md`
+9. `docs/roadmap/2026-07-23-integrated-product-hardening-roadmap.md`
+10. `docs/content/content-package-format-v2.md`
 
 如果任务涉及部署，还必须阅读：
 
-12. `docs/deployment/self-hosting.md`
+11. `docs/deployment/self-hosting.md`
+
+历史 `v0.2`/`v0.4`–`v2.17` execution-plan 文档已归档为内部迭代记录，不再作为开发依据，无需逐份阅读。`docs/content/private-phb-import-policy.md` 与 `docs/content/phb-2024-private-import-notes.md` 已在 2026-07-14 归档时删除，对应规则现收录于 `project_memory.md` 的「Private test build exception」与「Commercial rulebook content」条款。
 
 ## 2. 当前阶段
 

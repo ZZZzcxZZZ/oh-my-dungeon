@@ -4,10 +4,10 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
+  INestApplication,
   Logger
 } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import type { INestApplication } from '@nestjs/core';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { Prisma } from '@prisma/client';
 import type { Request, Response } from 'express';

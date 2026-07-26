@@ -1,5 +1,23 @@
 # 当前执行状态与版本推进计划
 
+## 0.1 AI Ready 结构化底座（2026-07-26）
+
+- 角色运行状态升级为版本化 `CharacterDocument v2`，HP、死亡豁免、资源、状态、物品实例和 namespaced extensions 均为可解析字段；旧 `hp` 字符串和旧 runtime 数据继续兼容读取。
+- 服务端新增按本地/战役作用域隔离的 `CharacterState`，以及不可变 `GameEvent`。事件记录操作者、目标、原因、变更前后、requestId 与时间，可按角色或战役分页查询。
+- HP、状态、资源和物品高频写操作统一进入 `CharacterOperationsService`，在同一事务内完成权限校验、revision 冲突检查、状态更新和事件追加；UI 与未来 AI 将复用同一业务接口。
+- 新增角色完整视图与精简摘要查询。摘要只返回上下文所需的等级、职业、HP、状态和主要装备，不要求未来 AI 扫描整张角色卡或聊天文本。
+- Flutter 快捷 HP、状态、资源和物品操作已接入统一 Controller：战役在线操作调用审计 API 并以服务端回包覆盖缓存；个人/离线操作写本地事实源并进入现有 Vault outbox。完整角色编辑器继续保留。
+- 角色页支持可读 Markdown 导入导出：中文表格与列表、稳定 HTML 条目引用、YAML 文件身份及扩展字段；导入先展示差异，再选择新建、覆盖或合并。Markdown 是交换格式，不作为数据库。
+- 私聊、小群广播按参与者隔离；会话拥有独立阅读游标，归档会话默认隐藏并拒绝继续写入。
+- 媒体上传改为严格 Base64 校验与可配置请求体上限；容器使用本地固定版本 Prisma CLI，Compose 不再提供弱数据库/JWT 默认密钥。
+
+验证基线：服务端 27 suites / 348 tests 通过；Flutter 788 tests 通过，2 项需要显式私有资料路径的测试按设计跳过；服务端 lint、Flutter analyze、Nest build、Prisma schema validation 和 `git diff --check` 通过。生产依赖 `npm audit --omit=dev` 为 0；开发依赖仍有 27 个 high 级传递漏洞，未执行破坏性 `audit fix --force`。本机 Docker Desktop Linux daemon 未运行，因此本轮未完成空容器迁移和镜像启动验证。
+
+设计与实施记录见：
+
+- `docs/superpowers/specs/2026-07-26-ai-ready-foundation-design.md`
+- `docs/superpowers/plans/2026-07-26-ai-ready-foundation.md`
+
 ## 0.1 用户反馈整合与产品加固归档（2026-07-23）
 
 ### 本轮归档执行

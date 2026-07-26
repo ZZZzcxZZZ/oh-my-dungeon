@@ -8,6 +8,8 @@
 
 当前已有可复用基础能力：服务器 profile、账号、战役聊天室、掷骰、角色卡、资料库、DM 控场、战役日志、内容包导入导出、部署与备份恢复。`Session` 和 `Rooms` 已退出 `0.1` 产品路径：战役本身就是长期群聊与跑团工作区，不再要求逐层创建场次。
 
+项目正在补齐 AI Ready 底座，但当前不包含 AI Agent。角色状态已经结构化为 HP、死亡豁免、资源、状态和物品实例；高频修改通过统一业务接口完成并追加不可变事件。未来 AI 与现有 Flutter UI 将调用同一组查询/操作接口，无需解析界面或聊天文本，也不能绕过权限直接写数据库。
+
 客户端采用离线优先架构：基于 Drift 的本地数据库作为唯一事实来源，应用无需配置服务器即可启动并使用首页、角色、资料库和设置；服务器是可选协作设施，用于跨设备同步和战役联机。服务器 Profile 迁入 Drift 持久化，旧 SharedPreferences 数据一次性迁移。资料库默认为空，项目不内置任何 SRD/PHB/官方规则正文；用户通过本地导入 JSON 或 `.dndpack` 包添加自己的资料。
 
 登录后可启用 Personal Vault 跨设备同步：个人角色、收藏、笔记和偏好作为通用实体写入 Vault，客户端先推送本地 Outbox 再拉取远端变化，按 cursor 增量合并并处理 409 冲突。本地基础资料包正文与 assets 永不进入 Vault payload，只同步包的 manifest（`id/version/locale/system/contentHash`），商业规则正文不会被上传。未登录时所有本地功能照常可用，同步为可选能力。
@@ -54,6 +56,8 @@
 - 服务端 Personal Vault API：push / changes / devices，按用户隔离、operation ID 幂等、cursor 单调分页、设备撤销与 tombstone
 - 客户端 Vault 同步：push → pull → apply → save cursor 固定顺序，409 转为冲突态，网络异常保留 Outbox 并重试
 - 客户端本地备份与恢复：`.dndtable-backup` ZIP、SHA-256 校验、单事务原子替换、战役缓存清理、资料索引重建
+- 版本化角色状态与事件审计：本地/战役状态隔离、revision 冲突、requestId 幂等、角色/战役事件查询与轻量摘要
+- 可读角色 Markdown 交换：中文表格和列表、稳定条目引用、扩展字段，导入时可预览并选择新建、覆盖或合并
 - 服务端 DM 控场 API：NPC、Encounter、EncounterParticipant、开始/推进/结束遭遇、HP/状态/可见性更新与 JournalEntry 记录
 - 客户端战役工具入口：战役聊天室 `+` 菜单提供桌面工具和 DM 控场入口
 - 战役消息支持结构化检定与响应历史、重复响应保护和目标 Actor 校验；DM 快捷检定可直接代掷并写入 roll 消息

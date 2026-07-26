@@ -312,7 +312,7 @@ feat(0.1): add readable character markdown exchange
 - 修改：`docs/handoff-2026-07-25.md`
 - 修改：`README.md`
 
-- [ ] **步骤 1：运行全量验证**
+- [x] **步骤 1：运行全量验证**
 
 ```powershell
 npm run lint:server
@@ -324,11 +324,11 @@ npm --prefix apps/server_nest run build
 
 Docker 可用时额外构建镜像并以无网络运行迁移启动测试。Docker 不可用时必须明确记录未验证项。
 
-- [ ] **步骤 2：核验迁移与兼容**
+- [x] **步骤 2：核验迁移与兼容**
 
 对空数据库执行 migrations，对旧测试 fixture 验证 v1 到 v2 读取，运行 `git diff --check` 并确认没有私有资料包进入 Git。
 
-- [ ] **步骤 3：更新状态并提交**
+- [x] **步骤 3：更新状态并提交**
 
 只记录实际通过的测试数量、当前 HEAD、迁移数量和残留边界，提交：
 

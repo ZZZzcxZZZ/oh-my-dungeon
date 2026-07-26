@@ -103,77 +103,63 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets(
-    'DM mode shows the create-campaign FAB',
-    (tester) async {
-      final auth = await buildLoggedInAuthController();
-      final campaignController = await buildCampaignController(auth);
-      final modeController = ClientModeController(
-        initialMode: ClientMode.dungeonMaster,
-      );
-      final prefs = buildAppPreferencesController();
-      await prefs.initialize();
-      final session = buildActiveServerSession();
+  testWidgets('DM mode shows the create-campaign FAB', (tester) async {
+    final auth = await buildLoggedInAuthController();
+    final campaignController = await buildCampaignController(auth);
+    final modeController = ClientModeController(
+      initialMode: ClientMode.dungeonMaster,
+    );
+    final prefs = buildAppPreferencesController();
+    await prefs.initialize();
+    final session = buildActiveServerSession();
 
-      await pumpCampaignsTab(
-        tester,
-        authController: auth,
-        campaignController: campaignController,
-        modeController: modeController,
-        appPreferencesController: prefs,
-        session: session,
-      );
+    await pumpCampaignsTab(
+      tester,
+      authController: auth,
+      campaignController: campaignController,
+      modeController: modeController,
+      appPreferencesController: prefs,
+      session: session,
+    );
 
-      expect(
-        find.byKey(const Key('campaign-create-button')),
-        findsOneWidget,
-      );
-      expect(find.text('创建战役'), findsOneWidget);
+    expect(find.byKey(const Key('campaign-create-button')), findsOneWidget);
+    expect(find.text('创建战役'), findsOneWidget);
 
-      modeController.dispose();
-      prefs.dispose();
-      campaignController.dispose();
-      auth.dispose();
-      session.dispose();
-    },
-  );
+    modeController.dispose();
+    prefs.dispose();
+    campaignController.dispose();
+    auth.dispose();
+    session.dispose();
+  });
 
-  testWidgets(
-    'Player mode hides the create-campaign FAB',
-    (tester) async {
-      final auth = await buildLoggedInAuthController();
-      final campaignController = await buildCampaignController(auth);
-      final modeController = ClientModeController(
-        initialMode: ClientMode.player,
-      );
-      final prefs = buildAppPreferencesController();
-      await prefs.initialize();
-      final session = buildActiveServerSession();
+  testWidgets('Player mode hides the create-campaign FAB', (tester) async {
+    final auth = await buildLoggedInAuthController();
+    final campaignController = await buildCampaignController(auth);
+    final modeController = ClientModeController(initialMode: ClientMode.player);
+    final prefs = buildAppPreferencesController();
+    await prefs.initialize();
+    final session = buildActiveServerSession();
 
-      await pumpCampaignsTab(
-        tester,
-        authController: auth,
-        campaignController: campaignController,
-        modeController: modeController,
-        appPreferencesController: prefs,
-        session: session,
-      );
+    await pumpCampaignsTab(
+      tester,
+      authController: auth,
+      campaignController: campaignController,
+      modeController: modeController,
+      appPreferencesController: prefs,
+      session: session,
+    );
 
-      expect(
-        find.byKey(const Key('campaign-create-button')),
-        findsNothing,
-      );
-      // AppBar entries remain accessible in either mode.
-      expect(find.byTooltip('使用邀请码加入战役'), findsOneWidget);
-      expect(find.byTooltip('刷新战役'), findsOneWidget);
+    expect(find.byKey(const Key('campaign-create-button')), findsNothing);
+    // AppBar entries remain accessible in either mode.
+    expect(find.byTooltip('使用邀请码加入战役'), findsOneWidget);
+    expect(find.byTooltip('刷新战役'), findsOneWidget);
 
-      modeController.dispose();
-      prefs.dispose();
-      campaignController.dispose();
-      auth.dispose();
-      session.dispose();
-    },
-  );
+    modeController.dispose();
+    prefs.dispose();
+    campaignController.dispose();
+    auth.dispose();
+    session.dispose();
+  });
 
   testWidgets(
     'toggling from Player to DM mode reveals the FAB without remounting',
@@ -248,41 +234,40 @@ void main() {
     },
   );
 
-  testWidgets(
-    'DM mode empty-state copy still mentions the bottom-right FAB',
-    (tester) async {
-      final auth = await buildLoggedInAuthController();
-      final campaignController = CampaignController(
-        apiBaseUrl: apiBaseUrl,
-        authController: auth,
-        campaignClient: _FakeCampaignClient(campaigns: const []),
-      );
-      await campaignController.loadCampaigns();
-      final modeController = ClientModeController(
-        initialMode: ClientMode.dungeonMaster,
-      );
-      final prefs = buildAppPreferencesController();
-      await prefs.initialize();
-      final session = buildActiveServerSession();
+  testWidgets('DM mode empty-state copy still mentions the bottom-right FAB', (
+    tester,
+  ) async {
+    final auth = await buildLoggedInAuthController();
+    final campaignController = CampaignController(
+      apiBaseUrl: apiBaseUrl,
+      authController: auth,
+      campaignClient: _FakeCampaignClient(campaigns: const []),
+    );
+    await campaignController.loadCampaigns();
+    final modeController = ClientModeController(
+      initialMode: ClientMode.dungeonMaster,
+    );
+    final prefs = buildAppPreferencesController();
+    await prefs.initialize();
+    final session = buildActiveServerSession();
 
-      await pumpCampaignsTab(
-        tester,
-        authController: auth,
-        campaignController: campaignController,
-        modeController: modeController,
-        appPreferencesController: prefs,
-        session: session,
-      );
+    await pumpCampaignsTab(
+      tester,
+      authController: auth,
+      campaignController: campaignController,
+      modeController: modeController,
+      appPreferencesController: prefs,
+      session: session,
+    );
 
-      expect(find.textContaining('点击右下角创建'), findsOneWidget);
+    expect(find.textContaining('点击右下角创建'), findsOneWidget);
 
-      modeController.dispose();
-      prefs.dispose();
-      campaignController.dispose();
-      auth.dispose();
-      session.dispose();
-    },
-  );
+    modeController.dispose();
+    prefs.dispose();
+    campaignController.dispose();
+    auth.dispose();
+    session.dispose();
+  });
 
   // Spec §客户端工作模式: owner 在 Player 模式打开战役时, 客户端显示一次
   // "一键切换主持人模式"提示.
@@ -311,10 +296,7 @@ void main() {
       await tester.tap(find.text('Curse of Strahd'));
       await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const Key('mode-switch-to-dm-dialog')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const Key('mode-switch-to-dm-dialog')), findsOneWidget);
       expect(find.text('切换到主持人模式？'), findsOneWidget);
 
       modeController.dispose();
@@ -401,210 +383,184 @@ void main() {
     },
   );
 
-  testWidgets(
-    'owner entering in DM mode sees no prompt',
-    (tester) async {
-      final auth = await buildLoggedInAuthController();
-      final campaignController = await buildCampaignController(auth);
-      final modeController = ClientModeController(
-        initialMode: ClientMode.dungeonMaster,
-      );
-      final prefs = buildAppPreferencesController();
-      await prefs.initialize();
-      final session = buildActiveServerSession();
+  testWidgets('owner entering in DM mode sees no prompt', (tester) async {
+    final auth = await buildLoggedInAuthController();
+    final campaignController = await buildCampaignController(auth);
+    final modeController = ClientModeController(
+      initialMode: ClientMode.dungeonMaster,
+    );
+    final prefs = buildAppPreferencesController();
+    await prefs.initialize();
+    final session = buildActiveServerSession();
 
-      await pumpCampaignsTab(
-        tester,
-        authController: auth,
-        campaignController: campaignController,
-        modeController: modeController,
-        appPreferencesController: prefs,
-        session: session,
-      );
+    await pumpCampaignsTab(
+      tester,
+      authController: auth,
+      campaignController: campaignController,
+      modeController: modeController,
+      appPreferencesController: prefs,
+      session: session,
+    );
 
-      await tester.tap(find.text('Curse of Strahd'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('Curse of Strahd'));
+    await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const Key('mode-switch-to-dm-dialog')),
-        findsNothing,
-      );
-      expect(find.byKey(const Key('mode-player-only-dialog')), findsNothing);
+    expect(find.byKey(const Key('mode-switch-to-dm-dialog')), findsNothing);
+    expect(find.byKey(const Key('mode-player-only-dialog')), findsNothing);
 
-      modeController.dispose();
-      prefs.dispose();
-      campaignController.dispose();
-      auth.dispose();
-      session.dispose();
-    },
-  );
+    modeController.dispose();
+    prefs.dispose();
+    campaignController.dispose();
+    auth.dispose();
+    session.dispose();
+  });
 
-  testWidgets(
-    'non-owner in DM mode sees player-only prompt',
-    (tester) async {
-      final auth = await buildLoggedInAuthController();
-      // Use a campaign where someone else is the owner, and the current user
-      // is a player member.
-      final otherOwnerCampaign = Campaign(
-        id: 'camp-other',
-        name: 'Friend Campaign',
-        description: '',
-        system: 'dnd5e',
-        ownerId: 'other-user',
-        status: 'active',
-        createdAt: '2026-07-09T00:00:00.000Z',
-        updatedAt: '2026-07-09T00:00:00.000Z',
-        memberPreview: const [
-          CampaignMemberPreview(
-            userId: 'user-1',
-            displayName: 'ranger',
-            role: 'player',
-          ),
-        ],
-      );
-      final campaignController = CampaignController(
-        apiBaseUrl: apiBaseUrl,
-        authController: auth,
-        campaignClient: _FakeCampaignClient(campaigns: [otherOwnerCampaign]),
-      );
-      await campaignController.loadCampaigns();
-      final modeController = ClientModeController(
-        initialMode: ClientMode.dungeonMaster,
-      );
-      final prefs = buildAppPreferencesController();
-      await prefs.initialize();
-      final session = buildActiveServerSession();
+  testWidgets('non-owner in DM mode sees player-only prompt', (tester) async {
+    final auth = await buildLoggedInAuthController();
+    // Use a campaign where someone else is the owner, and the current user
+    // is a player member.
+    final otherOwnerCampaign = Campaign(
+      id: 'camp-other',
+      name: 'Friend Campaign',
+      description: '',
+      system: 'dnd5e',
+      ownerId: 'other-user',
+      status: 'active',
+      createdAt: '2026-07-09T00:00:00.000Z',
+      updatedAt: '2026-07-09T00:00:00.000Z',
+      memberPreview: const [
+        CampaignMemberPreview(
+          userId: 'user-1',
+          displayName: 'ranger',
+          role: 'player',
+        ),
+      ],
+    );
+    final campaignController = CampaignController(
+      apiBaseUrl: apiBaseUrl,
+      authController: auth,
+      campaignClient: _FakeCampaignClient(campaigns: [otherOwnerCampaign]),
+    );
+    await campaignController.loadCampaigns();
+    final modeController = ClientModeController(
+      initialMode: ClientMode.dungeonMaster,
+    );
+    final prefs = buildAppPreferencesController();
+    await prefs.initialize();
+    final session = buildActiveServerSession();
 
-      await pumpCampaignsTab(
-        tester,
-        authController: auth,
-        campaignController: campaignController,
-        modeController: modeController,
-        appPreferencesController: prefs,
-        session: session,
-      );
+    await pumpCampaignsTab(
+      tester,
+      authController: auth,
+      campaignController: campaignController,
+      modeController: modeController,
+      appPreferencesController: prefs,
+      session: session,
+    );
 
-      await tester.tap(find.text('Friend Campaign'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('Friend Campaign'));
+    await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const Key('mode-player-only-dialog')),
-        findsOneWidget,
-      );
-      expect(find.text('以玩家身份参与'), findsOneWidget);
+    expect(find.byKey(const Key('mode-player-only-dialog')), findsOneWidget);
+    expect(find.text('以玩家身份参与'), findsOneWidget);
 
-      modeController.dispose();
-      prefs.dispose();
-      campaignController.dispose();
-      auth.dispose();
-      session.dispose();
-    },
-  );
+    modeController.dispose();
+    prefs.dispose();
+    campaignController.dispose();
+    auth.dispose();
+    session.dispose();
+  });
 
-  testWidgets(
-    'non-owner in Player mode sees no prompt',
-    (tester) async {
-      final auth = await buildLoggedInAuthController();
-      final otherOwnerCampaign = Campaign(
-        id: 'camp-other',
-        name: 'Friend Campaign',
-        description: '',
-        system: 'dnd5e',
-        ownerId: 'other-user',
-        status: 'active',
-        createdAt: '2026-07-09T00:00:00.000Z',
-        updatedAt: '2026-07-09T00:00:00.000Z',
-        memberPreview: const [
-          CampaignMemberPreview(
-            userId: 'user-1',
-            displayName: 'ranger',
-            role: 'player',
-          ),
-        ],
-      );
-      final campaignController = CampaignController(
-        apiBaseUrl: apiBaseUrl,
-        authController: auth,
-        campaignClient: _FakeCampaignClient(campaigns: [otherOwnerCampaign]),
-      );
-      await campaignController.loadCampaigns();
-      final modeController = ClientModeController(
-        initialMode: ClientMode.player,
-      );
-      final prefs = buildAppPreferencesController();
-      await prefs.initialize();
-      final session = buildActiveServerSession();
+  testWidgets('non-owner in Player mode sees no prompt', (tester) async {
+    final auth = await buildLoggedInAuthController();
+    final otherOwnerCampaign = Campaign(
+      id: 'camp-other',
+      name: 'Friend Campaign',
+      description: '',
+      system: 'dnd5e',
+      ownerId: 'other-user',
+      status: 'active',
+      createdAt: '2026-07-09T00:00:00.000Z',
+      updatedAt: '2026-07-09T00:00:00.000Z',
+      memberPreview: const [
+        CampaignMemberPreview(
+          userId: 'user-1',
+          displayName: 'ranger',
+          role: 'player',
+        ),
+      ],
+    );
+    final campaignController = CampaignController(
+      apiBaseUrl: apiBaseUrl,
+      authController: auth,
+      campaignClient: _FakeCampaignClient(campaigns: [otherOwnerCampaign]),
+    );
+    await campaignController.loadCampaigns();
+    final modeController = ClientModeController(initialMode: ClientMode.player);
+    final prefs = buildAppPreferencesController();
+    await prefs.initialize();
+    final session = buildActiveServerSession();
 
-      await pumpCampaignsTab(
-        tester,
-        authController: auth,
-        campaignController: campaignController,
-        modeController: modeController,
-        appPreferencesController: prefs,
-        session: session,
-      );
+    await pumpCampaignsTab(
+      tester,
+      authController: auth,
+      campaignController: campaignController,
+      modeController: modeController,
+      appPreferencesController: prefs,
+      session: session,
+    );
 
-      await tester.tap(find.text('Friend Campaign'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('Friend Campaign'));
+    await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('mode-switch-to-dm-dialog')), findsNothing);
-      expect(find.byKey(const Key('mode-player-only-dialog')), findsNothing);
+    expect(find.byKey(const Key('mode-switch-to-dm-dialog')), findsNothing);
+    expect(find.byKey(const Key('mode-player-only-dialog')), findsNothing);
 
-      modeController.dispose();
-      prefs.dispose();
-      campaignController.dispose();
-      auth.dispose();
-      session.dispose();
-    },
-  );
+    modeController.dispose();
+    prefs.dispose();
+    campaignController.dispose();
+    auth.dispose();
+    session.dispose();
+  });
 
-  testWidgets(
-    'owner is prompted again after declining DM mode',
-    (tester) async {
-      final auth = await buildLoggedInAuthController();
-      final campaignController = await buildCampaignController(auth);
-      final modeController = ClientModeController(
-        initialMode: ClientMode.player,
-      );
-      final prefs = buildAppPreferencesController();
-      await prefs.initialize();
-      final session = buildActiveServerSession();
+  testWidgets('owner is prompted again after declining DM mode', (
+    tester,
+  ) async {
+    final auth = await buildLoggedInAuthController();
+    final campaignController = await buildCampaignController(auth);
+    final modeController = ClientModeController(initialMode: ClientMode.player);
+    final prefs = buildAppPreferencesController();
+    await prefs.initialize();
+    final session = buildActiveServerSession();
 
-      await pumpCampaignsTab(
-        tester,
-        authController: auth,
-        campaignController: campaignController,
-        modeController: modeController,
-        appPreferencesController: prefs,
-        session: session,
-      );
+    await pumpCampaignsTab(
+      tester,
+      authController: auth,
+      campaignController: campaignController,
+      modeController: modeController,
+      appPreferencesController: prefs,
+      session: session,
+    );
 
-      // First entry: prompt shown.
-      await tester.tap(find.text('Curse of Strahd'));
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const Key('mode-switch-to-dm-dialog')),
-        findsOneWidget,
-      );
-      await tester.tap(find.byKey(const Key('mode-switch-stay-player')));
-      await tester.pumpAndSettle();
-      expect(find.text('Curse of Strahd'), findsOneWidget);
+    // First entry: prompt shown.
+    await tester.tap(find.text('Curse of Strahd'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('mode-switch-to-dm-dialog')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('mode-switch-stay-player')));
+    await tester.pumpAndSettle();
+    expect(find.text('Curse of Strahd'), findsOneWidget);
 
-      // The host cannot enter in Player mode, so the next attempt asks again.
-      await tester.tap(find.text('Curse of Strahd'));
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const Key('mode-switch-to-dm-dialog')),
-        findsOneWidget,
-      );
+    // The host cannot enter in Player mode, so the next attempt asks again.
+    await tester.tap(find.text('Curse of Strahd'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('mode-switch-to-dm-dialog')), findsOneWidget);
 
-      modeController.dispose();
-      prefs.dispose();
-      campaignController.dispose();
-      auth.dispose();
-      session.dispose();
-    },
-  );
+    modeController.dispose();
+    prefs.dispose();
+    campaignController.dispose();
+    auth.dispose();
+    session.dispose();
+  });
 
   // ---- Plan 2026-07-23 task 5.1: expandable campaign card ----
 
@@ -642,8 +598,9 @@ void main() {
       ],
     );
 
-    testWidgets('card is collapsed by default and hides expanded content',
-        (tester) async {
+    testWidgets('card is collapsed by default and hides expanded content', (
+      tester,
+    ) async {
       final auth = await buildLoggedInAuthController();
       final campaignController = CampaignController(
         apiBaseUrl: apiBaseUrl,
@@ -676,8 +633,9 @@ void main() {
       session.dispose();
     });
 
-    testWidgets('tapping the expand chevron reveals expanded content',
-        (tester) async {
+    testWidgets('tapping the expand chevron reveals expanded content', (
+      tester,
+    ) async {
       final auth = await buildLoggedInAuthController();
       final campaignController = CampaignController(
         apiBaseUrl: apiBaseUrl,
@@ -717,8 +675,9 @@ void main() {
       session.dispose();
     });
 
-    testWidgets('tapping the expand toggle again collapses the card',
-        (tester) async {
+    testWidgets('tapping the expand toggle again collapses the card', (
+      tester,
+    ) async {
       final auth = await buildLoggedInAuthController();
       final campaignController = CampaignController(
         apiBaseUrl: apiBaseUrl,
@@ -771,8 +730,9 @@ void main() {
       final campaignController = CampaignController(
         apiBaseUrl: apiBaseUrl,
         authController: auth,
-        campaignClient:
-            _FakeCampaignClient(campaigns: [expandedCampaign, secondCampaign]),
+        campaignClient: _FakeCampaignClient(
+          campaigns: [expandedCampaign, secondCampaign],
+        ),
       );
       await campaignController.loadCampaigns();
       final modeController = ClientModeController(
@@ -814,8 +774,9 @@ void main() {
       session.dispose();
     });
 
-    testWidgets('tapping "主聊天室" triggers the main onCampaignOpened callback',
-        (tester) async {
+    testWidgets('tapping "主聊天室" triggers the main onCampaignOpened callback', (
+      tester,
+    ) async {
       final auth = await buildLoggedInAuthController();
       final campaignController = CampaignController(
         apiBaseUrl: apiBaseUrl,
@@ -960,14 +921,14 @@ void main() {
         );
 
         // Expand the card — this triggers loadConversations.
-        await tester.tap(
-          find.byKey(const Key('campaign-card-expand-toggle')),
-        );
+        await tester.tap(find.byKey(const Key('campaign-card-expand-toggle')));
         await tester.pumpAndSettle();
 
         // Main chat entry button always present.
-        expect(find.byKey(const Key('campaign-card-main-chat-entry')),
-            findsOneWidget);
+        expect(
+          find.byKey(const Key('campaign-card-main-chat-entry')),
+          findsOneWidget,
+        );
         // Secondary create buttons present even with zero conversations.
         expect(find.text('发起私聊'), findsOneWidget);
         expect(find.text('创建小群'), findsOneWidget);
@@ -1020,9 +981,7 @@ void main() {
           conversationController: conversationController,
         );
 
-        await tester.tap(
-          find.byKey(const Key('campaign-card-expand-toggle')),
-        );
+        await tester.tap(find.byKey(const Key('campaign-card-expand-toggle')));
         await tester.pumpAndSettle();
 
         // Section headers show counts.
@@ -1045,127 +1004,117 @@ void main() {
       },
     );
 
-    testWidgets(
-      'tapping 发起私聊 opens the member picker dialog',
-      (tester) async {
-        final auth = await buildLoggedInAuthController();
-        final client = _FakeCampaignClient(
-          campaigns: [conversationCampaign],
-          conversations: [mainConv],
-        );
-        final campaignController = CampaignController(
-          apiBaseUrl: apiBaseUrl,
-          authController: auth,
-          campaignClient: client,
-        );
-        await campaignController.loadCampaigns();
-        final modeController = ClientModeController(
-          initialMode: ClientMode.dungeonMaster,
-        );
-        final prefs = buildAppPreferencesController();
-        await prefs.initialize();
-        final session = buildActiveServerSession();
-        final conversationController = ConversationController(
-          apiBaseUrl: apiBaseUrl,
-          authController: auth,
-          campaignClient: client,
-        );
+    testWidgets('tapping 发起私聊 opens the member picker dialog', (tester) async {
+      final auth = await buildLoggedInAuthController();
+      final client = _FakeCampaignClient(
+        campaigns: [conversationCampaign],
+        conversations: [mainConv],
+      );
+      final campaignController = CampaignController(
+        apiBaseUrl: apiBaseUrl,
+        authController: auth,
+        campaignClient: client,
+      );
+      await campaignController.loadCampaigns();
+      final modeController = ClientModeController(
+        initialMode: ClientMode.dungeonMaster,
+      );
+      final prefs = buildAppPreferencesController();
+      await prefs.initialize();
+      final session = buildActiveServerSession();
+      final conversationController = ConversationController(
+        apiBaseUrl: apiBaseUrl,
+        authController: auth,
+        campaignClient: client,
+      );
 
-        await pumpCampaignsTab(
-          tester,
-          authController: auth,
-          campaignController: campaignController,
-          modeController: modeController,
-          appPreferencesController: prefs,
-          session: session,
-          conversationController: conversationController,
-        );
+      await pumpCampaignsTab(
+        tester,
+        authController: auth,
+        campaignController: campaignController,
+        modeController: modeController,
+        appPreferencesController: prefs,
+        session: session,
+        conversationController: conversationController,
+      );
 
-        await tester.tap(
-          find.byKey(const Key('campaign-card-expand-toggle')),
-        );
-        await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('campaign-card-expand-toggle')));
+      await tester.pumpAndSettle();
 
-        // Tap 发起私聊 — should open a dialog listing other members.
-        await tester.tap(find.text('发起私聊'));
-        await tester.pumpAndSettle();
+      // Tap 发起私聊 — should open a dialog listing other members.
+      await tester.tap(find.text('发起私聊'));
+      await tester.pumpAndSettle();
 
-        // Dialog title and button both render '发起私聊', so two matches.
-        expect(find.text('发起私聊'), findsNWidgets(2));
-        // Other members (excluding current user) appear as candidates.
-        expect(find.text('Arannis'), findsOneWidget);
-        expect(find.text('Briv'), findsOneWidget);
-        expect(find.text('取消'), findsOneWidget);
+      // Dialog title and button both render '发起私聊', so two matches.
+      expect(find.text('发起私聊'), findsNWidgets(2));
+      // Other members (excluding current user) appear as candidates.
+      expect(find.text('Arannis'), findsOneWidget);
+      expect(find.text('Briv'), findsOneWidget);
+      expect(find.text('取消'), findsOneWidget);
 
-        modeController.dispose();
-        prefs.dispose();
-        campaignController.dispose();
-        conversationController.dispose();
-        auth.dispose();
-        session.dispose();
-      },
-    );
+      modeController.dispose();
+      prefs.dispose();
+      campaignController.dispose();
+      conversationController.dispose();
+      auth.dispose();
+      session.dispose();
+    });
 
-    testWidgets(
-      'tapping 创建小群 opens the group creation dialog',
-      (tester) async {
-        final auth = await buildLoggedInAuthController();
-        final client = _FakeCampaignClient(
-          campaigns: [conversationCampaign],
-          conversations: [mainConv],
-        );
-        final campaignController = CampaignController(
-          apiBaseUrl: apiBaseUrl,
-          authController: auth,
-          campaignClient: client,
-        );
-        await campaignController.loadCampaigns();
-        final modeController = ClientModeController(
-          initialMode: ClientMode.dungeonMaster,
-        );
-        final prefs = buildAppPreferencesController();
-        await prefs.initialize();
-        final session = buildActiveServerSession();
-        final conversationController = ConversationController(
-          apiBaseUrl: apiBaseUrl,
-          authController: auth,
-          campaignClient: client,
-        );
+    testWidgets('tapping 创建小群 opens the group creation dialog', (tester) async {
+      final auth = await buildLoggedInAuthController();
+      final client = _FakeCampaignClient(
+        campaigns: [conversationCampaign],
+        conversations: [mainConv],
+      );
+      final campaignController = CampaignController(
+        apiBaseUrl: apiBaseUrl,
+        authController: auth,
+        campaignClient: client,
+      );
+      await campaignController.loadCampaigns();
+      final modeController = ClientModeController(
+        initialMode: ClientMode.dungeonMaster,
+      );
+      final prefs = buildAppPreferencesController();
+      await prefs.initialize();
+      final session = buildActiveServerSession();
+      final conversationController = ConversationController(
+        apiBaseUrl: apiBaseUrl,
+        authController: auth,
+        campaignClient: client,
+      );
 
-        await pumpCampaignsTab(
-          tester,
-          authController: auth,
-          campaignController: campaignController,
-          modeController: modeController,
-          appPreferencesController: prefs,
-          session: session,
-          conversationController: conversationController,
-        );
+      await pumpCampaignsTab(
+        tester,
+        authController: auth,
+        campaignController: campaignController,
+        modeController: modeController,
+        appPreferencesController: prefs,
+        session: session,
+        conversationController: conversationController,
+      );
 
-        await tester.tap(
-          find.byKey(const Key('campaign-card-expand-toggle')),
-        );
-        await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('campaign-card-expand-toggle')));
+      await tester.pumpAndSettle();
 
-        await tester.tap(find.text('创建小群'));
-        await tester.pumpAndSettle();
+      await tester.tap(find.text('创建小群'));
+      await tester.pumpAndSettle();
 
-        // Dialog title and button both render '创建小群', so two matches.
-        expect(find.text('创建小群'), findsNWidgets(2));
-        // Title field and member checkboxes are present.
-        expect(find.text('小群名称'), findsOneWidget);
-        expect(find.text('Arannis'), findsOneWidget);
-        expect(find.text('Briv'), findsOneWidget);
-        expect(find.text('创建'), findsOneWidget);
+      // Dialog title and button both render '创建小群', so two matches.
+      expect(find.text('创建小群'), findsNWidgets(2));
+      // Title field and member checkboxes are present.
+      expect(find.text('小群名称'), findsOneWidget);
+      expect(find.text('Arannis'), findsOneWidget);
+      expect(find.text('Briv'), findsOneWidget);
+      expect(find.text('创建'), findsOneWidget);
 
-        modeController.dispose();
-        prefs.dispose();
-        campaignController.dispose();
-        conversationController.dispose();
-        auth.dispose();
-        session.dispose();
-      },
-    );
+      modeController.dispose();
+      prefs.dispose();
+      campaignController.dispose();
+      conversationController.dispose();
+      auth.dispose();
+      session.dispose();
+    });
 
     testWidgets(
       'expanding the card triggers loadConversations on the controller',
@@ -1206,9 +1155,7 @@ void main() {
         // Before expanding, the controller has no active campaign.
         expect(conversationController.activeCampaignId, isNull);
 
-        await tester.tap(
-          find.byKey(const Key('campaign-card-expand-toggle')),
-        );
+        await tester.tap(find.byKey(const Key('campaign-card-expand-toggle')));
         await tester.pumpAndSettle();
 
         // After expanding, conversations are loaded for the campaign.
@@ -1249,26 +1196,23 @@ class _FakeAuthClient implements AuthClient {
     required String apiBaseUrl,
     required String identifier,
     required String password,
-  }) async =>
-      const AuthSession(
-        user: _user,
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-      );
+  }) async => const AuthSession(
+    user: _user,
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+  );
 
   @override
   Future<AuthUser> me({
     required String apiBaseUrl,
     required String accessToken,
-  }) async =>
-      _user;
+  }) async => _user;
 
   @override
   Future<String> refresh({
     required String apiBaseUrl,
     required String refreshToken,
-  }) async =>
-      'access-token';
+  }) async => 'access-token';
 
   @override
   Future<RegisterResult> register({
@@ -1276,8 +1220,7 @@ class _FakeAuthClient implements AuthClient {
     required String username,
     required String email,
     required String password,
-  }) async =>
-      const RegisterResult(user: _user, isFirstUser: false);
+  }) async => const RegisterResult(user: _user, isFirstUser: false);
 
   @override
   Future<void> logout({
@@ -1302,8 +1245,7 @@ class _FakeCampaignClient implements CampaignClient {
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-  }) async =>
-      throw UnimplementedError();
+  }) async => throw UnimplementedError();
 
   @override
   Future<List<CampaignArchiveEntry>> listArchives({
@@ -1313,8 +1255,7 @@ class _FakeCampaignClient implements CampaignClient {
     String? kind,
     String? query,
     List<String>? tags,
-  }) async =>
-      const [];
+  }) async => const [];
 
   @override
   Future<CampaignArchiveEntry> createArchiveEntry({
@@ -1329,8 +1270,7 @@ class _FakeCampaignClient implements CampaignClient {
     List<String>? tags,
     List<Map<String, Object?>>? links,
     List<Map<String, Object?>>? attachmentRefs,
-  }) async =>
-      throw UnimplementedError();
+  }) async => throw UnimplementedError();
 
   @override
   Future<void> archiveEntry({
@@ -1355,8 +1295,7 @@ class _FakeCampaignClient implements CampaignClient {
     List<String>? tags,
     List<Map<String, Object?>>? links,
     List<Map<String, Object?>>? attachmentRefs,
-  }) async =>
-      throw UnimplementedError();
+  }) async => throw UnimplementedError();
 
   @override
   Future<Campaign> createCampaign({
@@ -1365,23 +1304,20 @@ class _FakeCampaignClient implements CampaignClient {
     required String name,
     String? description,
     String? system,
-  }) async =>
-      _campaign;
+  }) async => _campaign;
 
   @override
   Future<Campaign> getCampaign({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-  }) async =>
-      _campaigns.first;
+  }) async => _campaigns.first;
 
   @override
   Future<List<Campaign>> listCampaigns({
     required String apiBaseUrl,
     required String accessToken,
-  }) async =>
-      _campaigns;
+  }) async => _campaigns;
 
   @override
   Future<CampaignInvite> createInvite({
@@ -1389,16 +1325,14 @@ class _FakeCampaignClient implements CampaignClient {
     required String accessToken,
     required String campaignId,
     int? maxUses,
-  }) async =>
-      throw UnimplementedError();
+  }) async => throw UnimplementedError();
 
   @override
   Future<CampaignMembership> joinCampaign({
     required String apiBaseUrl,
     required String accessToken,
     required String code,
-  }) async =>
-      throw UnimplementedError();
+  }) async => throw UnimplementedError();
 
   @override
   Future<List<CampaignChatMessage>> listMessages({
@@ -1407,8 +1341,7 @@ class _FakeCampaignClient implements CampaignClient {
     required String campaignId,
     String? query,
     String? conversationId,
-  }) async =>
-      const [];
+  }) async => const [];
 
   @override
   Future<void> markCampaignRead({
@@ -1418,14 +1351,21 @@ class _FakeCampaignClient implements CampaignClient {
   }) async {}
 
   @override
+  Future<void> markConversationRead({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String conversationId,
+  }) async {}
+
+  @override
   Future<CampaignMembership> updateSpeaker({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
     required String speakerMode,
     String? actorId,
-  }) async =>
-      throw UnimplementedError();
+  }) async => throw UnimplementedError();
 
   @override
   Future<CampaignChatMessage> sendMessage({
@@ -1439,16 +1379,14 @@ class _FakeCampaignClient implements CampaignClient {
     Map<String, Object?>? eventData,
     Map<String, Object?>? speakerSnapshot,
     String? conversationId,
-  }) async =>
-      throw UnimplementedError();
+  }) async => throw UnimplementedError();
 
   @override
   Future<List<CampaignInvite>> listInvites({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-  }) async =>
-      const [];
+  }) async => const [];
 
   @override
   Future<List<CampaignConversation>> listConversations({

@@ -35,7 +35,7 @@
 - 测试：`apps/server_nest/src/modules/realtime/campaigns.gateway.spec.ts`
 - 测试：`apps/server_nest/test/campaign-conversations.e2e-spec.ts`
 
-- [ ] **步骤 1：编写失败测试**
+- [x] **步骤 1：编写失败测试**
 
 增加测试证明：私聊消息仅发送到 `conversation:<id>`；非参与者不能加入房间；每位用户每个会话有独立 `lastReadAt`；归档会话默认不列出且不能发送；主会话元数据包含 `conversationId = null` 的旧消息。
 
@@ -46,7 +46,7 @@ expect(first.unreadCount).toBe(0);
 expect(second.unreadCount).toBe(2);
 ```
 
-- [ ] **步骤 2：验证红灯**
+- [x] **步骤 2：验证红灯**
 
 运行：
 
@@ -56,11 +56,11 @@ npm --prefix apps/server_nest test -- campaigns.gateway.spec.ts campaign-convers
 
 预期：现有实现广播到战役房间、共用成员阅读时间并返回归档会话，测试失败。
 
-- [ ] **步骤 3：实现最小修复**
+- [x] **步骤 3：实现最小修复**
 
 新增 `CampaignConversationRead(userId, conversationId, lastReadAt)` 唯一记录。Socket 加入会话前验证成员与 participant；主聊继续使用战役房间，私聊和小群使用会话房间。归档会话仅在显式管理查询中返回，并拒绝消息写入。
 
-- [ ] **步骤 4：验证绿灯并提交**
+- [x] **步骤 4：验证绿灯并提交**
 
 运行上述测试及 `npm run lint:server`，提交：
 

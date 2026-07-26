@@ -85,6 +85,10 @@ describe("campaign conversation endpoints", () => {
       upsert: jest.fn(),
       update: jest.fn(),
     },
+    campaignConversationRead: {
+      findUnique: jest.fn(),
+      upsert: jest.fn(),
+    },
     journalEntry: { create: jest.fn(), findMany: jest.fn() },
     campaignActor: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn() },
     campaignArchiveEntry: {
@@ -102,6 +106,7 @@ describe("campaign conversation endpoints", () => {
   };
   const campaignsGateway = {
     broadcastToCampaign: jest.fn(),
+    broadcastToUsers: jest.fn(),
   };
 
   const storedDm = {
@@ -148,7 +153,7 @@ describe("campaign conversation endpoints", () => {
   });
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     prismaService.$queryRaw.mockResolvedValue([{ health_check: 1 }]);
     prismaService.serverSetting.findFirst.mockResolvedValue({
       registrationEnabled: true,
@@ -184,6 +189,8 @@ describe("campaign conversation endpoints", () => {
     prismaService.campaignConversation.findFirst.mockResolvedValue(null);
     prismaService.campaignConversation.create.mockResolvedValue(mainConversation);
     prismaService.campaignConversation.update.mockResolvedValue(mainConversation);
+    prismaService.campaignConversationRead.findUnique.mockResolvedValue(null);
+    prismaService.campaignConversationRead.upsert.mockResolvedValue({});
 
     prismaService.campaignChatMessage.create.mockResolvedValue({});
     prismaService.campaignChatMessage.findMany.mockResolvedValue([]);
@@ -234,6 +241,64 @@ describe("campaign conversation endpoints", () => {
           expect(body[0].lastMessage).toBeNull();
           expect(body[0].unreadCount).toBe(0);
         });
+      expect(prismaService.campaignConversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { campaignId: "camp-1", archivedAt: null },
+        }),
+      );
+    });
+
+    it("uses a conversation-specific read cursor for unread messages", async () => {
+      const token = await loginAs(storedPlayer1);
+      prismaService.campaignConversation.findMany.mockResolvedValueOnce([
+        mainConversation,
+      ]);
+      prismaService.campaignConversationRead.findUnique.mockResolvedValueOnce({
+        lastReadAt: new Date("2026-07-15T00:00:00.000Z"),
+      });
+
+      await request(app.getHttpServer())
+        .get("/api/campaigns/camp-1/conversations")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200);
+
+      expect(prismaService.campaignConversationRead.findUnique)
+        .toHaveBeenCalledWith({
+          where: {
+            conversationId_userId: {
+              conversationId: "conv-main",
+              userId: "player-1",
+            },
+          },
+        });
+      expect(prismaService.campaignChatMessage.count).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          createdAt: { gt: new Date("2026-07-15T00:00:00.000Z") },
+        }),
+      });
+    });
+
+    it("marks only the selected conversation as read", async () => {
+      const token = await loginAs(storedPlayer1);
+      prismaService.campaignConversation.findFirst.mockResolvedValueOnce(
+        mainConversation,
+      );
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/conversations/conv-main/read")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(201);
+
+      expect(prismaService.campaignConversationRead.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            conversationId_userId: {
+              conversationId: "conv-main",
+              userId: "player-1",
+            },
+          },
+        }),
+      );
     });
 
     it("rejects without authentication with 401", async () => {
@@ -554,6 +619,12 @@ describe("campaign conversation endpoints", () => {
 
       const createArgs = prismaService.campaignChatMessage.create.mock.calls[0][0];
       expect(createArgs.data.conversationId).toBe("conv-direct");
+      expect(campaignsGateway.broadcastToUsers).toHaveBeenCalledWith(
+        ["player-1", "player-2"],
+        "campaign:message:new",
+        expect.objectContaining({ id: "msg-1" }),
+      );
+      expect(campaignsGateway.broadcastToCampaign).not.toHaveBeenCalled();
     });
 
     it("lets a participant list messages in a direct conversation", async () => {

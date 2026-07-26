@@ -695,40 +695,39 @@ void main() {
 
   // Plan 2026-07-23 task 1: 概览使用全宽 section 与清晰间距, 不使用嵌套 Card。
   // DM 工具和战役设置分区, 不与成员列表粘连。
-  testWidgets(
-    'overview panel does not wrap sections in nested Card widgets',
-    (tester) async {
-      final dmAuth = await buildLoggedInAuthController();
-      final dmController = await buildCampaignController(
-        authController: dmAuth,
-        canManage: true,
-      );
-      await pumpCenterPage(tester, dmController);
+  testWidgets('overview panel does not wrap sections in nested Card widgets', (
+    tester,
+  ) async {
+    final dmAuth = await buildLoggedInAuthController();
+    final dmController = await buildCampaignController(
+      authController: dmAuth,
+      canManage: true,
+    );
+    await pumpCenterPage(tester, dmController);
 
-      // The DM control entry should NOT be wrapped in a Card — it should be a
-      // full-width section (e.g. ListTile or Container, not Card.filled).
-      final dmControlEntry = find.byKey(
-        const Key('campaign-overview-dm-control-entry'),
-      );
-      expect(dmControlEntry, findsOneWidget);
-      // Walk up from the entry to ensure no ancestor Card exists.
-      final ancestors = tester.widgetList<Card>(
-        find.ancestor(of: dmControlEntry, matching: find.byType(Card)),
-      );
-      expect(ancestors, isEmpty);
+    // The DM control entry should NOT be wrapped in a Card — it should be a
+    // full-width section (e.g. ListTile or Container, not Card.filled).
+    final dmControlEntry = find.byKey(
+      const Key('campaign-overview-dm-control-entry'),
+    );
+    expect(dmControlEntry, findsOneWidget);
+    // Walk up from the entry to ensure no ancestor Card exists.
+    final ancestors = tester.widgetList<Card>(
+      find.ancestor(of: dmControlEntry, matching: find.byType(Card)),
+    );
+    expect(ancestors, isEmpty);
 
-      // The invite share should also not be wrapped in a nested Card.
-      final inviteShare = find.byKey(const Key('campaign-invite-share'));
-      expect(inviteShare, findsOneWidget);
-      final inviteAncestors = tester.widgetList<Card>(
-        find.ancestor(of: inviteShare, matching: find.byType(Card)),
-      );
-      expect(inviteAncestors, isEmpty);
+    // The invite share should also not be wrapped in a nested Card.
+    final inviteShare = find.byKey(const Key('campaign-invite-share'));
+    expect(inviteShare, findsOneWidget);
+    final inviteAncestors = tester.widgetList<Card>(
+      find.ancestor(of: inviteShare, matching: find.byType(Card)),
+    );
+    expect(inviteAncestors, isEmpty);
 
-      dmController.dispose();
-      dmAuth.dispose();
-    },
-  );
+    dmController.dispose();
+    dmAuth.dispose();
+  });
 
   // Plan 2026-07-23 Wave 1 Task 1.4: 档案新建 FAB 与角色新建 FAB 风格一致，
   // 都使用 FloatingActionButton.extended + 语义化图标 + 文字标签。
@@ -975,6 +974,14 @@ class _FakeCampaignClient implements CampaignClient {
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
+  }) async {}
+
+  @override
+  Future<void> markConversationRead({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String conversationId,
   }) async {}
 
   @override

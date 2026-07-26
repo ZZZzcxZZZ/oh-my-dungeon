@@ -432,11 +432,12 @@ export class CampaignsService {
     // Plan 2026-07-23 task 5.3: route the message to a conversation. If the
     // caller did not specify one, default to the campaign's main room
     // (creating it for legacy campaigns predating task 5.3).
-    const conversationId = await this.resolveMessageConversationId(
+    const conversation = await this.resolveMessageConversation(
       actor.userId,
       campaignId,
       input.conversationId,
     );
+    const conversationId = conversation.id;
 
     if (input.speakerSnapshot) {
       return this.sendSpeakerSnapshotMessage(
@@ -450,6 +451,10 @@ export class CampaignsService {
           membership,
           capabilities,
           conversationId,
+          conversationParticipantIds:
+            conversation.kind === "main"
+              ? null
+              : conversation.participantIds,
         },
       );
     }
@@ -642,7 +647,7 @@ export class CampaignsService {
         });
 
     const view = toCampaignChatMessageView(created);
-    this.gateway.broadcastToCampaign(campaignId, "campaign:message:new", view);
+    this.broadcastConversationMessage(campaignId, conversation, view);
 
     return view;
   }
@@ -666,6 +671,7 @@ export class CampaignsService {
       membership: { id: string };
       capabilities: { canManageCampaign: boolean };
       conversationId: string;
+      conversationParticipantIds: string[] | null;
     },
   ): Promise<CampaignChatMessageView> {
     if (!input.capabilities.canManageCampaign) {
@@ -709,7 +715,19 @@ export class CampaignsService {
     });
 
     const view = toCampaignChatMessageView(created);
-    this.gateway.broadcastToCampaign(campaignId, "campaign:message:new", view);
+    if (input.conversationParticipantIds) {
+      this.gateway.broadcastToUsers(
+        input.conversationParticipantIds,
+        "campaign:message:new",
+        view,
+      );
+    } else {
+      this.gateway.broadcastToCampaign(
+        campaignId,
+        "campaign:message:new",
+        view,
+      );
+    }
     return view;
   }
 
@@ -832,6 +850,9 @@ export class CampaignsService {
     if (!conversation) {
       throw new NotFoundException("Conversation not found");
     }
+    if (conversation.archivedAt) {
+      throw new BadRequestException("Conversation is archived");
+    }
     // Main is open to all campaign members (membership already verified by
     // canViewCampaign upstream). Direct/group require explicit participation.
     if (
@@ -849,23 +870,23 @@ export class CampaignsService {
    * defaults to the main room, creating it for legacy campaigns that predate
    * the seeded main conversation in createCampaign.
    */
-  private async resolveMessageConversationId(
+  private async resolveMessageConversation(
     userId: string,
     campaignId: string,
     conversationId: string | null | undefined,
-  ): Promise<string> {
+  ): Promise<{ id: string; kind: string; participantIds: string[] }> {
     if (conversationId) {
       const conversation = await this.loadAccessibleConversation(
         userId,
         campaignId,
         conversationId,
       );
-      return conversation.id;
+      return conversation;
     }
     const main = await this.prismaService.campaignConversation.findFirst({
       where: { campaignId, kind: "main" },
     });
-    if (main) return main.id;
+    if (main) return main;
     const created = await this.prismaService.campaignConversation.create({
       data: {
         campaignId,
@@ -876,7 +897,27 @@ export class CampaignsService {
         createdBy: userId,
       },
     });
-    return created.id;
+    return created;
+  }
+
+  private broadcastConversationMessage(
+    campaignId: string,
+    conversation: { kind: string; participantIds: string[] },
+    message: CampaignChatMessageView,
+  ): void {
+    if (conversation.kind === "main") {
+      this.gateway.broadcastToCampaign(
+        campaignId,
+        "campaign:message:new",
+        message,
+      );
+      return;
+    }
+    this.gateway.broadcastToUsers(
+      conversation.participantIds,
+      "campaign:message:new",
+      message,
+    );
   }
 
   /**

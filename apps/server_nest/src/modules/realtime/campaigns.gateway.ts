@@ -56,6 +56,7 @@ export class CampaignsGateway {
         userId: payload.userId,
         username: payload.username
       };
+      void client.join(`user:${payload.userId}`);
     } catch {
       client.disconnect(true);
     }
@@ -116,6 +117,18 @@ export class CampaignsGateway {
     payload: unknown
   ): void {
     this.server.to(`campaign:${campaignId}`).emit(event, payload);
+  }
+
+  broadcastToUsers(
+    userIds: string[],
+    event: string,
+    payload: unknown
+  ): void {
+    const rooms = Array.from(new Set(userIds))
+      .sort()
+      .map((userId) => `user:${userId}`);
+    if (rooms.length === 0) return;
+    this.server.to(rooms).emit(event, payload);
   }
 
   broadcastChange(event: CampaignChangedEvent): void {

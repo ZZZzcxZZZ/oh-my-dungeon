@@ -100,24 +100,30 @@ void main() {
     authController.dispose();
   });
 
-  test('searches campaign records through the server without replacing chat', () async {
-    final authController = await buildLoggedInAuthController();
-    final client = _FakeCampaignClient();
-    final controller = CampaignController(
-      apiBaseUrl: apiBaseUrl,
-      authController: authController,
-      campaignClient: client,
-    );
+  test(
+    'searches campaign records through the server without replacing chat',
+    () async {
+      final authController = await buildLoggedInAuthController();
+      final client = _FakeCampaignClient();
+      final controller = CampaignController(
+        apiBaseUrl: apiBaseUrl,
+        authController: authController,
+        campaignClient: client,
+      );
 
-    final results = await controller.searchMessages('camp-1', query: 'chapel');
+      final results = await controller.searchMessages(
+        'camp-1',
+        query: 'chapel',
+      );
 
-    expect(client.lastMessageQuery, 'chapel');
-    expect(results, [_remoteMessage]);
-    expect(controller.messages, isEmpty);
+      expect(client.lastMessageQuery, 'chapel');
+      expect(results, [_remoteMessage]);
+      expect(controller.messages, isEmpty);
 
-    controller.dispose();
-    authController.dispose();
-  });
+      controller.dispose();
+      authController.dispose();
+    },
+  );
 
   // Spec §双向同步 切片 A: socket 收到 campaign:changed 信号后应触发
   // onCampaignChanged 回调，由调用方接入 actorController.pullUntilCurrent。
@@ -219,11 +225,35 @@ class _FakeCampaignSocketService implements CampaignSocketService {
 class _FakeCampaignClient implements CampaignClient {
   String? lastMessageQuery;
   @override
-  Future<void> markCampaignRead({required String apiBaseUrl, required String accessToken, required String campaignId}) async {}
+  Future<void> markCampaignRead({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+  }) async {}
   @override
-  Future<CampaignMembership> updateSpeaker({required String apiBaseUrl, required String accessToken, required String campaignId, required String speakerMode, String? actorId}) => throw UnimplementedError();
+  Future<void> markConversationRead({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String conversationId,
+  }) async {}
   @override
-  Future<List<CampaignArchiveEntry>> listArchives({required String apiBaseUrl, required String accessToken, required String campaignId, String? kind, String? query, List<String>? tags}) async => const [
+  Future<CampaignMembership> updateSpeaker({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String speakerMode,
+    String? actorId,
+  }) => throw UnimplementedError();
+  @override
+  Future<List<CampaignArchiveEntry>> listArchives({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    String? kind,
+    String? query,
+    List<String>? tags,
+  }) async => const [
     CampaignArchiveEntry(
       id: 'archive-1',
       campaignId: 'camp-1',
@@ -236,11 +266,42 @@ class _FakeCampaignClient implements CampaignClient {
     ),
   ];
   @override
-  Future<CampaignArchiveEntry> createArchiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String kind, required String title, String? summary, Map<String, Object?>? payload, List<Map<String, Object?>>? bodyBlocks, List<String>? tags, List<Map<String, Object?>>? links, List<Map<String, Object?>>? attachmentRefs}) => throw UnimplementedError();
+  Future<CampaignArchiveEntry> createArchiveEntry({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String kind,
+    required String title,
+    String? summary,
+    Map<String, Object?>? payload,
+    List<Map<String, Object?>>? bodyBlocks,
+    List<String>? tags,
+    List<Map<String, Object?>>? links,
+    List<Map<String, Object?>>? attachmentRefs,
+  }) => throw UnimplementedError();
   @override
-  Future<CampaignArchiveEntry> updateArchiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String entryId, String? kind, String? title, String? summary, Map<String, Object?>? payload, bool? pinned, List<Map<String, Object?>>? bodyBlocks, List<String>? tags, List<Map<String, Object?>>? links, List<Map<String, Object?>>? attachmentRefs}) => throw UnimplementedError();
+  Future<CampaignArchiveEntry> updateArchiveEntry({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String entryId,
+    String? kind,
+    String? title,
+    String? summary,
+    Map<String, Object?>? payload,
+    bool? pinned,
+    List<Map<String, Object?>>? bodyBlocks,
+    List<String>? tags,
+    List<Map<String, Object?>>? links,
+    List<Map<String, Object?>>? attachmentRefs,
+  }) => throw UnimplementedError();
   @override
-  Future<void> archiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String entryId}) => throw UnimplementedError();
+  Future<void> archiveEntry({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String entryId,
+  }) => throw UnimplementedError();
   @override
   Future<CampaignWorkspaceContext> getWorkspaceContext({
     required String apiBaseUrl,

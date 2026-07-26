@@ -181,6 +181,24 @@ describe('CampaignsGateway', () => {
     });
   });
 
+  describe('broadcastToUsers', () => {
+    it('emits once to the union of participant user rooms', () => {
+      gateway.broadcastToUsers(
+        ['user-2', 'user-1', 'user-2'],
+        'campaign:message:new',
+        { id: 'private-1' }
+      );
+
+      expect(fakeServer.to).toHaveBeenCalledWith([
+        'user:user-1',
+        'user:user-2'
+      ]);
+      expect(toRoomEmit).toHaveBeenCalledWith('campaign:message:new', {
+        id: 'private-1'
+      });
+    });
+  });
+
   describe('broadcastChange', () => {
     it('broadcasts a cursor notification without entry or sheet bodies', () => {
       gateway.broadcastChange({

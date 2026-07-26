@@ -38,13 +38,8 @@ export class CampaignConversationsService {
     // Legacy campaigns created before task 5.3 may not have a main row yet.
     await this.ensureMainConversation(campaignId, actor.userId);
 
-    const membership = await this.prisma.campaignMember.findFirst({
-      where: { campaignId, userId: actor.userId },
-    });
-    const lastReadAt = membership?.lastReadAt ?? null;
-
     const conversations = await this.prisma.campaignConversation.findMany({
-      where: { campaignId },
+      where: { campaignId, archivedAt: null },
       orderBy: [{ kind: "asc" }, { createdAt: "asc" }],
     });
 
@@ -54,8 +49,39 @@ export class CampaignConversationsService {
     );
 
     return Promise.all(
-      visible.map((c: any) => this.toViewWithMeta(c, actor.userId, lastReadAt)),
+      visible.map((c: any) => this.toViewWithMeta(c, actor.userId)),
     );
+  }
+
+  async markRead(
+    actor: AccessTokenPayload,
+    campaignId: string,
+    conversationId: string,
+  ): Promise<{ lastReadAt: string }> {
+    const context = await this.context(campaignId);
+    this.policy.canViewCampaign(actor, context);
+    const conversation = await this.getConversationOrThrow(
+      campaignId,
+      conversationId,
+    );
+    if (
+      conversation.archivedAt ||
+      !this.canAccessConversation(actor.userId, conversation)
+    ) {
+      throw new NotFoundException("Conversation not found");
+    }
+    const lastReadAt = new Date();
+    await this.prisma.campaignConversationRead.upsert({
+      where: {
+        conversationId_userId: {
+          conversationId,
+          userId: actor.userId,
+        },
+      },
+      create: { conversationId, userId: actor.userId, lastReadAt },
+      update: { lastReadAt },
+    });
+    return { lastReadAt: lastReadAt.toISOString() };
   }
 
   async ensureMainConversation(
@@ -118,7 +144,7 @@ export class CampaignConversationsService {
       update: {},
     });
 
-    return this.toViewWithMeta(conversation, actor.userId, null);
+    return this.toViewWithMeta(conversation, actor.userId);
   }
 
   async createGroupConversation(
@@ -166,7 +192,7 @@ export class CampaignConversationsService {
       },
     });
 
-    return this.toViewWithMeta(conversation, actor.userId, null);
+    return this.toViewWithMeta(conversation, actor.userId);
   }
 
   async updateConversation(
@@ -209,7 +235,7 @@ export class CampaignConversationsService {
     }
 
     if (Object.keys(data).length === 0) {
-      return this.toViewWithMeta(conversation, actor.userId, null);
+      return this.toViewWithMeta(conversation, actor.userId);
     }
 
     const updated = await this.prisma.campaignConversation.update({
@@ -217,7 +243,7 @@ export class CampaignConversationsService {
       data,
     });
 
-    return this.toViewWithMeta(updated, actor.userId, null);
+    return this.toViewWithMeta(updated, actor.userId);
   }
 
   canAccessConversation(
@@ -241,15 +267,32 @@ export class CampaignConversationsService {
   private async toViewWithMeta(
     conversation: any,
     viewerUserId: string,
-    lastReadAt: Date | null,
   ): Promise<CampaignConversationView> {
+    const read = await this.prisma.campaignConversationRead.findUnique({
+      where: {
+        conversationId_userId: {
+          conversationId: conversation.id,
+          userId: viewerUserId,
+        },
+      },
+    });
+    const lastReadAt = read?.lastReadAt ?? null;
+    const conversationWhere =
+      conversation.kind === "main"
+        ? {
+            OR: [
+              { conversationId: conversation.id },
+              { conversationId: null, campaignId: conversation.campaignId },
+            ],
+          }
+        : { conversationId: conversation.id };
     const lastMessage = await this.prisma.campaignChatMessage.findFirst({
-      where: { conversationId: conversation.id },
+      where: conversationWhere,
       orderBy: { createdAt: "desc" },
     });
     const unreadCount = await this.prisma.campaignChatMessage.count({
       where: {
-        conversationId: conversation.id,
+        ...conversationWhere,
         senderId: { not: viewerUserId },
         ...(lastReadAt ? { createdAt: { gt: lastReadAt } } : {}),
       },

@@ -46,6 +46,19 @@ abstract class CampaignClient {
     required String campaignId,
   });
 
+  Future<void> markConversationRead({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String conversationId,
+  }) {
+    return markCampaignRead(
+      apiBaseUrl: apiBaseUrl,
+      accessToken: accessToken,
+      campaignId: campaignId,
+    );
+  }
+
   Future<CampaignInvite> createInvite({
     required String apiBaseUrl,
     required String accessToken,
@@ -270,7 +283,9 @@ class CampaignApiClient implements CampaignClient {
     if (links != null) body['links'] = links;
     if (attachmentRefs != null) body['attachmentRefs'] = attachmentRefs;
     final response = await _httpClient.put(
-      Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/archives/$entryId'),
+      Uri.parse(
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/archives/$entryId',
+      ),
       headers: {
         'content-type': 'application/json',
         'authorization': 'Bearer $accessToken',
@@ -291,7 +306,9 @@ class CampaignApiClient implements CampaignClient {
     required String entryId,
   }) async {
     final response = await _httpClient.delete(
-      Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/archives/$entryId'),
+      Uri.parse(
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/archives/$entryId',
+      ),
       headers: {'authorization': 'Bearer $accessToken'},
     );
     if (response.statusCode != 200) throw _toException(response);
@@ -419,6 +436,23 @@ class CampaignApiClient implements CampaignClient {
   }
 
   @override
+  Future<void> markConversationRead({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String conversationId,
+  }) async {
+    final response = await _httpClient.post(
+      Uri.parse(
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/'
+        'conversations/$conversationId/read',
+      ),
+      headers: {'authorization': 'Bearer $accessToken'},
+    );
+    if (response.statusCode != 201) throw _toException(response);
+  }
+
+  @override
   Future<CampaignInvite> createInvite({
     required String apiBaseUrl,
     required String accessToken,
@@ -507,8 +541,9 @@ class CampaignApiClient implements CampaignClient {
       params['conversationId'] = conversationId;
     }
     final response = await _httpClient.get(
-      Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/messages')
-          .replace(queryParameters: params.isEmpty ? null : params),
+      Uri.parse(
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/messages',
+      ).replace(queryParameters: params.isEmpty ? null : params),
       headers: {'authorization': 'Bearer $accessToken'},
     );
 
@@ -584,9 +619,7 @@ class CampaignApiClient implements CampaignClient {
     final decoded = jsonDecode(response.body) as List<Object?>;
     return decoded
         .map(
-          (item) => CampaignConversation.fromJson(
-            item as Map<String, Object?>,
-          ),
+          (item) => CampaignConversation.fromJson(item as Map<String, Object?>),
         )
         .toList();
   }
@@ -630,10 +663,7 @@ class CampaignApiClient implements CampaignClient {
         'content-type': 'application/json',
         'authorization': 'Bearer $accessToken',
       },
-      body: jsonEncode({
-        'title': title,
-        'participantIds': participantIds,
-      }),
+      body: jsonEncode({'title': title, 'participantIds': participantIds}),
     );
     if (response.statusCode != 201) throw _toException(response);
     return CampaignConversation.fromJson(

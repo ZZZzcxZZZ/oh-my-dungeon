@@ -1405,6 +1405,13 @@ class _RecordingCampaignClient implements CampaignClient {
     required String campaignId,
   }) async {}
   @override
+  Future<void> markConversationRead({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String conversationId,
+  }) async {}
+  @override
   Future<CampaignMembership> updateSpeaker({
     required String apiBaseUrl,
     required String accessToken,

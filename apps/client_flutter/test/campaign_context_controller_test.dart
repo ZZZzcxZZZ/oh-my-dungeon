@@ -88,8 +88,7 @@ void main() {
         );
 
         await controller.loadWorkspaceContext('camp-1');
-        final originalMembership =
-            controller.workspaceContext?.membership;
+        final originalMembership = controller.workspaceContext?.membership;
 
         final updated = await controller.updateSpeaker(
           campaignId: 'camp-1',
@@ -103,7 +102,10 @@ void main() {
         );
         // The membership object should have been replaced, not the same instance.
         expect(
-          identical(controller.workspaceContext?.membership, originalMembership),
+          identical(
+            controller.workspaceContext?.membership,
+            originalMembership,
+          ),
           isFalse,
         );
 
@@ -112,25 +114,28 @@ void main() {
       },
     );
 
-    test('notifies listeners when workspace context starts and finishes', () async {
-      final authController = await buildLoggedInAuthController();
-      final controller = CampaignContextController(
-        apiBaseUrl: apiBaseUrl,
-        authController: authController,
-        campaignClient: _FakeCampaignClient(),
-      );
+    test(
+      'notifies listeners when workspace context starts and finishes',
+      () async {
+        final authController = await buildLoggedInAuthController();
+        final controller = CampaignContextController(
+          apiBaseUrl: apiBaseUrl,
+          authController: authController,
+          campaignClient: _FakeCampaignClient(),
+        );
 
-      int notifications = 0;
-      controller.addListener(() => notifications += 1);
+        int notifications = 0;
+        controller.addListener(() => notifications += 1);
 
-      await controller.loadWorkspaceContext('camp-1');
+        await controller.loadWorkspaceContext('camp-1');
 
-      // At least: start loading + finish loading.
-      expect(notifications, greaterThanOrEqualTo(2));
+        // At least: start loading + finish loading.
+        expect(notifications, greaterThanOrEqualTo(2));
 
-      controller.dispose();
-      authController.dispose();
-    });
+        controller.dispose();
+        authController.dispose();
+      },
+    );
   });
 
   group('CampaignContextController archives', () {
@@ -156,25 +161,28 @@ void main() {
       authController.dispose();
     });
 
-    test('loads campaign archives independently from the chat stream', () async {
-      final authController = await buildLoggedInAuthController();
-      final controller = CampaignContextController(
-        apiBaseUrl: apiBaseUrl,
-        authController: authController,
-        campaignClient: _FakeCampaignClient(),
-      );
+    test(
+      'loads campaign archives independently from the chat stream',
+      () async {
+        final authController = await buildLoggedInAuthController();
+        final controller = CampaignContextController(
+          apiBaseUrl: apiBaseUrl,
+          authController: authController,
+          campaignClient: _FakeCampaignClient(),
+        );
 
-      await controller.loadArchives('camp-1');
+        await controller.loadArchives('camp-1');
 
-      expect(controller.archives, hasLength(1));
-      expect(controller.archives.single.kind, 'clue');
-      expect(controller.archives.single.title, 'The silver key');
-      expect(controller.isArchivesLoading, isFalse);
-      expect(controller.archivesError, isNull);
+        expect(controller.archives, hasLength(1));
+        expect(controller.archives.single.kind, 'clue');
+        expect(controller.archives.single.title, 'The silver key');
+        expect(controller.isArchivesLoading, isFalse);
+        expect(controller.archivesError, isNull);
 
-      controller.dispose();
-      authController.dispose();
-    });
+        controller.dispose();
+        authController.dispose();
+      },
+    );
 
     test('createArchiveEntry prepends the new entry to the list', () async {
       final authController = await buildLoggedInAuthController();
@@ -329,6 +337,14 @@ class _FakeCampaignClient implements CampaignClient {
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
+  }) async {}
+
+  @override
+  Future<void> markConversationRead({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String conversationId,
   }) async {}
 
   @override

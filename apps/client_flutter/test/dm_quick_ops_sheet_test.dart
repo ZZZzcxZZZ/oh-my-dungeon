@@ -40,10 +40,20 @@ void main() {
   setUp(() async {
     syncClient = MemoryCampaignSyncApiClient();
     actorController = CampaignActorController(
-      cacheRepository: MemoryCampaignCacheRepository(actors: [
-        testCampaignActor(id: 'a1', campaignId: 'c1', sheet: {'name': 'Gandalf', 'currentHp': 52, 'maxHp': 60}),
-        testCampaignActor(id: 'a2', campaignId: 'c1', sheet: {'name': 'Frodo', 'currentHp': 28, 'maxHp': 30}),
-      ]),
+      cacheRepository: MemoryCampaignCacheRepository(
+        actors: [
+          testCampaignActor(
+            id: 'a1',
+            campaignId: 'c1',
+            sheet: {'name': 'Gandalf', 'currentHp': 52, 'maxHp': 60},
+          ),
+          testCampaignActor(
+            id: 'a2',
+            campaignId: 'c1',
+            sheet: {'name': 'Frodo', 'currentHp': 28, 'maxHp': 30},
+          ),
+        ],
+      ),
       apiClient: syncClient,
       apiBaseUrl: profile.apiBaseUrl,
       accessToken: 'tok',
@@ -110,7 +120,9 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('batch HP change applies to selected actors (Task 3.4)', (tester) async {
+  testWidgets('batch HP change applies to selected actors (Task 3.4)', (
+    tester,
+  ) async {
     await pumpSheet(tester);
 
     // Open the "批量扣血/治疗" entry.
@@ -137,24 +149,30 @@ void main() {
     expect(syncClient.changeActorHpCalls, hasLength(2));
     expect(syncClient.changeActorHpCalls[0]['delta'], -5);
     expect(syncClient.changeActorHpCalls[1]['delta'], -5);
-    final actorIds = syncClient.changeActorHpCalls.map((c) => c['actorId']).toSet();
+    final actorIds = syncClient.changeActorHpCalls
+        .map((c) => c['actorId'])
+        .toSet();
     expect(actorIds, {'a1', 'a2'});
   });
 
-  testWidgets('grant item writes inventory and emits event (Task 3.4)', (tester) async {
-    final contentRepo = MemoryContentRepository(initialEntries: const [
-      ContentEntry(
-        id: 'item-longsword',
-        type: 'equipment',
-        slug: 'longsword',
-        name: '长剑',
-        body: [],
-        revision: 1,
-        structured: {},
-        tags: [],
-        source: ContentSource(label: 'PHB'),
-      ),
-    ]);
+  testWidgets('grant item writes inventory and emits event (Task 3.4)', (
+    tester,
+  ) async {
+    final contentRepo = MemoryContentRepository(
+      initialEntries: const [
+        ContentEntry(
+          id: 'item-longsword',
+          type: 'equipment',
+          slug: 'longsword',
+          name: '长剑',
+          body: [],
+          revision: 1,
+          structured: {},
+          tags: [],
+          source: ContentSource(label: 'PHB'),
+        ),
+      ],
+    );
     await pumpSheet(tester, contentRepository: contentRepo);
 
     await tester.tap(find.text('给予装备'));
@@ -174,7 +192,9 @@ void main() {
     expect(syncClient.grantItemCalls.single['name'], '长剑');
   });
 
-  testWidgets('quick check rolls d20 and sends chat message (Task 3.4)', (tester) async {
+  testWidgets('quick check rolls d20 and sends chat message (Task 3.4)', (
+    tester,
+  ) async {
     final recordingClient = _RecordingCampaignClient();
     campaignController = CampaignController(
       apiBaseUrl: profile.apiBaseUrl,
@@ -204,7 +224,10 @@ void main() {
     final msg = recordingClient.sentMessages.single;
     expect(msg.kind, 'roll');
     expect(msg.campaignActorId, 'a2');
-    expect((msg.eventData?['total'] as num?)?.toInt(), 18); // 17+1 = 18 (dex +1)
+    expect(
+      (msg.eventData?['total'] as num?)?.toInt(),
+      18,
+    ); // 17+1 = 18 (dex +1)
     expect((msg.eventData?['dc'] as num?)?.toInt(), 15);
     expect(msg.eventData?['success'], true);
   });
@@ -212,61 +235,171 @@ void main() {
 
 class _StubAuthClient implements AuthClient {
   @override
-  Future<AuthSession> login({required String apiBaseUrl, required String identifier, required String password}) =>
-      throw UnimplementedError();
+  Future<AuthSession> login({
+    required String apiBaseUrl,
+    required String identifier,
+    required String password,
+  }) => throw UnimplementedError();
   @override
-  Future<void> logout({required String apiBaseUrl, required String refreshToken}) async {}
+  Future<void> logout({
+    required String apiBaseUrl,
+    required String refreshToken,
+  }) async {}
   @override
-  Future<AuthUser> me({required String apiBaseUrl, required String accessToken}) async {
-    return const AuthUser(
-      id: 'dm-1',
-      username: 'dm',
-      email: 'dm@example.com',
-    );
+  Future<AuthUser> me({
+    required String apiBaseUrl,
+    required String accessToken,
+  }) async {
+    return const AuthUser(id: 'dm-1', username: 'dm', email: 'dm@example.com');
   }
+
   @override
-  Future<String> refresh({required String apiBaseUrl, required String refreshToken}) => throw UnimplementedError();
+  Future<String> refresh({
+    required String apiBaseUrl,
+    required String refreshToken,
+  }) => throw UnimplementedError();
   @override
-  Future<RegisterResult> register({required String apiBaseUrl, required String username, required String email, required String password}) =>
-      throw UnimplementedError();
+  Future<RegisterResult> register({
+    required String apiBaseUrl,
+    required String username,
+    required String email,
+    required String password,
+  }) => throw UnimplementedError();
 }
 
 class _RecordingCampaignClient implements CampaignClient {
   final List<_SentMessage> sentMessages = [];
 
   @override
-  Future<void> markCampaignRead({required String apiBaseUrl, required String accessToken, required String campaignId}) async {}
+  Future<void> markCampaignRead({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+  }) async {}
   @override
-  Future<CampaignMembership> updateSpeaker({required String apiBaseUrl, required String accessToken, required String campaignId, required String speakerMode, String? actorId}) =>
-      throw UnimplementedError();
+  Future<void> markConversationRead({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String conversationId,
+  }) async {}
   @override
-  Future<List<CampaignArchiveEntry>> listArchives({required String apiBaseUrl, required String accessToken, required String campaignId, String? kind, String? query, List<String>? tags}) async => const [];
+  Future<CampaignMembership> updateSpeaker({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String speakerMode,
+    String? actorId,
+  }) => throw UnimplementedError();
   @override
-  Future<CampaignArchiveEntry> createArchiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String kind, required String title, String? summary, Map<String, Object?>? payload, List<Map<String, Object?>>? bodyBlocks, List<String>? tags, List<Map<String, Object?>>? links, List<Map<String, Object?>>? attachmentRefs}) =>
-      throw UnimplementedError();
+  Future<List<CampaignArchiveEntry>> listArchives({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    String? kind,
+    String? query,
+    List<String>? tags,
+  }) async => const [];
   @override
-  Future<CampaignArchiveEntry> updateArchiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String entryId, String? kind, String? title, String? summary, Map<String, Object?>? payload, bool? pinned, List<Map<String, Object?>>? bodyBlocks, List<String>? tags, List<Map<String, Object?>>? links, List<Map<String, Object?>>? attachmentRefs}) =>
-      throw UnimplementedError();
+  Future<CampaignArchiveEntry> createArchiveEntry({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String kind,
+    required String title,
+    String? summary,
+    Map<String, Object?>? payload,
+    List<Map<String, Object?>>? bodyBlocks,
+    List<String>? tags,
+    List<Map<String, Object?>>? links,
+    List<Map<String, Object?>>? attachmentRefs,
+  }) => throw UnimplementedError();
   @override
-  Future<void> archiveEntry({required String apiBaseUrl, required String accessToken, required String campaignId, required String entryId}) => throw UnimplementedError();
+  Future<CampaignArchiveEntry> updateArchiveEntry({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String entryId,
+    String? kind,
+    String? title,
+    String? summary,
+    Map<String, Object?>? payload,
+    bool? pinned,
+    List<Map<String, Object?>>? bodyBlocks,
+    List<String>? tags,
+    List<Map<String, Object?>>? links,
+    List<Map<String, Object?>>? attachmentRefs,
+  }) => throw UnimplementedError();
   @override
-  Future<CampaignWorkspaceContext> getWorkspaceContext({required String apiBaseUrl, required String accessToken, required String campaignId}) =>
-      throw UnimplementedError();
+  Future<void> archiveEntry({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String entryId,
+  }) => throw UnimplementedError();
   @override
-  Future<List<Campaign>> listCampaigns({required String apiBaseUrl, required String accessToken}) async => const [];
+  Future<CampaignWorkspaceContext> getWorkspaceContext({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+  }) => throw UnimplementedError();
   @override
-  Future<Campaign> getCampaign({required String apiBaseUrl, required String accessToken, required String campaignId}) => throw UnimplementedError();
+  Future<List<Campaign>> listCampaigns({
+    required String apiBaseUrl,
+    required String accessToken,
+  }) async => const [];
   @override
-  Future<List<CampaignInvite>> listInvites({required String apiBaseUrl, required String accessToken, required String campaignId}) async => const [];
+  Future<Campaign> getCampaign({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+  }) => throw UnimplementedError();
   @override
-  Future<CampaignMembership> joinCampaign({required String apiBaseUrl, required String accessToken, required String code}) => throw UnimplementedError();
+  Future<List<CampaignInvite>> listInvites({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+  }) async => const [];
   @override
-  Future<List<CampaignChatMessage>> listMessages({required String apiBaseUrl, required String accessToken, required String campaignId, String? query, String? conversationId}) async => const [];
+  Future<CampaignMembership> joinCampaign({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String code,
+  }) => throw UnimplementedError();
   @override
-  Future<CampaignInvite> createInvite({required String apiBaseUrl, required String accessToken, required String campaignId, int? maxUses}) => throw UnimplementedError();
+  Future<List<CampaignChatMessage>> listMessages({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    String? query,
+    String? conversationId,
+  }) async => const [];
   @override
-  Future<CampaignChatMessage> sendMessage({required String apiBaseUrl, required String accessToken, required String campaignId, required String kind, required String content, String? campaignActorId, String? actionId, Map<String, Object?>? eventData, Map<String, Object?>? speakerSnapshot, String? conversationId}) async {
-    final msg = _SentMessage(kind: kind, content: content, campaignActorId: campaignActorId, eventData: eventData);
+  Future<CampaignInvite> createInvite({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    int? maxUses,
+  }) => throw UnimplementedError();
+  @override
+  Future<CampaignChatMessage> sendMessage({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String kind,
+    required String content,
+    String? campaignActorId,
+    String? actionId,
+    Map<String, Object?>? eventData,
+    Map<String, Object?>? speakerSnapshot,
+    String? conversationId,
+  }) async {
+    final msg = _SentMessage(
+      kind: kind,
+      content: content,
+      campaignActorId: campaignActorId,
+      eventData: eventData,
+    );
     sentMessages.add(msg);
     return CampaignChatMessage(
       id: 'm-${sentMessages.length}',
@@ -281,8 +414,15 @@ class _RecordingCampaignClient implements CampaignClient {
       createdAt: DateTime.now().toUtc().toIso8601String(),
     );
   }
+
   @override
-  Future<Campaign> createCampaign({required String apiBaseUrl, required String accessToken, required String name, String? description, String? system}) => throw UnimplementedError();
+  Future<Campaign> createCampaign({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String name,
+    String? description,
+    String? system,
+  }) => throw UnimplementedError();
   @override
   Future<List<CampaignConversation>> listConversations({
     required String apiBaseUrl,
@@ -354,7 +494,12 @@ class _RecordingCampaignClient implements CampaignClient {
 }
 
 class _SentMessage {
-  const _SentMessage({required this.kind, required this.content, this.campaignActorId, this.eventData});
+  const _SentMessage({
+    required this.kind,
+    required this.content,
+    this.campaignActorId,
+    this.eventData,
+  });
   final String kind;
   final String content;
   final String? campaignActorId;

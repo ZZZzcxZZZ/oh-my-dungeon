@@ -40,6 +40,7 @@ model User {
   checkResponses      CheckResponse[]
   vaultEntities       VaultEntity[]
   vaultDevices        VaultDevice[]
+  conversationReads   CampaignConversationRead[]
 }
 
 model VaultEntity {
@@ -298,10 +299,23 @@ model CampaignConversation {
   archivedAt     DateTime?
   campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   messages       CampaignChatMessage[]
+  reads          CampaignConversationRead[]
 
   @@unique([campaignId, mainKey])
   @@unique([campaignId, directKey])
   @@index([campaignId, kind])
+}
+
+model CampaignConversationRead {
+  id             String               @id @default(uuid())
+  conversationId String
+  userId         String
+  lastReadAt     DateTime
+  conversation   CampaignConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId, lastReadAt])
 }
 
 model CampaignMember {

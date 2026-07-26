@@ -16,13 +16,13 @@ class CampaignController extends ChangeNotifier {
     required this.campaignClient,
     CampaignSocketService? campaignSocketService,
     Future<void> Function()? onCampaignChanged,
-  })  : _socketService = campaignSocketService ?? NoopCampaignSocketService(),
-        _onCampaignChanged = onCampaignChanged,
-        contextController = CampaignContextController(
-          apiBaseUrl: apiBaseUrl,
-          authController: authController,
-          campaignClient: campaignClient,
-        ) {
+  }) : _socketService = campaignSocketService ?? NoopCampaignSocketService(),
+       _onCampaignChanged = onCampaignChanged,
+       contextController = CampaignContextController(
+         apiBaseUrl: apiBaseUrl,
+         authController: authController,
+         campaignClient: campaignClient,
+       ) {
     authController.addListener(_onAuthChanged);
     // Forward context controller notifications so existing listeners on
     // CampaignController keep seeing workspace/archive state changes.
@@ -238,10 +238,7 @@ class CampaignController extends ChangeNotifier {
     }
   }
 
-  Future<void> loadMessages(
-    String campaignId, {
-    String? conversationId,
-  }) async {
+  Future<void> loadMessages(String campaignId, {String? conversationId}) async {
     final token = await authController.ensureValidAccessToken();
     if (token == null) return;
 
@@ -273,11 +270,20 @@ class CampaignController extends ChangeNotifier {
     try {
       final readToken = await authController.ensureValidAccessToken();
       if (readToken != null) {
-        await campaignClient.markCampaignRead(
-          apiBaseUrl: apiBaseUrl,
-          accessToken: readToken,
-          campaignId: campaignId,
-        );
+        if (conversationId != null && conversationId.isNotEmpty) {
+          await campaignClient.markConversationRead(
+            apiBaseUrl: apiBaseUrl,
+            accessToken: readToken,
+            campaignId: campaignId,
+            conversationId: conversationId,
+          );
+        } else {
+          await campaignClient.markCampaignRead(
+            apiBaseUrl: apiBaseUrl,
+            accessToken: readToken,
+            campaignId: campaignId,
+          );
+        }
       }
     } catch (_) {}
   }
@@ -322,20 +328,23 @@ class CampaignController extends ChangeNotifier {
     required String campaignId,
     required String speakerMode,
     String? actorId,
-  }) =>
-      contextController.updateSpeaker(
-        campaignId: campaignId,
-        speakerMode: speakerMode,
-        actorId: actorId,
-      );
+  }) => contextController.updateSpeaker(
+    campaignId: campaignId,
+    speakerMode: speakerMode,
+    actorId: actorId,
+  );
 
   Future<void> loadArchives(
     String campaignId, {
     String? kind,
     String? query,
     List<String>? tags,
-  }) =>
-      contextController.loadArchives(campaignId, kind: kind, query: query, tags: tags);
+  }) => contextController.loadArchives(
+    campaignId,
+    kind: kind,
+    query: query,
+    tags: tags,
+  );
 
   Future<CampaignArchiveEntry?> createArchiveEntry({
     required String campaignId,
@@ -347,18 +356,17 @@ class CampaignController extends ChangeNotifier {
     List<String>? tags,
     List<Map<String, Object?>>? links,
     List<Map<String, Object?>>? attachmentRefs,
-  }) =>
-      contextController.createArchiveEntry(
-        campaignId: campaignId,
-        kind: kind,
-        title: title,
-        summary: summary,
-        payload: payload,
-        bodyBlocks: bodyBlocks,
-        tags: tags,
-        links: links,
-        attachmentRefs: attachmentRefs,
-      );
+  }) => contextController.createArchiveEntry(
+    campaignId: campaignId,
+    kind: kind,
+    title: title,
+    summary: summary,
+    payload: payload,
+    bodyBlocks: bodyBlocks,
+    tags: tags,
+    links: links,
+    attachmentRefs: attachmentRefs,
+  );
 
   Future<CampaignArchiveEntry?> updateArchiveEntry({
     required String campaignId,
@@ -372,29 +380,25 @@ class CampaignController extends ChangeNotifier {
     List<String>? tags,
     List<Map<String, Object?>>? links,
     List<Map<String, Object?>>? attachmentRefs,
-  }) =>
-      contextController.updateArchiveEntry(
-        campaignId: campaignId,
-        entryId: entryId,
-        kind: kind,
-        title: title,
-        summary: summary,
-        payload: payload,
-        pinned: pinned,
-        bodyBlocks: bodyBlocks,
-        tags: tags,
-        links: links,
-        attachmentRefs: attachmentRefs,
-      );
+  }) => contextController.updateArchiveEntry(
+    campaignId: campaignId,
+    entryId: entryId,
+    kind: kind,
+    title: title,
+    summary: summary,
+    payload: payload,
+    pinned: pinned,
+    bodyBlocks: bodyBlocks,
+    tags: tags,
+    links: links,
+    attachmentRefs: attachmentRefs,
+  );
 
   Future<bool> archiveEntry({
     required String campaignId,
     required String entryId,
   }) =>
-      contextController.archiveEntry(
-        campaignId: campaignId,
-        entryId: entryId,
-      );
+      contextController.archiveEntry(campaignId: campaignId, entryId: entryId);
 
   Future<bool> sendMessage({
     required String campaignId,

@@ -98,4 +98,13 @@ export class CampaignConversationsController {
       archived: typeof body.archived === "boolean" ? body.archived : undefined,
     });
   }
+
+  @Post(":conversationId/read")
+  markRead(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param("campaignId") campaignId: string,
+    @Param("conversationId") conversationId: string,
+  ): Promise<{ lastReadAt: string }> {
+    return this.conversations.markRead(user, campaignId, conversationId);
+  }
 }

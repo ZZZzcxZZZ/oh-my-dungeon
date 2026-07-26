@@ -73,10 +73,7 @@ void main() {
       expect(find.byKey(const Key('dm-create-full')), findsOneWidget);
       expect(find.text('完整创建角色'), findsOneWidget);
       // Task 5.2: 一次性发言身份改用 speaker snapshot, 不再在此菜单创建临时角色.
-      expect(
-        find.byKey(const Key('dm-create-quick-temporary')),
-        findsNothing,
-      );
+      expect(find.byKey(const Key('dm-create-quick-temporary')), findsNothing);
       expect(find.text('快速创建一次性角色'), findsNothing);
 
       actorController.dispose();
@@ -87,7 +84,9 @@ void main() {
   testWidgets(
     'player mode does not show the DM create menu, FAB opens editor directly',
     (tester) async {
-      final modeController = ClientModeController(initialMode: ClientMode.player);
+      final modeController = ClientModeController(
+        initialMode: ClientMode.player,
+      );
       final actorController = await buildActorController();
       await pumpPage(
         tester,
@@ -140,31 +139,45 @@ void main() {
     },
   );
 
-  testWidgets(
-    'DM quick NPC option opens the quick NPC form',
-    (tester) async {
-      final modeController = ClientModeController(
-        initialMode: ClientMode.dungeonMaster,
-      );
-      final actorController = await buildActorController();
-      await pumpPage(
-        tester,
-        modeController: modeController,
-        actorController: actorController,
-      );
+  testWidgets('DM quick NPC option opens the quick NPC form', (tester) async {
+    final modeController = ClientModeController(
+      initialMode: ClientMode.dungeonMaster,
+    );
+    final actorController = await buildActorController();
+    await pumpPage(
+      tester,
+      modeController: modeController,
+      actorController: actorController,
+    );
 
-      await tester.tap(find.byKey(const Key('create_character')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('dm-create-quick-npc')));
-      await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('create_character')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('dm-create-quick-npc')));
+    await tester.pumpAndSettle();
 
-      expect(find.text('快速创建 NPC'), findsOneWidget);
-      expect(find.byKey(const Key('quick-npc-name')), findsOneWidget);
-      expect(find.byKey(const Key('quick-npc-hp')), findsOneWidget);
-      expect(find.byKey(const Key('quick-npc-confirm')), findsOneWidget);
+    expect(find.text('快速创建 NPC'), findsOneWidget);
+    expect(find.byKey(const Key('quick-npc-name')), findsOneWidget);
+    expect(find.byKey(const Key('quick-npc-hp')), findsOneWidget);
+    expect(find.byKey(const Key('quick-npc-confirm')), findsOneWidget);
 
-      actorController.dispose();
-      modeController.dispose();
-    },
-  );
+    actorController.dispose();
+    modeController.dispose();
+  });
+
+  testWidgets('offers one clear Markdown import and export entry', (
+    tester,
+  ) async {
+    final modeController = ClientModeController(initialMode: ClientMode.player);
+    await pumpPage(tester, modeController: modeController);
+
+    expect(find.byKey(const Key('import-character-markdown')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('character-expand-char-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('更多角色操作'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('导出 Markdown'), findsOneWidget);
+    modeController.dispose();
+  });
 }

@@ -285,19 +285,19 @@ refactor(0.1): route character actions through operations
 - 创建：`apps/client_flutter/test/character_markdown_codec_test.dart`
 - 创建：`apps/client_flutter/test/character_import_preview_test.dart`
 
-- [ ] **步骤 1：编写失败 codec 测试**
+- [x] **步骤 1：编写失败 codec 测试**
 
 覆盖中文可读导出、标准与自定义字段 round trip、HTML 稳定引用、用户调整空行、非法数值、未知章节保留和基础/战役快照两种导出。
 
-- [ ] **步骤 2：验证红灯并实现 codec**
+- [x] **步骤 2：验证红灯并实现 codec**
 
 使用 Markdown AST 与 YAML parser；不使用标题字符串切片解析。生成固定章节顺序和易读表格。
 
-- [ ] **步骤 3：编写并实现预览测试**
+- [x] **步骤 3：编写并实现预览测试**
 
 预览按新增、修改、删除分组显示自然语言差异；提供新建、覆盖、合并三个明确动作；执行导入时调用现有角色保存/操作接口。
 
-- [ ] **步骤 4：验证并提交**
+- [x] **步骤 4：验证并提交**
 
 运行 Markdown、预览、角色页面测试和 analyze，提交：
 

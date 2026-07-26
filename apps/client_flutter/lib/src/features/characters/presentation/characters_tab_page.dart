@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -12,6 +13,7 @@ import '../../client_mode/domain/client_mode.dart';
 import '../../content/data/local/content_repository.dart';
 import '../../content/domain/content_entry.dart';
 import '../data/local/character_sync_conflict_repository.dart';
+import '../data/character_markdown_codec.dart';
 import '../domain/character.dart';
 import '../domain/character_rule_projector.dart';
 import '../domain/dnd5e_rules.dart';
@@ -20,6 +22,7 @@ import 'character_conflict_resolution_page.dart';
 import 'character_detail_page.dart';
 import 'character_controller.dart';
 import 'character_editor_page.dart';
+import 'character_import_preview_sheet.dart';
 import 'character_upgrade_page.dart';
 
 class CharactersTabPage extends StatefulWidget {
@@ -112,7 +115,17 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
       ]),
       builder: (context, _) {
         return Scaffold(
-          appBar: AppBar(title: const Text('角色')),
+          appBar: AppBar(
+            title: const Text('角色'),
+            actions: [
+              IconButton(
+                key: const Key('import-character-markdown'),
+                tooltip: '导入角色卡',
+                onPressed: _importMarkdown,
+                icon: const Icon(Icons.file_upload_outlined),
+              ),
+            ],
+          ),
           floatingActionButton: FloatingActionButton.extended(
             key: const Key('create_character'),
             heroTag: 'create_character',
@@ -229,6 +242,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
           onOpen: () => _openDetailPage(character),
           onEdit: () => _openEditPage(character),
           onContentRefs: () => _showContentRefsDialog(character),
+          onExport: () => _exportMarkdown(character),
           onPublish: widget.actorController == null
               ? null
               : () => _showPublishSheet(character),
@@ -748,6 +762,72 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
       context,
     ).showSnackBar(const SnackBar(content: Text('HP 调整失败')));
   }
+
+  Future<void> _importMarkdown() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['md', 'markdown'],
+        withData: true,
+      );
+      final bytes = result?.files.singleOrNull?.bytes;
+      if (bytes == null || bytes.isEmpty || !mounted) return;
+      final imported = const CharacterMarkdownCodec().decode(
+        utf8.decode(bytes),
+      );
+      final existing = widget.controller.characters
+          .where((item) => item.id == imported.character.id)
+          .firstOrNull;
+      final action = await showModalBottomSheet<CharacterImportAction>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (sheetContext) => CharacterImportPreviewSheet(
+          imported: imported.character,
+          existing: existing,
+          onSelected: (value) => Navigator.pop(sheetContext, value),
+        ),
+      );
+      if (action == null || !mounted) return;
+      final character = switch (action) {
+        CharacterImportAction.create => _asNewCharacter(imported.character),
+        CharacterImportAction.replace => _replaceCharacter(
+          existing!,
+          imported.character,
+        ),
+        CharacterImportAction.merge => _mergeCharacter(
+          existing!,
+          imported.character,
+        ),
+      };
+      final saved = await widget.controller.updateCharacter(character);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(saved ? '角色卡已导入' : '角色卡导入失败')));
+    } on CharacterMarkdownFormatException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('无法导入角色卡：$error')));
+    }
+  }
+
+  Future<void> _exportMarkdown(CharacterSheet character) async {
+    final markdown = const CharacterMarkdownCodec().encode(character);
+    await FilePicker.platform.saveFile(
+      dialogTitle: '导出角色卡',
+      fileName: '${_safeFilename(character.name)}.md',
+      type: FileType.custom,
+      allowedExtensions: const ['md'],
+      bytes: Uint8List.fromList(utf8.encode(markdown)),
+    );
+  }
 }
 
 class _CharacterCard extends StatefulWidget {
@@ -757,6 +837,7 @@ class _CharacterCard extends StatefulWidget {
     required this.onOpen,
     required this.onEdit,
     required this.onContentRefs,
+    required this.onExport,
     required this.onHpDelta,
     this.onUpgrade,
     this.onPublish,
@@ -767,6 +848,7 @@ class _CharacterCard extends StatefulWidget {
   final VoidCallback onOpen;
   final VoidCallback onEdit;
   final VoidCallback onContentRefs;
+  final VoidCallback onExport;
   final VoidCallback? onPublish;
   final ValueChanged<int> onHpDelta;
   final VoidCallback? onUpgrade;
@@ -933,6 +1015,8 @@ class _CharacterCardState extends State<_CharacterCard> {
                                     widget.onEdit();
                                   case _CharacterAction.contentRefs:
                                     widget.onContentRefs();
+                                  case _CharacterAction.exportMarkdown:
+                                    widget.onExport();
                                 }
                               },
                               itemBuilder: (context) => const [
@@ -943,6 +1027,10 @@ class _CharacterCardState extends State<_CharacterCard> {
                                 PopupMenuItem(
                                   value: _CharacterAction.contentRefs,
                                   child: Text('内容引用'),
+                                ),
+                                PopupMenuItem(
+                                  value: _CharacterAction.exportMarkdown,
+                                  child: Text('导出 Markdown'),
                                 ),
                               ],
                             ),
@@ -1073,7 +1161,7 @@ class _CharacterSummaryTile extends StatelessWidget {
   }
 }
 
-enum _CharacterAction { edit, contentRefs }
+enum _CharacterAction { edit, contentRefs, exportMarkdown }
 
 String? emptyToNull(String? value) {
   if (value == null || value.isEmpty) return null;
@@ -1119,4 +1207,92 @@ List<String> _splitRefs(String value) {
       .map((item) => item.trim())
       .where((item) => item.isNotEmpty)
       .toList(growable: false);
+}
+
+CharacterSheet _asNewCharacter(CharacterSheet imported) {
+  final now = DateTime.now().toUtc().toIso8601String();
+  return _copyImported(
+    imported,
+    id: 'imported-${DateTime.now().microsecondsSinceEpoch}',
+    ownerUserId: 'local',
+    createdAt: now,
+    updatedAt: now,
+  );
+}
+
+CharacterSheet _replaceCharacter(
+  CharacterSheet existing,
+  CharacterSheet imported,
+) {
+  return _copyImported(
+    imported,
+    id: existing.id,
+    ownerUserId: existing.ownerUserId,
+    createdAt: existing.createdAt,
+    updatedAt: DateTime.now().toUtc().toIso8601String(),
+  );
+}
+
+CharacterSheet _mergeCharacter(
+  CharacterSheet existing,
+  CharacterSheet imported,
+) {
+  return existing.copyWith(
+    name: imported.name,
+    avatarUrl: imported.avatarUrl,
+    level: imported.level,
+    classSummary: imported.classSummary,
+    raceSummary: imported.raceSummary,
+    currentHp: imported.currentHp,
+    maxHp: imported.maxHp,
+    armorClass: imported.armorClass,
+    speed: imported.speed,
+    initiativeBonus: imported.initiativeBonus,
+    abilities: {...existing.abilityMap, ...imported.abilityMap},
+    saves: {...existing.saveMap, ...imported.saveMap},
+    skills: {...existing.skillMap, ...imported.skillMap},
+    inventory: imported.inventory,
+    currency: {...existing.currencyMap, ...imported.currencyMap},
+    notes: imported.notes.isEmpty ? existing.notes : imported.notes,
+    data: {...existing.dataMap, ...imported.dataMap},
+  );
+}
+
+CharacterSheet _copyImported(
+  CharacterSheet source, {
+  required String id,
+  required String ownerUserId,
+  required String createdAt,
+  required String updatedAt,
+}) {
+  return CharacterSheet(
+    id: id,
+    ownerUserId: ownerUserId,
+    name: source.name,
+    avatarUrl: source.avatarUrl,
+    system: source.system,
+    level: source.level,
+    classSummary: source.classSummary,
+    raceSummary: source.raceSummary,
+    currentHp: source.currentHp,
+    maxHp: source.maxHp,
+    armorClass: source.armorClass,
+    speed: source.speed,
+    initiativeBonus: source.initiativeBonus,
+    abilities: source.abilities,
+    saves: source.saves,
+    skills: source.skills,
+    inventory: source.inventory,
+    currency: source.currency,
+    notes: source.notes,
+    data: source.data,
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+    contentReferences: source.contentReferences,
+  );
+}
+
+String _safeFilename(String value) {
+  final safe = value.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_').trim();
+  return safe.isEmpty ? 'character' : safe;
 }

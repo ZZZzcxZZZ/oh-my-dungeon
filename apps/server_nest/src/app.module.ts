@@ -12,6 +12,7 @@ import { ServerInfoModule } from './modules/server-info/server-info.module';
 import { ServerSettingsModule } from './modules/server-settings/server-settings.module';
 import { VaultModule } from './modules/vault/vault.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { GameEventsModule } from './modules/game-events/game-events.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { PrismaModule } from './prisma/prisma.module';
     CampaignsModule,
     CampaignSyncModule,
     CharactersModule,
+    GameEventsModule,
     EncountersModule,
     RealtimeModule,
     VaultModule

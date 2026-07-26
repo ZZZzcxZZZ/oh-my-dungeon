@@ -163,22 +163,22 @@ feat(0.1): add versioned character document
 - 修改：`apps/server_nest/src/app.module.ts`
 - 测试：`apps/server_nest/test/characters.e2e-spec.ts`
 
-- [ ] **步骤 1：编写失败测试**
+- [x] **步骤 1：编写失败测试**
 
 证明本地默认状态和不同战役状态互不污染，事件拥有稳定 `requestId` 并按角色/战役/游标分页。
 
-- [ ] **步骤 2：验证红灯**
+- [x] **步骤 2：验证红灯**
 
 运行 `npm --prefix apps/server_nest test -- characters.e2e-spec.ts`，预期新状态和事件接口不存在。
 
-- [ ] **步骤 3：实现最小持久化**
+- [x] **步骤 3：实现最小持久化**
 
 新增 `CharacterState(characterId, campaignId?, stateJson, revision)` 和
 `GameEvent(schemaVersion, type, campaignId?, characterId?, actorType,
 actorId, requestId, targets, cause, before, after, payload, occurredAt)`。
 默认状态使用确定性的 scope key，避免 PostgreSQL 对 nullable unique 的歧义。
 
-- [ ] **步骤 4：验证并提交**
+- [x] **步骤 4：验证并提交**
 
 运行迁移、Prisma generate 和角色 e2e，提交：
 

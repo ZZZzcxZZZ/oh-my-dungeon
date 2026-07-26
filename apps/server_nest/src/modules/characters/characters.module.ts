@@ -3,10 +3,12 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
 import { CharactersController } from './characters.controller';
 import { CharactersService } from './characters.service';
+import { CharacterStateStore } from './character-state.store';
+import { GameEventsModule } from '../game-events/game-events.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, GameEventsModule],
   controllers: [CharactersController],
-  providers: [CharactersService]
+  providers: [CharactersService, CharacterStateStore]
 })
 export class CharactersModule {}

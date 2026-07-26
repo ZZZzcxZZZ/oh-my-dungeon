@@ -120,7 +120,7 @@ fix(0.1): harden media and deterministic deployment
 - 创建：`apps/client_flutter/lib/src/features/characters/domain/character_document.dart`
 - 创建：`apps/client_flutter/test/character_document_test.dart`
 
-- [ ] **步骤 1：编写失败测试**
+- [x] **步骤 1：编写失败测试**
 
 覆盖旧数据缺失字段、数值边界、自定义资源、状态来源、物品实例、未知 namespaced extension 和 v2 round trip。
 
@@ -135,15 +135,15 @@ expect(parseCharacterState({ hp: '25/40' })).toEqual({
 });
 ```
 
-- [ ] **步骤 2：验证红灯**
+- [x] **步骤 2：验证红灯**
 
 运行服务端领域测试与 Flutter 新测试，预期类型和解析器不存在。
 
-- [ ] **步骤 3：实现纯领域适配器**
+- [x] **步骤 3：实现纯领域适配器**
 
 实现不可依赖 Prisma、HTTP 或 Flutter Widget 的 v2 类型、默认值、校验、旧字段兼容和序列化。自定义扩展只接受包含 `.` 的命名空间键和 JSON 值。
 
-- [ ] **步骤 4：验证并提交**
+- [x] **步骤 4：验证并提交**
 
 运行两端领域测试和静态分析，提交：
 

@@ -1,3 +1,5 @@
+import type { CharacterState } from './domain/character-state';
+
 export interface CharacterView {
   id: string;
   ownerUserId: string;
@@ -19,6 +21,7 @@ export interface CharacterView {
   currency: unknown;
   notes: string;
   data: unknown;
+  state: CharacterState;
   createdAt: string;
   updatedAt: string;
 }

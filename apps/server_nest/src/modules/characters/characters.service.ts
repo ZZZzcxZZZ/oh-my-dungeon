@@ -13,6 +13,7 @@ import type {
   CreateCharacterInput,
   UpdateCharacterInput
 } from './characters.types';
+import { parseCharacterState } from './domain/character-state';
 
 const MANAGE_ROLES = new Set(['owner', 'dm']);
 const VIEW_ROLES = new Set(['owner', 'dm', 'player', 'spectator']);
@@ -330,6 +331,10 @@ function setIfDefined(
 }
 
 function toCharacterView(character: any): CharacterView {
+  const data =
+    character.data && typeof character.data === 'object'
+      ? (character.data as Record<string, unknown>)
+      : {};
   return {
     id: character.id,
     ownerUserId: character.ownerUserId,
@@ -351,6 +356,12 @@ function toCharacterView(character: any): CharacterView {
     currency: character.currency,
     notes: character.notes,
     data: character.data,
+    state: parseCharacterState({
+      ...data,
+      currentHp: character.currentHp,
+      maxHp: character.maxHp,
+      inventory: character.inventory
+    }),
     createdAt: toIso(character.createdAt),
     updatedAt: toIso(character.updatedAt)
   };

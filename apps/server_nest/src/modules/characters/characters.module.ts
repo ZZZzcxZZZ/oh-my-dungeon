@@ -6,10 +6,16 @@ import { CharactersService } from './characters.service';
 import { CharacterStateStore } from './character-state.store';
 import { GameEventsModule } from '../game-events/game-events.module';
 import { CharacterOperationsService } from './character-operations.service';
+import { CharacterQueriesService } from './character-queries.service';
 
 @Module({
   imports: [PrismaModule, AuthModule, GameEventsModule],
   controllers: [CharactersController],
-  providers: [CharactersService, CharacterStateStore, CharacterOperationsService]
+  providers: [
+    CharactersService,
+    CharacterStateStore,
+    CharacterOperationsService,
+    CharacterQueriesService
+  ]
 })
 export class CharactersModule {}

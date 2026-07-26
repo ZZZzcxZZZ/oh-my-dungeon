@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -13,6 +14,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AccessTokenPayload } from '../auth/auth.types';
 import { CharactersService } from './characters.service';
 import { CharacterOperationsService } from './character-operations.service';
+import { CharacterQueriesService } from './character-queries.service';
 import type {
   CharacterCampaignBindingView,
   CharacterView
@@ -59,6 +61,7 @@ export class CharactersController {
   constructor(
     private readonly charactersService: CharactersService,
     private readonly operations: CharacterOperationsService,
+    private readonly queries: CharacterQueriesService,
   ) {}
 
   @Post('characters/:characterId/actions/adjust-hp')
@@ -238,9 +241,19 @@ export class CharactersController {
   @Get('characters/:id')
   getCharacter(
     @CurrentUser() user: AccessTokenPayload,
-    @Param('id') id: string
-  ): Promise<CharacterView> {
-    return this.charactersService.getCharacter(user, id);
+    @Param('id') id: string,
+    @Query('campaignId') campaignId?: string,
+  ) {
+    return this.queries.getResolved(user, id, campaignId ?? null);
+  }
+
+  @Get('characters/:id/summary')
+  getCharacterSummary(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Query('campaignId') campaignId?: string,
+  ) {
+    return this.queries.getSummary(user, id, campaignId ?? null);
   }
 
   @Patch('characters/:id')

@@ -230,15 +230,15 @@ feat(0.1): add auditable character operations
 - 修改：`apps/server_nest/src/modules/characters/characters.types.ts`
 - 测试：`apps/server_nest/test/characters.e2e-spec.ts`
 
-- [ ] **步骤 1：编写失败测试**
+- [x] **步骤 1：编写失败测试**
 
 摘要仅返回姓名、等级、职业、HP、状态名和主要装备；详情返回 resolved view；玩家不能读取无权限角色；DM 可读取战役角色；事件支持 cursor、type 与时间筛选。
 
-- [ ] **步骤 2：验证红灯并实现**
+- [x] **步骤 2：验证红灯并实现**
 
 运行角色 e2e 确认失败，随后实现查询服务，避免控制器拼接 JSON。
 
-- [ ] **步骤 3：验证并提交**
+- [x] **步骤 3：验证并提交**
 
 运行角色 e2e、全量服务端测试和 lint，提交：
 

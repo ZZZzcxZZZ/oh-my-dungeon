@@ -195,7 +195,7 @@ feat(0.1): persist scoped character state and game events
 - 修改：`apps/server_nest/src/modules/characters/characters.service.ts`
 - 测试：`apps/server_nest/test/characters.e2e-spec.ts`
 
-- [ ] **步骤 1：逐项编写失败测试**
+- [x] **步骤 1：逐项编写失败测试**
 
 覆盖伤害/治疗边界、临时 HP、重复 `requestId`、添加/移除状态、资源消耗/休息恢复、物品发放/消耗/转移/装备，以及角色所有者和 DM 权限。
 
@@ -206,15 +206,15 @@ expect(result.event.before).toEqual({ current: 25 });
 expect(result.event.after).toEqual({ current: 17 });
 ```
 
-- [ ] **步骤 2：验证每组红灯**
+- [x] **步骤 2：验证每组红灯**
 
 每增加一种操作测试就单独运行，确认因端点或行为缺失而失败。
 
-- [ ] **步骤 3：实现普通应用服务**
+- [x] **步骤 3：实现普通应用服务**
 
 每个方法执行权限、revision、D&D 边界、事务状态更新和事件写入。调用方不能提交任意 `before`、`after` 或 actor 身份。
 
-- [ ] **步骤 4：验证并提交**
+- [x] **步骤 4：验证并提交**
 
 运行角色 e2e、全量服务端测试和 lint，提交：
 

@@ -12,6 +12,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AccessTokenPayload } from '../auth/auth.types';
 import { CharactersService } from './characters.service';
+import { CharacterOperationsService } from './character-operations.service';
 import type {
   CharacterCampaignBindingView,
   CharacterView
@@ -55,7 +56,146 @@ interface AdjustCharacterHpBody {
 @Controller()
 @UseGuards(JwtAuthGuard)
 export class CharactersController {
-  constructor(private readonly charactersService: CharactersService) {}
+  constructor(
+    private readonly charactersService: CharactersService,
+    private readonly operations: CharacterOperationsService,
+  ) {}
+
+  @Post('characters/:characterId/actions/adjust-hp')
+  adjustHitPoints(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('characterId') characterId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.operations.adjustHitPoints(user, characterId, {
+      ...operationBase(body),
+      delta: strictOptionalInteger(body.delta, 'delta'),
+      current: strictOptionalInteger(body.current, 'current'),
+      temporary: strictOptionalInteger(body.temporary, 'temporary'),
+    });
+  }
+
+  @Post('characters/:characterId/actions/add-condition')
+  addCondition(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('characterId') characterId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    if (!isRecord(body.condition)) {
+      throw new BadRequestException('condition is required');
+    }
+    return this.operations.addCondition(user, characterId, {
+      ...operationBase(body),
+      condition: body.condition,
+    });
+  }
+
+  @Post('characters/:characterId/actions/remove-condition')
+  removeCondition(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('characterId') characterId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.operations.removeCondition(user, characterId, {
+      ...operationBase(body),
+      conditionId: requiredString(body.conditionId, 'conditionId'),
+    });
+  }
+
+  @Post('characters/:characterId/actions/consume-resource')
+  consumeResource(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('characterId') characterId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.operations.consumeResource(user, characterId, {
+      ...operationBase(body),
+      resourceId: requiredString(body.resourceId, 'resourceId'),
+      amount: strictOptionalInteger(body.amount, 'amount'),
+    });
+  }
+
+  @Post('characters/:characterId/actions/restore-resource')
+  restoreResource(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('characterId') characterId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.operations.restoreResource(user, characterId, {
+      ...operationBase(body),
+      resourceId: requiredString(body.resourceId, 'resourceId'),
+      amount: strictOptionalInteger(body.amount, 'amount'),
+    });
+  }
+
+  @Post('characters/:characterId/items')
+  grantItem(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('characterId') characterId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    if (!isRecord(body.item)) {
+      throw new BadRequestException('item is required');
+    }
+    return this.operations.grantItem(user, characterId, {
+      ...operationBase(body),
+      item: body.item,
+    });
+  }
+
+  @Post('characters/:characterId/items/:itemId/actions/consume')
+  consumeItem(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('characterId') characterId: string,
+    @Param('itemId') itemId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.operations.consumeItem(user, characterId, {
+      ...operationBase(body),
+      itemId,
+      quantity: strictOptionalInteger(body.quantity, 'quantity'),
+    });
+  }
+
+  @Post('characters/:characterId/items/:itemId/actions/equip')
+  equipItem(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('characterId') characterId: string,
+    @Param('itemId') itemId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    if (typeof body.equipped !== 'boolean') {
+      throw new BadRequestException('equipped must be a boolean');
+    }
+    return this.operations.equipItem(user, characterId, {
+      ...operationBase(body),
+      itemId,
+      equipped: body.equipped,
+    });
+  }
+
+  @Post('characters/:characterId/items/:itemId/actions/transfer')
+  transferItem(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('characterId') characterId: string,
+    @Param('itemId') itemId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    const base = operationBase(body);
+    if (!base.campaignId) {
+      throw new BadRequestException('campaignId is required');
+    }
+    return this.operations.transferItem(user, characterId, {
+      ...base,
+      campaignId: base.campaignId,
+      itemId,
+      targetCharacterId: requiredString(
+        body.targetCharacterId,
+        'targetCharacterId',
+      ),
+      quantity: strictOptionalInteger(body.quantity, 'quantity'),
+    });
+  }
 
   @Post('characters')
   createCharacter(
@@ -176,6 +316,42 @@ export class CharactersController {
       { delta, currentHp }
     );
   }
+}
+
+function operationBase(body: Record<string, unknown>) {
+  return {
+    requestId: requiredString(body.requestId, 'requestId'),
+    campaignId:
+      body.campaignId === undefined || body.campaignId === null
+        ? null
+        : requiredString(body.campaignId, 'campaignId'),
+    expectedRevision: strictOptionalInteger(
+      body.expectedRevision,
+      'expectedRevision',
+    ),
+  };
+}
+
+function requiredString(value: unknown, name: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new BadRequestException(`${name} is required`);
+  }
+  return value.trim();
+}
+
+function strictOptionalInteger(
+  value: unknown,
+  name: string,
+): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'number' || !Number.isInteger(value)) {
+    throw new BadRequestException(`${name} must be an integer`);
+  }
+  return value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function isNonEmptyString(value: unknown): value is string {

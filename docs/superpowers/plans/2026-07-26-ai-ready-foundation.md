@@ -79,7 +79,7 @@ fix(0.1): isolate campaign conversations
 - 创建：`apps/server_nest/test/media.e2e-spec.ts`
 - 修改：`docs/handoff-2026-07-25.md`
 
-- [ ] **步骤 1：编写媒体失败测试**
+- [x] **步骤 1：编写媒体失败测试**
 
 使用超过 100 KiB 的合法 Base64 上传应成功；包含非法字符或非规范 padding 的 Base64 返回 400；超限返回 400。
 
@@ -91,19 +91,19 @@ await request(app.getHttpServer())
   .expect(201);
 ```
 
-- [ ] **步骤 2：验证红灯**
+- [x] **步骤 2：验证红灯**
 
 运行 `npm --prefix apps/server_nest test -- media.e2e-spec.ts`，预期大请求在控制器前返回 413，非法 Base64 被接受。
 
-- [ ] **步骤 3：实现媒体修复**
+- [x] **步骤 3：实现媒体修复**
 
 在 `main.ts` 使用与 `MAX_UPLOAD_SIZE_MB` 一致、包含 Base64 开销的 JSON limit。使用严格的 Base64 正则、长度与重新编码等价检查后再解码。
 
-- [ ] **步骤 4：固定容器启动**
+- [x] **步骤 4：固定容器启动**
 
 将与 `@prisma/client` 同版本的 `prisma` CLI 作为生产依赖安装，Docker 启动调用本地 `./node_modules/.bin/prisma`。Compose 使用 `${POSTGRES_PASSWORD:?required}` 和 `${JWT_SECRET:?required}`，不提供弱默认值。
 
-- [ ] **步骤 5：验证并提交**
+- [x] **步骤 5：验证并提交**
 
 运行媒体 e2e、服务端构建、`docker compose config`（使用临时强密钥环境变量）及 `git diff --check`，提交：
 

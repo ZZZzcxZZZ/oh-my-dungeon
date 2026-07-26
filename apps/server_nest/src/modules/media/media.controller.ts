@@ -20,6 +20,19 @@ function resolveMaxBase64Length(): number {
   return Math.ceil(maxBytes * 4 / 3) + 8;
 }
 
+function decodeBase64Strict(value: string): Buffer {
+  const canonicalBase64 =
+    /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+  if (!canonicalBase64.test(value)) {
+    throw new BadRequestException('Invalid base64 payload');
+  }
+  const bytes = Buffer.from(value, 'base64');
+  if (bytes.toString('base64') !== value) {
+    throw new BadRequestException('Invalid base64 payload');
+  }
+  return bytes;
+}
+
 @Controller('media')
 @UseGuards(JwtAuthGuard)
 export class MediaController {
@@ -42,12 +55,7 @@ export class MediaController {
     if (body.base64.length === 0 || body.base64.length > maxBase64Length) {
       throw new BadRequestException('Media payload exceeds the allowed size');
     }
-    let bytes: Buffer;
-    try {
-      bytes = Buffer.from(body.base64, 'base64');
-    } catch {
-      throw new BadRequestException('Invalid base64 payload');
-    }
+    const bytes = decodeBase64Strict(body.base64);
     return this.media.upload(user.userId, {
       purpose: body.purpose,
       mimeType: body.mimeType,

@@ -22,8 +22,7 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 COPY --from=build /app/apps/server_nest/prisma ./prisma
 COPY --from=build /app/apps/server_nest/prisma.config.ts ./
 COPY --from=build /app/apps/server_nest/dist ./dist
-# runtime 镜像没有 prisma CLI, 也不会触发 postinstall; 把 build 阶段 `prisma generate`
-# 生成的客户端复制过来, 让运行时和 seed 脚本都能 require('@prisma/client').
+# 复制 build 阶段生成的客户端，避免 runtime 安装阶段运行生成器。
 COPY --from=build /app/apps/server_nest/node_modules/.prisma ./node_modules/.prisma
 
 # node:22-alpine 自带非 root 用户 `node`, 切换以避免容器以 root 运行.
@@ -36,4 +35,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD wget --quiet --tries=1 --spider http://localhost:3000/health || exit 1
 
-CMD ["sh", "-c", "npx prisma migrate deploy && npx prisma db seed && node dist/main.js"]
+CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && ./node_modules/.bin/prisma db seed && node dist/main.js"]

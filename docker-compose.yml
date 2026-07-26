@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: dnd_table
       POSTGRES_USER: dnd
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dnd}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
     # 仅绑定本机回环，避免公网暴露；本机调试可用 docker compose exec postgres psql
     ports:
       - "127.0.0.1:5432:5432"
@@ -26,8 +26,8 @@ services:
       SERVER_NAME: ${SERVER_NAME:-D&D Table Tool}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
-      DATABASE_URL: postgresql://dnd:${POSTGRES_PASSWORD:-dnd}@postgres:5432/dnd_table
-      JWT_SECRET: ${JWT_SECRET:-change-me}
+      DATABASE_URL: postgresql://dnd:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/dnd_table
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
       REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
       DEFAULT_LOCALE: ${DEFAULT_LOCALE:-zh-CN}
       UPLOAD_DIR: /data/uploads

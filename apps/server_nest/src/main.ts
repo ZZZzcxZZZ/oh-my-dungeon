@@ -11,6 +11,7 @@ import { NestFactory } from '@nestjs/core';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { Prisma } from '@prisma/client';
 import type { Request, Response } from 'express';
+import { json } from 'express';
 import { AppModule } from './app.module';
 
 /**
@@ -102,7 +103,15 @@ function registerSecurityHeaders(app: INestApplication): void {
 }
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  const configuredUploadMb = Number(process.env.MAX_UPLOAD_SIZE_MB);
+  const uploadMb =
+    Number.isFinite(configuredUploadMb) && configuredUploadMb > 0
+      ? Math.floor(configuredUploadMb)
+      : 20;
+  const jsonLimitBytes =
+    Math.ceil(uploadMb * 1024 * 1024 * 4 / 3) + 64 * 1024;
+  app.use(json({ limit: jsonLimitBytes }));
   app.setGlobalPrefix('api', {
     exclude: ['health', '.well-known/dnd-tool-server']
   });

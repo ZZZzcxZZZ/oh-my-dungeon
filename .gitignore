@@ -17,6 +17,9 @@ __pycache__/
 .flutter-plugins-dependencies
 build/
 
+# Local Pub cache used to bypass TRAE sandbox when building APK
+.pub-cache/
+
 .idea/
 .vscode/*
 !.vscode/settings.json

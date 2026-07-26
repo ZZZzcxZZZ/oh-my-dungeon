@@ -76,6 +76,7 @@ class DriftCharacterRepository implements CharacterRepository {
   /// Saves a character that arrived from the remote Vault without enqueuing a
   /// new outbox operation. [syncRevision] records the server revision so the
   /// local store can detect remote-origin writes.
+  @override
   Future<void> saveRemote(CharacterSheet character, int syncRevision) async {
     final db = _database;
     await db.transaction(() async {

@@ -5,6 +5,7 @@ abstract interface class CharacterRepository {
   Stream<List<CharacterSheet>> watchOwnedCharacters();
   Future<CharacterSheet?> getById(String id);
   Future<void> save(CharacterSheet character);
+  Future<void> saveRemote(CharacterSheet character, int syncRevision);
   Future<void> archive(String id);
   Future<void> delete(String id);
 }
@@ -13,12 +14,13 @@ abstract interface class CharacterRepository {
 /// available (e.g. tests that inject in-memory stores).
 class EmptyCharacterRepository implements CharacterRepository {
   @override
-  Stream<List<CharacterSheet>> watchOwnedCharacters() =>
-      Stream.value(const []);
+  Stream<List<CharacterSheet>> watchOwnedCharacters() => Stream.value(const []);
   @override
   Future<CharacterSheet?> getById(String id) async => null;
   @override
   Future<void> save(CharacterSheet character) async {}
+  @override
+  Future<void> saveRemote(CharacterSheet character, int syncRevision) async {}
   @override
   Future<void> archive(String id) async {}
   @override

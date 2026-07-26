@@ -1,5 +1,7 @@
 import 'package:dnd_table_client/src/features/characters/domain/character_edit_draft.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
+import 'package:dnd_table_client/src/features/characters/domain/character_document.dart';
+import 'package:dnd_table_client/src/features/characters/data/character_api_client.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -167,6 +169,119 @@ void main() {
   );
 
   test(
+    'offline HP operation persists locally through the repository',
+    () async {
+      final repository = MemoryCharacterRepository(initial: [_character]);
+      final controller = CharacterController(repository: repository);
+      await drainStream();
+
+      final ok = await controller.adjustHitPoints(
+        characterId: 'char-1',
+        delta: -7,
+      );
+
+      expect(ok, isTrue);
+      expect((await repository.getById('char-1'))?.currentHp, 17);
+      expect(repository.localSaveCount, 1);
+      controller.dispose();
+    },
+  );
+
+  test('campaign HP operation replaces cache with server state', () async {
+    final repository = MemoryCharacterRepository(initial: [_character]);
+    final operations = _FakeCharacterOperationsClient(
+      result: CharacterOperationResult(
+        state: CharacterDocument.fromJson(const {
+          'hitPoints': {'current': 11, 'maximum': 24, 'temporary': 2},
+        }),
+        revision: 8,
+        event: const {'type': 'character.hp.adjusted'},
+      ),
+    );
+    final controller = CharacterController(
+      repository: repository,
+      operationsClient: operations,
+      apiBaseUrlProvider: () => 'http://localhost:3000/api',
+      accessTokenProvider: () => 'token',
+    );
+    await drainStream();
+
+    final ok = await controller.adjustHitPoints(
+      characterId: 'char-1',
+      campaignId: 'camp-1',
+      delta: -13,
+      expectedRevision: 7,
+    );
+
+    expect(ok, isTrue);
+    expect(operations.lastCampaignId, 'camp-1');
+    expect(operations.lastDelta, -13);
+    expect(repository.remoteSaveCount, 1);
+    expect(repository.localSaveCount, 0);
+    final stored = await repository.getById('char-1');
+    expect(stored?.currentHp, 11);
+    expect(stored?.temporaryHp, 2);
+    controller.dispose();
+  });
+
+  test(
+    'offline condition, resource, and item operations stay structured',
+    () async {
+      final structured = _character.copyWith(
+        data: const {
+          'characterState': {
+            'schemaVersion': 2,
+            'resources': [
+              {
+                'id': 'second-wind',
+                'name': '回气',
+                'current': 1,
+                'maximum': 1,
+                'restoreOn': 'shortRest',
+                'custom': false,
+              },
+            ],
+          },
+        },
+      );
+      final repository = MemoryCharacterRepository(initial: [structured]);
+      final controller = CharacterController(repository: repository);
+      await drainStream();
+
+      expect(
+        await controller.addCondition(
+          characterId: 'char-1',
+          condition: const {'id': 'poisoned', 'type': '中毒'},
+        ),
+        isTrue,
+      );
+      expect(
+        await controller.consumeResource(
+          characterId: 'char-1',
+          resourceId: 'second-wind',
+        ),
+        isTrue,
+      );
+      expect(
+        await controller.grantItem(
+          characterId: 'char-1',
+          item: const {'id': 'potion-1', 'name': '治疗药水', 'quantity': 2},
+        ),
+        isTrue,
+      );
+
+      final stored = await repository.getById('char-1');
+      final state = CharacterDocument.fromJson(
+        Map<String, Object?>.from(stored!.dataMap['characterState']! as Map),
+      );
+      expect(state.conditions.single.type, '中毒');
+      expect(state.resources.single.current, 0);
+      expect(state.items.single.quantity, 2);
+      controller.dispose();
+    },
+  );
+
+  test(
     'copyWith exposes avatarUrl so callers can update the character avatar',
     () {
       // Spec §头像来源: 本地角色头像离线保存在客户端；战役角色头像在本地角色
@@ -213,3 +328,85 @@ const _character = CharacterSheet(
   createdAt: '2026-07-09T00:00:00.000Z',
   updatedAt: '2026-07-09T00:00:00.000Z',
 );
+
+class _FakeCharacterOperationsClient implements CharacterOperationsClient {
+  _FakeCharacterOperationsClient({required this.result});
+
+  final CharacterOperationResult result;
+  String? lastCampaignId;
+  int? lastDelta;
+
+  @override
+  Future<CharacterOperationResult> adjustHitPoints({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String characterId,
+    required String requestId,
+    String? campaignId,
+    int? expectedRevision,
+    int? delta,
+    int? current,
+    int? temporary,
+  }) async {
+    lastCampaignId = campaignId;
+    lastDelta = delta;
+    return result;
+  }
+
+  @override
+  Future<CharacterOperationResult> addCondition({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String characterId,
+    required String requestId,
+    required Map<String, Object?> condition,
+    String? campaignId,
+    int? expectedRevision,
+  }) async => result;
+
+  @override
+  Future<CharacterOperationResult> consumeResource({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String characterId,
+    required String requestId,
+    required String resourceId,
+    int amount = 1,
+    String? campaignId,
+    int? expectedRevision,
+  }) async => result;
+
+  @override
+  Future<CharacterOperationResult> grantItem({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String characterId,
+    required String requestId,
+    required Map<String, Object?> item,
+    String? campaignId,
+    int? expectedRevision,
+  }) async => result;
+
+  @override
+  Future<CharacterOperationResult> removeCondition({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String characterId,
+    required String requestId,
+    required String conditionId,
+    String? campaignId,
+    int? expectedRevision,
+  }) async => result;
+
+  @override
+  Future<CharacterOperationResult> restoreResource({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String characterId,
+    required String requestId,
+    required String resourceId,
+    int amount = 1,
+    String? campaignId,
+    int? expectedRevision,
+  }) async => result;
+}

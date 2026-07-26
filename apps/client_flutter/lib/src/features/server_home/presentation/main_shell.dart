@@ -26,6 +26,7 @@ import '../../../features/campaigns/presentation/conversation_controller.dart';
 import '../../../features/campaigns/presentation/campaign_controller.dart';
 import '../../../features/campaigns/presentation/campaigns_tab_page.dart';
 import '../../../features/characters/data/character_repository.dart';
+import '../../../features/characters/data/character_api_client.dart';
 import '../../../features/characters/data/local/character_sync_conflict_repository.dart';
 import '../../../features/characters/data/local/drift_character_repository.dart';
 import '../../../features/characters/presentation/character_conflict_banner_controller.dart';
@@ -151,6 +152,9 @@ class _MainShellState extends State<MainShell> {
         : EmptyCharacterRepository();
     _characterController = CharacterController(
       repository: _characterRepository,
+      operationsClient: CharacterApiClient(),
+      apiBaseUrlProvider: () => widget.session.profile?.apiBaseUrl ?? '',
+      accessTokenProvider: () => _authController.accessToken ?? '',
     );
     _localContentRepository = widget.database != null
         ? DriftContentRepository(widget.database!)

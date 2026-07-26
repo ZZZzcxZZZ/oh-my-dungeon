@@ -258,15 +258,15 @@ feat(0.1): expose character summaries and event history
 - 测试：`apps/client_flutter/test/character_controller_test.dart`
 - 测试：`apps/client_flutter/test/character_quick_edit_service_test.dart`
 
-- [ ] **步骤 1：编写失败测试**
+- [x] **步骤 1：编写失败测试**
 
 快捷 HP、状态、资源和物品操作应调用统一 action API，离线时写本地状态与 outbox；联网回包替换缓存；完整角色编辑仍可保存。
 
-- [ ] **步骤 2：验证红灯并实现**
+- [x] **步骤 2：验证红灯并实现**
 
 逐个迁移现有 UI 写路径，不改变页面布局。删除已无调用的直接 JSON 修改函数。
 
-- [ ] **步骤 3：验证并提交**
+- [x] **步骤 3：验证并提交**
 
 运行相关 Flutter 测试和 `flutter analyze`，提交：
 

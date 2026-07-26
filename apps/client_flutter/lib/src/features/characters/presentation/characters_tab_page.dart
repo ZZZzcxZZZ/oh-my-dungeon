@@ -739,8 +739,9 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
   }
 
   Future<void> _adjustHp(CharacterSheet character, int delta) async {
-    final success = await widget.controller.updateCharacter(
-      character.copyWith(currentHp: character.currentHp + delta),
+    final success = await widget.controller.adjustHitPoints(
+      characterId: character.id,
+      delta: delta,
     );
     if (!mounted || success) return;
     ScaffoldMessenger.of(

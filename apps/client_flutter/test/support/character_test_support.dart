@@ -9,22 +9,17 @@ CharacterSheet testCharacter({
   String notes = '',
   int level = 1,
 }) {
-  return CharacterSheet.local(
-    id: id,
-    name: name,
-    level: level,
-    notes: notes,
-  );
+  return CharacterSheet.local(id: id, name: name, level: level, notes: notes);
 }
 
 class MemoryCharacterRepository implements CharacterRepository {
   MemoryCharacterRepository({List<CharacterSheet> initial = const []})
-      : _characters = {
-          for (final character in initial) character.id: character,
-        };
+    : _characters = {for (final character in initial) character.id: character};
 
   final Map<String, CharacterSheet> _characters;
   final Set<String> _archived = {};
+  int localSaveCount = 0;
+  int remoteSaveCount = 0;
   final StreamController<List<CharacterSheet>> _controller =
       StreamController<List<CharacterSheet>>.broadcast();
 
@@ -51,6 +46,15 @@ class MemoryCharacterRepository implements CharacterRepository {
 
   @override
   Future<void> save(CharacterSheet character) async {
+    localSaveCount += 1;
+    _characters[character.id] = character;
+    _archived.remove(character.id);
+    _emit();
+  }
+
+  @override
+  Future<void> saveRemote(CharacterSheet character, int syncRevision) async {
+    remoteSaveCount += 1;
     _characters[character.id] = character;
     _archived.remove(character.id);
     _emit();

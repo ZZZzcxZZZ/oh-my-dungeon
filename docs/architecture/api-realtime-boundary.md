@@ -6,6 +6,10 @@
 - REST 是服务端状态的事实源；WebSocket 只通知消息或游标变化。
 - 所有写操作由服务端根据 Campaign membership 和 Actor ownership 校验。
 - `Session`、`Rooms` 和独立 `CheckRequests` HTTP 模块已退出 0.1 产品路径，不得重新挂载。
+- 未来 AI Agent 与 Flutter UI 必须复用同一业务接口；不得给 Agent 提供绕过权限、revision 或事件审计的数据库直写工具。
+
+Agent 使用的数据结构、工具名称、幂等、错误与审批规范见
+[AI Agent 数据与工具接口规范](ai-agent-data-and-tool-contract.md)。
 
 ## 2. 当前 REST 边界
 
@@ -94,6 +98,28 @@ GET  /api/vault/devices
 ```
 
 Vault 同步个人角色、收藏、笔记、偏好和资料包 manifest。资料正文与 assets 禁止进入 payload。
+
+### 结构化角色查询、操作与事件
+
+```text
+GET  /api/characters/:characterId
+GET  /api/characters/:characterId/summary
+GET  /api/characters/:characterId/events
+GET  /api/campaigns/:campaignId/events
+
+POST /api/characters/:characterId/actions/adjust-hp
+POST /api/characters/:characterId/actions/add-condition
+POST /api/characters/:characterId/actions/remove-condition
+POST /api/characters/:characterId/actions/consume-resource
+POST /api/characters/:characterId/actions/restore-resource
+POST /api/characters/:characterId/items
+POST /api/characters/:characterId/items/:itemId/actions/consume
+POST /api/characters/:characterId/items/:itemId/actions/equip
+POST /api/characters/:characterId/items/:itemId/actions/transfer
+```
+
+所有修改操作必须携带唯一 `requestId`，可以携带 `expectedRevision` 和
+`campaignId`。服务端返回结构化 state、最新 revision 与不可变 GameEvent。
 
 ## 3. WebSocket
 

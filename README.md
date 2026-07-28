@@ -142,6 +142,8 @@ docker compose config
 - [系统架构设计](docs/architecture/system-architecture.md)
 - [领域模型设计](docs/architecture/domain-model.md)
 - [API 与实时事件边界](docs/architecture/api-realtime-boundary.md)
+- [AI Agent 数据与工具接口规范](docs/architecture/ai-agent-data-and-tool-contract.md)
+- [AI Ready 基础层验收清单](docs/acceptance/ai-ready-foundation-acceptance.md)
 - [离线数据与同步边界](docs/architecture/offline-data-and-sync.md)
 - [工程规范](docs/engineering/engineering-standards.md)
 - [本地开发环境](docs/development/local-setup.md)

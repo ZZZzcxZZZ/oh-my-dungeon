@@ -2,7 +2,7 @@
 
 **日期：** 2026-07-29
 **版本：** 0.1
-**状态：** 待用户审查
+**状态：** 已确认
 **范围：** Flutter 客户端、NestJS 服务端、Drift/IndexedDB、PostgreSQL、角色与资料 Markdown
 **不包含：** 战斗系统、AI Agent 运行时、官方服务器运营系统、通用 TRPG 规则引擎
 

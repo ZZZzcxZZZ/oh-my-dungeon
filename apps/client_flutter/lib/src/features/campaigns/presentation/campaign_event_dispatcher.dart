@@ -58,6 +58,7 @@ class CampaignEventDispatcher extends ChangeNotifier {
         accessToken: _accessTokenProvider(),
         campaignId: campaignId,
         characterId: characterId,
+        requestId: _nextRequestId('hp', characterId),
         delta: delta,
         reason: reason,
         baseRevision: baseRevision,
@@ -80,6 +81,7 @@ class CampaignEventDispatcher extends ChangeNotifier {
         accessToken: _accessTokenProvider(),
         campaignId: campaignId,
         characterId: characterId,
+        requestId: _nextRequestId('item', characterId),
         itemId: itemId,
         name: name,
         quantity: quantity,
@@ -103,12 +105,23 @@ class CampaignEventDispatcher extends ChangeNotifier {
         accessToken: _accessTokenProvider(),
         campaignId: campaignId,
         characterId: characterId,
+        requestId: _nextRequestId('condition', characterId),
         type: type,
         name: name,
         durationRounds: durationRounds,
         baseRevision: baseRevision,
       ),
     );
+  }
+
+  int _requestCounter = 0;
+
+  /// 生成客户端唯一请求 id, 供服务端幂等去重. 同一 dispatcher 内单调递增,
+  /// 前缀含 operation 与 characterId, 便于审计定位.
+  String _nextRequestId(String operation, String characterId) {
+    _requestCounter += 1;
+    final now = DateTime.now().microsecondsSinceEpoch;
+    return 'client:$operation:$characterId:$now:$_requestCounter';
   }
 
   Future<int> _dispatch(Future<CampaignEventResult> Function() action) async {

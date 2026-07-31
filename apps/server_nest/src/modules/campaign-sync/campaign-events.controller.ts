@@ -43,7 +43,8 @@ export class CampaignEventsController {
       );
     }
     return this.eventsService.changeCharacterHp(user, campaignId, characterId, {
-      delta: body.delta,
+      requestId: body.requestId as string,
+      delta: body.delta as number,
       reason: typeof body.reason === "string" ? body.reason : undefined,
       baseRevision:
         typeof body.baseRevision === "number" ? body.baseRevision : undefined,
@@ -68,8 +69,9 @@ export class CampaignEventsController {
       throw new BadRequestException("name is required");
     }
     return this.eventsService.grantItem(user, campaignId, characterId, {
-      itemId: body.itemId,
-      name: body.name,
+      requestId: body.requestId as string,
+      itemId: body.itemId as string,
+      name: body.name as string,
       quantity:
         typeof body.quantity === "number" ? body.quantity : undefined,
       baseRevision:
@@ -95,8 +97,9 @@ export class CampaignEventsController {
       throw new BadRequestException("name is required");
     }
     return this.eventsService.addCondition(user, campaignId, characterId, {
-      type: body.type,
-      name: body.name,
+      requestId: body.requestId as string,
+      type: body.type as string,
+      name: body.name as string,
       durationRounds:
         typeof body.durationRounds === "number"
           ? body.durationRounds
@@ -108,12 +111,14 @@ export class CampaignEventsController {
 }
 
 interface ChangeCharacterHpBody {
+  requestId?: unknown;
   delta?: unknown;
   reason?: unknown;
   baseRevision?: unknown;
 }
 
 interface GrantItemBody {
+  requestId?: unknown;
   itemId?: unknown;
   name?: unknown;
   quantity?: unknown;
@@ -121,6 +126,7 @@ interface GrantItemBody {
 }
 
 interface AddConditionBody {
+  requestId?: unknown;
   type?: unknown;
   name?: unknown;
   durationRounds?: unknown;

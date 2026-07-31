@@ -23,6 +23,10 @@ import type {
   GrantItemInput,
 } from "./campaign-sync.types";
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 // ---------------------------------------------------------------------------
 // Task 3.1 — CampaignEvent 事件层
 //
@@ -67,6 +71,9 @@ export class CampaignEventsService {
     characterId: string,
     input: ChangeCharacterHpInput,
   ): Promise<CampaignEventResult> {
+    if (!isNonEmptyString(input.requestId)) {
+      throw new BadRequestException("requestId is required");
+    }
     if (
       typeof input.delta !== "number" ||
       !Number.isFinite(input.delta) ||
@@ -124,6 +131,9 @@ export class CampaignEventsService {
       cursor,
       messageRow,
     } = await this.prismaService.$transaction(async (tx) => {
+      // 幂等锚: 相同 requestId 已执行过则直接重放首次结果, 不重复扣血.
+      const replay = await this.findReplay(tx, input.requestId, campaignId);
+      if (replay) return replay;
       const result = await tx.campaignCharacter.update({
         where: { id: characterId },
         data: {
@@ -177,17 +187,31 @@ export class CampaignEventsService {
             from: currentHp,
             to: clampedNext,
             reason,
+            requestId: input.requestId,
           } as Prisma.InputJsonValue,
         },
+      });
+      await this.recordOperationEvent(tx, {
+        requestId: input.requestId,
+        type: "character.hp.adjusted",
+        campaignId,
+        characterId,
+        userId: user.userId,
+        before: { currentHp, maxHp },
+        after: { currentHp: clampedNext, maxHp },
+        payload: { delta: actualDelta },
       });
       return { row: result, cursor: change.cursor, messageRow: message };
     });
 
-    this.gateway.broadcastChange({
-      campaignId,
-      entityType: "character",
-      cursor,
-    });
+    // 幂等重放时 cursor 为 null, 不再重复广播.
+    if (cursor !== null) {
+      this.gateway.broadcastChange({
+        campaignId,
+        entityType: "character",
+        cursor,
+      });
+    }
     const eventView = toEventView(messageRow);
     this.gateway.broadcastToCampaign(
       campaignId,
@@ -211,6 +235,9 @@ export class CampaignEventsService {
     characterId: string,
     input: GrantItemInput,
   ): Promise<CampaignEventResult> {
+    if (!isNonEmptyString(input.requestId)) {
+      throw new BadRequestException("requestId is required");
+    }
     if (typeof input.itemId !== "string" || input.itemId.trim().length === 0) {
       throw new BadRequestException("itemId is required");
     }
@@ -283,6 +310,9 @@ export class CampaignEventsService {
       cursor,
       messageRow,
     } = await this.prismaService.$transaction(async (tx) => {
+      // 幂等锚: 相同 requestId 已执行过则直接重放首次结果, 不重复发物品.
+      const replay = await this.findReplay(tx, input.requestId, campaignId);
+      if (replay) return replay;
       const result = await tx.campaignCharacter.update({
         where: { id: characterId },
         data: {
@@ -334,17 +364,31 @@ export class CampaignEventsService {
             itemId: input.itemId,
             itemName: input.name.trim(),
             quantity,
+            requestId: input.requestId,
           } as Prisma.InputJsonValue,
         },
+      });
+      await this.recordOperationEvent(tx, {
+        requestId: input.requestId,
+        type: "character.item.granted",
+        campaignId,
+        characterId,
+        userId: user.userId,
+        before: { inventory: beforeInventory },
+        after: { inventory: afterInventory },
+        payload: { itemId: input.itemId, quantity },
       });
       return { row: result, cursor: change.cursor, messageRow: message };
     });
 
-    this.gateway.broadcastChange({
-      campaignId,
-      entityType: "character",
-      cursor,
-    });
+    // 幂等重放时 cursor 为 null, 不再重复广播.
+    if (cursor !== null) {
+      this.gateway.broadcastChange({
+        campaignId,
+        entityType: "character",
+        cursor,
+      });
+    }
     const eventView = toEventView(messageRow);
     this.gateway.broadcastToCampaign(
       campaignId,
@@ -367,6 +411,9 @@ export class CampaignEventsService {
     characterId: string,
     input: AddConditionInput,
   ): Promise<CampaignEventResult> {
+    if (!isNonEmptyString(input.requestId)) {
+      throw new BadRequestException("requestId is required");
+    }
     const type = input.type.trim();
     const name = input.name.trim();
     if (!type) throw new BadRequestException("type is required");
@@ -427,6 +474,9 @@ export class CampaignEventsService {
       cursor,
       messageRow,
     } = await this.prismaService.$transaction(async (tx) => {
+      // 幂等锚: 相同 requestId 已执行过则直接重放首次结果, 不重复加状态.
+      const replay = await this.findReplay(tx, input.requestId, campaignId);
+      if (replay) return replay;
       const result = await tx.campaignCharacter.update({
         where: { id: characterId },
         data: {
@@ -475,17 +525,31 @@ export class CampaignEventsService {
             conditionType: type,
             conditionName: name,
             durationRounds: durationRounds ?? null,
+            requestId: input.requestId,
           } as Prisma.InputJsonValue,
         },
+      });
+      await this.recordOperationEvent(tx, {
+        requestId: input.requestId,
+        type: "character.condition.added",
+        campaignId,
+        characterId,
+        userId: user.userId,
+        before: { conditions: beforeConditions },
+        after: { conditions: [...beforeConditions, condition] },
+        payload: { conditionId: condition.id },
       });
       return { row: result, cursor: change.cursor, messageRow: message };
     });
 
-    this.gateway.broadcastChange({
-      campaignId,
-      entityType: "character",
-      cursor,
-    });
+    // 幂等重放时 cursor 为 null, 不再重复广播.
+    if (cursor !== null) {
+      this.gateway.broadcastChange({
+        campaignId,
+        entityType: "character",
+        cursor,
+      });
+    }
     const eventView = toEventView(messageRow);
     this.gateway.broadcastToCampaign(
       campaignId,
@@ -497,6 +561,68 @@ export class CampaignEventsService {
       character: toCharacterSummary(updatedRow),
       event: eventView,
     };
+  }
+
+  /**
+   * 幂等重放: 相同 requestId 已在 GameEvent 表中执行过时, 返回首次执行的
+   * 结果快照 (当前 character + 首次事件消息), 调用方不再重复写状态.
+   */
+  private async findReplay(
+    tx: Prisma.TransactionClient,
+    requestId: string,
+    campaignId: string,
+  ): Promise<{ row: CharacterRow; cursor: string | null; messageRow: unknown } | null> {
+    const existing = await tx.gameEvent.findUnique({
+      where: { requestId },
+    });
+    if (!existing) return null;
+    const messageRow = await tx.campaignChatMessage.findFirst({
+      where: {
+        campaignId,
+        eventData: { path: ["requestId"], equals: requestId },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!messageRow) return null;
+    const row = await tx.campaignCharacter.findUnique({
+      where: { id: existing.characterId ?? "" },
+    });
+    if (!row || row.campaignId !== campaignId) return null;
+    return { row, cursor: null, messageRow };
+  }
+
+  /**
+   * 结构化操作事件 (GameEvent, requestId 唯一)。与 AI 契约的操作事件
+   * 对齐: 重试不重复扣血/发物品/加状态, 并可供事件查询接口审计。
+   */
+  private async recordOperationEvent(
+    tx: Prisma.TransactionClient,
+    input: {
+      requestId: string;
+      type: string;
+      campaignId: string;
+      characterId: string;
+      userId: string;
+      before: Record<string, unknown>;
+      after: Record<string, unknown>;
+      payload: Record<string, unknown>;
+    },
+  ): Promise<void> {
+    await tx.gameEvent.create({
+      data: {
+        schemaVersion: 1,
+        type: input.type,
+        campaignId: input.campaignId,
+        characterId: input.characterId,
+        initiatorType: "user",
+        initiatorId: input.userId,
+        requestId: input.requestId,
+        targets: [{ type: "character", id: input.characterId }] as unknown as Prisma.InputJsonValue,
+        before: input.before as Prisma.InputJsonValue,
+        after: input.after as Prisma.InputJsonValue,
+        payload: input.payload as Prisma.InputJsonValue,
+      },
+    });
   }
 
   private async loadCharacter(

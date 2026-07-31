@@ -210,6 +210,8 @@ export interface CharacterItemGrantedEvent {
 
 /** HP 变化请求. delta < 0 为伤害, > 0 为治疗, 0 拒绝. */
 export interface ChangeCharacterHpInput {
+  /** 客户端生成的唯一请求 id；相同 requestId 重试只执行一次（幂等）。 */
+  requestId: string;
   delta: number;
   /** 可选 DM 备注. */
   reason?: string;
@@ -219,6 +221,8 @@ export interface ChangeCharacterHpInput {
 
 /** 给予物品请求. */
 export interface GrantItemInput {
+  /** 客户端生成的唯一请求 id；相同 requestId 重试只执行一次（幂等）。 */
+  requestId: string;
   itemId: string;
   name: string;
   /** 默认 1. 必须是正整数. */
@@ -227,8 +231,9 @@ export interface GrantItemInput {
   baseRevision?: number;
 }
 
-/** 给予状态请求. 状态采用结构化对象写入 character sheet. */
 export interface AddConditionInput {
+  /** 客户端生成的唯一请求 id；相同 requestId 重试只执行一次（幂等）。 */
+  requestId: string;
   type: string;
   name: string;
   /** 可选持续轮数. 必须为正整数. */

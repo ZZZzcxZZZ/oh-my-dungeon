@@ -61,7 +61,8 @@ describe("campaign events endpoints (Task 3.1)", () => {
       findMany: jest.fn(),
       update: jest.fn(),
     },
-    campaignChatMessage: { create: jest.fn(), findMany: jest.fn() },
+    campaignChatMessage: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn() },
+    gameEvent: { create: jest.fn(), findUnique: jest.fn() },
     journalEntry: { create: jest.fn(), findMany: jest.fn() },
     campaignSyncState: { upsert: jest.fn(), findUnique: jest.fn() },
     campaignCharacter: {
@@ -175,6 +176,9 @@ describe("campaign events endpoints (Task 3.1)", () => {
     prismaService.campaignInvite.update.mockResolvedValue({});
     prismaService.campaignChatMessage.create.mockResolvedValue({});
     prismaService.campaignChatMessage.findMany.mockResolvedValue([]);
+    prismaService.campaignChatMessage.findFirst.mockResolvedValue(null);
+    prismaService.gameEvent.findUnique.mockResolvedValue(null);
+    prismaService.gameEvent.create.mockResolvedValue({});
     prismaService.journalEntry.create.mockResolvedValue({});
     prismaService.journalEntry.findMany.mockResolvedValue([]);
 
@@ -287,7 +291,10 @@ describe("campaign events endpoints (Task 3.1)", () => {
       const res = await request(app.getHttpServer())
         .post("/api/campaigns/camp-1/characters/character-1/hp")
         .set("Authorization", `Bearer ${token}`)
-        .send({ delta: -8 })
+        .send({
+        requestId: "req-001",
+        delta: -8
+      })
         .expect(201);
 
       // 响应包含新的 character 状态和事件消息.
@@ -366,7 +373,10 @@ describe("campaign events endpoints (Task 3.1)", () => {
       const res = await request(app.getHttpServer())
         .post("/api/campaigns/camp-1/characters/character-1/hp")
         .set("Authorization", `Bearer ${token}`)
-        .send({ delta: -99 })
+        .send({
+        requestId: "req-002",
+        delta: -99
+      })
         .expect(201);
 
       expect(res.body.character.sheet.currentHp).toBe(0);
@@ -408,7 +418,10 @@ describe("campaign events endpoints (Task 3.1)", () => {
       const res = await request(app.getHttpServer())
         .post("/api/campaigns/camp-1/characters/character-1/hp")
         .set("Authorization", `Bearer ${token}`)
-        .send({ delta: 15 })
+        .send({
+        requestId: "req-003",
+        delta: 15
+      })
         .expect(201);
 
       expect(res.body.character.sheet.currentHp).toBe(25);
@@ -446,7 +459,10 @@ describe("campaign events endpoints (Task 3.1)", () => {
       const res = await request(app.getHttpServer())
         .post("/api/campaigns/camp-1/characters/character-1/hp")
         .set("Authorization", `Bearer ${token}`)
-        .send({ delta: 50 })
+        .send({
+        requestId: "req-004",
+        delta: 50
+      })
         .expect(201);
 
       expect(res.body.character.sheet.currentHp).toBe(30);
@@ -465,7 +481,10 @@ describe("campaign events endpoints (Task 3.1)", () => {
       await request(app.getHttpServer())
         .post("/api/campaigns/camp-1/characters/character-1/hp")
         .set("Authorization", `Bearer ${token}`)
-        .send({ delta: -5 })
+        .send({
+        requestId: "req-005",
+        delta: -5
+      })
         .expect(403);
 
       // 失败时不应修改 character 或写入消息.
@@ -480,7 +499,10 @@ describe("campaign events endpoints (Task 3.1)", () => {
       await request(app.getHttpServer())
         .post("/api/campaigns/camp-1/characters/missing/hp")
         .set("Authorization", `Bearer ${token}`)
-        .send({ delta: -5 })
+        .send({
+        requestId: "req-006",
+        delta: -5
+      })
         .expect(404);
 
       expect(prismaService.campaignCharacter.update).not.toHaveBeenCalled();
@@ -496,7 +518,10 @@ describe("campaign events endpoints (Task 3.1)", () => {
       await request(app.getHttpServer())
         .post("/api/campaigns/camp-1/characters/character-1/hp")
         .set("Authorization", `Bearer ${token}`)
-        .send({ delta: "oops" })
+        .send({
+        requestId: "req-007",
+        delta: "oops"
+      })
         .expect(400);
 
       expect(prismaService.campaignCharacter.update).not.toHaveBeenCalled();
@@ -511,7 +536,10 @@ describe("campaign events endpoints (Task 3.1)", () => {
       await request(app.getHttpServer())
         .post("/api/campaigns/camp-1/characters/character-1/hp")
         .set("Authorization", `Bearer ${token}`)
-        .send({ delta: 0 })
+        .send({
+        requestId: "req-008",
+        delta: 0
+      })
         .expect(400);
     });
 
@@ -524,7 +552,10 @@ describe("campaign events endpoints (Task 3.1)", () => {
       await request(app.getHttpServer())
         .post("/api/campaigns/camp-1/characters/character-1/hp")
         .set("Authorization", `Bearer ${token}`)
-        .send({ delta: -5, baseRevision: 99 })
+        .send({
+        requestId: "req-009",
+        delta: -5, baseRevision: 99
+      })
         .expect(409);
 
       expect(prismaService.campaignCharacter.update).not.toHaveBeenCalled();
@@ -575,7 +606,10 @@ describe("campaign events endpoints (Task 3.1)", () => {
       const res = await request(app.getHttpServer())
         .post("/api/campaigns/camp-1/characters/character-1/items")
         .set("Authorization", `Bearer ${token}`)
-        .send({ itemId: "item-longsword", name: "长剑", quantity: 1 })
+        .send({
+        requestId: "req-010",
+        itemId: "item-longsword", name: "长剑", quantity: 1
+      })
         .expect(201);
 
       expect(res.body.character.revision).toBe(2);
@@ -681,7 +715,10 @@ describe("campaign events endpoints (Task 3.1)", () => {
       const res = await request(app.getHttpServer())
         .post("/api/campaigns/camp-1/characters/character-1/items")
         .set("Authorization", `Bearer ${token}`)
-        .send({ itemId: "item-arrow", name: "箭矢", quantity: 5 })
+        .send({
+        requestId: "req-011",
+        itemId: "item-arrow", name: "箭矢", quantity: 5
+      })
         .expect(201);
 
       expect(res.body.character.sheet.inventory[0].quantity).toBe(15);
@@ -722,7 +759,10 @@ describe("campaign events endpoints (Task 3.1)", () => {
       const res = await request(app.getHttpServer())
         .post("/api/campaigns/camp-1/characters/character-1/items")
         .set("Authorization", `Bearer ${token}`)
-        .send({ itemId: "item-torch", name: "火把" })
+        .send({
+        requestId: "req-012",
+        itemId: "item-torch", name: "火把"
+      })
         .expect(201);
 
       expect(res.body.character.sheet.inventory[0].quantity).toBe(1);
@@ -736,7 +776,10 @@ describe("campaign events endpoints (Task 3.1)", () => {
       await request(app.getHttpServer())
         .post("/api/campaigns/camp-1/characters/character-1/items")
         .set("Authorization", `Bearer ${token}`)
-        .send({ itemId: "item-x", name: "X" })
+        .send({
+        requestId: "req-013",
+        itemId: "item-x", name: "X"
+      })
         .expect(403);
 
       expect(prismaService.campaignCharacter.update).not.toHaveBeenCalled();
@@ -752,7 +795,10 @@ describe("campaign events endpoints (Task 3.1)", () => {
       await request(app.getHttpServer())
         .post("/api/campaigns/camp-1/characters/character-1/items")
         .set("Authorization", `Bearer ${token}`)
-        .send({ name: "无 ID 物品" })
+        .send({
+        requestId: "req-014",
+        name: "无 ID 物品"
+      })
         .expect(400);
     });
 
@@ -765,13 +811,19 @@ describe("campaign events endpoints (Task 3.1)", () => {
       await request(app.getHttpServer())
         .post("/api/campaigns/camp-1/characters/character-1/items")
         .set("Authorization", `Bearer ${token}`)
-        .send({ itemId: "item-x", name: "X", quantity: 0 })
+        .send({
+        requestId: "req-015",
+        itemId: "item-x", name: "X", quantity: 0
+      })
         .expect(400);
 
       await request(app.getHttpServer())
         .post("/api/campaigns/camp-1/characters/character-1/items")
         .set("Authorization", `Bearer ${token}`)
-        .send({ itemId: "item-y", name: "Y", quantity: -2 })
+        .send({
+        requestId: "req-016",
+        itemId: "item-y", name: "Y", quantity: -2
+      })
         .expect(400);
     });
   });
@@ -802,7 +854,10 @@ describe("campaign events endpoints (Task 3.1)", () => {
       const res = await request(app.getHttpServer())
         .post("/api/campaigns/camp-1/characters/character-1/conditions")
         .set("Authorization", `Bearer ${token}`)
-        .send({ type: "poisoned", name: "中毒", durationRounds: 3 })
+        .send({
+        requestId: "req-017",
+        type: "poisoned", name: "中毒", durationRounds: 3
+      })
         .expect(201);
 
       expect(res.body.character.sheet.conditions).toEqual([
@@ -842,7 +897,106 @@ describe("campaign events endpoints (Task 3.1)", () => {
       await request(app.getHttpServer())
         .post("/api/campaigns/camp-1/characters/character-1/conditions")
         .set("Authorization", `Bearer ${token}`)
-        .send({ type: "", name: "无效状态" })
+        .send({
+        requestId: "req-018",
+        type: "", name: "无效状态"
+      })
+        .expect(400);
+    });
+  });
+
+  describe("幂等: 相同 requestId 重试不重复执行", () => {
+    it("replays the first HP result without re-applying the delta", async () => {
+      const token = await loginAs(storedDm);
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        arannisCharacter,
+      );
+      // 首次执行: 事务内 update 成功.
+      prismaService.campaignCharacter.update.mockImplementationOnce(
+        async (args: any) => ({
+          ...arannisCharacter,
+          sheetJson: args.data.sheetJson,
+          revision: args.data.revision,
+          updatedBy: args.data.updatedBy,
+        }),
+      );
+      // 首次执行: 事件消息落库.
+      prismaService.campaignChatMessage.create.mockImplementationOnce(
+        async (args: any) => ({
+          id: "msg-hp-1",
+          campaignId: "camp-1",
+          ...args.data,
+          createdAt: new Date("2026-07-14T01:00:00.000Z"),
+        }),
+      );
+
+      const first = await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/characters/character-1/hp")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ requestId: "req-idem-hp", delta: -8 })
+        .expect(201);
+      expect(first.body.character.sheet.currentHp).toBe(12);
+      expect(prismaService.campaignCharacter.update).toHaveBeenCalledTimes(1);
+      expect(prismaService.gameEvent.create).toHaveBeenCalledTimes(1);
+
+      // 重试: gameEvent.findUnique 命中首次记录, 重放结果且不再写状态.
+      prismaService.gameEvent.findUnique.mockResolvedValueOnce({
+        id: "evt-1",
+        requestId: "req-idem-hp",
+        characterId: "character-1",
+        campaignId: "camp-1",
+        type: "character.hp.adjusted",
+      });
+      prismaService.campaignChatMessage.findFirst.mockResolvedValueOnce({
+        id: "msg-hp-1",
+        campaignId: "camp-1",
+        senderId: "dm-1",
+        campaignCharacterId: null,
+        displayName: "旁白",
+        speakerMode: "narrator",
+        ooc: false,
+        kind: "system",
+        content: "Arannis -8 HP (20 → 12)",
+        eventData: {
+          eventType: "character.hp_changed",
+          characterId: "character-1",
+          characterName: "Arannis",
+          delta: -8,
+          from: 20,
+          to: 12,
+          reason: null,
+          requestId: "req-idem-hp",
+        },
+        createdAt: new Date("2026-07-14T01:00:00.000Z"),
+      });
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        arannisCharacter,
+      );
+
+      const replay = await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/characters/character-1/hp")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ requestId: "req-idem-hp", delta: -8 })
+        .expect(201);
+
+      expect(replay.body.event.eventData.delta).toBe(-8);
+      // 重试没有再次更新角色、没有重复落消息、没有重复写 GameEvent.
+      expect(prismaService.campaignCharacter.update).toHaveBeenCalledTimes(1);
+      expect(prismaService.campaignChatMessage.create).toHaveBeenCalledTimes(1);
+      expect(prismaService.gameEvent.create).toHaveBeenCalledTimes(1);
+      // 重放不重复广播 change (cursor 为 null).
+      expect(campaignsGateway.broadcastChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects a missing requestId with 400", async () => {
+      const token = await loginAs(storedDm);
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        arannisCharacter,
+      );
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/characters/character-1/hp")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ delta: -8 })
         .expect(400);
     });
   });

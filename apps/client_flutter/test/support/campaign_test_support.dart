@@ -469,6 +469,7 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
     required String accessToken,
     required String campaignId,
     required String characterId,
+    required String requestId,
     required int delta,
     String? reason,
     int? baseRevision,
@@ -476,6 +477,7 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
     changeCharacterHpCalls.add({
       'campaignId': campaignId,
       'characterId': characterId,
+      'requestId': requestId,
       'delta': delta,
       'reason': reason,
       'baseRevision': baseRevision,
@@ -501,6 +503,7 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
     required String accessToken,
     required String campaignId,
     required String characterId,
+    required String requestId,
     required String itemId,
     required String name,
     int quantity = 1,
@@ -509,6 +512,7 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
     grantItemCalls.add({
       'campaignId': campaignId,
       'characterId': characterId,
+      'requestId': requestId,
       'itemId': itemId,
       'name': name,
       'quantity': quantity,
@@ -536,6 +540,7 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
     required String accessToken,
     required String campaignId,
     required String characterId,
+    required String requestId,
     required String type,
     required String name,
     int? durationRounds,
@@ -544,6 +549,7 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
     addConditionCalls.add({
       'campaignId': campaignId,
       'characterId': characterId,
+      'requestId': requestId,
       'type': type,
       'name': name,
       'durationRounds': durationRounds,

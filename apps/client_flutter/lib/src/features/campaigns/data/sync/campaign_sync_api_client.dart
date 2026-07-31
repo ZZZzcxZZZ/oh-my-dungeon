@@ -150,6 +150,7 @@ abstract interface class CampaignSyncApiClient {
     required String accessToken,
     required String campaignId,
     required String characterId,
+    required String requestId,
     required int delta,
     String? reason,
     int? baseRevision,
@@ -161,6 +162,7 @@ abstract interface class CampaignSyncApiClient {
     required String accessToken,
     required String campaignId,
     required String characterId,
+    required String requestId,
     required String itemId,
     required String name,
     int quantity,
@@ -173,6 +175,7 @@ abstract interface class CampaignSyncApiClient {
     required String accessToken,
     required String campaignId,
     required String characterId,
+    required String requestId,
     required String type,
     required String name,
     int? durationRounds,
@@ -541,11 +544,15 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
     required String accessToken,
     required String campaignId,
     required String characterId,
+    required String requestId,
     required int delta,
     String? reason,
     int? baseRevision,
   }) async {
-    final body = <String, Object?>{'delta': delta};
+    final body = <String, Object?>{
+      'requestId': requestId,
+      'delta': delta,
+    };
     if (reason != null && reason.trim().isNotEmpty) {
       body['reason'] = reason.trim();
     }
@@ -574,12 +581,14 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
     required String accessToken,
     required String campaignId,
     required String characterId,
+    required String requestId,
     required String itemId,
     required String name,
     int quantity = 1,
     int? baseRevision,
   }) async {
     final body = <String, Object?>{
+      'requestId': requestId,
       'itemId': itemId,
       'name': name,
       'quantity': quantity,
@@ -609,12 +618,17 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
     required String accessToken,
     required String campaignId,
     required String characterId,
+    required String requestId,
     required String type,
     required String name,
     int? durationRounds,
     int? baseRevision,
   }) async {
-    final body = <String, Object?>{'type': type, 'name': name};
+    final body = <String, Object?>{
+      'requestId': requestId,
+      'type': type,
+      'name': name,
+    };
     if (durationRounds != null) {
       body['durationRounds'] = durationRounds;
     }

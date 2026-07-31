@@ -46,10 +46,10 @@ export class CampaignsService {
   ) {}
 
   async createCampaign(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     input: CreateCampaignInput,
   ): Promise<CampaignView> {
-    this.policy.canCreateCampaign(actor);
+    this.policy.canCreateCampaign(user);
 
     const campaign = await this.prismaService.$transaction(async (tx) => {
       const created = await tx.campaign.create({
@@ -57,16 +57,16 @@ export class CampaignsService {
           name: input.name,
           description: input.description ?? "",
           system: input.system ?? "dnd5e",
-          ownerId: actor.userId,
+          ownerId: user.userId,
         },
       });
 
       await tx.campaignMember.create({
         data: {
           campaignId: created.id,
-          userId: actor.userId,
+          userId: user.userId,
           role: "owner",
-          displayName: actor.username,
+          displayName: user.username,
         },
       });
 
@@ -80,7 +80,7 @@ export class CampaignsService {
           title: "",
           mainKey: "main",
           participantIds: [],
-          createdBy: actor.userId,
+          createdBy: user.userId,
         },
       });
 
@@ -90,9 +90,9 @@ export class CampaignsService {
     return toCampaignView(campaign);
   }
 
-  async listCampaigns(actor: AccessTokenPayload): Promise<CampaignView[]> {
+  async listCampaigns(user: AccessTokenPayload): Promise<CampaignView[]> {
     const memberships = await this.prismaService.campaignMember.findMany({
-      where: { userId: actor.userId },
+      where: { userId: user.userId },
       include: {
         campaign: {
           include: {
@@ -114,7 +114,7 @@ export class CampaignsService {
         const unreadCount = await this.prismaService.campaignChatMessage.count({
           where: {
             campaignId: membership.campaignId,
-            senderId: { not: actor.userId },
+            senderId: { not: user.userId },
             ...(membership.lastReadAt
               ? { createdAt: { gt: membership.lastReadAt } }
               : {}),
@@ -126,50 +126,57 @@ export class CampaignsService {
   }
 
   async getCampaign(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
   ): Promise<CampaignView> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    this.policy.canViewCampaign(actor, campaign.context);
+    this.policy.canViewCampaign(user, campaign.context);
     return campaign.view;
   }
 
   async getWorkspaceContext(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
   ): Promise<CampaignWorkspaceContextView> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    this.policy.canViewCampaign(actor, campaign.context);
+    this.policy.canViewCampaign(user, campaign.context);
 
     const membership = campaign.members.find(
-      (member: any) => member.userId === actor.userId,
+      (member: any) => member.userId === user.userId,
     );
     if (!membership) {
       throw new ForbiddenException("Campaign membership not found");
     }
 
-    const actors = await this.prismaService.campaignActor.findMany({
+    const characters = await this.prismaService.campaignCharacter.findMany({
       where: { campaignId },
       orderBy: { createdAt: "asc" },
     });
+    const capabilities = this.policy.capabilitiesFor(user, campaign.context);
+    const visibleCharacters = characters.filter(
+      (character) =>
+        capabilities.canManageCampaign ||
+        character.characterType === "player" ||
+        character.visibleToPlayers === true,
+    );
 
     return {
       campaign: campaign.view,
       membership: toMembershipView(membership),
       members: campaign.view.memberPreview,
-      actors: actors.map(toCampaignWorkspaceActorView),
-      capabilities: this.policy.capabilitiesFor(actor, campaign.context),
+      characters: visibleCharacters.map(toCampaignWorkspaceCharacterView),
+      capabilities,
     };
   }
 
   async updateMemberBinding(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
     targetUserId: string,
-    actorId: string | null,
+    characterId: string | null,
   ): Promise<MembershipView> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    this.policy.canViewCampaign(actor, campaign.context);
+    this.policy.canViewCampaign(user, campaign.context);
 
     const membership = await this.prismaService.campaignMember.findFirst({
       where: { campaignId, userId: targetUserId },
@@ -179,56 +186,56 @@ export class CampaignsService {
     }
 
     this.policy.canManageMembershipBinding(
-      actor,
+      user,
       campaign.context,
       targetUserId,
-      !!membership.boundActorId,
+      !!membership.boundCharacterId,
     );
 
-    if (actorId === null) {
+    if (characterId === null) {
       const updated = await this.prismaService.campaignMember.update({
         where: { id: membership.id },
         data: {
-          boundActorId: null,
-          activeSpeakerActorId: null,
+          boundCharacterId: null,
+          activeSpeakerCharacterId: null,
           speakerMode: "ooc",
         },
       });
       return toMembershipView(updated);
     }
 
-    const campaignActor = await this.prismaService.campaignActor.findUnique({
-      where: { id: actorId },
+    const campaignCharacter = await this.prismaService.campaignCharacter.findUnique({
+      where: { id: characterId },
     });
-    if (!campaignActor || campaignActor.campaignId !== campaignId) {
-      throw new BadRequestException("Actor does not belong to this campaign");
+    if (!campaignCharacter || campaignCharacter.campaignId !== campaignId) {
+      throw new BadRequestException("Character does not belong to this campaign");
     }
-    this.policy.canBindActor(actor, campaign.context, targetUserId, {
-      ownerUserId: campaignActor.ownerUserId,
-      actorType: campaignActor.actorType,
-      status: campaignActor.status,
+    this.policy.canBindCharacter(user, campaign.context, targetUserId, {
+      ownerUserId: campaignCharacter.ownerUserId,
+      characterType: campaignCharacter.characterType,
+      status: campaignCharacter.status,
     });
 
     const updated = await this.prismaService.campaignMember.update({
       where: { id: membership.id },
       data: {
-        boundActorId: actorId,
-        activeSpeakerActorId: actorId,
-        speakerMode: "boundActor",
+        boundCharacterId: characterId,
+        activeSpeakerCharacterId: characterId,
+        speakerMode: "boundCharacter",
       },
     });
     return toMembershipView(updated);
   }
 
   async updateSpeaker(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
-    input: { speakerMode: "boundActor" | "actor" | "narrator" | "ooc"; actorId: string | null },
+    input: { speakerMode: "boundCharacter" | "character" | "narrator" | "ooc"; characterId: string | null },
   ): Promise<MembershipView> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    this.policy.canViewCampaign(actor, campaign.context);
+    this.policy.canViewCampaign(user, campaign.context);
     const membership = campaign.members.find(
-      (member: any) => member.userId === actor.userId,
+      (member: any) => member.userId === user.userId,
     );
     if (!membership) {
       throw new ForbiddenException("Campaign membership not found");
@@ -238,47 +245,47 @@ export class CampaignsService {
       return this.saveSpeaker(membership.id, null, "ooc");
     }
     if (input.speakerMode === "narrator") {
-      if (!this.policy.capabilitiesFor(actor, campaign.context).canSpeakAsNarrator) {
+      if (!this.policy.capabilitiesFor(user, campaign.context).canSpeakAsNarrator) {
         throw new ForbiddenException("Only a DM can speak as narrator");
       }
       return this.saveSpeaker(membership.id, null, "narrator");
     }
 
-    const actorId =
-      input.speakerMode === "boundActor"
-        ? membership.boundActorId
-        : input.actorId;
-    if (!actorId) {
-      throw new BadRequestException("A bound actor is required for this speaker mode");
+    const characterId =
+      input.speakerMode === "boundCharacter"
+        ? membership.boundCharacterId
+        : input.characterId;
+    if (!characterId) {
+      throw new BadRequestException("A bound character is required for this speaker mode");
     }
-    const campaignActor = await this.prismaService.campaignActor.findUnique({
-      where: { id: actorId },
+    const campaignCharacter = await this.prismaService.campaignCharacter.findUnique({
+      where: { id: characterId },
     });
-    if (!campaignActor || campaignActor.campaignId !== campaignId) {
-      throw new BadRequestException("Actor does not belong to this campaign");
+    if (!campaignCharacter || campaignCharacter.campaignId !== campaignId) {
+      throw new BadRequestException("Character does not belong to this campaign");
     }
-    this.policy.canSpeakAsActor(actor, campaign.context, {
-      ownerUserId: campaignActor.ownerUserId,
-      actorType: campaignActor.actorType,
-      status: campaignActor.status,
+    this.policy.canSpeakAsCharacter(user, campaign.context, {
+      ownerUserId: campaignCharacter.ownerUserId,
+      characterType: campaignCharacter.characterType,
+      status: campaignCharacter.status,
     });
     if (
-      !this.policy.capabilitiesFor(actor, campaign.context).canManageCampaign &&
-      membership.boundActorId !== actorId
+      !this.policy.capabilitiesFor(user, campaign.context).canManageCampaign &&
+      membership.boundCharacterId !== characterId
     ) {
-      throw new ForbiddenException("Players can only speak as their bound actor");
+      throw new ForbiddenException("Players can only speak as their bound character");
     }
-    return this.saveSpeaker(membership.id, actorId, input.speakerMode);
+    return this.saveSpeaker(membership.id, characterId, input.speakerMode);
   }
 
   async markRead(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
   ): Promise<MembershipView> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    this.policy.canViewCampaign(actor, campaign.context);
+    this.policy.canViewCampaign(user, campaign.context);
     const membership = campaign.members.find(
-      (member: any) => member.userId === actor.userId,
+      (member: any) => member.userId === user.userId,
     );
     if (!membership) {
       throw new ForbiddenException("Campaign membership not found");
@@ -292,27 +299,27 @@ export class CampaignsService {
 
   private async saveSpeaker(
     membershipId: string,
-    activeSpeakerActorId: string | null,
+    activeSpeakerCharacterId: string | null,
     speakerMode: string,
   ): Promise<MembershipView> {
     const updated = await this.prismaService.campaignMember.update({
       where: { id: membershipId },
-      data: { activeSpeakerActorId, speakerMode },
+      data: { activeSpeakerCharacterId, speakerMode },
     });
     return toMembershipView(updated);
   }
 
   async listMessages(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
     query?: string,
     conversationId?: string,
   ): Promise<CampaignChatMessageView[]> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    this.policy.canViewCampaign(actor, campaign.context);
+    this.policy.canViewCampaign(user, campaign.context);
 
     const conversationFilter = await this.resolveConversationFilter(
-      actor.userId,
+      user.userId,
       campaignId,
       conversationId,
     );
@@ -339,11 +346,11 @@ export class CampaignsService {
    * eventData.status，默认 'open'。
    */
   async listCheckRequests(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
   ): Promise<CampaignCheckRequestView[]> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    this.policy.canViewCampaign(actor, campaign.context);
+    this.policy.canViewCampaign(user, campaign.context);
 
     const messages = await this.prismaService.campaignChatMessage.findMany({
       where: {
@@ -379,12 +386,12 @@ export class CampaignsService {
    * archive_published 等），q 用于按 summary 模糊搜索。
    */
   async listJournal(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
     query: { type?: string; q?: string } = {},
   ): Promise<CampaignJournalEntryView[]> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    this.policy.canViewCampaign(actor, campaign.context);
+    this.policy.canViewCampaign(user, campaign.context);
 
     const entries = await this.prismaService.journalEntry.findMany({
       where: {
@@ -401,19 +408,19 @@ export class CampaignsService {
   }
 
   async sendMessage(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
     input: CreateCampaignChatMessageInput,
   ): Promise<CampaignChatMessageView> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    this.policy.canViewCampaign(actor, campaign.context);
+    this.policy.canViewCampaign(user, campaign.context);
 
     let content = input.content.trim();
     const kind = normalizeMessageKind(input.kind);
 
-    let displayName = actor.username;
+    let displayName = user.username;
     let avatarUrl: string | null = null;
-    let campaignActorId: string | null = null;
+    let campaignCharacterId: string | null = null;
     let actionSnapshot: Record<string, unknown> | null = null;
     let delegatedByUserId: string | null = null;
     let speakerAvatarAssetId: string | null = null;
@@ -421,33 +428,46 @@ export class CampaignsService {
     let publicHealthFraction: number | null = null;
     const eventData = validateEventData(kind, input.eventData);
     const membership = campaign.members.find(
-      (member: any) => member.userId === actor.userId,
+      (member: any) => member.userId === user.userId,
     );
     if (!membership) {
       throw new ForbiddenException("Campaign membership not found");
     }
-    const capabilities = this.policy.capabilitiesFor(actor, campaign.context);
-    const requestedActorId = input.campaignActorId ?? null;
+    const capabilities = this.policy.capabilitiesFor(user, campaign.context);
+    const explicitSpeaker = input.speaker ?? null;
+    const requestedCharacterId =
+      explicitSpeaker?.kind === "character"
+        ? explicitSpeaker.characterId
+        : input.campaignCharacterId ?? null;
 
     // Plan 2026-07-23 task 5.3: route the message to a conversation. If the
     // caller did not specify one, default to the campaign's main room
     // (creating it for legacy campaigns predating task 5.3).
     const conversation = await this.resolveMessageConversation(
-      actor.userId,
+      user.userId,
       campaignId,
       input.conversationId,
     );
     const conversationId = conversation.id;
 
-    if (input.speakerSnapshot) {
+    if (explicitSpeaker?.kind === "temporary" || input.speakerSnapshot) {
+      const snapshot =
+        explicitSpeaker?.kind === "temporary"
+          ? {
+              displayName: explicitSpeaker.displayName,
+              avatarUrl: explicitSpeaker.avatarUrl,
+            }
+          : input.speakerSnapshot!;
       return this.sendSpeakerSnapshotMessage(
-        actor,
+        user,
         campaignId,
         {
           kind,
           content,
           eventData,
-          speakerSnapshot: input.speakerSnapshot,
+          speakerSnapshot: snapshot,
+          speakerMode:
+            explicitSpeaker?.kind === "temporary" ? "temporary" : "snapshot",
           membership,
           capabilities,
           conversationId,
@@ -460,22 +480,22 @@ export class CampaignsService {
     }
 
     if (MANAGER_MESSAGE_KINDS.has(kind)) {
-      this.policy.canManageCampaign(actor, campaign.context);
+      this.policy.canManageCampaign(user, campaign.context);
     }
 
     if (!capabilities.canManageCampaign && kind !== "ooc") {
       if (
-        !membership.boundActorId ||
+        !membership.boundCharacterId ||
         membership.speakerMode === "ooc" ||
-        !membership.activeSpeakerActorId
+        !membership.activeSpeakerCharacterId
       ) {
         throw new ForbiddenException(
           "Bind a character and select it before sending roleplay messages",
         );
       }
       if (
-        requestedActorId !== null &&
-        requestedActorId !== membership.activeSpeakerActorId
+        requestedCharacterId !== null &&
+        requestedCharacterId !== membership.activeSpeakerCharacterId
       ) {
         throw new ForbiddenException(
           "Players can only speak as their active campaign character",
@@ -483,61 +503,88 @@ export class CampaignsService {
       }
     }
 
+    if (
+      explicitSpeaker?.kind === "narrator" &&
+      !capabilities.canSpeakAsNarrator
+    ) {
+      throw new ForbiddenException("Only a DM can speak as narrator");
+    }
+    if (explicitSpeaker?.kind === "ooc" && kind !== "ooc") {
+      throw new BadRequestException("OOC speaker requires an ooc message");
+    }
+    if (explicitSpeaker?.kind !== "ooc" && kind === "ooc" && explicitSpeaker) {
+      throw new BadRequestException("OOC messages require the ooc speaker");
+    }
+
     const speakerMode =
-      kind === "ooc"
-        ? "ooc"
-        : membership.speakerMode ?? (requestedActorId ? "actor" : "ooc");
-    const effectiveActorId =
+      explicitSpeaker?.kind === "character"
+        ? "character"
+        : explicitSpeaker?.kind === "narrator"
+          ? "narrator"
+          : explicitSpeaker?.kind === "ooc" || kind === "ooc"
+            ? "ooc"
+            : membership.speakerMode ?? (requestedCharacterId ? "character" : "ooc");
+    const effectiveCharacterId =
       kind === "ooc"
         ? null
         : !capabilities.canManageCampaign
-          ? membership.activeSpeakerActorId
-          : requestedActorId ??
-            (speakerMode === "actor" || speakerMode === "boundActor"
-              ? membership.activeSpeakerActorId ?? null
+          ? membership.activeSpeakerCharacterId
+          : requestedCharacterId ??
+            (speakerMode === "character" || speakerMode === "boundCharacter"
+              ? membership.activeSpeakerCharacterId ?? null
               : null);
     const ooc = speakerMode === "ooc";
 
-    if (input.actionId && !effectiveActorId) {
-      throw new BadRequestException("Character action requires an actor");
+    if (input.actionId && !effectiveCharacterId) {
+      throw new BadRequestException("Character action requires an character");
     }
 
-    if (effectiveActorId) {
-      const campaignActor = await this.prismaService.campaignActor.findUnique({
-        where: { id: effectiveActorId },
+    if (effectiveCharacterId) {
+      const campaignCharacter = await this.prismaService.campaignCharacter.findUnique({
+        where: { id: effectiveCharacterId },
       });
-      if (!campaignActor || campaignActor.campaignId !== campaignId) {
-        throw new BadRequestException("Actor does not belong to this campaign");
+      if (!campaignCharacter || campaignCharacter.campaignId !== campaignId) {
+        throw new BadRequestException("Character does not belong to this campaign");
       }
-      this.policy.canSpeakAsActor(actor, campaign.context, {
-        ownerUserId: campaignActor.ownerUserId,
-        actorType: campaignActor.actorType ?? "player",
-        status: campaignActor.status ?? "active",
+      this.policy.canSpeakAsCharacter(user, campaign.context, {
+        ownerUserId: campaignCharacter.ownerUserId,
+        characterType: campaignCharacter.characterType ?? "player",
+        status: campaignCharacter.status ?? "active",
       });
-      const sheet = (campaignActor.sheetJson ?? {}) as Record<string, unknown>;
+      const sheet = (campaignCharacter.sheetJson ?? {}) as Record<string, unknown>;
       displayName = typeof sheet.name === "string" ? sheet.name : "";
       avatarUrl = typeof sheet.avatarUrl === "string" ? sheet.avatarUrl : null;
-      campaignActorId = effectiveActorId;
-      speakerAvatarAssetId = campaignActor.avatarAssetId ?? null;
+      campaignCharacterId = effectiveCharacterId;
+      speakerAvatarAssetId = campaignCharacter.avatarAssetId ?? null;
       publicHealthState = resolvePublicHealthState(sheet);
       publicHealthFraction = resolvePublicHealthFraction(sheet);
       if (
         capabilities.canManageCampaign &&
-        campaignActor.actorType === "player" &&
-        campaignActor.ownerUserId &&
-        campaignActor.ownerUserId !== actor.userId
+        campaignCharacter.characterType !== "player" &&
+        campaignCharacter.visibleToPlayers === false
       ) {
-        delegatedByUserId = actor.userId;
+        await this.prismaService.campaignCharacter.update({
+          where: { id: campaignCharacter.id },
+          data: { visibleToPlayers: true },
+        });
+      }
+      if (
+        capabilities.canManageCampaign &&
+        campaignCharacter.characterType === "player" &&
+        campaignCharacter.ownerUserId &&
+        campaignCharacter.ownerUserId !== user.userId
+      ) {
+        delegatedByUserId = user.userId;
       }
       if (input.actionId) {
         actionSnapshot = resolveActionSnapshot(
           sheet,
           input.actionId,
-          campaignActor.revision,
+          campaignCharacter.revision,
         );
         if (!actionSnapshot) {
           throw new BadRequestException(
-            "Action does not belong to this campaign actor",
+            "Action does not belong to this campaign character",
           );
         }
         content = actionSnapshot.name as string;
@@ -549,11 +596,11 @@ export class CampaignsService {
     }
 
     if (kind === "checkRequest") {
-      const targetActorId = eventData?.targetActorId as string;
-      const targetActor = await this.prismaService.campaignActor.findUnique({
-        where: { id: targetActorId },
+      const targetCharacterId = eventData?.targetCharacterId as string;
+      const targetCharacter = await this.prismaService.campaignCharacter.findUnique({
+        where: { id: targetCharacterId },
       });
-      if (!targetActor || targetActor.campaignId !== campaignId) {
+      if (!targetCharacter || targetCharacter.campaignId !== campaignId) {
         throw new BadRequestException(
           "Check target does not belong to this campaign",
         );
@@ -570,14 +617,14 @@ export class CampaignsService {
         throw new BadRequestException("Check request not found");
       }
       const originalEventData = asRecord(originalRequest.eventData) ?? {};
-      const targetActorId = originalEventData.targetActorId;
+      const targetCharacterId = originalEventData.targetCharacterId;
       if (
-        typeof targetActorId === "string" &&
-        targetActorId.length > 0 &&
-        targetActorId !== effectiveActorId
+        typeof targetCharacterId === "string" &&
+        targetCharacterId.length > 0 &&
+        targetCharacterId !== effectiveCharacterId
       ) {
         throw new ForbiddenException(
-          "Check request must be answered by its target actor",
+          "Check request must be answered by its target character",
         );
       }
       if (originalEventData.status === "closed") {
@@ -588,7 +635,7 @@ export class CampaignsService {
           where: {
             campaignId,
             kind: "roll",
-            senderId: actor.userId,
+            senderId: user.userId,
             eventData: { path: ["requestId"], equals: requestId },
           },
         });
@@ -601,8 +648,8 @@ export class CampaignsService {
 
     const messageData: Prisma.CampaignChatMessageUncheckedCreateInput = {
       campaignId,
-      senderId: actor.userId,
-      campaignActorId,
+      senderId: user.userId,
+      campaignCharacterId,
       displayName,
       avatarUrl,
       speakerMode,
@@ -654,14 +701,14 @@ export class CampaignsService {
 
   /**
    * DM-only path: writes a single message under a use-once speaker snapshot.
-   * Plan 2026-07-23 task 5.2: no CampaignActor is created and the DM's
-   * activeSpeakerActorId is NOT mutated — the snapshot lives only on this one
-   * message row. The DM's next message uses whichever actor they had selected
-   * before. Replaces the old sendDraftActorMessage which persisted a temporary
-   * actor and switched the active speaker.
+   * Plan 2026-07-23 task 5.2: no CampaignCharacter is created and the DM's
+   * activeSpeakerCharacterId is NOT mutated — the snapshot lives only on this one
+   * message row. The DM's next message uses whichever character they had selected
+   * before. Replaces the old sendDraftCharacterMessage which persisted a temporary
+   * character and switched the active speaker.
    */
   private async sendSpeakerSnapshotMessage(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
     input: {
       kind: string;
@@ -672,6 +719,7 @@ export class CampaignsService {
       capabilities: { canManageCampaign: boolean };
       conversationId: string;
       conversationParticipantIds: string[] | null;
+      speakerMode: "snapshot" | "temporary";
     },
   ): Promise<CampaignChatMessageView> {
     if (!input.capabilities.canManageCampaign) {
@@ -690,16 +738,16 @@ export class CampaignsService {
     }
     const avatarUrl = input.speakerSnapshot.avatarUrl ?? null;
 
-    // No transaction needed: a single row write. No actor creation, no
+    // No transaction needed: a single row write. No character creation, no
     // membership mutation — the snapshot is self-contained on the message.
     const created = await this.prismaService.campaignChatMessage.create({
       data: {
         campaignId,
-        senderId: actor.userId,
-        campaignActorId: null,
+        senderId: user.userId,
+        campaignCharacterId: null,
         displayName,
         avatarUrl,
-        speakerMode: "snapshot",
+        speakerMode: input.speakerMode,
         delegatedByUserId: null,
         speakerAvatarAssetId: null,
         publicHealthState: null,
@@ -732,11 +780,11 @@ export class CampaignsService {
   }
 
   async createInvite(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     input: CreateInviteInput,
   ): Promise<InviteView> {
     const campaign = await this.fetchCampaignContext(input.campaignId);
-    this.policy.canManageCampaign(actor, campaign.context);
+    this.policy.canManageCampaign(user, campaign.context);
 
     const code = generateInviteCode();
     const created = await this.prismaService.campaignInvite.create({
@@ -748,7 +796,7 @@ export class CampaignsService {
         maxUses: input.maxUses ?? 1,
         usedCount: 0,
         requireApproval: false,
-        createdBy: actor.userId,
+        createdBy: user.userId,
       },
     });
 
@@ -756,11 +804,11 @@ export class CampaignsService {
   }
 
   async listInvites(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
   ): Promise<InviteView[]> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    this.policy.canManageCampaign(actor, campaign.context);
+    this.policy.canManageCampaign(user, campaign.context);
 
     const invites = await this.prismaService.campaignInvite.findMany({
       where: { campaignId },
@@ -770,7 +818,7 @@ export class CampaignsService {
   }
 
   async joinCampaign(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     code: string,
   ): Promise<MembershipView> {
     const invite = await this.prismaService.campaignInvite.findUnique({
@@ -792,7 +840,7 @@ export class CampaignsService {
     const existingMembership =
       await this.prismaService.campaignMember.findFirst({
         where: {
-          userId: actor.userId,
+          userId: user.userId,
           campaignId: invite?.campaignId ?? "__none__",
         },
       });
@@ -811,7 +859,7 @@ export class CampaignsService {
     if (existingSummary) {
       const membership = await this.prismaService.campaignMember.findFirst({
         where: {
-          userId: actor.userId,
+          userId: user.userId,
           campaignId: invite!.campaignId,
         },
       });
@@ -822,9 +870,9 @@ export class CampaignsService {
       const created = await tx.campaignMember.create({
         data: {
           campaignId: invite!.campaignId,
-          userId: actor.userId,
+          userId: user.userId,
           role: PUBLIC_INVITE_ROLE,
-          displayName: actor.username,
+          displayName: user.username,
         },
       });
 
@@ -1012,19 +1060,22 @@ function toCampaignView(campaign: any, unreadCount = 0): CampaignView {
   };
 }
 
-function toCampaignWorkspaceActorView(actor: any) {
-  const sheet = asRecord(actor.sheetJson) ?? {};
+function toCampaignWorkspaceCharacterView(character: any) {
+  const sheet = asRecord(character.sheetJson) ?? {};
   return {
-    id: actor.id,
-    ownerUserId: actor.ownerUserId ?? null,
-    actorType: actor.actorType,
-    status: actor.status,
-    lifecycle: actor.lifecycle ?? "persistent",
+    id: character.id,
+    ownerUserId: character.ownerUserId ?? null,
+    characterType: character.characterType,
+    status: character.status,
+    lifecycle: character.lifecycle ?? "persistent",
+    visibleToPlayers:
+      character.characterType === "player" ||
+      character.visibleToPlayers === true,
     displayName:
       typeof sheet.name === "string" && sheet.name.trim()
         ? sheet.name.trim()
-        : "Unnamed actor",
-    avatarAssetId: actor.avatarAssetId ?? null,
+        : "Unnamed character",
+    avatarAssetId: character.avatarAssetId ?? null,
     publicHealthState: resolvePublicHealthState(sheet),
   };
 }
@@ -1072,10 +1123,10 @@ function toCampaignChatMessageView(message: any): CampaignChatMessageView {
     id: message.id,
     campaignId: message.campaignId,
     senderId: message.senderId,
-    campaignActorId: message.campaignActorId ?? null,
+    campaignCharacterId: message.campaignCharacterId ?? null,
     displayName: message.displayName,
     avatarUrl: message.avatarUrl ?? null,
-    speakerMode: message.speakerMode ?? "actor",
+    speakerMode: message.speakerMode ?? "character",
     delegatedByUserId: message.delegatedByUserId ?? null,
     speakerAvatarAssetId: message.speakerAvatarAssetId ?? null,
     publicHealthState: message.publicHealthState ?? null,
@@ -1104,7 +1155,7 @@ function toCampaignChatMessageView(message: any): CampaignChatMessageView {
 function resolveActionSnapshot(
   sheet: Record<string, unknown>,
   actionId: string,
-  actorRevision: number,
+  characterRevision: number,
 ): Record<string, unknown> | null {
   const data = asRecord(sheet.data);
   const actions = Array.isArray(data?.actions) ? data.actions : [];
@@ -1120,7 +1171,7 @@ function resolveActionSnapshot(
     name: action.name.trim(),
     ...(typeof action.entryId === "string" ? { entryId: action.entryId } : {}),
     ...(typeof action.formula === "string" ? { formula: action.formula } : {}),
-    actorRevision,
+    characterRevision,
   };
 }
 
@@ -1201,9 +1252,9 @@ function validateEventData(
   if (!value) {
     throw new BadRequestException("Check request data is required");
   }
-  const targetActorId = requiredTrimmedString(
-    value.targetActorId,
-    "Check target actor",
+  const targetCharacterId = requiredTrimmedString(
+    value.targetCharacterId,
+    "Check target character",
   );
   const checkType = requiredTrimmedString(value.checkType, "Check type");
   if (!new Set(["ability", "save", "skill"]).has(checkType)) {
@@ -1228,7 +1279,7 @@ function validateEventData(
     throw new BadRequestException("Check DC must be an integer from 1 to 30");
   }
   return {
-    targetActorId,
+    targetCharacterId,
     checkType,
     checkKey,
     label,
@@ -1284,9 +1335,9 @@ function toMembershipView(membership: any): MembershipView {
     userId: membership.userId,
     role: membership.role,
     displayName: membership.displayName,
-    boundActorId: membership.boundActorId ?? null,
-    activeSpeakerActorId: membership.activeSpeakerActorId ?? null,
-    speakerMode: membership.speakerMode ?? "boundActor",
+    boundCharacterId: membership.boundCharacterId ?? null,
+    activeSpeakerCharacterId: membership.activeSpeakerCharacterId ?? null,
+    speakerMode: membership.speakerMode ?? "boundCharacter",
     lastReadAt: membership.lastReadAt
       ? membership.lastReadAt instanceof Date
         ? membership.lastReadAt.toISOString()

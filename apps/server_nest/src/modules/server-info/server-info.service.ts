@@ -1,33 +1,33 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ServerSettingsService } from '../server-settings/server-settings.service';
 import type { ServerMetadata } from './server-metadata.type';
 
 @Injectable()
 export class ServerInfoService {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly serverSettingsService: ServerSettingsService
+  ) {}
 
-  getMetadata(): ServerMetadata {
+  async getMetadata(): Promise<ServerMetadata> {
     const publicBaseUrl = this.configService.get<string>(
       'PUBLIC_BASE_URL',
       'http://localhost:3000'
     );
-    const serverName = this.configService.get<string>(
-      'SERVER_NAME',
-      'D&D Table Tool'
-    );
-    const registrationEnabled =
-      this.configService.get<string>('REGISTRATION_ENABLED', 'true') === 'true';
+    const settings = await this.serverSettingsService.getDiscoverySettings();
 
     return {
-      name: serverName,
+      instanceId: settings.instanceId,
+      name: settings.serverName,
       version: '0.1.0',
       apiBaseUrl: `${publicBaseUrl}/api`,
       websocketUrl: this.toWebSocketUrl(publicBaseUrl),
-      registrationEnabled,
+      registrationEnabled: settings.registrationEnabled,
       serverMode: 'self_hosted',
       supportedSystems: ['dnd5e'],
       apiVersion: '1',
-      features: ['campaignArchives', 'campaignActors', 'campaignChat']
+      features: ['campaignArchives', 'campaignCharacters', 'campaignChat']
     };
   }
 

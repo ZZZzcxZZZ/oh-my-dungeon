@@ -22,7 +22,7 @@ export interface CampaignChatMessageView {
   id: string;
   campaignId: string;
   senderId: string;
-  campaignActorId: string | null;
+  campaignCharacterId: string | null;
   displayName: string;
   avatarUrl: string | null;
   speakerMode: string;
@@ -41,8 +41,8 @@ export interface CampaignChatMessageView {
 /**
  * Use-once speaker snapshot. Plan 2026-07-23 task 5.2: a DM may send a single
  * message under a throwaway identity (e.g. an NPC the party just met) without
- * persisting a CampaignActor. The snapshot is written onto the message row
- * directly and discarded — no actor is created and the DM's active speaker is
+ * persisting a CampaignCharacter. The snapshot is written onto the message row
+ * directly and discarded — no character is created and the DM's active speaker is
  * not mutated.
  */
 export interface SpeakerSnapshotInput {
@@ -50,13 +50,24 @@ export interface SpeakerSnapshotInput {
   avatarUrl?: string | null;
 }
 
+export type MessageSpeakerInput =
+  | { kind: "narrator" }
+  | { kind: "ooc" }
+  | { kind: "character"; characterId: string }
+  | {
+      kind: "temporary";
+      displayName: string;
+      avatarUrl?: string | null;
+    };
+
 export interface CreateCampaignChatMessageInput {
   kind?: string;
   content: string;
-  campaignActorId?: string | null;
+  campaignCharacterId?: string | null;
   actionId?: string | null;
   eventData?: Record<string, unknown> | null;
   speakerSnapshot?: SpeakerSnapshotInput | null;
+  speaker?: MessageSpeakerInput | null;
   conversationId?: string | null;
 }
 
@@ -94,8 +105,8 @@ export interface MembershipView {
   userId: string;
   role: string;
   displayName: string;
-  boundActorId: string | null;
-  activeSpeakerActorId: string | null;
+  boundCharacterId: string | null;
+  activeSpeakerCharacterId: string | null;
   speakerMode: string;
   lastReadAt: string | null;
   joinedAt: string;
@@ -105,20 +116,21 @@ export interface CampaignCapabilitiesView {
   canManageCampaign: boolean;
   canManageMembers: boolean;
   canInviteMembers: boolean;
-  canCreateActors: boolean;
-  canManageActors: boolean;
-  canEditAnyActor: boolean;
+  canCreateCharacters: boolean;
+  canManageCharacters: boolean;
+  canEditAnyCharacter: boolean;
   canSpeakAsNarrator: boolean;
   canCreateArchive: boolean;
   canManageArchive: boolean;
 }
 
-export interface CampaignWorkspaceActorView {
+export interface CampaignWorkspaceCharacterView {
   id: string;
   ownerUserId: string | null;
-  actorType: string;
+  characterType: string;
   status: string;
   lifecycle: string;
+  visibleToPlayers: boolean;
   displayName: string;
   avatarAssetId: string | null;
   publicHealthState: "healthy" | "injured" | "critical" | "down" | "unknown";
@@ -128,7 +140,7 @@ export interface CampaignWorkspaceContextView {
   campaign: CampaignView;
   membership: MembershipView;
   members: CampaignMemberPreview[];
-  actors: CampaignWorkspaceActorView[];
+  characters: CampaignWorkspaceCharacterView[];
   capabilities: CampaignCapabilitiesView;
 }
 

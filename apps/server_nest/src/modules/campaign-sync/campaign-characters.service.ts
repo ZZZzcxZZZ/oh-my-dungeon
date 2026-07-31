@@ -8,27 +8,27 @@ import type { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AccessTokenPayload } from "../auth/auth.types";
 import {
-  CampaignActorContext,
+  CampaignCharacterContext,
   CampaignContext,
   CampaignPolicy,
 } from "../campaigns/policies/campaign.policy";
 import { CampaignsGateway } from "../realtime/campaigns.gateway";
 import { CampaignChangeService } from "./campaign-change.service";
 import type {
-  ArchiveActorInput,
-  AssignActorInput,
-  CampaignActorAuditRecord,
-  CampaignActorSummary,
-  CampaignActorStatus,
-  CampaignActorType,
+  ArchiveCharacterInput,
+  AssignCharacterInput,
+  CampaignCharacterAuditRecord,
+  CampaignCharacterSummary,
+  CampaignCharacterStatus,
+  CampaignCharacterType,
   CampaignRuntimeCommand,
-  CreateActorInput,
-  PublishActorInput,
+  CreateCharacterInput,
+  PublishCharacterInput,
   RuntimeCommandInput,
-  UpdateActorInput,
+  UpdateCharacterInput,
 } from "./campaign-sync.types";
 
-const ALLOWED_ACTOR_TYPES: ReadonlySet<CampaignActorType> = new Set([
+const ALLOWED_CHARACTER_TYPES: ReadonlySet<CampaignCharacterType> = new Set([
   "player",
   "npc",
   "unclaimed",
@@ -46,7 +46,7 @@ const RUNTIME_COMMAND_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 @Injectable()
-export class CampaignActorsService {
+export class CampaignCharactersService {
   constructor(
     private readonly prismaService: PrismaService,
     private readonly policy: CampaignPolicy,
@@ -55,29 +55,29 @@ export class CampaignActorsService {
   ) {}
 
   async publish(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
-    input: PublishActorInput,
-  ): Promise<CampaignActorSummary> {
+    input: PublishCharacterInput,
+  ): Promise<CampaignCharacterSummary> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    this.policy.canPublishActor(actor, campaign);
+    this.policy.canPublishCharacter(user, campaign);
 
     if (!isNonEmptyString(input.sourceCharacterId)) {
       throw new BadRequestException("sourceCharacterId is required");
     }
-    if (!ALLOWED_ACTOR_TYPES.has(input.actorType)) {
-      throw new BadRequestException(`Unknown actorType: ${input.actorType}`);
+    if (!ALLOWED_CHARACTER_TYPES.has(input.characterType)) {
+      throw new BadRequestException(`Unknown characterType: ${input.characterType}`);
     }
-    if (input.actorType !== "player") {
+    if (input.characterType !== "player") {
       throw new BadRequestException(
-        "Only player actors can be self-published; use the DM create endpoint for NPCs",
+        "Only player characters can be self-published; use the DM create endpoint for NPCs",
       );
     }
     if (!isObject(input.sheet)) {
       throw new BadRequestException("sheet must be an object");
     }
 
-    const existing = await this.prismaService.campaignActor.findUnique({
+    const existing = await this.prismaService.campaignCharacter.findUnique({
       where: {
         campaignId_sourceCharacterId: {
           campaignId,
@@ -91,31 +91,39 @@ export class CampaignActorsService {
 
     if (existing) {
       // Re-publishing is idempotent: update the sheet in place and bump
-      // revision, leaving ownerUserId untouched so a re-publish does not
-      // reassign ownership.
-      return this.applyUpdate(actor, campaignId, existing, {
+      // revision. An archived campaign copy is restored because selecting the
+      // local character again is the player's explicit "rejoin" action.
+      if (existing.ownerUserId !== user.userId) {
+        throw new ConflictException(
+          "This local character is already published by another campaign member",
+        );
+      }
+      return this.applyUpdate(user, campaignId, existing, {
         baseRevision: input.baseRevision,
         sheet: sheetJson,
+      }, {
+        reactivatePublishedCharacter: true,
       });
     }
 
     const { row: created, cursor } = await this.prismaService.$transaction(async (tx) => {
-      const row = await tx.campaignActor.create({
+      const row = await tx.campaignCharacter.create({
         data: {
           campaignId,
-          ownerUserId: actor.userId,
+          ownerUserId: user.userId,
           sourceCharacterId: input.sourceCharacterId,
-          actorType: input.actorType,
+          characterType: input.characterType,
           status: "active",
+          visibleToPlayers: true,
           sheetJson: sheetJson as unknown as Prisma.InputJsonValue,
           revision,
-          updatedBy: actor.userId,
+          updatedBy: user.userId,
         },
       });
       const change = await this.changeService.recordInTransaction(
         tx,
         campaignId,
-        "actor",
+        "character",
         row.id,
         "upsert",
         revision,
@@ -123,24 +131,24 @@ export class CampaignActorsService {
       return { row, cursor: change.cursor };
     });
 
-    this.broadcastChange(campaignId, "actor", cursor);
-    return toActorSummary(created);
+    this.broadcastChange(campaignId, "character", cursor);
+    return toCharacterSummary(created);
   }
 
   async create(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
-    input: CreateActorInput,
-  ): Promise<CampaignActorSummary> {
+    input: CreateCharacterInput,
+  ): Promise<CampaignCharacterSummary> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    this.policy.canManageCampaign(actor, campaign);
+    this.policy.canManageCampaign(user, campaign);
 
-    if (!ALLOWED_ACTOR_TYPES.has(input.actorType)) {
-      throw new BadRequestException(`Unknown actorType: ${input.actorType}`);
+    if (!ALLOWED_CHARACTER_TYPES.has(input.characterType)) {
+      throw new BadRequestException(`Unknown characterType: ${input.characterType}`);
     }
-    if (input.actorType === "player") {
+    if (input.characterType === "player") {
       throw new BadRequestException(
-        "Player actors must be self-published via /actors/publish",
+        "Player characters must be self-published via /characters/publish",
       );
     }
     if (!isObject(input.sheet)) {
@@ -166,23 +174,24 @@ export class CampaignActorsService {
 
     const revision = 1;
     const { row: created, cursor } = await this.prismaService.$transaction(async (tx) => {
-      const row = await tx.campaignActor.create({
+      const row = await tx.campaignCharacter.create({
         data: {
           campaignId,
           ownerUserId,
           sourceCharacterId: null,
-          actorType: input.actorType,
+          characterType: input.characterType,
           status: "active",
           lifecycle: input.lifecycle ?? "persistent",
+          visibleToPlayers: false,
           sheetJson: input.sheet as unknown as Prisma.InputJsonValue,
           revision,
-          updatedBy: actor.userId,
+          updatedBy: user.userId,
         },
       });
       const change = await this.changeService.recordInTransaction(
         tx,
         campaignId,
-        "actor",
+        "character",
         row.id,
         "upsert",
         revision,
@@ -190,81 +199,100 @@ export class CampaignActorsService {
       return { row, cursor: change.cursor };
     });
 
-    this.broadcastChange(campaignId, "actor", cursor);
-    return toActorSummary(created);
+    this.broadcastChange(campaignId, "character", cursor);
+    return toCharacterSummary(created);
   }
 
   async list(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
-  ): Promise<CampaignActorSummary[]> {
+  ): Promise<CampaignCharacterSummary[]> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    this.policy.canViewCampaign(actor, campaign);
+    this.policy.canViewCampaign(user, campaign);
 
-    const rows = await this.prismaService.campaignActor.findMany({
+    const rows = await this.prismaService.campaignCharacter.findMany({
       where: { campaignId },
       orderBy: { createdAt: "asc" },
     });
-    return rows.map(toActorSummary);
+    const canManage = this.policy.capabilitiesFor(
+      user,
+      campaign,
+    ).canManageCampaign;
+    return rows
+      .filter(
+        (row) =>
+          canManage ||
+          row.characterType === "player" ||
+          row.visibleToPlayers === true,
+      )
+      .map(toCharacterSummary);
   }
 
   async get(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
-    actorId: string,
-  ): Promise<CampaignActorSummary> {
-    const { row, ctx } = await this.loadActor(campaignId, actorId);
-    this.policy.canViewActor(actor, ctx);
-    return toActorSummary(row);
+    characterId: string,
+  ): Promise<CampaignCharacterSummary> {
+    const { row, ctx } = await this.loadCharacter(campaignId, characterId);
+    this.policy.canViewCharacter(user, ctx);
+    return toCharacterSummary(row);
   }
 
   async update(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
-    actorId: string,
-    input: UpdateActorInput,
-  ): Promise<CampaignActorSummary> {
-    const { row, ctx } = await this.loadActor(campaignId, actorId);
+    characterId: string,
+    input: UpdateCharacterInput,
+  ): Promise<CampaignCharacterSummary> {
+    const { row, ctx } = await this.loadCharacter(campaignId, characterId);
     // Spec §完整管理: 转为常驻 — lifecycle 变更需要 DM 权限；普通 sheet
-    // 编辑沿用 canEditOwnedActor，保持玩家自编辑角色卡的能力。
+    // 编辑沿用 canEditOwnedCharacter，保持玩家自编辑角色卡的能力。
     const currentLifecycle = row.lifecycle === "temporary" ? "temporary" : "persistent";
     const lifecycleChanged =
       input.lifecycle !== undefined && input.lifecycle !== currentLifecycle;
-    if (lifecycleChanged) {
-      this.policy.canManageActor(actor, ctx);
-    } else {
-      this.policy.canEditOwnedActor(actor, ctx);
+    const currentVisibility =
+      row.characterType === "player" || row.visibleToPlayers === true;
+    const visibilityChanged =
+      input.visibleToPlayers !== undefined &&
+      input.visibleToPlayers !== currentVisibility;
+    if (row.characterType === "player" && input.visibleToPlayers === false) {
+      throw new BadRequestException("Player characters are always visible");
     }
-    return this.applyUpdate(actor, campaignId, row, input);
+    if (lifecycleChanged || visibilityChanged) {
+      this.policy.canManageCharacter(user, ctx);
+    } else {
+      this.policy.canEditOwnedCharacter(user, ctx);
+    }
+    return this.applyUpdate(user, campaignId, row, input);
   }
 
   async archive(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
-    actorId: string,
-    input: ArchiveActorInput,
-  ): Promise<CampaignActorSummary> {
-    const { row, ctx } = await this.loadActor(campaignId, actorId);
-    this.policy.canManageActor(actor, ctx);
+    characterId: string,
+    input: ArchiveCharacterInput,
+  ): Promise<CampaignCharacterSummary> {
+    const { row, ctx } = await this.loadCharacter(campaignId, characterId);
+    this.policy.canManageCharacter(user, ctx);
     if (row.revision !== input.baseRevision) {
       throw conflict(row);
     }
 
     const nextRevision = row.revision + 1;
     const { row: updated, cursor } = await this.prismaService.$transaction(async (tx) => {
-      const result = await tx.campaignActor.update({
-        where: { id: actorId },
+      const result = await tx.campaignCharacter.update({
+        where: { id: characterId },
         data: {
-          status: "archived" satisfies CampaignActorStatus,
+          status: "archived" satisfies CampaignCharacterStatus,
           revision: nextRevision,
-          updatedBy: actor.userId,
+          updatedBy: user.userId,
         },
       });
-      await tx.campaignActorAudit.create({
+      await tx.campaignCharacterAudit.create({
         data: {
-          campaignActorId: actorId,
+          campaignCharacterId: characterId,
           campaignId,
-          actorUserId: actor.userId,
+          characterUserId: user.userId,
           baseRevision: row.revision,
           resultRevision: nextRevision,
           changedPaths: ["status"] as unknown as Prisma.InputJsonValue,
@@ -275,26 +303,81 @@ export class CampaignActorsService {
       const change = await this.changeService.recordInTransaction(
         tx,
         campaignId,
-        "actor",
-        actorId,
+        "character",
+        characterId,
         "upsert",
         nextRevision,
       );
       return { row: result, cursor: change.cursor };
     });
 
-    this.broadcastChange(campaignId, "actor", cursor);
-    return toActorSummary(updated);
+    this.broadcastChange(campaignId, "character", cursor);
+    return toCharacterSummary(updated);
+  }
+
+  async restore(
+    user: AccessTokenPayload,
+    campaignId: string,
+    characterId: string,
+    input: ArchiveCharacterInput,
+  ): Promise<CampaignCharacterSummary> {
+    const { row, ctx } = await this.loadCharacter(campaignId, characterId);
+    this.policy.canManageCharacter(user, ctx);
+    if (row.revision !== input.baseRevision) {
+      throw conflict(row);
+    }
+
+    const nextRevision = row.revision + 1;
+    const { row: updated, cursor } = await this.prismaService.$transaction(
+      async (tx) => {
+        const result = await tx.campaignCharacter.update({
+          where: { id: characterId },
+          data: {
+            status: "active" satisfies CampaignCharacterStatus,
+            revision: nextRevision,
+            updatedBy: user.userId,
+          },
+        });
+        await tx.campaignCharacterAudit.create({
+          data: {
+            campaignCharacterId: characterId,
+            campaignId,
+            characterUserId: user.userId,
+            baseRevision: row.revision,
+            resultRevision: nextRevision,
+            changedPaths: ["status"] as unknown as Prisma.InputJsonValue,
+            beforeJson: {
+              status: row.status,
+            } as unknown as Prisma.InputJsonValue,
+            afterJson: {
+              status: "active",
+            } as unknown as Prisma.InputJsonValue,
+          },
+        });
+        const change = await this.changeService.recordInTransaction(
+          tx,
+          campaignId,
+          "character",
+          characterId,
+          "upsert",
+          nextRevision,
+        );
+        return { row: result, cursor: change.cursor };
+      },
+    );
+
+    this.broadcastChange(campaignId, "character", cursor);
+    return toCharacterSummary(updated);
   }
 
   async assign(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
-    actorId: string,
-    input: AssignActorInput,
-  ): Promise<CampaignActorSummary> {
-    const { row, ctx } = await this.loadActor(campaignId, actorId);
-    this.policy.canManageActor(actor, ctx);
+    characterId: string,
+    input: AssignCharacterInput,
+  ): Promise<CampaignCharacterSummary> {
+    const { row, ctx } = await this.loadCharacter(campaignId, characterId);
+    this.policy.canManageCharacter(user, ctx);
     if (row.revision !== input.baseRevision) {
       throw conflict(row);
     }
@@ -317,19 +400,19 @@ export class CampaignActorsService {
 
     const nextRevision = row.revision + 1;
     const { row: updated, cursor } = await this.prismaService.$transaction(async (tx) => {
-      const result = await tx.campaignActor.update({
-        where: { id: actorId },
+      const result = await tx.campaignCharacter.update({
+        where: { id: characterId },
         data: {
           ownerUserId,
           revision: nextRevision,
-          updatedBy: actor.userId,
+          updatedBy: user.userId,
         },
       });
-      await tx.campaignActorAudit.create({
+      await tx.campaignCharacterAudit.create({
         data: {
-          campaignActorId: actorId,
+          campaignCharacterId: characterId,
           campaignId,
-          actorUserId: actor.userId,
+          characterUserId: user.userId,
           baseRevision: row.revision,
           resultRevision: nextRevision,
           changedPaths: ["ownerUserId"] as unknown as Prisma.InputJsonValue,
@@ -340,26 +423,26 @@ export class CampaignActorsService {
       const change = await this.changeService.recordInTransaction(
         tx,
         campaignId,
-        "actor",
-        actorId,
+        "character",
+        characterId,
         "upsert",
         nextRevision,
       );
       return { row: result, cursor: change.cursor };
     });
 
-    this.broadcastChange(campaignId, "actor", cursor);
-    return toActorSummary(updated);
+    this.broadcastChange(campaignId, "character", cursor);
+    return toCharacterSummary(updated);
   }
 
   async applyRuntimeCommands(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
-    actorId: string,
+    characterId: string,
     input: RuntimeCommandInput,
-  ): Promise<CampaignActorSummary> {
-    const { row, ctx } = await this.loadActor(campaignId, actorId);
-    this.policy.canManageActor(actor, ctx);
+  ): Promise<CampaignCharacterSummary> {
+    const { row, ctx } = await this.loadCharacter(campaignId, characterId);
+    this.policy.canManageCharacter(user, ctx);
     if (row.revision !== input.baseRevision) {
       throw conflict(row);
     }
@@ -378,19 +461,19 @@ export class CampaignActorsService {
     const changedPaths = diffPaths(beforeSheet, afterSheet);
 
     const updated = await this.prismaService.$transaction(async (tx) => {
-      const result = await tx.campaignActor.update({
-        where: { id: actorId },
+      const result = await tx.campaignCharacter.update({
+        where: { id: characterId },
         data: {
           sheetJson: afterSheet as unknown as Prisma.InputJsonValue,
           revision: nextRevision,
-          updatedBy: actor.userId,
+          updatedBy: user.userId,
         },
       });
-      await tx.campaignActorAudit.create({
+      await tx.campaignCharacterAudit.create({
         data: {
-          campaignActorId: actorId,
+          campaignCharacterId: characterId,
           campaignId,
-          actorUserId: actor.userId,
+          characterUserId: user.userId,
           baseRevision: row.revision,
           resultRevision: nextRevision,
           changedPaths: changedPaths as unknown as Prisma.InputJsonValue,
@@ -401,39 +484,42 @@ export class CampaignActorsService {
       const change = await this.changeService.recordInTransaction(
         tx,
         campaignId,
-        "actor",
-        actorId,
+        "character",
+        characterId,
         "upsert",
         nextRevision,
       );
       return { row: result, cursor: change.cursor };
     });
 
-    this.broadcastChange(campaignId, "actor", updated.cursor);
-    return toActorSummary(updated.row);
+    this.broadcastChange(campaignId, "character", updated.cursor);
+    return toCharacterSummary(updated.row);
   }
 
   async listAudits(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
-    actorId: string,
-  ): Promise<CampaignActorAuditRecord[]> {
-    const { ctx } = await this.loadActor(campaignId, actorId);
-    this.policy.canViewActor(actor, ctx);
+    characterId: string,
+  ): Promise<CampaignCharacterAuditRecord[]> {
+    const { ctx } = await this.loadCharacter(campaignId, characterId);
+    this.policy.canViewCharacter(user, ctx);
 
-    const rows = await this.prismaService.campaignActorAudit.findMany({
-      where: { campaignActorId: actorId, campaignId },
+    const rows = await this.prismaService.campaignCharacterAudit.findMany({
+      where: { campaignCharacterId: characterId, campaignId },
       orderBy: { createdAt: "asc" },
     });
     return rows.map(toAuditRecord);
   }
 
   private async applyUpdate(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
-    existing: ActorRow,
-    input: UpdateActorInput,
-  ): Promise<CampaignActorSummary> {
+    existing: CharacterRow,
+    input: UpdateCharacterInput,
+    options: {
+      reactivatePublishedCharacter?: boolean;
+    } = {},
+  ): Promise<CampaignCharacterSummary> {
     if (existing.revision !== input.baseRevision) {
       throw conflict(existing);
     }
@@ -453,37 +539,110 @@ export class CampaignActorsService {
     if (lifecycleChanged) {
       changedPaths.push("lifecycle");
     }
+    const currentVisibility =
+      existing.characterType === "player" ||
+      existing.visibleToPlayers === true;
+    const visibilityChanged =
+      input.visibleToPlayers !== undefined &&
+      input.visibleToPlayers !== currentVisibility;
+    if (visibilityChanged) {
+      changedPaths.push("visibleToPlayers");
+    }
+    const reactivating = options.reactivatePublishedCharacter === true;
+    const statusChanged = reactivating && existing.status !== "active";
+    const characterTypeChanged =
+      reactivating && existing.characterType !== "player";
+    const publishedVisibilityChanged =
+      reactivating && existing.visibleToPlayers !== true;
+    if (statusChanged) {
+      changedPaths.push("status");
+    }
+    if (characterTypeChanged) {
+      changedPaths.push("characterType");
+    }
+    if (publishedVisibilityChanged &&
+        !changedPaths.includes("visibleToPlayers")) {
+      changedPaths.push("visibleToPlayers");
+    }
 
     const updated = await this.prismaService.$transaction(async (tx) => {
-      const result = await tx.campaignActor.update({
+      const result = await tx.campaignCharacter.update({
         where: { id: existing.id },
         data: {
           sheetJson: afterSheet as unknown as Prisma.InputJsonValue,
           revision: nextRevision,
-          updatedBy: actor.userId,
+          updatedBy: user.userId,
           ...(lifecycleChanged ? { lifecycle: input.lifecycle } : {}),
+          ...(visibilityChanged
+            ? { visibleToPlayers: input.visibleToPlayers }
+            : {}),
+          ...(reactivating
+            ? {
+                status: "active",
+                characterType: "player",
+                visibleToPlayers: true,
+              }
+            : {}),
         },
       });
-      await tx.campaignActorAudit.create({
+      const stateChanged =
+        lifecycleChanged ||
+        visibilityChanged ||
+        statusChanged ||
+        characterTypeChanged ||
+        publishedVisibilityChanged;
+      await tx.campaignCharacterAudit.create({
         data: {
-          campaignActorId: existing.id,
+          campaignCharacterId: existing.id,
           campaignId,
-          actorUserId: actor.userId,
+          characterUserId: user.userId,
           baseRevision: existing.revision,
           resultRevision: nextRevision,
           changedPaths: changedPaths as unknown as Prisma.InputJsonValue,
-          beforeJson: lifecycleChanged
-            ? { sheet: beforeSheet, lifecycle: currentLifecycle } as unknown as Prisma.InputJsonValue
-            : beforeSheet as unknown as Prisma.InputJsonValue,
-          afterJson: lifecycleChanged
-            ? { sheet: afterSheet, lifecycle: input.lifecycle } as unknown as Prisma.InputJsonValue
-            : afterSheet as unknown as Prisma.InputJsonValue,
+          beforeJson:
+            stateChanged
+              ? ({
+                  sheet: beforeSheet,
+                  ...(lifecycleChanged
+                    ? { lifecycle: currentLifecycle }
+                    : {}),
+                  ...(visibilityChanged
+                    ? { visibleToPlayers: currentVisibility }
+                    : {}),
+                  ...(statusChanged ? { status: existing.status } : {}),
+                  ...(characterTypeChanged
+                    ? { characterType: existing.characterType }
+                    : {}),
+                  ...(publishedVisibilityChanged
+                    ? { visibleToPlayers: existing.visibleToPlayers === true }
+                    : {}),
+                } as unknown as Prisma.InputJsonValue)
+              : (beforeSheet as unknown as Prisma.InputJsonValue),
+          afterJson:
+            stateChanged
+              ? ({
+                  sheet: afterSheet,
+                  ...(lifecycleChanged
+                    ? { lifecycle: input.lifecycle }
+                    : {}),
+                  ...(visibilityChanged
+                    ? { visibleToPlayers: input.visibleToPlayers }
+                    : {}),
+                  ...(statusChanged ? { status: "active" } : {}),
+                  ...(characterTypeChanged
+                    ? { characterType: "player" }
+                    : {}),
+                  ...(publishedVisibilityChanged
+                    ? { visibleToPlayers: true }
+                    : {}),
+                } as unknown as Prisma.InputJsonValue)
+              : (afterSheet as unknown as Prisma.InputJsonValue),
         },
       });
       const change = await this.changeService.recordInTransaction(
         tx,
         campaignId,
-        "actor",
+        "character",
         existing.id,
         "upsert",
         nextRevision,
@@ -491,20 +650,20 @@ export class CampaignActorsService {
       return { row: result, cursor: change.cursor };
     });
 
-    this.broadcastChange(campaignId, "actor", updated.cursor);
-    return toActorSummary(updated.row);
+    this.broadcastChange(campaignId, "character", updated.cursor);
+    return toCharacterSummary(updated.row);
   }
 
-  private async loadActor(campaignId: string, actorId: string): Promise<{
-    row: ActorRow;
-    ctx: CampaignActorContext;
+  private async loadCharacter(campaignId: string, characterId: string): Promise<{
+    row: CharacterRow;
+    ctx: CampaignCharacterContext;
   }> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    const row = await this.prismaService.campaignActor.findUnique({
-      where: { id: actorId },
+    const row = await this.prismaService.campaignCharacter.findUnique({
+      where: { id: characterId },
     });
     if (!row || row.campaignId !== campaignId) {
-      throw new NotFoundException("Campaign actor not found");
+      throw new NotFoundException("Campaign character not found");
     }
     return {
       row,
@@ -512,10 +671,10 @@ export class CampaignActorsService {
         campaignId: campaign.campaignId,
         ownerId: campaign.ownerId,
         members: campaign.members,
-        actorId: row.id,
-        actorOwnerUserId: row.ownerUserId,
-        actorSourceCharacterId: row.sourceCharacterId,
-        actorRevision: row.revision,
+        characterId: row.id,
+        characterOwnerUserId: row.ownerUserId,
+        characterSourceCharacterId: row.sourceCharacterId,
+        characterRevision: row.revision,
       },
     };
   }
@@ -540,21 +699,22 @@ export class CampaignActorsService {
 
   private broadcastChange(
     campaignId: string,
-    entityType: "actor" | "content",
+    entityType: "character" | "content",
     cursor: string,
   ): void {
     this.gateway.broadcastChange({ campaignId, entityType, cursor });
   }
 }
 
-interface ActorRow {
+interface CharacterRow {
   id: string;
   campaignId: string;
   ownerUserId: string | null;
   sourceCharacterId: string | null;
-  actorType: string;
+  characterType: string;
   status: string;
   lifecycle?: string;
+  visibleToPlayers?: boolean;
   sheetJson: unknown;
   revision: number;
   updatedBy: string;
@@ -562,15 +722,17 @@ interface ActorRow {
   updatedAt: Date;
 }
 
-function toActorSummary(row: ActorRow): CampaignActorSummary {
+function toCharacterSummary(row: CharacterRow): CampaignCharacterSummary {
   return {
     id: row.id,
     campaignId: row.campaignId,
     ownerUserId: row.ownerUserId,
     sourceCharacterId: row.sourceCharacterId,
-    actorType: row.actorType,
+    characterType: row.characterType,
     status: row.status,
     lifecycle: row.lifecycle === "temporary" ? "temporary" : "persistent",
+    visibleToPlayers:
+      row.characterType === "player" || row.visibleToPlayers === true,
     sheet: (row.sheetJson ?? {}) as Record<string, unknown>,
     revision: row.revision,
     updatedBy: row.updatedBy,
@@ -579,12 +741,12 @@ function toActorSummary(row: ActorRow): CampaignActorSummary {
   };
 }
 
-function toAuditRecord(row: any): CampaignActorAuditRecord {
+function toAuditRecord(row: any): CampaignCharacterAuditRecord {
   return {
     id: row.id,
-    campaignActorId: row.campaignActorId,
+    campaignCharacterId: row.campaignCharacterId,
     campaignId: row.campaignId,
-    actorUserId: row.actorUserId,
+    characterUserId: row.characterUserId,
     baseRevision: row.baseRevision,
     resultRevision: row.resultRevision,
     changedPaths: Array.isArray(row.changedPaths) ? row.changedPaths : [],
@@ -606,10 +768,10 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function conflict(row: ActorRow): ConflictException {
+function conflict(row: CharacterRow): ConflictException {
   return new ConflictException({
-    message: "Actor revision conflict",
-    current: toActorSummary(row),
+    message: "Character revision conflict",
+    current: toCharacterSummary(row),
   });
 }
 

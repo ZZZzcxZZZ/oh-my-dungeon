@@ -22,7 +22,7 @@ export class EncountersService {
   ) {}
 
   async createNpc(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
     input: {
       name: string;
@@ -34,7 +34,7 @@ export class EncountersService {
     }
   ): Promise<NpcView> {
     const campaign = await this.fetchCampaign(campaignId);
-    this.assertCanManage(actor, campaign);
+    this.assertCanManage(user, campaign);
 
     const npc = await this.prismaService.npc.create({
       data: {
@@ -45,7 +45,7 @@ export class EncountersService {
         dmNotes: input.dmNotes ?? '',
         stats: input.stats ?? {},
         tags: input.tags ?? [],
-        createdBy: actor.userId
+        createdBy: user.userId
       }
     });
 
@@ -53,11 +53,11 @@ export class EncountersService {
   }
 
   async listNpcs(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string
   ): Promise<NpcView[]> {
     const campaign = await this.fetchCampaign(campaignId);
-    this.campaignPolicy.canViewCampaign(actor, toCampaignContext(campaign));
+    this.campaignPolicy.canViewCampaign(user, toCampaignContext(campaign));
 
     const npcs = await this.prismaService.npc.findMany({
       where: { campaignId },
@@ -67,12 +67,12 @@ export class EncountersService {
   }
 
   async createEncounter(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
     input: { name: string; sessionId?: string | null }
   ): Promise<EncounterView> {
     const campaign = await this.fetchCampaign(campaignId);
-    this.assertCanManage(actor, campaign);
+    this.assertCanManage(user, campaign);
 
     const encounter = await this.prismaService.encounter.create({
       data: {
@@ -82,7 +82,7 @@ export class EncountersService {
         status: 'draft',
         round: 0,
         currentTurnParticipantId: null,
-        createdBy: actor.userId
+        createdBy: user.userId
       },
       include: { participants: true }
     });
@@ -91,12 +91,12 @@ export class EncountersService {
   }
 
   async listEncounters(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string
   ): Promise<EncounterView[]> {
     const campaign = await this.fetchCampaign(campaignId);
-    const canManage = this.canManage(actor, campaign);
-    this.campaignPolicy.canViewCampaign(actor, toCampaignContext(campaign));
+    const canManage = this.canManage(user, campaign);
+    this.campaignPolicy.canViewCampaign(user, toCampaignContext(campaign));
 
     const encounters = await this.prismaService.encounter.findMany({
       where: { campaignId },
@@ -110,13 +110,13 @@ export class EncountersService {
   }
 
   async getEncounter(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     encounterId: string
   ): Promise<EncounterView> {
     const encounter = await this.fetchEncounter(encounterId);
-    const canManage = this.canManage(actor, encounter.campaign);
+    const canManage = this.canManage(user, encounter.campaign);
     this.campaignPolicy.canViewCampaign(
-      actor,
+      user,
       toCampaignContext(encounter.campaign)
     );
 
@@ -124,7 +124,7 @@ export class EncountersService {
   }
 
   async addParticipant(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     encounterId: string,
     input: {
       participantType: string;
@@ -139,7 +139,7 @@ export class EncountersService {
     }
   ): Promise<EncounterParticipantView> {
     const encounter = await this.fetchEncounter(encounterId);
-    this.assertCanManage(actor, encounter.campaign);
+    this.assertCanManage(user, encounter.campaign);
 
     const snapshot = await this.buildParticipantSnapshot(encounter, input);
     const participant = await this.prismaService.encounterParticipant.create({
@@ -164,11 +164,11 @@ export class EncountersService {
   }
 
   async startEncounter(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     encounterId: string
   ): Promise<EncounterView> {
     const encounter = await this.fetchEncounter(encounterId);
-    this.assertCanManage(actor, encounter.campaign);
+    this.assertCanManage(user, encounter.campaign);
     const ordered = orderParticipants(encounter.participants ?? []);
     const first = ordered[0]?.id ?? null;
 
@@ -198,11 +198,11 @@ export class EncountersService {
   }
 
   async advanceTurn(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     encounterId: string
   ): Promise<EncounterView> {
     const encounter = await this.fetchEncounter(encounterId);
-    this.assertCanManage(actor, encounter.campaign);
+    this.assertCanManage(user, encounter.campaign);
     const ordered = orderParticipants(encounter.participants ?? []);
     const currentIndex = ordered.findIndex(
       (item: any) => item.id === encounter.currentTurnParticipantId
@@ -238,11 +238,11 @@ export class EncountersService {
   }
 
   async endEncounter(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     encounterId: string
   ): Promise<EncounterView> {
     const encounter = await this.fetchEncounter(encounterId);
-    this.assertCanManage(actor, encounter.campaign);
+    this.assertCanManage(user, encounter.campaign);
 
     const updated = await this.prismaService.$transaction(async (tx) => {
       const result = await tx.encounter.update({
@@ -266,7 +266,7 @@ export class EncountersService {
   }
 
   async updateParticipant(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     encounterId: string,
     participantId: string,
     input: {
@@ -286,7 +286,7 @@ export class EncountersService {
     if (!participant || participant.encounterId !== encounterId) {
       throw new NotFoundException('Encounter participant not found');
     }
-    this.assertCanManage(actor, participant.encounter.campaign);
+    this.assertCanManage(user, participant.encounter.campaign);
 
     const data: Record<string, unknown> = {};
     setIfDefined(data, 'initiative', input.initiative);
@@ -407,14 +407,14 @@ export class EncountersService {
     return encounter;
   }
 
-  private assertCanManage(actor: AccessTokenPayload, campaign: any): void {
-    this.campaignPolicy.canManageCampaign(actor, toCampaignContext(campaign));
+  private assertCanManage(user: AccessTokenPayload, campaign: any): void {
+    this.campaignPolicy.canManageCampaign(user, toCampaignContext(campaign));
   }
 
-  private canManage(actor: AccessTokenPayload, campaign: any): boolean {
-    if (actor.userId === campaign.ownerId) return true;
+  private canManage(user: AccessTokenPayload, campaign: any): boolean {
+    if (user.userId === campaign.ownerId) return true;
     const member = (campaign.members ?? []).find(
-      (item: any) => item.userId === actor.userId
+      (item: any) => item.userId === user.userId
     );
     return member ? MANAGE_ROLES.has(member.role) : false;
   }

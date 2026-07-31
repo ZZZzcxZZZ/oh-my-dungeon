@@ -34,7 +34,7 @@ export class CampaignContentService {
   ) {}
 
   async validate(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
     input: {
       type?: unknown;
@@ -45,38 +45,38 @@ export class CampaignContentService {
     },
   ): Promise<ContentValidationReport> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    this.policy.canManageCampaign(actor, campaign);
+    this.policy.canManageCampaign(user, campaign);
     return this.validator.validate(input);
   }
 
   async listChanges(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
     cursor: string,
     limit?: number,
   ): Promise<CampaignChangePage> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    this.policy.canViewCampaign(actor, campaign);
+    this.policy.canViewCampaign(user, campaign);
     const page = await this.changeService.listChanges(campaignId, cursor, limit);
 
     // Enrich upsert items with the full entity so the client can apply
     // changes without a second round-trip. Delete items stay lightweight.
-    const actorIds = page.items
-        .filter((item) => item.entityType === "actor" && item.operation === "upsert")
+    const characterIds = page.items
+        .filter((item) => item.entityType === "character" && item.operation === "upsert")
         .map((item) => item.entityId);
     const contentIds = page.items
         .filter((item) => item.entityType === "content" && item.operation === "upsert")
         .map((item) => item.entityId);
 
-    const actorMap = new Map<string, Record<string, unknown>>();
+    const characterMap = new Map<string, Record<string, unknown>>();
     const contentMap = new Map<string, Record<string, unknown>>();
 
-    if (actorIds.length > 0) {
-      const actors = await this.prismaService.campaignActor.findMany({
-        where: { id: { in: actorIds } },
+    if (characterIds.length > 0) {
+      const characters = await this.prismaService.campaignCharacter.findMany({
+        where: { id: { in: characterIds } },
       });
-      for (const row of actors) {
-        actorMap.set(row.id, toActorEntity(row));
+      for (const row of characters) {
+        characterMap.set(row.id, toCharacterEntity(row));
       }
     }
     if (contentIds.length > 0) {
@@ -90,8 +90,8 @@ export class CampaignContentService {
 
     page.items = page.items.map((item) => {
       if (item.operation !== "upsert") return item;
-      if (item.entityType === "actor") {
-        return { ...item, entity: actorMap.get(item.entityId) ?? null };
+      if (item.entityType === "character") {
+        return { ...item, entity: characterMap.get(item.entityId) ?? null };
       }
       if (item.entityType === "content") {
         return { ...item, entity: contentMap.get(item.entityId) ?? null };
@@ -103,7 +103,7 @@ export class CampaignContentService {
   }
 
   async create(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
     body: {
       type?: unknown;
@@ -114,7 +114,7 @@ export class CampaignContentService {
     },
   ): Promise<CampaignContentEntrySummary> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    this.policy.canManageCampaign(actor, campaign);
+    this.policy.canManageCampaign(user, campaign);
 
     const report = this.validator.validate(body);
     if (!report.valid) {
@@ -163,7 +163,7 @@ export class CampaignContentService {
               name: input.name,
               entryJson: input.entry as unknown as Prisma.InputJsonValue,
               revision,
-              updatedBy: actor.userId,
+              updatedBy: user.userId,
               deletedAt: null,
             },
           });
@@ -192,8 +192,8 @@ export class CampaignContentService {
           name: input.name,
           entryJson: input.entry as unknown as Prisma.InputJsonValue,
           revision,
-          createdBy: actor.userId,
-          updatedBy: actor.userId,
+          createdBy: user.userId,
+          updatedBy: user.userId,
         },
       });
       const change = await this.changeService.recordInTransaction(
@@ -212,11 +212,11 @@ export class CampaignContentService {
   }
 
   async list(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
   ): Promise<CampaignContentEntrySummary[]> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    this.policy.canViewCampaign(actor, campaign);
+    this.policy.canViewCampaign(user, campaign);
 
     const rows = await this.prismaService.campaignContentEntry.findMany({
       where: { campaignId, deletedAt: null },
@@ -226,13 +226,13 @@ export class CampaignContentService {
   }
 
   async update(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
     entryId: string,
     input: UpdateContentEntryInput,
   ): Promise<CampaignContentEntrySummary> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    this.policy.canManageCampaign(actor, campaign);
+    this.policy.canManageCampaign(user, campaign);
     const row = await this.fetchEntry(campaignId, entryId);
     if (row.revision !== input.baseRevision) {
       throw conflict(row);
@@ -262,7 +262,7 @@ export class CampaignContentService {
         data: {
           entryJson: input.entry as unknown as Prisma.InputJsonValue,
           revision: nextRevision,
-          updatedBy: actor.userId,
+          updatedBy: user.userId,
         },
       });
       if (result.count !== 1) {
@@ -285,7 +285,7 @@ export class CampaignContentService {
           ...row,
           entryJson: input.entry,
           revision: nextRevision,
-          updatedBy: actor.userId,
+          updatedBy: user.userId,
           updatedAt: new Date(),
         },
         cursor: change.cursor,
@@ -297,12 +297,12 @@ export class CampaignContentService {
   }
 
   async delete(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
     entryId: string,
   ): Promise<CampaignContentEntrySummary> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    this.policy.canManageCampaign(actor, campaign);
+    this.policy.canManageCampaign(user, campaign);
     const row = await this.fetchEntry(campaignId, entryId);
 
     const nextRevision = row.revision + 1;
@@ -318,7 +318,7 @@ export class CampaignContentService {
         data: {
           deletedAt: now,
           revision: nextRevision,
-          updatedBy: actor.userId,
+          updatedBy: user.userId,
         },
       });
       if (result.count !== 1) {
@@ -341,7 +341,7 @@ export class CampaignContentService {
           ...row,
           deletedAt: now,
           revision: nextRevision,
-          updatedBy: actor.userId,
+          updatedBy: user.userId,
           updatedAt: now,
         },
         cursor: change.cursor,
@@ -385,7 +385,7 @@ export class CampaignContentService {
 
   private broadcastChange(
     campaignId: string,
-    entityType: "actor" | "content",
+    entityType: "character" | "content",
     cursor: string,
   ): void {
     this.gateway.broadcastChange({ campaignId, entityType, cursor });
@@ -471,12 +471,12 @@ function conflict(row: EntryRow): ConflictException {
   });
 }
 
-interface ActorEntityRow {
+interface CharacterEntityRow {
   id: string;
   campaignId: string;
   ownerUserId: string | null;
   sourceCharacterId: string | null;
-  actorType: string;
+  characterType: string;
   status: string;
   sheetJson: unknown;
   revision: number;
@@ -485,13 +485,13 @@ interface ActorEntityRow {
   updatedAt: Date;
 }
 
-function toActorEntity(row: ActorEntityRow): Record<string, unknown> {
+function toCharacterEntity(row: CharacterEntityRow): Record<string, unknown> {
   return {
     id: row.id,
     campaignId: row.campaignId,
     ownerUserId: row.ownerUserId,
     sourceCharacterId: row.sourceCharacterId,
-    actorType: row.actorType,
+    characterType: row.characterType,
     status: row.status,
     sheet: (row.sheetJson ?? {}) as Record<string, unknown>,
     revision: row.revision,

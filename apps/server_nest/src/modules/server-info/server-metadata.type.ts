@@ -1,4 +1,5 @@
 export type ServerMetadata = {
+  instanceId: string;
   name: string;
   version: string;
   apiBaseUrl: string;

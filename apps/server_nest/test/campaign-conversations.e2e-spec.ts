@@ -90,7 +90,7 @@ describe("campaign conversation endpoints", () => {
       upsert: jest.fn(),
     },
     journalEntry: { create: jest.fn(), findMany: jest.fn() },
-    campaignActor: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn() },
+    campaignCharacter: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn() },
     campaignArchiveEntry: {
       create: jest.fn(),
       findMany: jest.fn(),
@@ -198,8 +198,8 @@ describe("campaign conversation endpoints", () => {
     prismaService.campaignChatMessage.count.mockResolvedValue(0);
     prismaService.campaignChatMessage.update.mockResolvedValue({});
 
-    prismaService.campaignActor.findUnique.mockResolvedValue(null);
-    prismaService.campaignActor.findMany.mockResolvedValue([]);
+    prismaService.campaignCharacter.findUnique.mockResolvedValue(null);
+    prismaService.campaignCharacter.findMany.mockResolvedValue([]);
     prismaService.journalEntry.create.mockResolvedValue({});
     prismaService.journalEntry.findMany.mockResolvedValue([]);
     prismaService.campaignArchiveEntry.create.mockResolvedValue({});
@@ -328,6 +328,13 @@ describe("campaign conversation endpoints", () => {
       prismaService.campaignMember.findFirst.mockResolvedValueOnce({
         userId: "player-2",
         role: "player",
+        displayName: "Bree",
+        boundCharacterId: null,
+      }).mockResolvedValueOnce({
+        userId: "player-2",
+        role: "player",
+        displayName: "Bree",
+        boundCharacterId: null,
       });
       prismaService.campaignConversation.upsert.mockResolvedValueOnce(
         directConversation,
@@ -341,6 +348,7 @@ describe("campaign conversation endpoints", () => {
         .expect(({ body }) => {
           expect(body.id).toBe("conv-direct");
           expect(body.kind).toBe("direct");
+          expect(body.title).toBe("Bree");
           expect(body.participantIds).toEqual(["player-1", "player-2"]);
         });
 
@@ -445,14 +453,56 @@ describe("campaign conversation endpoints", () => {
       expect(createArgs.data.createdBy).toBe("dm-1");
     });
 
-    it("rejects group creation from a player with 403", async () => {
+    it("lets a player create a group with two other campaign members", async () => {
+      const token = await loginAs(storedPlayer1);
+      const groupConversation = {
+        id: "conv-player-group",
+        campaignId: "camp-1",
+        kind: "group",
+        title: "Secret Club",
+        mainKey: null,
+        directKey: null,
+        participantIds: ["player-1", "dm-1", "player-2"],
+        createdBy: "player-1",
+        createdAt: new Date("2026-07-16T00:00:00.000Z"),
+        updatedAt: new Date("2026-07-16T00:00:00.000Z"),
+        archivedAt: null,
+      };
+      prismaService.campaignMember.findMany.mockResolvedValueOnce([
+        { userId: "player-1" },
+        { userId: "dm-1" },
+        { userId: "player-2" },
+      ]);
+      prismaService.campaignConversation.create.mockResolvedValueOnce(
+        groupConversation,
+      );
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/conversations/group")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          title: "Secret Club",
+          participantIds: ["dm-1", "player-2"],
+        })
+        .expect(201)
+        .expect(({ body }) => {
+          expect(body.createdBy).toBe("player-1");
+          expect(body.participantIds).toEqual([
+            "player-1",
+            "dm-1",
+            "player-2",
+          ]);
+        });
+    });
+
+    it("rejects a group with fewer than two other members", async () => {
       const token = await loginAs(storedPlayer1);
 
       await request(app.getHttpServer())
         .post("/api/campaigns/camp-1/conversations/group")
         .set("Authorization", `Bearer ${token}`)
-        .send({ title: "Secret Club", participantIds: ["player-2"] })
-        .expect(403);
+        .send({ title: "Too Small", participantIds: ["player-2"] })
+        .expect(400);
     });
 
     it("rejects group creation with a missing title", async () => {
@@ -588,7 +638,7 @@ describe("campaign conversation endpoints", () => {
         campaignId: "camp-1",
         conversationId: "conv-direct",
         senderId: "player-1",
-        campaignActorId: null,
+        campaignCharacterId: null,
         displayName: "arannis",
         avatarUrl: null,
         speakerMode: "ooc",
@@ -652,7 +702,7 @@ describe("campaign conversation endpoints", () => {
           campaignId: "camp-1",
           conversationId: "conv-direct",
           senderId: "player-1",
-          campaignActorId: null,
+          campaignCharacterId: null,
           displayName: "arannis",
           avatarUrl: null,
           speakerMode: "ooc",

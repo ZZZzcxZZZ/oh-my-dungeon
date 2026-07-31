@@ -25,7 +25,7 @@ export class GameEventsController {
 
   @Get('characters/:characterId/events')
   async listCharacterEvents(
-    @CurrentUser() actor: AccessTokenPayload,
+    @CurrentUser() user: AccessTokenPayload,
     @Param('characterId') characterId: string,
     @Query('cursor') cursor?: string,
     @Query('type') type?: string,
@@ -37,7 +37,7 @@ export class GameEventsController {
       select: { ownerUserId: true },
     });
     if (!character) throw new NotFoundException('Character not found');
-    if (character.ownerUserId !== actor.userId) {
+    if (character.ownerUserId !== user.userId) {
       throw new ForbiddenException('Character access denied');
     }
     return this.events.listCharacterEvents(
@@ -48,7 +48,7 @@ export class GameEventsController {
 
   @Get('campaigns/:campaignId/events')
   async listCampaignEvents(
-    @CurrentUser() actor: AccessTokenPayload,
+    @CurrentUser() user: AccessTokenPayload,
     @Param('campaignId') campaignId: string,
     @Query('cursor') cursor?: string,
     @Query('type') type?: string,
@@ -60,7 +60,7 @@ export class GameEventsController {
       include: { members: true },
     });
     if (!campaign) throw new NotFoundException('Campaign not found');
-    this.campaignPolicy.canViewCampaign(actor, {
+    this.campaignPolicy.canViewCampaign(user, {
       campaignId,
       ownerId: campaign.ownerId,
       members: campaign.members.map((member) => ({

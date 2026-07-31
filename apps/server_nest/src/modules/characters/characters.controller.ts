@@ -15,10 +15,7 @@ import type { AccessTokenPayload } from '../auth/auth.types';
 import { CharactersService } from './characters.service';
 import { CharacterOperationsService } from './character-operations.service';
 import { CharacterQueriesService } from './character-queries.service';
-import type {
-  CharacterCampaignBindingView,
-  CharacterView
-} from './characters.types';
+import type { CharacterView } from './characters.types';
 
 interface CreateCharacterBody {
   name?: unknown;
@@ -41,18 +38,8 @@ interface CreateCharacterBody {
   data?: unknown;
 }
 
-interface BindCharacterBody {
-  campaignId?: unknown;
-  visibility?: unknown;
-}
-
 interface UpdateCharacterBody extends CreateCharacterBody {
   campaignId?: unknown;
-}
-
-interface AdjustCharacterHpBody {
-  delta?: unknown;
-  currentHp?: unknown;
 }
 
 @Controller()
@@ -285,50 +272,6 @@ export class CharactersController {
     });
   }
 
-  @Post('characters/:id/campaign-bindings')
-  bindCharacterToCampaign(
-    @CurrentUser() user: AccessTokenPayload,
-    @Param('id') id: string,
-    @Body() body: BindCharacterBody
-  ): Promise<CharacterCampaignBindingView> {
-    if (!isNonEmptyString(body.campaignId)) {
-      throw new BadRequestException('Campaign id is required');
-    }
-
-    return this.charactersService.bindCharacterToCampaign(user, id, {
-      campaignId: body.campaignId,
-      visibility: optionalString(body.visibility)
-    });
-  }
-
-  @Get('campaigns/:id/characters')
-  listCampaignCharacters(
-    @CurrentUser() user: AccessTokenPayload,
-    @Param('id') id: string
-  ): Promise<CharacterCampaignBindingView[]> {
-    return this.charactersService.listCampaignCharacters(user, id);
-  }
-
-  @Post('campaigns/:campaignId/characters/:characterId/hp')
-  adjustCampaignCharacterHp(
-    @CurrentUser() user: AccessTokenPayload,
-    @Param('campaignId') campaignId: string,
-    @Param('characterId') characterId: string,
-    @Body() body: AdjustCharacterHpBody
-  ): Promise<CharacterView> {
-    const delta = optionalInteger(body.delta);
-    const currentHp = optionalInteger(body.currentHp);
-    if (delta === undefined && currentHp === undefined) {
-      throw new BadRequestException('HP adjustment requires delta or currentHp');
-    }
-
-    return this.charactersService.adjustCampaignCharacterHp(
-      user,
-      campaignId,
-      characterId,
-      { delta, currentHp }
-    );
-  }
 }
 
 function operationBase(body: Record<string, unknown>) {

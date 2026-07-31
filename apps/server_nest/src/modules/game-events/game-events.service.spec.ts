@@ -43,8 +43,8 @@ describe('GameEventsService', () => {
     const result = await service.append(prisma as never, {
       type: 'character.hp.adjusted',
       characterId: 'character-1',
-      actorType: 'user',
-      actorId: 'user-1',
+      initiatorType: 'user',
+      initiatorId: 'user-1',
       requestId: 'request-1',
       targets: [],
       before: {},

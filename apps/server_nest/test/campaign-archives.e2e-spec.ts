@@ -90,6 +90,12 @@ describe("campaign archive wiki endpoints", () => {
     email: "player@example.com",
     passwordHash: "hashed-secret",
   };
+  const storedOutsider = {
+    id: "outsider-1",
+    username: "outsider",
+    email: "outsider@example.com",
+    passwordHash: "hashed-secret",
+  };
 
   beforeAll(async () => {
     process.env.JWT_SECRET = "test-secret";
@@ -166,7 +172,12 @@ describe("campaign archive wiki endpoints", () => {
     prismaService.campaignArchiveEntry.update.mockResolvedValue({});
   });
 
-  async function loginAs(user: typeof storedDm): Promise<string> {
+  async function loginAs(user: {
+    id: string;
+    username: string;
+    email: string;
+    passwordHash: string;
+  }): Promise<string> {
     prismaService.user.findFirst.mockResolvedValueOnce(user);
     const login = await request(app.getHttpServer())
       .post("/api/auth/login")
@@ -209,7 +220,7 @@ describe("campaign archive wiki endpoints", () => {
           ],
           tags: ["vallaki", "barovia"],
           links: [
-            { kind: "actor", id: "actor-1", label: "Ireena" },
+            { kind: "character", id: "character-1", label: "Ireena" },
           ],
           attachmentRefs: [
             { kind: "image", id: "asset-1", label: "Town Map" },
@@ -227,7 +238,7 @@ describe("campaign archive wiki endpoints", () => {
           { type: "heading", text: "Notable Locations" },
         ],
         tags: ["vallaki", "barovia"],
-        links: [{ kind: "actor", id: "actor-1", label: "Ireena" }],
+        links: [{ kind: "character", id: "character-1", label: "Ireena" }],
         attachmentRefs: [{ kind: "image", id: "asset-1", label: "Town Map" }],
       });
       expect(createArgs.data.createdBy).toBe("dm-1");
@@ -395,6 +406,59 @@ describe("campaign archive wiki endpoints", () => {
           bodyBlocks: [{ missing: "type" }],
         })
         .expect(400);
+    });
+  });
+
+  describe("member create permissions", () => {
+    it("lets an ordinary campaign member create an archive entry", async () => {
+      const token = await loginAs(storedPlayer);
+      prismaService.campaignArchiveEntry.create.mockImplementationOnce(
+        async (args: any) => ({
+          id: "archive-player-1",
+          campaignId: "camp-1",
+          kind: args.data.kind,
+          title: args.data.title,
+          summary: args.data.summary,
+          payload: args.data.payload,
+          visibility: "members",
+          pinned: false,
+          createdBy: args.data.createdBy,
+          updatedBy: args.data.updatedBy,
+          createdAt: "2026-07-30T00:00:00.000Z",
+          updatedAt: "2026-07-30T00:00:00.000Z",
+          deletedAt: null,
+        }),
+      );
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/archives")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          kind: "clue",
+          title: "玩家发现的线索",
+          summary: "来自玩家的记录",
+        })
+        .expect(201)
+        .expect(({ body }) => {
+          expect(body.createdBy).toBe("player-1");
+        });
+
+      expect(
+        prismaService.campaignArchiveEntry.create.mock.calls[0][0].data
+          .createdBy,
+      ).toBe("player-1");
+    });
+
+    it("rejects archive creation from a non-member", async () => {
+      const token = await loginAs(storedOutsider);
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/archives")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ kind: "clue", title: "不属于该战役" })
+        .expect(403);
+
+      expect(prismaService.campaignArchiveEntry.create).not.toHaveBeenCalled();
     });
   });
 

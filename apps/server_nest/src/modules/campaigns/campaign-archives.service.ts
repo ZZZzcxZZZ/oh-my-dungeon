@@ -111,14 +111,14 @@ export class CampaignArchivesService {
   constructor(private readonly prisma: PrismaService, private readonly policy: CampaignPolicy) {}
 
   async list(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
     kind?: string,
     q?: string,
     tags?: string[],
   ) {
     const campaign = await this.context(campaignId);
-    this.policy.canViewCampaign(actor, campaign);
+    this.policy.canViewCampaign(user, campaign);
     const entries = await this.prisma.campaignArchiveEntry.findMany({
       where: { campaignId, deletedAt: null, ...(kind ? { kind } : {}) },
       orderBy: [{ pinned: 'desc' }, { updatedAt: 'desc' }],
@@ -175,20 +175,20 @@ export class CampaignArchivesService {
     }));
   }
 
-  async create(actor: AccessTokenPayload, campaignId: string, input: ArchiveCreateInput) {
+  async create(user: AccessTokenPayload, campaignId: string, input: ArchiveCreateInput) {
     const campaign = await this.context(campaignId);
-    this.policy.canManageCampaign(actor, campaign);
+    this.policy.canViewCampaign(user, campaign);
     if (!kinds.has(input.kind) || !input.title.trim()) throw new BadRequestException('Invalid archive entry');
     const wiki = validateWikiFields(input);
     const payload = mergeWikiIntoPayload(input.payload ?? {}, wiki);
     return this.prisma.campaignArchiveEntry.create({ data: {
       campaignId, kind: input.kind, title: input.title.trim(), summary: input.summary?.trim() ?? '',
-      payload: payload as Prisma.InputJsonValue, createdBy: actor.userId, updatedBy: actor.userId,
+      payload: payload as Prisma.InputJsonValue, createdBy: user.userId, updatedBy: user.userId,
     }});
   }
 
   async update(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
     entryId: string,
     input: ArchiveUpdateInput,
@@ -199,19 +199,19 @@ export class CampaignArchivesService {
     });
     if (!entry) throw new NotFoundException('Archive entry not found');
     // Plan task 3: creator OR manager can edit; other members are read-only.
-    this.assertCanEdit(actor, campaign, entry.createdBy);
+    this.assertCanEdit(user, campaign, entry.createdBy);
     if (input.kind !== undefined && !kinds.has(input.kind)) throw new BadRequestException('Invalid archive entry kind');
     if (input.title !== undefined && !input.title.trim()) throw new BadRequestException('Archive title is required');
 
     const wiki = validateWikiFields(input);
-    const data: Prisma.CampaignArchiveEntryUpdateInput = { updatedBy: actor.userId };
+    const data: Prisma.CampaignArchiveEntryUpdateInput = { updatedBy: user.userId };
     if (input.kind !== undefined) data.kind = input.kind;
     if (input.title !== undefined) data.title = input.title.trim();
     if (input.summary !== undefined) data.summary = input.summary.trim();
     if (input.pinned !== undefined) data.pinned = input.pinned;
 
     // Merge wiki fields into the existing payload so partial updates don't
-    // wipe unrelated metadata (sourceMessageId, relatedActorId, etc.).
+    // wipe unrelated metadata (sourceMessageId, relatedCharacterId, etc.).
     if (input.payload !== undefined || wiki.bodyBlocks !== undefined || wiki.tags !== undefined || wiki.links !== undefined || wiki.attachmentRefs !== undefined) {
       const existingPayload = (entry.payload && typeof entry.payload === 'object')
         ? (entry.payload as Record<string, unknown>)
@@ -225,26 +225,26 @@ export class CampaignArchivesService {
     return this.prisma.campaignArchiveEntry.update({ where: { id: entryId }, data });
   }
 
-  async archive(actor: AccessTokenPayload, campaignId: string, entryId: string) {
+  async archive(user: AccessTokenPayload, campaignId: string, entryId: string) {
     const campaign = await this.context(campaignId);
     const entry = await this.prisma.campaignArchiveEntry.findFirst({
       where: { id: entryId, campaignId, deletedAt: null },
     });
     if (!entry) throw new NotFoundException('Archive entry not found');
-    this.assertCanEdit(actor, campaign, entry.createdBy);
+    this.assertCanEdit(user, campaign, entry.createdBy);
     return this.prisma.campaignArchiveEntry.update({
       where: { id: entryId },
-      data: { deletedAt: new Date(), updatedBy: actor.userId },
+      data: { deletedAt: new Date(), updatedBy: user.userId },
     });
   }
 
   private assertCanEdit(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaign: { campaignId: string; ownerId: string; members: { userId: string; role: string }[] },
     createdBy: string,
   ): void {
-    if (createdBy === actor.userId) return;
-    this.policy.canManageCampaign(actor, campaign);
+    if (createdBy === user.userId) return;
+    this.policy.canManageCampaign(user, campaign);
   }
 
   private async context(campaignId: string) {

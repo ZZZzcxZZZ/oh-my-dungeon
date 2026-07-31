@@ -67,8 +67,8 @@ describe("CampaignChangeService", () => {
 
       const first = await service.record(
         "campaign-1",
-        "actor",
-        "actor-1",
+        "character",
+        "character-1",
         "upsert",
         1,
       );
@@ -81,7 +81,7 @@ describe("CampaignChangeService", () => {
       );
 
       expect(BigInt(second.cursor)).toBe(BigInt(first.cursor) + 1n);
-      expect(first.entityType).toBe("actor");
+      expect(first.entityType).toBe("character");
       expect(second.entityType).toBe("content");
       expect(first.cursor).toBe("1");
       expect(second.cursor).toBe("2");
@@ -101,8 +101,8 @@ describe("CampaignChangeService", () => {
               id: "change-1",
               campaignId: "campaign-new",
               cursor: 1n,
-              entityType: "actor",
-              entityId: "actor-1",
+              entityType: "character",
+              entityId: "character-1",
               operation: "upsert",
               revision: 1,
               createdAt: new Date(),
@@ -114,8 +114,8 @@ describe("CampaignChangeService", () => {
 
       const result = await service.record(
         "campaign-new",
-        "actor",
-        "actor-1",
+        "character",
+        "character-1",
         "upsert",
         1,
       );
@@ -137,8 +137,8 @@ describe("CampaignChangeService", () => {
               id: "change-big",
               campaignId: "c1",
               cursor: 1234567890123456789n,
-              entityType: "actor",
-              entityId: "actor-1",
+              entityType: "character",
+              entityId: "character-1",
               operation: "upsert",
               revision: 1,
               createdAt: new Date(),
@@ -150,8 +150,8 @@ describe("CampaignChangeService", () => {
 
       const result = await service.record(
         "c1",
-        "actor",
-        "actor-1",
+        "character",
+        "character-1",
         "upsert",
         1,
       );
@@ -171,8 +171,8 @@ describe("CampaignChangeService", () => {
               id: "change-5",
               campaignId: "c1",
               cursor: 5n,
-              entityType: "actor",
-              entityId: "actor-1",
+              entityType: "character",
+              entityId: "character-1",
               operation: "upsert",
               revision: 3,
               createdAt: new Date(),
@@ -184,8 +184,8 @@ describe("CampaignChangeService", () => {
 
       const result = await service.record(
         "c1",
-        "actor",
-        "actor-1",
+        "character",
+        "character-1",
         "upsert",
         3,
       );
@@ -201,8 +201,8 @@ describe("CampaignChangeService", () => {
           id: "change-1",
           campaignId: "c1",
           cursor: 1n,
-          entityType: "actor",
-          entityId: "actor-1",
+          entityType: "character",
+          entityId: "character-1",
           operation: "upsert",
           revision: 1,
           createdAt: new Date("2026-07-14T00:00:00Z"),
@@ -238,8 +238,8 @@ describe("CampaignChangeService", () => {
         id: `change-${index + 1}`,
         campaignId: "c1",
         cursor: BigInt(index + 1),
-        entityType: "actor",
-        entityId: `actor-${index + 1}`,
+        entityType: "character",
+        entityId: `character-${index + 1}`,
         operation: "upsert",
         revision: 1,
         createdAt: new Date(),

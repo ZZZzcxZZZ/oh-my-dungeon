@@ -32,19 +32,19 @@ export interface JoinContext {
   existingMembership: CampaignMemberSummary | null;
 }
 
-export interface CampaignActorContext {
+export interface CampaignCharacterContext {
   campaignId: string;
   ownerId: string;
   members: CampaignMemberSummary[];
-  actorId: string;
-  actorOwnerUserId: string | null;
-  actorSourceCharacterId: string | null;
-  actorRevision: number;
+  characterId: string;
+  characterOwnerUserId: string | null;
+  characterSourceCharacterId: string | null;
+  characterRevision: number;
 }
 
-export interface CampaignActorIdentity {
+export interface CampaignCharacterIdentity {
   ownerUserId: string | null;
-  actorType: string;
+  characterType: string;
   status: string;
 }
 
@@ -52,9 +52,9 @@ export interface CampaignCapabilities {
   canManageCampaign: boolean;
   canManageMembers: boolean;
   canInviteMembers: boolean;
-  canCreateActors: boolean;
-  canManageActors: boolean;
-  canEditAnyActor: boolean;
+  canCreateCharacters: boolean;
+  canManageCharacters: boolean;
+  canEditAnyCharacter: boolean;
   canSpeakAsNarrator: boolean;
   canCreateArchive: boolean;
   canManageArchive: boolean;
@@ -65,24 +65,24 @@ const VIEW_ROLES = new Set(['owner', 'dm', 'player', 'spectator']);
 
 @Injectable()
 export class CampaignPolicy {
-  canCreateCampaign(actor: AccessTokenPayload): void {
-    if (!actor.userId) {
+  canCreateCampaign(user: AccessTokenPayload): void {
+    if (!user.userId) {
       throw new ForbiddenException('Authenticated user required');
     }
   }
 
   capabilitiesFor(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaign: CampaignContext,
   ): CampaignCapabilities {
-    const isManager = this.isManager(actor, campaign);
+    const isManager = this.isManager(user, campaign);
     return {
       canManageCampaign: isManager,
       canManageMembers: isManager,
       canInviteMembers: isManager,
-      canCreateActors: isManager,
-      canManageActors: isManager,
-      canEditAnyActor: isManager,
+      canCreateCharacters: isManager,
+      canManageCharacters: isManager,
+      canEditAnyCharacter: isManager,
       canSpeakAsNarrator: isManager,
       canCreateArchive: isManager,
       canManageArchive: isManager,
@@ -90,13 +90,13 @@ export class CampaignPolicy {
   }
 
   canViewCampaign(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaign: CampaignContext
   ): void {
-    if (actor.userId === campaign.ownerId) return;
+    if (user.userId === campaign.ownerId) return;
 
     const membership = campaign.members.find(
-      (member) => member.userId === actor.userId
+      (member) => member.userId === user.userId
     );
     if (!membership || !VIEW_ROLES.has(membership.role)) {
       throw new ForbiddenException(
@@ -106,13 +106,13 @@ export class CampaignPolicy {
   }
 
   canManageCampaign(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaign: CampaignContext
   ): void {
-    if (actor.userId === campaign.ownerId) return;
+    if (user.userId === campaign.ownerId) return;
 
     const membership = campaign.members.find(
-      (member) => member.userId === actor.userId
+      (member) => member.userId === user.userId
     );
     if (!membership || !MANAGE_ROLES.has(membership.role)) {
       throw new ForbiddenException(
@@ -142,41 +142,41 @@ export class CampaignPolicy {
   }
 
   /**
-   * Anyone who can view the campaign may list and read its actors, including
+   * Anyone who can view the campaign may list and read its characters, including
    * their sheet JSON. The sheet is the campaign's copy, not the player's
    * private local character, so DM-level visibility is intentional.
    */
-  canViewActor(
-    actor: AccessTokenPayload,
-    ctx: CampaignActorContext
+  canViewCharacter(
+    user: AccessTokenPayload,
+    ctx: CampaignCharacterContext
   ): void {
-    this.canViewCampaign(actor, ctx);
+    this.canViewCampaign(user, ctx);
   }
 
   /**
-   * DMs (owner or dm role) can fully edit any actor: NPCs, unclaimed actors,
+   * DMs (owner or dm role) can fully edit any character: NPCs, unclaimed characters,
    * and the campaign copy of a published player character.
    */
-  canManageActor(
-    actor: AccessTokenPayload,
-    ctx: CampaignActorContext
+  canManageCharacter(
+    user: AccessTokenPayload,
+    ctx: CampaignCharacterContext
   ): void {
-    this.canManageCampaign(actor, ctx);
+    this.canManageCampaign(user, ctx);
   }
 
   /**
-   * A player may edit an actor iff they own it (i.e. they published their
-   * local character to the campaign and the actor has not been reassigned).
-   * DMs go through `canManageActor` instead.
+   * A player may edit an character iff they own it (i.e. they published their
+   * local character to the campaign and the character has not been reassigned).
+   * DMs go through `canManageCharacter` instead.
    */
-  canEditOwnedActor(
-    actor: AccessTokenPayload,
-    ctx: CampaignActorContext
+  canEditOwnedCharacter(
+    user: AccessTokenPayload,
+    ctx: CampaignCharacterContext
   ): void {
-    if (this.isManager(actor, ctx)) return;
-    if (ctx.actorOwnerUserId && ctx.actorOwnerUserId === actor.userId) return;
+    if (this.isManager(user, ctx)) return;
+    if (ctx.characterOwnerUserId && ctx.characterOwnerUserId === user.userId) return;
     throw new ForbiddenException(
-      'Only the actor owner or a DM can edit this actor'
+      'Only the character owner or a DM can edit this character'
     );
   }
 
@@ -184,46 +184,46 @@ export class CampaignPolicy {
    * Publishing a local character only requires campaign membership — players
    * are allowed to introduce their own character into a campaign.
    */
-  canPublishActor(
-    actor: AccessTokenPayload,
+  canPublishCharacter(
+    user: AccessTokenPayload,
     campaign: CampaignContext
   ): void {
-    this.canViewCampaign(actor, campaign);
+    this.canViewCampaign(user, campaign);
   }
 
   /**
    * A membership binding is the player-facing identity for a campaign. A
-   * player can only bind their own active player actor; managers can repair
+   * player can only bind their own active player character; managers can repair
    * bindings for any member.
    */
-  canBindActor(
-    actor: AccessTokenPayload,
+  canBindCharacter(
+    user: AccessTokenPayload,
     campaign: CampaignContext,
     targetUserId: string,
-    candidate: CampaignActorIdentity,
+    candidate: CampaignCharacterIdentity,
   ): void {
-    this.canViewCampaign(actor, campaign);
-    if (candidate.status !== "active" || candidate.actorType !== "player") {
+    this.canViewCampaign(user, campaign);
+    if (candidate.status !== "active" || candidate.characterType !== "player") {
       throw new ForbiddenException(
-        "Only active player actors can be bound to a campaign member",
+        "只能绑定当前可用的玩家角色；请重新发布或恢复该角色",
       );
     }
-    if (this.isManager(actor, campaign)) return;
-    if (actor.userId !== targetUserId || candidate.ownerUserId !== actor.userId) {
+    if (this.isManager(user, campaign)) return;
+    if (user.userId !== targetUserId || candidate.ownerUserId !== user.userId) {
       throw new ForbiddenException(
-        "Players can only bind their own player actor",
+        "玩家只能绑定自己的角色",
       );
     }
   }
 
   canManageMembershipBinding(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaign: CampaignContext,
     targetUserId: string,
     hasExistingBinding: boolean,
   ): void {
-    if (this.isManager(actor, campaign)) return;
-    if (actor.userId !== targetUserId || hasExistingBinding) {
+    if (this.isManager(user, campaign)) return;
+    if (user.userId !== targetUserId || hasExistingBinding) {
       throw new ForbiddenException(
         "Only a DM can replace or clear a campaign character binding",
       );
@@ -232,33 +232,33 @@ export class CampaignPolicy {
 
   /**
    * Chat speakers are server-authorized. Managers may puppeteer any active
-   * campaign actor; a player can speak only as their own active player actor.
+   * campaign character; a player can speak only as their own active player character.
    */
-  canSpeakAsActor(
-    actor: AccessTokenPayload,
+  canSpeakAsCharacter(
+    user: AccessTokenPayload,
     campaign: CampaignContext,
-    candidate: CampaignActorIdentity,
+    candidate: CampaignCharacterIdentity,
   ): void {
-    this.canViewCampaign(actor, campaign);
+    this.canViewCampaign(user, campaign);
     if (candidate.status !== "active") {
-      throw new ForbiddenException("Archived actors cannot speak");
+      throw new ForbiddenException("Archived characters cannot speak");
     }
-    if (this.isManager(actor, campaign)) return;
+    if (this.isManager(user, campaign)) return;
     if (
-      candidate.actorType !== "player" ||
-      candidate.ownerUserId !== actor.userId
+      candidate.characterType !== "player" ||
+      candidate.ownerUserId !== user.userId
     ) {
-      throw new ForbiddenException("You can only speak as your own actor");
+      throw new ForbiddenException("You can only speak as your own character");
     }
   }
 
   private isManager(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaign: CampaignContext
   ): boolean {
-    if (actor.userId === campaign.ownerId) return true;
+    if (user.userId === campaign.ownerId) return true;
     const membership = campaign.members.find(
-      (member) => member.userId === actor.userId
+      (member) => member.userId === user.userId
     );
     return !!membership && MANAGE_ROLES.has(membership.role);
   }

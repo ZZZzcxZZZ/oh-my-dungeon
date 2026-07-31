@@ -5,6 +5,12 @@ export interface ServerSettingsView {
   maxUploadSizeMb: number;
 }
 
+export interface ServerDiscoverySettings {
+  instanceId: string;
+  serverName: string;
+  registrationEnabled: boolean;
+}
+
 export interface UpdateServerSettingsInput {
   registrationEnabled: boolean;
 }

@@ -8,6 +8,7 @@ describe('ServerSettingsService', () => {
       findFirst: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
+      upsert: jest.Mock;
     };
     serverAdmin: {
       findUnique: jest.Mock;
@@ -19,7 +20,8 @@ describe('ServerSettingsService', () => {
       serverSetting: {
         findFirst: jest.fn(),
         create: jest.fn(),
-        update: jest.fn()
+        update: jest.fn(),
+        upsert: jest.fn()
       },
       serverAdmin: {
         findUnique: jest.fn()
@@ -84,6 +86,49 @@ describe('ServerSettingsService', () => {
       expect(result).not.toHaveProperty('id');
       expect(result).not.toHaveProperty('allowPublicCampaignDiscovery');
       expect(result).not.toHaveProperty('enabledSystems');
+    });
+  });
+
+  describe('getDiscoverySettings', () => {
+    it('returns the persisted server identity', async () => {
+      prismaService.serverSetting.findFirst.mockResolvedValue({
+        id: 'settings-1',
+        instanceId: 'instance-1',
+        serverName: 'Friday Table',
+        registrationEnabled: true,
+        defaultLocale: 'zh-CN',
+        maxUploadSizeMb: 20
+      });
+
+      await expect(service.getDiscoverySettings()).resolves.toEqual({
+        instanceId: 'instance-1',
+        serverName: 'Friday Table',
+        registrationEnabled: true
+      });
+      expect(prismaService.serverSetting.upsert).not.toHaveBeenCalled();
+    });
+
+    it('creates a stable server identity when settings do not exist', async () => {
+      prismaService.serverSetting.findFirst.mockResolvedValue(null);
+      prismaService.serverSetting.upsert.mockResolvedValue({
+        id: 'settings-1',
+        instanceId: 'instance-1',
+        serverName: 'D&D Table Tool',
+        registrationEnabled: true,
+        defaultLocale: 'zh-CN',
+        maxUploadSizeMb: 20
+      });
+
+      await expect(service.getDiscoverySettings()).resolves.toEqual({
+        instanceId: 'instance-1',
+        serverName: 'D&D Table Tool',
+        registrationEnabled: true
+      });
+      expect(prismaService.serverSetting.upsert).toHaveBeenCalledWith({
+        where: { id: 'singleton' },
+        create: { id: 'singleton' },
+        update: {}
+      });
     });
   });
 

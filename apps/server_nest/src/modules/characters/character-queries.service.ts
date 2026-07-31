@@ -15,12 +15,12 @@ export class CharacterQueriesService {
   ) {}
 
   async getResolved(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     characterId: string,
     campaignId: string | null,
   ) {
     const character = await this.loadAuthorizedCharacter(
-      actor,
+      user,
       characterId,
       campaignId,
     );
@@ -52,12 +52,12 @@ export class CharacterQueriesService {
   }
 
   async getSummary(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     characterId: string,
     campaignId: string | null,
   ) {
     const character = await this.loadAuthorizedCharacter(
-      actor,
+      user,
       characterId,
       campaignId,
     );
@@ -86,7 +86,7 @@ export class CharacterQueriesService {
   }
 
   private async loadAuthorizedCharacter(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     characterId: string,
     campaignId: string | null,
   ) {
@@ -94,7 +94,7 @@ export class CharacterQueriesService {
       where: { id: characterId },
     });
     if (!character) throw new NotFoundException('Character not found');
-    if (character.ownerUserId === actor.userId) return character;
+    if (character.ownerUserId === user.userId) return character;
     if (!campaignId) throw new ForbiddenException('Character access denied');
     const campaign = await this.prisma.campaign.findUnique({
       where: { id: campaignId },
@@ -102,7 +102,7 @@ export class CharacterQueriesService {
     });
     if (
       !campaign ||
-      !campaign.members.some((member) => member.userId === actor.userId)
+      !campaign.members.some((member) => member.userId === user.userId)
     ) {
       throw new ForbiddenException('Character access denied');
     }

@@ -7,7 +7,7 @@ describe('CharacterQueriesService', () => {
     campaign: { findUnique: jest.fn() },
   };
   const stateStore = { get: jest.fn() };
-  const actor = { userId: 'user-1', username: 'aria' };
+  const character = { userId: 'user-1', username: 'aria' };
 
   beforeEach(() => {
     jest.resetAllMocks();
@@ -53,7 +53,7 @@ describe('CharacterQueriesService', () => {
     );
 
     const summary = await service.getSummary(
-      actor,
+      character,
       'character-1',
       'campaign-1',
     );

@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import type {
+  ServerDiscoverySettings,
   ServerSettingsView,
   UpdateServerSettingsInput
 } from './server-settings.types';
@@ -17,6 +18,22 @@ const ALLOWED_ADMIN_ROLES = new Set(['owner', 'admin']);
 @Injectable()
 export class ServerSettingsService {
   constructor(private readonly prismaService: PrismaService) {}
+
+  async getDiscoverySettings(): Promise<ServerDiscoverySettings> {
+    const existing = await this.prismaService.serverSetting.findFirst();
+    const row =
+      existing ??
+      (await this.prismaService.serverSetting.upsert({
+        where: { id: 'singleton' },
+        create: { id: 'singleton' },
+        update: {}
+      }));
+    return {
+      instanceId: row.instanceId,
+      serverName: row.serverName,
+      registrationEnabled: row.registrationEnabled
+    };
+  }
 
   async getSettings(): Promise<ServerSettingsView> {
     const row = await this.prismaService.serverSetting.findFirst();

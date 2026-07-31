@@ -37,7 +37,7 @@ export class CharacterOperationsService {
   ) {}
 
   adjustHitPoints(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     characterId: string,
     input: OperationBase & {
       delta?: number;
@@ -49,7 +49,7 @@ export class CharacterOperationsService {
       throw new BadRequestException('delta or current is required');
     }
     return this.mutate(
-      actor,
+      user,
       characterId,
       input,
       'character.hp.adjusted',
@@ -92,12 +92,12 @@ export class CharacterOperationsService {
   }
 
   addCondition(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     characterId: string,
     input: OperationBase & { condition: Record<string, unknown> },
   ) {
     return this.mutate(
-      actor,
+      user,
       characterId,
       input,
       'character.condition.added',
@@ -121,12 +121,12 @@ export class CharacterOperationsService {
   }
 
   removeCondition(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     characterId: string,
     input: OperationBase & { conditionId: string },
   ) {
     return this.mutate(
-      actor,
+      user,
       characterId,
       input,
       'character.condition.removed',
@@ -152,12 +152,12 @@ export class CharacterOperationsService {
   }
 
   consumeResource(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     characterId: string,
     input: OperationBase & { resourceId: string; amount?: number },
   ) {
     return this.changeResource(
-      actor,
+      user,
       characterId,
       input,
       -Math.max(1, input.amount ?? 1),
@@ -166,12 +166,12 @@ export class CharacterOperationsService {
   }
 
   restoreResource(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     characterId: string,
     input: OperationBase & { resourceId: string; amount?: number },
   ) {
     return this.changeResource(
-      actor,
+      user,
       characterId,
       input,
       Math.max(1, input.amount ?? Number.MAX_SAFE_INTEGER),
@@ -180,12 +180,12 @@ export class CharacterOperationsService {
   }
 
   grantItem(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     characterId: string,
     input: OperationBase & { item: Record<string, unknown> },
   ) {
     return this.mutate(
-      actor,
+      user,
       characterId,
       input,
       'character.item.granted',
@@ -212,12 +212,12 @@ export class CharacterOperationsService {
   }
 
   consumeItem(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     characterId: string,
     input: OperationBase & { itemId: string; quantity?: number },
   ) {
     return this.changeItem(
-      actor,
+      user,
       characterId,
       input,
       'character.item.consumed',
@@ -226,12 +226,12 @@ export class CharacterOperationsService {
   }
 
   equipItem(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     characterId: string,
     input: OperationBase & { itemId: string; equipped: boolean },
   ) {
     return this.changeItem(
-      actor,
+      user,
       characterId,
       input,
       'character.item.equipped',
@@ -240,7 +240,7 @@ export class CharacterOperationsService {
   }
 
   async transferItem(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     characterId: string,
     input: OperationBase & {
       campaignId: string;
@@ -250,7 +250,7 @@ export class CharacterOperationsService {
     },
   ) {
     const quantity = Math.max(1, input.quantity ?? 1);
-    await this.assertCanEdit(actor, characterId, input.campaignId);
+    await this.assertCanEdit(user, characterId, input.campaignId);
     const target = await this.prisma.character.findUnique({
       where: { id: input.targetCharacterId },
     });
@@ -355,8 +355,8 @@ export class CharacterOperationsService {
         type: 'character.item.transferred',
         campaignId: input.campaignId,
         characterId,
-        actorType: 'user',
-        actorId: actor.userId,
+        initiatorType: 'user',
+        initiatorId: user.userId,
         requestId: input.requestId,
         targets: [
           { type: 'character', id: characterId },
@@ -375,13 +375,13 @@ export class CharacterOperationsService {
   }
 
   private changeResource(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     characterId: string,
     input: OperationBase & { resourceId: string },
     delta: number,
     type: string,
   ) {
-    return this.mutate(actor, characterId, input, type, (state) => {
+    return this.mutate(user, characterId, input, type, (state) => {
       const resource = state.resources.find(
         (item) => item.id === input.resourceId,
       );
@@ -406,13 +406,13 @@ export class CharacterOperationsService {
   }
 
   private changeItem(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     characterId: string,
     input: OperationBase & { itemId: string },
     type: string,
     change: (item: CharacterState['items'][number]) => Record<string, unknown>,
   ) {
-    return this.mutate(actor, characterId, input, type, (state) => {
+    return this.mutate(user, characterId, input, type, (state) => {
       const item = state.items.find((entry) => entry.id === input.itemId);
       if (!item) throw new NotFoundException('Item not found');
       const changed = change(item);
@@ -436,7 +436,7 @@ export class CharacterOperationsService {
   }
 
   private async mutate(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     characterId: string,
     input: OperationBase,
     type: string,
@@ -451,7 +451,7 @@ export class CharacterOperationsService {
     if (!input.requestId?.trim()) {
       throw new BadRequestException('requestId is required');
     }
-    await this.assertCanEdit(actor, characterId, input.campaignId ?? null);
+    await this.assertCanEdit(user, characterId, input.campaignId ?? null);
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.gameEvent.findUnique({
         where: { requestId: input.requestId },
@@ -494,8 +494,8 @@ export class CharacterOperationsService {
         type,
         campaignId: input.campaignId ?? null,
         characterId,
-        actorType: 'user',
-        actorId: actor.userId,
+        initiatorType: 'user',
+        initiatorId: user.userId,
         requestId: input.requestId,
         targets: [{ type: 'character', id: characterId }],
         before: change.before,
@@ -511,7 +511,7 @@ export class CharacterOperationsService {
   }
 
   private async assertCanEdit(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     characterId: string,
     campaignId: string | null,
   ): Promise<void> {
@@ -520,7 +520,7 @@ export class CharacterOperationsService {
     });
     if (!character) throw new NotFoundException('Character not found');
     if (!campaignId) {
-      if (character.ownerUserId !== actor.userId) {
+      if (character.ownerUserId !== user.userId) {
         throw new ForbiddenException('Character access denied');
       }
       return;
@@ -531,14 +531,14 @@ export class CharacterOperationsService {
     });
     if (!campaign) throw new NotFoundException('Campaign not found');
     const membership = campaign.members.find(
-      (member) => member.userId === actor.userId,
+      (member) => member.userId === user.userId,
     );
     const canManage =
-      campaign.ownerId === actor.userId ||
+      campaign.ownerId === user.userId ||
       membership?.role === 'owner' ||
       membership?.role === 'dm';
     const isOwner =
-      character.ownerUserId === actor.userId && membership !== undefined;
+      character.ownerUserId === user.userId && membership !== undefined;
     if (!canManage && !isOwner) {
       throw new ForbiddenException('Character access denied');
     }

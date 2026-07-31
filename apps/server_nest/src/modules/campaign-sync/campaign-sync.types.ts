@@ -1,4 +1,4 @@
-export type CampaignEntityType = "actor" | "content";
+export type CampaignEntityType = "character" | "content";
 
 export type CampaignChangeOperation = "upsert" | "delete";
 
@@ -20,14 +20,15 @@ export interface CampaignChangePage {
   hasMore: boolean;
 }
 
-export interface CampaignActorSummary {
+export interface CampaignCharacterSummary {
   id: string;
   campaignId: string;
   ownerUserId: string | null;
   sourceCharacterId: string | null;
-  actorType: string;
+  characterType: string;
   status: string;
   lifecycle: "persistent" | "temporary";
+  visibleToPlayers: boolean;
   sheet: Record<string, unknown>;
   revision: number;
   updatedBy: string;
@@ -35,11 +36,11 @@ export interface CampaignActorSummary {
   updatedAt: string;
 }
 
-export interface CampaignActorAuditRecord {
+export interface CampaignCharacterAuditRecord {
   id: string;
-  campaignActorId: string;
+  campaignCharacterId: string;
   campaignId: string;
-  actorUserId: string;
+  characterUserId: string;
   baseRevision: number;
   resultRevision: number;
   changedPaths: string[];
@@ -69,14 +70,10 @@ export interface CampaignChangedEvent {
   entityType: CampaignEntityType;
 }
 
-export type CampaignActorType =
-  | "player"
-  | "npc"
-  | "unclaimed"
-  | "companion"
-  | "monster";
+export type CampaignCharacterType =
+  "player" | "npc" | "unclaimed" | "companion" | "monster";
 
-export type CampaignActorStatus = "active" | "archived";
+export type CampaignCharacterStatus = "active" | "archived";
 
 export type CampaignRuntimeCommandType =
   | "setHp"
@@ -94,37 +91,39 @@ export interface CampaignRuntimeCommand {
   amount?: number;
 }
 
-export interface PublishActorInput {
+export interface PublishCharacterInput {
   sourceCharacterId: string;
-  actorType: CampaignActorType;
+  characterType: CampaignCharacterType;
   baseRevision: number;
   sheet: Record<string, unknown>;
 }
 
-export interface CreateActorInput {
-  actorType: CampaignActorType;
+export interface CreateCharacterInput {
+  characterType: CampaignCharacterType;
   ownerUserId?: string | null;
   lifecycle?: "persistent" | "temporary";
+  visibleToPlayers?: boolean;
   sheet: Record<string, unknown>;
 }
 
-export interface UpdateActorInput {
+export interface UpdateCharacterInput {
   baseRevision: number;
   sheet: Record<string, unknown>;
+  visibleToPlayers?: boolean;
   /**
    * Spec §完整管理: 转为常驻 — DM 可将 temporary 角色升级为 persistent。
-   * 仅在 lifecycle 实际发生变化时强制 canManageActor 权限；未提供时
-   * 保持原有 canEditOwnedActor 行为，避免影响玩家自编辑角色卡。
+   * 仅在 lifecycle 实际发生变化时强制 canManageCharacter 权限；未提供时
+   * 保持原有 canEditOwnedCharacter 行为，避免影响玩家自编辑角色卡。
    */
   lifecycle?: "persistent" | "temporary";
 }
 
-export interface AssignActorInput {
+export interface AssignCharacterInput {
   ownerUserId: string | null;
   baseRevision: number;
 }
 
-export interface ArchiveActorInput {
+export interface ArchiveCharacterInput {
   baseRevision: number;
 }
 
@@ -165,8 +164,8 @@ export interface ContentValidationError {
 
 /**
  * 战役事件类型枚举 (最小集合). 沿用路线图第三节定义的命名空间:
- *   message.* / roll.* / actor.* / archive.* / system.*
- * 当前已实现: actor.hp_changed, actor.item_granted.
+ *   message.* / roll.* / character.* / archive.* / system.*
+ * 当前已实现: character.hp_changed, character.item_granted.
  * 已有但未形式化的 kind (say/action/roll/checkRequest/archivePublished)
  * 保留原 kind 字段, 不强制改名为 message.say 等, 避免破坏存量数据.
  */
@@ -178,16 +177,17 @@ export type CampaignEventKind =
   | "roll.check"
   | "roll.save"
   | "roll.initiative"
-  | "actor.hp_changed"
-  | "actor.item_granted"
+  | "character.hp_changed"
+  | "character.item_granted"
+  | "character.condition_added"
   | "archive.published"
   | "system.notice";
 
 /** HP 变化事件 payload. 存储在 CampaignChatMessage.eventData 中. */
-export interface ActorHpChangedEvent {
-  eventType: "actor.hp_changed";
-  actorId: string;
-  actorName: string;
+export interface CharacterHpChangedEvent {
+  eventType: "character.hp_changed";
+  characterId: string;
+  characterName: string;
   /** 客户端请求的原始 delta (可被 clamp 修正). */
   delta: number;
   /** clamp 前的 currentHp. */
@@ -199,21 +199,21 @@ export interface ActorHpChangedEvent {
 }
 
 /** 给予物品事件 payload. */
-export interface ActorItemGrantedEvent {
-  eventType: "actor.item_granted";
-  actorId: string;
-  actorName: string;
+export interface CharacterItemGrantedEvent {
+  eventType: "character.item_granted";
+  characterId: string;
+  characterName: string;
   itemId: string;
   itemName: string;
   quantity: number;
 }
 
 /** HP 变化请求. delta < 0 为伤害, > 0 为治疗, 0 拒绝. */
-export interface ChangeActorHpInput {
+export interface ChangeCharacterHpInput {
   delta: number;
   /** 可选 DM 备注. */
   reason?: string;
-  /** 可选乐观锁; 提供时必须与当前 actor revision 一致. */
+  /** 可选乐观锁; 提供时必须与当前 character revision 一致. */
   baseRevision?: number;
 }
 
@@ -227,16 +227,28 @@ export interface GrantItemInput {
   baseRevision?: number;
 }
 
-/** 原子事件操作的返回: 同时返回更新后的 actor 和追加的事件消息. */
+/** 给予状态请求. 状态采用结构化对象写入 character sheet. */
+export interface AddConditionInput {
+  type: string;
+  name: string;
+  /** 可选持续轮数. 必须为正整数. */
+  durationRounds?: number;
+  /** 可选乐观锁. */
+  baseRevision?: number;
+}
+
+/** 原子事件操作的返回: 同时返回更新后的 character 和追加的事件消息. */
 export interface CampaignEventResult {
-  actor: CampaignActorSummary;
+  character: CampaignCharacterSummary;
   /** kind='system' 的 CampaignChatMessage view. */
   event: {
     id: string;
     campaignId: string;
     senderId: string;
-    campaignActorId: string | null;
+    campaignCharacterId: string | null;
     displayName: string;
+    speakerMode: string;
+    ooc: boolean;
     kind: string;
     content: string;
     eventData: Record<string, unknown>;

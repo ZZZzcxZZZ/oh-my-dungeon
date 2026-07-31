@@ -4,39 +4,47 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AccessTokenPayload } from "../auth/auth.types";
 import {
-  CampaignActorContext,
+  CampaignCharacterContext,
   CampaignContext,
   CampaignPolicy,
 } from "../campaigns/policies/campaign.policy";
 import { CampaignsGateway } from "../realtime/campaigns.gateway";
 import { CampaignChangeService } from "./campaign-change.service";
 import type {
-  CampaignActorSummary,
+  CampaignCharacterSummary,
   CampaignEventResult,
-  ChangeActorHpInput,
+  AddConditionInput,
+  ChangeCharacterHpInput,
   GrantItemInput,
 } from "./campaign-sync.types";
 
 // ---------------------------------------------------------------------------
 // Task 3.1 — CampaignEvent 事件层
 //
-// 把"修改 actor 状态 + 追加事件消息"绑定到单一 Prisma 事务, 保证:
+// 把"修改 character 状态 + 追加事件消息"绑定到单一 Prisma 事务, 保证:
 //   1. 状态修改与事件追加原子提交, 失败全部回滚 (无孤儿消息, 无孤儿 HP).
 //   2. 事务提交后才广播, 客户端收到的事件一定已落库.
 //   3. 客户端可通过 eventData.eventType 字段分发渲染 (BG3 风格系统日志).
 // ---------------------------------------------------------------------------
 
-const HP_EVENT_TYPE = "actor.hp_changed";
-const ITEM_EVENT_TYPE = "actor.item_granted";
+const HP_EVENT_TYPE = "character.hp_changed";
+const ITEM_EVENT_TYPE = "character.item_granted";
+const CONDITION_EVENT_TYPE = "character.condition_added";
 
 interface InventoryEntry {
+  id: string;
   itemId: string;
+  templateRef: string;
   name: string;
   quantity: number;
+  equipped: boolean;
+  attuned: boolean;
+  instanceData: Record<string, unknown>;
 }
 
 @Injectable()
@@ -49,15 +57,15 @@ export class CampaignEventsService {
   ) {}
 
   /**
-   * 原子操作: 调整 actor HP + 追加 actor.hp_changed 事件消息.
+   * 原子操作: 调整 character HP + 追加 character.hp_changed 事件消息.
    * delta < 0 为伤害 (clamp 到 0), > 0 为治疗 (clamp 到 maxHp, 若 maxHp 有效).
-   * 同事务内: actor update + audit + change record + chat message.
+   * 同事务内: character update + audit + change record + chat message.
    */
-  async changeActorHp(
-    actor: AccessTokenPayload,
+  async changeCharacterHp(
+    user: AccessTokenPayload,
     campaignId: string,
-    actorId: string,
-    input: ChangeActorHpInput,
+    characterId: string,
+    input: ChangeCharacterHpInput,
   ): Promise<CampaignEventResult> {
     if (
       typeof input.delta !== "number" ||
@@ -71,19 +79,22 @@ export class CampaignEventsService {
         ? input.reason.trim()
         : null;
 
-    const { row, ctx } = await this.loadActor(campaignId, actorId);
-    if (input.baseRevision !== undefined && row.revision !== input.baseRevision) {
+    const { row, ctx } = await this.loadCharacter(campaignId, characterId);
+    if (
+      input.baseRevision !== undefined &&
+      row.revision !== input.baseRevision
+    ) {
       throw conflict(row);
     }
-    this.policy.canManageActor(actor, ctx);
+    this.policy.canManageCharacter(user, ctx);
 
     const beforeSheet = (row.sheetJson ?? {}) as Record<string, unknown>;
     const currentHp = toInt(beforeSheet.currentHp);
     const maxHp = toInt(beforeSheet.maxHp);
-    const actorName =
+    const characterName =
       typeof beforeSheet.name === "string" && beforeSheet.name.trim()
         ? beforeSheet.name.trim()
-        : "Unnamed actor";
+        : "Unnamed character";
 
     const rawNext = currentHp + input.delta;
     const clampedNext =
@@ -108,79 +119,96 @@ export class CampaignEventsService {
     const nextRevision = row.revision + 1;
     const changedPaths = ["currentHp"];
 
-    const { row: updatedRow, cursor, messageRow } = await this.prismaService.$transaction(
-      async (tx) => {
-        const result = await tx.campaignActor.update({
-          where: { id: actorId },
-          data: {
-            sheetJson: afterSheet as unknown as Prisma.InputJsonValue,
-            revision: nextRevision,
-            updatedBy: actor.userId,
-          },
-        });
-        await tx.campaignActorAudit.create({
-          data: {
-            campaignActorId: actorId,
-            campaignId,
-            actorUserId: actor.userId,
-            baseRevision: row.revision,
-            resultRevision: nextRevision,
-            changedPaths: changedPaths as unknown as Prisma.InputJsonValue,
-            beforeJson: beforeSheet as unknown as Prisma.InputJsonValue,
-            afterJson: afterSheet as unknown as Prisma.InputJsonValue,
-          },
-        });
-        const change = await this.changeService.recordInTransaction(
-          tx as unknown as Parameters<typeof this.changeService.recordInTransaction>[0],
+    const {
+      row: updatedRow,
+      cursor,
+      messageRow,
+    } = await this.prismaService.$transaction(async (tx) => {
+      const result = await tx.campaignCharacter.update({
+        where: { id: characterId },
+        data: {
+          sheetJson: afterSheet as unknown as Prisma.InputJsonValue,
+          revision: nextRevision,
+          updatedBy: user.userId,
+        },
+      });
+      await tx.campaignCharacterAudit.create({
+        data: {
+          campaignCharacterId: characterId,
           campaignId,
-          "actor",
-          actorId,
-          "upsert",
-          nextRevision,
-        );
-        const message = await tx.campaignChatMessage.create({
-          data: {
-            campaignId,
-            senderId: actor.userId,
-            campaignActorId: actorId,
-            displayName: actor.username,
-            speakerMode: "actor",
-            ooc: false,
-            kind: "system",
-            content: formatHpMessage(actorName, actualDelta, currentHp, clampedNext),
-            eventData: {
-              eventType: HP_EVENT_TYPE,
-              actorId,
-              actorName,
-              delta: actualDelta,
-              from: currentHp,
-              to: clampedNext,
-              reason,
-            } as Prisma.InputJsonValue,
-          },
-        });
-        return { row: result, cursor: change.cursor, messageRow: message };
-      },
+          characterUserId: user.userId,
+          baseRevision: row.revision,
+          resultRevision: nextRevision,
+          changedPaths: changedPaths as unknown as Prisma.InputJsonValue,
+          beforeJson: beforeSheet as unknown as Prisma.InputJsonValue,
+          afterJson: afterSheet as unknown as Prisma.InputJsonValue,
+        },
+      });
+      const change = await this.changeService.recordInTransaction(
+        tx as unknown as Parameters<
+          typeof this.changeService.recordInTransaction
+        >[0],
+        campaignId,
+        "character",
+        characterId,
+        "upsert",
+        nextRevision,
+      );
+      const message = await tx.campaignChatMessage.create({
+        data: {
+          campaignId,
+          senderId: user.userId,
+          campaignCharacterId: null,
+          displayName: "旁白",
+          speakerMode: "narrator",
+          ooc: false,
+          kind: "system",
+          content: formatHpMessage(
+            characterName,
+            actualDelta,
+            currentHp,
+            clampedNext,
+          ),
+          eventData: {
+            eventType: HP_EVENT_TYPE,
+            characterId,
+            characterName,
+            delta: actualDelta,
+            from: currentHp,
+            to: clampedNext,
+            reason,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      return { row: result, cursor: change.cursor, messageRow: message };
+    });
+
+    this.gateway.broadcastChange({
+      campaignId,
+      entityType: "character",
+      cursor,
+    });
+    const eventView = toEventView(messageRow);
+    this.gateway.broadcastToCampaign(
+      campaignId,
+      "campaign:message:new",
+      eventView,
     );
 
-    this.gateway.broadcastChange({ campaignId, entityType: "actor", cursor });
-    const eventView = toEventView(messageRow);
-    this.gateway.broadcastToCampaign(campaignId, "campaign:message:new", eventView);
-
     return {
-      actor: toActorSummary(updatedRow),
+      character: toCharacterSummary(updatedRow),
       event: eventView,
     };
   }
 
   /**
-   * 原子操作: 给予 actor 物品 + 追加 actor.item_granted 事件消息.
+   * 原子操作: 给予 character 物品 + 追加 character.item_granted 事件消息.
    * 若 inventory 已含相同 itemId, 累加数量; 否则追加新条目.
    */
   async grantItem(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
-    actorId: string,
+    characterId: string,
     input: GrantItemInput,
   ): Promise<CampaignEventResult> {
     if (typeof input.itemId !== "string" || input.itemId.trim().length === 0) {
@@ -203,17 +231,20 @@ export class CampaignEventsService {
       );
     }
 
-    const { row, ctx } = await this.loadActor(campaignId, actorId);
-    if (input.baseRevision !== undefined && row.revision !== input.baseRevision) {
+    const { row, ctx } = await this.loadCharacter(campaignId, characterId);
+    if (
+      input.baseRevision !== undefined &&
+      row.revision !== input.baseRevision
+    ) {
       throw conflict(row);
     }
-    this.policy.canManageActor(actor, ctx);
+    this.policy.canManageCharacter(user, ctx);
 
     const beforeSheet = (row.sheetJson ?? {}) as Record<string, unknown>;
-    const actorName =
+    const characterName =
       typeof beforeSheet.name === "string" && beforeSheet.name.trim()
         ? beforeSheet.name.trim()
-        : "Unnamed actor";
+        : "Unnamed character";
     const beforeInventory = readInventory(beforeSheet.inventory);
     const existingIdx = beforeInventory.findIndex(
       (entry) => entry.itemId === input.itemId,
@@ -228,7 +259,16 @@ export class CampaignEventsService {
     } else {
       afterInventory = [
         ...beforeInventory,
-        { itemId: input.itemId, name: input.name.trim(), quantity },
+        {
+          id: input.itemId,
+          itemId: input.itemId,
+          templateRef: input.itemId,
+          name: input.name.trim(),
+          quantity,
+          equipped: false,
+          attuned: false,
+          instanceData: {},
+        },
       ];
     }
     const afterSheet: Record<string, unknown> = {
@@ -238,80 +278,237 @@ export class CampaignEventsService {
     const nextRevision = row.revision + 1;
     const changedPaths = ["inventory"];
 
-    const { row: updatedRow, cursor, messageRow } = await this.prismaService.$transaction(
-      async (tx) => {
-        const result = await tx.campaignActor.update({
-          where: { id: actorId },
-          data: {
-            sheetJson: afterSheet as unknown as Prisma.InputJsonValue,
-            revision: nextRevision,
-            updatedBy: actor.userId,
-          },
-        });
-        await tx.campaignActorAudit.create({
-          data: {
-            campaignActorId: actorId,
-            campaignId,
-            actorUserId: actor.userId,
-            baseRevision: row.revision,
-            resultRevision: nextRevision,
-            changedPaths: changedPaths as unknown as Prisma.InputJsonValue,
-            beforeJson: beforeSheet as unknown as Prisma.InputJsonValue,
-            afterJson: afterSheet as unknown as Prisma.InputJsonValue,
-          },
-        });
-        const change = await this.changeService.recordInTransaction(
-          tx as unknown as Parameters<typeof this.changeService.recordInTransaction>[0],
+    const {
+      row: updatedRow,
+      cursor,
+      messageRow,
+    } = await this.prismaService.$transaction(async (tx) => {
+      const result = await tx.campaignCharacter.update({
+        where: { id: characterId },
+        data: {
+          sheetJson: afterSheet as unknown as Prisma.InputJsonValue,
+          revision: nextRevision,
+          updatedBy: user.userId,
+        },
+      });
+      await tx.campaignCharacterAudit.create({
+        data: {
+          campaignCharacterId: characterId,
           campaignId,
-          "actor",
-          actorId,
-          "upsert",
-          nextRevision,
-        );
-        const message = await tx.campaignChatMessage.create({
-          data: {
-            campaignId,
-            senderId: actor.userId,
-            campaignActorId: actorId,
-            displayName: actor.username,
-            speakerMode: "actor",
-            ooc: false,
-            kind: "system",
-            content: formatItemMessage(actorName, input.name.trim(), quantity),
-            eventData: {
-              eventType: ITEM_EVENT_TYPE,
-              actorId,
-              actorName,
-              itemId: input.itemId,
-              itemName: input.name.trim(),
-              quantity,
-            } as Prisma.InputJsonValue,
-          },
-        });
-        return { row: result, cursor: change.cursor, messageRow: message };
-      },
+          characterUserId: user.userId,
+          baseRevision: row.revision,
+          resultRevision: nextRevision,
+          changedPaths: changedPaths as unknown as Prisma.InputJsonValue,
+          beforeJson: beforeSheet as unknown as Prisma.InputJsonValue,
+          afterJson: afterSheet as unknown as Prisma.InputJsonValue,
+        },
+      });
+      const change = await this.changeService.recordInTransaction(
+        tx as unknown as Parameters<
+          typeof this.changeService.recordInTransaction
+        >[0],
+        campaignId,
+        "character",
+        characterId,
+        "upsert",
+        nextRevision,
+      );
+      const message = await tx.campaignChatMessage.create({
+        data: {
+          campaignId,
+          senderId: user.userId,
+          campaignCharacterId: null,
+          displayName: "旁白",
+          speakerMode: "narrator",
+          ooc: false,
+          kind: "system",
+          content: formatItemMessage(
+            characterName,
+            input.name.trim(),
+            quantity,
+          ),
+          eventData: {
+            eventType: ITEM_EVENT_TYPE,
+            characterId,
+            characterName,
+            itemId: input.itemId,
+            itemName: input.name.trim(),
+            quantity,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      return { row: result, cursor: change.cursor, messageRow: message };
+    });
+
+    this.gateway.broadcastChange({
+      campaignId,
+      entityType: "character",
+      cursor,
+    });
+    const eventView = toEventView(messageRow);
+    this.gateway.broadcastToCampaign(
+      campaignId,
+      "campaign:message:new",
+      eventView,
     );
 
-    this.gateway.broadcastChange({ campaignId, entityType: "actor", cursor });
-    const eventView = toEventView(messageRow);
-    this.gateway.broadcastToCampaign(campaignId, "campaign:message:new", eventView);
-
     return {
-      actor: toActorSummary(updatedRow),
+      character: toCharacterSummary(updatedRow),
       event: eventView,
     };
   }
 
-  private async loadActor(
+  /**
+   * 原子操作: 给予结构化状态 + 追加 character.condition_added 事件消息.
+   */
+  async addCondition(
+    user: AccessTokenPayload,
     campaignId: string,
-    actorId: string,
-  ): Promise<{ row: ActorRow; ctx: CampaignActorContext }> {
+    characterId: string,
+    input: AddConditionInput,
+  ): Promise<CampaignEventResult> {
+    const type = input.type.trim();
+    const name = input.name.trim();
+    if (!type) throw new BadRequestException("type is required");
+    if (!name) throw new BadRequestException("name is required");
+    const durationRounds =
+      input.durationRounds === undefined
+        ? undefined
+        : Number.isInteger(input.durationRounds) && input.durationRounds > 0
+          ? input.durationRounds
+          : NaN;
+    if (Number.isNaN(durationRounds)) {
+      throw new BadRequestException(
+        "durationRounds must be a positive integer",
+      );
+    }
+
+    const { row, ctx } = await this.loadCharacter(campaignId, characterId);
+    if (
+      input.baseRevision !== undefined &&
+      row.revision !== input.baseRevision
+    ) {
+      throw conflict(row);
+    }
+    this.policy.canManageCharacter(user, ctx);
+
+    const beforeSheet = (row.sheetJson ?? {}) as Record<string, unknown>;
+    const characterName =
+      typeof beforeSheet.name === "string" && beforeSheet.name.trim()
+        ? beforeSheet.name.trim()
+        : "Unnamed character";
+    const beforeConditions = Array.isArray(beforeSheet.conditions)
+      ? beforeSheet.conditions
+      : [];
+    const condition = {
+      id: randomUUID(),
+      type,
+      name,
+      source: { type: "user", id: user.userId },
+      duration:
+        durationRounds === undefined
+          ? null
+          : {
+              unit: "round",
+              total: durationRounds,
+              remaining: durationRounds,
+            },
+      removable: true,
+    };
+    const afterSheet: Record<string, unknown> = {
+      ...beforeSheet,
+      conditions: [...beforeConditions, condition],
+    };
+    const nextRevision = row.revision + 1;
+    const changedPaths = ["conditions"];
+
+    const {
+      row: updatedRow,
+      cursor,
+      messageRow,
+    } = await this.prismaService.$transaction(async (tx) => {
+      const result = await tx.campaignCharacter.update({
+        where: { id: characterId },
+        data: {
+          sheetJson: afterSheet as unknown as Prisma.InputJsonValue,
+          revision: nextRevision,
+          updatedBy: user.userId,
+        },
+      });
+      await tx.campaignCharacterAudit.create({
+        data: {
+          campaignCharacterId: characterId,
+          campaignId,
+          characterUserId: user.userId,
+          baseRevision: row.revision,
+          resultRevision: nextRevision,
+          changedPaths: changedPaths as unknown as Prisma.InputJsonValue,
+          beforeJson: beforeSheet as unknown as Prisma.InputJsonValue,
+          afterJson: afterSheet as unknown as Prisma.InputJsonValue,
+        },
+      });
+      const change = await this.changeService.recordInTransaction(
+        tx as unknown as Parameters<
+          typeof this.changeService.recordInTransaction
+        >[0],
+        campaignId,
+        "character",
+        characterId,
+        "upsert",
+        nextRevision,
+      );
+      const message = await tx.campaignChatMessage.create({
+        data: {
+          campaignId,
+          senderId: user.userId,
+          campaignCharacterId: null,
+          displayName: "旁白",
+          speakerMode: "narrator",
+          ooc: false,
+          kind: "system",
+          content: formatConditionMessage(characterName, name, durationRounds),
+          eventData: {
+            eventType: CONDITION_EVENT_TYPE,
+            characterId,
+            characterName,
+            conditionId: condition.id,
+            conditionType: type,
+            conditionName: name,
+            durationRounds: durationRounds ?? null,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      return { row: result, cursor: change.cursor, messageRow: message };
+    });
+
+    this.gateway.broadcastChange({
+      campaignId,
+      entityType: "character",
+      cursor,
+    });
+    const eventView = toEventView(messageRow);
+    this.gateway.broadcastToCampaign(
+      campaignId,
+      "campaign:message:new",
+      eventView,
+    );
+
+    return {
+      character: toCharacterSummary(updatedRow),
+      event: eventView,
+    };
+  }
+
+  private async loadCharacter(
+    campaignId: string,
+    characterId: string,
+  ): Promise<{ row: CharacterRow; ctx: CampaignCharacterContext }> {
     const campaign = await this.fetchCampaignContext(campaignId);
-    const row = await this.prismaService.campaignActor.findUnique({
-      where: { id: actorId },
+    const row = await this.prismaService.campaignCharacter.findUnique({
+      where: { id: characterId },
     });
     if (!row || row.campaignId !== campaignId) {
-      throw new NotFoundException("Campaign actor not found");
+      throw new NotFoundException("Campaign character not found");
     }
     return {
       row,
@@ -319,15 +516,17 @@ export class CampaignEventsService {
         campaignId: campaign.campaignId,
         ownerId: campaign.ownerId,
         members: campaign.members,
-        actorId: row.id,
-        actorOwnerUserId: row.ownerUserId,
-        actorSourceCharacterId: row.sourceCharacterId,
-        actorRevision: row.revision,
+        characterId: row.id,
+        characterOwnerUserId: row.ownerUserId,
+        characterSourceCharacterId: row.sourceCharacterId,
+        characterRevision: row.revision,
       },
     };
   }
 
-  private async fetchCampaignContext(campaignId: string): Promise<CampaignContext> {
+  private async fetchCampaignContext(
+    campaignId: string,
+  ): Promise<CampaignContext> {
     const campaign = await this.prismaService.campaign.findUnique({
       where: { id: campaignId },
       include: { members: true },
@@ -346,14 +545,15 @@ export class CampaignEventsService {
   }
 }
 
-interface ActorRow {
+interface CharacterRow {
   id: string;
   campaignId: string;
   ownerUserId: string | null;
   sourceCharacterId: string | null;
-  actorType: string;
+  characterType: string;
   status: string;
   lifecycle?: string;
+  visibleToPlayers?: boolean;
   sheetJson: unknown;
   revision: number;
   updatedBy: string;
@@ -361,15 +561,17 @@ interface ActorRow {
   updatedAt: Date;
 }
 
-function toActorSummary(row: ActorRow): CampaignActorSummary {
+function toCharacterSummary(row: CharacterRow): CampaignCharacterSummary {
   return {
     id: row.id,
     campaignId: row.campaignId,
     ownerUserId: row.ownerUserId,
     sourceCharacterId: row.sourceCharacterId,
-    actorType: row.actorType,
+    characterType: row.characterType,
     status: row.status,
     lifecycle: row.lifecycle === "temporary" ? "temporary" : "persistent",
+    visibleToPlayers:
+      row.characterType === "player" || row.visibleToPlayers === true,
     sheet: (row.sheetJson ?? {}) as Record<string, unknown>,
     revision: row.revision,
     updatedBy: row.updatedBy,
@@ -383,8 +585,10 @@ function toEventView(message: any) {
     id: message.id,
     campaignId: message.campaignId,
     senderId: message.senderId,
-    campaignActorId: message.campaignActorId ?? null,
+    campaignCharacterId: message.campaignCharacterId ?? null,
     displayName: message.displayName,
+    speakerMode: message.speakerMode,
+    ooc: message.ooc === true,
     kind: message.kind,
     content: message.content,
     eventData:
@@ -417,36 +621,67 @@ function readInventory(value: unknown): InventoryEntry[] {
       if (!entry || typeof entry !== "object") return null;
       const record = entry as Record<string, unknown>;
       const itemId =
-        typeof record.itemId === "string" ? record.itemId : "";
+        typeof record.templateRef === "string"
+          ? record.templateRef
+          : typeof record.itemId === "string"
+            ? record.itemId
+            : "";
+      const id =
+        typeof record.id === "string" && record.id.trim() ? record.id : itemId;
       const name = typeof record.name === "string" ? record.name : "";
       const quantity = toInt(record.quantity);
       if (!itemId) return null;
-      return { itemId, name, quantity } satisfies InventoryEntry;
+      const instanceData =
+        record.instanceData &&
+        typeof record.instanceData === "object" &&
+        !Array.isArray(record.instanceData)
+          ? (record.instanceData as Record<string, unknown>)
+          : {};
+      return {
+        id,
+        itemId,
+        templateRef: itemId,
+        name,
+        quantity,
+        equipped: record.equipped === true,
+        attuned: record.attuned === true,
+        instanceData,
+      } satisfies InventoryEntry;
     })
     .filter((entry): entry is InventoryEntry => entry !== null);
 }
 
 function formatHpMessage(
-  actorName: string,
+  characterName: string,
   delta: number,
   from: number,
   to: number,
 ): string {
   const sign = delta >= 0 ? "+" : "";
-  return `${actorName} ${sign}${delta} HP (${from} → ${to})`;
+  return `${characterName} ${sign}${delta} HP (${from} → ${to})`;
 }
 
 function formatItemMessage(
-  actorName: string,
+  characterName: string,
   itemName: string,
   quantity: number,
 ): string {
-  return `给 ${actorName} ${itemName} ×${quantity}`;
+  return `给 ${characterName} ${itemName} ×${quantity}`;
 }
 
-function conflict(row: ActorRow): ConflictException {
+function formatConditionMessage(
+  characterName: string,
+  conditionName: string,
+  durationRounds?: number,
+): string {
+  const duration =
+    durationRounds === undefined ? "" : `（${durationRounds} 轮）`;
+  return `${characterName} 获得状态：${conditionName}${duration}`;
+}
+
+function conflict(row: CharacterRow): ConflictException {
   return new ConflictException({
-    message: "Actor revision conflict",
-    current: toActorSummary(row),
+    message: "Character revision conflict",
+    current: toCharacterSummary(row),
   });
 }

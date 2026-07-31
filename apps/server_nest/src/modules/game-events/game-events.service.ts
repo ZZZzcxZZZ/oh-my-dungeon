@@ -23,8 +23,8 @@ export class GameEventsService {
         type: input.type,
         campaignId: input.campaignId ?? null,
         characterId: input.characterId ?? null,
-        actorType: input.actorType,
-        actorId: input.actorId,
+        initiatorType: input.initiatorType,
+        initiatorId: input.initiatorId,
         requestId: input.requestId,
         targets: input.targets as Prisma.InputJsonValue,
         cause: input.cause

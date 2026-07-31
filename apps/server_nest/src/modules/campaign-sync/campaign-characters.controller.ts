@@ -12,39 +12,40 @@ import {
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import type { AccessTokenPayload } from "../auth/auth.types";
-import { CampaignActorsService } from "./campaign-actors.service";
+import { CampaignCharactersService } from "./campaign-characters.service";
 import type {
-  CampaignActorAuditRecord,
-  CampaignActorSummary,
-  CampaignActorType,
+  CampaignCharacterAuditRecord,
+  CampaignCharacterSummary,
+  CampaignCharacterType,
 } from "./campaign-sync.types";
 
-interface PublishActorBody {
+interface PublishCharacterBody {
   sourceCharacterId?: unknown;
-  actorType?: unknown;
+  characterType?: unknown;
   baseRevision?: unknown;
   sheet?: unknown;
 }
 
-interface CreateActorBody {
-  actorType?: unknown;
+interface CreateCharacterBody {
+  characterType?: unknown;
   ownerUserId?: unknown;
   lifecycle?: unknown;
   sheet?: unknown;
 }
 
-interface UpdateActorBody {
+interface UpdateCharacterBody {
   baseRevision?: unknown;
   sheet?: unknown;
   lifecycle?: unknown;
+  visibleToPlayers?: unknown;
 }
 
-interface AssignActorBody {
+interface AssignCharacterBody {
   ownerUserId?: unknown;
   baseRevision?: unknown;
 }
 
-interface ArchiveActorBody {
+interface ArchiveCharacterBody {
   baseRevision?: unknown;
 }
 
@@ -53,20 +54,20 @@ interface RuntimeCommandBody {
   commands?: unknown;
 }
 
-@Controller("campaigns/:campaignId/actors")
+@Controller("campaigns/:campaignId/characters")
 @UseGuards(JwtAuthGuard)
-export class CampaignActorsController {
-  constructor(private readonly actorsService: CampaignActorsService) {}
+export class CampaignCharactersController {
+  constructor(private readonly charactersService: CampaignCharactersService) {}
 
   @Post("publish")
   publish(
     @CurrentUser() user: AccessTokenPayload,
     @Param("campaignId") campaignId: string,
-    @Body() body: PublishActorBody,
-  ): Promise<CampaignActorSummary> {
-    return this.actorsService.publish(user, campaignId, {
+    @Body() body: PublishCharacterBody,
+  ): Promise<CampaignCharacterSummary> {
+    return this.charactersService.publish(user, campaignId, {
       sourceCharacterId: parseString(body.sourceCharacterId, "sourceCharacterId"),
-      actorType: parseActorType(body.actorType),
+      characterType: parseCharacterType(body.characterType),
       baseRevision: parseBaseRevision(body.baseRevision),
       sheet: parseSheet(body.sheet),
     });
@@ -76,10 +77,10 @@ export class CampaignActorsController {
   create(
     @CurrentUser() user: AccessTokenPayload,
     @Param("campaignId") campaignId: string,
-    @Body() body: CreateActorBody,
-  ): Promise<CampaignActorSummary> {
-    return this.actorsService.create(user, campaignId, {
-      actorType: parseActorType(body.actorType),
+    @Body() body: CreateCharacterBody,
+  ): Promise<CampaignCharacterSummary> {
+    return this.charactersService.create(user, campaignId, {
+      characterType: parseCharacterType(body.characterType),
       ownerUserId:
         typeof body.ownerUserId === "string" && body.ownerUserId.length > 0
           ? body.ownerUserId
@@ -93,59 +94,63 @@ export class CampaignActorsController {
   list(
     @CurrentUser() user: AccessTokenPayload,
     @Param("campaignId") campaignId: string,
-  ): Promise<CampaignActorSummary[]> {
-    return this.actorsService.list(user, campaignId);
+  ): Promise<CampaignCharacterSummary[]> {
+    return this.charactersService.list(user, campaignId);
   }
 
-  @Get(":actorId")
+  @Get(":characterId")
   get(
     @CurrentUser() user: AccessTokenPayload,
     @Param("campaignId") campaignId: string,
-    @Param("actorId") actorId: string,
-  ): Promise<CampaignActorSummary> {
-    return this.actorsService.get(user, campaignId, actorId);
+    @Param("characterId") characterId: string,
+  ): Promise<CampaignCharacterSummary> {
+    return this.charactersService.get(user, campaignId, characterId);
   }
 
-  @Put(":actorId")
+  @Put(":characterId")
   update(
     @CurrentUser() user: AccessTokenPayload,
     @Param("campaignId") campaignId: string,
-    @Param("actorId") actorId: string,
-    @Body() body: UpdateActorBody,
-  ): Promise<CampaignActorSummary> {
-    return this.actorsService.update(user, campaignId, actorId, {
+    @Param("characterId") characterId: string,
+    @Body() body: UpdateCharacterBody,
+  ): Promise<CampaignCharacterSummary> {
+    return this.charactersService.update(user, campaignId, characterId, {
       baseRevision: parseBaseRevision(body.baseRevision),
       sheet: parseSheet(body.sheet),
       lifecycle: parseOptionalLifecycle(body.lifecycle),
+      visibleToPlayers: parseOptionalBoolean(
+        body.visibleToPlayers,
+        "visibleToPlayers",
+      ),
     });
   }
 
-  @Post(":actorId/runtime-commands")
+  @Post(":characterId/runtime-commands")
   @HttpCode(200)
   applyRuntimeCommands(
     @CurrentUser() user: AccessTokenPayload,
     @Param("campaignId") campaignId: string,
-    @Param("actorId") actorId: string,
+    @Param("characterId") characterId: string,
     @Body() body: RuntimeCommandBody,
-  ): Promise<CampaignActorSummary> {
+  ): Promise<CampaignCharacterSummary> {
     if (!Array.isArray(body.commands)) {
       throw new BadRequestException("commands must be an array");
     }
-    return this.actorsService.applyRuntimeCommands(user, campaignId, actorId, {
+    return this.charactersService.applyRuntimeCommands(user, campaignId, characterId, {
       baseRevision: parseBaseRevision(body.baseRevision),
       commands: body.commands as any,
     });
   }
 
-  @Post(":actorId/assign")
+  @Post(":characterId/assign")
   @HttpCode(200)
   assign(
     @CurrentUser() user: AccessTokenPayload,
     @Param("campaignId") campaignId: string,
-    @Param("actorId") actorId: string,
-    @Body() body: AssignActorBody,
-  ): Promise<CampaignActorSummary> {
-    return this.actorsService.assign(user, campaignId, actorId, {
+    @Param("characterId") characterId: string,
+    @Body() body: AssignCharacterBody,
+  ): Promise<CampaignCharacterSummary> {
+    return this.charactersService.assign(user, campaignId, characterId, {
       ownerUserId:
         body.ownerUserId === null
           ? null
@@ -156,26 +161,39 @@ export class CampaignActorsController {
     });
   }
 
-  @Post(":actorId/archive")
+  @Post(":characterId/archive")
   @HttpCode(200)
   archive(
     @CurrentUser() user: AccessTokenPayload,
     @Param("campaignId") campaignId: string,
-    @Param("actorId") actorId: string,
-    @Body() body: ArchiveActorBody,
-  ): Promise<CampaignActorSummary> {
-    return this.actorsService.archive(user, campaignId, actorId, {
+    @Param("characterId") characterId: string,
+    @Body() body: ArchiveCharacterBody,
+  ): Promise<CampaignCharacterSummary> {
+    return this.charactersService.archive(user, campaignId, characterId, {
       baseRevision: parseBaseRevision(body.baseRevision),
     });
   }
 
-  @Get(":actorId/audits")
+  @Post(":characterId/restore")
+  @HttpCode(200)
+  restore(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param("campaignId") campaignId: string,
+    @Param("characterId") characterId: string,
+    @Body() body: ArchiveCharacterBody,
+  ): Promise<CampaignCharacterSummary> {
+    return this.charactersService.restore(user, campaignId, characterId, {
+      baseRevision: parseBaseRevision(body.baseRevision),
+    });
+  }
+
+  @Get(":characterId/audits")
   listAudits(
     @CurrentUser() user: AccessTokenPayload,
     @Param("campaignId") campaignId: string,
-    @Param("actorId") actorId: string,
-  ): Promise<CampaignActorAuditRecord[]> {
-    return this.actorsService.listAudits(user, campaignId, actorId);
+    @Param("characterId") characterId: string,
+  ): Promise<CampaignCharacterAuditRecord[]> {
+    return this.charactersService.listAudits(user, campaignId, characterId);
   }
 }
 
@@ -186,7 +204,7 @@ function parseString(value: unknown, field: string): string {
   return value;
 }
 
-function parseActorType(value: unknown): CampaignActorType {
+function parseCharacterType(value: unknown): CampaignCharacterType {
   if (
     value === "player" ||
     value === "npc" ||
@@ -196,24 +214,26 @@ function parseActorType(value: unknown): CampaignActorType {
   ) {
     return value;
   }
-  throw new BadRequestException("actorType must be one of player|npc|unclaimed|companion|monster");
+  throw new BadRequestException("characterType must be one of player|npc|unclaimed|companion|monster");
 }
 
-function parseLifecycle(value: unknown): "persistent" | "temporary" {
+function parseLifecycle(value: unknown): "persistent" {
   if (value === undefined || value === "persistent") return "persistent";
-  if (value === "temporary") return "temporary";
-  throw new BadRequestException("lifecycle must be persistent or temporary");
+  throw new BadRequestException(
+    "lifecycle must be persistent; one-shot identities belong to message speakerSnapshot",
+  );
 }
 
 /**
- * Spec §完整管理: 转为常驻 — PUT /actors/:id 可携带 lifecycle 字段将
- * temporary 角色升级为 persistent。未提供时返回 undefined，保持原有行为。
+ * Legacy temporary characters can still be promoted to persistent. New temporary
+ * character state is no longer accepted.
  */
-function parseOptionalLifecycle(value: unknown): "persistent" | "temporary" | undefined {
+function parseOptionalLifecycle(value: unknown): "persistent" | undefined {
   if (value === undefined) return undefined;
   if (value === "persistent") return "persistent";
-  if (value === "temporary") return "temporary";
-  throw new BadRequestException("lifecycle must be persistent or temporary");
+  throw new BadRequestException(
+    "lifecycle must be persistent; one-shot identities belong to message speakerSnapshot",
+  );
 }
 
 function parseBaseRevision(value: unknown): number {
@@ -221,6 +241,15 @@ function parseBaseRevision(value: unknown): number {
     throw new BadRequestException("baseRevision must be a number");
   }
   return Math.trunc(value);
+}
+
+function parseOptionalBoolean(
+  value: unknown,
+  field: string,
+): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === "boolean") return value;
+  throw new BadRequestException(`${field} must be a boolean`);
 }
 
 function parseSheet(value: unknown): Record<string, unknown> {

@@ -22,6 +22,7 @@ import type {
   InviteView,
   MembershipView,
   SpeakerSnapshotInput,
+  MessageSpeakerInput,
 } from "./campaigns.types";
 
 interface CreateCampaignBody {
@@ -41,20 +42,21 @@ interface JoinCampaignBody {
 interface CreateCampaignChatMessageBody {
   kind?: unknown;
   content?: unknown;
-  campaignActorId?: unknown;
+  campaignCharacterId?: unknown;
   actionId?: unknown;
   eventData?: unknown;
   speakerSnapshot?: unknown;
+  speaker?: unknown;
   conversationId?: unknown;
 }
 
 interface UpdateMemberBindingBody {
-  actorId?: unknown;
+  characterId?: unknown;
 }
 
 interface UpdateSpeakerBody {
   speakerMode?: unknown;
-  actorId?: unknown;
+  characterId?: unknown;
 }
 
 @Controller("campaigns")
@@ -132,11 +134,12 @@ export class CampaignsController {
     return this.campaignsService.sendMessage(user, campaignId, {
       kind: typeof body.kind === "string" ? body.kind : undefined,
       content: body.content,
-      campaignActorId:
-        typeof body.campaignActorId === "string" ? body.campaignActorId : null,
+      campaignCharacterId:
+        typeof body.campaignCharacterId === "string" ? body.campaignCharacterId : null,
       actionId: typeof body.actionId === "string" ? body.actionId : null,
       eventData: isRecord(body.eventData) ? body.eventData : null,
       speakerSnapshot: parseSpeakerSnapshot(body.speakerSnapshot),
+      speaker: parseMessageSpeaker(body.speaker),
       conversationId:
         typeof body.conversationId === "string" ? body.conversationId : null,
     });
@@ -165,14 +168,14 @@ export class CampaignsController {
     @Param("userId") userId: string,
     @Body() body: UpdateMemberBindingBody,
   ): Promise<MembershipView> {
-    if (body.actorId !== null && typeof body.actorId !== "string") {
-      throw new BadRequestException("actorId must be a string or null");
+    if (body.characterId !== null && typeof body.characterId !== "string") {
+      throw new BadRequestException("characterId must be a string or null");
     }
     return this.campaignsService.updateMemberBinding(
       user,
       campaignId,
       userId,
-      body.actorId ?? null,
+      body.characterId ?? null,
     );
   }
 
@@ -183,19 +186,19 @@ export class CampaignsController {
     @Body() body: UpdateSpeakerBody,
   ): Promise<MembershipView> {
     if (
-      body.speakerMode !== "boundActor" &&
-      body.speakerMode !== "actor" &&
+      body.speakerMode !== "boundCharacter" &&
+      body.speakerMode !== "character" &&
       body.speakerMode !== "narrator" &&
       body.speakerMode !== "ooc"
     ) {
       throw new BadRequestException("Unsupported speakerMode");
     }
-    if (body.actorId !== undefined && typeof body.actorId !== "string") {
-      throw new BadRequestException("actorId must be a string when provided");
+    if (body.characterId !== undefined && typeof body.characterId !== "string") {
+      throw new BadRequestException("characterId must be a string when provided");
     }
     return this.campaignsService.updateSpeaker(user, campaignId, {
       speakerMode: body.speakerMode,
-      actorId: typeof body.actorId === "string" ? body.actorId : null,
+      characterId: typeof body.characterId === "string" ? body.characterId : null,
     });
   }
 
@@ -256,4 +259,31 @@ function parseSpeakerSnapshot(value: unknown): SpeakerSnapshotInput | null {
   const avatarUrl =
     typeof value.avatarUrl === "string" ? value.avatarUrl : null;
   return { displayName: displayName.trim(), avatarUrl };
+}
+
+function parseMessageSpeaker(value: unknown): MessageSpeakerInput | null {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value) || typeof value.kind !== "string") {
+    throw new BadRequestException("speaker.kind is required");
+  }
+  if (value.kind === "narrator" || value.kind === "ooc") {
+    return { kind: value.kind };
+  }
+  if (value.kind === "character") {
+    if (!isNonEmptyString(value.characterId)) {
+      throw new BadRequestException("speaker.characterId is required");
+    }
+    return { kind: "character", characterId: value.characterId.trim() };
+  }
+  if (value.kind === "temporary") {
+    if (!isNonEmptyString(value.displayName)) {
+      throw new BadRequestException("speaker.displayName is required");
+    }
+    return {
+      kind: "temporary",
+      displayName: value.displayName.trim(),
+      avatarUrl: typeof value.avatarUrl === "string" ? value.avatarUrl : null,
+    };
+  }
+  throw new BadRequestException("Unsupported speaker kind");
 }

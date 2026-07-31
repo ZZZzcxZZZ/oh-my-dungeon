@@ -3,8 +3,8 @@ import { AuthModule } from "../auth/auth.module";
 import { CampaignsModule } from "../campaigns/campaigns.module";
 import { RealtimeModule } from "../realtime/realtime.module";
 import { PrismaModule } from "../../prisma/prisma.module";
-import { CampaignActorsController } from "./campaign-actors.controller";
-import { CampaignActorsService } from "./campaign-actors.service";
+import { CampaignCharactersController } from "./campaign-characters.controller";
+import { CampaignCharactersService } from "./campaign-characters.service";
 import { CampaignChangeService } from "./campaign-change.service";
 import { CampaignContentController } from "./campaign-content.controller";
 import { CampaignContentService } from "./campaign-content.service";
@@ -15,20 +15,20 @@ import { CampaignEntryValidatorService } from "./campaign-entry-validator.servic
 @Module({
   imports: [PrismaModule, AuthModule, CampaignsModule, RealtimeModule],
   controllers: [
-    CampaignActorsController,
+    CampaignCharactersController,
     CampaignContentController,
     CampaignEventsController,
   ],
   providers: [
     CampaignChangeService,
-    CampaignActorsService,
+    CampaignCharactersService,
     CampaignContentService,
     CampaignEntryValidatorService,
     CampaignEventsService,
   ],
   exports: [
     CampaignChangeService,
-    CampaignActorsService,
+    CampaignCharactersService,
     CampaignContentService,
     CampaignEntryValidatorService,
     CampaignEventsService,

@@ -51,14 +51,14 @@ describe("campaign content sync endpoints", () => {
     },
     campaignChatMessage: { create: jest.fn(), findMany: jest.fn() },
     campaignSyncState: { upsert: jest.fn(), findUnique: jest.fn() },
-    campaignActor: {
+    campaignCharacter: {
       create: jest.fn(),
       findUnique: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
       count: jest.fn(),
     },
-    campaignActorAudit: { create: jest.fn(), findMany: jest.fn() },
+    campaignCharacterAudit: { create: jest.fn(), findMany: jest.fn() },
     campaignContentEntry: {
       create: jest.fn(),
       findUnique: jest.fn(),
@@ -171,12 +171,12 @@ describe("campaign content sync endpoints", () => {
         cursor: BigInt(1),
       }),
     );
-    prismaService.campaignActor.create.mockResolvedValue({});
-    prismaService.campaignActor.findUnique.mockResolvedValue(null);
-    prismaService.campaignActor.findMany.mockResolvedValue([]);
-    prismaService.campaignActor.update.mockResolvedValue({});
-    prismaService.campaignActorAudit.create.mockResolvedValue({});
-    prismaService.campaignActorAudit.findMany.mockResolvedValue([]);
+    prismaService.campaignCharacter.create.mockResolvedValue({});
+    prismaService.campaignCharacter.findUnique.mockResolvedValue(null);
+    prismaService.campaignCharacter.findMany.mockResolvedValue([]);
+    prismaService.campaignCharacter.update.mockResolvedValue({});
+    prismaService.campaignCharacterAudit.create.mockResolvedValue({});
+    prismaService.campaignCharacterAudit.findMany.mockResolvedValue([]);
     prismaService.campaignContentEntry.create.mockResolvedValue({});
     prismaService.campaignContentEntry.findUnique.mockResolvedValue(null);
     prismaService.campaignContentEntry.findMany.mockResolvedValue([]);

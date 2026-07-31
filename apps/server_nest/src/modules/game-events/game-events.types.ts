@@ -2,8 +2,8 @@ export interface AppendGameEventInput {
   type: string;
   campaignId?: string | null;
   characterId?: string | null;
-  actorType: string;
-  actorId: string;
+  initiatorType: string;
+  initiatorId: string;
   requestId: string;
   targets: unknown[];
   cause?: Record<string, unknown> | null;

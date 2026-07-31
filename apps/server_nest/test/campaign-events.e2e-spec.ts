@@ -8,7 +8,7 @@ import { CampaignsGateway } from "../src/modules/realtime/campaigns.gateway";
 
 // Task 3.1 — CampaignEvent 事件层 e2e 验证.
 // 关注点: HP 变化与给予物品必须在同一事务中完成状态修改 + 事件追加,
-// 失败时全部回滚; 非授权用户被拒绝; 不存在的 actor 返回 404;
+// 失败时全部回滚; 非授权用户被拒绝; 不存在的 character 返回 404;
 // revision 冲突返回 409; 事务提交后广播 campaign:message:new.
 describe("campaign events endpoints (Task 3.1)", () => {
   let app: INestApplication;
@@ -37,8 +37,16 @@ describe("campaign events endpoints (Task 3.1)", () => {
       create: jest.fn(),
     },
     serverAdmin: { create: jest.fn(), findUnique: jest.fn() },
-    serverSetting: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
-    refreshToken: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
+    serverSetting: {
+      findFirst: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
+    refreshToken: {
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
     campaign: { create: jest.fn(), findUnique: jest.fn(), findMany: jest.fn() },
     campaignMember: {
       create: jest.fn(),
@@ -56,14 +64,14 @@ describe("campaign events endpoints (Task 3.1)", () => {
     campaignChatMessage: { create: jest.fn(), findMany: jest.fn() },
     journalEntry: { create: jest.fn(), findMany: jest.fn() },
     campaignSyncState: { upsert: jest.fn(), findUnique: jest.fn() },
-    campaignActor: {
+    campaignCharacter: {
       create: jest.fn(),
       findUnique: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
       count: jest.fn(),
     },
-    campaignActorAudit: { create: jest.fn(), findMany: jest.fn() },
+    campaignCharacterAudit: { create: jest.fn(), findMany: jest.fn() },
     campaignContentEntry: {
       create: jest.fn(),
       findUnique: jest.fn(),
@@ -176,27 +184,29 @@ describe("campaign events endpoints (Task 3.1)", () => {
         cursor: BigInt(1),
       }),
     );
-    prismaService.campaignActor.create.mockResolvedValue({});
-    prismaService.campaignActor.findUnique.mockResolvedValue(null);
-    prismaService.campaignActor.findMany.mockResolvedValue([]);
-    prismaService.campaignActor.update.mockResolvedValue({});
-    prismaService.campaignActorAudit.create.mockResolvedValue({});
-    prismaService.campaignActorAudit.findMany.mockResolvedValue([]);
+    prismaService.campaignCharacter.create.mockResolvedValue({});
+    prismaService.campaignCharacter.findUnique.mockResolvedValue(null);
+    prismaService.campaignCharacter.findMany.mockResolvedValue([]);
+    prismaService.campaignCharacter.update.mockResolvedValue({});
+    prismaService.campaignCharacterAudit.create.mockResolvedValue({});
+    prismaService.campaignCharacterAudit.findMany.mockResolvedValue([]);
     prismaService.campaignContentEntry.create.mockResolvedValue({});
     prismaService.campaignContentEntry.findUnique.mockResolvedValue(null);
     prismaService.campaignContentEntry.findMany.mockResolvedValue([]);
     prismaService.campaignContentEntry.update.mockResolvedValue({});
     prismaService.campaignContentEntry.delete.mockResolvedValue({});
-    prismaService.campaignChange.create.mockImplementation(async (args: any) => ({
-      id: "change-id",
-      campaignId: args.data.campaignId,
-      cursor: args.data.cursor,
-      entityType: args.data.entityType,
-      entityId: args.data.entityId,
-      operation: args.data.operation,
-      revision: args.data.revision,
-      createdAt: new Date(),
-    }));
+    prismaService.campaignChange.create.mockImplementation(
+      async (args: any) => ({
+        id: "change-id",
+        campaignId: args.data.campaignId,
+        cursor: args.data.cursor,
+        entityType: args.data.entityType,
+        entityId: args.data.entityId,
+        operation: args.data.operation,
+        revision: args.data.revision,
+        createdAt: new Date(),
+      }),
+    );
     prismaService.campaignChange.findMany.mockResolvedValue([]);
     prismaService.campaignChange.count.mockResolvedValue(0);
   });
@@ -215,12 +225,12 @@ describe("campaign events endpoints (Task 3.1)", () => {
     return login.body.accessToken;
   }
 
-  const arannisActor = {
-    id: "actor-1",
+  const arannisCharacter = {
+    id: "character-1",
     campaignId: "camp-1",
     ownerUserId: "player-1",
     sourceCharacterId: "char-1",
-    actorType: "player",
+    characterType: "player",
     status: "active",
     lifecycle: "persistent",
     sheetJson: { name: "Arannis", currentHp: 20, maxHp: 30 },
@@ -230,26 +240,28 @@ describe("campaign events endpoints (Task 3.1)", () => {
     updatedAt: new Date("2026-07-14T00:00:00.000Z"),
   };
 
-  describe("POST /api/campaigns/:campaignId/actors/:actorId/hp", () => {
-    it("atomically updates actor HP and appends an actor.hp_changed event", async () => {
+  describe("POST /api/campaigns/:campaignId/characters/:characterId/hp", () => {
+    it("atomically updates character HP and appends an character.hp_changed event", async () => {
       const token = await loginAs(storedDm);
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(arannisActor);
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        arannisCharacter,
+      );
       const updatedRow = {
-        ...arannisActor,
+        ...arannisCharacter,
         sheetJson: { name: "Arannis", currentHp: 12, maxHp: 30 },
         revision: 2,
         updatedBy: "dm-1",
         updatedAt: new Date("2026-07-14T01:00:00.000Z"),
       };
-      prismaService.campaignActor.update.mockResolvedValueOnce(updatedRow);
+      prismaService.campaignCharacter.update.mockResolvedValueOnce(updatedRow);
       const eventMessageRow = {
         id: "msg-1",
         campaignId: "camp-1",
         senderId: "dm-1",
-        campaignActorId: "actor-1",
-        displayName: "dm",
+        campaignCharacterId: null,
+        displayName: "旁白",
         avatarUrl: null,
-        speakerMode: "actor",
+        speakerMode: "narrator",
         delegatedByUserId: null,
         speakerAvatarAssetId: null,
         publicHealthState: "injured",
@@ -258,9 +270,9 @@ describe("campaign events endpoints (Task 3.1)", () => {
         kind: "system",
         content: "Arannis -8 HP (20 → 12)",
         eventData: {
-          eventType: "actor.hp_changed",
-          actorId: "actor-1",
-          actorName: "Arannis",
+          eventType: "character.hp_changed",
+          characterId: "character-1",
+          characterName: "Arannis",
           delta: -8,
           from: 20,
           to: 12,
@@ -273,27 +285,38 @@ describe("campaign events endpoints (Task 3.1)", () => {
       );
 
       const res = await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/actor-1/hp")
+        .post("/api/campaigns/camp-1/characters/character-1/hp")
         .set("Authorization", `Bearer ${token}`)
         .send({ delta: -8 })
         .expect(201);
 
-      // 响应包含新的 actor 状态和事件消息.
-      expect(res.body.actor.id).toBe("actor-1");
-      expect(res.body.actor.sheet.currentHp).toBe(12);
-      expect(res.body.actor.revision).toBe(2);
+      // 响应包含新的 character 状态和事件消息.
+      expect(res.body.character.id).toBe("character-1");
+      expect(res.body.character.sheet.currentHp).toBe(12);
+      expect(res.body.character.revision).toBe(2);
       expect(res.body.event.kind).toBe("system");
-      expect(res.body.event.eventData.eventType).toBe("actor.hp_changed");
+      expect(res.body.event.speakerMode).toBe("narrator");
+      expect(res.body.event.eventData.eventType).toBe("character.hp_changed");
       expect(res.body.event.eventData.delta).toBe(-8);
       expect(res.body.event.eventData.from).toBe(20);
       expect(res.body.event.eventData.to).toBe(12);
-      expect(res.body.event.eventData.actorId).toBe("actor-1");
+      expect(res.body.event.eventData.characterId).toBe("character-1");
 
-      // 原子性: actor update, audit, change, chat message 全部在同一事务内.
-      expect(prismaService.campaignActor.update).toHaveBeenCalledTimes(1);
-      expect(prismaService.campaignActorAudit.create).toHaveBeenCalledTimes(1);
+      // 原子性: character update, audit, change, chat message 全部在同一事务内.
+      expect(prismaService.campaignCharacter.update).toHaveBeenCalledTimes(1);
+      expect(prismaService.campaignCharacterAudit.create).toHaveBeenCalledTimes(
+        1,
+      );
       expect(prismaService.campaignChange.create).toHaveBeenCalledTimes(1);
       expect(prismaService.campaignChatMessage.create).toHaveBeenCalledTimes(1);
+      expect(prismaService.campaignChatMessage.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          campaignCharacterId: null,
+          displayName: "旁白",
+          speakerMode: "narrator",
+          kind: "system",
+        }),
+      });
 
       // 事务提交后广播 chat message.
       expect(campaignsGateway.broadcastToCampaign).toHaveBeenCalledWith(
@@ -302,15 +325,20 @@ describe("campaign events endpoints (Task 3.1)", () => {
         expect.objectContaining({ kind: "system" }),
       );
       expect(campaignsGateway.broadcastChange).toHaveBeenCalledWith(
-        expect.objectContaining({ campaignId: "camp-1", entityType: "actor" }),
+        expect.objectContaining({
+          campaignId: "camp-1",
+          entityType: "character",
+        }),
       );
     });
 
     it("clamps HP at zero on damage beyond current", async () => {
       const token = await loginAs(storedDm);
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(arannisActor);
-      prismaService.campaignActor.update.mockResolvedValueOnce({
-        ...arannisActor,
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        arannisCharacter,
+      );
+      prismaService.campaignCharacter.update.mockResolvedValueOnce({
+        ...arannisCharacter,
         sheetJson: { name: "Arannis", currentHp: 0, maxHp: 30 },
         revision: 2,
         updatedBy: "dm-1",
@@ -319,12 +347,15 @@ describe("campaign events endpoints (Task 3.1)", () => {
         id: "msg-2",
         campaignId: "camp-1",
         senderId: "dm-1",
-        campaignActorId: "actor-1",
-        displayName: "dm",
+        campaignCharacterId: null,
+        displayName: "旁白",
+        avatarUrl: null,
+        speakerMode: "narrator",
+        ooc: false,
         kind: "system",
         content: "Arannis -99 HP (20 → 0)",
         eventData: {
-          eventType: "actor.hp_changed",
+          eventType: "character.hp_changed",
           delta: -99,
           from: 20,
           to: 0,
@@ -333,12 +364,12 @@ describe("campaign events endpoints (Task 3.1)", () => {
       });
 
       const res = await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/actor-1/hp")
+        .post("/api/campaigns/camp-1/characters/character-1/hp")
         .set("Authorization", `Bearer ${token}`)
         .send({ delta: -99 })
         .expect(201);
 
-      expect(res.body.actor.sheet.currentHp).toBe(0);
+      expect(res.body.character.sheet.currentHp).toBe(0);
       expect(res.body.event.eventData.to).toBe(0);
       expect(res.body.event.eventData.delta).toBe(-99);
       expect(res.body.event.eventData.from).toBe(20);
@@ -347,11 +378,11 @@ describe("campaign events endpoints (Task 3.1)", () => {
     it("allows healing (positive delta) up to maxHp", async () => {
       const token = await loginAs(storedDm);
       const injured = {
-        ...arannisActor,
+        ...arannisCharacter,
         sheetJson: { name: "Arannis", currentHp: 10, maxHp: 30 },
       };
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(injured);
-      prismaService.campaignActor.update.mockResolvedValueOnce({
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(injured);
+      prismaService.campaignCharacter.update.mockResolvedValueOnce({
         ...injured,
         sheetJson: { name: "Arannis", currentHp: 25, maxHp: 30 },
         revision: 2,
@@ -361,12 +392,12 @@ describe("campaign events endpoints (Task 3.1)", () => {
         id: "msg-3",
         campaignId: "camp-1",
         senderId: "dm-1",
-        campaignActorId: "actor-1",
+        campaignCharacterId: "character-1",
         displayName: "dm",
         kind: "system",
         content: "Arannis +15 HP (10 → 25)",
         eventData: {
-          eventType: "actor.hp_changed",
+          eventType: "character.hp_changed",
           delta: 15,
           from: 10,
           to: 25,
@@ -375,20 +406,22 @@ describe("campaign events endpoints (Task 3.1)", () => {
       });
 
       const res = await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/actor-1/hp")
+        .post("/api/campaigns/camp-1/characters/character-1/hp")
         .set("Authorization", `Bearer ${token}`)
         .send({ delta: 15 })
         .expect(201);
 
-      expect(res.body.actor.sheet.currentHp).toBe(25);
+      expect(res.body.character.sheet.currentHp).toBe(25);
       expect(res.body.event.eventData.delta).toBe(15);
     });
 
     it("clamps healing at maxHp", async () => {
       const token = await loginAs(storedDm);
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(arannisActor);
-      prismaService.campaignActor.update.mockResolvedValueOnce({
-        ...arannisActor,
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        arannisCharacter,
+      );
+      prismaService.campaignCharacter.update.mockResolvedValueOnce({
+        ...arannisCharacter,
         sheetJson: { name: "Arannis", currentHp: 30, maxHp: 30 },
         revision: 2,
         updatedBy: "dm-1",
@@ -397,12 +430,12 @@ describe("campaign events endpoints (Task 3.1)", () => {
         id: "msg-4",
         campaignId: "camp-1",
         senderId: "dm-1",
-        campaignActorId: "actor-1",
+        campaignCharacterId: "character-1",
         displayName: "dm",
         kind: "system",
         content: "Arannis +50 HP (20 → 30)",
         eventData: {
-          eventType: "actor.hp_changed",
+          eventType: "character.hp_changed",
           delta: 10,
           from: 20,
           to: 30,
@@ -411,12 +444,12 @@ describe("campaign events endpoints (Task 3.1)", () => {
       });
 
       const res = await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/actor-1/hp")
+        .post("/api/campaigns/camp-1/characters/character-1/hp")
         .set("Authorization", `Bearer ${token}`)
         .send({ delta: 50 })
         .expect(201);
 
-      expect(res.body.actor.sheet.currentHp).toBe(30);
+      expect(res.body.character.sheet.currentHp).toBe(30);
       expect(res.body.event.eventData.to).toBe(30);
       // 报告的实际增量为 clamped 后的值 (20→30, +10).
       expect(res.body.event.eventData.delta).toBe(10);
@@ -424,103 +457,114 @@ describe("campaign events endpoints (Task 3.1)", () => {
 
     it("rejects a non-member stranger with 403", async () => {
       const token = await loginAs(storedStranger);
-      // Actor 必须存在, 否则 loadActor 在到达权限检查前就抛 404.
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(arannisActor);
+      // Character 必须存在, 否则 loadCharacter 在到达权限检查前就抛 404.
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        arannisCharacter,
+      );
 
       await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/actor-1/hp")
+        .post("/api/campaigns/camp-1/characters/character-1/hp")
         .set("Authorization", `Bearer ${token}`)
         .send({ delta: -5 })
         .expect(403);
 
-      // 失败时不应修改 actor 或写入消息.
-      expect(prismaService.campaignActor.update).not.toHaveBeenCalled();
+      // 失败时不应修改 character 或写入消息.
+      expect(prismaService.campaignCharacter.update).not.toHaveBeenCalled();
       expect(prismaService.campaignChatMessage.create).not.toHaveBeenCalled();
     });
 
-    it("returns 404 when the actor does not exist", async () => {
+    it("returns 404 when the character does not exist", async () => {
       const token = await loginAs(storedDm);
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(null);
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(null);
 
       await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/missing/hp")
+        .post("/api/campaigns/camp-1/characters/missing/hp")
         .set("Authorization", `Bearer ${token}`)
         .send({ delta: -5 })
         .expect(404);
 
-      expect(prismaService.campaignActor.update).not.toHaveBeenCalled();
+      expect(prismaService.campaignCharacter.update).not.toHaveBeenCalled();
       expect(prismaService.campaignChatMessage.create).not.toHaveBeenCalled();
     });
 
     it("returns 400 when delta is not a finite number", async () => {
       const token = await loginAs(storedDm);
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(arannisActor);
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        arannisCharacter,
+      );
 
       await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/actor-1/hp")
+        .post("/api/campaigns/camp-1/characters/character-1/hp")
         .set("Authorization", `Bearer ${token}`)
         .send({ delta: "oops" })
         .expect(400);
 
-      expect(prismaService.campaignActor.update).not.toHaveBeenCalled();
+      expect(prismaService.campaignCharacter.update).not.toHaveBeenCalled();
     });
 
     it("returns 400 when delta is zero", async () => {
       const token = await loginAs(storedDm);
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(arannisActor);
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        arannisCharacter,
+      );
 
       await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/actor-1/hp")
+        .post("/api/campaigns/camp-1/characters/character-1/hp")
         .set("Authorization", `Bearer ${token}`)
         .send({ delta: 0 })
         .expect(400);
     });
 
-    it("returns 409 when baseRevision mismatches the actor revision", async () => {
+    it("returns 409 when baseRevision mismatches the character revision", async () => {
       const token = await loginAs(storedDm);
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(arannisActor);
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        arannisCharacter,
+      );
 
       await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/actor-1/hp")
+        .post("/api/campaigns/camp-1/characters/character-1/hp")
         .set("Authorization", `Bearer ${token}`)
         .send({ delta: -5, baseRevision: 99 })
         .expect(409);
 
-      expect(prismaService.campaignActor.update).not.toHaveBeenCalled();
+      expect(prismaService.campaignCharacter.update).not.toHaveBeenCalled();
       expect(prismaService.campaignChatMessage.create).not.toHaveBeenCalled();
     });
   });
 
-  describe("POST /api/campaigns/:campaignId/actors/:actorId/items", () => {
-    it("atomically grants an item and appends an actor.item_granted event", async () => {
+  describe("POST /api/campaigns/:campaignId/characters/:characterId/items", () => {
+    it("atomically grants an item and appends an character.item_granted event", async () => {
       const token = await loginAs(storedDm);
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(arannisActor);
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        arannisCharacter,
+      );
       const updatedRow = {
-        ...arannisActor,
+        ...arannisCharacter,
         sheetJson: {
           name: "Arannis",
           currentHp: 20,
           maxHp: 30,
-          inventory: [
-            { itemId: "item-longsword", name: "长剑", quantity: 1 },
-          ],
+          inventory: [{ itemId: "item-longsword", name: "长剑", quantity: 1 }],
         },
         revision: 2,
         updatedBy: "dm-1",
       };
-      prismaService.campaignActor.update.mockResolvedValueOnce(updatedRow);
+      prismaService.campaignCharacter.update.mockResolvedValueOnce(updatedRow);
       prismaService.campaignChatMessage.create.mockResolvedValueOnce({
         id: "msg-item-1",
         campaignId: "camp-1",
         senderId: "dm-1",
-        campaignActorId: "actor-1",
-        displayName: "dm",
+        campaignCharacterId: null,
+        displayName: "旁白",
+        avatarUrl: null,
+        speakerMode: "narrator",
+        ooc: false,
         kind: "system",
         content: "给 Arannis 长剑 ×1",
         eventData: {
-          eventType: "actor.item_granted",
-          actorId: "actor-1",
-          actorName: "Arannis",
+          eventType: "character.item_granted",
+          characterId: "character-1",
+          characterName: "Arannis",
           itemId: "item-longsword",
           itemName: "长剑",
           quantity: 1,
@@ -529,24 +573,62 @@ describe("campaign events endpoints (Task 3.1)", () => {
       });
 
       const res = await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/actor-1/items")
+        .post("/api/campaigns/camp-1/characters/character-1/items")
         .set("Authorization", `Bearer ${token}`)
         .send({ itemId: "item-longsword", name: "长剑", quantity: 1 })
         .expect(201);
 
-      expect(res.body.actor.revision).toBe(2);
-      expect(res.body.actor.sheet.inventory).toEqual([
+      expect(res.body.character.revision).toBe(2);
+      expect(res.body.character.sheet.inventory).toEqual([
         { itemId: "item-longsword", name: "长剑", quantity: 1 },
       ]);
       expect(res.body.event.kind).toBe("system");
-      expect(res.body.event.eventData.eventType).toBe("actor.item_granted");
+      expect(res.body.event.speakerMode).toBe("narrator");
+      expect(res.body.event.eventData.eventType).toBe("character.item_granted");
       expect(res.body.event.eventData.itemId).toBe("item-longsword");
+      expect(prismaService.campaignChatMessage.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          campaignCharacterId: null,
+          displayName: "旁白",
+          speakerMode: "narrator",
+          kind: "system",
+        }),
+      });
       expect(res.body.event.eventData.quantity).toBe(1);
 
-      expect(prismaService.campaignActor.update).toHaveBeenCalledTimes(1);
-      expect(prismaService.campaignActorAudit.create).toHaveBeenCalledTimes(1);
+      expect(prismaService.campaignCharacter.update).toHaveBeenCalledTimes(1);
+      expect(prismaService.campaignCharacter.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            sheetJson: expect.objectContaining({
+              inventory: [
+                expect.objectContaining({
+                  id: "item-longsword",
+                  templateRef: "item-longsword",
+                  name: "长剑",
+                  quantity: 1,
+                  equipped: false,
+                  attuned: false,
+                  instanceData: {},
+                }),
+              ],
+            }),
+          }),
+        }),
+      );
+      expect(prismaService.campaignCharacterAudit.create).toHaveBeenCalledTimes(
+        1,
+      );
       expect(prismaService.campaignChange.create).toHaveBeenCalledTimes(1);
       expect(prismaService.campaignChatMessage.create).toHaveBeenCalledTimes(1);
+      expect(prismaService.campaignChatMessage.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          campaignCharacterId: null,
+          displayName: "旁白",
+          speakerMode: "narrator",
+          kind: "system",
+        }),
+      });
 
       expect(campaignsGateway.broadcastToCampaign).toHaveBeenCalledWith(
         "camp-1",
@@ -557,27 +639,25 @@ describe("campaign events endpoints (Task 3.1)", () => {
 
     it("stacks quantity when granting an existing item", async () => {
       const token = await loginAs(storedDm);
-      const actorWithItem = {
-        ...arannisActor,
+      const characterWithItem = {
+        ...arannisCharacter,
         sheetJson: {
           name: "Arannis",
           currentHp: 20,
           maxHp: 30,
-          inventory: [
-            { itemId: "item-arrow", name: "箭矢", quantity: 10 },
-          ],
+          inventory: [{ itemId: "item-arrow", name: "箭矢", quantity: 10 }],
         },
       };
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(actorWithItem);
-      prismaService.campaignActor.update.mockResolvedValueOnce({
-        ...actorWithItem,
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        characterWithItem,
+      );
+      prismaService.campaignCharacter.update.mockResolvedValueOnce({
+        ...characterWithItem,
         sheetJson: {
           name: "Arannis",
           currentHp: 20,
           maxHp: 30,
-          inventory: [
-            { itemId: "item-arrow", name: "箭矢", quantity: 15 },
-          ],
+          inventory: [{ itemId: "item-arrow", name: "箭矢", quantity: 15 }],
         },
         revision: 2,
         updatedBy: "dm-1",
@@ -586,12 +666,12 @@ describe("campaign events endpoints (Task 3.1)", () => {
         id: "msg-item-2",
         campaignId: "camp-1",
         senderId: "dm-1",
-        campaignActorId: "actor-1",
+        campaignCharacterId: "character-1",
         displayName: "dm",
         kind: "system",
         content: "给 Arannis 箭矢 ×5",
         eventData: {
-          eventType: "actor.item_granted",
+          eventType: "character.item_granted",
           itemId: "item-arrow",
           quantity: 5,
         },
@@ -599,19 +679,21 @@ describe("campaign events endpoints (Task 3.1)", () => {
       });
 
       const res = await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/actor-1/items")
+        .post("/api/campaigns/camp-1/characters/character-1/items")
         .set("Authorization", `Bearer ${token}`)
         .send({ itemId: "item-arrow", name: "箭矢", quantity: 5 })
         .expect(201);
 
-      expect(res.body.actor.sheet.inventory[0].quantity).toBe(15);
+      expect(res.body.character.sheet.inventory[0].quantity).toBe(15);
     });
 
     it("defaults quantity to 1 when omitted", async () => {
       const token = await loginAs(storedDm);
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(arannisActor);
-      prismaService.campaignActor.update.mockResolvedValueOnce({
-        ...arannisActor,
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        arannisCharacter,
+      );
+      prismaService.campaignCharacter.update.mockResolvedValueOnce({
+        ...arannisCharacter,
         sheetJson: {
           name: "Arannis",
           currentHp: 20,
@@ -625,12 +707,12 @@ describe("campaign events endpoints (Task 3.1)", () => {
         id: "msg-item-3",
         campaignId: "camp-1",
         senderId: "dm-1",
-        campaignActorId: "actor-1",
+        campaignCharacterId: "character-1",
         displayName: "dm",
         kind: "system",
         content: "给 Arannis 火把 ×1",
         eventData: {
-          eventType: "actor.item_granted",
+          eventType: "character.item_granted",
           itemId: "item-torch",
           quantity: 1,
         },
@@ -638,33 +720,37 @@ describe("campaign events endpoints (Task 3.1)", () => {
       });
 
       const res = await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/actor-1/items")
+        .post("/api/campaigns/camp-1/characters/character-1/items")
         .set("Authorization", `Bearer ${token}`)
         .send({ itemId: "item-torch", name: "火把" })
         .expect(201);
 
-      expect(res.body.actor.sheet.inventory[0].quantity).toBe(1);
+      expect(res.body.character.sheet.inventory[0].quantity).toBe(1);
     });
 
     it("rejects a non-member stranger with 403", async () => {
       const token = await loginAs(storedStranger);
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(arannisActor);
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        arannisCharacter,
+      );
       await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/actor-1/items")
+        .post("/api/campaigns/camp-1/characters/character-1/items")
         .set("Authorization", `Bearer ${token}`)
         .send({ itemId: "item-x", name: "X" })
         .expect(403);
 
-      expect(prismaService.campaignActor.update).not.toHaveBeenCalled();
+      expect(prismaService.campaignCharacter.update).not.toHaveBeenCalled();
       expect(prismaService.campaignChatMessage.create).not.toHaveBeenCalled();
     });
 
     it("returns 400 when itemId is missing", async () => {
       const token = await loginAs(storedDm);
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(arannisActor);
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        arannisCharacter,
+      );
 
       await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/actor-1/items")
+        .post("/api/campaigns/camp-1/characters/character-1/items")
         .set("Authorization", `Bearer ${token}`)
         .send({ name: "无 ID 物品" })
         .expect(400);
@@ -672,18 +758,91 @@ describe("campaign events endpoints (Task 3.1)", () => {
 
     it("returns 400 when quantity is not a positive integer", async () => {
       const token = await loginAs(storedDm);
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(arannisActor);
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        arannisCharacter,
+      );
 
       await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/actor-1/items")
+        .post("/api/campaigns/camp-1/characters/character-1/items")
         .set("Authorization", `Bearer ${token}`)
         .send({ itemId: "item-x", name: "X", quantity: 0 })
         .expect(400);
 
       await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/actor-1/items")
+        .post("/api/campaigns/camp-1/characters/character-1/items")
         .set("Authorization", `Bearer ${token}`)
         .send({ itemId: "item-y", name: "Y", quantity: -2 })
+        .expect(400);
+    });
+  });
+
+  describe("POST /api/campaigns/:campaignId/characters/:characterId/conditions", () => {
+    it("atomically adds a structured condition and appends an event", async () => {
+      const token = await loginAs(storedDm);
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        arannisCharacter,
+      );
+      prismaService.campaignCharacter.update.mockImplementationOnce(
+        async (args: any) => ({
+          ...arannisCharacter,
+          sheetJson: args.data.sheetJson,
+          revision: args.data.revision,
+          updatedBy: args.data.updatedBy,
+          updatedAt: new Date("2026-07-14T02:00:00.000Z"),
+        }),
+      );
+      prismaService.campaignChatMessage.create.mockImplementationOnce(
+        async (args: any) => ({
+          id: "msg-condition-1",
+          ...args.data,
+          createdAt: new Date("2026-07-14T02:00:00.000Z"),
+        }),
+      );
+
+      const res = await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/characters/character-1/conditions")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ type: "poisoned", name: "中毒", durationRounds: 3 })
+        .expect(201);
+
+      expect(res.body.character.sheet.conditions).toEqual([
+        expect.objectContaining({
+          type: "poisoned",
+          name: "中毒",
+          removable: true,
+          duration: { unit: "round", total: 3, remaining: 3 },
+        }),
+      ]);
+      expect(res.body.character.sheet.conditions[0].id).toEqual(
+        expect.any(String),
+      );
+      expect(res.body.event.eventData).toEqual(
+        expect.objectContaining({
+          eventType: "character.condition_added",
+          characterId: "character-1",
+          conditionType: "poisoned",
+          conditionName: "中毒",
+          durationRounds: 3,
+        }),
+      );
+      expect(prismaService.campaignCharacterAudit.create).toHaveBeenCalledTimes(
+        1,
+      );
+      expect(prismaService.campaignChange.create).toHaveBeenCalledTimes(1);
+      expect(prismaService.campaignChatMessage.create).toHaveBeenCalledTimes(1);
+      expect(campaignsGateway.broadcastToCampaign).toHaveBeenCalledWith(
+        "camp-1",
+        "campaign:message:new",
+        expect.objectContaining({ kind: "system" }),
+      );
+    });
+
+    it("rejects an empty condition type", async () => {
+      const token = await loginAs(storedDm);
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/characters/character-1/conditions")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ type: "", name: "无效状态" })
         .expect(400);
     });
   });

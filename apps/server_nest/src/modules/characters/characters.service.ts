@@ -6,29 +6,23 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccessTokenPayload } from '../auth/auth.types';
 import type {
-  BindCharacterInput,
-  AdjustCharacterHpInput,
-  CharacterCampaignBindingView,
   CharacterView,
   CreateCharacterInput,
   UpdateCharacterInput
 } from './characters.types';
 import { parseCharacterState } from './domain/character-state';
 
-const MANAGE_ROLES = new Set(['owner', 'dm']);
-const VIEW_ROLES = new Set(['owner', 'dm', 'player', 'spectator']);
-
 @Injectable()
 export class CharactersService {
   constructor(private readonly prismaService: PrismaService) {}
 
   async createCharacter(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     input: CreateCharacterInput
   ): Promise<CharacterView> {
     const character = await this.prismaService.character.create({
       data: {
-        ownerUserId: actor.userId,
+        ownerUserId: user.userId,
         name: input.name,
         avatarUrl: input.avatarUrl ?? null,
         system: input.system ?? 'dnd5e',
@@ -54,10 +48,10 @@ export class CharactersService {
   }
 
   async listOwnedCharacters(
-    actor: AccessTokenPayload
+    user: AccessTokenPayload
   ): Promise<CharacterView[]> {
     const characters = await this.prismaService.character.findMany({
-      where: { ownerUserId: actor.userId },
+      where: { ownerUserId: user.userId },
       orderBy: { updatedAt: 'desc' }
     });
 
@@ -65,7 +59,7 @@ export class CharactersService {
   }
 
   async getCharacter(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     characterId: string
   ): Promise<CharacterView> {
     const character = await this.prismaService.character.findUnique({
@@ -74,12 +68,12 @@ export class CharactersService {
     if (!character) {
       throw new NotFoundException('Character not found');
     }
-    this.assertOwnsCharacter(actor, character);
+    this.assertOwnsCharacter(user, character);
     return toCharacterView(character);
   }
 
   async updateCharacter(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     characterId: string,
     input: UpdateCharacterInput
   ): Promise<CharacterView> {
@@ -89,10 +83,10 @@ export class CharactersService {
     if (!character) {
       throw new NotFoundException('Character not found');
     }
-    this.assertOwnsCharacter(actor, character);
+    this.assertOwnsCharacter(user, character);
 
     if (input.campaignId) {
-      await this.assertCampaignMembership(actor, input.campaignId);
+      await this.assertCampaignMembership(user, input.campaignId);
     }
 
     const data = characterUpdateData(input);
@@ -119,167 +113,21 @@ export class CharactersService {
     return toCharacterView(updated);
   }
 
-  async bindCharacterToCampaign(
-    actor: AccessTokenPayload,
-    characterId: string,
-    input: BindCharacterInput
-  ): Promise<CharacterCampaignBindingView> {
-    const character = await this.prismaService.character.findUnique({
-      where: { id: characterId }
-    });
-    if (!character) {
-      throw new NotFoundException('Character not found');
-    }
-    this.assertOwnsCharacter(actor, character);
-
-    const campaign = await this.prismaService.campaign.findUnique({
-      where: { id: input.campaignId },
-      include: { members: true }
-    });
-    if (!campaign) {
-      throw new NotFoundException('Campaign not found');
-    }
-
-    const membership = await this.prismaService.campaignMember.findUnique({
-      where: {
-        campaignId_userId: {
-          campaignId: input.campaignId,
-          userId: actor.userId
-        }
-      }
-    });
-    if (!membership) {
-      throw new ForbiddenException(
-        'Only campaign members can bind characters to this campaign'
-      );
-    }
-
-    const binding = await this.prismaService.characterCampaignBinding.create({
-      data: {
-        campaignId: input.campaignId,
-        characterId,
-        userId: actor.userId,
-        visibility: input.visibility ?? 'party',
-        status: 'active',
-        dmNotes: ''
-      }
-    });
-
-    return toBindingView(binding);
-  }
-
-  async adjustCampaignCharacterHp(
-    actor: AccessTokenPayload,
-    campaignId: string,
-    characterId: string,
-    input: AdjustCharacterHpInput
-  ): Promise<CharacterView> {
-    if (input.delta === undefined && input.currentHp === undefined) {
-      throw new ForbiddenException('HP adjustment requires delta or currentHp');
-    }
-
-    const campaign = await this.prismaService.campaign.findUnique({
-      where: { id: campaignId },
-      include: { members: true }
-    });
-    if (!campaign) {
-      throw new NotFoundException('Campaign not found');
-    }
-    const role = this.getCampaignRole(actor, campaign);
-    const canManage = actor.userId === campaign.ownerId || (role !== null && MANAGE_ROLES.has(role));
-    if (!canManage) {
-      throw new ForbiddenException('Only the owner or a DM can adjust character HP');
-    }
-
-    const binding =
-      await this.prismaService.characterCampaignBinding.findUnique({
-        where: {
-          campaignId_characterId: {
-            campaignId,
-            characterId
-          }
-        },
-        include: { character: true }
-      });
-    if (!binding) {
-      throw new NotFoundException('Campaign character binding not found');
-    }
-
-    const previousHp = binding.character.currentHp;
-    const nextHp = input.currentHp ?? previousHp + input.delta!;
-    const updated = await this.prismaService.$transaction(async (tx) => {
-      const result = await tx.character.update({
-        where: { id: characterId },
-        data: { currentHp: nextHp }
-      });
-
-      await tx.journalEntry.create({
-        data: {
-          campaignId,
-          type: 'character_hp_changed',
-          summary: `${binding.character.name} HP ${previousHp} -> ${nextHp}`,
-          refId: characterId
-        }
-      });
-
-      return result;
-    });
-
-    return toCharacterView(updated);
-  }
-
-  async listCampaignCharacters(
-    actor: AccessTokenPayload,
-    campaignId: string
-  ): Promise<CharacterCampaignBindingView[]> {
-    const campaign = await this.prismaService.campaign.findUnique({
-      where: { id: campaignId },
-      include: { members: true }
-    });
-    if (!campaign) {
-      throw new NotFoundException('Campaign not found');
-    }
-
-    const role = this.getCampaignRole(actor, campaign);
-    if (!role || !VIEW_ROLES.has(role)) {
-      throw new ForbiddenException('You are not a member of this campaign');
-    }
-    const canManage = actor.userId === campaign.ownerId || MANAGE_ROLES.has(role);
-
-    const bindings =
-      await this.prismaService.characterCampaignBinding.findMany({
-        where: { campaignId, status: 'active' },
-        include: { character: true },
-        orderBy: { joinedAt: 'asc' }
-      });
-
-    return bindings
-      .filter((binding: any) => {
-        if (canManage) return true;
-        return (
-          binding.userId === actor.userId ||
-          binding.visibility === 'public' ||
-          binding.visibility === 'party'
-        );
-      })
-      .map(toBindingView);
-  }
-
-  private assertOwnsCharacter(actor: AccessTokenPayload, character: any): void {
-    if (character.ownerUserId !== actor.userId) {
+  private assertOwnsCharacter(user: AccessTokenPayload, character: any): void {
+    if (character.ownerUserId !== user.userId) {
       throw new ForbiddenException('Only the character owner can do this');
     }
   }
 
   private async assertCampaignMembership(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string
   ): Promise<void> {
     const membership = await this.prismaService.campaignMember.findUnique({
       where: {
         campaignId_userId: {
           campaignId,
-          userId: actor.userId
+          userId: user.userId
         }
       }
     });
@@ -288,13 +136,6 @@ export class CharactersService {
     }
   }
 
-  private getCampaignRole(actor: AccessTokenPayload, campaign: any): string | null {
-    if (actor.userId === campaign.ownerId) return 'owner';
-    const member = (campaign.members ?? []).find(
-      (item: any) => item.userId === actor.userId
-    );
-    return member?.role ?? null;
-  }
 }
 
 function characterUpdateData(input: UpdateCharacterInput): Record<string, unknown> {
@@ -364,21 +205,6 @@ function toCharacterView(character: any): CharacterView {
     }),
     createdAt: toIso(character.createdAt),
     updatedAt: toIso(character.updatedAt)
-  };
-}
-
-function toBindingView(binding: any): CharacterCampaignBindingView {
-  return {
-    id: binding.id,
-    campaignId: binding.campaignId,
-    characterId: binding.characterId,
-    userId: binding.userId,
-    visibility: binding.visibility,
-    status: binding.status,
-    dmNotes: binding.dmNotes,
-    joinedAt: toIso(binding.joinedAt),
-    updatedAt: toIso(binding.updatedAt),
-    character: binding.character ? toCharacterView(binding.character) : undefined
   };
 }
 

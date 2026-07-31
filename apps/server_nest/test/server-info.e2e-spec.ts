@@ -7,7 +7,19 @@ import { PrismaService } from '../src/prisma/prisma.service';
 describe('server metadata endpoints', () => {
   let app: INestApplication;
   const prismaService = {
-    $queryRaw: jest.fn().mockResolvedValue([{ health_check: 1 }])
+    $queryRaw: jest.fn().mockResolvedValue([{ health_check: 1 }]),
+    serverSetting: {
+      findFirst: jest.fn().mockResolvedValue({
+        id: 'settings-1',
+        instanceId: 'instance-1',
+        serverName: 'Friday Table',
+        registrationEnabled: true,
+        defaultLocale: 'zh-CN',
+        maxUploadSizeMb: 20
+      }),
+      create: jest.fn(),
+      upsert: jest.fn()
+    }
   };
 
   beforeAll(async () => {
@@ -46,7 +58,8 @@ describe('server metadata endpoints', () => {
       .get('/.well-known/dnd-tool-server')
       .expect(200)
       .expect(({ body }) => {
-        expect(body.name).toBe('D&D Table Tool');
+        expect(body.instanceId).toBe('instance-1');
+        expect(body.name).toBe('Friday Table');
         expect(body.version).toBe('0.1.0');
         expect(body.apiBaseUrl).toBe('http://localhost:3000/api');
         expect(body.websocketUrl).toBe('ws://localhost:3000/campaigns');
@@ -56,7 +69,7 @@ describe('server metadata endpoints', () => {
         expect(body.features).toEqual(
           expect.arrayContaining([
             'campaignArchives',
-            'campaignActors',
+            'campaignCharacters',
             'campaignChat'
           ])
         );

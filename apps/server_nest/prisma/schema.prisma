@@ -9,6 +9,7 @@ datasource db {
 
 model ServerSetting {
   id                           String   @id @default(uuid())
+  instanceId                   String   @unique @default(uuid())
   serverName                   String   @default("D&D Table Tool")
   registrationEnabled          Boolean  @default(true)
   defaultLocale                String   @default("zh-CN")
@@ -133,7 +134,7 @@ model Campaign {
   npcs              Npc[]
   encounters        Encounter[]
   syncState         CampaignSyncState?
-  actors            CampaignActor[]
+  characters            CampaignCharacter[]
   contentEntries    CampaignContentEntry[]
   changes           CampaignChange[]
   archiveEntries    CampaignArchiveEntry[]
@@ -184,14 +185,15 @@ model CampaignSyncState {
   campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 }
 
-model CampaignActor {
+model CampaignCharacter {
   id                String              @id @default(uuid())
   campaignId        String
   ownerUserId       String?
   sourceCharacterId String?
-  actorType         String              @default("player")
+  characterType     String              @default("player") @map("actorType")
   status            String              @default("active")
   lifecycle         String              @default("persistent")
+  visibleToPlayers  Boolean             @default(false)
   avatarAssetId     String?
   healthVisibility  String              @default("ownerAndDm")
   sheetJson         Json
@@ -200,28 +202,30 @@ model CampaignActor {
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   campaign          Campaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  audits            CampaignActorAudit[]
+  audits            CampaignCharacterAudit[]
   chatMessages      CampaignChatMessage[]
 
   @@unique([campaignId, sourceCharacterId])
   @@index([campaignId, status])
   @@index([ownerUserId])
+  @@map("CampaignActor")
 }
 
-model CampaignActorAudit {
+model CampaignCharacterAudit {
   id              String        @id @default(uuid())
-  campaignActorId String
+  campaignCharacterId String @map("campaignActorId")
   campaignId      String
-  actorUserId     String
+  characterUserId     String @map("actorUserId")
   baseRevision    Int
   resultRevision  Int
   changedPaths    Json
   beforeJson      Json
   afterJson       Json
   createdAt       DateTime      @default(now())
-  campaignActor   CampaignActor @relation(fields: [campaignActorId], references: [id], onDelete: Cascade)
+  campaignCharacter   CampaignCharacter @relation(fields: [campaignCharacterId], references: [id], onDelete: Cascade)
 
   @@index([campaignId, createdAt])
+  @@map("CampaignActorAudit")
 }
 
 model CampaignContentEntry {
@@ -263,10 +267,10 @@ model CampaignChatMessage {
   campaignId       String
   conversationId   String?
   senderId         String
-  campaignActorId  String?
+  campaignCharacterId  String? @map("campaignActorId")
   displayName      String              @default("")
   avatarUrl        String?
-  speakerMode      String              @default("actor")
+  speakerMode      String              @default("character")
   delegatedByUserId String?
   speakerAvatarAssetId String?
   publicHealthState String?
@@ -278,12 +282,12 @@ model CampaignChatMessage {
   eventData        Json?
   createdAt        DateTime            @default(now())
   campaign         Campaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  campaignActor    CampaignActor?      @relation(fields: [campaignActorId], references: [id], onDelete: SetNull)
+  campaignCharacter    CampaignCharacter?      @relation(fields: [campaignCharacterId], references: [id], onDelete: SetNull)
   conversation     CampaignConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
 
   @@index([campaignId, createdAt])
   @@index([senderId])
-  @@index([campaignActorId])
+  @@index([campaignCharacterId])
   @@index([conversationId, createdAt])
 }
 
@@ -326,9 +330,9 @@ model CampaignMember {
   userId      String
   role        String   @default("player")
   displayName String   @default("")
-  boundActorId String?
-  activeSpeakerActorId String?
-  speakerMode String   @default("boundActor")
+  boundCharacterId String? @map("boundActorId")
+  activeSpeakerCharacterId String? @map("activeSpeakerActorId")
+  speakerMode String   @default("boundCharacter")
   lastReadAt DateTime?
   joinedAt    DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -396,8 +400,8 @@ model ChatMessage {
 model DiceRoll {
   id         String   @id @default(uuid())
   sessionId  String
-  actorId    String
-  actorName  String
+  characterId    String @map("actorId")
+  characterName  String @map("actorName")
   notation   String
   total      Int
   components Json
@@ -471,8 +475,8 @@ model GameEvent {
   type          String
   campaignId    String?
   characterId   String?
-  actorType     String
-  actorId       String
+  initiatorType String @map("actorType")
+  initiatorId   String @map("actorId")
   requestId     String    @unique
   targets       Json      @default("[]")
   cause         Json?

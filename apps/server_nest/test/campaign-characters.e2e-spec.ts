@@ -6,7 +6,7 @@ import { PrismaService } from "../src/prisma/prisma.service";
 import { PasswordHashService } from "../src/modules/auth/password-hash.service";
 import { CampaignsGateway } from "../src/modules/realtime/campaigns.gateway";
 
-describe("campaign actors endpoints", () => {
+describe("campaign characters endpoints", () => {
   let app: INestApplication;
 
   const campaignRow = {
@@ -51,14 +51,14 @@ describe("campaign actors endpoints", () => {
     },
     campaignChatMessage: { create: jest.fn(), findMany: jest.fn() },
     campaignSyncState: { upsert: jest.fn(), findUnique: jest.fn() },
-    campaignActor: {
+    campaignCharacter: {
       create: jest.fn(),
       findUnique: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
       count: jest.fn(),
     },
-    campaignActorAudit: { create: jest.fn(), findMany: jest.fn() },
+    campaignCharacterAudit: { create: jest.fn(), findMany: jest.fn() },
     campaignContentEntry: {
       create: jest.fn(),
       findUnique: jest.fn(),
@@ -169,12 +169,12 @@ describe("campaign actors endpoints", () => {
         cursor: BigInt(1),
       }),
     );
-    prismaService.campaignActor.create.mockResolvedValue({});
-    prismaService.campaignActor.findUnique.mockResolvedValue(null);
-    prismaService.campaignActor.findMany.mockResolvedValue([]);
-    prismaService.campaignActor.update.mockResolvedValue({});
-    prismaService.campaignActorAudit.create.mockResolvedValue({});
-    prismaService.campaignActorAudit.findMany.mockResolvedValue([]);
+    prismaService.campaignCharacter.create.mockResolvedValue({});
+    prismaService.campaignCharacter.findUnique.mockResolvedValue(null);
+    prismaService.campaignCharacter.findMany.mockResolvedValue([]);
+    prismaService.campaignCharacter.update.mockResolvedValue({});
+    prismaService.campaignCharacterAudit.create.mockResolvedValue({});
+    prismaService.campaignCharacterAudit.findMany.mockResolvedValue([]);
     prismaService.campaignContentEntry.create.mockResolvedValue({});
     prismaService.campaignContentEntry.findUnique.mockResolvedValue(null);
     prismaService.campaignContentEntry.findMany.mockResolvedValue([]);
@@ -208,15 +208,15 @@ describe("campaign actors endpoints", () => {
     return login.body.accessToken;
   }
 
-  describe("POST /api/campaigns/:campaignId/actors/publish", () => {
+  describe("POST /api/campaigns/:campaignId/characters/publish", () => {
     it("lets a member publish their local character", async () => {
       const token = await loginAs(storedPlayer);
       const created = {
-        id: "actor-1",
+        id: "character-1",
         campaignId: "camp-1",
         ownerUserId: "player-1",
         sourceCharacterId: "char-1",
-        actorType: "player",
+        characterType: "player",
         status: "active",
         sheetJson: { name: "Arannis", currentHp: 10 },
         revision: 1,
@@ -224,37 +224,94 @@ describe("campaign actors endpoints", () => {
         createdAt: new Date("2026-07-14T00:00:00.000Z"),
         updatedAt: new Date("2026-07-14T00:00:00.000Z"),
       };
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(null);
-      prismaService.campaignActor.create.mockResolvedValueOnce(created);
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(null);
+      prismaService.campaignCharacter.create.mockResolvedValueOnce(created);
 
       const res = await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/publish")
+        .post("/api/campaigns/camp-1/characters/publish")
         .set("Authorization", `Bearer ${token}`)
         .send({
           sourceCharacterId: "char-1",
-          actorType: "player",
+          characterType: "player",
           baseRevision: 0,
           sheet: { name: "Arannis", currentHp: 10 },
         })
         .expect(201);
 
-      expect(res.body.id).toBe("actor-1");
+      expect(res.body.id).toBe("character-1");
       expect(res.body.ownerUserId).toBe("player-1");
       expect(res.body.revision).toBe(1);
       expect(res.body.sheet).toEqual({ name: "Arannis", currentHp: 10 });
-      expect(prismaService.campaignActor.create).toHaveBeenCalled();
+      expect(prismaService.campaignCharacter.create).toHaveBeenCalled();
       expect(prismaService.campaignChange.create).toHaveBeenCalled();
+    });
+
+    it("reactivates an archived player character when it is re-published", async () => {
+      const token = await loginAs(storedPlayer);
+      const archived = {
+        id: "character-archived",
+        campaignId: "camp-1",
+        ownerUserId: "player-1",
+        sourceCharacterId: "char-archived",
+        characterType: "player",
+        status: "archived",
+        lifecycle: "persistent",
+        visibleToPlayers: true,
+        sheetJson: { name: "Arannis", currentHp: 0 },
+        revision: 3,
+        updatedBy: "dm-1",
+        createdAt: new Date("2026-07-14T00:00:00.000Z"),
+        updatedAt: new Date("2026-07-14T01:00:00.000Z"),
+      };
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(archived);
+      prismaService.campaignCharacter.update.mockResolvedValueOnce({
+        ...archived,
+        status: "active",
+        sheetJson: { name: "Arannis", currentHp: 10 },
+        revision: 4,
+        updatedBy: "player-1",
+      });
+
+      const res = await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/characters/publish")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          sourceCharacterId: "char-archived",
+          characterType: "player",
+          baseRevision: 3,
+          sheet: { name: "Arannis", currentHp: 10 },
+        })
+        .expect(201);
+
+      expect(res.body.status).toBe("active");
+      expect(prismaService.campaignCharacter.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "character-archived" },
+          data: expect.objectContaining({
+            status: "active",
+            characterType: "player",
+            visibleToPlayers: true,
+          }),
+        }),
+      );
+      expect(prismaService.campaignCharacterAudit.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            changedPaths: expect.arrayContaining(["status"]),
+          }),
+        }),
+      );
     });
 
     it("rejects publishing when the user is not a campaign member", async () => {
       const token = await loginAs(storedStranger);
 
       await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/publish")
+        .post("/api/campaigns/camp-1/characters/publish")
         .set("Authorization", `Bearer ${token}`)
         .send({
           sourceCharacterId: "char-x",
-          actorType: "player",
+          characterType: "player",
           baseRevision: 0,
           sheet: { name: "Ghost" },
         })
@@ -262,46 +319,52 @@ describe("campaign actors endpoints", () => {
     });
   });
 
-  describe("POST /api/campaigns/:campaignId/actors (DM create)", () => {
-    it("lets the DM create an NPC actor", async () => {
+  describe("POST /api/campaigns/:campaignId/characters (DM create)", () => {
+    it("lets the DM create an NPC character", async () => {
       const token = await loginAs(storedDm);
       const created = {
-        id: "actor-npc",
+        id: "character-npc",
         campaignId: "camp-1",
         ownerUserId: null,
         sourceCharacterId: null,
-        actorType: "npc",
+        characterType: "npc",
         status: "active",
+        visibleToPlayers: false,
         sheetJson: { name: "Goblin", currentHp: 7 },
         revision: 1,
         updatedBy: "dm-1",
         createdAt: new Date("2026-07-14T00:00:00.000Z"),
         updatedAt: new Date("2026-07-14T00:00:00.000Z"),
       };
-      prismaService.campaignActor.create.mockResolvedValueOnce(created);
+      prismaService.campaignCharacter.create.mockResolvedValueOnce(created);
 
       const res = await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors")
+        .post("/api/campaigns/camp-1/characters")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          actorType: "npc",
+          characterType: "npc",
           sheet: { name: "Goblin", currentHp: 7 },
         })
         .expect(201);
 
-      expect(res.body.id).toBe("actor-npc");
-      expect(res.body.actorType).toBe("npc");
+      expect(res.body.id).toBe("character-npc");
+      expect(res.body.characterType).toBe("npc");
       expect(res.body.ownerUserId).toBeNull();
+      expect(res.body.visibleToPlayers).toBe(false);
+      expect(
+        prismaService.campaignCharacter.create.mock.calls[0][0].data
+          .visibleToPlayers,
+      ).toBe(false);
     });
 
-    it("lets the DM create a monster actor", async () => {
+    it("lets the DM create a monster character", async () => {
       const token = await loginAs(storedDm);
       const created = {
-        id: "actor-monster",
+        id: "character-monster",
         campaignId: "camp-1",
         ownerUserId: null,
         sourceCharacterId: null,
-        actorType: "monster",
+        characterType: "monster",
         status: "active",
         sheetJson: { name: "Goblin Boss", currentHp: 21, maxHp: 21 },
         revision: 1,
@@ -309,114 +372,168 @@ describe("campaign actors endpoints", () => {
         createdAt: new Date("2026-07-14T00:00:00.000Z"),
         updatedAt: new Date("2026-07-14T00:00:00.000Z"),
       };
-      prismaService.campaignActor.create.mockResolvedValueOnce(created);
+      prismaService.campaignCharacter.create.mockResolvedValueOnce(created);
 
       const res = await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors")
+        .post("/api/campaigns/camp-1/characters")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          actorType: "monster",
+          characterType: "monster",
           sheet: { name: "Goblin Boss", currentHp: 21, maxHp: 21 },
         })
         .expect(201);
 
-      expect(res.body.id).toBe("actor-monster");
-      expect(res.body.actorType).toBe("monster");
+      expect(res.body.id).toBe("character-monster");
+      expect(res.body.characterType).toBe("monster");
     });
 
-    it("keeps an explicitly temporary NPC distinct from persistent actors", async () => {
+    it("rejects persisted temporary characters because one-shot identities belong to messages", async () => {
       const token = await loginAs(storedDm);
-      prismaService.campaignActor.create.mockResolvedValueOnce({
-        id: "actor-temp",
-        campaignId: "camp-1",
-        ownerUserId: null,
-        sourceCharacterId: null,
-        actorType: "npc",
-        status: "active",
-        lifecycle: "temporary",
-        sheetJson: { name: "Street informant" },
-        revision: 1,
-        updatedBy: "dm-1",
-        createdAt: new Date("2026-07-14T00:00:00.000Z"),
-        updatedAt: new Date("2026-07-14T00:00:00.000Z"),
-      });
 
-      const res = await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors")
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/characters")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          actorType: "npc",
+          characterType: "npc",
           lifecycle: "temporary",
           sheet: { name: "Street informant" },
         })
-        .expect(201);
+        .expect(400);
 
-      expect(res.body.lifecycle).toBe("temporary");
-      expect(prismaService.campaignActor.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ lifecycle: "temporary" }),
-        }),
-      );
+      expect(prismaService.campaignCharacter.create).not.toHaveBeenCalled();
     });
 
     it("rejects a player trying to create an NPC", async () => {
       const token = await loginAs(storedPlayer);
 
       await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors")
+        .post("/api/campaigns/camp-1/characters")
         .set("Authorization", `Bearer ${token}`)
-        .send({ actorType: "npc", sheet: { name: "Goblin" } })
+        .send({ characterType: "npc", sheet: { name: "Goblin" } })
         .expect(403);
     });
   });
 
-  describe("GET /api/campaigns/:campaignId/actors", () => {
-    it("returns actors for a member", async () => {
+  describe("GET /api/campaigns/:campaignId/characters", () => {
+    it("returns characters for a member", async () => {
       const token = await loginAs(storedPlayer);
-      prismaService.campaignActor.findMany.mockResolvedValueOnce([
+      prismaService.campaignCharacter.findMany.mockResolvedValueOnce([
         {
-          id: "actor-1",
+          id: "character-1",
           campaignId: "camp-1",
           ownerUserId: "player-1",
           sourceCharacterId: "char-1",
-          actorType: "player",
+          characterType: "player",
           status: "active",
+          visibleToPlayers: true,
           sheetJson: { name: "Arannis" },
           revision: 1,
           updatedBy: "player-1",
           createdAt: new Date("2026-07-14T00:00:00.000Z"),
           updatedAt: new Date("2026-07-14T00:00:00.000Z"),
         },
+        {
+          id: "hidden-npc",
+          campaignId: "camp-1",
+          ownerUserId: null,
+          sourceCharacterId: null,
+          characterType: "npc",
+          status: "active",
+          visibleToPlayers: false,
+          sheetJson: { name: "Secret villain" },
+          revision: 1,
+          updatedBy: "dm-1",
+          createdAt: new Date("2026-07-14T00:00:00.000Z"),
+          updatedAt: new Date("2026-07-14T00:00:00.000Z"),
+        },
+        {
+          id: "visible-npc",
+          campaignId: "camp-1",
+          ownerUserId: null,
+          sourceCharacterId: null,
+          characterType: "npc",
+          status: "active",
+          visibleToPlayers: true,
+          sheetJson: { name: "Known ally" },
+          revision: 1,
+          updatedBy: "dm-1",
+          createdAt: new Date("2026-07-14T00:00:00.000Z"),
+          updatedAt: new Date("2026-07-14T00:00:00.000Z"),
+        },
       ]);
 
       const res = await request(app.getHttpServer())
-        .get("/api/campaigns/camp-1/actors")
+        .get("/api/campaigns/camp-1/characters")
         .set("Authorization", `Bearer ${token}`)
         .expect(200);
 
-      expect(res.body).toHaveLength(1);
-      expect(res.body[0].id).toBe("actor-1");
+      expect(res.body).toHaveLength(2);
+      expect(res.body[0].id).toBe("character-1");
+      expect(res.body[1].id).toBe("visible-npc");
     });
 
     it("rejects a non-member with 403", async () => {
       const token = await loginAs(storedStranger);
 
       await request(app.getHttpServer())
-        .get("/api/campaigns/camp-1/actors")
+        .get("/api/campaigns/camp-1/characters")
         .set("Authorization", `Bearer ${token}`)
         .expect(403);
     });
   });
 
-  describe("PUT /api/campaigns/:campaignId/actors/:actorId", () => {
-    it("lets the DM update an actor and bumps revision", async () => {
+  describe("PUT /api/campaigns/:campaignId/characters/:characterId", () => {
+    it("lets the DM change NPC player visibility", async () => {
       const token = await loginAs(storedDm);
       const existing = {
-        id: "actor-1",
+        id: "npc-visibility",
+        campaignId: "camp-1",
+        ownerUserId: null,
+        sourceCharacterId: null,
+        characterType: "npc",
+        status: "active",
+        lifecycle: "persistent",
+        visibleToPlayers: false,
+        sheetJson: { name: "Hidden guide" },
+        revision: 1,
+        updatedBy: "dm-1",
+        createdAt: new Date("2026-07-14T00:00:00.000Z"),
+        updatedAt: new Date("2026-07-14T00:00:00.000Z"),
+      };
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(existing);
+      prismaService.campaignCharacter.update.mockResolvedValueOnce({
+        ...existing,
+        visibleToPlayers: true,
+        revision: 2,
+      });
+
+      const res = await request(app.getHttpServer())
+        .put("/api/campaigns/camp-1/characters/npc-visibility")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          baseRevision: 1,
+          sheet: existing.sheetJson,
+          visibleToPlayers: true,
+        })
+        .expect(200);
+
+      expect(res.body.visibleToPlayers).toBe(true);
+      expect(prismaService.campaignCharacter.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "npc-visibility" },
+          data: expect.objectContaining({ visibleToPlayers: true }),
+        }),
+      );
+    });
+
+    it("lets the DM update an character and bumps revision", async () => {
+      const token = await loginAs(storedDm);
+      const existing = {
+        id: "character-1",
         campaignId: "camp-1",
         ownerUserId: "player-1",
         sourceCharacterId: "char-1",
-        actorType: "player",
+        characterType: "player",
         status: "active",
         sheetJson: { name: "Arannis", currentHp: 10 },
         revision: 1,
@@ -431,29 +548,29 @@ describe("campaign actors endpoints", () => {
         updatedBy: "dm-1",
         updatedAt: new Date("2026-07-14T01:00:00.000Z"),
       };
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(existing);
-      prismaService.campaignActor.update.mockResolvedValueOnce(updated);
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(existing);
+      prismaService.campaignCharacter.update.mockResolvedValueOnce(updated);
 
       const res = await request(app.getHttpServer())
-        .put("/api/campaigns/camp-1/actors/actor-1")
+        .put("/api/campaigns/camp-1/characters/character-1")
         .set("Authorization", `Bearer ${token}`)
         .send({ baseRevision: 1, sheet: { name: "Arannis", currentHp: 7 } })
         .expect(200);
 
       expect(res.body.revision).toBe(2);
       expect(res.body.sheet).toEqual({ name: "Arannis", currentHp: 7 });
-      expect(prismaService.campaignActorAudit.create).toHaveBeenCalled();
+      expect(prismaService.campaignCharacterAudit.create).toHaveBeenCalled();
       expect(prismaService.campaignChange.create).toHaveBeenCalled();
     });
 
-    it("returns 409 with the current actor on a stale revision", async () => {
+    it("returns 409 with the current character on a stale revision", async () => {
       const token = await loginAs(storedPlayer);
       const existing = {
-        id: "actor-1",
+        id: "character-1",
         campaignId: "camp-1",
         ownerUserId: "player-1",
         sourceCharacterId: "char-1",
-        actorType: "player",
+        characterType: "player",
         status: "active",
         sheetJson: { name: "Arannis", currentHp: 10 },
         revision: 5,
@@ -461,10 +578,10 @@ describe("campaign actors endpoints", () => {
         createdAt: new Date("2026-07-14T00:00:00.000Z"),
         updatedAt: new Date("2026-07-14T01:00:00.000Z"),
       };
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(existing);
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(existing);
 
       const res = await request(app.getHttpServer())
-        .put("/api/campaigns/camp-1/actors/actor-1")
+        .put("/api/campaigns/camp-1/characters/character-1")
         .set("Authorization", `Bearer ${token}`)
         .send({ baseRevision: 1, sheet: { name: "stale" } })
         .expect(409);
@@ -472,14 +589,14 @@ describe("campaign actors endpoints", () => {
       expect(res.body.current.revision).toBe(5);
     });
 
-    it("lets the owner player update their own actor", async () => {
+    it("lets the owner player update their own character", async () => {
       const token = await loginAs(storedPlayer);
       const existing = {
-        id: "actor-1",
+        id: "character-1",
         campaignId: "camp-1",
         ownerUserId: "player-1",
         sourceCharacterId: "char-1",
-        actorType: "player",
+        characterType: "player",
         status: "active",
         sheetJson: { name: "Arannis", currentHp: 10 },
         revision: 1,
@@ -493,11 +610,11 @@ describe("campaign actors endpoints", () => {
         revision: 2,
         updatedBy: "player-1",
       };
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(existing);
-      prismaService.campaignActor.update.mockResolvedValueOnce(updated);
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(existing);
+      prismaService.campaignCharacter.update.mockResolvedValueOnce(updated);
 
       const res = await request(app.getHttpServer())
-        .put("/api/campaigns/camp-1/actors/actor-1")
+        .put("/api/campaigns/camp-1/characters/character-1")
         .set("Authorization", `Bearer ${token}`)
         .send({ baseRevision: 1, sheet: { name: "Arannis", currentHp: 9 } })
         .expect(200);
@@ -506,14 +623,14 @@ describe("campaign actors endpoints", () => {
     });
 
     // Spec §完整管理: 转为常驻 — DM 可以把 temporary 角色转为 persistent。
-    it("lets the DM convert a temporary actor to persistent via lifecycle field", async () => {
+    it("lets the DM convert a temporary character to persistent via lifecycle field", async () => {
       const token = await loginAs(storedDm);
       const existing = {
-        id: "actor-1",
+        id: "character-1",
         campaignId: "camp-1",
         ownerUserId: null,
         sourceCharacterId: null,
-        actorType: "npc",
+        characterType: "npc",
         status: "active",
         lifecycle: "temporary",
         sheetJson: { name: "Innkeeper" },
@@ -528,11 +645,11 @@ describe("campaign actors endpoints", () => {
         revision: 2,
         updatedBy: "dm-1",
       };
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(existing);
-      prismaService.campaignActor.update.mockResolvedValueOnce(updated);
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(existing);
+      prismaService.campaignCharacter.update.mockResolvedValueOnce(updated);
 
       const res = await request(app.getHttpServer())
-        .put("/api/campaigns/camp-1/actors/actor-1")
+        .put("/api/campaigns/camp-1/characters/character-1")
         .set("Authorization", `Bearer ${token}`)
         .send({
           baseRevision: 1,
@@ -542,18 +659,18 @@ describe("campaign actors endpoints", () => {
         .expect(200);
 
       expect(res.body.lifecycle).toBe("persistent");
-      const args = prismaService.campaignActor.update.mock.calls[0][0];
+      const args = prismaService.campaignCharacter.update.mock.calls[0][0];
       expect(args.data.lifecycle).toBe("persistent");
     });
 
-    it("rejects a player trying to convert an actor lifecycle to persistent", async () => {
+    it("rejects a player trying to convert an character lifecycle to persistent", async () => {
       const token = await loginAs(storedPlayer);
       const existing = {
-        id: "actor-1",
+        id: "character-1",
         campaignId: "camp-1",
         ownerUserId: null,
         sourceCharacterId: null,
-        actorType: "npc",
+        characterType: "npc",
         status: "active",
         lifecycle: "temporary",
         sheetJson: { name: "Innkeeper" },
@@ -562,10 +679,10 @@ describe("campaign actors endpoints", () => {
         createdAt: new Date("2026-07-14T00:00:00.000Z"),
         updatedAt: new Date("2026-07-14T00:00:00.000Z"),
       };
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(existing);
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(existing);
 
       await request(app.getHttpServer())
-        .put("/api/campaigns/camp-1/actors/actor-1")
+        .put("/api/campaigns/camp-1/characters/character-1")
         .set("Authorization", `Bearer ${token}`)
         .send({
           baseRevision: 1,
@@ -576,15 +693,15 @@ describe("campaign actors endpoints", () => {
     });
   });
 
-  describe("POST /api/campaigns/:campaignId/actors/:actorId/archive", () => {
-    it("lets the DM archive an actor without deleting it", async () => {
+  describe("POST /api/campaigns/:campaignId/characters/:characterId/archive", () => {
+    it("lets the DM archive an character without deleting it", async () => {
       const token = await loginAs(storedDm);
       const existing = {
-        id: "actor-1",
+        id: "character-1",
         campaignId: "camp-1",
         ownerUserId: "player-1",
         sourceCharacterId: "char-1",
-        actorType: "player",
+        characterType: "player",
         status: "active",
         sheetJson: { name: "Arannis" },
         revision: 1,
@@ -592,8 +709,8 @@ describe("campaign actors endpoints", () => {
         createdAt: new Date("2026-07-14T00:00:00.000Z"),
         updatedAt: new Date("2026-07-14T00:00:00.000Z"),
       };
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(existing);
-      prismaService.campaignActor.update.mockResolvedValueOnce({
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(existing);
+      prismaService.campaignCharacter.update.mockResolvedValueOnce({
         ...existing,
         status: "archived",
         revision: 2,
@@ -601,31 +718,66 @@ describe("campaign actors endpoints", () => {
       });
 
       const res = await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/actor-1/archive")
+        .post("/api/campaigns/camp-1/characters/character-1/archive")
         .set("Authorization", `Bearer ${token}`)
         .send({ baseRevision: 1 })
         .expect(200);
 
       expect(res.body.status).toBe("archived");
-      expect(prismaService.campaignActor.update).toHaveBeenCalled();
-      const args = prismaService.campaignActor.update.mock.calls[0][0];
+      expect(prismaService.campaignCharacter.update).toHaveBeenCalled();
+      const args = prismaService.campaignCharacter.update.mock.calls[0][0];
       expect(args.data.status).toBe("archived");
     });
   });
 
-  describe("GET /api/campaigns/:campaignId/actors/:actorId/audits", () => {
+  describe("POST /api/campaigns/:campaignId/characters/:characterId/restore", () => {
+    it("lets the DM restore an archived character", async () => {
+      const token = await loginAs(storedDm);
+      const existing = {
+        id: "character-1",
+        campaignId: "camp-1",
+        ownerUserId: null,
+        sourceCharacterId: null,
+        characterType: "npc",
+        status: "archived",
+        sheetJson: { name: "Innkeeper" },
+        revision: 2,
+        updatedBy: "dm-1",
+        createdAt: new Date("2026-07-14T00:00:00.000Z"),
+        updatedAt: new Date("2026-07-14T00:00:00.000Z"),
+      };
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(existing);
+      prismaService.campaignCharacter.update.mockResolvedValueOnce({
+        ...existing,
+        status: "active",
+        revision: 3,
+      });
+
+      const res = await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/characters/character-1/restore")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ baseRevision: 2 })
+        .expect(200);
+
+      expect(res.body.status).toBe("active");
+      const args = prismaService.campaignCharacter.update.mock.calls[0][0];
+      expect(args.data.status).toBe("active");
+    });
+  });
+
+  describe("GET /api/campaigns/:campaignId/characters/:characterId/audits", () => {
     it("returns audit records for a member", async () => {
       const token = await loginAs(storedDm);
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce({
-        id: "actor-1",
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce({
+        id: "character-1",
         campaignId: "camp-1",
       });
-      prismaService.campaignActorAudit.findMany.mockResolvedValueOnce([
+      prismaService.campaignCharacterAudit.findMany.mockResolvedValueOnce([
         {
           id: "audit-1",
-          campaignActorId: "actor-1",
+          campaignCharacterId: "character-1",
           campaignId: "camp-1",
-          actorUserId: "dm-1",
+          characterUserId: "dm-1",
           baseRevision: 1,
           resultRevision: 2,
           changedPaths: ["currentHp"],
@@ -636,7 +788,7 @@ describe("campaign actors endpoints", () => {
       ]);
 
       const res = await request(app.getHttpServer())
-        .get("/api/campaigns/camp-1/actors/actor-1/audits")
+        .get("/api/campaigns/camp-1/characters/character-1/audits")
         .set("Authorization", `Bearer ${token}`)
         .expect(200);
 
@@ -646,15 +798,15 @@ describe("campaign actors endpoints", () => {
     });
   });
 
-  describe("POST /api/campaigns/:campaignId/actors/:actorId/runtime-commands", () => {
+  describe("POST /api/campaigns/:campaignId/characters/:characterId/runtime-commands", () => {
     it("applies setHp and adjustHp in order", async () => {
       const token = await loginAs(storedDm);
       const existing = {
-        id: "actor-1",
+        id: "character-1",
         campaignId: "camp-1",
         ownerUserId: "player-1",
         sourceCharacterId: "char-1",
-        actorType: "player",
+        characterType: "player",
         status: "active",
         sheetJson: { name: "Arannis", currentHp: 10, conditions: [] },
         revision: 1,
@@ -662,8 +814,8 @@ describe("campaign actors endpoints", () => {
         createdAt: new Date("2026-07-14T00:00:00.000Z"),
         updatedAt: new Date("2026-07-14T00:00:00.000Z"),
       };
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(existing);
-      prismaService.campaignActor.update.mockResolvedValueOnce({
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(existing);
+      prismaService.campaignCharacter.update.mockResolvedValueOnce({
         ...existing,
         sheetJson: { name: "Arannis", currentHp: 4, conditions: [] },
         revision: 2,
@@ -671,7 +823,7 @@ describe("campaign actors endpoints", () => {
       });
 
       const res = await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/actor-1/runtime-commands")
+        .post("/api/campaigns/camp-1/characters/character-1/runtime-commands")
         .set("Authorization", `Bearer ${token}`)
         .send({
           baseRevision: 1,
@@ -688,11 +840,11 @@ describe("campaign actors endpoints", () => {
 
     it("rejects unknown command types with 400", async () => {
       const token = await loginAs(storedDm);
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce({
-        id: "actor-1",
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce({
+        id: "character-1",
         campaignId: "camp-1",
         ownerUserId: "player-1",
-        actorType: "player",
+        characterType: "player",
         status: "active",
         sheetJson: { currentHp: 10 },
         revision: 1,
@@ -700,7 +852,7 @@ describe("campaign actors endpoints", () => {
       });
 
       await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/actor-1/runtime-commands")
+        .post("/api/campaigns/camp-1/characters/character-1/runtime-commands")
         .set("Authorization", `Bearer ${token}`)
         .send({
           baseRevision: 1,
@@ -710,33 +862,33 @@ describe("campaign actors endpoints", () => {
     });
   });
 
-  describe("POST /api/campaigns/:campaignId/actors/:actorId/assign", () => {
-    it("lets the DM assign an actor to a campaign member", async () => {
+  describe("POST /api/campaigns/:campaignId/characters/:characterId/assign", () => {
+    it("lets the DM assign an character to a campaign member", async () => {
       const token = await loginAs(storedDm);
       const existing = {
-        id: "actor-1",
+        id: "character-1",
         campaignId: "camp-1",
         ownerUserId: null,
         sourceCharacterId: null,
-        actorType: "unclaimed",
+        characterType: "unclaimed",
         status: "active",
         sheetJson: { name: "Sidekick" },
         revision: 1,
         updatedBy: "dm-1",
       };
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce(existing);
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(existing);
       prismaService.campaignMember.findFirst.mockResolvedValueOnce({
         userId: "player-1",
         role: "player",
       });
-      prismaService.campaignActor.update.mockResolvedValueOnce({
+      prismaService.campaignCharacter.update.mockResolvedValueOnce({
         ...existing,
         ownerUserId: "player-1",
         revision: 2,
       });
 
       const res = await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/actor-1/assign")
+        .post("/api/campaigns/camp-1/characters/character-1/assign")
         .set("Authorization", `Bearer ${token}`)
         .send({ ownerUserId: "player-1", baseRevision: 1 })
         .expect(200);
@@ -744,14 +896,14 @@ describe("campaign actors endpoints", () => {
       expect(res.body.ownerUserId).toBe("player-1");
     });
 
-    it("rejects assigning an actor to a non-member", async () => {
+    it("rejects assigning an character to a non-member", async () => {
       const token = await loginAs(storedDm);
-      prismaService.campaignActor.findUnique.mockResolvedValueOnce({
-        id: "actor-1",
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce({
+        id: "character-1",
         campaignId: "camp-1",
         ownerUserId: null,
         sourceCharacterId: null,
-        actorType: "unclaimed",
+        characterType: "unclaimed",
         status: "active",
         sheetJson: { name: "Sidekick" },
         revision: 1,
@@ -760,7 +912,7 @@ describe("campaign actors endpoints", () => {
       prismaService.campaignMember.findFirst.mockResolvedValueOnce(null);
 
       await request(app.getHttpServer())
-        .post("/api/campaigns/camp-1/actors/actor-1/assign")
+        .post("/api/campaigns/camp-1/characters/character-1/assign")
         .set("Authorization", `Bearer ${token}`)
         .send({ ownerUserId: "stranger-1", baseRevision: 1 })
         .expect(400);

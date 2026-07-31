@@ -7,7 +7,7 @@ export class ServerInfoController {
   constructor(private readonly serverInfoService: ServerInfoService) {}
 
   @Get()
-  getMetadata(): ServerMetadata {
+  getMetadata(): Promise<ServerMetadata> {
     return this.serverInfoService.getMetadata();
   }
 }

@@ -11,7 +11,7 @@ describe('CharacterOperationsService', () => {
   };
   const stateStore = { getOrCreate: jest.fn() };
   const events = { append: jest.fn() };
-  const actor = { userId: 'user-1', username: 'aria' };
+  const character = { userId: 'user-1', username: 'aria' };
 
   beforeEach(() => {
     jest.resetAllMocks();
@@ -60,7 +60,7 @@ describe('CharacterOperationsService', () => {
       events as never,
     );
 
-    const result = await service.adjustHitPoints(actor, 'character-1', {
+    const result = await service.adjustHitPoints(character, 'character-1', {
       requestId: 'request-1',
       delta: -8,
     });
@@ -87,7 +87,7 @@ describe('CharacterOperationsService', () => {
       events as never,
     );
 
-    const result = await service.addCondition(actor, 'character-1', {
+    const result = await service.addCondition(character, 'character-1', {
       requestId: 'request-2',
       condition: { id: 'poison-1', type: 'poisoned', remaining: 2 },
     });
@@ -104,7 +104,7 @@ describe('CharacterOperationsService', () => {
       events as never,
     );
 
-    const result = await service.consumeResource(actor, 'character-1', {
+    const result = await service.consumeResource(character, 'character-1', {
       requestId: 'request-3',
       resourceId: 'second-wind',
       amount: 2,
@@ -120,7 +120,7 @@ describe('CharacterOperationsService', () => {
       events as never,
     );
 
-    const result = await service.grantItem(actor, 'character-1', {
+    const result = await service.grantItem(character, 'character-1', {
       requestId: 'request-4',
       item: { id: 'potion-1', name: '治疗药水', quantity: 2 },
     });
@@ -182,7 +182,7 @@ describe('CharacterOperationsService', () => {
       events as never,
     );
 
-    const result = await service.transferItem(actor, 'character-1', {
+    const result = await service.transferItem(character, 'character-1', {
       requestId: 'request-5',
       campaignId: 'campaign-1',
       targetCharacterId: 'character-2',

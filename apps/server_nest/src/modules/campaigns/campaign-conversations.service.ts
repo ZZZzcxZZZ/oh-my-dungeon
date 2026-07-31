@@ -29,14 +29,14 @@ export class CampaignConversationsService {
   ) {}
 
   async listConversations(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
   ): Promise<CampaignConversationView[]> {
     const context = await this.context(campaignId);
-    this.policy.canViewCampaign(actor, context);
+    this.policy.canViewCampaign(user, context);
 
     // Legacy campaigns created before task 5.3 may not have a main row yet.
-    await this.ensureMainConversation(campaignId, actor.userId);
+    await this.ensureMainConversation(campaignId, user.userId);
 
     const conversations = await this.prisma.campaignConversation.findMany({
       where: { campaignId, archivedAt: null },
@@ -45,28 +45,28 @@ export class CampaignConversationsService {
 
     // Main is visible to all members; direct/group only to participants.
     const visible = conversations.filter((c: any) =>
-      this.canAccessConversation(actor.userId, c),
+      this.canAccessConversation(user.userId, c),
     );
 
     return Promise.all(
-      visible.map((c: any) => this.toViewWithMeta(c, actor.userId)),
+      visible.map((c: any) => this.toViewWithMeta(c, user.userId)),
     );
   }
 
   async markRead(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
     conversationId: string,
   ): Promise<{ lastReadAt: string }> {
     const context = await this.context(campaignId);
-    this.policy.canViewCampaign(actor, context);
+    this.policy.canViewCampaign(user, context);
     const conversation = await this.getConversationOrThrow(
       campaignId,
       conversationId,
     );
     if (
       conversation.archivedAt ||
-      !this.canAccessConversation(actor.userId, conversation)
+      !this.canAccessConversation(user.userId, conversation)
     ) {
       throw new NotFoundException("Conversation not found");
     }
@@ -75,10 +75,10 @@ export class CampaignConversationsService {
       where: {
         conversationId_userId: {
           conversationId,
-          userId: actor.userId,
+          userId: user.userId,
         },
       },
-      create: { conversationId, userId: actor.userId, lastReadAt },
+      create: { conversationId, userId: user.userId, lastReadAt },
       update: { lastReadAt },
     });
     return { lastReadAt: lastReadAt.toISOString() };
@@ -103,18 +103,18 @@ export class CampaignConversationsService {
   }
 
   async createDirectConversation(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
     input: CreateDirectConversationInput,
   ): Promise<CampaignConversationView> {
     const context = await this.context(campaignId);
-    this.policy.canViewCampaign(actor, context);
+    this.policy.canViewCampaign(user, context);
 
     const otherUserId = input.otherUserId;
     if (!otherUserId || typeof otherUserId !== "string") {
       throw new BadRequestException("otherUserId is required");
     }
-    if (otherUserId === actor.userId) {
+    if (otherUserId === user.userId) {
       throw new BadRequestException(
         "Cannot create a direct conversation with yourself",
       );
@@ -129,7 +129,7 @@ export class CampaignConversationsService {
     }
 
     // Sorted pair key dedupes the 1:1 channel regardless of who initiates.
-    const directKey = [actor.userId, otherUserId].sort().join(":");
+    const directKey = [user.userId, otherUserId].sort().join(":");
 
     const conversation = await this.prisma.campaignConversation.upsert({
       where: { campaignId_directKey: { campaignId, directKey } },
@@ -138,22 +138,22 @@ export class CampaignConversationsService {
         kind: "direct",
         title: "",
         directKey,
-        participantIds: [actor.userId, otherUserId],
-        createdBy: actor.userId,
+        participantIds: [user.userId, otherUserId],
+        createdBy: user.userId,
       },
       update: {},
     });
 
-    return this.toViewWithMeta(conversation, actor.userId);
+    return this.toViewWithMeta(conversation, user.userId);
   }
 
   async createGroupConversation(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
     input: CreateGroupConversationInput,
   ): Promise<CampaignConversationView> {
     const context = await this.context(campaignId);
-    this.policy.canManageCampaign(actor, context);
+    this.policy.canViewCampaign(user, context);
 
     if (!input.title || !input.title.trim()) {
       throw new BadRequestException("Group conversation title is required");
@@ -165,10 +165,17 @@ export class CampaignConversationsService {
       throw new BadRequestException("participantIds must be an array of strings");
     }
 
-    // The creator is always a participant.
-    const participantIds = Array.from(
-      new Set([actor.userId, ...input.participantIds]),
+    const otherParticipantIds = Array.from(
+      new Set(input.participantIds.filter((id) => id !== user.userId)),
     );
+    if (otherParticipantIds.length < 2) {
+      throw new BadRequestException(
+        "A group conversation requires at least two other members",
+      );
+    }
+
+    // The creator is always the first participant.
+    const participantIds = [user.userId, ...otherParticipantIds];
 
     const members = await this.prisma.campaignMember.findMany({
       where: { campaignId, userId: { in: participantIds } },
@@ -188,15 +195,15 @@ export class CampaignConversationsService {
         kind: "group",
         title: input.title.trim(),
         participantIds,
-        createdBy: actor.userId,
+        createdBy: user.userId,
       },
     });
 
-    return this.toViewWithMeta(conversation, actor.userId);
+    return this.toViewWithMeta(conversation, user.userId);
   }
 
   async updateConversation(
-    actor: AccessTokenPayload,
+    user: AccessTokenPayload,
     campaignId: string,
     conversationId: string,
     input: UpdateConversationInput,
@@ -214,7 +221,7 @@ export class CampaignConversationsService {
 
     if (input.archived !== undefined) {
       // Archiving a conversation is a DM-only operation.
-      this.policy.canManageCampaign(actor, context);
+      this.policy.canManageCampaign(user, context);
       data.archivedAt = input.archived ? new Date() : null;
     }
 
@@ -225,8 +232,8 @@ export class CampaignConversationsService {
         );
       }
       // Group creator may rename; otherwise a DM is required.
-      if (conversation.createdBy !== actor.userId) {
-        this.policy.canManageCampaign(actor, context);
+      if (conversation.createdBy !== user.userId) {
+        this.policy.canManageCampaign(user, context);
       }
       if (!input.title.trim()) {
         throw new BadRequestException("Title is required");
@@ -235,7 +242,7 @@ export class CampaignConversationsService {
     }
 
     if (Object.keys(data).length === 0) {
-      return this.toViewWithMeta(conversation, actor.userId);
+      return this.toViewWithMeta(conversation, user.userId);
     }
 
     const updated = await this.prisma.campaignConversation.update({
@@ -243,7 +250,7 @@ export class CampaignConversationsService {
       data,
     });
 
-    return this.toViewWithMeta(updated, actor.userId);
+    return this.toViewWithMeta(updated, user.userId);
   }
 
   canAccessConversation(
@@ -297,19 +304,29 @@ export class CampaignConversationsService {
         ...(lastReadAt ? { createdAt: { gt: lastReadAt } } : {}),
       },
     });
-    return this.toView(conversation, lastMessage, unreadCount);
+    const displayTitle = await this.resolveDisplayTitle(
+      conversation,
+      viewerUserId,
+    );
+    return this.toView(
+      conversation,
+      lastMessage,
+      unreadCount,
+      displayTitle,
+    );
   }
 
   private toView(
     conversation: any,
     lastMessage: any,
     unreadCount: number,
+    displayTitle?: string,
   ): CampaignConversationView {
     return {
       id: conversation.id,
       campaignId: conversation.campaignId,
       kind: conversation.kind,
-      title: conversation.title ?? "",
+      title: displayTitle ?? conversation.title ?? "",
       participantIds: Array.isArray(conversation.participantIds)
         ? conversation.participantIds
         : [],
@@ -322,6 +339,56 @@ export class CampaignConversationsService {
       lastMessage: lastMessage ? toChatMessageView(lastMessage) : null,
       unreadCount,
     };
+  }
+
+  private async resolveDisplayTitle(
+    conversation: any,
+    viewerUserId: string,
+  ): Promise<string | undefined> {
+    if (conversation.kind !== "direct") return undefined;
+    const participantIds = Array.isArray(conversation.participantIds)
+      ? conversation.participantIds
+      : [];
+    const otherUserId = participantIds.find(
+      (participantId: string) => participantId !== viewerUserId,
+    );
+    if (!otherUserId) return "私聊";
+
+    const membership = await this.prisma.campaignMember.findFirst({
+      where: {
+        campaignId: conversation.campaignId,
+        userId: otherUserId,
+      },
+      select: {
+        displayName: true,
+        boundCharacterId: true,
+      },
+    });
+    const memberName =
+      typeof membership?.displayName === "string"
+        ? membership.displayName.trim()
+        : "";
+    const boundCharacterId = membership?.boundCharacterId;
+    if (typeof boundCharacterId !== "string" || !boundCharacterId) {
+      return memberName || "私聊";
+    }
+
+    const character = await this.prisma.campaignCharacter.findUnique({
+      where: { id: boundCharacterId },
+      select: { sheetJson: true },
+    });
+    const sheet =
+      character?.sheetJson &&
+      typeof character.sheetJson === "object" &&
+      !Array.isArray(character.sheetJson)
+        ? (character.sheetJson as Record<string, unknown>)
+        : undefined;
+    const characterName =
+      typeof sheet?.name === "string" ? sheet.name.trim() : "";
+    if (memberName && characterName && memberName !== characterName) {
+      return `${memberName} · ${characterName}`;
+    }
+    return characterName || memberName || "私聊";
   }
 
   private async context(campaignId: string) {
@@ -351,10 +418,10 @@ function toChatMessageView(message: any): CampaignChatMessageView {
     id: message.id,
     campaignId: message.campaignId,
     senderId: message.senderId,
-    campaignActorId: message.campaignActorId ?? null,
+    campaignCharacterId: message.campaignCharacterId ?? null,
     displayName: message.displayName,
     avatarUrl: message.avatarUrl ?? null,
-    speakerMode: message.speakerMode ?? "actor",
+    speakerMode: message.speakerMode ?? "character",
     delegatedByUserId: message.delegatedByUserId ?? null,
     speakerAvatarAssetId: message.speakerAvatarAssetId ?? null,
     publicHealthState: message.publicHealthState ?? null,

@@ -5,7 +5,9 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { PasswordHashService } from '../src/modules/auth/password-hash.service';
 
-describe('encounters endpoints', () => {
+// 战斗系统不开发 (0.1 收敛规格): EncountersModule 已从应用装配摘除,
+// 客户端无消费者。本套件保留为历史记录, 标记 skip 不再执行。
+describe.skip('encounters endpoints', () => {
   let app: INestApplication;
   const prismaService = {
     user: {

@@ -41,6 +41,7 @@ describe("campaign characters endpoints", () => {
       findUnique: jest.fn(),
       findFirst: jest.fn(),
       findMany: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     campaignInvite: {
       create: jest.fn(),
@@ -727,6 +728,15 @@ describe("campaign characters endpoints", () => {
       expect(prismaService.campaignCharacter.update).toHaveBeenCalled();
       const args = prismaService.campaignCharacter.update.mock.calls[0][0];
       expect(args.data.status).toBe("archived");
+      // 归档时解绑所有绑定该角色的成员, 避免"已绑定但不可用"的脏状态.
+      expect(prismaService.campaignMember.updateMany).toHaveBeenCalledWith({
+        where: { campaignId: "camp-1", boundCharacterId: "character-1" },
+        data: {
+          boundCharacterId: null,
+          activeSpeakerCharacterId: null,
+          speakerMode: "ooc",
+        },
+      });
     });
   });
 

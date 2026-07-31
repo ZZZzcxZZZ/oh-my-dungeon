@@ -288,6 +288,16 @@ export class CampaignCharactersService {
           updatedBy: user.userId,
         },
       });
+      // 归档角色时解绑所有绑定它的成员: 归档角色不可发言/绑定, 成员栏
+      // 应回到"未绑定"状态, 避免已绑定但不可用的脏状态.
+      await tx.campaignMember.updateMany({
+        where: { campaignId, boundCharacterId: characterId },
+        data: {
+          boundCharacterId: null,
+          activeSpeakerCharacterId: null,
+          speakerMode: "ooc",
+        },
+      });
       await tx.campaignCharacterAudit.create({
         data: {
           campaignCharacterId: characterId,

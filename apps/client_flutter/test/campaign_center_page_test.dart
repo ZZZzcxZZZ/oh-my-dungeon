@@ -416,6 +416,7 @@ void main() {
                 userId: 'user-1',
                 displayName: '玩家一',
                 role: 'player',
+                boundCharacterId: 'character-1',
               ),
             ],
             characters: [character],

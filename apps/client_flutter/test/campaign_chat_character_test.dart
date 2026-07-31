@@ -50,6 +50,7 @@ const _campaign = Campaign(
       userId: 'user-2',
       displayName: 'Player Two',
       role: 'player',
+      boundCharacterId: 'character-player',
     ),
   ],
 );

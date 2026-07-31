@@ -341,6 +341,7 @@ describe("campaigns endpoints", () => {
               userId: "user-1",
               displayName: "ranger",
               role: "owner",
+              boundCharacterId: null,
             },
           ]);
         });
@@ -418,6 +419,7 @@ describe("campaigns endpoints", () => {
             userId: "user-1",
             displayName: "ranger",
             role: "owner",
+            boundCharacterId: null,
           });
         });
     });

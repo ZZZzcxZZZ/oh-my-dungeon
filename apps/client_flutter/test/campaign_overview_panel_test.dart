@@ -3,6 +3,8 @@ import 'package:dnd_table_client/src/features/campaigns/presentation/center/camp
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/campaign_test_support.dart';
+
 /// Plan 2026-07-23 Wave 1 Task 1.1: 战役中心概览区块重构
 ///
 /// 用户反馈：成员和下面的工具什么设置黏在一起。
@@ -135,6 +137,92 @@ void main() {
       expect(settings, findsOneWidget);
 
       expect(find.byType(Divider), findsWidgets);
+    });
+  });
+
+  group('CampaignOverviewPanel 成员绑定归属', () {
+    testWidgets('成员栏按 boundCharacterId 显示绑定角色，不按 ownerUserId 猜测', (tester) async {
+      // 塔夫场景：角色发布者(ownerUserId=主持人) 与绑定者不一致。
+      // 主持人未绑定任何角色时，塔夫不应显示在主持人名下。
+      final tav = testCampaignCharacter(
+        id: 'char-tav',
+        ownerUserId: 'u-dm',
+        characterType: 'player',
+        sheet: {'name': '塔夫'},
+      );
+      await tester.pumpWidget(
+        harness(
+          CampaignOverviewPanel(
+            campaign: campaign,
+            canManage: true,
+            members: [
+              CampaignMemberPreview(
+                userId: 'u-dm',
+                displayName: '主持人',
+                role: 'owner',
+                boundCharacterId: null,
+              ),
+              CampaignMemberPreview(
+                userId: 'u-player',
+                displayName: '玩家甲',
+                role: 'player',
+                boundCharacterId: 'char-tav',
+              ),
+            ],
+            characters: [tav],
+            onOpenDmControl: () {},
+            onEditDetails: () {},
+            onTransferOwnership: () {},
+            onArchiveCampaign: () {},
+            onLeaveCampaign: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 顶部角色 chip 是"主持人"，成员列表里也是"主持人"，所以至少出现两次
+      // （顶部 chip + 成员 displayName）。关键是成员条目必须显示"未绑定角色"。
+      expect(find.text('主持人'), findsNWidgets(2));
+      expect(find.text('主持人 · 未绑定角色'), findsOneWidget);
+      // 玩家绑定塔夫 → 塔夫显示在玩家甲名下
+      expect(find.text('玩家甲'), findsOneWidget);
+      expect(find.text('塔夫 · 玩家'), findsOneWidget);
+      // 塔夫不应出现在主持人条目里（主持人条目只应有一个 subtitle）
+      expect(find.text('塔夫 · 主持人'), findsNothing);
+    });
+
+    testWidgets('成员绑定角色已归档时不显示角色名', (tester) async {
+      await tester.pumpWidget(
+        harness(
+          CampaignOverviewPanel(
+            campaign: campaign,
+            canManage: false,
+            members: [
+              CampaignMemberPreview(
+                userId: 'u-player',
+                displayName: '玩家甲',
+                role: 'player',
+                boundCharacterId: 'char-old',
+              ),
+            ],
+            characters: [
+              testCampaignCharacter(
+                id: 'char-old',
+                ownerUserId: 'u-player',
+                characterType: 'player',
+                status: 'archived',
+                sheet: {'name': '旧角色'},
+              ),
+            ],
+            onLeaveCampaign: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('玩家甲'), findsOneWidget);
+      expect(find.text('玩家 · 未绑定角色'), findsOneWidget);
+      expect(find.text('旧角色'), findsNothing);
     });
   });
 }

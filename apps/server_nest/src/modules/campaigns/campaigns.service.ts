@@ -1035,6 +1035,7 @@ function toCampaignView(campaign: any, unreadCount = 0): CampaignView {
     userId: member.userId,
     displayName: member.displayName,
     role: member.role,
+    boundCharacterId: member.boundCharacterId ?? null,
   }));
 
   return {

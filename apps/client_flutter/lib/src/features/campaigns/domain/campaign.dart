@@ -108,17 +108,22 @@ class CampaignMemberPreview {
     required this.userId,
     required this.displayName,
     required this.role,
+    this.boundCharacterId,
   });
 
   final String userId;
   final String displayName;
   final String role;
 
+  /// 成员绑定的战役角色 id。null 表示未绑定。
+  final String? boundCharacterId;
+
   factory CampaignMemberPreview.fromJson(Map<String, Object?> json) {
     return CampaignMemberPreview(
       userId: json['userId']! as String,
       displayName: json['displayName']! as String,
       role: json['role']! as String,
+      boundCharacterId: json['boundCharacterId'] as String?,
     );
   }
 
@@ -128,11 +133,12 @@ class CampaignMemberPreview {
         other is CampaignMemberPreview &&
             userId == other.userId &&
             displayName == other.displayName &&
-            role == other.role;
+            role == other.role &&
+            boundCharacterId == other.boundCharacterId;
   }
 
   @override
-  int get hashCode => Object.hash(userId, displayName, role);
+  int get hashCode => Object.hash(userId, displayName, role, boundCharacterId);
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {

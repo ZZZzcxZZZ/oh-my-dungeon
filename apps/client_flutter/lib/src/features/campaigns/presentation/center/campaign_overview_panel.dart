@@ -316,14 +316,18 @@ class _CampaignMemberList extends StatelessWidget {
   }
 
   Widget _memberTile(CampaignMemberPreview member) {
-    final character = characters
-        .where(
-          (candidate) =>
-              candidate.ownerUserId == member.userId &&
-              candidate.characterType == 'player' &&
-              candidate.status != 'archived',
-        )
-        .firstOrNull;
+    // 成员栏展示的是“绑定关系”：成员通过 boundCharacterId 绑定战役角色。
+    // 不能用 ownerUserId 匹配——发布者不一定是绑定者（如 DM 代发或历史
+    // 数据中发布者与绑定者不一致），否则会把角色错误挂到他人名下。
+    final character = member.boundCharacterId == null
+        ? null
+        : characters
+            .where(
+              (candidate) =>
+                  candidate.id == member.boundCharacterId &&
+                  candidate.status != 'archived',
+            )
+            .firstOrNull;
     final characterName = character?.sheet['name']?.toString().trim();
     return ListTile(
       leading: CampaignAvatar(

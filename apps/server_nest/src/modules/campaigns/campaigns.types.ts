@@ -16,6 +16,7 @@ export interface CampaignMemberPreview {
   userId: string;
   displayName: string;
   role: string;
+  boundCharacterId: string | null;
 }
 
 export interface CampaignChatMessageView {

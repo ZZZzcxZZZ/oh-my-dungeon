@@ -82,6 +82,11 @@ flutter:
     - family: NotoSansSC
       fonts:
         - asset: assets/fonts/NotoSansSC-Variable.ttf
+    # Flutter web 引擎默认尝试从 Google Fonts 拉取 Material 默认字体族
+    # Roboto；将其映射到本地字体可避免任何外部请求。
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/NotoSansSC-Variable.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

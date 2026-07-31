@@ -6,6 +6,9 @@ COPY apps/server_nest/package.json apps/server_nest/package-lock.json ./
 RUN npm ci --ignore-scripts
 
 COPY apps/server_nest ./
+# 离线引擎: 不依赖 binaries.prisma.sh 下载, 构建期直接使用仓库内引擎.
+ENV PRISMA_SCHEMA_ENGINE_BINARY=/app/apps/server_nest/engines/schema-engine-linux-musl-openssl-3.0.x
+ENV PRISMA_QUERY_ENGINE_LIBRARY=/app/apps/server_nest/engines/libquery_engine-linux-musl-openssl-3.0.x.so.node
 RUN npx prisma generate && npm run build
 
 FROM node:22-alpine AS runtime
@@ -24,6 +27,10 @@ COPY --from=build /app/apps/server_nest/prisma.config.ts ./
 COPY --from=build /app/apps/server_nest/dist ./dist
 # 复制 build 阶段生成的客户端，避免 runtime 安装阶段运行生成器。
 COPY --from=build /app/apps/server_nest/node_modules/.prisma ./node_modules/.prisma
+# 离线引擎: runtime migrate/seed 不再联网下载.
+COPY --from=build /app/apps/server_nest/engines ./engines
+ENV PRISMA_SCHEMA_ENGINE_BINARY=/app/apps/server_nest/engines/schema-engine-linux-musl-openssl-3.0.x
+ENV PRISMA_QUERY_ENGINE_LIBRARY=/app/apps/server_nest/engines/libquery_engine-linux-musl-openssl-3.0.x.so.node
 
 # node:22-alpine 自带非 root 用户 `node`, 切换以避免容器以 root 运行.
 RUN mkdir -p /app/uploads && chown -R node:node /app

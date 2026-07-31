@@ -36,6 +36,7 @@ private-imports/
 *.content.private.json
 phb-2024-content-bundle.json
 apps/client_flutter/assets/private/
+apps/server_nest/engines/
 
 # Local brainstorming prototypes.
 .superpowers/

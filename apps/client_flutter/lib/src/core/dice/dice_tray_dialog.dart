@@ -52,15 +52,10 @@ class DiceTrayDialog extends StatefulWidget {
 class _DiceTrayDialogState extends State<DiceTrayDialog> {
   late final List<_DiceGroup> _groups = [_DiceGroup.defaults()];
   _RollMode _rollMode = _RollMode.normal;
-  final TextEditingController _dcController = TextEditingController();
+  /// 可选 DC 检定目标; null 表示不检定.
+  int? _dcValue;
   String? _selectedCharacterId;
   String? _errorMessage;
-
-  @override
-  void dispose() {
-    _dcController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -193,20 +188,14 @@ class _DiceTrayDialogState extends State<DiceTrayDialog> {
 
   Widget _buildDcRow(ThemeData theme, ColorScheme colorScheme) {
     return Center(
-      child: SizedBox(
+      child: NumericInputField(
+        fieldKey: DiceTrayDialog.dcKey,
+        value: _dcValue ?? 0,
+        label: 'DC',
+        allowEmpty: true,
         width: 96,
-        child: TextField(
-          key: DiceTrayDialog.dcKey,
-          controller: _dcController,
-          keyboardType: TextInputType.number,
-          textAlign: TextAlign.center,
-          decoration: const InputDecoration(
-            labelText: 'DC',
-            hintText: '可选',
-            isDense: true,
-            border: OutlineInputBorder(),
-          ),
-        ),
+        onChanged: (value) => setState(() => _dcValue = value),
+        onCleared: () => setState(() => _dcValue = null),
       ),
     );
   }
@@ -358,8 +347,7 @@ class _DiceTrayDialogState extends State<DiceTrayDialog> {
     final notation = _buildNotation();
     try {
       final roll = widget.diceRoller.rollExpression(notation);
-      final dcText = _dcController.text.trim();
-      final dc = int.tryParse(dcText);
+      final dc = _dcValue;
       final success = dc == null ? null : roll.total >= dc;
       widget.onSend(
         DiceTrayResult(

@@ -1,248 +1,54 @@
 # Agent 执行指南
 
-## 1. 阅读顺序
-
-任何开发 agent 在开始实现前必须按顺序阅读：
+## 必读顺序
 
 1. `README.md`
 2. `AGENTS.md`
-3. `docs/architecture/system-architecture.md`
-4. `docs/architecture/domain-model.md`
-5. `docs/architecture/api-realtime-boundary.md`
-6. `docs/architecture/offline-data-and-sync.md`
-7. `docs/engineering/engineering-standards.md`
-8. `docs/roadmap/current-execution-status.md`
-9. `docs/roadmap/2026-07-23-integrated-product-hardening-roadmap.md`
-10. `docs/content/content-package-format-v2.md`
+3. `docs/README.md`
+4. `docs/roadmap/current-execution-status.md`
+5. `docs/superpowers/specs/2026-07-29-private-workspaces-and-campaign-convergence-design.md`
+6. 与任务直接相关的 `docs/architecture/`、`docs/content/` 或 `docs/deployment/` 文档
 
-如果任务涉及部署，还必须阅读：
+`docs/archive/` 只用于追溯，不能作为当前待办或现行接口依据。
 
-11. `docs/deployment/self-hosting.md`
+## 当前硬约束
 
-历史 `v0.2`/`v0.4`–`v2.17` execution-plan 文档已归档为内部迭代记录，不再作为开发依据，无需逐份阅读。`docs/content/private-phb-import-policy.md` 与 `docs/content/phb-2024-private-import-notes.md` 已在 2026-07-14 归档时删除，对应规则现收录于 `project_memory.md` 的「Private test build exception」与「Commercial rulebook content」条款。
+- 对外版本统一为 `0.1`。
+- 领域统一称 Character，不新增 Actor 产品接口。
+- 战役是长期聊天和协作工作区，不恢复 Room/Session 前置流程。
+- 客户端离线优先；只有战役协作和可选 Vault 同步需要服务器。
+- UI 与未来 Agent 必须调用相同业务接口，不能直接修改数据库。
+- 当前不实现战斗系统、AI Agent 运行时或通用 TRPG 引擎。
+- 商业规则正文不得提交到公开仓库或公开构建。
+- `private-imports/` 只供本地私人验证。
 
-## 2. 当前阶段
+## 实施方式
 
-当前项目统一回到 `0.1` 开发线，尚未达到用户认可的可用 MVP。此前 `v0.2`、`v0.8`、`v1.0`、`v2.x` 均视为内部迭代日志，不代表对外版本或完成状态。后续开发必须围绕 `docs/roadmap/v0.1-unified-mvp-plan.md` 推进。
+1. 先阅读现有代码和测试，确认所有权边界。
+2. 为行为变化先增加失败测试。
+3. 通过业务服务修改状态，并记录结构化事件。
+4. 复用 Material 3 主题和共享组件。
+5. 不暴露没有完整实现的入口。
+6. 只删除经 `rg` 和静态分析确认没有消费者的代码。
+7. 不覆盖工作树中来源不明的用户或其他 Agent 改动。
 
-当前首要方向是：战役像 QQ 群聊一样成为主入口；用户点击战役即可聊天、说话、做动作、掷骰和打开更多跑团工具；角色卡、DM 控场、检定请求和资料库都应从战役聊天室上下文进入。`Session` / `DiceRoll` / `ChatMessage` / `JournalEntry` 等既有模型可以复用，但不能继续把“先新建场次、再开始”作为默认体验。`/api/rooms` 与客户端 rooms 页面仍是冻结资产，不再扩展。
+## 验证
 
-## 3. 实施原则
+常规改动至少运行相关测试和静态分析。阶段收口运行：
 
-### 3.1 小步提交
-
-每个任务应产生一个清晰、可验证的变化。推荐提交粒度：
-
-- 初始化服务端。
-- 初始化客户端。
-- 添加 Docker Compose。
-- 添加 Prisma。
-- 添加 health endpoint。
-- 添加服务器配置页面。
-- 添加 CI。
-
-### 3.2 先测试核心逻辑
-
-以下逻辑需要优先有测试：
-
-- 服务器元信息解析。
-- 客户端服务器配置存储。
-- 权限 policy。
-- 骰子表达式解析。
-- 内容包 schema 校验。
-- 角色计算。
-
-### 3.3 不提前实现非 MVP 功能
-
-不要在当前 `0.1` MVP 中实现：
-
-- 地图战棋。
-- AI。
-- 插件市场。
-- 完整规则自动化。
-- 语音视频。
-- 复杂模组编辑器。
-
-这些模块只保留目录和边界，不写未使用的大量抽象。
-
-## 4. v0.1 实施任务建议
-
-### 任务 1：创建 monorepo 根结构
-
-创建：
-
-```text
-apps/
-  client_flutter/
-  server_nest/
-packages/
-  api_contracts/
-  dnd_rules/
-docs/
-infra/
-scripts/
+```powershell
+npm run check
+npm --prefix apps/server_nest run build
+$env:DATABASE_URL='postgresql://dnd:dnd@localhost:5432/dnd_table?schema=public'
+Push-Location apps/server_nest
+npx prisma validate
+Pop-Location
+git diff --check
 ```
 
-根目录添加：
+私人内容只使用专用脚本验证和构建：
 
-```text
-README.md
-.gitignore
-.editorconfig
+```powershell
+npm run validate:phb-private
+pwsh -File scripts/build_private_client.ps1 -Target web -BuildArgs --release
 ```
-
-### 任务 2：初始化 NestJS 服务端
-
-在 `apps/server_nest` 初始化 NestJS。
-
-服务端第一批模块：
-
-```text
-health
-server-info
-config
-```
-
-必须提供：
-
-```text
-GET /health
-GET /.well-known/dnd-tool-server
-```
-
-### 任务 3：初始化 PostgreSQL 与 Prisma
-
-添加：
-
-```text
-prisma/schema.prisma
-DATABASE_URL
-PrismaService
-```
-
-v0.1 不需要完整领域模型迁移，但需要能连接 PostgreSQL 并通过服务端健康检查确认数据库可用。
-
-### 任务 4：添加 Docker Compose
-
-添加：
-
-```text
-docker-compose.yml
-docker-compose.dev.yml
-.env.example
-```
-
-容器：
-
-```text
-server
-postgres
-```
-
-### 任务 5：初始化 Flutter 客户端
-
-在 `apps/client_flutter` 初始化 Flutter App。
-
-必须包含：
-
-```text
-MaterialApp.router
-ThemeData(useMaterial3: true)
-server_profiles feature
-settings feature
-```
-
-### 任务 6：客户端添加服务器
-
-实现：
-
-```text
-服务器列表页
-添加服务器表单
-测试连接
-读取 /.well-known/dnd-tool-server
-保存 server profile
-切换当前服务器
-```
-
-本地保存字段：
-
-```text
-id
-name
-baseUrl
-apiBaseUrl
-websocketUrl
-lastCheckedAt
-lastKnownVersion
-```
-
-### 任务 7：CI
-
-添加 GitHub Actions：
-
-```text
-server lint
-server test
-flutter analyze
-flutter test
-docker build
-```
-
-## 5. v0.2 实施任务建议
-
-v0.2 开始实现账号、服务器隔离和模式切换。
-
-任务：
-
-1. Auth 数据模型。
-2. 注册登录 API。
-3. JWT。
-4. 首次注册用户成为 ServerAdmin。
-5. 客户端按 serverProfile 保存 token。
-6. Player/DM 模式切换。
-7. 服务器注册开关。
-
-## 6. v0.3 实施任务建议
-
-v0.3 实现战役与成员。
-
-任务：
-
-1. Campaign 模型。
-2. CampaignMember 模型。
-3. CampaignInvite 模型。
-4. DM 创建战役。
-5. 玩家邀请码加入。
-6. Player 战役列表。
-7. DM 战役列表。
-8. 权限 policy 测试。
-
-## 7. 约束清单
-
-开发 agent 必须遵守：
-
-- 客户端不绑定中心服务器。
-- 账号和 token 按服务器隔离。
-- Player Mode 和 DM Mode 是客户端工作台，不是权限来源。
-- 服务端权限以 CampaignMember 和 ServerAdmin 为准。
-- 关键业务事件必须写 JournalEntry。
-- WebSocket 不能作为唯一持久化来源，只广播 cursor + entityType，完整实体通过 HTTP changes 拉取。
-- Material 3 官方组件优先。
-- 不在 MVP 中实现地图战棋。
-- **离线优先**：未配置服务器、未登录或断网时，资料库、角色、收藏、笔记、设置、规则计算和本地备份必须完整可用；服务器是可选同步设施，不作为本地功能门禁。
-- **正文永不上传**：本地资料包正文与 assets 永远不进入 Vault payload，也不进入战役同步。Vault 只同步个人实体和资料包 manifest（`id/version/locale/system/contentHash`），战役只同步 DM 创建的独立 JSON 条目。
-- **不信任客户端身份**：聊天身份必须绑定 `CampaignActor`，服务端以 `campaignActorId` 为准，不接受客户端 displayName 作为权威。
-- **不内置版权正文**：公开仓库、默认数据库 seed、客户端安装包不含 SRD/PHB 或任何官方规则正文；商业内容只能由用户本地导入 `.dndpack` / JSON。
-- **旧 ContentModule 已下线**：`apps/server_nest/src/modules/content/` 不再存在；旧全局/用户/战役内容包 API 返回 404；战役作用域内容统一通过 `CampaignContentEntry` 同步。
-- **本地备份不触碰同步状态**：`.dndtable-backup` 只含个人数据表 + assets，不含 token、Vault Outbox / Cursor / Devices / Conflicts 和战役缓存。
-
-## 8. 完成定义
-
-每个版本完成时必须满足：
-
-1. 对应路线图的验收标准。
-2. 相关测试通过。
-3. 文档更新。
-4. Docker Compose 路径可用。
-5. Flutter 至少能在一个目标平台运行。

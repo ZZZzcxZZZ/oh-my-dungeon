@@ -240,6 +240,168 @@ subclassOf, featureOf, spellOf, requires, replaces, related
 
 对应 choice 的 `optionType` 使用 `equipmentBundle`，`builderStep` 使用 `equipment`。方案本身不会进入库存，最终授予的 `equipment` 或 `item` 条目会进入角色库存和引用账本。
 
+## Character 模板与 Character Markdown
+
+怪物资料使用 `type: "monster"`，可执行预填数据只放在
+`structured.characterTemplate`。正文 `body` 用于资料库阅读，不作为角色数值来源：
+
+```json
+{
+  "id": "my-pack:monster/zombie",
+  "type": "monster",
+  "slug": "zombie",
+  "name": "丧尸",
+  "body": [],
+  "revision": 1,
+  "structured": {
+    "challengeRating": "1/4",
+    "type": "undead",
+    "size": "medium",
+    "alignment": "neutral-evil",
+    "classification": {
+      "creatureType": "undead",
+      "subtypes": [],
+      "tags": ["亡灵"]
+    },
+    "characterTemplate": {
+      "kind": "monster",
+      "templateRef": "my-pack:monster/zombie",
+      "size": "medium",
+      "creatureType": "undead",
+      "alignment": "neutral-evil",
+      "armorClass": 8,
+      "initiativeBonus": -2,
+      "hitPoints": {"maximum": 15, "formula": "2d8+6"},
+      "speed": {"walk": 20},
+      "abilities": {
+        "str": 13, "dex": 6, "con": 16,
+        "int": 3, "wis": 6, "cha": 5
+      },
+      "challengeRating": "1/4",
+      "proficiencyBonus": 2,
+      "actions": {
+        "normal": [
+          {
+            "id": "slam",
+            "name": "猛击",
+            "description": "近战武器攻击说明。",
+            "attack": {"bonus": 3},
+            "damage": {"expression": "1d6+1", "type": "bludgeoning"}
+          }
+        ],
+        "bonus": [],
+        "reactions": [],
+        "legendary": [],
+        "lair": []
+      },
+      "sections": {
+        "特质": "### 不死坚韧\n\n说明。",
+        "动作": "### 猛击\n\n近战攻击说明。"
+      }
+    }
+  }
+}
+```
+
+客户端从模板创建的是普通、可编辑的角色实例。模板只负责初始值；
+`templateRef` 和 revision 用于追溯来源，后续模板更新不得覆盖用户编辑。
+实例可以进入角色库、完整角色卡、Markdown 导入导出、战役发布和聊天身份。
+
+统一交换格式为 `dnd-table-character/v2`：
+
+```markdown
+---
+format: dnd-table-character/v2
+kind: monster
+name: 丧尸
+system: dnd5e-2024
+templateRef: my-pack:monster/zombie
+revision: 1
+contentHash: sha256:...
+generatedAt: 2026-07-29T12:00:00Z
+size: medium
+creatureType: undead
+alignment: neutral-evil
+armorClass: 8
+hitPoints:
+  current: 15
+  maximum: 15
+  formula: 2d8+6
+speed:
+  walk: 20
+abilities:
+  str: 13
+  dex: 6
+  con: 16
+  int: 3
+  wis: 6
+  cha: 5
+initiativeBonus: -2
+challengeRating: 1/4
+proficiencyBonus: 2
+---
+
+# 丧尸
+
+中型亡灵，中立邪恶
+
+## 特质
+
+### 不死坚韧
+
+说明。
+
+## 动作
+
+### 猛击
+
+近战攻击说明。
+```
+
+YAML 是机器状态，Markdown 正文是人类可读描述。导入器接受缺少通用角色表格
+的怪物图鉴式文件，也接受完整角色卡导出；未知 `##` 区块必须保留。旧
+`dnd-table-character/v1` 只作为兼容输入。
+
+## 物品模板与物品实例
+
+资料条目描述物品本身，角色库存保存具体实例：
+
+```json
+{
+  "id": "my-pack:item/ring-of-protection",
+  "type": "item",
+  "structured": {
+    "category": "ring",
+    "rarity": "rare",
+    "attunement": true,
+    "itemTemplate": {
+      "kind": "item",
+      "templateRef": "my-pack:item/ring-of-protection",
+      "quantity": 1,
+      "equipped": false,
+      "attuned": false
+    }
+  }
+}
+```
+
+库存实例统一保存：
+
+```json
+{
+  "id": "instance-stable-id",
+  "templateRef": "my-pack:item/ring-of-protection",
+  "name": "守护戒指",
+  "quantity": 1,
+  "equipped": true,
+  "attuned": true,
+  "instanceData": {}
+}
+```
+
+`templateRef` 可为空以支持自定义物品。战役服务端兼容读取旧 `itemId`，新写入
+会归一化为上述实例字段；UI 和未来 Agent 都不得直接修改库存 JSON。
+
 ## 职业示例
 
 ```json

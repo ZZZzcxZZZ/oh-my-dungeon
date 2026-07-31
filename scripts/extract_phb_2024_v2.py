@@ -76,6 +76,7 @@ ALL_ENTRIES: list[dict[str, Any]] = []
 UNRESOLVED_LINKS: list[dict[str, Any]] = []
 MANUAL_REVIEW: list[dict[str, Any]] = []
 SLUG_SEEN: dict[str, int] = {}  # slug 去重计数
+CLASS_ENTRY_SLUGS: dict[str, str] = {}
 
 
 # --------------------------------------------------------------------------- #
@@ -387,6 +388,114 @@ def parse_class_core_table(soup: BeautifulSoup) -> dict[str, Any]:
     return structured
 
 
+SPELL_LEVEL_LABELS = {
+    "戏法": 0,
+    "一环": 1,
+    "二环": 2,
+    "三环": 3,
+    "四环": 4,
+    "五环": 5,
+    "六环": 6,
+    "七环": 7,
+    "八环": 8,
+    "九环": 9,
+}
+
+
+def parse_spell_selection_table(
+    soup: BeautifulSoup,
+    *,
+    class_slug: str,
+    ability: str,
+) -> dict[str, Any] | None:
+    """Extract the selectable spell limits declared by a class table."""
+    for table in soup.find_all("table"):
+        rows = parse_table_rows(table)
+        if not rows:
+            continue
+        header = rows[0]
+        if not any("等级" in cell for cell in header):
+            continue
+        maximum_column = next(
+            (
+                index
+                for index, cell in enumerate(header)
+                if "准备法术" in cell or "已知法术" in cell
+            ),
+            None,
+        )
+        if maximum_column is None:
+            continue
+        cantrip_column = next(
+            (index for index, cell in enumerate(header) if "戏法" in cell),
+            None,
+        )
+        explicit_level_column = next(
+            (
+                index
+                for index, cell in enumerate(header)
+                if "法术位环阶" in cell
+            ),
+            None,
+        )
+        slot_labels: list[int] = []
+        if len(rows) > 1 and not rows[1][0].isdigit():
+            slot_labels = [
+                SPELL_LEVEL_LABELS[cell]
+                for cell in rows[1]
+                if cell in SPELL_LEVEL_LABELS and cell != "戏法"
+            ]
+
+        progression: list[dict[str, Any]] = []
+        for row in rows[1:]:
+            if not row or not row[0].isdigit():
+                continue
+            maximum = _parse_table_int(row, maximum_column)
+            if maximum is None:
+                continue
+            maximum_spell_level = None
+            if explicit_level_column is not None:
+                maximum_spell_level = SPELL_LEVEL_LABELS.get(
+                    row[explicit_level_column]
+                    if explicit_level_column < len(row)
+                    else ""
+                )
+            elif slot_labels:
+                for offset, spell_level in enumerate(slot_labels):
+                    slot_value = _parse_table_int(row, maximum_column + 1 + offset)
+                    if slot_value:
+                        maximum_spell_level = spell_level
+            if maximum_spell_level is None:
+                maximum_spell_level = 0
+
+            progression.append({
+                "level": int(row[0]),
+                "maximumSpellLevel": maximum_spell_level,
+                "maximumCantrips": _parse_table_int(row, cantrip_column),
+                "maximumLeveledSpells": maximum,
+            })
+
+        if progression:
+            return {
+                "mode": (
+                    "prepared"
+                    if "准备法术" in header[maximum_column]
+                    else "known"
+                ),
+                "ability": ability,
+                "listTags": [f"spell-list:{class_slug}"],
+                "progression": progression,
+            }
+    return None
+
+
+def _parse_table_int(row: list[str], index: int | None) -> int | None:
+    if index is None or index >= len(row):
+        return None
+    value = row[index].strip()
+    return int(value) if value.isdigit() else None
+
+
 # --------------------------------------------------------------------------- #
 # 职业特性表 → progression（1-20 级）
 # --------------------------------------------------------------------------- #
@@ -493,7 +602,18 @@ def extract_class(cls_name: str) -> tuple[dict[str, Any] | None,
         return None, [], []
 
     slug = slugify(name, en_name)
+    CLASS_ENTRY_SLUGS[cls_name] = slug
     structured = parse_class_core_table(soup)
+    casting_ability = CASTING_CLASSES.get(cls_name)
+    if casting_ability:
+        structured["spellcastingAbility"] = casting_ability
+        spellcasting = parse_spell_selection_table(
+            soup,
+            class_slug=slug,
+            ability=casting_ability,
+        )
+        if spellcasting:
+            structured["spellcasting"] = spellcasting
 
     # 提取职业特性段落 "N级：特性名 EnglishName"
     feature_paragraphs: list[tuple[int, str, str, str]] = []  # (level, cn_name, en_name, desc)
@@ -566,9 +686,7 @@ def extract_class(cls_name: str) -> tuple[dict[str, Any] | None,
     # 施法属性和法术位
     rules: dict[str, Any] = {}
     casting_ability = structured.get("spellcastingAbility")
-    if cls_name == "魔契师" or (
-        casting_ability and CASTING_CLASSES.get(cls_name) == casting_ability
-    ):
+    if casting_ability:
         rules_data = _build_spell_slot_progression(cls_name, slug, progression)
         if rules_data:
             rules.update(rules_data)
@@ -1004,15 +1122,25 @@ def _process_spell(h4: Tag, p: Tag, level: int, schools_pat: str,
     if stat_fields:
         body.insert(0, {"type": "statBlock", "fields": stat_fields})
 
+    tags = [structured["school"].lower()] if structured.get("school") else []
+    tags.extend(_spell_list_tags(structured.get("classes", [])))
     entry = make_entry(
         "spell", slug, name, body,
         structured=structured,
-        tags=[structured["school"].lower()] if structured.get("school") else [],
+        tags=tags,
         aliases=[en_name] if en_name else [],
         summary=f"{structured.get('levelLabel', '')} {structured.get('school', '')} · {name}",
         source_path=str(source_path),
     )
     items.append(entry)
+
+
+def _spell_list_tags(class_names: list[str]) -> list[str]:
+    return sorted({
+        f"spell-list:{CLASS_ENTRY_SLUGS[name]}"
+        for name in class_names
+        if name in CLASS_ENTRY_SLUGS
+    })
 
 
 # --------------------------------------------------------------------------- #
@@ -1201,6 +1329,9 @@ def extract_backgrounds() -> list[dict[str, Any]]:
         m = re.search(r"工具熟练[：:]\s*([^\n]*?)(?=\s*装备|$)", text)
         if m:
             structured["toolProficiency"] = m.group(1).strip()
+        m = re.search(r"装备[：:]\s*(.+?)(?=\s*(?:你在|你曾|作为|$))", text)
+        if m:
+            structured["startingEquipment"] = m.group(1).strip()
 
         desc = ""
         for p in soup.find_all("p"):
@@ -1215,7 +1346,12 @@ def extract_backgrounds() -> list[dict[str, Any]]:
         # 收集所有段落
         for p in soup.find_all("p"):
             ptext = clean_text(p.get_text())
-            if ptext:
+            if ptext and not (
+                "属性值" in ptext
+                and "专长" in ptext
+                and "技能熟练" in ptext
+                and "装备" in ptext
+            ):
                 body.append({"type": "paragraph", "text": ptext})
         for ul in soup.find_all("ul"):
             items_list = [clean_text(li.get_text()) for li in ul.find_all("li", recursive=False)]
@@ -1229,6 +1365,7 @@ def extract_backgrounds() -> list[dict[str, Any]]:
             ("专长", structured.get("recommendedFeat", "")),
             ("技能熟练", structured.get("skills", "")),
             ("工具熟练", structured.get("toolProficiency", "")),
+            ("装备", structured.get("startingEquipment", "")),
         ]:
             if v:
                 stat_fields[k] = str(v)

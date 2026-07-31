@@ -8,13 +8,12 @@
 dnd-table-tool/
   apps/client_flutter/   Flutter 多端客户端
   apps/server_nest/      NestJS + Prisma 服务端
-  packages/              预留共享契约与规则边界
   docs/                  产品、架构、计划与部署文档
   infra/                 Docker Compose 与部署配置
   scripts/               验证、私有测试构建和分发脚本
 ```
 
-客户端本地功能不依赖服务器。服务器负责账号、战役聊天室、战役 Actor/资料/档案/遭遇协作，以及用户主动启用的 Personal Vault。
+客户端本地功能不依赖服务器。服务器负责账号、战役聊天室、战役 Character/资料/档案/遭遇协作，以及用户主动启用的 Personal Vault。
 
 ## 2. 技术栈现状
 
@@ -56,12 +55,12 @@ lib/src/
 
 - `characters`：个人本地角色和规则投影。
 - `content`：本地资料包、Wiki、收藏、笔记和导入；正文只在客户端。
-- `campaigns`：联网工作区、聊天、Actor、战役资料和 cursor 缓存。
+- `campaigns`：联网工作区、聊天、Character、战役资料和 cursor 缓存。
 - `encounters`：战役内 DM 控场。
 - `vault`：可选个人跨设备同步，不得同步资料正文。
 - `client_mode`：本机界面偏好，不是权限来源。
 
-本地角色、资料和设置以 Drift 为事实源。战役 Actor 是服务器角色快照，本地通过 backlink 和 revision 做双向同步，冲突必须显式解决。
+本地角色、资料和设置以 Drift 为事实源。战役 Character 是服务器角色快照，本地通过 backlink 和 revision 做双向同步，冲突必须显式解决。
 
 ## 4. NestJS 模块
 
@@ -69,7 +68,7 @@ lib/src/
 
 - `auth`、`server-settings`、`server-info`、`health`
 - `campaigns`：战役、成员、邀请、聊天、日志和档案
-- `campaign-sync`：Actor、战役资料和增量 change cursor
+- `campaign-sync`：Character、战役资料和增量 change cursor
 - `encounters`：NPC、遭遇和参与者
 - `realtime`：campaign room、消息和变更通知
 - `vault`：个人实体跨设备同步
@@ -107,7 +106,7 @@ WebSocket 不是持久层。客户端必须能用 REST 和本地 cursor 在重�
 
 1. 权限以服务端 policy 和 membership 为准。
 2. 关键跨表写入使用事务，广播发生在提交之后。
-3. Actor 更新必须推进 revision；本地角色更新必须推进本地 revision。
+3. Character 更新必须推进 revision；本地角色更新必须推进本地 revision。
 4. 资料条目稳定 ID 和结构化 rules 是角色创建、升级、角色卡和聊天动作的共同输入。
 5. Material 3 组件优先；页面状态、空态、错误态和窄屏布局必须有测试。
 6. 不新增第二套 Session、角色详情、资料详情或检定模型；先复用现有统一入口。

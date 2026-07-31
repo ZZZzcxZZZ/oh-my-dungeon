@@ -73,7 +73,7 @@ MAX_UPLOAD_SIZE_MB=20
 
 ## 5. 一键部署流程
 
-v1.0 推荐流程：
+推荐流程：
 
 ```bash
 git clone https://github.com/<your-org>/dnd-table-tool.git

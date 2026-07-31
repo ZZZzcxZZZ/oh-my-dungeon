@@ -5,9 +5,9 @@
 0.1 明确区分个人离线数据和战役协作数据：
 
 - 个人域以客户端 Drift 为事实源：角色、资料包、收藏、笔记、偏好和备份。
-- 战役域以服务端 PostgreSQL 为事实源：成员、Actor、聊天、战役资料、档案、日志和遭遇。
+- 战役域以服务端 PostgreSQL 为事实源：成员、Character、聊天、战役资料、档案、日志和遭遇。
 
-本地 `CharacterSheet` 不是服务端 `CampaignActor`。玩家发布角色后形成战役快照，并用 `sourceCharacterId` 和 backlink 建立可冲突的双向同步。
+本地 `CharacterSheet` 不是服务端 `CampaignCharacter`。玩家发布角色后形成战役快照，并用 `sourceCharacterId` 和 backlink 建立可冲突的双向同步。
 
 ## 2. 用户与服务器
 
@@ -31,7 +31,7 @@ id, name, description, system, ownerId, status, createdAt, updatedAt
 
 ```text
 campaignId, userId, role
-boundActorId, activeSpeakerActorId, speakerMode
+boundCharacterId, activeSpeakerCharacterId, speakerMode
 displayName, lastReadAt
 ```
 
@@ -43,19 +43,19 @@ displayName, lastReadAt
 campaignId, code, roleOnJoin, expiresAt, maxUses, usedCount, createdBy
 ```
 
-## 4. 角色与 Actor
+## 4. 角色与 Character
 
 ### 本地 CharacterSheet
 
 完整 JSON 保存于 Drift `Characters.sheetJson`，并有单调递增的本地 `revision`。资料引用另存稳定 entryKey、sourceRevision 和 snapshot，资料包缺失时角色仍可使用。
 
-### CampaignActor
+### CampaignCharacter
 
 ```text
 campaignId
 ownerUserId
 sourceCharacterId
-actorType: player / npc / monster / companion
+characterType: player / npc / monster / companion
 lifecycle: persistent / temporary
 status: active / archived
 sheetJson
@@ -63,12 +63,12 @@ revision
 updatedBy
 ```
 
-- 玩家只能发布并编辑自己的 player Actor。
-- owner/DM 可创建 NPC 等 Actor，并编辑任意 Actor。
-- 消息身份、头像、生命值和角色详情均从 CampaignActor 快照读取。
-- `CampaignActorAudit` 保存 baseRevision、resultRevision、变更路径和前后快照。
+- 玩家只能发布并编辑自己的 player Character。
+- owner/DM 可创建 NPC 等 Character，并编辑任意 Character。
+- 消息身份、头像、生命值和角色详情均从 CampaignCharacter 快照读取。
+- `CampaignCharacterAudit` 保存 baseRevision、resultRevision、变更路径和前后快照。
 
-客户端 `CampaignActorBacklink` 记录最近发布的本地 revision 和最近应用的 Actor revision。双方都偏离基线时生成 `CharacterSyncConflict`，不能静默覆盖。
+客户端 `CampaignCharacterBacklink` 记录最近发布的本地 revision 和最近应用的 Character revision。双方都偏离基线时生成 `CharacterSyncConflict`，不能静默覆盖。
 
 ## 5. 资料
 
@@ -92,13 +92,13 @@ DM 明确发布到战役的独立 JSON 条目。它通过 `CampaignChange` curso
 ### CampaignChatMessage
 
 ```text
-campaignId, senderId, campaignActorId
+campaignId, senderId, campaignCharacterId
 displayName, avatarUrl, speakerMode, delegatedByUserId
 kind: say / action / ooc / roll / system / checkRequest / archivePublished
 content, eventData, actionSnapshot, publicHealthState, createdAt
 ```
 
-显示身份由服务端根据 membership 和 Actor 派生，不信任客户端 displayName。检定请求和响应通过 `eventData.requestId/targetActorId` 关联。
+显示身份由服务端根据 membership 和 Character 派生，不信任客户端 displayName。检定请求和响应通过 `eventData.requestId/targetCharacterId` 关联。
 
 ### JournalEntry
 
@@ -114,7 +114,7 @@ content, eventData, actionSnapshot, publicHealthState, createdAt
 
 ## 8. 增量同步
 
-`CampaignChange` 是 Actor 和战役资料的单调 cursor 日志，WebSocket 只广播 `{campaignId, entityType, cursor}`。客户端按 cursor 拉取完整实体并写入 Drift campaign cache。
+`CampaignChange` 是 Character 和战役资料的单调 cursor 日志，WebSocket 只广播 `{campaignId, entityType, cursor}`。客户端按 cursor 拉取完整实体并写入 Drift campaign cache。
 
 ## 9. 遗留模型
 

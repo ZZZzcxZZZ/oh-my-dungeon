@@ -80,6 +80,31 @@ class Phb2024V2ToolsTest(unittest.TestCase):
         self.assertEqual(pact_slot["data"]["spellLevel"], 3)
         self.assertEqual(pact_slot["data"]["recovery"], "shortRest")
 
+    def test_real_wizard_entry_declares_spell_selection_progression(self) -> None:
+        extractor.SLUG_SEEN.clear()
+        extractor.CLASS_ENTRY_SLUGS.clear()
+
+        class_entry, _, _ = extractor.extract_class("法师")
+
+        spellcasting = class_entry["structured"]["spellcasting"]
+        self.assertEqual(spellcasting["ability"], "int")
+        self.assertEqual(spellcasting["listTags"], ["spell-list:wizard"])
+        level_one = next(
+            row for row in spellcasting["progression"] if row["level"] == 1
+        )
+        self.assertEqual(level_one["maximumSpellLevel"], 1)
+        self.assertEqual(level_one["maximumCantrips"], 3)
+        self.assertEqual(level_one["maximumLeveledSpells"], 4)
+
+    def test_spell_list_tags_use_extracted_class_slugs(self) -> None:
+        extractor.CLASS_ENTRY_SLUGS.clear()
+        extractor.CLASS_ENTRY_SLUGS.update({"法师": "wizard", "牧师": "cleric"})
+
+        self.assertEqual(
+            extractor._spell_list_tags(["牧师", "法师", "不存在"]),
+            ["spell-list:cleric", "spell-list:wizard"],
+        )
+
     def test_sorcerer_subclass_titles_are_not_extracted_from_whole_page_text(self) -> None:
         extractor.SLUG_SEEN.clear()
         _, _, subclasses = extractor.extract_class("术士")

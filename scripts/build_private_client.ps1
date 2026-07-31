@@ -1,14 +1,14 @@
 ﻿<#
 .SYNOPSIS
-  私人测试构建：把 private-imports/phb-2024-v2/ 注入到客户端 assets 后构建。
+  私人测试构建：把 PHB、怪物图鉴和城主指南物品包注入客户端后构建。
 
 .DESCRIPTION
   正式构建硬约束（AGENTS.md）：commercial rulebook 不得 commit/seed/进 build artifact。
   本脚本仅供本地私人测试使用，构建产物不得向第三方分发。
 
   流程：
-    1. 检查 private-imports/phb-2024-v2/{manifest.json, entries/*.json} 存在
-    2. 合并为单文件 bundle（manifest + entries 数组）
+    1. 检查三个 private-imports 资料包存在
+    2. 生成多包聚合文件（packages 数组）
     3. 备份 apps/client_flutter/assets/bundled_content.json
     4. 用 bundle 覆盖 bundled_content.json
     5. 执行 flutter build <target>
@@ -31,7 +31,9 @@
 .NOTES
   提取资料包请先运行：
     python scripts/extract_phb_2024_v2.py
-  输出位于 private-imports/phb-2024-v2/（被 .gitignore 排除）。
+    python scripts/extract_monster_manual_private.py
+    python scripts/extract_dmg_2024_items.py
+  输出位于 private-imports/（被 .gitignore 排除）。
 #>
 
 [CmdletBinding()]
@@ -45,10 +47,22 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Resolve-Path "$PSScriptRoot/.."
-$privateImportDir = Join-Path (Join-Path $repoRoot 'private-imports') 'phb-2024-v2'
-$manifestPath = Join-Path $privateImportDir 'manifest.json'
-$entriesDir = Join-Path $privateImportDir 'entries'
-$privateBundlePath = Join-Path (Join-Path $repoRoot 'private-imports') 'phb-2024-v2-bundle.json'
+$privateRoot = Join-Path $repoRoot 'private-imports'
+$privatePackages = @(
+    @{
+        Directory = Join-Path $privateRoot 'phb-2024-v2'
+        Bundle = Join-Path $privateRoot 'phb-2024-v2-bundle.json'
+    },
+    @{
+        Directory = Join-Path $privateRoot 'mm-2024-v1'
+        Bundle = Join-Path $privateRoot 'mm-2024-v1-bundle.json'
+    },
+    @{
+        Directory = Join-Path $privateRoot 'dmg-2024-items-v1'
+        Bundle = Join-Path $privateRoot 'dmg-2024-items-v1-bundle.json'
+    }
+)
+$privateBundlePath = Join-Path $privateRoot 'private-test-all-bundle.json'
 $bundleBuilderPath = Join-Path $PSScriptRoot 'build-private-content-bundle.ps1'
 
 $clientDir = Join-Path (Join-Path $repoRoot 'apps') 'client_flutter'
@@ -73,15 +87,14 @@ function Write-Fail([string]$msg) {
 # --------------------------------------------------------------------------- #
 Write-Step "前置检查"
 
-if (-not (Test-Path $manifestPath)) {
-    Write-Fail "manifest 不存在: $manifestPath"
-    Write-Host "    请先运行: python scripts/extract_phb_2024_v2.py"
-    exit 1
-}
-if (-not (Test-Path $entriesDir)) {
-    Write-Fail "entries 目录不存在: $entriesDir"
-    Write-Host "    请先运行: python scripts/extract_phb_2024_v2.py"
-    exit 1
+foreach ($package in $privatePackages) {
+    $manifestPath = Join-Path $package.Directory 'manifest.json'
+    $entriesDir = Join-Path $package.Directory 'entries'
+    if (-not (Test-Path $manifestPath) -or -not (Test-Path $entriesDir)) {
+        Write-Fail "私人资料包不完整: $($package.Directory)"
+        Write-Host "    请先运行三个 private extractor。"
+        exit 1
+    }
 }
 if (-not (Test-Path $bundledContentPath)) {
     Write-Fail "目标文件不存在: $bundledContentPath"
@@ -102,15 +115,27 @@ Write-Done "前置检查通过"
 # --------------------------------------------------------------------------- #
 # 2. 合并散文件为单文件 bundle
 # --------------------------------------------------------------------------- #
-Write-Step "合并 manifest + entries/*.json 为单文件 bundle"
+Write-Step "生成 PHB、怪物与魔法物品多包聚合文件"
 
-& $bundleBuilderPath -SourceDirectory $privateImportDir -OutputPath $privateBundlePath
-if (-not $?) {
-    throw "私人资料包聚合失败"
+$packageBundles = @()
+$totalEntries = 0
+foreach ($package in $privatePackages) {
+    & $bundleBuilderPath -SourceDirectory $package.Directory -OutputPath $package.Bundle
+    if (-not $?) {
+        throw "私人资料包聚合失败: $($package.Directory)"
+    }
+    $parsedPackage = Get-Content -LiteralPath $package.Bundle -Raw -Encoding UTF8 | ConvertFrom-Json
+    $packageBundles += $parsedPackage
+    $totalEntries += [int]$parsedPackage.entryCount
 }
+$bundleJson = [ordered]@{ packages = $packageBundles } | ConvertTo-Json -Depth 100 -Compress
+[System.IO.File]::WriteAllText(
+    $privateBundlePath,
+    $bundleJson,
+    [System.Text.UTF8Encoding]::new($false)
+)
 $bundleJson = Get-Content -LiteralPath $privateBundlePath -Raw -Encoding UTF8
-$bundle = $bundleJson | ConvertFrom-Json
-Write-Done "合并 $($bundle.entryCount) 条条目"
+Write-Done "聚合 $($privatePackages.Count) 个包，共 $totalEntries 条条目"
 
 # --------------------------------------------------------------------------- #
 # 3. 备份当前 bundled_content.json
@@ -199,7 +224,7 @@ if ($buildSuccess) {
         }
     }
     Write-Host ""
-    Write-Host "    注意：本构建产物包含商业版权内容（玩家手册 2024 私有提取），" -ForegroundColor Yellow
+    Write-Host "    注意：本构建产物包含商业版权内容（PHB/MM/DMG 私有提取），" -ForegroundColor Yellow
     Write-Host "          仅限本地测试，不得向第三方分发。" -ForegroundColor Yellow
 } else {
     throw "flutter build $Target failed"

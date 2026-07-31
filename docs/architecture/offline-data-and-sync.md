@@ -10,7 +10,7 @@
 - **服务器可选**：服务器只承担跨设备同步和战役联机，不作为本地功能的门禁。`MainShell` 始终打开，未登录时显示「同步可选」提示。
 - **私有资料显式导入**：客户端不声明、编译或自动加载 `assets/private/`。用户持有的商业规则资料包只能从「设置 → 资料包」手动导入 Drift；新安装的资料库默认为空。
 - **正文永不上传**：本地资料包正文与 assets 永远不进入 Vault payload，也不进入战役同步。Vault 只同步个人实体和资料包 manifest（`id/version/locale/system/contentHash`），战役只同步 DM 创建的独立 JSON 条目。
-- **不信任客户端身份**：聊天身份必须绑定 `CampaignActor`，服务器以 `campaignActorId` 为准，不接受客户端 displayName 作为权威来源。
+- **不信任客户端身份**：聊天身份必须绑定 `CampaignCharacter`，服务器以 `campaignCharacterId` 为准，不接受客户端 displayName 作为权威来源。
 - **WebSocket 仅广播游标**：实时通道只推送最新 cursor 和 entityType，完整实体通过 HTTP `changes` 端点拉取，避免信任客户端增量。
 
 ## 2. 本地数据层（Drift）
@@ -29,7 +29,7 @@
 
 ### 2.3 战役缓存（5 张表）
 
-`CampaignActorsCache`、`CampaignActorBacklinks`、`CampaignContentCache`、`CampaignSyncCursors`、`CharacterSyncConflicts`。这组表只是远端战役的本地镜像，离线可读，可在「设置 → 数据管理」一键清理，不进入个人备份。
+`CampaignCharactersCache`、`CampaignCharacterBacklinks`、`CampaignContentCache`、`CampaignSyncCursors`、`CharacterSyncConflicts`。这组表只是远端战役的本地镜像，离线可读，可在「设置 → 数据管理」一键清理，不进入个人备份。
 
 ## 3. Personal Vault 同步
 
@@ -59,29 +59,29 @@
 
 - `CampaignSyncState`：每战役一行，记录当前 cursor。
 - `CampaignChange`：每条变更一行，`(campaignId, cursor)` 唯一，含 `entityType / entityId / operation / revision`。
-- `CampaignActor`：战役角色实体，含 `sheetJson`、`revision`、`ownerUserId`、`sourceCharacterId`、`updatedBy`。
-- `CampaignActorAudit`：Actor 的每次修改审计，含 `baseRevision / resultRevision / changedPaths / beforeJson / afterJson`。
+- `CampaignCharacter`：战役角色实体，含 `sheetJson`、`revision`、`ownerUserId`、`sourceCharacterId`、`updatedBy`。
+- `CampaignCharacterAudit`：Character 的每次修改审计，含 `baseRevision / resultRevision / changedPaths / beforeJson / afterJson`。
 - `CampaignContentEntry`：DM 创建的独立 JSON 条目，`(campaignId, slug)` 唯一，含 `type / name / entryJson / revision / deletedAt`。
-- `CampaignChatMessage`：聊天消息，持久化 `campaignActorId`，不信任客户端 displayName。
+- `CampaignChatMessage`：聊天消息，持久化 `campaignCharacterId`，不信任客户端 displayName。
 
 ### 4.2 同步边界
 
 - **只同步 DM 创建的独立 JSON 条目**：`CampaignContentEntry` 是独立条目，不存在 overlay / patch / 依赖选项 / 公共包市场。
-- **玩家发布角色形成完整 CampaignActor**：本地角色发布时把整张角色卡快照写入 `CampaignActor.sheetJson`，owner/DM 都有完整编辑权。
-- **owner/DM 编辑权**：所有修改记录在 `CampaignActorAudit`，revision 单调递增，客户端冲突可见、可回滚。
+- **玩家发布角色形成完整 CampaignCharacter**：本地角色发布时把整张角色卡快照写入 `CampaignCharacter.sheetJson`，owner/DM 都有完整编辑权。
+- **owner/DM 编辑权**：所有修改记录在 `CampaignCharacterAudit`，revision 单调递增，客户端冲突可见、可回滚。
 - **资料正文不进入战役同步**：`CampaignContentEntry.entryJson` 是 DM 自己写的独立条目，不会引用本地资料包正文；客户端在 Wiki 检索时把本地包和战役缓存合并显示，同名不覆盖，来源 chip 标注「本地」/「战役」。
 
 ### 4.3 客户端缓存流程
 
 1. 用户进入战役 → 客户端拉取 `GET /api/campaigns/:id/changes?cursor=0` 增量。
-2. 每条 change 按 `entityType` 路由到 `CampaignActorsCache` 或 `CampaignContentCache`，更新 `CampaignSyncCursors`。
+2. 每条 change 按 `entityType` 路由到 `CampaignCharactersCache` 或 `CampaignContentCache`，更新 `CampaignSyncCursors`。
 3. 离线时只能读缓存，不能写战役；写入必须等到联网后通过 HTTP 提交。
 4. WebSocket 仅广播 `{ campaignId, cursor, entityType }`，客户端收到后用 HTTP `changes` 拉取完整实体。
 
 ### 4.4 聊天身份
 
-- 客户端发送消息时携带 `campaignActorId`，服务端以此为准；displayName 只是缓存字段，不可作为权威。
-- 消息持久化在 `CampaignChatMessage`，与 `CampaignActor` 软关联（`onDelete: SetNull`），Actor 被删除时消息保留但 Actor 引用置空。
+- 客户端发送消息时携带 `campaignCharacterId`，服务端以此为准；displayName 只是缓存字段，不可作为权威。
+- 消息持久化在 `CampaignChatMessage`，与 `CampaignCharacter` 软关联（`onDelete: SetNull`），Character 被删除时消息保留但 Character 引用置空。
 - 资料引用以快照形式写入消息，避免本地资料包被删除后聊天失去上下文。
 
 ## 5. 本地备份与恢复
@@ -118,7 +118,7 @@
 
 | 数据 | 存储 | Vault 同步 | 战役同步 | 本地备份 |
 |------|------|------------|----------|----------|
-| 个人角色 | Drift `Characters` | ✅ `character` | 发布后形成 `CampaignActor` | ✅ |
+| 个人角色 | Drift `Characters` | ✅ `character` | 发布后形成 `CampaignCharacter` | ✅ |
 | 资料包正文 | Drift `LocalContentEntries` | ❌ | ❌ | ✅ |
 | 资料包 manifest | Drift `LocalContentPackages` | ✅ `contentPackageManifest` | ❌ | ✅ |
 | 资料包 assets | Drift `LocalContentAssets` | ❌ | ❌ | ✅ |
@@ -126,7 +126,7 @@
 | 偏好 | Drift `AppPreferences` | ✅ `preference` | ❌ | ✅ |
 | 服务器 profile | Drift `ServerProfiles` | ❌（按设备本地） | ❌ | ✅ |
 | Vault Outbox / Cursor | Drift | ❌ | ❌ | ❌ |
-| 战役 Actor 缓存 | Drift `CampaignActorsCache` | ❌ | ✅ | ❌ |
+| 战役 Character 缓存 | Drift `CampaignCharactersCache` | ❌ | ✅ | ❌ |
 | 战役 ContentEntry 缓存 | Drift `CampaignContentCache` | ❌ | ✅ | ❌ |
 | 战役聊天消息 | 服务端 `CampaignChatMessage` | ❌ | ✅ | ❌ |
 | Token / 密码 | 系统安全存储 | ❌ | ❌ | ❌ |
@@ -134,10 +134,10 @@
 ## 7. 验证清单
 
 - 未配置服务器、未登录和断网时，个人角色、资料库、收藏、笔记、设置、规则计算、本地备份与恢复完整可用。
-- Player 角色页只管理本地个人角色；DM 角色页管理所选战役 Actor，并具备完整编辑权和审计。
-- 本地角色发布后形成完整 `CampaignActor`，revision 冲突可见，DM 变更可同步回玩家。
+- Player 角色页只管理本地个人角色；DM 角色页管理所选战役 Character，并具备完整编辑权和审计。
+- 本地角色发布后形成完整 `CampaignCharacter`，revision 冲突可见，DM 变更可同步回玩家。
 - 战役只同步 DM 新增的独立 JSON 条目；玩家可离线读取缓存，不存在资料包覆盖或依赖选项。
 - Wiki 同时检索本地包和当前战役缓存，来源明确且同名不覆盖。
-- 聊天身份绑定 `CampaignActor`，支持说/做、头像角色卡、资料引用快照和离线历史。
+- 聊天身份绑定 `CampaignCharacter`，支持说/做、头像角色卡、资料引用快照和离线历史。
 - 公开仓库、默认数据库和客户端安装包不含 SRD 或官方规则正文。
 - `npm run doctor` 与 `flutter build web` 使用新鲜输出通过。

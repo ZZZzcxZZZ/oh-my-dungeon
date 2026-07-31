@@ -297,7 +297,7 @@ interface CharacterOperationResult {
 }
 ```
 
-调用方不得提交 `actorId`、`before` 或 `after`；这些字段由服务端根据认证身份和真实状态生成。
+调用方不得提交 `characterId`、`before` 或 `after`；这些字段由服务端根据认证身份和真实状态生成。
 
 ### 6.2 HP
 
@@ -366,7 +366,7 @@ POST /api/characters/:characterId/actions/adjust-hp
 GET /api/campaigns/:campaignId/context
 ```
 
-当前返回战役、当前成员身份、成员、Actor 摘要和 capability。它不是最终 Agent Context；尚未统一返回当前地点、目标、近期事件和知识引用。
+当前返回战役、当前成员身份、成员、Character 摘要和 capability。它不是最终 Agent Context；尚未统一返回当前地点、目标、近期事件和知识引用。
 
 ### 7.2 战役事件
 
@@ -421,8 +421,8 @@ interface GameEvent {
   type: string;
   campaignId: string | null;
   characterId: string | null;
-  actorType: "user" | "system" | "agent";
-  actorId: string;
+  characterType: "user" | "system" | "agent";
+  characterId: string;
   requestId: string;
   targets: Array<Record<string, unknown>>;
   cause: Record<string, unknown> | null;
@@ -476,7 +476,7 @@ interface CampaignAgentContext {
     role: string;
     capabilities: string[];
   };
-  actors: CharacterSummary[];
+  characters: CharacterSummary[];
   activeObjectives: Array<{
     id: string;
     title: string;
@@ -497,7 +497,7 @@ interface CampaignAgentContext {
 
 上下文必须有数量和时间边界：
 
-- Actor 默认只返回当前战役相关摘要；
+- Character 默认只返回当前战役相关摘要；
 - 事件默认最近 20 条，最大 100 条；
 - 规则只返回引用；
 - 私聊只在请求者是参与者时返回；
@@ -515,8 +515,21 @@ interface CampaignAgentContext {
 格式标识：
 
 ```yaml
-format: dnd-table-character/v1
+format: dnd-table-character/v2
+revision: 42
+contentHash: sha256:...
+generatedAt: 2026-07-29T12:00:00Z
 ```
+
+`dnd-table-character/v1` 仅作为旧文件兼容输入，不再用于新导出。玩家角色、
+NPC、怪物与同伴都使用 Character Markdown；`kind` 区分 `player / npc /
+monster / companion`。YAML 保存 HP、AC、速度、属性、模板引用等机器字段，
+正文按怪物图鉴式 `## 特质 / ## 动作 / ## 反应` 等区块保存可读内容。导入后
+必须转换为正常 `CharacterSheet`，进入统一角色库、详情页、编辑器和战役发布
+流程，不得创建只读的 Markdown 旁路模型。
+
+完整格式和资料模板契约见
+[本地资料包格式 v2](../content/content-package-format-v2.md#character-模板与character-markdown)。
 
 ## 12. 当前实现差距
 

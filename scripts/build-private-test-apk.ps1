@@ -12,16 +12,12 @@ $assetPath = Join-Path $clientDir "assets\bundled_content.json"
 $gradleInitScript = Join-Path $PSScriptRoot "gradle-repositories.init.gradle"
 $gradleUserHome = if ($env:GRADLE_USER_HOME) { $env:GRADLE_USER_HOME } else { Join-Path $env:USERPROFILE ".gradle" }
 $installedGradleInitScript = Join-Path $gradleUserHome "init.d\dnd-table-tool-repositories.init.gradle"
-$defaultBundlePath = Join-Path $root "private-imports\phb-2024-v2-bundle.json"
+$defaultBundlePath = Join-Path $root "private-imports\private-test-all-bundle.json"
 $ContentBundlePath = if ($ContentBundlePath) { $ContentBundlePath } else { $defaultBundlePath }
 $OutputDirectory = if ($OutputDirectory) { $OutputDirectory } else { Join-Path $root "dist\android" }
 
 if (-not (Test-Path -LiteralPath $ContentBundlePath)) {
-  $bundleBuilder = Join-Path $PSScriptRoot "build-private-content-bundle.ps1"
-  & $bundleBuilder -OutputPath $ContentBundlePath
-  if ($LASTEXITCODE -ne 0) {
-    throw "Private content bundle generation failed"
-  }
+  throw "Private aggregate bundle was not found. Run scripts/build_private_client.ps1 once or provide -ContentBundlePath."
 }
 
 if (-not (Test-Path -LiteralPath $assetPath)) {

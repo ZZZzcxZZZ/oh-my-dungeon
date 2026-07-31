@@ -4,7 +4,7 @@
 
 - 客户端除战役协作和可选 Personal Vault 外均可离线使用。
 - REST 是服务端状态的事实源；WebSocket 只通知消息或游标变化。
-- 所有写操作由服务端根据 Campaign membership 和 Actor ownership 校验。
+- 所有写操作由服务端根据 Campaign membership 和 Character ownership 校验。
 - `Session`、`Rooms` 和独立 `CheckRequests` HTTP 模块已退出 0.1 产品路径，不得重新挂载。
 - 未来 AI Agent 与 Flutter UI 必须复用同一业务接口；不得给 Agent 提供绕过权限、revision 或事件审计的数据库直写工具。
 
@@ -48,17 +48,17 @@ POST /api/campaigns/join
 
 检定、响应和系统事件是带结构化 `eventData` 的战役消息。`check-requests` 只提供战役消息历史聚合，不是独立 Session 资源。
 
-### Actor、战役资料与增量同步
+### Character、战役资料与增量同步
 
 ```text
-POST /api/campaigns/:campaignId/actors/publish
-POST /api/campaigns/:campaignId/actors
-GET  /api/campaigns/:campaignId/actors
-GET  /api/campaigns/:campaignId/actors/:actorId
-POST /api/campaigns/:campaignId/actors/:actorId/runtime-commands
-POST /api/campaigns/:campaignId/actors/:actorId/assign
-POST /api/campaigns/:campaignId/actors/:actorId/archive
-GET  /api/campaigns/:campaignId/actors/:actorId/audits
+POST /api/campaigns/:campaignId/characters/publish
+POST /api/campaigns/:campaignId/characters
+GET  /api/campaigns/:campaignId/characters
+GET  /api/campaigns/:campaignId/characters/:characterId
+POST /api/campaigns/:campaignId/characters/:characterId/runtime-commands
+POST /api/campaigns/:campaignId/characters/:characterId/assign
+POST /api/campaigns/:campaignId/characters/:characterId/archive
+GET  /api/campaigns/:campaignId/characters/:characterId/audits
 
 POST   /api/campaigns/:campaignId/content/entries/validate
 POST   /api/campaigns/:campaignId/content/entries
@@ -132,7 +132,7 @@ server -> client: campaign:message:new
 server -> client: campaign:changed { campaignId, entityType, cursor }
 ```
 
-`campaign:message:new` 提供已持久化消息的即时显示。`campaign:changed` 只提示客户端按 cursor 调 HTTP changes；不得把完整 Actor 或资料正文塞入事件。
+`campaign:message:new` 提供已持久化消息的即时显示。`campaign:changed` 只提示客户端按 cursor 调 HTTP changes；不得把完整 Character 或资料正文塞入事件。
 
 ## 4. 一致性与重连
 
@@ -146,6 +146,6 @@ server -> client: campaign:changed { campaignId, entityType, cursor }
 
 - 战役创建者是 owner，公开邀请码始终加入为 player。
 - 客户端 Player/DM 模式只控制界面，不授予战役权限。
-- owner 或服务端保留的 dm membership 可管理战役和任意 Actor。
-- 玩家只能绑定、发言和编辑自己拥有的 active player Actor。
-- 玩家响应检定时，当前发言 Actor 必须与请求的 targetActorId 一致。
+- owner 或服务端保留的 dm membership 可管理战役和任意 Character。
+- 玩家只能绑定、发言和编辑自己拥有的 active player Character。
+- 玩家响应检定时，当前发言 Character 必须与请求的 targetCharacterId 一致。

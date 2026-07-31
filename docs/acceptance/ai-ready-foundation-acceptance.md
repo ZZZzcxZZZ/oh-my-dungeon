@@ -62,7 +62,7 @@ npm run doctor
 - [x] 物品授予、消耗、装备、转移已由服务端业务接口实现。
 - [x] 操作支持 requestId 幂等。
 - [x] 操作支持 expectedRevision 乐观并发检查。
-- [x] 服务端根据认证身份生成 actor，不信任调用方伪造 actorId。
+- [x] 服务端根据认证身份生成 character，不信任调用方伪造 characterId。
 - [ ] 使用相同 requestId 连续提交两次扣血，确认只生效一次。
 - [ ] 使用旧 revision 修改状态，确认得到冲突且数据未被覆盖。
 - [ ] 普通玩家尝试修改他人角色，确认被拒绝；DM 按既定权限可以管理战役角色。
@@ -85,7 +85,7 @@ npm run doctor
 ## 6. 事件与可追踪性
 
 - [x] HP、状态、资源和物品操作生成结构化 GameEvent。
-- [x] 事件记录 requestId、actor、target、before、after、payload 和时间。
+- [x] 事件记录 requestId、character、target、before、after、payload 和时间。
 - [x] 事件按游标分页，不要求读取整个历史。
 - [x] 聊天系统消息可携带结构化 eventData。
 - [ ] 在聊天室执行一次角色状态操作，确认系统提示可追溯到事件。

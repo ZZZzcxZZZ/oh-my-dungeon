@@ -54,24 +54,27 @@ void main() {
     expect(reloaded.mode, ClientMode.dungeonMaster);
   });
 
-  test('keeps the previous mode and exposes an error when save fails', () async {
-    final store = _ThrowingClientModeStore(ClientMode.player);
+  test(
+    'keeps the previous mode and exposes an error when save fails',
+    () async {
+      final store = _ThrowingClientModeStore(ClientMode.player);
 
-    final controller = ClientModeController.withStore(store: store);
-    await controller.initialize();
-    expect(controller.mode, ClientMode.player);
+      final controller = ClientModeController.withStore(store: store);
+      await controller.initialize();
+      expect(controller.mode, ClientMode.player);
 
-    Object? caught;
-    try {
-      await controller.setMode(ClientMode.dungeonMaster);
-    } catch (error) {
-      caught = error;
-    }
+      Object? caught;
+      try {
+        await controller.setMode(ClientMode.dungeonMaster);
+      } catch (error) {
+        caught = error;
+      }
 
-    expect(caught, isNotNull);
-    expect(controller.mode, ClientMode.player);
-    expect(controller.lastError, isNotNull);
-  });
+      expect(caught, isNotNull);
+      expect(controller.mode, ClientMode.player);
+      expect(controller.lastError, isNotNull);
+    },
+  );
 
   test('load falls back to player mode when no value is stored', () async {
     SharedPreferences.setMockInitialValues({});

@@ -6,6 +6,7 @@ import '../../auth/presentation/auth_controller.dart';
 import '../data/campaign_api_client.dart';
 import '../data/campaign_socket_service.dart';
 import '../domain/campaign.dart';
+import '../domain/campaign_message_speaker.dart';
 import '../domain/campaign_archive_entry.dart';
 import 'campaign_context_controller.dart';
 
@@ -15,7 +16,7 @@ class CampaignController extends ChangeNotifier {
     required this.authController,
     required this.campaignClient,
     CampaignSocketService? campaignSocketService,
-    Future<void> Function()? onCampaignChanged,
+    Future<void> Function(CampaignChangeSignal signal)? onCampaignChanged,
   }) : _socketService = campaignSocketService ?? NoopCampaignSocketService(),
        _onCampaignChanged = onCampaignChanged,
        contextController = CampaignContextController(
@@ -33,7 +34,7 @@ class CampaignController extends ChangeNotifier {
   final AuthController authController;
   final CampaignClient campaignClient;
   final CampaignSocketService _socketService;
-  final Future<void> Function()? _onCampaignChanged;
+  final Future<void> Function(CampaignChangeSignal signal)? _onCampaignChanged;
   final CampaignContextController contextController;
   StreamSubscription<CampaignChatMessage>? _messageSubscription;
   StreamSubscription<void>? _changeSubscription;
@@ -327,11 +328,19 @@ class CampaignController extends ChangeNotifier {
   Future<bool> updateSpeaker({
     required String campaignId,
     required String speakerMode,
-    String? actorId,
+    String? characterId,
   }) => contextController.updateSpeaker(
     campaignId: campaignId,
     speakerMode: speakerMode,
-    actorId: actorId,
+    characterId: characterId,
+  );
+
+  Future<bool> updateMemberBinding({
+    required String campaignId,
+    required String? characterId,
+  }) => contextController.updateMemberBinding(
+    campaignId: campaignId,
+    characterId: characterId,
   );
 
   Future<void> loadArchives(
@@ -404,10 +413,11 @@ class CampaignController extends ChangeNotifier {
     required String campaignId,
     required String kind,
     required String content,
-    String? campaignActorId,
+    String? campaignCharacterId,
     String? actionId,
     Map<String, Object?>? eventData,
     Map<String, Object?>? speakerSnapshot,
+    CampaignMessageSpeaker? speaker,
     String? conversationId,
   }) async {
     final token = await authController.ensureValidAccessToken();
@@ -421,10 +431,11 @@ class CampaignController extends ChangeNotifier {
         campaignId: campaignId,
         kind: kind,
         content: content,
-        campaignActorId: campaignActorId,
+        campaignCharacterId: campaignCharacterId,
         actionId: actionId,
         eventData: eventData,
         speakerSnapshot: speakerSnapshot,
+        speaker: speaker,
         conversationId: conversationId,
       );
       _appendMessage(message);
@@ -455,13 +466,26 @@ class CampaignController extends ChangeNotifier {
       if (message.campaignId != _connectedCampaignId) return;
       _appendMessage(message);
       notifyListeners();
+      final onChanged = _onCampaignChanged;
+      if (onChanged != null) {
+        unawaited(
+          onChanged(
+            CampaignChangeSignal(
+              campaignId: message.campaignId,
+              entityType: 'conversation',
+              cursor: message.createdAt,
+            ),
+          ),
+        );
+      }
     });
     // Spec §双向同步 切片 A: 收到 campaign:changed 信号后触发增量拉取，
-    // 由调用方注入 onCampaignChanged 回调（通常接 actorController.pullUntilCurrent）。
+    // 由调用方注入 onCampaignChanged 回调（通常接 characterController.pullUntilCurrent）。
     final onChanged = _onCampaignChanged;
     if (onChanged != null) {
-      _changeSubscription = _socketService.changeStream.listen((_) {
-        onChanged();
+      _changeSubscription = _socketService.changeStream.listen((signal) {
+        if (signal.campaignId != _connectedCampaignId) return;
+        onChanged(signal);
       });
     }
 

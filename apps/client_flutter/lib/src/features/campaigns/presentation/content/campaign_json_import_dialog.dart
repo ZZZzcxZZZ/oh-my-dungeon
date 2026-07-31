@@ -5,10 +5,7 @@ import 'campaign_content_controller.dart';
 /// JSON 导入对话框。允许粘贴单对象或数组，先本地解析预览，再逐条调用
 /// [CampaignContentController.createEntry] 发布到服务器。
 class CampaignJsonImportDialog extends StatefulWidget {
-  const CampaignJsonImportDialog({
-    required this.controller,
-    super.key,
-  });
+  const CampaignJsonImportDialog({required this.controller, super.key});
 
   final CampaignContentController controller;
 
@@ -74,9 +71,9 @@ class _CampaignJsonImportDialogState extends State<CampaignJsonImportDialog> {
     setState(() => _importing = false);
     if (failCount == 0) {
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('成功导入 $successCount 个条目')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('成功导入 $successCount 个条目')));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('导入 $successCount 个成功，$failCount 个失败')),
@@ -106,10 +103,7 @@ class _CampaignJsonImportDialogState extends State<CampaignJsonImportDialog> {
                   isDense: true,
                 ),
                 maxLines: 8,
-                style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 13,
-                ),
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
               ),
               const SizedBox(height: 8),
               Align(
@@ -122,10 +116,7 @@ class _CampaignJsonImportDialogState extends State<CampaignJsonImportDialog> {
                 ),
               ),
               if (_parseError != null) ...[
-                Text(
-                  _parseError!,
-                  style: TextStyle(color: colorScheme.error),
-                ),
+                Text(_parseError!, style: TextStyle(color: colorScheme.error)),
               ],
               if (_preview != null) ...[
                 const SizedBox(height: 8),
@@ -134,31 +125,32 @@ class _CampaignJsonImportDialogState extends State<CampaignJsonImportDialog> {
                   style: Theme.of(context).textTheme.labelLarge,
                 ),
                 const SizedBox(height: 4),
-                ...(_preview!.map((entry) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.article_outlined,
-                            size: 16,
-                            color: colorScheme.onSurfaceVariant,
+                ...(_preview!.map(
+                  (entry) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.article_outlined,
+                          size: 16,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            entry['name']?.toString() ?? '(未命名)',
+                            style: Theme.of(context).textTheme.bodySmall,
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              entry['name']?.toString() ?? '(未命名)',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ),
-                          Text(
-                            entry['type']?.toString() ?? '?',
-                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                          ),
-                        ],
-                      ),
-                    ))),
+                        ),
+                        Text(
+                          entry['type']?.toString() ?? '?',
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                )),
               ],
             ],
           ),

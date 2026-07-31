@@ -1,17 +1,26 @@
 import 'package:flutter/material.dart';
 
+import '../widgets/numeric_input_field.dart';
 import 'dice_roller.dart';
+
+class DiceTrayCharacterTarget {
+  const DiceTrayCharacterTarget({required this.id, required this.name});
+
+  final String id;
+  final String name;
+}
 
 /// Task 3.2 — 组合式骰子编辑器 (Foundry Dice Tray 风格).
 ///
 /// 支持多组骰子相加, 实时表达式预览, 优势/劣势 (2d20kh1/kl1),
-/// DC 检定, 内置预设 (攻击/伤害/救赎/死亡救赎) 与用户自定义预设.
+/// DC 检定与用户自定义预设.
 /// 调用方通过 [onSend] 回调拿到 [DiceTrayResult] 后再决定如何发送到聊天.
 class DiceTrayDialog extends StatefulWidget {
   const DiceTrayDialog({
     required this.diceRoller,
     required this.onSend,
     this.quickPresets = const [],
+    this.characterTargets = const [],
     super.key,
   });
 
@@ -21,6 +30,7 @@ class DiceTrayDialog extends StatefulWidget {
   /// 用户自定义预设, 来自 AppPreferencesController.quickDicePresets.
   /// 每个字符串是合法骰子表达式, 如 '8d6' / '2d20kh1+3'.
   final List<String> quickPresets;
+  final List<DiceTrayCharacterTarget> characterTargets;
 
   /// 加骰子组按钮的 Key, 便于 widget test 定位.
   static final GlobalKey addGroupKey = GlobalKey(debugLabel: 'dice-tray-add');
@@ -30,10 +40,10 @@ class DiceTrayDialog extends StatefulWidget {
 
   /// DC 输入框的 Key.
   static final GlobalKey dcKey = GlobalKey(debugLabel: 'dice-tray-dc');
+  static const characterTargetKey = ValueKey('dice-tray-character-target');
 
   /// 删除某组骰子按钮的 Key.
-  static Key removeGroupKey(int index) =>
-      ValueKey('dice-tray-remove-$index');
+  static Key removeGroupKey(int index) => ValueKey('dice-tray-remove-$index');
 
   @override
   State<DiceTrayDialog> createState() => _DiceTrayDialogState();
@@ -43,6 +53,7 @@ class _DiceTrayDialogState extends State<DiceTrayDialog> {
   late final List<_DiceGroup> _groups = [_DiceGroup.defaults()];
   _RollMode _rollMode = _RollMode.normal;
   final TextEditingController _dcController = TextEditingController();
+  String? _selectedCharacterId;
   String? _errorMessage;
 
   @override
@@ -83,9 +94,15 @@ class _DiceTrayDialogState extends State<DiceTrayDialog> {
           _buildRollModeSelector(theme, colorScheme),
           const SizedBox(height: 8),
           _buildDcRow(theme, colorScheme),
-          const Divider(),
-          _buildPresets(colorScheme),
-          const SizedBox(height: 12),
+          if (widget.characterTargets.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildCharacterTarget(),
+          ],
+          if (widget.quickPresets.isNotEmpty) ...[
+            const Divider(),
+            _buildPresets(),
+            const SizedBox(height: 12),
+          ],
           _buildPreview(theme, colorScheme, notation, canSend),
         ],
       ),
@@ -97,49 +114,52 @@ class _DiceTrayDialogState extends State<DiceTrayDialog> {
     final canRemove = _groups.length > 1;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: _NumberDropdown(
-              keyPrefix: 'count-$index',
-              value: group.count,
-              items: const [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-              onChanged: (value) {
-                setState(() => group.count = value);
-              },
-            ),
+          Row(
+            children: [
+              NumericInputField(
+                fieldKey: ValueKey('dice-tray-count-$index'),
+                value: group.count,
+                label: '数量',
+                onChanged: (value) => setState(() => group.count = value),
+              ),
+              const SizedBox(width: 8),
+              NumericInputField(
+                fieldKey: ValueKey('dice-tray-modifier-$index'),
+                value: group.modifier,
+                label: '加值',
+                allowNegative: true,
+                onChanged: (value) => setState(() => group.modifier = value),
+              ),
+              const Spacer(),
+              IconButton(
+                key: DiceTrayDialog.removeGroupKey(index),
+                tooltip: '删除骰子组',
+                onPressed: canRemove
+                    ? () => setState(() => _groups.removeAt(index))
+                    : null,
+                icon: const Icon(Icons.delete_outline),
+                color: colorScheme.error,
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _NumberDropdown(
-              keyPrefix: 'sides-$index',
-              value: group.sides,
-              items: const [4, 6, 8, 10, 12, 20, 100],
-              onChanged: (value) {
-                setState(() => group.sides = value);
-              },
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _NumberDropdown(
-              keyPrefix: 'modifier-$index',
-              value: group.modifier,
-              items: const [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-              onChanged: (value) {
-                setState(() => group.modifier = value);
-              },
-            ),
-          ),
-          IconButton(
-            key: DiceTrayDialog.removeGroupKey(index),
-            onPressed: canRemove
-                ? () {
-                    setState(() => _groups.removeAt(index));
-                  }
-                : null,
-            icon: const Icon(Icons.delete_outline),
-            color: colorScheme.error,
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final sides in const [4, 6, 8, 10, 12, 20, 100])
+                ChoiceChip(
+                  key: ValueKey('dice-tray-sides-$sides'),
+                  selected: group.sides == sides,
+                  showCheckmark: false,
+                  avatar: const Icon(Icons.casino_outlined, size: 18),
+                  label: Text('d$sides'),
+                  onSelected: (_) => setState(() => group.sides = sides),
+                ),
+            ],
           ),
         ],
       ),
@@ -172,35 +192,56 @@ class _DiceTrayDialogState extends State<DiceTrayDialog> {
   }
 
   Widget _buildDcRow(ThemeData theme, ColorScheme colorScheme) {
-    return Row(
-      children: [
-        Text('DC', style: theme.textTheme.labelLarge),
-        const SizedBox(width: 12),
-        SizedBox(
-          width: 80,
-          child: TextField(
-            key: DiceTrayDialog.dcKey,
-            controller: _dcController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(hintText: '可选'),
+    return Center(
+      child: SizedBox(
+        width: 96,
+        child: TextField(
+          key: DiceTrayDialog.dcKey,
+          controller: _dcController,
+          keyboardType: TextInputType.number,
+          textAlign: TextAlign.center,
+          decoration: const InputDecoration(
+            labelText: 'DC',
+            hintText: '可选',
+            isDense: true,
+            border: OutlineInputBorder(),
           ),
         ),
-      ],
+      ),
     );
   }
 
-  Widget _buildPresets(ColorScheme colorScheme) {
+  Widget _buildCharacterTarget() {
+    return DropdownButtonFormField<String?>(
+      key: DiceTrayDialog.characterTargetKey,
+      initialValue: _selectedCharacterId,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        labelText: '代骰角色（可选）',
+        prefixIcon: Icon(Icons.person_outline),
+        border: OutlineInputBorder(),
+      ),
+      items: [
+        const DropdownMenuItem<String?>(value: null, child: Text('不指定角色')),
+        for (final character in widget.characterTargets)
+          DropdownMenuItem<String?>(
+            value: character.id,
+            child: Text(
+              character.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+      ],
+      onChanged: (value) => setState(() => _selectedCharacterId = value),
+    );
+  }
+
+  Widget _buildPresets() {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
-        for (final entry in _builtinPresets.entries)
-          FilledButton.tonalIcon(
-            key: ValueKey('dice-tray-builtin-${entry.key}'),
-            onPressed: () => _applyPreset(entry.value),
-            icon: const Icon(Icons.casino_outlined),
-            label: Text(entry.key),
-          ),
         for (final preset in widget.quickPresets)
           FilledButton.tonalIcon(
             key: ValueKey('dice-tray-preset-$preset'),
@@ -227,9 +268,12 @@ class _DiceTrayDialogState extends State<DiceTrayDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('表达式预览', style: theme.textTheme.labelMedium?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-          )),
+          Text(
+            '表达式预览',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
           const SizedBox(height: 4),
           Text(
             notation,
@@ -241,7 +285,9 @@ class _DiceTrayDialogState extends State<DiceTrayDialog> {
             const SizedBox(height: 4),
             Text(
               _errorMessage!,
-              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.error),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.error,
+              ),
             ),
           ],
           const SizedBox(height: 12),
@@ -300,7 +346,9 @@ class _DiceTrayDialogState extends State<DiceTrayDialog> {
       final count = int.tryParse(match.group(1)!) ?? 1;
       final sides = int.tryParse(match.group(2)!) ?? 20;
       final modifierStr = match.group(3);
-      final modifier = modifierStr == null ? 0 : (int.tryParse(modifierStr) ?? 0);
+      final modifier = modifierStr == null
+          ? 0
+          : (int.tryParse(modifierStr) ?? 0);
       groups.add(_DiceGroup(count: count, sides: sides, modifier: modifier));
     }
     return groups.isEmpty ? null : groups;
@@ -313,26 +361,25 @@ class _DiceTrayDialogState extends State<DiceTrayDialog> {
       final dcText = _dcController.text.trim();
       final dc = int.tryParse(dcText);
       final success = dc == null ? null : roll.total >= dc;
-      widget.onSend(DiceTrayResult(
-        notation: notation,
-        total: roll.total,
-        rollMode: _rollMode.name,
-        dc: dc,
-        success: success,
-      ));
+      widget.onSend(
+        DiceTrayResult(
+          notation: notation,
+          total: roll.total,
+          rollMode: _rollMode.name,
+          dc: dc,
+          success: success,
+          characterId: _selectedCharacterId,
+          characterName: widget.characterTargets
+              .where((character) => character.id == _selectedCharacterId)
+              .firstOrNull
+              ?.name,
+        ),
+      );
       setState(() => _errorMessage = null);
     } on DiceRollException catch (error) {
       setState(() => _errorMessage = error.message);
     }
   }
-
-  /// 内置预设. 攻击 = 1d20+5, 伤害 = 1d6+3, 救赎 = 1d20+0, 死亡救赎 = 1d20+0.
-  static const Map<String, String> _builtinPresets = {
-    '攻击': '1d20+5',
-    '伤害': '1d6+3',
-    '救赎': '1d20',
-    '死亡救赎': '1d20',
-  };
 }
 
 enum _RollMode { normal, advantage, disadvantage }
@@ -351,44 +398,6 @@ class _DiceGroup {
   int modifier;
 }
 
-/// 内部数字 dropdown, 避免重复样板.
-///
-/// [keyPrefix] 用于在 widget test 中精确定位某一组的某一列 dropdown,
-/// 组合 Key 形如 'dice-tray-count-0'.
-class _NumberDropdown extends StatelessWidget {
-  const _NumberDropdown({
-    required this.value,
-    required this.items,
-    required this.onChanged,
-    required this.keyPrefix,
-  });
-
-  final String keyPrefix;
-  final int value;
-  final List<int> items;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return DropdownButton<int>(
-      key: ValueKey('dice-tray-$keyPrefix'),
-      value: value,
-      isExpanded: true,
-      items: [
-        for (final item in items)
-          DropdownMenuItem<int>(
-            key: ValueKey('dice-tray-$keyPrefix-item-$item'),
-            value: item,
-            child: Text('$item'),
-          ),
-      ],
-      onChanged: (selected) {
-        if (selected != null) onChanged(selected);
-      },
-    );
-  }
-}
-
 /// 组合骰子编辑器发送结果.
 class DiceTrayResult {
   const DiceTrayResult({
@@ -397,6 +406,8 @@ class DiceTrayResult {
     required this.rollMode,
     this.dc,
     this.success,
+    this.characterId,
+    this.characterName,
   });
 
   /// 完整表达式, 如 '2d20kh1+5 + 2d6+3'.
@@ -413,4 +424,7 @@ class DiceTrayResult {
 
   /// 仅在 [dc] 提供时有值.
   final bool? success;
+
+  final String? characterId;
+  final String? characterName;
 }

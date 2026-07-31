@@ -1,23 +1,32 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/campaign.dart';
-import '../../domain/campaign_actor.dart';
+import '../../domain/campaign_character.dart';
 import '../../domain/campaign_health.dart';
 import '../widgets/campaign_avatar.dart';
 import 'campaign_composer_identity.dart';
 
 class CampaignSpeakerChoice {
-  const CampaignSpeakerChoice(this.speakerMode, [this.actorId])
-    : createTemporary = false;
+  const CampaignSpeakerChoice(this.speakerMode, [this.characterId])
+    : createTemporary = false,
+      changeBinding = false;
 
   const CampaignSpeakerChoice.temporary()
     : speakerMode = null,
-      actorId = null,
-      createTemporary = true;
+      characterId = null,
+      createTemporary = true,
+      changeBinding = false;
+
+  const CampaignSpeakerChoice.changeBinding()
+    : speakerMode = null,
+      characterId = null,
+      createTemporary = false,
+      changeBinding = true;
 
   final String? speakerMode;
-  final String? actorId;
+  final String? characterId;
   final bool createTemporary;
+  final bool changeBinding;
 }
 
 class CampaignIdentitySheet extends StatelessWidget {
@@ -25,10 +34,9 @@ class CampaignIdentitySheet extends StatelessWidget {
     required this.identity,
     required this.membership,
     required this.isManager,
-    required this.persistentActors,
-    required this.temporaryActors,
-    required this.proxyActors,
-    required this.campaignActors,
+    required this.persistentCharacters,
+    required this.proxyCharacters,
+    required this.campaignCharacters,
     required this.hasBoundCharacter,
     super.key,
   });
@@ -36,10 +44,9 @@ class CampaignIdentitySheet extends StatelessWidget {
   final CampaignComposerIdentity identity;
   final CampaignMembership membership;
   final bool isManager;
-  final List<CampaignWorkspaceActor> persistentActors;
-  final List<CampaignWorkspaceActor> temporaryActors;
-  final List<CampaignWorkspaceActor> proxyActors;
-  final List<CampaignActor> campaignActors;
+  final List<CampaignWorkspaceCharacter> persistentCharacters;
+  final List<CampaignWorkspaceCharacter> proxyCharacters;
+  final List<CampaignCharacter> campaignCharacters;
   final bool hasBoundCharacter;
 
   @override
@@ -94,24 +101,19 @@ class CampaignIdentitySheet extends StatelessWidget {
                   key: const Key('identity-quick-temporary-entry'),
                   icon: Icons.person_add_alt_1_outlined,
                   title: '快速临时身份',
-                  subtitle: '只输入名称，首次发言时创建',
+                  subtitle: '仅用于下一条消息，不会保存为角色',
                   selected: false,
                   choice: const CampaignSpeakerChoice.temporary(),
                 ),
-                if (persistentActors.isNotEmpty) ...[
+                if (persistentCharacters.isNotEmpty) ...[
                   const _SectionTitle('常驻 NPC、怪物与同伴'),
-                  for (final actor in persistentActors)
-                    _actorTile(context, actor),
+                  for (final character in persistentCharacters)
+                    _characterTile(context, character),
                 ],
-                if (temporaryActors.isNotEmpty) ...[
-                  const _SectionTitle('临时角色'),
-                  for (final actor in temporaryActors)
-                    _actorTile(context, actor, subtitle: '临时身份'),
-                ],
-                if (proxyActors.isNotEmpty) ...[
+                if (proxyCharacters.isNotEmpty) ...[
                   const _SectionTitle('代管玩家角色'),
-                  for (final actor in proxyActors)
-                    _actorTile(context, actor, subtitle: 'DM 代管'),
+                  for (final character in proxyCharacters)
+                    _characterTile(context, character, subtitle: 'DM 代管'),
                 ],
               ] else ...[
                 _choiceTile(
@@ -119,11 +121,9 @@ class CampaignIdentitySheet extends StatelessWidget {
                   key: const Key('identity-bound-character-entry'),
                   icon: Icons.person_outline,
                   title: '绑定角色',
-                  subtitle: hasBoundCharacter ? null : '尚未绑定角色',
-                  selected: membership.speakerMode == 'boundActor',
-                  choice: hasBoundCharacter
-                      ? const CampaignSpeakerChoice('boundActor')
-                      : null,
+                  subtitle: hasBoundCharacter ? '点击更换' : '点击选择角色',
+                  selected: membership.speakerMode == 'boundCharacter',
+                  choice: const CampaignSpeakerChoice.changeBinding(),
                 ),
                 _choiceTile(
                   context,
@@ -141,35 +141,36 @@ class CampaignIdentitySheet extends StatelessWidget {
     );
   }
 
-  Widget _actorTile(
+  Widget _characterTile(
     BuildContext context,
-    CampaignWorkspaceActor actor, {
+    CampaignWorkspaceCharacter character, {
     String? subtitle,
   }) {
-    final campaignActor = _campaignActorFor(actor.id);
-    final sheet = campaignActor?.sheet ?? const <String, Object?>{};
+    final campaignCharacter = _campaignCharacterFor(character.id);
+    final sheet = campaignCharacter?.sheet ?? const <String, Object?>{};
     return ListTile(
-      key: Key('identity-actor-${actor.id}'),
+      key: Key('identity-character-${character.id}'),
       leading: CampaignAvatar(
-        initials: actor.displayName,
+        initials: character.displayName,
         health: CampaignAvatar.healthFromState(
-          campaignHealthStateFromSheet(sheet) ?? actor.publicHealthState,
+          campaignHealthStateFromSheet(sheet) ?? character.publicHealthState,
         ),
         healthFraction: campaignHealthFractionFromSheet(sheet),
       ),
-      title: Text(actor.displayName),
+      title: Text(character.displayName),
       subtitle: subtitle == null ? null : Text(subtitle),
       selected:
-          membership.speakerMode == 'actor' &&
-          membership.activeSpeakerActorId == actor.id,
-      onTap: () =>
-          Navigator.of(context).pop(CampaignSpeakerChoice('actor', actor.id)),
+          membership.speakerMode == 'character' &&
+          membership.activeSpeakerCharacterId == character.id,
+      onTap: () => Navigator.of(
+        context,
+      ).pop(CampaignSpeakerChoice('character', character.id)),
     );
   }
 
-  CampaignActor? _campaignActorFor(String actorId) {
-    for (final actor in campaignActors) {
-      if (actor.id == actorId) return actor;
+  CampaignCharacter? _campaignCharacterFor(String characterId) {
+    for (final character in campaignCharacters) {
+      if (character.id == characterId) return character;
     }
     return null;
   }

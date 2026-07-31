@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('shows invite code and triggers copy and share callbacks',
-      (tester) async {
+  testWidgets('shows invite code and triggers copy and share callbacks', (
+    tester,
+  ) async {
     var copied = 0;
     var shared = 0;
     final invite = CampaignInvite(

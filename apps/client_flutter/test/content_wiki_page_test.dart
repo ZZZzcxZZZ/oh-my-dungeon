@@ -60,7 +60,11 @@ void main() {
     await tester.pumpWidget(buildContentTestApp(entries: [testFighterEntry()]));
     await tester.pumpAndSettle();
     expect(find.text('战士'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('content-filter-button')));
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilterChip, '收藏'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('content-filter-apply')));
     await tester.pumpAndSettle();
     expect(find.text('战士'), findsNothing);
   });
@@ -231,14 +235,8 @@ void main() {
       await tester.tap(find.byKey(const Key('content-filter-apply')));
       await tester.pumpAndSettle();
 
-      // 启用的 FilterChip 行可见.
-      expect(
-        find.descendant(
-          of: find.byType(FilterChip),
-          matching: find.textContaining('3环'),
-        ),
-        findsOneWidget,
-      );
+      expect(find.byTooltip('筛选，已启用 2 项'), findsOneWidget);
+      expect(find.byType(FilterChip), findsNothing);
     });
 
     testWidgets('detail dialog renders without overflow at width $width', (

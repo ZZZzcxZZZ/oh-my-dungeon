@@ -11,6 +11,7 @@ import 'package:dnd_table_client/src/features/campaigns/domain/campaign_archive_
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_controller.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaigns_tab_page.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/conversation_controller.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/widgets/campaign_list_tile.dart';
 import 'package:dnd_table_client/src/features/characters/data/character_repository.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_controller.dart';
 import 'package:dnd_table_client/src/features/client_mode/domain/client_mode.dart';
@@ -21,7 +22,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Spec §客户端工作模式: 战役创建入口只在 DM 模式显示。Player 模式下
-/// 应隐藏 FAB，并保留加入/刷新入口；空态文案也应随模式调整。
+/// 应隐藏 FAB，并保留加入入口；空态文案也应随模式调整。
 void main() {
   const apiBaseUrl = 'http://localhost:3000/api';
 
@@ -152,7 +153,7 @@ void main() {
     expect(find.byKey(const Key('campaign-create-button')), findsNothing);
     // AppBar entries remain accessible in either mode.
     expect(find.byTooltip('使用邀请码加入战役'), findsOneWidget);
-    expect(find.byTooltip('刷新战役'), findsOneWidget);
+    expect(find.byTooltip('刷新战役'), findsNothing);
 
     modeController.dispose();
     prefs.dispose();
@@ -415,61 +416,71 @@ void main() {
     session.dispose();
   });
 
-  testWidgets('non-owner in DM mode sees player-only prompt', (tester) async {
-    final auth = await buildLoggedInAuthController();
-    // Use a campaign where someone else is the owner, and the current user
-    // is a player member.
-    final otherOwnerCampaign = Campaign(
-      id: 'camp-other',
-      name: 'Friend Campaign',
-      description: '',
-      system: 'dnd5e',
-      ownerId: 'other-user',
-      status: 'active',
-      createdAt: '2026-07-09T00:00:00.000Z',
-      updatedAt: '2026-07-09T00:00:00.000Z',
-      memberPreview: const [
-        CampaignMemberPreview(
-          userId: 'user-1',
-          displayName: 'ranger',
-          role: 'player',
-        ),
-      ],
-    );
-    final campaignController = CampaignController(
-      apiBaseUrl: apiBaseUrl,
-      authController: auth,
-      campaignClient: _FakeCampaignClient(campaigns: [otherOwnerCampaign]),
-    );
-    await campaignController.loadCampaigns();
-    final modeController = ClientModeController(
-      initialMode: ClientMode.dungeonMaster,
-    );
-    final prefs = buildAppPreferencesController();
-    await prefs.initialize();
-    final session = buildActiveServerSession();
+  testWidgets(
+    'non-owner in DM mode must switch to Player mode before entering',
+    (tester) async {
+      final auth = await buildLoggedInAuthController();
+      // Use a campaign where someone else is the owner, and the current user
+      // is a player member.
+      final otherOwnerCampaign = Campaign(
+        id: 'camp-other',
+        name: 'Friend Campaign',
+        description: '',
+        system: 'dnd5e',
+        ownerId: 'other-user',
+        status: 'active',
+        createdAt: '2026-07-09T00:00:00.000Z',
+        updatedAt: '2026-07-09T00:00:00.000Z',
+        memberPreview: const [
+          CampaignMemberPreview(
+            userId: 'user-1',
+            displayName: 'ranger',
+            role: 'player',
+          ),
+        ],
+      );
+      final campaignController = CampaignController(
+        apiBaseUrl: apiBaseUrl,
+        authController: auth,
+        campaignClient: _FakeCampaignClient(campaigns: [otherOwnerCampaign]),
+      );
+      await campaignController.loadCampaigns();
+      final modeController = ClientModeController(
+        initialMode: ClientMode.dungeonMaster,
+      );
+      final prefs = buildAppPreferencesController();
+      await prefs.initialize();
+      final session = buildActiveServerSession();
 
-    await pumpCampaignsTab(
-      tester,
-      authController: auth,
-      campaignController: campaignController,
-      modeController: modeController,
-      appPreferencesController: prefs,
-      session: session,
-    );
+      await pumpCampaignsTab(
+        tester,
+        authController: auth,
+        campaignController: campaignController,
+        modeController: modeController,
+        appPreferencesController: prefs,
+        session: session,
+      );
 
-    await tester.tap(find.text('Friend Campaign'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Friend Campaign'));
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('mode-player-only-dialog')), findsOneWidget);
-    expect(find.text('以玩家身份参与'), findsOneWidget);
+      expect(find.byKey(const Key('mode-player-only-dialog')), findsOneWidget);
+      expect(find.text('切换到玩家模式？'), findsOneWidget);
+      expect(find.byKey(const Key('campaign-chat-page')), findsNothing);
 
-    modeController.dispose();
-    prefs.dispose();
-    campaignController.dispose();
-    auth.dispose();
-    session.dispose();
-  });
+      await tester.tap(find.byKey(const Key('mode-switch-confirm-player')));
+      await tester.pumpAndSettle();
+
+      expect(modeController.mode, ClientMode.player);
+      expect(find.byKey(const Key('campaign-chat-page')), findsOneWidget);
+
+      modeController.dispose();
+      prefs.dispose();
+      campaignController.dispose();
+      auth.dispose();
+      session.dispose();
+    },
+  );
 
   testWidgets('non-owner in Player mode sees no prompt', (tester) async {
     final auth = await buildLoggedInAuthController();
@@ -633,6 +644,44 @@ void main() {
       session.dispose();
     });
 
+    testWidgets('collapsed card uses one campaign icon without member stack', (
+      tester,
+    ) async {
+      final auth = await buildLoggedInAuthController();
+      final campaignController = CampaignController(
+        apiBaseUrl: apiBaseUrl,
+        authController: auth,
+        campaignClient: _FakeCampaignClient(campaigns: [expandedCampaign]),
+      );
+      await campaignController.loadCampaigns();
+      final modeController = ClientModeController(
+        initialMode: ClientMode.dungeonMaster,
+      );
+      final prefs = buildAppPreferencesController();
+      final session = buildActiveServerSession();
+      await pumpCampaignsTab(
+        tester,
+        authController: auth,
+        campaignController: campaignController,
+        modeController: modeController,
+        appPreferencesController: prefs,
+        session: session,
+      );
+
+      expect(
+        find.byKey(const Key('campaign-card-leading-icon')),
+        findsOneWidget,
+      );
+      expect(find.text('A'), findsNothing);
+      expect(find.text('B'), findsNothing);
+
+      modeController.dispose();
+      prefs.dispose();
+      campaignController.dispose();
+      auth.dispose();
+      session.dispose();
+    });
+
     testWidgets('tapping the expand chevron reveals expanded content', (
       tester,
     ) async {
@@ -661,12 +710,10 @@ void main() {
       await tester.tap(find.byKey(const Key('campaign-card-expand-toggle')));
       await tester.pumpAndSettle();
 
-      // Expanded-only content should now be visible. (Note: '3 位成员'
-      // also appears in the collapsed subtitle, so we assert on expanded-only
-      // labels: description, unread summary, and the main-chat entry.)
+      // Expanded-only content shows campaign context and conversation groups.
       expect(find.text('穿越迷雾山脉的冒险'), findsOneWidget);
-      expect(find.text('未读 7'), findsOneWidget);
-      expect(find.text('主聊天室'), findsOneWidget);
+      expect(find.text('小群'), findsOneWidget);
+      expect(find.text('私聊'), findsOneWidget);
 
       modeController.dispose();
       prefs.dispose();
@@ -701,12 +748,12 @@ void main() {
 
       await tester.tap(find.byKey(const Key('campaign-card-expand-toggle')));
       await tester.pumpAndSettle();
-      expect(find.text('主聊天室'), findsOneWidget);
+      expect(find.text('小群'), findsOneWidget);
 
       // Tap again to collapse.
       await tester.tap(find.byKey(const Key('campaign-card-expand-toggle')));
       await tester.pumpAndSettle();
-      expect(find.text('主聊天室'), findsNothing);
+      expect(find.text('小群'), findsNothing);
 
       modeController.dispose();
       prefs.dispose();
@@ -715,7 +762,7 @@ void main() {
       session.dispose();
     });
 
-    testWidgets('only one card is expanded at a time', (tester) async {
+    testWidgets('campaign cards expand independently', (tester) async {
       final secondCampaign = Campaign(
         id: 'camp-second',
         name: 'Second Campaign',
@@ -754,18 +801,15 @@ void main() {
         find.byKey(const Key('campaign-card-expand-toggle')).first,
       );
       await tester.pumpAndSettle();
-      // Only one card's expanded content (主聊天室) should be visible.
-      expect(find.text('主聊天室'), findsOneWidget);
+      expect(find.text('小群'), findsOneWidget);
 
-      // Expand the second card — the first should collapse.
+      // Expand the second card without collapsing the first.
       await tester.tap(
         find.byKey(const Key('campaign-card-expand-toggle')).at(1),
       );
       await tester.pumpAndSettle();
-      // Still only one expanded card.
-      expect(find.text('主聊天室'), findsOneWidget);
-      // The first card's expanded-only description should now be hidden.
-      expect(find.text('穿越迷雾山脉的冒险'), findsNothing);
+      expect(find.text('小群'), findsNWidgets(2));
+      expect(find.text('穿越迷雾山脉的冒险'), findsOneWidget);
 
       modeController.dispose();
       prefs.dispose();
@@ -774,16 +818,37 @@ void main() {
       session.dispose();
     });
 
-    testWidgets('tapping "主聊天室" triggers the main onCampaignOpened callback', (
+    testWidgets('tapping the campaign summary opens the main chat', (
       tester,
     ) async {
       final auth = await buildLoggedInAuthController();
+      final secondaryConversation = CampaignConversation(
+        id: 'direct-stale',
+        campaignId: expandedCampaign.id,
+        kind: 'direct',
+        title: '旧私聊',
+        participantIds: const ['user-2'],
+        createdBy: 'user-1',
+        createdAt: '2026-07-23T00:00:00.000Z',
+        updatedAt: '2026-07-23T10:00:00.000Z',
+      );
+      final client = _FakeCampaignClient(
+        campaigns: [expandedCampaign],
+        conversations: [secondaryConversation],
+      );
       final campaignController = CampaignController(
         apiBaseUrl: apiBaseUrl,
         authController: auth,
-        campaignClient: _FakeCampaignClient(campaigns: [expandedCampaign]),
+        campaignClient: client,
       );
       await campaignController.loadCampaigns();
+      final conversationController = ConversationController(
+        apiBaseUrl: apiBaseUrl,
+        authController: auth,
+        campaignClient: client,
+      );
+      await conversationController.loadConversations(expandedCampaign.id);
+      conversationController.setActiveConversation(secondaryConversation.id);
       final modeController = ClientModeController(
         initialMode: ClientMode.dungeonMaster,
       );
@@ -803,23 +868,23 @@ void main() {
             contentRepository: EmptyContentRepository(),
             modeController: modeController,
             appPreferencesController: prefs,
+            conversationController: conversationController,
             onCampaignOpened: (_) async => opened = true,
           ),
         ),
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('campaign-card-expand-toggle')));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('主聊天室'));
+      await tester.tap(find.byKey(CampaignListTile.mainChatKey));
       await tester.pumpAndSettle();
 
       expect(opened, isTrue);
+      expect(conversationController.activeConversationId, isNull);
 
       modeController.dispose();
       prefs.dispose();
       campaignController.dispose();
+      conversationController.dispose();
       auth.dispose();
       session.dispose();
     });
@@ -984,9 +1049,8 @@ void main() {
         await tester.tap(find.byKey(const Key('campaign-card-expand-toggle')));
         await tester.pumpAndSettle();
 
-        // Section headers show counts.
-        expect(find.text('私聊 (1)'), findsOneWidget);
-        expect(find.text('小群 (1)'), findsOneWidget);
+        expect(find.text('私聊'), findsOneWidget);
+        expect(find.text('小群'), findsOneWidget);
         // Group conversation title is rendered as a row.
         expect(find.text('突袭小队'), findsOneWidget);
         // Direct conversation title (resolved from CampaignConversation.title).
@@ -1107,6 +1171,18 @@ void main() {
       expect(find.text('Arannis'), findsOneWidget);
       expect(find.text('Briv'), findsOneWidget);
       expect(find.text('创建'), findsOneWidget);
+      final createButton = find.widgetWithText(FilledButton, '创建');
+      expect(tester.widget<FilledButton>(createButton).onPressed, isNull);
+
+      await tester.enterText(find.byType(TextField), '突袭小队');
+      await tester.tap(find.text('Arannis'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(createButton).onPressed, isNull);
+
+      await tester.tap(find.text('Briv'));
+      await tester.pumpAndSettle();
+
+      expect(tester.widget<FilledButton>(createButton).onPressed, isNotNull);
 
       modeController.dispose();
       prefs.dispose();
@@ -1364,7 +1440,7 @@ class _FakeCampaignClient implements CampaignClient {
     required String accessToken,
     required String campaignId,
     required String speakerMode,
-    String? actorId,
+    String? characterId,
   }) async => throw UnimplementedError();
 
   @override
@@ -1374,10 +1450,11 @@ class _FakeCampaignClient implements CampaignClient {
     required String campaignId,
     required String kind,
     required String content,
-    String? campaignActorId,
+    String? campaignCharacterId,
     String? actionId,
     Map<String, Object?>? eventData,
     Map<String, Object?>? speakerSnapshot,
+    Object? speaker,
     String? conversationId,
   }) async => throw UnimplementedError();
 

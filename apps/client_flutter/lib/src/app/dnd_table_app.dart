@@ -1,13 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/database/app_database.dart';
+import '../core/workspace/legacy_bootstrap_migrator.dart';
+import '../core/workspace/legacy_workspace_migrator.dart';
+import '../core/workspace/workspace_database_factory.dart';
+import '../core/workspace/workspace_session_coordinator.dart';
+import '../core/workspace/workspace_storage_manager.dart';
 import 'theme/app_theme.dart';
 import '../features/app_preferences/data/app_preferences_store.dart';
 import '../features/app_preferences/domain/app_preferences.dart';
 import '../features/app_preferences/presentation/app_preferences_controller.dart';
 import '../features/auth/data/auth_api_client.dart';
 import '../features/auth/data/auth_token_store.dart';
+import '../features/auth/domain/auth_session.dart';
 import '../features/campaigns/data/campaign_api_client.dart';
 import '../features/campaigns/data/campaign_socket_service.dart';
 import '../features/client_mode/data/client_mode_store.dart';
@@ -61,7 +69,10 @@ class _DndTableAppState extends State<DndTableApp> {
   AppPreferencesController? _ownedPreferencesController;
   late final Future<_AppDeps> _depsFuture;
   final ActiveServerSession _session = ActiveServerSession();
-  AppDatabase? _ownedDatabase;
+  AppDatabase? _ownedBootstrapDatabase;
+  AppDatabase? _ownedLegacyDatabase;
+  WorkspaceStorageManager? _workspaceStorage;
+  WorkspaceSessionCoordinator? _workspaceCoordinator;
 
   @override
   void initState() {
@@ -81,7 +92,9 @@ class _DndTableAppState extends State<DndTableApp> {
     }
     _session.dispose();
     _ownedPreferencesController?.dispose();
-    _ownedDatabase?.close();
+    unawaited(_workspaceStorage?.dispose() ?? Future<void>.value());
+    unawaited(_ownedBootstrapDatabase?.close() ?? Future<void>.value());
+    unawaited(_ownedLegacyDatabase?.close() ?? Future<void>.value());
     super.dispose();
   }
 
@@ -143,26 +156,50 @@ class _DndTableAppState extends State<DndTableApp> {
     }
 
     final AppDatabase database;
+    final bool managedWorkspace;
     if (injectedDatabase != null) {
       database = injectedDatabase;
-    } else if (_ownedDatabase != null) {
-      database = _ownedDatabase!;
+      managedWorkspace = false;
     } else {
-      _ownedDatabase = AppDatabase();
-      database = _ownedDatabase!;
+      final bootstrap = _ownedBootstrapDatabase ??= AppDatabase.named(
+        'bootstrap.db',
+      );
+      final legacy = _ownedLegacyDatabase ??= AppDatabase();
+      final storage = _workspaceStorage ??= WorkspaceStorageManager(
+        factory: const DriftWorkspaceDatabaseFactory(),
+      );
+      final coordinator = _workspaceCoordinator ??= WorkspaceSessionCoordinator(
+        storage: storage,
+      );
+      await coordinator.initialize();
+      await LegacyBootstrapMigrator(source: legacy, target: bootstrap).run();
+      await LegacyWorkspaceMigrator(
+        source: legacy,
+        target: storage.database!,
+      ).run();
+      await legacy.close();
+      if (identical(_ownedLegacyDatabase, legacy)) {
+        _ownedLegacyDatabase = null;
+      }
+      database = storage.database!;
+      managedWorkspace = true;
     }
 
     final ServerProfileStore serverProfileStore;
     if (injectedStore != null) {
       serverProfileStore = injectedStore;
     } else {
-      serverProfileStore = DriftServerProfileStore(database);
+      final profileDatabase = managedWorkspace
+          ? _ownedBootstrapDatabase!
+          : database;
+      serverProfileStore = DriftServerProfileStore(profileDatabase);
       final prefs = preferences ?? await SharedPreferences.getInstance();
-      await ServerProfileMigrator(database, prefs).run();
+      await ServerProfileMigrator(profileDatabase, prefs).run();
     }
 
     return _AppDeps(
       database: database,
+      managedWorkspace: managedWorkspace,
       serverProfileStore: serverProfileStore,
       authTokenStore:
           injectedTokenStore ?? SharedPreferencesAuthTokenStore(preferences!),
@@ -212,8 +249,15 @@ class _DndTableAppState extends State<DndTableApp> {
 
   /// 离线优先：始终进入 MainShell，服务器会话可选。
   Widget _buildHome(_AppDeps deps) {
+    final activeServerInstanceId = _session.profile?.instanceId;
+    final database = deps.managedWorkspace
+        ? _workspaceStorage!.database
+        : deps.database;
+    final workspaceGeneration = deps.managedWorkspace
+        ? _workspaceStorage!.generation
+        : 0;
     return MainShell(
-      key: ValueKey(_session.profile?.id),
+      key: ValueKey('${_session.profile?.id}:$workspaceGeneration'),
       session: _session,
       modeController: _modeController,
       authTokenStore: deps.authTokenStore,
@@ -221,24 +265,70 @@ class _DndTableAppState extends State<DndTableApp> {
       campaignClient: deps.campaignClient,
       campaignSocketService: widget.campaignSocketService,
       appPreferencesController: deps.appPreferencesController,
-      database: deps.database,
+      database: database,
+      workspaceStorageKey: deps.managedWorkspace
+          ? _workspaceStorage!.identity?.storageKey
+          : null,
       diceRoller: widget.diceRoller,
       enableBackgroundSync: widget.enableBackgroundSync,
       bundledContentLoader: widget.bundledContentLoader,
       serverProfileStore: deps.serverProfileStore,
+      onAuthUserChanged: deps.managedWorkspace
+          ? (user) => _onAuthUserChanged(
+              sourceServerInstanceId: activeServerInstanceId,
+              user: user,
+            )
+          : null,
       serverProfilesPageBuilder: (context) => ServerProfilesPage(
         store: deps.serverProfileStore,
         discoveryClient: widget.discoveryClient ?? ServerDiscoveryClient(),
         onProfileActivated: (activated) async {
           await deps.serverProfileStore.setDefaultProfileId(activated.id);
-          _session.activate(activated);
+          await _changeWorkspace(() async {
+            await _workspaceCoordinator?.loggedOut();
+            _session.activate(activated);
+          });
         },
       ),
       onSwitchToProfile: (profile) async {
         await deps.serverProfileStore.setDefaultProfileId(profile.id);
-        _session.activate(profile);
+        await _changeWorkspace(() async {
+          await _workspaceCoordinator?.loggedOut();
+          _session.activate(profile);
+        });
       },
     );
+  }
+
+  Future<void> _onAuthUserChanged({
+    required String? sourceServerInstanceId,
+    required AuthUser? user,
+  }) async {
+    final coordinator = _workspaceCoordinator;
+    if (coordinator == null) return;
+    final currentServerInstanceId = _session.profile?.instanceId;
+    if (sourceServerInstanceId != currentServerInstanceId) return;
+    await _changeWorkspace(() async {
+      if (user == null || sourceServerInstanceId == null) {
+        await coordinator.loggedOut();
+      } else {
+        await coordinator.authenticated(
+          serverInstanceId: sourceServerInstanceId,
+          userId: user.id,
+        );
+      }
+    });
+  }
+
+  Future<void> _changeWorkspace(Future<void> Function() activate) async {
+    await activate();
+    if (!mounted) {
+      await _workspaceStorage?.completeHandoff();
+      return;
+    }
+    setState(() {});
+    await WidgetsBinding.instance.endOfFrame;
+    await _workspaceStorage?.completeHandoff();
   }
 
   Widget _buildMaterialApp({
@@ -309,6 +399,7 @@ class _StartupErrorPage extends StatelessWidget {
 class _AppDeps {
   const _AppDeps({
     this.database,
+    this.managedWorkspace = false,
     required this.serverProfileStore,
     required this.authTokenStore,
     required this.appPreferencesController,
@@ -317,6 +408,7 @@ class _AppDeps {
   });
 
   final AppDatabase? database;
+  final bool managedWorkspace;
   final ServerProfileStore serverProfileStore;
   final AuthTokenStore authTokenStore;
   final AppPreferencesController appPreferencesController;

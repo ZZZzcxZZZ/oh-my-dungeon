@@ -42,7 +42,10 @@ void main() {
 
       await controller.loadWorkspaceContext('camp-1');
 
-      expect(controller.workspaceContext?.membership.boundActorId, 'actor-1');
+      expect(
+        controller.workspaceContext?.membership.boundCharacterId,
+        'character-1',
+      );
       expect(
         controller.workspaceContext?.capabilities.canManageCampaign,
         isFalse,
@@ -97,7 +100,7 @@ void main() {
 
         expect(updated, isTrue);
         expect(
-          controller.workspaceContext?.membership.activeSpeakerActorId,
+          controller.workspaceContext?.membership.activeSpeakerCharacterId,
           isNull,
         );
         // The membership object should have been replaced, not the same instance.
@@ -107,6 +110,37 @@ void main() {
             originalMembership,
           ),
           isFalse,
+        );
+
+        controller.dispose();
+        authController.dispose();
+      },
+    );
+
+    test(
+      'binds the current player and refreshes workspace membership',
+      () async {
+        final authController = await buildLoggedInAuthController();
+        final controller = CampaignContextController(
+          apiBaseUrl: apiBaseUrl,
+          authController: authController,
+          campaignClient: _FakeCampaignClient(),
+        );
+
+        await controller.loadWorkspaceContext('camp-1');
+        final updated = await controller.updateMemberBinding(
+          campaignId: 'camp-1',
+          characterId: 'character-2',
+        );
+
+        expect(updated, isTrue);
+        expect(
+          controller.workspaceContext?.membership.boundCharacterId,
+          'character-2',
+        );
+        expect(
+          controller.workspaceContext?.membership.speakerMode,
+          'boundCharacter',
         );
 
         controller.dispose();
@@ -326,7 +360,7 @@ class _FakeAuthClient implements AuthClient {
   }
 }
 
-class _FakeCampaignClient implements CampaignClient {
+class _FakeCampaignClient implements CampaignClient, CampaignBindingClient {
   _FakeCampaignClient({this.workspaceContextError, this.archivesError});
 
   final CampaignApiException? workspaceContextError;
@@ -353,7 +387,7 @@ class _FakeCampaignClient implements CampaignClient {
     required String accessToken,
     required String campaignId,
     required String speakerMode,
-    String? actorId,
+    String? characterId,
   }) async {
     return const CampaignMembership(
       id: 'member-1',
@@ -362,8 +396,28 @@ class _FakeCampaignClient implements CampaignClient {
       role: 'player',
       displayName: 'ranger',
       joinedAt: '2026-07-09T00:00:00.000Z',
-      boundActorId: 'actor-1',
-      activeSpeakerActorId: null,
+      boundCharacterId: 'character-1',
+      activeSpeakerCharacterId: null,
+    );
+  }
+
+  @override
+  Future<CampaignMembership> updateMemberBinding({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String userId,
+    required String? characterId,
+  }) async {
+    return CampaignMembership(
+      id: 'member-1',
+      campaignId: campaignId,
+      userId: userId,
+      role: 'player',
+      displayName: 'ranger',
+      joinedAt: '2026-07-09T00:00:00.000Z',
+      boundCharacterId: characterId,
+      speakerMode: 'boundCharacter',
     );
   }
 
@@ -471,15 +525,15 @@ class _FakeCampaignClient implements CampaignClient {
         role: 'player',
         displayName: 'ranger',
         joinedAt: '2026-07-09T00:00:00.000Z',
-        boundActorId: 'actor-1',
-        activeSpeakerActorId: 'actor-1',
+        boundCharacterId: 'character-1',
+        activeSpeakerCharacterId: 'character-1',
       ),
       members: const [],
-      actors: const [],
+      characters: const [],
       capabilities: const CampaignCapabilities(
         canManageCampaign: false,
         canManageMembers: false,
-        canCreateActors: false,
+        canCreateCharacters: false,
         canSpeakAsNarrator: false,
       ),
     );
@@ -559,10 +613,11 @@ class _FakeCampaignClient implements CampaignClient {
     required String campaignId,
     required String kind,
     required String content,
-    String? campaignActorId,
+    String? campaignCharacterId,
     String? actionId,
     Map<String, Object?>? eventData,
     Map<String, Object?>? speakerSnapshot,
+    Object? speaker,
     String? conversationId,
   }) {
     throw UnimplementedError();

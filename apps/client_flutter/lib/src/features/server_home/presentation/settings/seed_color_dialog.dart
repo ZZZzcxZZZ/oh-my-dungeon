@@ -92,7 +92,9 @@ class _SeedColorDialogState extends State<SeedColorDialog> {
                     onTap: () {
                       setState(() {
                         _selected = preset.color;
-                        _hexController.text = _hexFor(preset.color).toUpperCase();
+                        _hexController.text = _hexFor(
+                          preset.color,
+                        ).toUpperCase();
                       });
                     },
                     child: Container(
@@ -146,9 +148,7 @@ class _SeedColorDialogState extends State<SeedColorDialog> {
                       hintText: '0061A4',
                     ),
                     inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                        RegExp(r'[0-9a-fA-F]'),
-                      ),
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9a-fA-F]')),
                       LengthLimitingTextInputFormatter(6),
                     ],
                     onChanged: (value) {

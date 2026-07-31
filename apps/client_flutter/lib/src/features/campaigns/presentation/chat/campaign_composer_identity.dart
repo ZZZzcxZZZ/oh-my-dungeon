@@ -1,67 +1,70 @@
 import '../../../characters/domain/character.dart';
 import '../../domain/campaign.dart';
-import '../../domain/campaign_actor.dart';
+import '../../domain/campaign_character.dart';
 import '../../domain/campaign_health.dart';
 
 /// Presentation model for the identity currently used by the chat composer.
 ///
 /// The server-side membership is authoritative. Local characters are only
-/// joined back in to provide offline sheet details for the active actor.
+/// joined back in to provide offline sheet details for the active character.
 class CampaignComposerIdentity {
   const CampaignComposerIdentity({
     required this.displayName,
     required this.speakerMode,
-    required this.actorId,
+    required this.characterId,
     required this.avatarUrl,
     required this.healthState,
     this.healthFraction,
     required this.localCharacter,
-    required this.campaignActor,
+    required this.campaignCharacter,
     required this.subtitle,
   });
 
   final String displayName;
   final String speakerMode;
-  final String? actorId;
+  final String? characterId;
   final String? avatarUrl;
   final String? healthState;
   final double? healthFraction;
   final CharacterSheet? localCharacter;
-  final CampaignActor? campaignActor;
+  final CampaignCharacter? campaignCharacter;
   final String subtitle;
 
   bool get isOoc => speakerMode == 'ooc';
-  bool get hasCharacterSheet => localCharacter != null || campaignActor != null;
+  bool get supportsSayAction =>
+      speakerMode != 'narrator' && speakerMode != 'ooc';
+  bool get hasCharacterSheet =>
+      localCharacter != null || campaignCharacter != null;
 
   Map<String, Object?> get characterData {
     final local = localCharacter;
     if (local != null) return local.dataMap;
-    final data = campaignActor?.sheet['data'];
+    final data = campaignCharacter?.sheet['data'];
     return data is Map ? Map<String, Object?>.from(data) : const {};
   }
 }
 
 CampaignComposerIdentity resolveCampaignComposerIdentity({
   required CampaignWorkspaceContext? workspace,
-  required List<CampaignActor> campaignActors,
+  required List<CampaignCharacter> campaignCharacters,
   required List<CharacterSheet> localCharacters,
   CharacterSheet? fallbackCharacter,
-  String? fallbackActorId,
+  String? fallbackCharacterId,
 }) {
   final membership = workspace?.membership;
   final speakerMode =
       membership?.speakerMode ??
-      (fallbackActorId == null ? 'boundActor' : 'actor');
+      (fallbackCharacterId == null ? 'boundCharacter' : 'character');
 
   if (speakerMode == 'narrator') {
     return const CampaignComposerIdentity(
       displayName: '旁白 / DM',
       speakerMode: 'narrator',
-      actorId: null,
+      characterId: null,
       avatarUrl: null,
       healthState: null,
       localCharacter: null,
-      campaignActor: null,
+      campaignCharacter: null,
       subtitle: '以旁白身份发言',
     );
   }
@@ -70,42 +73,42 @@ CampaignComposerIdentity resolveCampaignComposerIdentity({
     return CampaignComposerIdentity(
       displayName: membership?.displayName ?? '场外',
       speakerMode: 'ooc',
-      actorId: null,
+      characterId: null,
       avatarUrl: null,
       healthState: null,
       localCharacter: null,
-      campaignActor: null,
+      campaignCharacter: null,
       subtitle: '场外发言',
     );
   }
 
-  final actorId =
-      membership?.activeSpeakerActorId ??
-      (speakerMode == 'boundActor' ? membership?.boundActorId : null) ??
-      fallbackActorId;
-  final workspaceActor = _firstWhereOrNull(
-    workspace?.actors ?? const <CampaignWorkspaceActor>[],
-    (actor) => actor.id == actorId,
+  final characterId =
+      membership?.activeSpeakerCharacterId ??
+      (speakerMode == 'boundCharacter' ? membership?.boundCharacterId : null) ??
+      fallbackCharacterId;
+  final workspaceCharacter = _firstWhereOrNull(
+    workspace?.characters ?? const <CampaignWorkspaceCharacter>[],
+    (character) => character.id == characterId,
   );
-  final campaignActor = _firstWhereOrNull(
-    campaignActors,
-    (actor) => actor.id == actorId,
+  final campaignCharacter = _firstWhereOrNull(
+    campaignCharacters,
+    (character) => character.id == characterId,
   );
-  final sourceCharacterId = campaignActor?.sourceCharacterId;
+  final sourceCharacterId = campaignCharacter?.sourceCharacterId;
   final localCharacter =
       _firstWhereOrNull(
         localCharacters,
         (character) => character.id == sourceCharacterId,
       ) ??
       ((fallbackCharacter != null &&
-              (actorId == fallbackActorId ||
+              (characterId == fallbackCharacterId ||
                   sourceCharacterId == fallbackCharacter.id ||
-                  actorId == null))
+                  characterId == null))
           ? fallbackCharacter
           : null);
-  final sheet = campaignActor?.sheet ?? const <String, Object?>{};
+  final sheet = campaignCharacter?.sheet ?? const <String, Object?>{};
   final name =
-      workspaceActor?.displayName ??
+      workspaceCharacter?.displayName ??
       _nonEmptyString(sheet['name']) ??
       localCharacter?.name ??
       fallbackCharacter?.name ??
@@ -118,14 +121,14 @@ CampaignComposerIdentity resolveCampaignComposerIdentity({
       ? _exactStatsFromSheet(sheet)
       : 'HP ${localCharacter.currentHp}/${localCharacter.maxHp} · '
             'AC ${localCharacter.armorClass}';
-  final actorLabel = _actorTypeLabel(
-    workspaceActor?.actorType ?? campaignActor?.actorType,
+  final characterLabel = _characterTypeLabel(
+    workspaceCharacter?.characterType ?? campaignCharacter?.characterType,
   );
 
   return CampaignComposerIdentity(
     displayName: name,
     speakerMode: speakerMode,
-    actorId: actorId,
+    characterId: characterId,
     avatarUrl: avatarUrl,
     healthState:
         campaignHealthStateFromSheet(sheet) ??
@@ -135,7 +138,7 @@ CampaignComposerIdentity resolveCampaignComposerIdentity({
                 localCharacter.currentHp,
                 localCharacter.maxHp,
               )) ??
-        workspaceActor?.publicHealthState,
+        workspaceCharacter?.publicHealthState,
     healthFraction:
         campaignHealthFractionFromSheet(sheet) ??
         (localCharacter == null
@@ -145,8 +148,8 @@ CampaignComposerIdentity resolveCampaignComposerIdentity({
                 localCharacter.maxHp,
               )),
     localCharacter: localCharacter,
-    campaignActor: campaignActor,
-    subtitle: hp ?? actorLabel ?? '角色发言',
+    campaignCharacter: campaignCharacter,
+    subtitle: hp ?? characterLabel ?? '角色发言',
   );
 }
 
@@ -170,7 +173,7 @@ String? _exactStatsFromSheet(Map<String, Object?> sheet) {
   return 'HP ${currentHp.toInt()}/${maxHp.toInt()} · AC ${armorClass.toInt()}';
 }
 
-String? _actorTypeLabel(String? actorType) => switch (actorType) {
+String? _characterTypeLabel(String? characterType) => switch (characterType) {
   'npc' => 'NPC',
   'monster' => '怪物',
   'companion' => '同伴',

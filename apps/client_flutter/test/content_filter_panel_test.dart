@@ -49,13 +49,13 @@ List<ContentEntry> _spellPackage() => [
 ];
 
 Widget _buildApp(List<ContentEntry> entries) => MaterialApp(
-      home: ContentLibraryPage(
-        controller: ContentLibraryController(
-          repository: MemoryContentRepository(initialEntries: entries),
-        ),
-        onImportRequested: () {},
-      ),
-    );
+  home: ContentLibraryPage(
+    controller: ContentLibraryController(
+      repository: MemoryContentRepository(initialEntries: entries),
+    ),
+    onImportRequested: () {},
+  ),
+);
 
 void main() {
   group('filter panel M3 refactor (Task 2.2)', () {
@@ -85,10 +85,12 @@ void main() {
       );
       // 计数格式: "塑能 (2)" 或 "塑能 · 2", 关键是包含数字.
       final plasticChip = tester.widget<FilterChip>(
-        find.ancestor(
-          of: find.textContaining('塑能'),
-          matching: find.byType(FilterChip),
-        ).first,
+        find
+            .ancestor(
+              of: find.textContaining('塑能'),
+              matching: find.byType(FilterChip),
+            )
+            .first,
       );
       final chipLabel = plasticChip.label as Text;
       expect(chipLabel.data, contains('2'));
@@ -98,7 +100,9 @@ void main() {
       );
     });
 
-    testWidgets('type filters use ChoiceChip semantics (single-select)', (tester) async {
+    testWidgets('type filters use ChoiceChip semantics (single-select)', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildApp(_spellPackage()));
       await tester.pumpAndSettle();
 
@@ -107,10 +111,7 @@ void main() {
 
       // 初始选中 "全部".
       final allChip = tester.widget<ChoiceChip>(
-        find.ancestor(
-          of: find.text('全部'),
-          matching: find.byType(ChoiceChip),
-        ),
+        find.ancestor(of: find.text('全部'), matching: find.byType(ChoiceChip)),
       );
       expect(allChip.selected, isTrue);
 
@@ -119,18 +120,12 @@ void main() {
       await tester.pumpAndSettle();
 
       final allChipAfter = tester.widget<ChoiceChip>(
-        find.ancestor(
-          of: find.text('全部'),
-          matching: find.byType(ChoiceChip),
-        ),
+        find.ancestor(of: find.text('全部'), matching: find.byType(ChoiceChip)),
       );
       expect(allChipAfter.selected, isFalse);
 
       final spellChip = tester.widget<ChoiceChip>(
-        find.ancestor(
-          of: find.text('法术'),
-          matching: find.byType(ChoiceChip),
-        ),
+        find.ancestor(of: find.text('法术'), matching: find.byType(ChoiceChip)),
       );
       expect(spellChip.selected, isTrue);
     });
@@ -159,7 +154,9 @@ void main() {
       );
     });
 
-    testWidgets('filter sheet is drag-resizable on small screens', (tester) async {
+    testWidgets('filter sheet is drag-resizable on small screens', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);

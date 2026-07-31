@@ -6,12 +6,12 @@ import '../../../../core/database/app_database.dart';
 import '../../../characters/data/character_repository.dart';
 import '../../../characters/data/local/character_sync_conflict_repository.dart';
 import '../../../characters/domain/character.dart';
-import '../../domain/campaign_actor.dart';
+import '../../domain/campaign_character.dart';
 
-/// 把远端 Actor 变更回写到本地角色。运行时字段（HP、临时生命、状态）始终覆盖，
+/// 把远端 Character 变更回写到本地角色。运行时字段（HP、临时生命、状态）始终覆盖，
 /// 构建字段（属性、豁免、技能等）仅在本地未偏离 lastPublished 时覆盖，否则记录冲突。
-class CampaignActorBacklinkService {
-  CampaignActorBacklinkService({
+class CampaignCharacterBacklinkService {
+  CampaignCharacterBacklinkService({
     required this.characterRepository,
     required this.database,
   });
@@ -19,30 +19,38 @@ class CampaignActorBacklinkService {
   final CharacterRepository characterRepository;
   final AppDatabase database;
 
-  Future<void> applyActorToCharacter(CampaignActor actor) {
-    return _applyActorToCharacter(actor, acceptRemoteBuild: false);
+  Future<void> applyCharacterToCharacter(CampaignCharacter campaignCharacter) {
+    return _applyCharacterToCharacter(
+      campaignCharacter,
+      acceptRemoteBuild: false,
+    );
   }
 
-  /// Applies the actor produced by a successful local publish and establishes
+  /// Applies the character produced by a successful local publish and establishes
   /// it as the new sync baseline. This must not conflict with the edit that
   /// initiated the publish.
-  Future<void> applyPublishedActorToCharacter(CampaignActor actor) {
-    return _applyActorToCharacter(actor, acceptRemoteBuild: true);
+  Future<void> applyPublishedCharacterToCharacter(
+    CampaignCharacter campaignCharacter,
+  ) {
+    return _applyCharacterToCharacter(
+      campaignCharacter,
+      acceptRemoteBuild: true,
+    );
   }
 
-  Future<void> _applyActorToCharacter(
-    CampaignActor actor, {
+  Future<void> _applyCharacterToCharacter(
+    CampaignCharacter campaignCharacter, {
     required bool acceptRemoteBuild,
   }) async {
-    if (actor.sourceCharacterId == null) return;
-    final characterId = actor.sourceCharacterId!;
-    final character = await characterRepository.getById(characterId);
+    if (campaignCharacter.sourceCharacterId == null) return;
+    final sourceCharacterId = campaignCharacter.sourceCharacterId!;
+    final character = await characterRepository.getById(sourceCharacterId);
     if (character == null) return; // 不得删除本地角色
 
-    final sheet = actor.sheet;
-    final backlink = await _loadBacklink(actor.id);
+    final sheet = campaignCharacter.sheet;
+    final backlink = await _loadBacklink(campaignCharacter.id);
     final lastPublished = backlink?.lastPublishedLocalRevision ?? 0;
-    final localRevision = await _readCharacterRevision(characterId);
+    final localRevision = await _readCharacterRevision(sourceCharacterId);
 
     // 运行时字段：HP、最大 HP、AC、速度始终覆盖。
     var updated = character.copyWith(
@@ -62,22 +70,24 @@ class CampaignActorBacklinkService {
         localRevision != lastPublished;
     if (buildDiverged) {
       await _recordConflict(
-        characterId: characterId,
-        actorId: actor.id,
+        campaignCharacterId: campaignCharacter.id,
+        characterId: character.id,
         localSheet: updated.toJson(),
-        remoteSheet: {...sheet, 'revision': actor.revision},
+        remoteSheet: {...sheet, 'revision': campaignCharacter.revision},
       );
     } else {
       updated = _mergeRemoteBuild(updated, sheet);
     }
 
     await characterRepository.save(updated);
-    final appliedLocalRevision = await _readCharacterRevision(characterId);
+    final appliedLocalRevision = await _readCharacterRevision(
+      sourceCharacterId,
+    );
     await _saveBacklink(
-      actor.id,
-      characterId,
+      campaignCharacter.id,
+      sourceCharacterId,
       buildDiverged ? lastPublished : appliedLocalRevision,
-      actor.revision,
+      campaignCharacter.revision,
     );
   }
 
@@ -100,17 +110,17 @@ class CampaignActorBacklinkService {
       final updated = CharacterSheet.fromJson(merged);
       await characterRepository.save(updated);
       final localRevision = await _readCharacterRevision(character.id);
-      final actorRevision = remote['revision'] is num
+      final characterRevision = remote['revision'] is num
           ? (remote['revision'] as num).toInt()
           : (await _loadBacklink(
-                  conflict.campaignActorId,
-                ))?.lastAppliedActorRevision ??
+                  conflict.campaignCharacterId,
+                ))?.lastAppliedCharacterRevision ??
                 0;
       await _saveBacklink(
-        conflict.campaignActorId,
+        conflict.campaignCharacterId,
         character.id,
         localRevision,
-        actorRevision,
+        characterRevision,
       );
       return true;
     } catch (_) {
@@ -118,11 +128,13 @@ class CampaignActorBacklinkService {
     }
   }
 
-  Future<CampaignActorBacklinkRow?> _loadBacklink(String actorId) async {
+  Future<CampaignCharacterBacklinkRow?> _loadBacklink(
+    String characterId,
+  ) async {
     final db = database;
-    return (db.select(
-      db.campaignActorBacklinks,
-    )..where((t) => t.campaignActorId.equals(actorId))).getSingleOrNull();
+    return (db.select(db.campaignCharacterBacklinks)
+          ..where((t) => t.campaignCharacterId.equals(characterId)))
+        .getSingleOrNull();
   }
 
   Future<int> _readCharacterRevision(String characterId) async {
@@ -134,40 +146,41 @@ class CampaignActorBacklinkService {
   }
 
   Future<void> _saveBacklink(
-    String actorId,
-    String characterId,
+    String campaignCharacterId,
+    String sourceCharacterId,
     int localRevision,
-    int actorRevision,
+    int characterRevision,
   ) async {
     final db = database;
     await db
-        .into(db.campaignActorBacklinks)
+        .into(db.campaignCharacterBacklinks)
         .insertOnConflictUpdate(
-          CampaignActorBacklinksCompanion.insert(
-            campaignActorId: actorId,
-            sourceCharacterId: characterId,
+          CampaignCharacterBacklinksCompanion.insert(
+            campaignCharacterId: campaignCharacterId,
+            sourceCharacterId: sourceCharacterId,
             lastPublishedLocalRevision: Value(localRevision),
-            lastAppliedActorRevision: Value(actorRevision),
+            lastAppliedCharacterRevision: Value(characterRevision),
           ),
         );
   }
 
   Future<void> _recordConflict({
+    required String campaignCharacterId,
     required String characterId,
-    required String actorId,
     required Map<String, Object?> localSheet,
     required Map<String, Object?> remoteSheet,
   }) async {
     final db = database;
     final id =
-        'conflict:$characterId:$actorId:${DateTime.now().microsecondsSinceEpoch}';
+        'conflict:$campaignCharacterId:$characterId:'
+        '${DateTime.now().microsecondsSinceEpoch}';
     await db
         .into(db.characterSyncConflicts)
         .insert(
           CharacterSyncConflictsCompanion.insert(
             id: id,
             characterId: characterId,
-            campaignActorId: actorId,
+            campaignCharacterId: campaignCharacterId,
             fieldPath: 'build',
             localValueJson: Value(jsonEncode(localSheet)),
             remoteValueJson: Value(jsonEncode(remoteSheet)),

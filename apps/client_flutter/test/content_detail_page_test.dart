@@ -53,8 +53,9 @@ void main() {
     expect(find.textContaining('爆炸性火焰'), findsOneWidget);
   });
 
-  testWidgets('reader is read-only with no edit duplicate or note entry',
-      (tester) async {
+  testWidgets('reader is read-only with no edit duplicate or note entry', (
+    tester,
+  ) async {
     await pumpDetailPage(tester);
     expect(find.byTooltip('编辑条目'), findsNothing);
     expect(find.byTooltip('复制条目'), findsNothing);

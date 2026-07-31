@@ -50,19 +50,38 @@ void main() {
     await database.close();
   });
 
-  test('drift store persists profiles and default id across instances', () async {
+  test(
+    'drift store persists profiles and default id across instances',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      final first = DriftServerProfileStore(database);
+      await first.saveProfile(profile);
+      await first.setDefaultProfileId(profile.id);
+
+      final second = DriftServerProfileStore(database);
+      expect(await second.listProfiles(), [profile]);
+      expect(await second.getDefaultProfileId(), profile.id);
+
+      await second.deleteProfile(profile.id);
+      expect(await second.listProfiles(), isEmpty);
+      expect(await second.getDefaultProfileId(), isNull);
+      await database.close();
+    },
+  );
+
+  test('refreshing discovered metadata preserves the local alias', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
-    final first = DriftServerProfileStore(database);
-    await first.saveProfile(profile);
-    await first.setDefaultProfileId(profile.id);
+    final store = DriftServerProfileStore(database);
+    await store.saveProfile(profile.copyWith(localAlias: '周五团'));
 
-    final second = DriftServerProfileStore(database);
-    expect(await second.listProfiles(), [profile]);
-    expect(await second.getDefaultProfileId(), profile.id);
+    await store.saveProfile(
+      profile.copyWith(serverName: 'Renamed Server', localAlias: null),
+    );
 
-    await second.deleteProfile(profile.id);
-    expect(await second.listProfiles(), isEmpty);
-    expect(await second.getDefaultProfileId(), isNull);
+    final saved = (await store.listProfiles()).single;
+    expect(saved.serverName, 'Renamed Server');
+    expect(saved.localAlias, '周五团');
+    expect(saved.displayName, '周五团');
     await database.close();
   });
 

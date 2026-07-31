@@ -27,6 +27,17 @@ class $ServerProfilesTable extends ServerProfiles
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _localAliasMeta = const VerificationMeta(
+    'localAlias',
+  );
+  @override
+  late final GeneratedColumn<String> localAlias = GeneratedColumn<String>(
+    'local_alias',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _baseUrlMeta = const VerificationMeta(
     'baseUrl',
   );
@@ -103,6 +114,7 @@ class $ServerProfilesTable extends ServerProfiles
   List<GeneratedColumn> get $columns => [
     id,
     name,
+    localAlias,
     baseUrl,
     apiBaseUrl,
     websocketUrl,
@@ -134,6 +146,12 @@ class $ServerProfilesTable extends ServerProfiles
       );
     } else if (isInserting) {
       context.missing(_nameMeta);
+    }
+    if (data.containsKey('local_alias')) {
+      context.handle(
+        _localAliasMeta,
+        localAlias.isAcceptableOrUnknown(data['local_alias']!, _localAliasMeta),
+      );
     }
     if (data.containsKey('base_url')) {
       context.handle(
@@ -206,6 +224,10 @@ class $ServerProfilesTable extends ServerProfiles
         DriftSqlType.string,
         data['${effectivePrefix}name'],
       )!,
+      localAlias: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}local_alias'],
+      ),
       baseUrl: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}base_url'],
@@ -243,6 +265,7 @@ class ServerProfileRow extends DataClass
     implements Insertable<ServerProfileRow> {
   final String id;
   final String name;
+  final String? localAlias;
   final String baseUrl;
   final String apiBaseUrl;
   final String websocketUrl;
@@ -252,6 +275,7 @@ class ServerProfileRow extends DataClass
   const ServerProfileRow({
     required this.id,
     required this.name,
+    this.localAlias,
     required this.baseUrl,
     required this.apiBaseUrl,
     required this.websocketUrl,
@@ -264,6 +288,9 @@ class ServerProfileRow extends DataClass
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
     map['name'] = Variable<String>(name);
+    if (!nullToAbsent || localAlias != null) {
+      map['local_alias'] = Variable<String>(localAlias);
+    }
     map['base_url'] = Variable<String>(baseUrl);
     map['api_base_url'] = Variable<String>(apiBaseUrl);
     map['websocket_url'] = Variable<String>(websocketUrl);
@@ -279,6 +306,9 @@ class ServerProfileRow extends DataClass
     return ServerProfilesCompanion(
       id: Value(id),
       name: Value(name),
+      localAlias: localAlias == null && nullToAbsent
+          ? const Value.absent()
+          : Value(localAlias),
       baseUrl: Value(baseUrl),
       apiBaseUrl: Value(apiBaseUrl),
       websocketUrl: Value(websocketUrl),
@@ -298,6 +328,7 @@ class ServerProfileRow extends DataClass
     return ServerProfileRow(
       id: serializer.fromJson<String>(json['id']),
       name: serializer.fromJson<String>(json['name']),
+      localAlias: serializer.fromJson<String?>(json['localAlias']),
       baseUrl: serializer.fromJson<String>(json['baseUrl']),
       apiBaseUrl: serializer.fromJson<String>(json['apiBaseUrl']),
       websocketUrl: serializer.fromJson<String>(json['websocketUrl']),
@@ -312,6 +343,7 @@ class ServerProfileRow extends DataClass
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
       'name': serializer.toJson<String>(name),
+      'localAlias': serializer.toJson<String?>(localAlias),
       'baseUrl': serializer.toJson<String>(baseUrl),
       'apiBaseUrl': serializer.toJson<String>(apiBaseUrl),
       'websocketUrl': serializer.toJson<String>(websocketUrl),
@@ -324,6 +356,7 @@ class ServerProfileRow extends DataClass
   ServerProfileRow copyWith({
     String? id,
     String? name,
+    Value<String?> localAlias = const Value.absent(),
     String? baseUrl,
     String? apiBaseUrl,
     String? websocketUrl,
@@ -333,6 +366,7 @@ class ServerProfileRow extends DataClass
   }) => ServerProfileRow(
     id: id ?? this.id,
     name: name ?? this.name,
+    localAlias: localAlias.present ? localAlias.value : this.localAlias,
     baseUrl: baseUrl ?? this.baseUrl,
     apiBaseUrl: apiBaseUrl ?? this.apiBaseUrl,
     websocketUrl: websocketUrl ?? this.websocketUrl,
@@ -346,6 +380,9 @@ class ServerProfileRow extends DataClass
     return ServerProfileRow(
       id: data.id.present ? data.id.value : this.id,
       name: data.name.present ? data.name.value : this.name,
+      localAlias: data.localAlias.present
+          ? data.localAlias.value
+          : this.localAlias,
       baseUrl: data.baseUrl.present ? data.baseUrl.value : this.baseUrl,
       apiBaseUrl: data.apiBaseUrl.present
           ? data.apiBaseUrl.value
@@ -368,6 +405,7 @@ class ServerProfileRow extends DataClass
     return (StringBuffer('ServerProfileRow(')
           ..write('id: $id, ')
           ..write('name: $name, ')
+          ..write('localAlias: $localAlias, ')
           ..write('baseUrl: $baseUrl, ')
           ..write('apiBaseUrl: $apiBaseUrl, ')
           ..write('websocketUrl: $websocketUrl, ')
@@ -382,6 +420,7 @@ class ServerProfileRow extends DataClass
   int get hashCode => Object.hash(
     id,
     name,
+    localAlias,
     baseUrl,
     apiBaseUrl,
     websocketUrl,
@@ -395,6 +434,7 @@ class ServerProfileRow extends DataClass
       (other is ServerProfileRow &&
           other.id == this.id &&
           other.name == this.name &&
+          other.localAlias == this.localAlias &&
           other.baseUrl == this.baseUrl &&
           other.apiBaseUrl == this.apiBaseUrl &&
           other.websocketUrl == this.websocketUrl &&
@@ -406,6 +446,7 @@ class ServerProfileRow extends DataClass
 class ServerProfilesCompanion extends UpdateCompanion<ServerProfileRow> {
   final Value<String> id;
   final Value<String> name;
+  final Value<String?> localAlias;
   final Value<String> baseUrl;
   final Value<String> apiBaseUrl;
   final Value<String> websocketUrl;
@@ -416,6 +457,7 @@ class ServerProfilesCompanion extends UpdateCompanion<ServerProfileRow> {
   const ServerProfilesCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
+    this.localAlias = const Value.absent(),
     this.baseUrl = const Value.absent(),
     this.apiBaseUrl = const Value.absent(),
     this.websocketUrl = const Value.absent(),
@@ -427,6 +469,7 @@ class ServerProfilesCompanion extends UpdateCompanion<ServerProfileRow> {
   ServerProfilesCompanion.insert({
     required String id,
     required String name,
+    this.localAlias = const Value.absent(),
     required String baseUrl,
     required String apiBaseUrl,
     required String websocketUrl,
@@ -442,6 +485,7 @@ class ServerProfilesCompanion extends UpdateCompanion<ServerProfileRow> {
   static Insertable<ServerProfileRow> custom({
     Expression<String>? id,
     Expression<String>? name,
+    Expression<String>? localAlias,
     Expression<String>? baseUrl,
     Expression<String>? apiBaseUrl,
     Expression<String>? websocketUrl,
@@ -453,6 +497,7 @@ class ServerProfilesCompanion extends UpdateCompanion<ServerProfileRow> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (name != null) 'name': name,
+      if (localAlias != null) 'local_alias': localAlias,
       if (baseUrl != null) 'base_url': baseUrl,
       if (apiBaseUrl != null) 'api_base_url': apiBaseUrl,
       if (websocketUrl != null) 'websocket_url': websocketUrl,
@@ -466,6 +511,7 @@ class ServerProfilesCompanion extends UpdateCompanion<ServerProfileRow> {
   ServerProfilesCompanion copyWith({
     Value<String>? id,
     Value<String>? name,
+    Value<String?>? localAlias,
     Value<String>? baseUrl,
     Value<String>? apiBaseUrl,
     Value<String>? websocketUrl,
@@ -477,6 +523,7 @@ class ServerProfilesCompanion extends UpdateCompanion<ServerProfileRow> {
     return ServerProfilesCompanion(
       id: id ?? this.id,
       name: name ?? this.name,
+      localAlias: localAlias ?? this.localAlias,
       baseUrl: baseUrl ?? this.baseUrl,
       apiBaseUrl: apiBaseUrl ?? this.apiBaseUrl,
       websocketUrl: websocketUrl ?? this.websocketUrl,
@@ -495,6 +542,9 @@ class ServerProfilesCompanion extends UpdateCompanion<ServerProfileRow> {
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
+    }
+    if (localAlias.present) {
+      map['local_alias'] = Variable<String>(localAlias.value);
     }
     if (baseUrl.present) {
       map['base_url'] = Variable<String>(baseUrl.value);
@@ -525,6 +575,7 @@ class ServerProfilesCompanion extends UpdateCompanion<ServerProfileRow> {
     return (StringBuffer('ServerProfilesCompanion(')
           ..write('id: $id, ')
           ..write('name: $name, ')
+          ..write('localAlias: $localAlias, ')
           ..write('baseUrl: $baseUrl, ')
           ..write('apiBaseUrl: $apiBaseUrl, ')
           ..write('websocketUrl: $websocketUrl, ')
@@ -4769,6 +4820,32 @@ class $CharactersTable extends Characters
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _markdownMirrorMeta = const VerificationMeta(
+    'markdownMirror',
+  );
+  @override
+  late final GeneratedColumn<String> markdownMirror = GeneratedColumn<String>(
+    'markdown_mirror',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _markdownDirtyMeta = const VerificationMeta(
+    'markdownDirty',
+  );
+  @override
+  late final GeneratedColumn<bool> markdownDirty = GeneratedColumn<bool>(
+    'markdown_dirty',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("markdown_dirty" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _revisionMeta = const VerificationMeta(
     'revision',
   );
@@ -4832,6 +4909,8 @@ class $CharactersTable extends Characters
     id,
     ownerLocalId,
     sheetJson,
+    markdownMirror,
+    markdownDirty,
     revision,
     syncRevision,
     archivedAt,
@@ -4871,6 +4950,24 @@ class $CharactersTable extends Characters
       );
     } else if (isInserting) {
       context.missing(_sheetJsonMeta);
+    }
+    if (data.containsKey('markdown_mirror')) {
+      context.handle(
+        _markdownMirrorMeta,
+        markdownMirror.isAcceptableOrUnknown(
+          data['markdown_mirror']!,
+          _markdownMirrorMeta,
+        ),
+      );
+    }
+    if (data.containsKey('markdown_dirty')) {
+      context.handle(
+        _markdownDirtyMeta,
+        markdownDirty.isAcceptableOrUnknown(
+          data['markdown_dirty']!,
+          _markdownDirtyMeta,
+        ),
+      );
     }
     if (data.containsKey('revision')) {
       context.handle(
@@ -4926,6 +5023,14 @@ class $CharactersTable extends Characters
         DriftSqlType.string,
         data['${effectivePrefix}sheet_json'],
       )!,
+      markdownMirror: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}markdown_mirror'],
+      ),
+      markdownDirty: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}markdown_dirty'],
+      )!,
       revision: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}revision'],
@@ -4959,6 +5064,12 @@ class CharacterRow extends DataClass implements Insertable<CharacterRow> {
   final String id;
   final String ownerLocalId;
   final String sheetJson;
+
+  /// Readable derivative regenerated from [sheetJson] on every write.
+  ///
+  /// Nullable only so backups created before schema v10 remain importable.
+  final String? markdownMirror;
+  final bool markdownDirty;
   final int revision;
   final int? syncRevision;
   final DateTime? archivedAt;
@@ -4968,6 +5079,8 @@ class CharacterRow extends DataClass implements Insertable<CharacterRow> {
     required this.id,
     required this.ownerLocalId,
     required this.sheetJson,
+    this.markdownMirror,
+    required this.markdownDirty,
     required this.revision,
     this.syncRevision,
     this.archivedAt,
@@ -4980,6 +5093,10 @@ class CharacterRow extends DataClass implements Insertable<CharacterRow> {
     map['id'] = Variable<String>(id);
     map['owner_local_id'] = Variable<String>(ownerLocalId);
     map['sheet_json'] = Variable<String>(sheetJson);
+    if (!nullToAbsent || markdownMirror != null) {
+      map['markdown_mirror'] = Variable<String>(markdownMirror);
+    }
+    map['markdown_dirty'] = Variable<bool>(markdownDirty);
     map['revision'] = Variable<int>(revision);
     if (!nullToAbsent || syncRevision != null) {
       map['sync_revision'] = Variable<int>(syncRevision);
@@ -4997,6 +5114,10 @@ class CharacterRow extends DataClass implements Insertable<CharacterRow> {
       id: Value(id),
       ownerLocalId: Value(ownerLocalId),
       sheetJson: Value(sheetJson),
+      markdownMirror: markdownMirror == null && nullToAbsent
+          ? const Value.absent()
+          : Value(markdownMirror),
+      markdownDirty: Value(markdownDirty),
       revision: Value(revision),
       syncRevision: syncRevision == null && nullToAbsent
           ? const Value.absent()
@@ -5018,6 +5139,8 @@ class CharacterRow extends DataClass implements Insertable<CharacterRow> {
       id: serializer.fromJson<String>(json['id']),
       ownerLocalId: serializer.fromJson<String>(json['ownerLocalId']),
       sheetJson: serializer.fromJson<String>(json['sheetJson']),
+      markdownMirror: serializer.fromJson<String?>(json['markdownMirror']),
+      markdownDirty: serializer.fromJson<bool>(json['markdownDirty']),
       revision: serializer.fromJson<int>(json['revision']),
       syncRevision: serializer.fromJson<int?>(json['syncRevision']),
       archivedAt: serializer.fromJson<DateTime?>(json['archivedAt']),
@@ -5032,6 +5155,8 @@ class CharacterRow extends DataClass implements Insertable<CharacterRow> {
       'id': serializer.toJson<String>(id),
       'ownerLocalId': serializer.toJson<String>(ownerLocalId),
       'sheetJson': serializer.toJson<String>(sheetJson),
+      'markdownMirror': serializer.toJson<String?>(markdownMirror),
+      'markdownDirty': serializer.toJson<bool>(markdownDirty),
       'revision': serializer.toJson<int>(revision),
       'syncRevision': serializer.toJson<int?>(syncRevision),
       'archivedAt': serializer.toJson<DateTime?>(archivedAt),
@@ -5044,6 +5169,8 @@ class CharacterRow extends DataClass implements Insertable<CharacterRow> {
     String? id,
     String? ownerLocalId,
     String? sheetJson,
+    Value<String?> markdownMirror = const Value.absent(),
+    bool? markdownDirty,
     int? revision,
     Value<int?> syncRevision = const Value.absent(),
     Value<DateTime?> archivedAt = const Value.absent(),
@@ -5053,6 +5180,10 @@ class CharacterRow extends DataClass implements Insertable<CharacterRow> {
     id: id ?? this.id,
     ownerLocalId: ownerLocalId ?? this.ownerLocalId,
     sheetJson: sheetJson ?? this.sheetJson,
+    markdownMirror: markdownMirror.present
+        ? markdownMirror.value
+        : this.markdownMirror,
+    markdownDirty: markdownDirty ?? this.markdownDirty,
     revision: revision ?? this.revision,
     syncRevision: syncRevision.present ? syncRevision.value : this.syncRevision,
     archivedAt: archivedAt.present ? archivedAt.value : this.archivedAt,
@@ -5066,6 +5197,12 @@ class CharacterRow extends DataClass implements Insertable<CharacterRow> {
           ? data.ownerLocalId.value
           : this.ownerLocalId,
       sheetJson: data.sheetJson.present ? data.sheetJson.value : this.sheetJson,
+      markdownMirror: data.markdownMirror.present
+          ? data.markdownMirror.value
+          : this.markdownMirror,
+      markdownDirty: data.markdownDirty.present
+          ? data.markdownDirty.value
+          : this.markdownDirty,
       revision: data.revision.present ? data.revision.value : this.revision,
       syncRevision: data.syncRevision.present
           ? data.syncRevision.value
@@ -5084,6 +5221,8 @@ class CharacterRow extends DataClass implements Insertable<CharacterRow> {
           ..write('id: $id, ')
           ..write('ownerLocalId: $ownerLocalId, ')
           ..write('sheetJson: $sheetJson, ')
+          ..write('markdownMirror: $markdownMirror, ')
+          ..write('markdownDirty: $markdownDirty, ')
           ..write('revision: $revision, ')
           ..write('syncRevision: $syncRevision, ')
           ..write('archivedAt: $archivedAt, ')
@@ -5098,6 +5237,8 @@ class CharacterRow extends DataClass implements Insertable<CharacterRow> {
     id,
     ownerLocalId,
     sheetJson,
+    markdownMirror,
+    markdownDirty,
     revision,
     syncRevision,
     archivedAt,
@@ -5111,6 +5252,8 @@ class CharacterRow extends DataClass implements Insertable<CharacterRow> {
           other.id == this.id &&
           other.ownerLocalId == this.ownerLocalId &&
           other.sheetJson == this.sheetJson &&
+          other.markdownMirror == this.markdownMirror &&
+          other.markdownDirty == this.markdownDirty &&
           other.revision == this.revision &&
           other.syncRevision == this.syncRevision &&
           other.archivedAt == this.archivedAt &&
@@ -5122,6 +5265,8 @@ class CharactersCompanion extends UpdateCompanion<CharacterRow> {
   final Value<String> id;
   final Value<String> ownerLocalId;
   final Value<String> sheetJson;
+  final Value<String?> markdownMirror;
+  final Value<bool> markdownDirty;
   final Value<int> revision;
   final Value<int?> syncRevision;
   final Value<DateTime?> archivedAt;
@@ -5132,6 +5277,8 @@ class CharactersCompanion extends UpdateCompanion<CharacterRow> {
     this.id = const Value.absent(),
     this.ownerLocalId = const Value.absent(),
     this.sheetJson = const Value.absent(),
+    this.markdownMirror = const Value.absent(),
+    this.markdownDirty = const Value.absent(),
     this.revision = const Value.absent(),
     this.syncRevision = const Value.absent(),
     this.archivedAt = const Value.absent(),
@@ -5143,6 +5290,8 @@ class CharactersCompanion extends UpdateCompanion<CharacterRow> {
     required String id,
     this.ownerLocalId = const Value.absent(),
     required String sheetJson,
+    this.markdownMirror = const Value.absent(),
+    this.markdownDirty = const Value.absent(),
     this.revision = const Value.absent(),
     this.syncRevision = const Value.absent(),
     this.archivedAt = const Value.absent(),
@@ -5155,6 +5304,8 @@ class CharactersCompanion extends UpdateCompanion<CharacterRow> {
     Expression<String>? id,
     Expression<String>? ownerLocalId,
     Expression<String>? sheetJson,
+    Expression<String>? markdownMirror,
+    Expression<bool>? markdownDirty,
     Expression<int>? revision,
     Expression<int>? syncRevision,
     Expression<DateTime>? archivedAt,
@@ -5166,6 +5317,8 @@ class CharactersCompanion extends UpdateCompanion<CharacterRow> {
       if (id != null) 'id': id,
       if (ownerLocalId != null) 'owner_local_id': ownerLocalId,
       if (sheetJson != null) 'sheet_json': sheetJson,
+      if (markdownMirror != null) 'markdown_mirror': markdownMirror,
+      if (markdownDirty != null) 'markdown_dirty': markdownDirty,
       if (revision != null) 'revision': revision,
       if (syncRevision != null) 'sync_revision': syncRevision,
       if (archivedAt != null) 'archived_at': archivedAt,
@@ -5179,6 +5332,8 @@ class CharactersCompanion extends UpdateCompanion<CharacterRow> {
     Value<String>? id,
     Value<String>? ownerLocalId,
     Value<String>? sheetJson,
+    Value<String?>? markdownMirror,
+    Value<bool>? markdownDirty,
     Value<int>? revision,
     Value<int?>? syncRevision,
     Value<DateTime?>? archivedAt,
@@ -5190,6 +5345,8 @@ class CharactersCompanion extends UpdateCompanion<CharacterRow> {
       id: id ?? this.id,
       ownerLocalId: ownerLocalId ?? this.ownerLocalId,
       sheetJson: sheetJson ?? this.sheetJson,
+      markdownMirror: markdownMirror ?? this.markdownMirror,
+      markdownDirty: markdownDirty ?? this.markdownDirty,
       revision: revision ?? this.revision,
       syncRevision: syncRevision ?? this.syncRevision,
       archivedAt: archivedAt ?? this.archivedAt,
@@ -5210,6 +5367,12 @@ class CharactersCompanion extends UpdateCompanion<CharacterRow> {
     }
     if (sheetJson.present) {
       map['sheet_json'] = Variable<String>(sheetJson.value);
+    }
+    if (markdownMirror.present) {
+      map['markdown_mirror'] = Variable<String>(markdownMirror.value);
+    }
+    if (markdownDirty.present) {
+      map['markdown_dirty'] = Variable<bool>(markdownDirty.value);
     }
     if (revision.present) {
       map['revision'] = Variable<int>(revision.value);
@@ -5238,6 +5401,8 @@ class CharactersCompanion extends UpdateCompanion<CharacterRow> {
           ..write('id: $id, ')
           ..write('ownerLocalId: $ownerLocalId, ')
           ..write('sheetJson: $sheetJson, ')
+          ..write('markdownMirror: $markdownMirror, ')
+          ..write('markdownDirty: $markdownDirty, ')
           ..write('revision: $revision, ')
           ..write('syncRevision: $syncRevision, ')
           ..write('archivedAt: $archivedAt, ')
@@ -5628,12 +5793,12 @@ class CharacterContentRefsCompanion
   }
 }
 
-class $CampaignActorsCacheTable extends CampaignActorsCache
-    with TableInfo<$CampaignActorsCacheTable, CampaignActorsCacheRow> {
+class $CampaignCharactersCacheTable extends CampaignCharactersCache
+    with TableInfo<$CampaignCharactersCacheTable, CampaignCharactersCacheRow> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $CampaignActorsCacheTable(this.attachedDatabase, [this._alias]);
+  $CampaignCharactersCacheTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
   late final GeneratedColumn<String> id = GeneratedColumn<String>(
@@ -5677,12 +5842,12 @@ class $CampaignActorsCacheTable extends CampaignActorsCache
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
-  static const VerificationMeta _actorTypeMeta = const VerificationMeta(
-    'actorType',
+  static const VerificationMeta _characterTypeMeta = const VerificationMeta(
+    'characterType',
   );
   @override
-  late final GeneratedColumn<String> actorType = GeneratedColumn<String>(
-    'actor_type',
+  late final GeneratedColumn<String> characterType = GeneratedColumn<String>(
+    'character_type',
     aliasedName,
     false,
     type: DriftSqlType.string,
@@ -5696,6 +5861,21 @@ class $CampaignActorsCacheTable extends CampaignActorsCache
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
+  );
+  static const VerificationMeta _visibleToPlayersMeta = const VerificationMeta(
+    'visibleToPlayers',
+  );
+  @override
+  late final GeneratedColumn<bool> visibleToPlayers = GeneratedColumn<bool>(
+    'visible_to_players',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("visible_to_players" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
   );
   static const VerificationMeta _sheetJsonMeta = const VerificationMeta(
     'sheetJson',
@@ -5758,8 +5938,9 @@ class $CampaignActorsCacheTable extends CampaignActorsCache
     campaignId,
     ownerUserId,
     sourceCharacterId,
-    actorType,
+    characterType,
     status,
+    visibleToPlayers,
     sheetJson,
     revision,
     updatedBy,
@@ -5770,10 +5951,10 @@ class $CampaignActorsCacheTable extends CampaignActorsCache
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
-  static const String $name = 'campaign_actors_cache';
+  static const String $name = 'campaign_characters_cache';
   @override
   VerificationContext validateIntegrity(
-    Insertable<CampaignActorsCacheRow> instance, {
+    Insertable<CampaignCharactersCacheRow> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
@@ -5809,13 +5990,16 @@ class $CampaignActorsCacheTable extends CampaignActorsCache
         ),
       );
     }
-    if (data.containsKey('actor_type')) {
+    if (data.containsKey('character_type')) {
       context.handle(
-        _actorTypeMeta,
-        actorType.isAcceptableOrUnknown(data['actor_type']!, _actorTypeMeta),
+        _characterTypeMeta,
+        characterType.isAcceptableOrUnknown(
+          data['character_type']!,
+          _characterTypeMeta,
+        ),
       );
     } else if (isInserting) {
-      context.missing(_actorTypeMeta);
+      context.missing(_characterTypeMeta);
     }
     if (data.containsKey('status')) {
       context.handle(
@@ -5824,6 +6008,15 @@ class $CampaignActorsCacheTable extends CampaignActorsCache
       );
     } else if (isInserting) {
       context.missing(_statusMeta);
+    }
+    if (data.containsKey('visible_to_players')) {
+      context.handle(
+        _visibleToPlayersMeta,
+        visibleToPlayers.isAcceptableOrUnknown(
+          data['visible_to_players']!,
+          _visibleToPlayersMeta,
+        ),
+      );
     }
     if (data.containsKey('sheet_json')) {
       context.handle(
@@ -5871,9 +6064,12 @@ class $CampaignActorsCacheTable extends CampaignActorsCache
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
-  CampaignActorsCacheRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+  CampaignCharactersCacheRow map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return CampaignActorsCacheRow(
+    return CampaignCharactersCacheRow(
       id: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}id'],
@@ -5890,13 +6086,17 @@ class $CampaignActorsCacheTable extends CampaignActorsCache
         DriftSqlType.string,
         data['${effectivePrefix}source_character_id'],
       ),
-      actorType: attachedDatabase.typeMapping.read(
+      characterType: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}actor_type'],
+        data['${effectivePrefix}character_type'],
       )!,
       status: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}status'],
+      )!,
+      visibleToPlayers: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}visible_to_players'],
       )!,
       sheetJson: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
@@ -5922,31 +6122,33 @@ class $CampaignActorsCacheTable extends CampaignActorsCache
   }
 
   @override
-  $CampaignActorsCacheTable createAlias(String alias) {
-    return $CampaignActorsCacheTable(attachedDatabase, alias);
+  $CampaignCharactersCacheTable createAlias(String alias) {
+    return $CampaignCharactersCacheTable(attachedDatabase, alias);
   }
 }
 
-class CampaignActorsCacheRow extends DataClass
-    implements Insertable<CampaignActorsCacheRow> {
+class CampaignCharactersCacheRow extends DataClass
+    implements Insertable<CampaignCharactersCacheRow> {
   final String id;
   final String campaignId;
   final String? ownerUserId;
   final String? sourceCharacterId;
-  final String actorType;
+  final String characterType;
   final String status;
+  final bool visibleToPlayers;
   final String sheetJson;
   final int revision;
   final String updatedBy;
   final DateTime createdAt;
   final DateTime updatedAt;
-  const CampaignActorsCacheRow({
+  const CampaignCharactersCacheRow({
     required this.id,
     required this.campaignId,
     this.ownerUserId,
     this.sourceCharacterId,
-    required this.actorType,
+    required this.characterType,
     required this.status,
+    required this.visibleToPlayers,
     required this.sheetJson,
     required this.revision,
     required this.updatedBy,
@@ -5964,8 +6166,9 @@ class CampaignActorsCacheRow extends DataClass
     if (!nullToAbsent || sourceCharacterId != null) {
       map['source_character_id'] = Variable<String>(sourceCharacterId);
     }
-    map['actor_type'] = Variable<String>(actorType);
+    map['character_type'] = Variable<String>(characterType);
     map['status'] = Variable<String>(status);
+    map['visible_to_players'] = Variable<bool>(visibleToPlayers);
     map['sheet_json'] = Variable<String>(sheetJson);
     map['revision'] = Variable<int>(revision);
     map['updated_by'] = Variable<String>(updatedBy);
@@ -5974,8 +6177,8 @@ class CampaignActorsCacheRow extends DataClass
     return map;
   }
 
-  CampaignActorsCacheCompanion toCompanion(bool nullToAbsent) {
-    return CampaignActorsCacheCompanion(
+  CampaignCharactersCacheCompanion toCompanion(bool nullToAbsent) {
+    return CampaignCharactersCacheCompanion(
       id: Value(id),
       campaignId: Value(campaignId),
       ownerUserId: ownerUserId == null && nullToAbsent
@@ -5984,8 +6187,9 @@ class CampaignActorsCacheRow extends DataClass
       sourceCharacterId: sourceCharacterId == null && nullToAbsent
           ? const Value.absent()
           : Value(sourceCharacterId),
-      actorType: Value(actorType),
+      characterType: Value(characterType),
       status: Value(status),
+      visibleToPlayers: Value(visibleToPlayers),
       sheetJson: Value(sheetJson),
       revision: Value(revision),
       updatedBy: Value(updatedBy),
@@ -5994,20 +6198,21 @@ class CampaignActorsCacheRow extends DataClass
     );
   }
 
-  factory CampaignActorsCacheRow.fromJson(
+  factory CampaignCharactersCacheRow.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return CampaignActorsCacheRow(
+    return CampaignCharactersCacheRow(
       id: serializer.fromJson<String>(json['id']),
       campaignId: serializer.fromJson<String>(json['campaignId']),
       ownerUserId: serializer.fromJson<String?>(json['ownerUserId']),
       sourceCharacterId: serializer.fromJson<String?>(
         json['sourceCharacterId'],
       ),
-      actorType: serializer.fromJson<String>(json['actorType']),
+      characterType: serializer.fromJson<String>(json['characterType']),
       status: serializer.fromJson<String>(json['status']),
+      visibleToPlayers: serializer.fromJson<bool>(json['visibleToPlayers']),
       sheetJson: serializer.fromJson<String>(json['sheetJson']),
       revision: serializer.fromJson<int>(json['revision']),
       updatedBy: serializer.fromJson<String>(json['updatedBy']),
@@ -6023,8 +6228,9 @@ class CampaignActorsCacheRow extends DataClass
       'campaignId': serializer.toJson<String>(campaignId),
       'ownerUserId': serializer.toJson<String?>(ownerUserId),
       'sourceCharacterId': serializer.toJson<String?>(sourceCharacterId),
-      'actorType': serializer.toJson<String>(actorType),
+      'characterType': serializer.toJson<String>(characterType),
       'status': serializer.toJson<String>(status),
+      'visibleToPlayers': serializer.toJson<bool>(visibleToPlayers),
       'sheetJson': serializer.toJson<String>(sheetJson),
       'revision': serializer.toJson<int>(revision),
       'updatedBy': serializer.toJson<String>(updatedBy),
@@ -6033,35 +6239,39 @@ class CampaignActorsCacheRow extends DataClass
     };
   }
 
-  CampaignActorsCacheRow copyWith({
+  CampaignCharactersCacheRow copyWith({
     String? id,
     String? campaignId,
     Value<String?> ownerUserId = const Value.absent(),
     Value<String?> sourceCharacterId = const Value.absent(),
-    String? actorType,
+    String? characterType,
     String? status,
+    bool? visibleToPlayers,
     String? sheetJson,
     int? revision,
     String? updatedBy,
     DateTime? createdAt,
     DateTime? updatedAt,
-  }) => CampaignActorsCacheRow(
+  }) => CampaignCharactersCacheRow(
     id: id ?? this.id,
     campaignId: campaignId ?? this.campaignId,
     ownerUserId: ownerUserId.present ? ownerUserId.value : this.ownerUserId,
     sourceCharacterId: sourceCharacterId.present
         ? sourceCharacterId.value
         : this.sourceCharacterId,
-    actorType: actorType ?? this.actorType,
+    characterType: characterType ?? this.characterType,
     status: status ?? this.status,
+    visibleToPlayers: visibleToPlayers ?? this.visibleToPlayers,
     sheetJson: sheetJson ?? this.sheetJson,
     revision: revision ?? this.revision,
     updatedBy: updatedBy ?? this.updatedBy,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
-  CampaignActorsCacheRow copyWithCompanion(CampaignActorsCacheCompanion data) {
-    return CampaignActorsCacheRow(
+  CampaignCharactersCacheRow copyWithCompanion(
+    CampaignCharactersCacheCompanion data,
+  ) {
+    return CampaignCharactersCacheRow(
       id: data.id.present ? data.id.value : this.id,
       campaignId: data.campaignId.present
           ? data.campaignId.value
@@ -6072,8 +6282,13 @@ class CampaignActorsCacheRow extends DataClass
       sourceCharacterId: data.sourceCharacterId.present
           ? data.sourceCharacterId.value
           : this.sourceCharacterId,
-      actorType: data.actorType.present ? data.actorType.value : this.actorType,
+      characterType: data.characterType.present
+          ? data.characterType.value
+          : this.characterType,
       status: data.status.present ? data.status.value : this.status,
+      visibleToPlayers: data.visibleToPlayers.present
+          ? data.visibleToPlayers.value
+          : this.visibleToPlayers,
       sheetJson: data.sheetJson.present ? data.sheetJson.value : this.sheetJson,
       revision: data.revision.present ? data.revision.value : this.revision,
       updatedBy: data.updatedBy.present ? data.updatedBy.value : this.updatedBy,
@@ -6084,13 +6299,14 @@ class CampaignActorsCacheRow extends DataClass
 
   @override
   String toString() {
-    return (StringBuffer('CampaignActorsCacheRow(')
+    return (StringBuffer('CampaignCharactersCacheRow(')
           ..write('id: $id, ')
           ..write('campaignId: $campaignId, ')
           ..write('ownerUserId: $ownerUserId, ')
           ..write('sourceCharacterId: $sourceCharacterId, ')
-          ..write('actorType: $actorType, ')
+          ..write('characterType: $characterType, ')
           ..write('status: $status, ')
+          ..write('visibleToPlayers: $visibleToPlayers, ')
           ..write('sheetJson: $sheetJson, ')
           ..write('revision: $revision, ')
           ..write('updatedBy: $updatedBy, ')
@@ -6106,8 +6322,9 @@ class CampaignActorsCacheRow extends DataClass
     campaignId,
     ownerUserId,
     sourceCharacterId,
-    actorType,
+    characterType,
     status,
+    visibleToPlayers,
     sheetJson,
     revision,
     updatedBy,
@@ -6117,13 +6334,14 @@ class CampaignActorsCacheRow extends DataClass
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is CampaignActorsCacheRow &&
+      (other is CampaignCharactersCacheRow &&
           other.id == this.id &&
           other.campaignId == this.campaignId &&
           other.ownerUserId == this.ownerUserId &&
           other.sourceCharacterId == this.sourceCharacterId &&
-          other.actorType == this.actorType &&
+          other.characterType == this.characterType &&
           other.status == this.status &&
+          other.visibleToPlayers == this.visibleToPlayers &&
           other.sheetJson == this.sheetJson &&
           other.revision == this.revision &&
           other.updatedBy == this.updatedBy &&
@@ -6131,27 +6349,29 @@ class CampaignActorsCacheRow extends DataClass
           other.updatedAt == this.updatedAt);
 }
 
-class CampaignActorsCacheCompanion
-    extends UpdateCompanion<CampaignActorsCacheRow> {
+class CampaignCharactersCacheCompanion
+    extends UpdateCompanion<CampaignCharactersCacheRow> {
   final Value<String> id;
   final Value<String> campaignId;
   final Value<String?> ownerUserId;
   final Value<String?> sourceCharacterId;
-  final Value<String> actorType;
+  final Value<String> characterType;
   final Value<String> status;
+  final Value<bool> visibleToPlayers;
   final Value<String> sheetJson;
   final Value<int> revision;
   final Value<String> updatedBy;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
-  const CampaignActorsCacheCompanion({
+  const CampaignCharactersCacheCompanion({
     this.id = const Value.absent(),
     this.campaignId = const Value.absent(),
     this.ownerUserId = const Value.absent(),
     this.sourceCharacterId = const Value.absent(),
-    this.actorType = const Value.absent(),
+    this.characterType = const Value.absent(),
     this.status = const Value.absent(),
+    this.visibleToPlayers = const Value.absent(),
     this.sheetJson = const Value.absent(),
     this.revision = const Value.absent(),
     this.updatedBy = const Value.absent(),
@@ -6159,13 +6379,14 @@ class CampaignActorsCacheCompanion
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
-  CampaignActorsCacheCompanion.insert({
+  CampaignCharactersCacheCompanion.insert({
     required String id,
     required String campaignId,
     this.ownerUserId = const Value.absent(),
     this.sourceCharacterId = const Value.absent(),
-    required String actorType,
+    required String characterType,
     required String status,
+    this.visibleToPlayers = const Value.absent(),
     required String sheetJson,
     required int revision,
     required String updatedBy,
@@ -6174,20 +6395,21 @@ class CampaignActorsCacheCompanion
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        campaignId = Value(campaignId),
-       actorType = Value(actorType),
+       characterType = Value(characterType),
        status = Value(status),
        sheetJson = Value(sheetJson),
        revision = Value(revision),
        updatedBy = Value(updatedBy),
        createdAt = Value(createdAt),
        updatedAt = Value(updatedAt);
-  static Insertable<CampaignActorsCacheRow> custom({
+  static Insertable<CampaignCharactersCacheRow> custom({
     Expression<String>? id,
     Expression<String>? campaignId,
     Expression<String>? ownerUserId,
     Expression<String>? sourceCharacterId,
-    Expression<String>? actorType,
+    Expression<String>? characterType,
     Expression<String>? status,
+    Expression<bool>? visibleToPlayers,
     Expression<String>? sheetJson,
     Expression<int>? revision,
     Expression<String>? updatedBy,
@@ -6200,8 +6422,9 @@ class CampaignActorsCacheCompanion
       if (campaignId != null) 'campaign_id': campaignId,
       if (ownerUserId != null) 'owner_user_id': ownerUserId,
       if (sourceCharacterId != null) 'source_character_id': sourceCharacterId,
-      if (actorType != null) 'actor_type': actorType,
+      if (characterType != null) 'character_type': characterType,
       if (status != null) 'status': status,
+      if (visibleToPlayers != null) 'visible_to_players': visibleToPlayers,
       if (sheetJson != null) 'sheet_json': sheetJson,
       if (revision != null) 'revision': revision,
       if (updatedBy != null) 'updated_by': updatedBy,
@@ -6211,13 +6434,14 @@ class CampaignActorsCacheCompanion
     });
   }
 
-  CampaignActorsCacheCompanion copyWith({
+  CampaignCharactersCacheCompanion copyWith({
     Value<String>? id,
     Value<String>? campaignId,
     Value<String?>? ownerUserId,
     Value<String?>? sourceCharacterId,
-    Value<String>? actorType,
+    Value<String>? characterType,
     Value<String>? status,
+    Value<bool>? visibleToPlayers,
     Value<String>? sheetJson,
     Value<int>? revision,
     Value<String>? updatedBy,
@@ -6225,13 +6449,14 @@ class CampaignActorsCacheCompanion
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
   }) {
-    return CampaignActorsCacheCompanion(
+    return CampaignCharactersCacheCompanion(
       id: id ?? this.id,
       campaignId: campaignId ?? this.campaignId,
       ownerUserId: ownerUserId ?? this.ownerUserId,
       sourceCharacterId: sourceCharacterId ?? this.sourceCharacterId,
-      actorType: actorType ?? this.actorType,
+      characterType: characterType ?? this.characterType,
       status: status ?? this.status,
+      visibleToPlayers: visibleToPlayers ?? this.visibleToPlayers,
       sheetJson: sheetJson ?? this.sheetJson,
       revision: revision ?? this.revision,
       updatedBy: updatedBy ?? this.updatedBy,
@@ -6256,11 +6481,14 @@ class CampaignActorsCacheCompanion
     if (sourceCharacterId.present) {
       map['source_character_id'] = Variable<String>(sourceCharacterId.value);
     }
-    if (actorType.present) {
-      map['actor_type'] = Variable<String>(actorType.value);
+    if (characterType.present) {
+      map['character_type'] = Variable<String>(characterType.value);
     }
     if (status.present) {
       map['status'] = Variable<String>(status.value);
+    }
+    if (visibleToPlayers.present) {
+      map['visible_to_players'] = Variable<bool>(visibleToPlayers.value);
     }
     if (sheetJson.present) {
       map['sheet_json'] = Variable<String>(sheetJson.value);
@@ -6285,13 +6513,14 @@ class CampaignActorsCacheCompanion
 
   @override
   String toString() {
-    return (StringBuffer('CampaignActorsCacheCompanion(')
+    return (StringBuffer('CampaignCharactersCacheCompanion(')
           ..write('id: $id, ')
           ..write('campaignId: $campaignId, ')
           ..write('ownerUserId: $ownerUserId, ')
           ..write('sourceCharacterId: $sourceCharacterId, ')
-          ..write('actorType: $actorType, ')
+          ..write('characterType: $characterType, ')
           ..write('status: $status, ')
+          ..write('visibleToPlayers: $visibleToPlayers, ')
           ..write('sheetJson: $sheetJson, ')
           ..write('revision: $revision, ')
           ..write('updatedBy: $updatedBy, ')
@@ -6303,23 +6532,27 @@ class CampaignActorsCacheCompanion
   }
 }
 
-class $CampaignActorBacklinksTable extends CampaignActorBacklinks
-    with TableInfo<$CampaignActorBacklinksTable, CampaignActorBacklinkRow> {
+class $CampaignCharacterBacklinksTable extends CampaignCharacterBacklinks
+    with
+        TableInfo<
+          $CampaignCharacterBacklinksTable,
+          CampaignCharacterBacklinkRow
+        > {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $CampaignActorBacklinksTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _campaignActorIdMeta = const VerificationMeta(
-    'campaignActorId',
-  );
+  $CampaignCharacterBacklinksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _campaignCharacterIdMeta =
+      const VerificationMeta('campaignCharacterId');
   @override
-  late final GeneratedColumn<String> campaignActorId = GeneratedColumn<String>(
-    'campaign_actor_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
+  late final GeneratedColumn<String> campaignCharacterId =
+      GeneratedColumn<String>(
+        'campaign_character_id',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
   static const VerificationMeta _sourceCharacterIdMeta = const VerificationMeta(
     'sourceCharacterId',
   );
@@ -6344,12 +6577,12 @@ class $CampaignActorBacklinksTable extends CampaignActorBacklinks
         requiredDuringInsert: false,
         defaultValue: const Constant(0),
       );
-  static const VerificationMeta _lastAppliedActorRevisionMeta =
-      const VerificationMeta('lastAppliedActorRevision');
+  static const VerificationMeta _lastAppliedCharacterRevisionMeta =
+      const VerificationMeta('lastAppliedCharacterRevision');
   @override
-  late final GeneratedColumn<int> lastAppliedActorRevision =
+  late final GeneratedColumn<int> lastAppliedCharacterRevision =
       GeneratedColumn<int>(
-        'last_applied_actor_revision',
+        'last_applied_character_revision',
         aliasedName,
         false,
         type: DriftSqlType.int,
@@ -6358,33 +6591,33 @@ class $CampaignActorBacklinksTable extends CampaignActorBacklinks
       );
   @override
   List<GeneratedColumn> get $columns => [
-    campaignActorId,
+    campaignCharacterId,
     sourceCharacterId,
     lastPublishedLocalRevision,
-    lastAppliedActorRevision,
+    lastAppliedCharacterRevision,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
-  static const String $name = 'campaign_actor_backlinks';
+  static const String $name = 'campaign_character_backlinks';
   @override
   VerificationContext validateIntegrity(
-    Insertable<CampaignActorBacklinkRow> instance, {
+    Insertable<CampaignCharacterBacklinkRow> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
-    if (data.containsKey('campaign_actor_id')) {
+    if (data.containsKey('campaign_character_id')) {
       context.handle(
-        _campaignActorIdMeta,
-        campaignActorId.isAcceptableOrUnknown(
-          data['campaign_actor_id']!,
-          _campaignActorIdMeta,
+        _campaignCharacterIdMeta,
+        campaignCharacterId.isAcceptableOrUnknown(
+          data['campaign_character_id']!,
+          _campaignCharacterIdMeta,
         ),
       );
     } else if (isInserting) {
-      context.missing(_campaignActorIdMeta);
+      context.missing(_campaignCharacterIdMeta);
     }
     if (data.containsKey('source_character_id')) {
       context.handle(
@@ -6406,12 +6639,12 @@ class $CampaignActorBacklinksTable extends CampaignActorBacklinks
         ),
       );
     }
-    if (data.containsKey('last_applied_actor_revision')) {
+    if (data.containsKey('last_applied_character_revision')) {
       context.handle(
-        _lastAppliedActorRevisionMeta,
-        lastAppliedActorRevision.isAcceptableOrUnknown(
-          data['last_applied_actor_revision']!,
-          _lastAppliedActorRevisionMeta,
+        _lastAppliedCharacterRevisionMeta,
+        lastAppliedCharacterRevision.isAcceptableOrUnknown(
+          data['last_applied_character_revision']!,
+          _lastAppliedCharacterRevisionMeta,
         ),
       );
     }
@@ -6419,17 +6652,17 @@ class $CampaignActorBacklinksTable extends CampaignActorBacklinks
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => {campaignActorId};
+  Set<GeneratedColumn> get $primaryKey => {campaignCharacterId};
   @override
-  CampaignActorBacklinkRow map(
+  CampaignCharacterBacklinkRow map(
     Map<String, dynamic> data, {
     String? tablePrefix,
   }) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return CampaignActorBacklinkRow(
-      campaignActorId: attachedDatabase.typeMapping.read(
+    return CampaignCharacterBacklinkRow(
+      campaignCharacterId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}campaign_actor_id'],
+        data['${effectivePrefix}campaign_character_id'],
       )!,
       sourceCharacterId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
@@ -6439,67 +6672,69 @@ class $CampaignActorBacklinksTable extends CampaignActorBacklinks
         DriftSqlType.int,
         data['${effectivePrefix}last_published_local_revision'],
       )!,
-      lastAppliedActorRevision: attachedDatabase.typeMapping.read(
+      lastAppliedCharacterRevision: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}last_applied_actor_revision'],
+        data['${effectivePrefix}last_applied_character_revision'],
       )!,
     );
   }
 
   @override
-  $CampaignActorBacklinksTable createAlias(String alias) {
-    return $CampaignActorBacklinksTable(attachedDatabase, alias);
+  $CampaignCharacterBacklinksTable createAlias(String alias) {
+    return $CampaignCharacterBacklinksTable(attachedDatabase, alias);
   }
 }
 
-class CampaignActorBacklinkRow extends DataClass
-    implements Insertable<CampaignActorBacklinkRow> {
-  final String campaignActorId;
+class CampaignCharacterBacklinkRow extends DataClass
+    implements Insertable<CampaignCharacterBacklinkRow> {
+  final String campaignCharacterId;
   final String sourceCharacterId;
   final int lastPublishedLocalRevision;
-  final int lastAppliedActorRevision;
-  const CampaignActorBacklinkRow({
-    required this.campaignActorId,
+  final int lastAppliedCharacterRevision;
+  const CampaignCharacterBacklinkRow({
+    required this.campaignCharacterId,
     required this.sourceCharacterId,
     required this.lastPublishedLocalRevision,
-    required this.lastAppliedActorRevision,
+    required this.lastAppliedCharacterRevision,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['campaign_actor_id'] = Variable<String>(campaignActorId);
+    map['campaign_character_id'] = Variable<String>(campaignCharacterId);
     map['source_character_id'] = Variable<String>(sourceCharacterId);
     map['last_published_local_revision'] = Variable<int>(
       lastPublishedLocalRevision,
     );
-    map['last_applied_actor_revision'] = Variable<int>(
-      lastAppliedActorRevision,
+    map['last_applied_character_revision'] = Variable<int>(
+      lastAppliedCharacterRevision,
     );
     return map;
   }
 
-  CampaignActorBacklinksCompanion toCompanion(bool nullToAbsent) {
-    return CampaignActorBacklinksCompanion(
-      campaignActorId: Value(campaignActorId),
+  CampaignCharacterBacklinksCompanion toCompanion(bool nullToAbsent) {
+    return CampaignCharacterBacklinksCompanion(
+      campaignCharacterId: Value(campaignCharacterId),
       sourceCharacterId: Value(sourceCharacterId),
       lastPublishedLocalRevision: Value(lastPublishedLocalRevision),
-      lastAppliedActorRevision: Value(lastAppliedActorRevision),
+      lastAppliedCharacterRevision: Value(lastAppliedCharacterRevision),
     );
   }
 
-  factory CampaignActorBacklinkRow.fromJson(
+  factory CampaignCharacterBacklinkRow.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return CampaignActorBacklinkRow(
-      campaignActorId: serializer.fromJson<String>(json['campaignActorId']),
+    return CampaignCharacterBacklinkRow(
+      campaignCharacterId: serializer.fromJson<String>(
+        json['campaignCharacterId'],
+      ),
       sourceCharacterId: serializer.fromJson<String>(json['sourceCharacterId']),
       lastPublishedLocalRevision: serializer.fromJson<int>(
         json['lastPublishedLocalRevision'],
       ),
-      lastAppliedActorRevision: serializer.fromJson<int>(
-        json['lastAppliedActorRevision'],
+      lastAppliedCharacterRevision: serializer.fromJson<int>(
+        json['lastAppliedCharacterRevision'],
       ),
     );
   }
@@ -6507,131 +6742,133 @@ class CampaignActorBacklinkRow extends DataClass
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'campaignActorId': serializer.toJson<String>(campaignActorId),
+      'campaignCharacterId': serializer.toJson<String>(campaignCharacterId),
       'sourceCharacterId': serializer.toJson<String>(sourceCharacterId),
       'lastPublishedLocalRevision': serializer.toJson<int>(
         lastPublishedLocalRevision,
       ),
-      'lastAppliedActorRevision': serializer.toJson<int>(
-        lastAppliedActorRevision,
+      'lastAppliedCharacterRevision': serializer.toJson<int>(
+        lastAppliedCharacterRevision,
       ),
     };
   }
 
-  CampaignActorBacklinkRow copyWith({
-    String? campaignActorId,
+  CampaignCharacterBacklinkRow copyWith({
+    String? campaignCharacterId,
     String? sourceCharacterId,
     int? lastPublishedLocalRevision,
-    int? lastAppliedActorRevision,
-  }) => CampaignActorBacklinkRow(
-    campaignActorId: campaignActorId ?? this.campaignActorId,
+    int? lastAppliedCharacterRevision,
+  }) => CampaignCharacterBacklinkRow(
+    campaignCharacterId: campaignCharacterId ?? this.campaignCharacterId,
     sourceCharacterId: sourceCharacterId ?? this.sourceCharacterId,
     lastPublishedLocalRevision:
         lastPublishedLocalRevision ?? this.lastPublishedLocalRevision,
-    lastAppliedActorRevision:
-        lastAppliedActorRevision ?? this.lastAppliedActorRevision,
+    lastAppliedCharacterRevision:
+        lastAppliedCharacterRevision ?? this.lastAppliedCharacterRevision,
   );
-  CampaignActorBacklinkRow copyWithCompanion(
-    CampaignActorBacklinksCompanion data,
+  CampaignCharacterBacklinkRow copyWithCompanion(
+    CampaignCharacterBacklinksCompanion data,
   ) {
-    return CampaignActorBacklinkRow(
-      campaignActorId: data.campaignActorId.present
-          ? data.campaignActorId.value
-          : this.campaignActorId,
+    return CampaignCharacterBacklinkRow(
+      campaignCharacterId: data.campaignCharacterId.present
+          ? data.campaignCharacterId.value
+          : this.campaignCharacterId,
       sourceCharacterId: data.sourceCharacterId.present
           ? data.sourceCharacterId.value
           : this.sourceCharacterId,
       lastPublishedLocalRevision: data.lastPublishedLocalRevision.present
           ? data.lastPublishedLocalRevision.value
           : this.lastPublishedLocalRevision,
-      lastAppliedActorRevision: data.lastAppliedActorRevision.present
-          ? data.lastAppliedActorRevision.value
-          : this.lastAppliedActorRevision,
+      lastAppliedCharacterRevision: data.lastAppliedCharacterRevision.present
+          ? data.lastAppliedCharacterRevision.value
+          : this.lastAppliedCharacterRevision,
     );
   }
 
   @override
   String toString() {
-    return (StringBuffer('CampaignActorBacklinkRow(')
-          ..write('campaignActorId: $campaignActorId, ')
+    return (StringBuffer('CampaignCharacterBacklinkRow(')
+          ..write('campaignCharacterId: $campaignCharacterId, ')
           ..write('sourceCharacterId: $sourceCharacterId, ')
           ..write('lastPublishedLocalRevision: $lastPublishedLocalRevision, ')
-          ..write('lastAppliedActorRevision: $lastAppliedActorRevision')
+          ..write('lastAppliedCharacterRevision: $lastAppliedCharacterRevision')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(
-    campaignActorId,
+    campaignCharacterId,
     sourceCharacterId,
     lastPublishedLocalRevision,
-    lastAppliedActorRevision,
+    lastAppliedCharacterRevision,
   );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is CampaignActorBacklinkRow &&
-          other.campaignActorId == this.campaignActorId &&
+      (other is CampaignCharacterBacklinkRow &&
+          other.campaignCharacterId == this.campaignCharacterId &&
           other.sourceCharacterId == this.sourceCharacterId &&
           other.lastPublishedLocalRevision == this.lastPublishedLocalRevision &&
-          other.lastAppliedActorRevision == this.lastAppliedActorRevision);
+          other.lastAppliedCharacterRevision ==
+              this.lastAppliedCharacterRevision);
 }
 
-class CampaignActorBacklinksCompanion
-    extends UpdateCompanion<CampaignActorBacklinkRow> {
-  final Value<String> campaignActorId;
+class CampaignCharacterBacklinksCompanion
+    extends UpdateCompanion<CampaignCharacterBacklinkRow> {
+  final Value<String> campaignCharacterId;
   final Value<String> sourceCharacterId;
   final Value<int> lastPublishedLocalRevision;
-  final Value<int> lastAppliedActorRevision;
+  final Value<int> lastAppliedCharacterRevision;
   final Value<int> rowid;
-  const CampaignActorBacklinksCompanion({
-    this.campaignActorId = const Value.absent(),
+  const CampaignCharacterBacklinksCompanion({
+    this.campaignCharacterId = const Value.absent(),
     this.sourceCharacterId = const Value.absent(),
     this.lastPublishedLocalRevision = const Value.absent(),
-    this.lastAppliedActorRevision = const Value.absent(),
+    this.lastAppliedCharacterRevision = const Value.absent(),
     this.rowid = const Value.absent(),
   });
-  CampaignActorBacklinksCompanion.insert({
-    required String campaignActorId,
+  CampaignCharacterBacklinksCompanion.insert({
+    required String campaignCharacterId,
     required String sourceCharacterId,
     this.lastPublishedLocalRevision = const Value.absent(),
-    this.lastAppliedActorRevision = const Value.absent(),
+    this.lastAppliedCharacterRevision = const Value.absent(),
     this.rowid = const Value.absent(),
-  }) : campaignActorId = Value(campaignActorId),
+  }) : campaignCharacterId = Value(campaignCharacterId),
        sourceCharacterId = Value(sourceCharacterId);
-  static Insertable<CampaignActorBacklinkRow> custom({
-    Expression<String>? campaignActorId,
+  static Insertable<CampaignCharacterBacklinkRow> custom({
+    Expression<String>? campaignCharacterId,
     Expression<String>? sourceCharacterId,
     Expression<int>? lastPublishedLocalRevision,
-    Expression<int>? lastAppliedActorRevision,
+    Expression<int>? lastAppliedCharacterRevision,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
-      if (campaignActorId != null) 'campaign_actor_id': campaignActorId,
+      if (campaignCharacterId != null)
+        'campaign_character_id': campaignCharacterId,
       if (sourceCharacterId != null) 'source_character_id': sourceCharacterId,
       if (lastPublishedLocalRevision != null)
         'last_published_local_revision': lastPublishedLocalRevision,
-      if (lastAppliedActorRevision != null)
-        'last_applied_actor_revision': lastAppliedActorRevision,
+      if (lastAppliedCharacterRevision != null)
+        'last_applied_character_revision': lastAppliedCharacterRevision,
       if (rowid != null) 'rowid': rowid,
     });
   }
 
-  CampaignActorBacklinksCompanion copyWith({
-    Value<String>? campaignActorId,
+  CampaignCharacterBacklinksCompanion copyWith({
+    Value<String>? campaignCharacterId,
     Value<String>? sourceCharacterId,
     Value<int>? lastPublishedLocalRevision,
-    Value<int>? lastAppliedActorRevision,
+    Value<int>? lastAppliedCharacterRevision,
     Value<int>? rowid,
   }) {
-    return CampaignActorBacklinksCompanion(
-      campaignActorId: campaignActorId ?? this.campaignActorId,
+    return CampaignCharacterBacklinksCompanion(
+      campaignCharacterId: campaignCharacterId ?? this.campaignCharacterId,
       sourceCharacterId: sourceCharacterId ?? this.sourceCharacterId,
       lastPublishedLocalRevision:
           lastPublishedLocalRevision ?? this.lastPublishedLocalRevision,
-      lastAppliedActorRevision:
-          lastAppliedActorRevision ?? this.lastAppliedActorRevision,
+      lastAppliedCharacterRevision:
+          lastAppliedCharacterRevision ?? this.lastAppliedCharacterRevision,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -6639,8 +6876,10 @@ class CampaignActorBacklinksCompanion
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    if (campaignActorId.present) {
-      map['campaign_actor_id'] = Variable<String>(campaignActorId.value);
+    if (campaignCharacterId.present) {
+      map['campaign_character_id'] = Variable<String>(
+        campaignCharacterId.value,
+      );
     }
     if (sourceCharacterId.present) {
       map['source_character_id'] = Variable<String>(sourceCharacterId.value);
@@ -6650,9 +6889,9 @@ class CampaignActorBacklinksCompanion
         lastPublishedLocalRevision.value,
       );
     }
-    if (lastAppliedActorRevision.present) {
-      map['last_applied_actor_revision'] = Variable<int>(
-        lastAppliedActorRevision.value,
+    if (lastAppliedCharacterRevision.present) {
+      map['last_applied_character_revision'] = Variable<int>(
+        lastAppliedCharacterRevision.value,
       );
     }
     if (rowid.present) {
@@ -6663,11 +6902,13 @@ class CampaignActorBacklinksCompanion
 
   @override
   String toString() {
-    return (StringBuffer('CampaignActorBacklinksCompanion(')
-          ..write('campaignActorId: $campaignActorId, ')
+    return (StringBuffer('CampaignCharacterBacklinksCompanion(')
+          ..write('campaignCharacterId: $campaignCharacterId, ')
           ..write('sourceCharacterId: $sourceCharacterId, ')
           ..write('lastPublishedLocalRevision: $lastPublishedLocalRevision, ')
-          ..write('lastAppliedActorRevision: $lastAppliedActorRevision, ')
+          ..write(
+            'lastAppliedCharacterRevision: $lastAppliedCharacterRevision, ',
+          )
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -7675,17 +7916,17 @@ class $CharacterSyncConflictsTable extends CharacterSyncConflicts
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _campaignActorIdMeta = const VerificationMeta(
-    'campaignActorId',
-  );
+  static const VerificationMeta _campaignCharacterIdMeta =
+      const VerificationMeta('campaignCharacterId');
   @override
-  late final GeneratedColumn<String> campaignActorId = GeneratedColumn<String>(
-    'campaign_actor_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
+  late final GeneratedColumn<String> campaignCharacterId =
+      GeneratedColumn<String>(
+        'campaign_character_id',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
   static const VerificationMeta _fieldPathMeta = const VerificationMeta(
     'fieldPath',
   );
@@ -7747,7 +7988,7 @@ class $CharacterSyncConflictsTable extends CharacterSyncConflicts
   List<GeneratedColumn> get $columns => [
     id,
     characterId,
-    campaignActorId,
+    campaignCharacterId,
     fieldPath,
     localValueJson,
     remoteValueJson,
@@ -7782,16 +8023,16 @@ class $CharacterSyncConflictsTable extends CharacterSyncConflicts
     } else if (isInserting) {
       context.missing(_characterIdMeta);
     }
-    if (data.containsKey('campaign_actor_id')) {
+    if (data.containsKey('campaign_character_id')) {
       context.handle(
-        _campaignActorIdMeta,
-        campaignActorId.isAcceptableOrUnknown(
-          data['campaign_actor_id']!,
-          _campaignActorIdMeta,
+        _campaignCharacterIdMeta,
+        campaignCharacterId.isAcceptableOrUnknown(
+          data['campaign_character_id']!,
+          _campaignCharacterIdMeta,
         ),
       );
     } else if (isInserting) {
-      context.missing(_campaignActorIdMeta);
+      context.missing(_campaignCharacterIdMeta);
     }
     if (data.containsKey('field_path')) {
       context.handle(
@@ -7853,9 +8094,9 @@ class $CharacterSyncConflictsTable extends CharacterSyncConflicts
         DriftSqlType.string,
         data['${effectivePrefix}character_id'],
       )!,
-      campaignActorId: attachedDatabase.typeMapping.read(
+      campaignCharacterId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}campaign_actor_id'],
+        data['${effectivePrefix}campaign_character_id'],
       )!,
       fieldPath: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
@@ -7890,7 +8131,7 @@ class CharacterSyncConflictRow extends DataClass
     implements Insertable<CharacterSyncConflictRow> {
   final String id;
   final String characterId;
-  final String campaignActorId;
+  final String campaignCharacterId;
   final String fieldPath;
   final String localValueJson;
   final String remoteValueJson;
@@ -7899,7 +8140,7 @@ class CharacterSyncConflictRow extends DataClass
   const CharacterSyncConflictRow({
     required this.id,
     required this.characterId,
-    required this.campaignActorId,
+    required this.campaignCharacterId,
     required this.fieldPath,
     required this.localValueJson,
     required this.remoteValueJson,
@@ -7911,7 +8152,7 @@ class CharacterSyncConflictRow extends DataClass
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
     map['character_id'] = Variable<String>(characterId);
-    map['campaign_actor_id'] = Variable<String>(campaignActorId);
+    map['campaign_character_id'] = Variable<String>(campaignCharacterId);
     map['field_path'] = Variable<String>(fieldPath);
     map['local_value_json'] = Variable<String>(localValueJson);
     map['remote_value_json'] = Variable<String>(remoteValueJson);
@@ -7926,7 +8167,7 @@ class CharacterSyncConflictRow extends DataClass
     return CharacterSyncConflictsCompanion(
       id: Value(id),
       characterId: Value(characterId),
-      campaignActorId: Value(campaignActorId),
+      campaignCharacterId: Value(campaignCharacterId),
       fieldPath: Value(fieldPath),
       localValueJson: Value(localValueJson),
       remoteValueJson: Value(remoteValueJson),
@@ -7945,7 +8186,9 @@ class CharacterSyncConflictRow extends DataClass
     return CharacterSyncConflictRow(
       id: serializer.fromJson<String>(json['id']),
       characterId: serializer.fromJson<String>(json['characterId']),
-      campaignActorId: serializer.fromJson<String>(json['campaignActorId']),
+      campaignCharacterId: serializer.fromJson<String>(
+        json['campaignCharacterId'],
+      ),
       fieldPath: serializer.fromJson<String>(json['fieldPath']),
       localValueJson: serializer.fromJson<String>(json['localValueJson']),
       remoteValueJson: serializer.fromJson<String>(json['remoteValueJson']),
@@ -7959,7 +8202,7 @@ class CharacterSyncConflictRow extends DataClass
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
       'characterId': serializer.toJson<String>(characterId),
-      'campaignActorId': serializer.toJson<String>(campaignActorId),
+      'campaignCharacterId': serializer.toJson<String>(campaignCharacterId),
       'fieldPath': serializer.toJson<String>(fieldPath),
       'localValueJson': serializer.toJson<String>(localValueJson),
       'remoteValueJson': serializer.toJson<String>(remoteValueJson),
@@ -7971,7 +8214,7 @@ class CharacterSyncConflictRow extends DataClass
   CharacterSyncConflictRow copyWith({
     String? id,
     String? characterId,
-    String? campaignActorId,
+    String? campaignCharacterId,
     String? fieldPath,
     String? localValueJson,
     String? remoteValueJson,
@@ -7980,7 +8223,7 @@ class CharacterSyncConflictRow extends DataClass
   }) => CharacterSyncConflictRow(
     id: id ?? this.id,
     characterId: characterId ?? this.characterId,
-    campaignActorId: campaignActorId ?? this.campaignActorId,
+    campaignCharacterId: campaignCharacterId ?? this.campaignCharacterId,
     fieldPath: fieldPath ?? this.fieldPath,
     localValueJson: localValueJson ?? this.localValueJson,
     remoteValueJson: remoteValueJson ?? this.remoteValueJson,
@@ -7995,9 +8238,9 @@ class CharacterSyncConflictRow extends DataClass
       characterId: data.characterId.present
           ? data.characterId.value
           : this.characterId,
-      campaignActorId: data.campaignActorId.present
-          ? data.campaignActorId.value
-          : this.campaignActorId,
+      campaignCharacterId: data.campaignCharacterId.present
+          ? data.campaignCharacterId.value
+          : this.campaignCharacterId,
       fieldPath: data.fieldPath.present ? data.fieldPath.value : this.fieldPath,
       localValueJson: data.localValueJson.present
           ? data.localValueJson.value
@@ -8017,7 +8260,7 @@ class CharacterSyncConflictRow extends DataClass
     return (StringBuffer('CharacterSyncConflictRow(')
           ..write('id: $id, ')
           ..write('characterId: $characterId, ')
-          ..write('campaignActorId: $campaignActorId, ')
+          ..write('campaignCharacterId: $campaignCharacterId, ')
           ..write('fieldPath: $fieldPath, ')
           ..write('localValueJson: $localValueJson, ')
           ..write('remoteValueJson: $remoteValueJson, ')
@@ -8031,7 +8274,7 @@ class CharacterSyncConflictRow extends DataClass
   int get hashCode => Object.hash(
     id,
     characterId,
-    campaignActorId,
+    campaignCharacterId,
     fieldPath,
     localValueJson,
     remoteValueJson,
@@ -8044,7 +8287,7 @@ class CharacterSyncConflictRow extends DataClass
       (other is CharacterSyncConflictRow &&
           other.id == this.id &&
           other.characterId == this.characterId &&
-          other.campaignActorId == this.campaignActorId &&
+          other.campaignCharacterId == this.campaignCharacterId &&
           other.fieldPath == this.fieldPath &&
           other.localValueJson == this.localValueJson &&
           other.remoteValueJson == this.remoteValueJson &&
@@ -8056,7 +8299,7 @@ class CharacterSyncConflictsCompanion
     extends UpdateCompanion<CharacterSyncConflictRow> {
   final Value<String> id;
   final Value<String> characterId;
-  final Value<String> campaignActorId;
+  final Value<String> campaignCharacterId;
   final Value<String> fieldPath;
   final Value<String> localValueJson;
   final Value<String> remoteValueJson;
@@ -8066,7 +8309,7 @@ class CharacterSyncConflictsCompanion
   const CharacterSyncConflictsCompanion({
     this.id = const Value.absent(),
     this.characterId = const Value.absent(),
-    this.campaignActorId = const Value.absent(),
+    this.campaignCharacterId = const Value.absent(),
     this.fieldPath = const Value.absent(),
     this.localValueJson = const Value.absent(),
     this.remoteValueJson = const Value.absent(),
@@ -8077,7 +8320,7 @@ class CharacterSyncConflictsCompanion
   CharacterSyncConflictsCompanion.insert({
     required String id,
     required String characterId,
-    required String campaignActorId,
+    required String campaignCharacterId,
     required String fieldPath,
     this.localValueJson = const Value.absent(),
     this.remoteValueJson = const Value.absent(),
@@ -8086,13 +8329,13 @@ class CharacterSyncConflictsCompanion
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        characterId = Value(characterId),
-       campaignActorId = Value(campaignActorId),
+       campaignCharacterId = Value(campaignCharacterId),
        fieldPath = Value(fieldPath),
        createdAt = Value(createdAt);
   static Insertable<CharacterSyncConflictRow> custom({
     Expression<String>? id,
     Expression<String>? characterId,
-    Expression<String>? campaignActorId,
+    Expression<String>? campaignCharacterId,
     Expression<String>? fieldPath,
     Expression<String>? localValueJson,
     Expression<String>? remoteValueJson,
@@ -8103,7 +8346,8 @@ class CharacterSyncConflictsCompanion
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (characterId != null) 'character_id': characterId,
-      if (campaignActorId != null) 'campaign_actor_id': campaignActorId,
+      if (campaignCharacterId != null)
+        'campaign_character_id': campaignCharacterId,
       if (fieldPath != null) 'field_path': fieldPath,
       if (localValueJson != null) 'local_value_json': localValueJson,
       if (remoteValueJson != null) 'remote_value_json': remoteValueJson,
@@ -8116,7 +8360,7 @@ class CharacterSyncConflictsCompanion
   CharacterSyncConflictsCompanion copyWith({
     Value<String>? id,
     Value<String>? characterId,
-    Value<String>? campaignActorId,
+    Value<String>? campaignCharacterId,
     Value<String>? fieldPath,
     Value<String>? localValueJson,
     Value<String>? remoteValueJson,
@@ -8127,7 +8371,7 @@ class CharacterSyncConflictsCompanion
     return CharacterSyncConflictsCompanion(
       id: id ?? this.id,
       characterId: characterId ?? this.characterId,
-      campaignActorId: campaignActorId ?? this.campaignActorId,
+      campaignCharacterId: campaignCharacterId ?? this.campaignCharacterId,
       fieldPath: fieldPath ?? this.fieldPath,
       localValueJson: localValueJson ?? this.localValueJson,
       remoteValueJson: remoteValueJson ?? this.remoteValueJson,
@@ -8146,8 +8390,10 @@ class CharacterSyncConflictsCompanion
     if (characterId.present) {
       map['character_id'] = Variable<String>(characterId.value);
     }
-    if (campaignActorId.present) {
-      map['campaign_actor_id'] = Variable<String>(campaignActorId.value);
+    if (campaignCharacterId.present) {
+      map['campaign_character_id'] = Variable<String>(
+        campaignCharacterId.value,
+      );
     }
     if (fieldPath.present) {
       map['field_path'] = Variable<String>(fieldPath.value);
@@ -8175,7 +8421,7 @@ class CharacterSyncConflictsCompanion
     return (StringBuffer('CharacterSyncConflictsCompanion(')
           ..write('id: $id, ')
           ..write('characterId: $characterId, ')
-          ..write('campaignActorId: $campaignActorId, ')
+          ..write('campaignCharacterId: $campaignCharacterId, ')
           ..write('fieldPath: $fieldPath, ')
           ..write('localValueJson: $localValueJson, ')
           ..write('remoteValueJson: $remoteValueJson, ')
@@ -8214,19 +8460,19 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $CharactersTable characters = $CharactersTable(this);
   late final $CharacterContentRefsTable characterContentRefs =
       $CharacterContentRefsTable(this);
-  late final $CampaignActorsCacheTable campaignActorsCache =
-      $CampaignActorsCacheTable(this);
-  late final $CampaignActorBacklinksTable campaignActorBacklinks =
-      $CampaignActorBacklinksTable(this);
+  late final $CampaignCharactersCacheTable campaignCharactersCache =
+      $CampaignCharactersCacheTable(this);
+  late final $CampaignCharacterBacklinksTable campaignCharacterBacklinks =
+      $CampaignCharacterBacklinksTable(this);
   late final $CampaignContentCacheTable campaignContentCache =
       $CampaignContentCacheTable(this);
   late final $CampaignSyncCursorsTable campaignSyncCursors =
       $CampaignSyncCursorsTable(this);
   late final $CharacterSyncConflictsTable characterSyncConflicts =
       $CharacterSyncConflictsTable(this);
-  late final Index idxCampaignActorsCampaignStatus = Index(
-    'idx_campaign_actors_campaign_status',
-    'CREATE INDEX idx_campaign_actors_campaign_status ON campaign_actors_cache (campaign_id, status)',
+  late final Index idxCampaignCharactersCampaignStatus = Index(
+    'idx_campaign_characters_campaign_status',
+    'CREATE INDEX idx_campaign_characters_campaign_status ON campaign_characters_cache (campaign_id, status)',
   );
   late final Index idxCampaignContentCampaignTypeDeleted = Index(
     'idx_campaign_content_campaign_type_deleted',
@@ -8255,12 +8501,12 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     contentReadHistory,
     characters,
     characterContentRefs,
-    campaignActorsCache,
-    campaignActorBacklinks,
+    campaignCharactersCache,
+    campaignCharacterBacklinks,
     campaignContentCache,
     campaignSyncCursors,
     characterSyncConflicts,
-    idxCampaignActorsCampaignStatus,
+    idxCampaignCharactersCampaignStatus,
     idxCampaignContentCampaignTypeDeleted,
     idxCharacterSyncConflictsCharacter,
   ];
@@ -8270,6 +8516,7 @@ typedef $$ServerProfilesTableCreateCompanionBuilder =
     ServerProfilesCompanion Function({
       required String id,
       required String name,
+      Value<String?> localAlias,
       required String baseUrl,
       required String apiBaseUrl,
       required String websocketUrl,
@@ -8282,6 +8529,7 @@ typedef $$ServerProfilesTableUpdateCompanionBuilder =
     ServerProfilesCompanion Function({
       Value<String> id,
       Value<String> name,
+      Value<String?> localAlias,
       Value<String> baseUrl,
       Value<String> apiBaseUrl,
       Value<String> websocketUrl,
@@ -8307,6 +8555,11 @@ class $$ServerProfilesTableFilterComposer
 
   ColumnFilters<String> get name => $composableBuilder(
     column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localAlias => $composableBuilder(
+    column: $table.localAlias,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8360,6 +8613,11 @@ class $$ServerProfilesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get localAlias => $composableBuilder(
+    column: $table.localAlias,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get baseUrl => $composableBuilder(
     column: $table.baseUrl,
     builder: (column) => ColumnOrderings(column),
@@ -8405,6 +8663,11 @@ class $$ServerProfilesTableAnnotationComposer
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get localAlias => $composableBuilder(
+    column: $table.localAlias,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get baseUrl =>
       $composableBuilder(column: $table.baseUrl, builder: (column) => column);
@@ -8472,6 +8735,7 @@ class $$ServerProfilesTableTableManager
               ({
                 Value<String> id = const Value.absent(),
                 Value<String> name = const Value.absent(),
+                Value<String?> localAlias = const Value.absent(),
                 Value<String> baseUrl = const Value.absent(),
                 Value<String> apiBaseUrl = const Value.absent(),
                 Value<String> websocketUrl = const Value.absent(),
@@ -8482,6 +8746,7 @@ class $$ServerProfilesTableTableManager
               }) => ServerProfilesCompanion(
                 id: id,
                 name: name,
+                localAlias: localAlias,
                 baseUrl: baseUrl,
                 apiBaseUrl: apiBaseUrl,
                 websocketUrl: websocketUrl,
@@ -8494,6 +8759,7 @@ class $$ServerProfilesTableTableManager
               ({
                 required String id,
                 required String name,
+                Value<String?> localAlias = const Value.absent(),
                 required String baseUrl,
                 required String apiBaseUrl,
                 required String websocketUrl,
@@ -8504,6 +8770,7 @@ class $$ServerProfilesTableTableManager
               }) => ServerProfilesCompanion.insert(
                 id: id,
                 name: name,
+                localAlias: localAlias,
                 baseUrl: baseUrl,
                 apiBaseUrl: apiBaseUrl,
                 websocketUrl: websocketUrl,
@@ -10919,6 +11186,8 @@ typedef $$CharactersTableCreateCompanionBuilder =
       required String id,
       Value<String> ownerLocalId,
       required String sheetJson,
+      Value<String?> markdownMirror,
+      Value<bool> markdownDirty,
       Value<int> revision,
       Value<int?> syncRevision,
       Value<DateTime?> archivedAt,
@@ -10931,6 +11200,8 @@ typedef $$CharactersTableUpdateCompanionBuilder =
       Value<String> id,
       Value<String> ownerLocalId,
       Value<String> sheetJson,
+      Value<String?> markdownMirror,
+      Value<bool> markdownDirty,
       Value<int> revision,
       Value<int?> syncRevision,
       Value<DateTime?> archivedAt,
@@ -10960,6 +11231,16 @@ class $$CharactersTableFilterComposer
 
   ColumnFilters<String> get sheetJson => $composableBuilder(
     column: $table.sheetJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get markdownMirror => $composableBuilder(
+    column: $table.markdownMirror,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get markdownDirty => $composableBuilder(
+    column: $table.markdownDirty,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -11013,6 +11294,16 @@ class $$CharactersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get markdownMirror => $composableBuilder(
+    column: $table.markdownMirror,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get markdownDirty => $composableBuilder(
+    column: $table.markdownDirty,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get revision => $composableBuilder(
     column: $table.revision,
     builder: (column) => ColumnOrderings(column),
@@ -11058,6 +11349,16 @@ class $$CharactersTableAnnotationComposer
 
   GeneratedColumn<String> get sheetJson =>
       $composableBuilder(column: $table.sheetJson, builder: (column) => column);
+
+  GeneratedColumn<String> get markdownMirror => $composableBuilder(
+    column: $table.markdownMirror,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get markdownDirty => $composableBuilder(
+    column: $table.markdownDirty,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get revision =>
       $composableBuilder(column: $table.revision, builder: (column) => column);
@@ -11113,6 +11414,8 @@ class $$CharactersTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<String> ownerLocalId = const Value.absent(),
                 Value<String> sheetJson = const Value.absent(),
+                Value<String?> markdownMirror = const Value.absent(),
+                Value<bool> markdownDirty = const Value.absent(),
                 Value<int> revision = const Value.absent(),
                 Value<int?> syncRevision = const Value.absent(),
                 Value<DateTime?> archivedAt = const Value.absent(),
@@ -11123,6 +11426,8 @@ class $$CharactersTableTableManager
                 id: id,
                 ownerLocalId: ownerLocalId,
                 sheetJson: sheetJson,
+                markdownMirror: markdownMirror,
+                markdownDirty: markdownDirty,
                 revision: revision,
                 syncRevision: syncRevision,
                 archivedAt: archivedAt,
@@ -11135,6 +11440,8 @@ class $$CharactersTableTableManager
                 required String id,
                 Value<String> ownerLocalId = const Value.absent(),
                 required String sheetJson,
+                Value<String?> markdownMirror = const Value.absent(),
+                Value<bool> markdownDirty = const Value.absent(),
                 Value<int> revision = const Value.absent(),
                 Value<int?> syncRevision = const Value.absent(),
                 Value<DateTime?> archivedAt = const Value.absent(),
@@ -11145,6 +11452,8 @@ class $$CharactersTableTableManager
                 id: id,
                 ownerLocalId: ownerLocalId,
                 sheetJson: sheetJson,
+                markdownMirror: markdownMirror,
+                markdownDirty: markdownDirty,
                 revision: revision,
                 syncRevision: syncRevision,
                 archivedAt: archivedAt,
@@ -11399,14 +11708,15 @@ typedef $$CharacterContentRefsTableProcessedTableManager =
       CharacterContentRefRow,
       PrefetchHooks Function()
     >;
-typedef $$CampaignActorsCacheTableCreateCompanionBuilder =
-    CampaignActorsCacheCompanion Function({
+typedef $$CampaignCharactersCacheTableCreateCompanionBuilder =
+    CampaignCharactersCacheCompanion Function({
       required String id,
       required String campaignId,
       Value<String?> ownerUserId,
       Value<String?> sourceCharacterId,
-      required String actorType,
+      required String characterType,
       required String status,
+      Value<bool> visibleToPlayers,
       required String sheetJson,
       required int revision,
       required String updatedBy,
@@ -11414,14 +11724,15 @@ typedef $$CampaignActorsCacheTableCreateCompanionBuilder =
       required DateTime updatedAt,
       Value<int> rowid,
     });
-typedef $$CampaignActorsCacheTableUpdateCompanionBuilder =
-    CampaignActorsCacheCompanion Function({
+typedef $$CampaignCharactersCacheTableUpdateCompanionBuilder =
+    CampaignCharactersCacheCompanion Function({
       Value<String> id,
       Value<String> campaignId,
       Value<String?> ownerUserId,
       Value<String?> sourceCharacterId,
-      Value<String> actorType,
+      Value<String> characterType,
       Value<String> status,
+      Value<bool> visibleToPlayers,
       Value<String> sheetJson,
       Value<int> revision,
       Value<String> updatedBy,
@@ -11430,9 +11741,9 @@ typedef $$CampaignActorsCacheTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
-class $$CampaignActorsCacheTableFilterComposer
-    extends Composer<_$AppDatabase, $CampaignActorsCacheTable> {
-  $$CampaignActorsCacheTableFilterComposer({
+class $$CampaignCharactersCacheTableFilterComposer
+    extends Composer<_$AppDatabase, $CampaignCharactersCacheTable> {
+  $$CampaignCharactersCacheTableFilterComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -11459,13 +11770,18 @@ class $$CampaignActorsCacheTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get actorType => $composableBuilder(
-    column: $table.actorType,
+  ColumnFilters<String> get characterType => $composableBuilder(
+    column: $table.characterType,
     builder: (column) => ColumnFilters(column),
   );
 
   ColumnFilters<String> get status => $composableBuilder(
     column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get visibleToPlayers => $composableBuilder(
+    column: $table.visibleToPlayers,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -11495,9 +11811,9 @@ class $$CampaignActorsCacheTableFilterComposer
   );
 }
 
-class $$CampaignActorsCacheTableOrderingComposer
-    extends Composer<_$AppDatabase, $CampaignActorsCacheTable> {
-  $$CampaignActorsCacheTableOrderingComposer({
+class $$CampaignCharactersCacheTableOrderingComposer
+    extends Composer<_$AppDatabase, $CampaignCharactersCacheTable> {
+  $$CampaignCharactersCacheTableOrderingComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -11524,13 +11840,18 @@ class $$CampaignActorsCacheTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get actorType => $composableBuilder(
-    column: $table.actorType,
+  ColumnOrderings<String> get characterType => $composableBuilder(
+    column: $table.characterType,
     builder: (column) => ColumnOrderings(column),
   );
 
   ColumnOrderings<String> get status => $composableBuilder(
     column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get visibleToPlayers => $composableBuilder(
+    column: $table.visibleToPlayers,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -11560,9 +11881,9 @@ class $$CampaignActorsCacheTableOrderingComposer
   );
 }
 
-class $$CampaignActorsCacheTableAnnotationComposer
-    extends Composer<_$AppDatabase, $CampaignActorsCacheTable> {
-  $$CampaignActorsCacheTableAnnotationComposer({
+class $$CampaignCharactersCacheTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CampaignCharactersCacheTable> {
+  $$CampaignCharactersCacheTableAnnotationComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -11587,11 +11908,18 @@ class $$CampaignActorsCacheTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get actorType =>
-      $composableBuilder(column: $table.actorType, builder: (column) => column);
+  GeneratedColumn<String> get characterType => $composableBuilder(
+    column: $table.characterType,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<bool> get visibleToPlayers => $composableBuilder(
+    column: $table.visibleToPlayers,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get sheetJson =>
       $composableBuilder(column: $table.sheetJson, builder: (column) => column);
@@ -11609,44 +11937,47 @@ class $$CampaignActorsCacheTableAnnotationComposer
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 }
 
-class $$CampaignActorsCacheTableTableManager
+class $$CampaignCharactersCacheTableTableManager
     extends
         RootTableManager<
           _$AppDatabase,
-          $CampaignActorsCacheTable,
-          CampaignActorsCacheRow,
-          $$CampaignActorsCacheTableFilterComposer,
-          $$CampaignActorsCacheTableOrderingComposer,
-          $$CampaignActorsCacheTableAnnotationComposer,
-          $$CampaignActorsCacheTableCreateCompanionBuilder,
-          $$CampaignActorsCacheTableUpdateCompanionBuilder,
+          $CampaignCharactersCacheTable,
+          CampaignCharactersCacheRow,
+          $$CampaignCharactersCacheTableFilterComposer,
+          $$CampaignCharactersCacheTableOrderingComposer,
+          $$CampaignCharactersCacheTableAnnotationComposer,
+          $$CampaignCharactersCacheTableCreateCompanionBuilder,
+          $$CampaignCharactersCacheTableUpdateCompanionBuilder,
           (
-            CampaignActorsCacheRow,
+            CampaignCharactersCacheRow,
             BaseReferences<
               _$AppDatabase,
-              $CampaignActorsCacheTable,
-              CampaignActorsCacheRow
+              $CampaignCharactersCacheTable,
+              CampaignCharactersCacheRow
             >,
           ),
-          CampaignActorsCacheRow,
+          CampaignCharactersCacheRow,
           PrefetchHooks Function()
         > {
-  $$CampaignActorsCacheTableTableManager(
+  $$CampaignCharactersCacheTableTableManager(
     _$AppDatabase db,
-    $CampaignActorsCacheTable table,
+    $CampaignCharactersCacheTable table,
   ) : super(
         TableManagerState(
           db: db,
           table: table,
           createFilteringComposer: () =>
-              $$CampaignActorsCacheTableFilterComposer($db: db, $table: table),
+              $$CampaignCharactersCacheTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
           createOrderingComposer: () =>
-              $$CampaignActorsCacheTableOrderingComposer(
+              $$CampaignCharactersCacheTableOrderingComposer(
                 $db: db,
                 $table: table,
               ),
           createComputedFieldComposer: () =>
-              $$CampaignActorsCacheTableAnnotationComposer(
+              $$CampaignCharactersCacheTableAnnotationComposer(
                 $db: db,
                 $table: table,
               ),
@@ -11656,21 +11987,23 @@ class $$CampaignActorsCacheTableTableManager
                 Value<String> campaignId = const Value.absent(),
                 Value<String?> ownerUserId = const Value.absent(),
                 Value<String?> sourceCharacterId = const Value.absent(),
-                Value<String> actorType = const Value.absent(),
+                Value<String> characterType = const Value.absent(),
                 Value<String> status = const Value.absent(),
+                Value<bool> visibleToPlayers = const Value.absent(),
                 Value<String> sheetJson = const Value.absent(),
                 Value<int> revision = const Value.absent(),
                 Value<String> updatedBy = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => CampaignActorsCacheCompanion(
+              }) => CampaignCharactersCacheCompanion(
                 id: id,
                 campaignId: campaignId,
                 ownerUserId: ownerUserId,
                 sourceCharacterId: sourceCharacterId,
-                actorType: actorType,
+                characterType: characterType,
                 status: status,
+                visibleToPlayers: visibleToPlayers,
                 sheetJson: sheetJson,
                 revision: revision,
                 updatedBy: updatedBy,
@@ -11684,21 +12017,23 @@ class $$CampaignActorsCacheTableTableManager
                 required String campaignId,
                 Value<String?> ownerUserId = const Value.absent(),
                 Value<String?> sourceCharacterId = const Value.absent(),
-                required String actorType,
+                required String characterType,
                 required String status,
+                Value<bool> visibleToPlayers = const Value.absent(),
                 required String sheetJson,
                 required int revision,
                 required String updatedBy,
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
-              }) => CampaignActorsCacheCompanion.insert(
+              }) => CampaignCharactersCacheCompanion.insert(
                 id: id,
                 campaignId: campaignId,
                 ownerUserId: ownerUserId,
                 sourceCharacterId: sourceCharacterId,
-                actorType: actorType,
+                characterType: characterType,
                 status: status,
+                visibleToPlayers: visibleToPlayers,
                 sheetJson: sheetJson,
                 revision: revision,
                 updatedBy: updatedBy,
@@ -11714,55 +12049,55 @@ class $$CampaignActorsCacheTableTableManager
       );
 }
 
-typedef $$CampaignActorsCacheTableProcessedTableManager =
+typedef $$CampaignCharactersCacheTableProcessedTableManager =
     ProcessedTableManager<
       _$AppDatabase,
-      $CampaignActorsCacheTable,
-      CampaignActorsCacheRow,
-      $$CampaignActorsCacheTableFilterComposer,
-      $$CampaignActorsCacheTableOrderingComposer,
-      $$CampaignActorsCacheTableAnnotationComposer,
-      $$CampaignActorsCacheTableCreateCompanionBuilder,
-      $$CampaignActorsCacheTableUpdateCompanionBuilder,
+      $CampaignCharactersCacheTable,
+      CampaignCharactersCacheRow,
+      $$CampaignCharactersCacheTableFilterComposer,
+      $$CampaignCharactersCacheTableOrderingComposer,
+      $$CampaignCharactersCacheTableAnnotationComposer,
+      $$CampaignCharactersCacheTableCreateCompanionBuilder,
+      $$CampaignCharactersCacheTableUpdateCompanionBuilder,
       (
-        CampaignActorsCacheRow,
+        CampaignCharactersCacheRow,
         BaseReferences<
           _$AppDatabase,
-          $CampaignActorsCacheTable,
-          CampaignActorsCacheRow
+          $CampaignCharactersCacheTable,
+          CampaignCharactersCacheRow
         >,
       ),
-      CampaignActorsCacheRow,
+      CampaignCharactersCacheRow,
       PrefetchHooks Function()
     >;
-typedef $$CampaignActorBacklinksTableCreateCompanionBuilder =
-    CampaignActorBacklinksCompanion Function({
-      required String campaignActorId,
+typedef $$CampaignCharacterBacklinksTableCreateCompanionBuilder =
+    CampaignCharacterBacklinksCompanion Function({
+      required String campaignCharacterId,
       required String sourceCharacterId,
       Value<int> lastPublishedLocalRevision,
-      Value<int> lastAppliedActorRevision,
+      Value<int> lastAppliedCharacterRevision,
       Value<int> rowid,
     });
-typedef $$CampaignActorBacklinksTableUpdateCompanionBuilder =
-    CampaignActorBacklinksCompanion Function({
-      Value<String> campaignActorId,
+typedef $$CampaignCharacterBacklinksTableUpdateCompanionBuilder =
+    CampaignCharacterBacklinksCompanion Function({
+      Value<String> campaignCharacterId,
       Value<String> sourceCharacterId,
       Value<int> lastPublishedLocalRevision,
-      Value<int> lastAppliedActorRevision,
+      Value<int> lastAppliedCharacterRevision,
       Value<int> rowid,
     });
 
-class $$CampaignActorBacklinksTableFilterComposer
-    extends Composer<_$AppDatabase, $CampaignActorBacklinksTable> {
-  $$CampaignActorBacklinksTableFilterComposer({
+class $$CampaignCharacterBacklinksTableFilterComposer
+    extends Composer<_$AppDatabase, $CampaignCharacterBacklinksTable> {
+  $$CampaignCharacterBacklinksTableFilterComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<String> get campaignActorId => $composableBuilder(
-    column: $table.campaignActorId,
+  ColumnFilters<String> get campaignCharacterId => $composableBuilder(
+    column: $table.campaignCharacterId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -11776,23 +12111,23 @@ class $$CampaignActorBacklinksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get lastAppliedActorRevision => $composableBuilder(
-    column: $table.lastAppliedActorRevision,
+  ColumnFilters<int> get lastAppliedCharacterRevision => $composableBuilder(
+    column: $table.lastAppliedCharacterRevision,
     builder: (column) => ColumnFilters(column),
   );
 }
 
-class $$CampaignActorBacklinksTableOrderingComposer
-    extends Composer<_$AppDatabase, $CampaignActorBacklinksTable> {
-  $$CampaignActorBacklinksTableOrderingComposer({
+class $$CampaignCharacterBacklinksTableOrderingComposer
+    extends Composer<_$AppDatabase, $CampaignCharacterBacklinksTable> {
+  $$CampaignCharacterBacklinksTableOrderingComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<String> get campaignActorId => $composableBuilder(
-    column: $table.campaignActorId,
+  ColumnOrderings<String> get campaignCharacterId => $composableBuilder(
+    column: $table.campaignCharacterId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -11806,23 +12141,23 @@ class $$CampaignActorBacklinksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get lastAppliedActorRevision => $composableBuilder(
-    column: $table.lastAppliedActorRevision,
+  ColumnOrderings<int> get lastAppliedCharacterRevision => $composableBuilder(
+    column: $table.lastAppliedCharacterRevision,
     builder: (column) => ColumnOrderings(column),
   );
 }
 
-class $$CampaignActorBacklinksTableAnnotationComposer
-    extends Composer<_$AppDatabase, $CampaignActorBacklinksTable> {
-  $$CampaignActorBacklinksTableAnnotationComposer({
+class $$CampaignCharacterBacklinksTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CampaignCharacterBacklinksTable> {
+  $$CampaignCharacterBacklinksTableAnnotationComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get campaignActorId => $composableBuilder(
-    column: $table.campaignActorId,
+  GeneratedColumn<String> get campaignCharacterId => $composableBuilder(
+    column: $table.campaignCharacterId,
     builder: (column) => column,
   );
 
@@ -11836,82 +12171,82 @@ class $$CampaignActorBacklinksTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get lastAppliedActorRevision => $composableBuilder(
-    column: $table.lastAppliedActorRevision,
+  GeneratedColumn<int> get lastAppliedCharacterRevision => $composableBuilder(
+    column: $table.lastAppliedCharacterRevision,
     builder: (column) => column,
   );
 }
 
-class $$CampaignActorBacklinksTableTableManager
+class $$CampaignCharacterBacklinksTableTableManager
     extends
         RootTableManager<
           _$AppDatabase,
-          $CampaignActorBacklinksTable,
-          CampaignActorBacklinkRow,
-          $$CampaignActorBacklinksTableFilterComposer,
-          $$CampaignActorBacklinksTableOrderingComposer,
-          $$CampaignActorBacklinksTableAnnotationComposer,
-          $$CampaignActorBacklinksTableCreateCompanionBuilder,
-          $$CampaignActorBacklinksTableUpdateCompanionBuilder,
+          $CampaignCharacterBacklinksTable,
+          CampaignCharacterBacklinkRow,
+          $$CampaignCharacterBacklinksTableFilterComposer,
+          $$CampaignCharacterBacklinksTableOrderingComposer,
+          $$CampaignCharacterBacklinksTableAnnotationComposer,
+          $$CampaignCharacterBacklinksTableCreateCompanionBuilder,
+          $$CampaignCharacterBacklinksTableUpdateCompanionBuilder,
           (
-            CampaignActorBacklinkRow,
+            CampaignCharacterBacklinkRow,
             BaseReferences<
               _$AppDatabase,
-              $CampaignActorBacklinksTable,
-              CampaignActorBacklinkRow
+              $CampaignCharacterBacklinksTable,
+              CampaignCharacterBacklinkRow
             >,
           ),
-          CampaignActorBacklinkRow,
+          CampaignCharacterBacklinkRow,
           PrefetchHooks Function()
         > {
-  $$CampaignActorBacklinksTableTableManager(
+  $$CampaignCharacterBacklinksTableTableManager(
     _$AppDatabase db,
-    $CampaignActorBacklinksTable table,
+    $CampaignCharacterBacklinksTable table,
   ) : super(
         TableManagerState(
           db: db,
           table: table,
           createFilteringComposer: () =>
-              $$CampaignActorBacklinksTableFilterComposer(
+              $$CampaignCharacterBacklinksTableFilterComposer(
                 $db: db,
                 $table: table,
               ),
           createOrderingComposer: () =>
-              $$CampaignActorBacklinksTableOrderingComposer(
+              $$CampaignCharacterBacklinksTableOrderingComposer(
                 $db: db,
                 $table: table,
               ),
           createComputedFieldComposer: () =>
-              $$CampaignActorBacklinksTableAnnotationComposer(
+              $$CampaignCharacterBacklinksTableAnnotationComposer(
                 $db: db,
                 $table: table,
               ),
           updateCompanionCallback:
               ({
-                Value<String> campaignActorId = const Value.absent(),
+                Value<String> campaignCharacterId = const Value.absent(),
                 Value<String> sourceCharacterId = const Value.absent(),
                 Value<int> lastPublishedLocalRevision = const Value.absent(),
-                Value<int> lastAppliedActorRevision = const Value.absent(),
+                Value<int> lastAppliedCharacterRevision = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => CampaignActorBacklinksCompanion(
-                campaignActorId: campaignActorId,
+              }) => CampaignCharacterBacklinksCompanion(
+                campaignCharacterId: campaignCharacterId,
                 sourceCharacterId: sourceCharacterId,
                 lastPublishedLocalRevision: lastPublishedLocalRevision,
-                lastAppliedActorRevision: lastAppliedActorRevision,
+                lastAppliedCharacterRevision: lastAppliedCharacterRevision,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                required String campaignActorId,
+                required String campaignCharacterId,
                 required String sourceCharacterId,
                 Value<int> lastPublishedLocalRevision = const Value.absent(),
-                Value<int> lastAppliedActorRevision = const Value.absent(),
+                Value<int> lastAppliedCharacterRevision = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => CampaignActorBacklinksCompanion.insert(
-                campaignActorId: campaignActorId,
+              }) => CampaignCharacterBacklinksCompanion.insert(
+                campaignCharacterId: campaignCharacterId,
                 sourceCharacterId: sourceCharacterId,
                 lastPublishedLocalRevision: lastPublishedLocalRevision,
-                lastAppliedActorRevision: lastAppliedActorRevision,
+                lastAppliedCharacterRevision: lastAppliedCharacterRevision,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -11922,25 +12257,25 @@ class $$CampaignActorBacklinksTableTableManager
       );
 }
 
-typedef $$CampaignActorBacklinksTableProcessedTableManager =
+typedef $$CampaignCharacterBacklinksTableProcessedTableManager =
     ProcessedTableManager<
       _$AppDatabase,
-      $CampaignActorBacklinksTable,
-      CampaignActorBacklinkRow,
-      $$CampaignActorBacklinksTableFilterComposer,
-      $$CampaignActorBacklinksTableOrderingComposer,
-      $$CampaignActorBacklinksTableAnnotationComposer,
-      $$CampaignActorBacklinksTableCreateCompanionBuilder,
-      $$CampaignActorBacklinksTableUpdateCompanionBuilder,
+      $CampaignCharacterBacklinksTable,
+      CampaignCharacterBacklinkRow,
+      $$CampaignCharacterBacklinksTableFilterComposer,
+      $$CampaignCharacterBacklinksTableOrderingComposer,
+      $$CampaignCharacterBacklinksTableAnnotationComposer,
+      $$CampaignCharacterBacklinksTableCreateCompanionBuilder,
+      $$CampaignCharacterBacklinksTableUpdateCompanionBuilder,
       (
-        CampaignActorBacklinkRow,
+        CampaignCharacterBacklinkRow,
         BaseReferences<
           _$AppDatabase,
-          $CampaignActorBacklinksTable,
-          CampaignActorBacklinkRow
+          $CampaignCharacterBacklinksTable,
+          CampaignCharacterBacklinkRow
         >,
       ),
-      CampaignActorBacklinkRow,
+      CampaignCharacterBacklinkRow,
       PrefetchHooks Function()
     >;
 typedef $$CampaignContentCacheTableCreateCompanionBuilder =
@@ -12478,7 +12813,7 @@ typedef $$CharacterSyncConflictsTableCreateCompanionBuilder =
     CharacterSyncConflictsCompanion Function({
       required String id,
       required String characterId,
-      required String campaignActorId,
+      required String campaignCharacterId,
       required String fieldPath,
       Value<String> localValueJson,
       Value<String> remoteValueJson,
@@ -12490,7 +12825,7 @@ typedef $$CharacterSyncConflictsTableUpdateCompanionBuilder =
     CharacterSyncConflictsCompanion Function({
       Value<String> id,
       Value<String> characterId,
-      Value<String> campaignActorId,
+      Value<String> campaignCharacterId,
       Value<String> fieldPath,
       Value<String> localValueJson,
       Value<String> remoteValueJson,
@@ -12518,8 +12853,8 @@ class $$CharacterSyncConflictsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get campaignActorId => $composableBuilder(
-    column: $table.campaignActorId,
+  ColumnFilters<String> get campaignCharacterId => $composableBuilder(
+    column: $table.campaignCharacterId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12568,8 +12903,8 @@ class $$CharacterSyncConflictsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get campaignActorId => $composableBuilder(
-    column: $table.campaignActorId,
+  ColumnOrderings<String> get campaignCharacterId => $composableBuilder(
+    column: $table.campaignCharacterId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -12616,8 +12951,8 @@ class $$CharacterSyncConflictsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get campaignActorId => $composableBuilder(
-    column: $table.campaignActorId,
+  GeneratedColumn<String> get campaignCharacterId => $composableBuilder(
+    column: $table.campaignCharacterId,
     builder: (column) => column,
   );
 
@@ -12691,7 +13026,7 @@ class $$CharacterSyncConflictsTableTableManager
               ({
                 Value<String> id = const Value.absent(),
                 Value<String> characterId = const Value.absent(),
-                Value<String> campaignActorId = const Value.absent(),
+                Value<String> campaignCharacterId = const Value.absent(),
                 Value<String> fieldPath = const Value.absent(),
                 Value<String> localValueJson = const Value.absent(),
                 Value<String> remoteValueJson = const Value.absent(),
@@ -12701,7 +13036,7 @@ class $$CharacterSyncConflictsTableTableManager
               }) => CharacterSyncConflictsCompanion(
                 id: id,
                 characterId: characterId,
-                campaignActorId: campaignActorId,
+                campaignCharacterId: campaignCharacterId,
                 fieldPath: fieldPath,
                 localValueJson: localValueJson,
                 remoteValueJson: remoteValueJson,
@@ -12713,7 +13048,7 @@ class $$CharacterSyncConflictsTableTableManager
               ({
                 required String id,
                 required String characterId,
-                required String campaignActorId,
+                required String campaignCharacterId,
                 required String fieldPath,
                 Value<String> localValueJson = const Value.absent(),
                 Value<String> remoteValueJson = const Value.absent(),
@@ -12723,7 +13058,7 @@ class $$CharacterSyncConflictsTableTableManager
               }) => CharacterSyncConflictsCompanion.insert(
                 id: id,
                 characterId: characterId,
-                campaignActorId: campaignActorId,
+                campaignCharacterId: campaignCharacterId,
                 fieldPath: fieldPath,
                 localValueJson: localValueJson,
                 remoteValueJson: remoteValueJson,
@@ -12792,12 +13127,16 @@ class $AppDatabaseManager {
       $$CharactersTableTableManager(_db, _db.characters);
   $$CharacterContentRefsTableTableManager get characterContentRefs =>
       $$CharacterContentRefsTableTableManager(_db, _db.characterContentRefs);
-  $$CampaignActorsCacheTableTableManager get campaignActorsCache =>
-      $$CampaignActorsCacheTableTableManager(_db, _db.campaignActorsCache);
-  $$CampaignActorBacklinksTableTableManager get campaignActorBacklinks =>
-      $$CampaignActorBacklinksTableTableManager(
+  $$CampaignCharactersCacheTableTableManager get campaignCharactersCache =>
+      $$CampaignCharactersCacheTableTableManager(
         _db,
-        _db.campaignActorBacklinks,
+        _db.campaignCharactersCache,
+      );
+  $$CampaignCharacterBacklinksTableTableManager
+  get campaignCharacterBacklinks =>
+      $$CampaignCharacterBacklinksTableTableManager(
+        _db,
+        _db.campaignCharacterBacklinks,
       );
   $$CampaignContentCacheTableTableManager get campaignContentCache =>
       $$CampaignContentCacheTableTableManager(_db, _db.campaignContentCache);

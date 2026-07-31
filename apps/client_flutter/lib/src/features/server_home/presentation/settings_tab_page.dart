@@ -18,6 +18,7 @@ import 'settings/content_and_storage_section.dart';
 import 'settings/gameplay_settings_section.dart';
 import 'settings/role_mode_section.dart';
 import 'settings/server_and_account_section.dart';
+import 'settings/server_and_account_page.dart';
 
 /// Top-level settings tab. The section order is deliberate and stable.
 class SettingsTabPage extends StatelessWidget {
@@ -72,6 +73,16 @@ class SettingsTabPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  ServerAndAccountSection(
+                    session: session,
+                    authController: authController,
+                    syncStatusController: syncStatusController,
+                    compact: true,
+                    onOpenDetails: () => _openServerAndAccount(context),
+                  ),
+                  const SizedBox(height: 24),
+                  RoleModeSection(modeController: modeController),
+                  const SizedBox(height: 24),
                   AppearanceSection(controller: appPreferencesController),
                   const SizedBox(height: 24),
                   GameplaySettingsSection(controller: appPreferencesController),
@@ -83,25 +94,27 @@ class SettingsTabPage extends StatelessWidget {
                     archiveService: archiveService,
                   ),
                   const SizedBox(height: 24),
-                  ServerAndAccountSection(
-                    session: session,
-                    authController: authController,
-                    syncStatusController: syncStatusController,
-                    serverProfileStore: serverProfileStore,
-                    serverProfilesPageBuilder: serverProfilesPageBuilder,
-                    onSwitchToProfile: onSwitchToProfile,
-                    vaultSyncActions: vaultSyncActions,
-                  ),
-                  const SizedBox(height: 24),
-                  RoleModeSection(
-                    modeController: modeController,
-                  ),
-                  const SizedBox(height: 24),
                   const AboutSection(),
                 ],
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  void _openServerAndAccount(BuildContext context) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (context) => ServerAndAccountPage(
+          session: session,
+          authController: authController,
+          syncStatusController: syncStatusController,
+          serverProfileStore: serverProfileStore,
+          serverProfilesPageBuilder: serverProfilesPageBuilder,
+          onSwitchToProfile: onSwitchToProfile,
+          vaultSyncActions: vaultSyncActions,
         ),
       ),
     );

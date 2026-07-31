@@ -16,51 +16,55 @@ class ContentBlockView extends StatelessWidget {
   final List<ContentBlock> blocks;
   final ValueChanged<String>? onOpenEntry;
   final Future<Uint8List?> Function(String packageId, String relativePath)?
-      readAsset;
+  readAsset;
   final String? packageId;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final block in blocks) _buildBlock(context, block),
-      ],
+      children: [for (final block in blocks) _buildBlock(context, block)],
     );
   }
 
   Widget _buildBlock(BuildContext context, ContentBlock block) {
     return switch (block) {
       HeadingBlock(:final level, :final text) => Padding(
-          padding: const EdgeInsets.only(top: 8, bottom: 4),
-          child: Text(text, style: _headingStyle(context, level)),
-        ),
+        padding: const EdgeInsets.only(top: 8, bottom: 4),
+        child: Text(text, style: _headingStyle(context, level)),
+      ),
       ParagraphBlock(:final text) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Text(text),
-        ),
-      ListBlock(:final ordered, :final items) =>
-        _ListView(ordered: ordered, items: items),
-      TableBlock(:final headers, :final rows) =>
-        _TableView(headers: headers, rows: rows),
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Text(text),
+      ),
+      ListBlock(:final ordered, :final items) => _ListView(
+        ordered: ordered,
+        items: items,
+      ),
+      TableBlock(:final headers, :final rows) => _TableView(
+        headers: headers,
+        rows: rows,
+      ),
       QuoteBlock(:final text) => _QuoteView(text: text),
-      CalloutBlock(:final variant, :final text) =>
-        _CalloutView(variant: variant, text: text),
+      CalloutBlock(:final variant, :final text) => _CalloutView(
+        variant: variant,
+        text: text,
+      ),
       ImageBlock(:final asset, :final alt) => _ImageBlockView(
-          asset: asset,
-          alt: alt,
-          packageId: packageId,
-          readAsset: readAsset,
-        ),
+        asset: asset,
+        alt: alt,
+        packageId: packageId,
+        readAsset: readAsset,
+      ),
       StatBlockBlock(:final fields) => _StatBlockView(fields: fields),
       EntryLinkBlock(:final targetId, :final text) => Material(
-          type: MaterialType.transparency,
-          child: ListTile(
-            title: Text(text),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: onOpenEntry == null ? null : () => onOpenEntry!(targetId),
-          ),
+        type: MaterialType.transparency,
+        child: ListTile(
+          title: Text(text),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: onOpenEntry == null ? null : () => onOpenEntry!(targetId),
         ),
+      ),
       DiceExpressionBlock(:final expression, :final label) =>
         _DiceExpressionView(expression: expression, label: label),
     };
@@ -119,9 +123,7 @@ class _TableView extends StatelessWidget {
         ],
         rows: [
           for (final row in rows)
-            DataRow(
-              cells: [for (final cell in row) DataCell(Text(cell))],
-            ),
+            DataRow(cells: [for (final cell in row) DataCell(Text(cell))]),
         ],
       ),
     );
@@ -140,14 +142,9 @@ class _QuoteView extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 4),
       padding: const EdgeInsets.only(left: 12),
       decoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(color: colorScheme.outline, width: 3),
-        ),
+        border: Border(left: BorderSide(color: colorScheme.outline, width: 3)),
       ),
-      child: Text(
-        text,
-        style: const TextStyle(fontStyle: FontStyle.italic),
-      ),
+      child: Text(text, style: const TextStyle(fontStyle: FontStyle.italic)),
     );
   }
 }
@@ -163,10 +160,14 @@ class _CalloutView extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final (backgroundColor, foregroundColor) = switch (variant) {
       'info' => (colorScheme.primaryContainer, colorScheme.onPrimaryContainer),
-      'warning' =>
-        (colorScheme.tertiaryContainer, colorScheme.onTertiaryContainer),
-      'success' =>
-        (colorScheme.secondaryContainer, colorScheme.onSecondaryContainer),
+      'warning' => (
+        colorScheme.tertiaryContainer,
+        colorScheme.onTertiaryContainer,
+      ),
+      'success' => (
+        colorScheme.secondaryContainer,
+        colorScheme.onSecondaryContainer,
+      ),
       'danger' => (colorScheme.errorContainer, colorScheme.onErrorContainer),
       _ => (colorScheme.surfaceContainerLow, colorScheme.onSurface),
     };
@@ -194,7 +195,7 @@ class _ImageBlockView extends StatefulWidget {
   final String alt;
   final String? packageId;
   final Future<Uint8List?> Function(String packageId, String relativePath)?
-      readAsset;
+  readAsset;
 
   @override
   State<_ImageBlockView> createState() => _ImageBlockViewState();
@@ -275,6 +276,7 @@ class _StatBlockView extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     entry.key,
@@ -283,7 +285,7 @@ class _StatBlockView extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(entry.value),
+                  Expanded(child: Text(entry.value)),
                 ],
               ),
             ),
@@ -307,24 +309,52 @@ class _DiceExpressionView extends StatelessWidget {
       color: colorScheme.surfaceContainerLow,
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Text(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final expressionText = Text(
               expression,
               style: theme.textTheme.titleMedium?.copyWith(
                 fontFamily: 'monospace',
               ),
-            ),
-            if (label.isNotEmpty) ...[
-              const SizedBox(width: 8),
-              Text(label, style: theme.textTheme.bodySmall),
-            ],
-            const Spacer(),
-            FilledButton.tonal(
+            );
+            final rollButton = FilledButton.tonal(
               onPressed: () {},
               child: const Text('投骰'),
-            ),
-          ],
+            );
+            if (constraints.maxWidth < 400) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(child: expressionText),
+                      const SizedBox(width: 8),
+                      const Spacer(),
+                      rollButton,
+                    ],
+                  ),
+                  if (label.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(label, style: theme.textTheme.bodySmall),
+                  ],
+                ],
+              );
+            }
+            return Row(
+              children: [
+                expressionText,
+                if (label.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(label, style: theme.textTheme.bodySmall),
+                  ),
+                ] else
+                  const Spacer(),
+                const SizedBox(width: 8),
+                rollButton,
+              ],
+            );
+          },
         ),
       ),
     );

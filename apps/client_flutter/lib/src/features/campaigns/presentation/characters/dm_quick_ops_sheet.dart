@@ -1,37 +1,31 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/dice/dice_roller.dart';
-import '../../../characters/domain/dnd5e_rules.dart';
 import '../../../content/data/local/content_repository.dart';
 import '../../../content/domain/content_entry.dart';
-import '../../domain/campaign_actor.dart';
-import '../campaign_controller.dart';
+import '../../domain/campaign_character.dart';
 import '../campaign_event_dispatcher.dart';
-import 'campaign_actor_controller.dart';
+import 'campaign_character_controller.dart';
+import 'campaign_character_picker_sheet.dart';
 
 /// Task 3.4 — DM 快捷操作面板.
 ///
 /// 三个原子操作参考 BG3 战斗日志:
-///   1. 批量扣血/治疗 — 多选 Actor + 数值 → `CampaignEventDispatcher.changeActorHp`
-///   2. 给予装备 — 选 Actor + 资料物品 → `CampaignEventDispatcher.grantItem`
-///   3. 快速检定 — 选 Actor + 检定类型 + DC → DM 代掷 + `sendMessage(kind: 'roll')`
+///   1. 批量扣血/治疗 — 多选 Character + 数值 → `CampaignEventDispatcher.changeCharacterHp`
+///   2. 给予装备 — 选 Character + 资料物品 → `CampaignEventDispatcher.grantItem`
+///   3. 给予状态 — 选 Character + 状态 + 持续轮数
 class DmQuickOpsSheet extends StatelessWidget {
   const DmQuickOpsSheet({
     required this.campaignId,
-    required this.actorController,
+    required this.characterController,
     required this.eventDispatcher,
-    required this.campaignController,
     this.contentRepository,
-    this.diceRoller,
     super.key,
   });
 
   final String campaignId;
-  final CampaignActorController actorController;
+  final CampaignCharacterController characterController;
   final CampaignEventDispatcher eventDispatcher;
-  final CampaignController campaignController;
   final ContentRepository? contentRepository;
-  final DiceRoller? diceRoller;
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +38,7 @@ class DmQuickOpsSheet extends StatelessWidget {
           Text('DM 快捷操作', style: theme.textTheme.titleLarge),
           const SizedBox(height: 4),
           Text(
-            '批量扣血、给予装备、快速检定',
+            '批量扣血、给予物品、给予状态',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -59,17 +53,17 @@ class DmQuickOpsSheet extends StatelessWidget {
           ),
           ListTile(
             leading: const Icon(Icons.inventory_2_outlined),
-            title: const Text('给予装备'),
-            subtitle: const Text('从资料库选物品, 写入角色背包'),
+            title: const Text('给予物品'),
+            subtitle: const Text('检索资料库物品或输入自定义物品'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _showGrantItemFlow(context),
           ),
           ListTile(
-            leading: const Icon(Icons.fact_check_outlined),
-            title: const Text('快速检定'),
-            subtitle: const Text('选角色 + 检定类型 + DC, DM 代掷'),
+            leading: const Icon(Icons.warning_amber_outlined),
+            title: const Text('给予状态'),
+            subtitle: const Text('添加常用或自定义状态，可记录持续轮数'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showQuickCheckFlow(context),
+            onTap: () => _showAddConditionFlow(context),
           ),
         ],
       ),
@@ -78,13 +72,27 @@ class DmQuickOpsSheet extends StatelessWidget {
 
   /// 操作 1: 批量扣血/治疗.
   void _showBatchHpDialog(BuildContext context) {
-    final actors = actorController.actors
+    showHpOperation(
+      context: context,
+      campaignId: campaignId,
+      characterController: characterController,
+      eventDispatcher: eventDispatcher,
+    );
+  }
+
+  static Future<void> showHpOperation({
+    required BuildContext context,
+    required String campaignId,
+    required CampaignCharacterController characterController,
+    required CampaignEventDispatcher eventDispatcher,
+  }) {
+    final characters = characterController.characters
         .where((a) => a.status == 'active')
         .toList(growable: false);
-    showDialog<void>(
+    return showDialog<void>(
       context: context,
       builder: (dialogContext) => _BatchHpDialog(
-        actors: actors,
+        characters: characters,
         campaignId: campaignId,
         dispatcher: eventDispatcher,
       ),
@@ -93,22 +101,42 @@ class DmQuickOpsSheet extends StatelessWidget {
 
   /// 操作 2: 给予装备.
   Future<void> _showGrantItemFlow(BuildContext context) async {
-    final actors = actorController.actors
+    await showGrantItemOperation(
+      context: context,
+      campaignId: campaignId,
+      characterController: characterController,
+      eventDispatcher: eventDispatcher,
+      contentRepository: contentRepository,
+    );
+  }
+
+  static Future<void> showGrantItemOperation({
+    required BuildContext context,
+    required String campaignId,
+    required CampaignCharacterController characterController,
+    required CampaignEventDispatcher eventDispatcher,
+    ContentRepository? contentRepository,
+  }) async {
+    final characters = characterController.characters
         .where((a) => a.status == 'active')
         .toList(growable: false);
-    final actor = await showDialog<CampaignActor>(
+    final character = await showCampaignCharacterPickerSheet(
       context: context,
-      builder: (_) => _ActorPickerDialog(actors: actors, title: '选择角色'),
+      title: '选择角色',
+      characters: characters,
     );
-    if (actor == null || !context.mounted) return;
+    if (character == null || !context.mounted) return;
 
     var items = const <ContentEntry>[];
     if (contentRepository != null) {
-      items = await contentRepository!.search(const ContentQuery(type: 'equipment'));
+      final entries = await contentRepository.search(const ContentQuery());
+      items = entries
+          .where((entry) => entry.type == 'equipment' || entry.type == 'item')
+          .toList(growable: false);
     }
     if (!context.mounted) return;
 
-    final item = await showDialog<ContentEntry>(
+    final item = await showDialog<_ItemSelection>(
       context: context,
       builder: (_) => _ItemPickerDialog(items: items),
     );
@@ -116,34 +144,59 @@ class DmQuickOpsSheet extends StatelessWidget {
 
     await eventDispatcher.grantItem(
       campaignId: campaignId,
-      actorId: actor.id,
+      characterId: character.id,
       itemId: item.id,
       name: item.name,
     );
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已给 ${actor.sheet['name']} ${item.name}')),
+      SnackBar(content: Text('已给 ${character.sheet['name']} ${item.name}')),
     );
   }
 
-  /// 操作 3: 快速检定.
-  Future<void> _showQuickCheckFlow(BuildContext context) async {
-    final actors = actorController.actors
+  /// 操作 3: 给予状态.
+  Future<void> _showAddConditionFlow(BuildContext context) async {
+    await showConditionOperation(
+      context: context,
+      campaignId: campaignId,
+      characterController: characterController,
+      eventDispatcher: eventDispatcher,
+    );
+  }
+
+  static Future<void> showConditionOperation({
+    required BuildContext context,
+    required String campaignId,
+    required CampaignCharacterController characterController,
+    required CampaignEventDispatcher eventDispatcher,
+  }) async {
+    final characters = characterController.characters
         .where((a) => a.status == 'active')
         .toList(growable: false);
-    final actor = await showDialog<CampaignActor>(
+    final character = await showCampaignCharacterPickerSheet(
       context: context,
-      builder: (_) => _ActorPickerDialog(actors: actors, title: '选择检定角色'),
+      title: '选择角色',
+      characters: characters,
     );
-    if (actor == null || !context.mounted) return;
+    if (character == null || !context.mounted) return;
 
-    await showDialog<void>(
+    final condition = await showDialog<_ConditionSelection>(
       context: context,
-      builder: (_) => _QuickCheckDialog(
-        actor: actor,
-        campaignId: campaignId,
-        campaignController: campaignController,
-        diceRoller: diceRoller ?? DiceRoller(),
+      builder: (_) => const _ConditionPickerDialog(),
+    );
+    if (condition == null || !context.mounted) return;
+
+    await eventDispatcher.addCondition(
+      campaignId: campaignId,
+      characterId: character.id,
+      type: condition.type,
+      name: condition.name,
+      durationRounds: condition.durationRounds,
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('已给 ${character.sheet['name']} 添加 ${condition.name}'),
       ),
     );
   }
@@ -152,12 +205,12 @@ class DmQuickOpsSheet extends StatelessWidget {
 /// 批量 HP 变更对话框.
 class _BatchHpDialog extends StatefulWidget {
   const _BatchHpDialog({
-    required this.actors,
+    required this.characters,
     required this.campaignId,
     required this.dispatcher,
   });
 
-  final List<CampaignActor> actors;
+  final List<CampaignCharacter> characters;
   final String campaignId;
   final CampaignEventDispatcher dispatcher;
 
@@ -168,6 +221,7 @@ class _BatchHpDialog extends StatefulWidget {
 class _BatchHpDialogState extends State<_BatchHpDialog> {
   final Set<String> _selectedIds = {};
   final _deltaController = TextEditingController();
+  _HpMode _mode = _HpMode.damage;
   bool _applying = false;
 
   @override
@@ -177,16 +231,17 @@ class _BatchHpDialogState extends State<_BatchHpDialog> {
   }
 
   Future<void> _apply() async {
-    final delta = int.tryParse(_deltaController.text.trim());
-    if (delta == null || _selectedIds.isEmpty) return;
+    final amount = int.tryParse(_deltaController.text.trim());
+    if (amount == null || amount <= 0 || _selectedIds.isEmpty) return;
+    final delta = _mode == _HpMode.damage ? -amount : amount;
     setState(() => _applying = true);
     final messenger = ScaffoldMessenger.of(context);
     var failures = 0;
-    for (final actorId in _selectedIds.toList()) {
+    for (final characterId in _selectedIds.toList()) {
       try {
-        await widget.dispatcher.changeActorHp(
+        await widget.dispatcher.changeCharacterHp(
           campaignId: widget.campaignId,
-          actorId: actorId,
+          characterId: characterId,
           delta: delta,
         );
       } catch (_) {
@@ -200,7 +255,7 @@ class _BatchHpDialogState extends State<_BatchHpDialog> {
       SnackBar(
         content: Text(
           failures == 0
-              ? '已对 ${_selectedIds.length} 个角色应用 ${delta > 0 ? '治疗' : '伤害'} $delta'
+              ? '已对 ${_selectedIds.length} 个角色应用 ${_mode == _HpMode.heal ? '治疗' : '伤害'} $amount'
               : '${_selectedIds.length - failures} 成功, $failures 失败',
         ),
       ),
@@ -219,20 +274,20 @@ class _BatchHpDialogState extends State<_BatchHpDialog> {
             Flexible(
               child: ListView.builder(
                 shrinkWrap: true,
-                itemCount: widget.actors.length,
+                itemCount: widget.characters.length,
                 itemBuilder: (context, index) {
-                  final actor = widget.actors[index];
-                  final name = actor.sheet['name']?.toString() ?? '未命名';
-                  final hp = actor.sheet['currentHp'];
-                  final maxHp = actor.sheet['maxHp'];
+                  final character = widget.characters[index];
+                  final name = character.sheet['name']?.toString() ?? '未命名';
+                  final hp = character.sheet['currentHp'];
+                  final maxHp = character.sheet['maxHp'];
                   return CheckboxListTile(
-                    value: _selectedIds.contains(actor.id),
+                    value: _selectedIds.contains(character.id),
                     onChanged: (selected) {
                       setState(() {
                         if (selected == true) {
-                          _selectedIds.add(actor.id);
+                          _selectedIds.add(character.id);
                         } else {
-                          _selectedIds.remove(actor.id);
+                          _selectedIds.remove(character.id);
                         }
                       });
                     },
@@ -243,13 +298,32 @@ class _BatchHpDialogState extends State<_BatchHpDialog> {
               ),
             ),
             const SizedBox(height: 8),
+            SegmentedButton<_HpMode>(
+              segments: const [
+                ButtonSegment(
+                  value: _HpMode.damage,
+                  icon: Icon(Icons.heart_broken_outlined),
+                  label: Text('伤害'),
+                ),
+                ButtonSegment(
+                  value: _HpMode.heal,
+                  icon: Icon(Icons.healing_outlined),
+                  label: Text('治疗'),
+                ),
+              ],
+              selected: {_mode},
+              onSelectionChanged: (value) {
+                setState(() => _mode = value.single);
+              },
+            ),
+            const SizedBox(height: 12),
             TextField(
               key: const Key('dm-batch-hp-delta'),
               controller: _deltaController,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
-                labelText: '数值 (负数=伤害, 正数=治疗)',
-                hintText: '例如 -5 或 10',
+                labelText: '数值',
+                hintText: '输入正整数，例如 5',
               ),
             ),
           ],
@@ -270,230 +344,126 @@ class _BatchHpDialogState extends State<_BatchHpDialog> {
   }
 }
 
-/// 角色选择对话框.
-class _ActorPickerDialog extends StatelessWidget {
-  const _ActorPickerDialog({required this.actors, required this.title});
+enum _HpMode { damage, heal }
 
-  final List<CampaignActor> actors;
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(title),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: ListView.builder(
-          shrinkWrap: true,
-          itemCount: actors.length,
-          itemBuilder: (context, index) {
-            final actor = actors[index];
-            final name = actor.sheet['name']?.toString() ?? '未命名';
-            return ListTile(
-              title: Text(name),
-              onTap: () => Navigator.of(context).pop(actor),
-            );
-          },
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
-        ),
-      ],
-    );
-  }
-}
-
-/// 物品选择对话框.
-class _ItemPickerDialog extends StatelessWidget {
-  const _ItemPickerDialog({required this.items});
-
-  final List<ContentEntry> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('选择物品'),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: items.isEmpty
-            ? const Text('资料库中没有装备条目')
-            : ListView.builder(
-                shrinkWrap: true,
-                itemCount: items.length,
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  return ListTile(
-                    title: Text(item.name),
-                    subtitle: Text(item.source.label),
-                    trailing: const Icon(Icons.add_circle_outline),
-                    onTap: () => Navigator.of(context).pop(item),
-                  );
-                },
-              ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
-        ),
-      ],
-    );
-  }
-}
-
-/// 快速检定对话框.
-class _QuickCheckDialog extends StatefulWidget {
-  const _QuickCheckDialog({
-    required this.actor,
-    required this.campaignId,
-    required this.campaignController,
-    required this.diceRoller,
+class _ConditionSelection {
+  const _ConditionSelection({
+    required this.type,
+    required this.name,
+    this.durationRounds,
   });
 
-  final CampaignActor actor;
-  final String campaignId;
-  final CampaignController campaignController;
-  final DiceRoller diceRoller;
-
-  @override
-  State<_QuickCheckDialog> createState() => _QuickCheckDialogState();
+  final String type;
+  final String name;
+  final int? durationRounds;
 }
 
-class _QuickCheckDialogState extends State<_QuickCheckDialog> {
-  String _checkType = 'ability';
-  String _checkKey = 'dex';
-  final _dcController = TextEditingController();
+class _ConditionPreset {
+  const _ConditionPreset(this.type, this.name);
+
+  final String type;
+  final String name;
+}
+
+const _conditionPresets = <_ConditionPreset>[
+  _ConditionPreset('poisoned', '中毒'),
+  _ConditionPreset('prone', '倒地'),
+  _ConditionPreset('frightened', '恐慌'),
+  _ConditionPreset('stunned', '震慑'),
+  _ConditionPreset('restrained', '束缚'),
+  _ConditionPreset('unconscious', '昏迷'),
+  _ConditionPreset('concentrating', '专注'),
+];
+
+class _ConditionPickerDialog extends StatefulWidget {
+  const _ConditionPickerDialog();
+
+  @override
+  State<_ConditionPickerDialog> createState() => _ConditionPickerDialogState();
+}
+
+class _ConditionPickerDialogState extends State<_ConditionPickerDialog> {
+  final _durationController = TextEditingController();
+  final _customController = TextEditingController();
+  _ConditionPreset? _selected;
 
   @override
   void dispose() {
-    _dcController.dispose();
+    _durationController.dispose();
+    _customController.dispose();
     super.dispose();
   }
 
-  Future<void> _roll() async {
-    final name = widget.actor.sheet['name']?.toString() ?? '角色';
-    final label = _labelFor(_checkType, _checkKey);
-    final modifier = _modifierFor(_checkType, _checkKey);
-    final die = widget.diceRoller.rollD20().total;
-    final total = die + modifier;
-    final dc = int.tryParse(_dcController.text.trim());
-    final success = dc == null ? null : total >= dc;
-
-    final content = dc == null
-        ? '$name $label d20${_formatMod(modifier)} = $total'
-        : '$name $label d20${_formatMod(modifier)} = $total ${success == true ? '≥' : '<'} DC $dc';
-
-    Navigator.of(context).pop();
-    await widget.campaignController.sendMessage(
-      campaignId: widget.campaignId,
-      kind: 'roll',
-      content: content,
-      campaignActorId: widget.actor.id,
-      eventData: <String, Object?>{
-        'checkType': _checkType,
-        'checkKey': _checkKey,
-        'label': label,
-        'notation': 'd20${_formatMod(modifier)}',
-        'die': die,
-        'modifier': modifier,
-        'total': total,
-        'dmRolled': true,
-        // ignore: use_null_aware_elements
-        if (dc != null) 'dc': dc,
-        // ignore: use_null_aware_elements
-        if (success != null) 'success': success,
-      },
+  void _submit() {
+    final customName = _customController.text.trim();
+    if (_selected == null && customName.isEmpty) return;
+    final duration = int.tryParse(_durationController.text.trim());
+    final preset = _selected;
+    Navigator.of(context).pop(
+      _ConditionSelection(
+        type: preset?.type ?? 'custom',
+        name: preset?.name ?? customName,
+        durationRounds: duration != null && duration > 0 ? duration : null,
+      ),
     );
-  }
-
-  String _labelFor(String type, String key) {
-    if (type == 'ability') {
-      return Dnd5eRules.abilityLabels[key] ?? key.toUpperCase();
-    }
-    if (type == 'save') {
-      return '${Dnd5eRules.abilityLabels[key] ?? key.toUpperCase()} 豁免';
-    }
-    return key;
-  }
-
-  int _modifierFor(String type, String key) {
-    // 使用 actor sheet 中的属性值估算修正. 没有 level 上下文时退化为 0.
-    final abilities = <String, int>{};
-    final sheetAbilities = widget.actor.sheet['abilities'];
-    if (sheetAbilities is Map) {
-      sheetAbilities.forEach((k, v) {
-        if (v is num) abilities[k.toString()] = v.toInt();
-      });
-    }
-    final levelValue = widget.actor.sheet['level'];
-    final level = levelValue is num ? levelValue.toInt() : 1;
-    if (type == 'ability') {
-      return Dnd5eRules.abilityModifier(Dnd5eRules.abilityScore(abilities, key));
-    }
-    if (type == 'save') {
-      return Dnd5eRules.saveBonus(
-        ability: key,
-        abilities: abilities,
-        level: level,
-        proficient: false,
-      );
-    }
-    return Dnd5eRules.skillBonus(
-      skillName: key,
-      abilities: abilities,
-      level: level,
-      proficient: false,
-    );
-  }
-
-  String _formatMod(int mod) {
-    if (mod >= 0) return '+$mod';
-    return '$mod';
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('快速检定'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'ability', label: Text('属性')),
-              ButtonSegment(value: 'save', label: Text('豁免')),
-              ButtonSegment(value: 'skill', label: Text('技能')),
+      title: const Text('给予状态'),
+      content: SizedBox(
+        width: 440,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('常用状态', style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final preset in _conditionPresets)
+                    FilterChip(
+                      label: Text(preset.name),
+                      selected: _selected == preset,
+                      onSelected: (selected) {
+                        setState(() {
+                          _selected = selected ? preset : null;
+                          if (selected) _customController.clear();
+                        });
+                      },
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _customController,
+                decoration: const InputDecoration(
+                  labelText: '自定义状态',
+                  hintText: '例如：受祝福',
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    if (value.trim().isNotEmpty) _selected = null;
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                key: const Key('dm-condition-duration'),
+                controller: _durationController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: '持续轮数（可选）',
+                  hintText: '留空表示不自动计时',
+                ),
+              ),
             ],
-            selected: {_checkType},
-            onSelectionChanged: (s) => setState(() => _checkType = s.single),
           ),
-          const SizedBox(height: 12),
-          InputDecorator(
-            decoration: const InputDecoration(labelText: '检定项'),
-            child: DropdownButton<String>(
-              value: _checkKey,
-              items: _optionsFor(_checkType),
-              onChanged: (v) {
-                if (v != null) setState(() => _checkKey = v);
-              },
-              underline: const SizedBox.shrink(),
-              isExpanded: true,
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            key: const Key('dm-quick-check-dc'),
-            controller: _dcController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'DC (可选)',
-              hintText: '例如 15',
-            ),
-          ),
-        ],
+        ),
       ),
       actions: [
         TextButton(
@@ -501,22 +471,178 @@ class _QuickCheckDialogState extends State<_QuickCheckDialog> {
           child: const Text('取消'),
         ),
         FilledButton(
-          key: const Key('dm-quick-check-roll'),
-          onPressed: _roll,
-          child: const Text('掷骰'),
+          key: const Key('dm-condition-apply'),
+          onPressed:
+              _selected != null || _customController.text.trim().isNotEmpty
+              ? _submit
+              : null,
+          child: const Text('应用'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ItemSelection {
+  const _ItemSelection({required this.id, required this.name});
+
+  final String id;
+  final String name;
+}
+
+/// Searchable item picker with an escape hatch for table-specific objects.
+class _ItemPickerDialog extends StatefulWidget {
+  const _ItemPickerDialog({required this.items});
+
+  final List<ContentEntry> items;
+
+  @override
+  State<_ItemPickerDialog> createState() => _ItemPickerDialogState();
+}
+
+class _ItemPickerDialogState extends State<_ItemPickerDialog> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = _query.trim().toLowerCase();
+    final visible = widget.items
+        .where(
+          (item) =>
+              normalized.isEmpty ||
+              item.name.toLowerCase().contains(normalized) ||
+              item.tags.any((tag) => tag.toLowerCase().contains(normalized)),
+        )
+        .toList(growable: false);
+    return AlertDialog(
+      title: const Text('选择物品'),
+      content: SizedBox(
+        width: 480,
+        height: 420,
+        child: Column(
+          children: [
+            SearchBar(
+              key: const Key('dm-item-search'),
+              controller: _searchController,
+              hintText: '搜索名称或标签',
+              leading: const Icon(Icons.search),
+              trailing: [
+                if (_query.isNotEmpty)
+                  IconButton(
+                    tooltip: '清除搜索',
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() => _query = '');
+                    },
+                    icon: const Icon(Icons.close),
+                  ),
+              ],
+              onChanged: (value) => setState(() => _query = value),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              key: const Key('dm-custom-item'),
+              leading: const Icon(Icons.add_circle_outline),
+              title: const Text('自定义物品'),
+              subtitle: const Text('直接输入这次要给予的物品名称'),
+              onTap: _createCustomItem,
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: visible.isEmpty
+                  ? const Center(child: Text('没有匹配的物品'))
+                  : ListView.builder(
+                      itemCount: visible.length,
+                      itemBuilder: (context, index) {
+                        final item = visible[index];
+                        return ListTile(
+                          title: Text(item.name),
+                          subtitle: Text(item.source.label),
+                          trailing: const Icon(Icons.add_circle_outline),
+                          onTap: () => Navigator.of(
+                            context,
+                          ).pop(_ItemSelection(id: item.id, name: item.name)),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
         ),
       ],
     );
   }
 
-  List<DropdownMenuItem<String>> _optionsFor(String type) {
-    if (type == 'skill') {
-      return Dnd5eRules.skills
-          .map((s) => DropdownMenuItem(value: s.name, child: Text(s.name)))
-          .toList();
-    }
-    return Dnd5eRules.abilityLabels.entries
-        .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
-        .toList();
+  Future<void> _createCustomItem() async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => const _CustomItemDialog(),
+    );
+    if (name == null || !mounted) return;
+    Navigator.of(context).pop(
+      _ItemSelection(
+        id: 'custom:${DateTime.now().microsecondsSinceEpoch}',
+        name: name,
+      ),
+    );
+  }
+}
+
+class _CustomItemDialog extends StatefulWidget {
+  const _CustomItemDialog();
+
+  @override
+  State<_CustomItemDialog> createState() => _CustomItemDialogState();
+}
+
+class _CustomItemDialogState extends State<_CustomItemDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('自定义物品'),
+      content: TextField(
+        key: const Key('dm-custom-item-name'),
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(
+          labelText: '物品名称',
+          hintText: '例如：酒馆钥匙',
+        ),
+        onChanged: (_) => setState(() {}),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          key: const Key('dm-custom-item-confirm'),
+          onPressed: _controller.text.trim().isEmpty
+              ? null
+              : () => Navigator.of(context).pop(_controller.text.trim()),
+          child: const Text('给予'),
+        ),
+      ],
+    );
   }
 }

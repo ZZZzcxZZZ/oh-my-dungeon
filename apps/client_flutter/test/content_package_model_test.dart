@@ -23,7 +23,10 @@ void main() {
         'text': '动作如潮',
       });
       expect(block, isA<EntryLinkBlock>());
-      expect((block as EntryLinkBlock).targetId, 'example:feature/action-surge');
+      expect(
+        (block as EntryLinkBlock).targetId,
+        'example:feature/action-surge',
+      );
       expect(block.text, '动作如潮');
     });
 
@@ -62,10 +65,7 @@ void main() {
     });
 
     test('parses a quote block', () {
-      final block = ContentBlock.fromJson({
-        'type': 'quote',
-        'text': '关键规则',
-      });
+      final block = ContentBlock.fromJson({'type': 'quote', 'text': '关键规则'});
       expect(block, isA<QuoteBlock>());
     });
 
@@ -110,7 +110,10 @@ void main() {
 
     test('rejects html blocks', () {
       expect(
-        () => ContentBlock.fromJson({'type': 'html', 'html': '<script>x</script>'}),
+        () => ContentBlock.fromJson({
+          'type': 'html',
+          'html': '<script>x</script>',
+        }),
         throwsFormatException,
       );
     });
@@ -137,8 +140,8 @@ void main() {
           {
             'type': 'entryLink',
             'targetId': 'example:feature/action-surge',
-            'text': '动作如潮'
-          }
+            'text': '动作如潮',
+          },
         ],
         'structured': {'hitDie': 'd10'},
         'tags': ['class'],
@@ -197,7 +200,7 @@ void main() {
         'slug': 'fighter',
         'name': '战士',
         'body': [
-          {'type': 'paragraph', 'text': '测试'}
+          {'type': 'paragraph', 'text': '测试'},
         ],
         'revision': 1,
       });

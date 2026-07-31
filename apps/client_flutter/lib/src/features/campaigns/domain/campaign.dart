@@ -149,13 +149,13 @@ class CampaignChatMessage {
     required this.id,
     required this.campaignId,
     required this.senderId,
-    required this.campaignActorId,
+    required this.campaignCharacterId,
     required this.displayName,
     required this.avatarUrl,
     required this.kind,
     required this.content,
     required this.createdAt,
-    this.speakerMode = 'actor',
+    this.speakerMode = 'character',
     this.delegatedByUserId,
     this.speakerAvatarAssetId,
     this.publicHealthState,
@@ -168,7 +168,7 @@ class CampaignChatMessage {
   final String id;
   final String campaignId;
   final String senderId;
-  final String? campaignActorId;
+  final String? campaignCharacterId;
   final String displayName;
   final String? avatarUrl;
   final String speakerMode;
@@ -188,10 +188,10 @@ class CampaignChatMessage {
       id: json['id']! as String,
       campaignId: json['campaignId']! as String,
       senderId: json['senderId']! as String,
-      campaignActorId: json['campaignActorId'] as String?,
+      campaignCharacterId: json['campaignCharacterId'] as String?,
       displayName: json['displayName']! as String,
       avatarUrl: json['avatarUrl'] as String?,
-      speakerMode: json['speakerMode'] as String? ?? 'actor',
+      speakerMode: json['speakerMode'] as String? ?? 'character',
       delegatedByUserId: json['delegatedByUserId'] as String?,
       speakerAvatarAssetId: json['speakerAvatarAssetId'] as String?,
       publicHealthState: json['publicHealthState'] as String?,
@@ -216,7 +216,7 @@ class CampaignChatMessage {
             id == other.id &&
             campaignId == other.campaignId &&
             senderId == other.senderId &&
-            campaignActorId == other.campaignActorId &&
+            campaignCharacterId == other.campaignCharacterId &&
             displayName == other.displayName &&
             avatarUrl == other.avatarUrl &&
             speakerMode == other.speakerMode &&
@@ -237,7 +237,7 @@ class CampaignChatMessage {
     id,
     campaignId,
     senderId,
-    campaignActorId,
+    campaignCharacterId,
     displayName,
     avatarUrl,
     speakerMode,
@@ -343,9 +343,9 @@ class CampaignMembership {
     required this.role,
     required this.displayName,
     required this.joinedAt,
-    this.boundActorId,
-    this.activeSpeakerActorId,
-    this.speakerMode = 'boundActor',
+    this.boundCharacterId,
+    this.activeSpeakerCharacterId,
+    this.speakerMode = 'boundCharacter',
     this.lastReadAt,
   });
 
@@ -355,8 +355,8 @@ class CampaignMembership {
   final String role;
   final String displayName;
   final String joinedAt;
-  final String? boundActorId;
-  final String? activeSpeakerActorId;
+  final String? boundCharacterId;
+  final String? activeSpeakerCharacterId;
   final String speakerMode;
   final String? lastReadAt;
 
@@ -368,9 +368,9 @@ class CampaignMembership {
       role: json['role']! as String,
       displayName: json['displayName']! as String,
       joinedAt: json['joinedAt']! as String,
-      boundActorId: json['boundActorId'] as String?,
-      activeSpeakerActorId: json['activeSpeakerActorId'] as String?,
-      speakerMode: json['speakerMode'] as String? ?? 'boundActor',
+      boundCharacterId: json['boundCharacterId'] as String?,
+      activeSpeakerCharacterId: json['activeSpeakerCharacterId'] as String?,
+      speakerMode: json['speakerMode'] as String? ?? 'boundCharacter',
       lastReadAt: json['lastReadAt'] as String?,
     );
   }
@@ -385,8 +385,8 @@ class CampaignMembership {
             role == other.role &&
             displayName == other.displayName &&
             joinedAt == other.joinedAt &&
-            boundActorId == other.boundActorId &&
-            activeSpeakerActorId == other.activeSpeakerActorId &&
+            boundCharacterId == other.boundCharacterId &&
+            activeSpeakerCharacterId == other.activeSpeakerCharacterId &&
             speakerMode == other.speakerMode &&
             lastReadAt == other.lastReadAt;
   }
@@ -399,8 +399,8 @@ class CampaignMembership {
     role,
     displayName,
     joinedAt,
-    boundActorId,
-    activeSpeakerActorId,
+    boundCharacterId,
+    activeSpeakerCharacterId,
     speakerMode,
     lastReadAt,
   );
@@ -411,14 +411,14 @@ class CampaignWorkspaceContext {
     required this.campaign,
     required this.membership,
     required this.members,
-    required this.actors,
+    required this.characters,
     required this.capabilities,
   });
 
   final Campaign campaign;
   final CampaignMembership membership;
   final List<CampaignMemberPreview> members;
-  final List<CampaignWorkspaceActor> actors;
+  final List<CampaignWorkspaceCharacter> characters;
   final CampaignCapabilities capabilities;
 
   factory CampaignWorkspaceContext.fromJson(Map<String, Object?> json) {
@@ -431,9 +431,9 @@ class CampaignWorkspaceContext {
           .whereType<Map<String, Object?>>()
           .map(CampaignMemberPreview.fromJson)
           .toList(growable: false),
-      actors: (json['actors'] as List? ?? const [])
+      characters: (json['characters'] as List? ?? const [])
           .whereType<Map<String, Object?>>()
-          .map(CampaignWorkspaceActor.fromJson)
+          .map(CampaignWorkspaceCharacter.fromJson)
           .toList(growable: false),
       capabilities: CampaignCapabilities.fromJson(
         json['capabilities']! as Map<String, Object?>,
@@ -446,19 +446,20 @@ class CampaignWorkspaceContext {
       campaign: campaign,
       membership: membership ?? this.membership,
       members: members,
-      actors: actors,
+      characters: characters,
       capabilities: capabilities,
     );
   }
 }
 
-class CampaignWorkspaceActor {
-  const CampaignWorkspaceActor({
+class CampaignWorkspaceCharacter {
+  const CampaignWorkspaceCharacter({
     required this.id,
     required this.ownerUserId,
-    required this.actorType,
+    required this.characterType,
     required this.status,
     required this.lifecycle,
+    this.visibleToPlayers = true,
     required this.displayName,
     required this.avatarAssetId,
     required this.publicHealthState,
@@ -466,20 +467,24 @@ class CampaignWorkspaceActor {
 
   final String id;
   final String? ownerUserId;
-  final String actorType;
+  final String characterType;
   final String status;
   final String lifecycle;
+  final bool visibleToPlayers;
   final String displayName;
   final String? avatarAssetId;
   final String publicHealthState;
 
-  factory CampaignWorkspaceActor.fromJson(Map<String, Object?> json) {
-    return CampaignWorkspaceActor(
+  factory CampaignWorkspaceCharacter.fromJson(Map<String, Object?> json) {
+    return CampaignWorkspaceCharacter(
       id: json['id']! as String,
       ownerUserId: json['ownerUserId'] as String?,
-      actorType: json['actorType']! as String,
+      characterType: json['characterType']! as String,
       status: json['status']! as String,
       lifecycle: json['lifecycle'] as String? ?? 'persistent',
+      visibleToPlayers:
+          json['visibleToPlayers'] as bool? ??
+          json['characterType'] == 'player',
       displayName: json['displayName']! as String,
       avatarAssetId: json['avatarAssetId'] as String?,
       publicHealthState: json['publicHealthState'] as String? ?? 'unknown',
@@ -492,9 +497,9 @@ class CampaignCapabilities {
     required this.canManageCampaign,
     required this.canManageMembers,
     this.canInviteMembers = false,
-    required this.canCreateActors,
-    this.canManageActors = false,
-    this.canEditAnyActor = false,
+    required this.canCreateCharacters,
+    this.canManageCharacters = false,
+    this.canEditAnyCharacter = false,
     required this.canSpeakAsNarrator,
     this.canCreateArchive = false,
     this.canManageArchive = false,
@@ -503,9 +508,9 @@ class CampaignCapabilities {
   final bool canManageCampaign;
   final bool canManageMembers;
   final bool canInviteMembers;
-  final bool canCreateActors;
-  final bool canManageActors;
-  final bool canEditAnyActor;
+  final bool canCreateCharacters;
+  final bool canManageCharacters;
+  final bool canEditAnyCharacter;
   final bool canSpeakAsNarrator;
   final bool canCreateArchive;
   final bool canManageArchive;
@@ -516,9 +521,11 @@ class CampaignCapabilities {
       canManageCampaign: canManageCampaign,
       canManageMembers: json['canManageMembers'] as bool? ?? false,
       canInviteMembers: json['canInviteMembers'] as bool? ?? canManageCampaign,
-      canCreateActors: json['canCreateActors'] as bool? ?? false,
-      canManageActors: json['canManageActors'] as bool? ?? canManageCampaign,
-      canEditAnyActor: json['canEditAnyActor'] as bool? ?? canManageCampaign,
+      canCreateCharacters: json['canCreateCharacters'] as bool? ?? false,
+      canManageCharacters:
+          json['canManageCharacters'] as bool? ?? canManageCampaign,
+      canEditAnyCharacter:
+          json['canEditAnyCharacter'] as bool? ?? canManageCampaign,
       canSpeakAsNarrator: json['canSpeakAsNarrator'] as bool? ?? false,
       canCreateArchive: json['canCreateArchive'] as bool? ?? canManageCampaign,
       canManageArchive: json['canManageArchive'] as bool? ?? canManageCampaign,

@@ -9,48 +9,47 @@ sealed class ContentBlock {
     final type = json['type'];
     return switch (type) {
       'heading' => HeadingBlock(
-          level: (json['level'] as num?)?.toInt() ?? 1,
-          text: json['text']! as String,
-        ),
+        level: (json['level'] as num?)?.toInt() ?? 1,
+        text: json['text']! as String,
+      ),
       'paragraph' => ParagraphBlock(text: json['text']! as String),
       'list' => ListBlock(
-          ordered: json['ordered'] as bool? ?? false,
-          items: (json['items'] as List<Object?>)
-              .map((item) => item as String)
-              .toList(),
-        ),
+        ordered: json['ordered'] as bool? ?? false,
+        items: (json['items'] as List<Object?>)
+            .map((item) => item as String)
+            .toList(),
+      ),
       'table' => TableBlock(
-          headers: (json['headers'] as List<Object?>)
-              .map((header) => header as String)
-              .toList(),
-          rows: (json['rows'] as List<Object?>)
-              .map(
-                (row) => (row as List<Object?>)
-                    .map((cell) => cell as String)
-                    .toList(),
-              )
-              .toList(),
-        ),
+        headers: (json['headers'] as List<Object?>)
+            .map((header) => header as String)
+            .toList(),
+        rows: (json['rows'] as List<Object?>)
+            .map(
+              (row) =>
+                  (row as List<Object?>).map((cell) => cell as String).toList(),
+            )
+            .toList(),
+      ),
       'quote' => QuoteBlock(text: json['text']! as String),
       'callout' => CalloutBlock(
-          variant: json['variant'] as String? ?? 'info',
-          text: json['text']! as String,
-        ),
+        variant: json['variant'] as String? ?? 'info',
+        text: json['text']! as String,
+      ),
       'image' => ImageBlock(
-          asset: json['asset']! as String,
-          alt: json['alt'] as String? ?? '',
-        ),
+        asset: json['asset']! as String,
+        alt: json['alt'] as String? ?? '',
+      ),
       'statBlock' => StatBlockBlock(
-          fields: Map<String, String>.from(json['fields'] as Map),
-        ),
+        fields: Map<String, String>.from(json['fields'] as Map),
+      ),
       'entryLink' => EntryLinkBlock(
-          targetId: json['targetId']! as String,
-          text: json['text']! as String,
-        ),
+        targetId: json['targetId']! as String,
+        text: json['text']! as String,
+      ),
       'diceExpression' => DiceExpressionBlock(
-          expression: json['expression']! as String,
-          label: json['label'] as String? ?? '',
-        ),
+        expression: json['expression']! as String,
+        label: json['label'] as String? ?? '',
+      ),
       _ => throw FormatException('Unsupported content block type: $type'),
     };
   }
@@ -65,10 +64,10 @@ final class HeadingBlock extends ContentBlock {
 
   @override
   Map<String, Object?> toJson() => {
-        'type': 'heading',
-        'level': level,
-        'text': text,
-      };
+    'type': 'heading',
+    'level': level,
+    'text': text,
+  };
 }
 
 final class ParagraphBlock extends ContentBlock {
@@ -78,10 +77,7 @@ final class ParagraphBlock extends ContentBlock {
   final String text;
 
   @override
-  Map<String, Object?> toJson() => {
-        'type': 'paragraph',
-        'text': text,
-      };
+  Map<String, Object?> toJson() => {'type': 'paragraph', 'text': text};
 }
 
 final class ListBlock extends ContentBlock {
@@ -92,10 +88,10 @@ final class ListBlock extends ContentBlock {
 
   @override
   Map<String, Object?> toJson() => {
-        'type': 'list',
-        'ordered': ordered,
-        'items': items,
-      };
+    'type': 'list',
+    'ordered': ordered,
+    'items': items,
+  };
 }
 
 final class TableBlock extends ContentBlock {
@@ -106,10 +102,10 @@ final class TableBlock extends ContentBlock {
 
   @override
   Map<String, Object?> toJson() => {
-        'type': 'table',
-        'headers': headers,
-        'rows': rows,
-      };
+    'type': 'table',
+    'headers': headers,
+    'rows': rows,
+  };
 }
 
 final class QuoteBlock extends ContentBlock {
@@ -119,10 +115,7 @@ final class QuoteBlock extends ContentBlock {
   final String text;
 
   @override
-  Map<String, Object?> toJson() => {
-        'type': 'quote',
-        'text': text,
-      };
+  Map<String, Object?> toJson() => {'type': 'quote', 'text': text};
 }
 
 final class CalloutBlock extends ContentBlock {
@@ -134,10 +127,10 @@ final class CalloutBlock extends ContentBlock {
 
   @override
   Map<String, Object?> toJson() => {
-        'type': 'callout',
-        'variant': variant,
-        'text': text,
-      };
+    'type': 'callout',
+    'variant': variant,
+    'text': text,
+  };
 }
 
 final class ImageBlock extends ContentBlock {
@@ -148,10 +141,10 @@ final class ImageBlock extends ContentBlock {
 
   @override
   Map<String, Object?> toJson() => {
-        'type': 'image',
-        'asset': asset,
-        'alt': alt,
-      };
+    'type': 'image',
+    'asset': asset,
+    'alt': alt,
+  };
 }
 
 final class StatBlockBlock extends ContentBlock {
@@ -160,10 +153,7 @@ final class StatBlockBlock extends ContentBlock {
   final Map<String, String> fields;
 
   @override
-  Map<String, Object?> toJson() => {
-        'type': 'statBlock',
-        'fields': fields,
-      };
+  Map<String, Object?> toJson() => {'type': 'statBlock', 'fields': fields};
 }
 
 final class EntryLinkBlock extends ContentBlock {
@@ -175,10 +165,10 @@ final class EntryLinkBlock extends ContentBlock {
 
   @override
   Map<String, Object?> toJson() => {
-        'type': 'entryLink',
-        'targetId': targetId,
-        'text': text,
-      };
+    'type': 'entryLink',
+    'targetId': targetId,
+    'text': text,
+  };
 }
 
 final class DiceExpressionBlock extends ContentBlock {
@@ -189,8 +179,8 @@ final class DiceExpressionBlock extends ContentBlock {
 
   @override
   Map<String, Object?> toJson() => {
-        'type': 'diceExpression',
-        'expression': expression,
-        'label': label,
-      };
+    'type': 'diceExpression',
+    'expression': expression,
+    'label': label,
+  };
 }

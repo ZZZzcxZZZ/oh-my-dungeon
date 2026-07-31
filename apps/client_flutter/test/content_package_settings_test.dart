@@ -10,28 +10,34 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/content_test_support.dart';
 
 void main() {
-  testWidgets('previews and imports a local package from settings', (tester) async {
-    final bytes = utf8.encode(jsonEncode({
-      'formatVersion': 1,
-      'id': 'example',
-      'name': 'Example',
-      'version': '1.0.0',
-      'locale': 'zh-CN',
-      'system': 'dnd5e-2024',
-      'entryCount': 1,
-      'entries': [testFighterEntry().toJson()],
-    }));
+  testWidgets('previews and imports a local package from settings', (
+    tester,
+  ) async {
+    final bytes = utf8.encode(
+      jsonEncode({
+        'formatVersion': 1,
+        'id': 'example',
+        'name': 'Example',
+        'version': '1.0.0',
+        'locale': 'zh-CN',
+        'system': 'dnd5e-2024',
+        'entryCount': 1,
+        'entries': [testFighterEntry().toJson()],
+      }),
+    );
     final picker = MemoryContentFilePicker(
       result: PickedContentFile(name: 'example.json', bytes: bytes),
     );
     final repository = MemoryContentRepository();
-    await tester.pumpWidget(MaterialApp(
-      home: ContentPackageSettingsPage(
-        repository: repository,
-        importer: ContentPackageImporter(repository),
-        filePicker: picker,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ContentPackageSettingsPage(
+          repository: repository,
+          importer: ContentPackageImporter(repository),
+          filePicker: picker,
+        ),
       ),
-    ));
+    );
     await tester.tap(find.text('从文件导入'));
     await tester.pumpAndSettle();
     expect(find.text('1 个条目'), findsOneWidget);
@@ -44,25 +50,29 @@ void main() {
     final repository = MemoryContentRepository();
     final importer = ContentPackageImporter(repository);
     // Pre-import a package so the list shows it
-    final report = await importer.previewJson(jsonEncode({
-      'formatVersion': 1,
-      'id': 'example',
-      'name': 'Example',
-      'version': '1.0.0',
-      'locale': 'zh-CN',
-      'system': 'dnd5e-2024',
-      'entryCount': 1,
-      'entries': [testFighterEntry().toJson()],
-    }));
+    final report = await importer.previewJson(
+      jsonEncode({
+        'formatVersion': 1,
+        'id': 'example',
+        'name': 'Example',
+        'version': '1.0.0',
+        'locale': 'zh-CN',
+        'system': 'dnd5e-2024',
+        'entryCount': 1,
+        'entries': [testFighterEntry().toJson()],
+      }),
+    );
     await importer.importReport(report);
 
-    await tester.pumpWidget(MaterialApp(
-      home: ContentPackageSettingsPage(
-        repository: repository,
-        importer: importer,
-        filePicker: MemoryContentFilePicker(),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ContentPackageSettingsPage(
+          repository: repository,
+          importer: importer,
+          filePicker: MemoryContentFilePicker(),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
     expect(find.text('Example'), findsOneWidget);
     expect(find.text('1.0.0'), findsOneWidget);
@@ -72,25 +82,29 @@ void main() {
   testWidgets('confirms deletion with impact summary', (tester) async {
     final repository = MemoryContentRepository();
     final importer = ContentPackageImporter(repository);
-    final report = await importer.previewJson(jsonEncode({
-      'formatVersion': 1,
-      'id': 'example',
-      'name': 'Example',
-      'version': '1.0.0',
-      'locale': 'zh-CN',
-      'system': 'dnd5e-2024',
-      'entryCount': 1,
-      'entries': [testFighterEntry().toJson()],
-    }));
+    final report = await importer.previewJson(
+      jsonEncode({
+        'formatVersion': 1,
+        'id': 'example',
+        'name': 'Example',
+        'version': '1.0.0',
+        'locale': 'zh-CN',
+        'system': 'dnd5e-2024',
+        'entryCount': 1,
+        'entries': [testFighterEntry().toJson()],
+      }),
+    );
     await importer.importReport(report);
 
-    await tester.pumpWidget(MaterialApp(
-      home: ContentPackageSettingsPage(
-        repository: repository,
-        importer: importer,
-        filePicker: MemoryContentFilePicker(),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ContentPackageSettingsPage(
+          repository: repository,
+          importer: importer,
+          filePicker: MemoryContentFilePicker(),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.delete_outline));
     await tester.pumpAndSettle();
@@ -104,27 +118,31 @@ void main() {
   });
 
   testWidgets('rejects invalid package preview', (tester) async {
-    final bytes = utf8.encode(jsonEncode({
-      'formatVersion': 1,
-      'id': 'example',
-      'name': 'Example',
-      'version': '1.0.0',
-      'locale': 'zh-CN',
-      'system': 'dnd5e-2024',
-      'entryCount': 2,
-      'entries': [testFighterEntry().toJson()],
-    }));
+    final bytes = utf8.encode(
+      jsonEncode({
+        'formatVersion': 1,
+        'id': 'example',
+        'name': 'Example',
+        'version': '1.0.0',
+        'locale': 'zh-CN',
+        'system': 'dnd5e-2024',
+        'entryCount': 2,
+        'entries': [testFighterEntry().toJson()],
+      }),
+    );
     final picker = MemoryContentFilePicker(
       result: PickedContentFile(name: 'example.json', bytes: bytes),
     );
     final repository = MemoryContentRepository();
-    await tester.pumpWidget(MaterialApp(
-      home: ContentPackageSettingsPage(
-        repository: repository,
-        importer: ContentPackageImporter(repository),
-        filePicker: picker,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ContentPackageSettingsPage(
+          repository: repository,
+          importer: ContentPackageImporter(repository),
+          filePicker: picker,
+        ),
       ),
-    ));
+    );
     await tester.tap(find.text('从文件导入'));
     await tester.pumpAndSettle();
     expect(find.text('1 个条目'), findsNothing);
@@ -138,32 +156,33 @@ void main() {
     final repository = MemoryContentRepository();
     final importer = ContentPackageImporter(repository);
     for (final packageId in ['alpha', 'beta']) {
-      final report = await importer.previewJson(jsonEncode({
-        'formatVersion': 1,
-        'id': packageId,
-        'name': packageId,
-        'version': '1.0.0',
-        'locale': 'zh-CN',
-        'system': 'dnd5e-2024',
-        'entryCount': 1,
-        'entries': [
-          {
-            ...testFighterEntry().toJson(),
-            'id': '$packageId:class/fighter',
-          },
-        ],
-      }));
+      final report = await importer.previewJson(
+        jsonEncode({
+          'formatVersion': 1,
+          'id': packageId,
+          'name': packageId,
+          'version': '1.0.0',
+          'locale': 'zh-CN',
+          'system': 'dnd5e-2024',
+          'entryCount': 1,
+          'entries': [
+            {...testFighterEntry().toJson(), 'id': '$packageId:class/fighter'},
+          ],
+        }),
+      );
       await importer.importReport(report);
     }
     expect(await repository.watchPackages().first, hasLength(2));
 
-    await tester.pumpWidget(MaterialApp(
-      home: ContentPackageSettingsPage(
-        repository: repository,
-        importer: importer,
-        filePicker: MemoryContentFilePicker(),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ContentPackageSettingsPage(
+          repository: repository,
+          importer: importer,
+          filePicker: MemoryContentFilePicker(),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     // "清除所有本地资料包" 入口可见。
@@ -186,25 +205,29 @@ void main() {
   testWidgets('cancel clear-all preserves installed packages', (tester) async {
     final repository = MemoryContentRepository();
     final importer = ContentPackageImporter(repository);
-    final report = await importer.previewJson(jsonEncode({
-      'formatVersion': 1,
-      'id': 'example',
-      'name': 'Example',
-      'version': '1.0.0',
-      'locale': 'zh-CN',
-      'system': 'dnd5e-2024',
-      'entryCount': 1,
-      'entries': [testFighterEntry().toJson()],
-    }));
+    final report = await importer.previewJson(
+      jsonEncode({
+        'formatVersion': 1,
+        'id': 'example',
+        'name': 'Example',
+        'version': '1.0.0',
+        'locale': 'zh-CN',
+        'system': 'dnd5e-2024',
+        'entryCount': 1,
+        'entries': [testFighterEntry().toJson()],
+      }),
+    );
     await importer.importReport(report);
 
-    await tester.pumpWidget(MaterialApp(
-      home: ContentPackageSettingsPage(
-        repository: repository,
-        importer: importer,
-        filePicker: MemoryContentFilePicker(),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ContentPackageSettingsPage(
+          repository: repository,
+          importer: importer,
+          filePicker: MemoryContentFilePicker(),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('清除所有本地资料包'));
@@ -217,62 +240,64 @@ void main() {
 
   // Spec §资料库 GUI 增强: 批量导入入口在资料包管理页可见,
   // 点击后通过 filePicker.pickMultiple 取多个文件并弹出确认向导.
-  testWidgets('batch import button opens wizard and imports multiple packages',
-      (tester) async {
-    final alphaBytes = utf8.encode(jsonEncode({
-      'formatVersion': 1,
-      'id': 'alpha',
-      'name': 'Alpha',
-      'version': '1.0.0',
-      'locale': 'zh-CN',
-      'system': 'dnd5e-2024',
-      'entryCount': 1,
-      'entries': [
-        {
-          ...testFighterEntry().toJson(),
-          'id': 'alpha:class/fighter',
-        },
-      ],
-    }));
-    final betaBytes = utf8.encode(jsonEncode({
-      'formatVersion': 1,
-      'id': 'beta',
-      'name': 'Beta',
-      'version': '1.0.0',
-      'locale': 'zh-CN',
-      'system': 'dnd5e-2024',
-      'entryCount': 1,
-      'entries': [
-        {
-          ...testFighterEntry().toJson(),
-          'id': 'beta:class/fighter',
-        },
-      ],
-    }));
-    final picker = MemoryContentFilePicker(
-      multipleResult: [
-        PickedContentFile(name: 'alpha.json', bytes: alphaBytes),
-        PickedContentFile(name: 'beta.json', bytes: betaBytes),
-      ],
-    );
-    final repository = MemoryContentRepository();
-    await tester.pumpWidget(MaterialApp(
-      home: ContentPackageSettingsPage(
-        repository: repository,
-        importer: ContentPackageImporter(repository),
-        filePicker: picker,
-      ),
-    ));
+  testWidgets(
+    'batch import button opens wizard and imports multiple packages',
+    (tester) async {
+      final alphaBytes = utf8.encode(
+        jsonEncode({
+          'formatVersion': 1,
+          'id': 'alpha',
+          'name': 'Alpha',
+          'version': '1.0.0',
+          'locale': 'zh-CN',
+          'system': 'dnd5e-2024',
+          'entryCount': 1,
+          'entries': [
+            {...testFighterEntry().toJson(), 'id': 'alpha:class/fighter'},
+          ],
+        }),
+      );
+      final betaBytes = utf8.encode(
+        jsonEncode({
+          'formatVersion': 1,
+          'id': 'beta',
+          'name': 'Beta',
+          'version': '1.0.0',
+          'locale': 'zh-CN',
+          'system': 'dnd5e-2024',
+          'entryCount': 1,
+          'entries': [
+            {...testFighterEntry().toJson(), 'id': 'beta:class/fighter'},
+          ],
+        }),
+      );
+      final picker = MemoryContentFilePicker(
+        multipleResult: [
+          PickedContentFile(name: 'alpha.json', bytes: alphaBytes),
+          PickedContentFile(name: 'beta.json', bytes: betaBytes),
+        ],
+      );
+      final repository = MemoryContentRepository();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ContentPackageSettingsPage(
+            repository: repository,
+            importer: ContentPackageImporter(repository),
+            filePicker: picker,
+          ),
+        ),
+      );
 
-    await tester.tap(find.text('批量导入'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('批量导入'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Alpha'), findsOneWidget);
-    expect(find.text('Beta'), findsOneWidget);
-    await tester.tap(find.widgetWithText(FilledButton, '导入 2 个'));
-    await tester.pumpAndSettle();
+      expect(find.text('Alpha'), findsOneWidget);
+      expect(find.text('Beta'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, '导入 2 个'));
+      await tester.pumpAndSettle();
 
-    final packages = await repository.watchPackages().first;
-    expect(packages.map((p) => p.id), containsAll(['alpha', 'beta']));
-  });
+      final packages = await repository.watchPackages().first;
+      expect(packages.map((p) => p.id), containsAll(['alpha', 'beta']));
+    },
+  );
 }

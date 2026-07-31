@@ -140,28 +140,6 @@ abstract class CharacterClient {
     String? notes,
     Object? data,
   });
-
-  Future<CharacterCampaignBinding> bindCharacterToCampaign({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String characterId,
-    required String campaignId,
-  });
-
-  Future<List<CharacterCampaignBinding>> listCampaignCharacters({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String campaignId,
-  });
-
-  Future<CharacterSheet> adjustCampaignCharacterHp({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String campaignId,
-    required String characterId,
-    int? delta,
-    int? currentHp,
-  });
 }
 
 class CharacterApiClient implements CharacterClient, CharacterOperationsClient {
@@ -287,78 +265,6 @@ class CharacterApiClient implements CharacterClient, CharacterOperationsClient {
       body: jsonEncode(body),
     );
     if (response.statusCode != 200) {
-      throw _toException(response);
-    }
-    return CharacterSheet.fromJson(
-      jsonDecode(response.body) as Map<String, Object?>,
-    );
-  }
-
-  @override
-  Future<CharacterCampaignBinding> bindCharacterToCampaign({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String characterId,
-    required String campaignId,
-  }) async {
-    final response = await _httpClient.post(
-      Uri.parse(
-        '${_normalize(apiBaseUrl)}/characters/$characterId/campaign-bindings',
-      ),
-      headers: _headers(accessToken),
-      body: jsonEncode({'campaignId': campaignId}),
-    );
-    if (response.statusCode != 201) {
-      throw _toException(response);
-    }
-    return CharacterCampaignBinding.fromJson(
-      jsonDecode(response.body) as Map<String, Object?>,
-    );
-  }
-
-  @override
-  Future<List<CharacterCampaignBinding>> listCampaignCharacters({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String campaignId,
-  }) async {
-    final response = await _httpClient.get(
-      Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/characters'),
-      headers: {'authorization': 'Bearer $accessToken'},
-    );
-    if (response.statusCode != 200) {
-      throw _toException(response);
-    }
-    final decoded = jsonDecode(response.body) as List<Object?>;
-    return decoded
-        .map(
-          (item) =>
-              CharacterCampaignBinding.fromJson(item as Map<String, Object?>),
-        )
-        .toList();
-  }
-
-  @override
-  Future<CharacterSheet> adjustCampaignCharacterHp({
-    required String apiBaseUrl,
-    required String accessToken,
-    required String campaignId,
-    required String characterId,
-    int? delta,
-    int? currentHp,
-  }) async {
-    final body = <String, Object?>{};
-    if (delta != null) body['delta'] = delta;
-    if (currentHp != null) body['currentHp'] = currentHp;
-
-    final response = await _httpClient.post(
-      Uri.parse(
-        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/characters/$characterId/hp',
-      ),
-      headers: _headers(accessToken),
-      body: jsonEncode(body),
-    );
-    if (response.statusCode != 201) {
       throw _toException(response);
     }
     return CharacterSheet.fromJson(

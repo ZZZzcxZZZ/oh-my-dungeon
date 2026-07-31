@@ -27,15 +27,17 @@ part 'app_database.g.dart';
     ContentReadHistory,
     Characters,
     CharacterContentRefs,
-    CampaignActorsCache,
-    CampaignActorBacklinks,
+    CampaignCharactersCache,
+    CampaignCharacterBacklinks,
     CampaignContentCache,
     CampaignSyncCursors,
     CharacterSyncConflicts,
   ],
 )
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(_openConnection());
+  AppDatabase() : super(_openConnection('app.db'));
+
+  AppDatabase.named(String databaseName) : super(_openConnection(databaseName));
 
   /// 测试与内存数据库构造器。
   @visibleForTesting
@@ -47,7 +49,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -67,8 +69,8 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(characterContentRefs);
       }
       if (from < 4) {
-        await m.createTable(campaignActorsCache);
-        await m.createTable(campaignActorBacklinks);
+        await m.createTable(campaignCharactersCache);
+        await m.createTable(campaignCharacterBacklinks);
         await m.createTable(campaignContentCache);
         await m.createTable(campaignSyncCursors);
         await m.createTable(characterSyncConflicts);
@@ -92,12 +94,61 @@ class AppDatabase extends _$AppDatabase {
         // 旧 refs 数据丢弃, 角色会在下次打开时重新解析 contentReferences。
         await m.alterTable(TableMigration(characterContentRefs));
       }
+      if (from < 9) {
+        await m.addColumn(serverProfiles, serverProfiles.localAlias);
+      }
+      if (from < 10) {
+        await m.addColumn(characters, characters.markdownMirror);
+      }
+      if (from < 11) {
+        await m.addColumn(characters, characters.markdownDirty);
+      }
+      if (from >= 4 && from < 12) {
+        await customStatement(
+          'ALTER TABLE campaign_actors_cache '
+          'RENAME TO campaign_characters_cache',
+        );
+        await customStatement(
+          'ALTER TABLE campaign_characters_cache '
+          'RENAME COLUMN actor_type TO character_type',
+        );
+        await customStatement(
+          'ALTER TABLE campaign_actor_backlinks '
+          'RENAME TO campaign_character_backlinks',
+        );
+        await customStatement(
+          'ALTER TABLE campaign_character_backlinks '
+          'RENAME COLUMN campaign_actor_id TO campaign_character_id',
+        );
+        await customStatement(
+          'ALTER TABLE campaign_character_backlinks '
+          'RENAME COLUMN last_applied_actor_revision '
+          'TO last_applied_character_revision',
+        );
+        await customStatement(
+          'ALTER TABLE character_sync_conflicts '
+          'RENAME COLUMN campaign_actor_id TO campaign_character_id',
+        );
+        await customStatement(
+          'DROP INDEX IF EXISTS idx_campaign_actors_campaign_status',
+        );
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_campaign_characters_campaign_status '
+          'ON campaign_characters_cache (campaign_id, status)',
+        );
+      }
+      if (from >= 4 && from < 13) {
+        await m.addColumn(
+          campaignCharactersCache,
+          campaignCharactersCache.visibleToPlayers,
+        );
+      }
     },
   );
 
-  static QueryExecutor _openConnection() {
+  static QueryExecutor _openConnection(String databaseName) {
     return driftDatabase(
-      name: 'app.db',
+      name: databaseName,
       web: DriftWebOptions(
         sqlite3Wasm: Uri.parse('sqlite3.wasm'),
         driftWorker: Uri.parse('drift_worker.dart.js'),

@@ -5,10 +5,7 @@ import 'settings_section.dart';
 
 /// 角色模式：Player/DM 切换。
 class RoleModeSection extends StatelessWidget {
-  const RoleModeSection({
-    required this.modeController,
-    super.key,
-  });
+  const RoleModeSection({required this.modeController, super.key});
 
   final ClientModeController modeController;
 
@@ -28,22 +25,32 @@ class RoleModeSection extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SegmentedButton<ClientMode>(
-                  segments: const [
-                    ButtonSegment(
-                      value: ClientMode.player,
-                      icon: Icon(Icons.person_outline),
-                      label: Text('玩家'),
-                    ),
-                    ButtonSegment(
-                      value: ClientMode.dungeonMaster,
-                      icon: Icon(Icons.shield_outlined),
-                      label: Text('主持人'),
-                    ),
-                  ],
-                  selected: {mode},
-                  onSelectionChanged: (selection) =>
-                      modeController.setMode(selection.single),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact = constraints.maxWidth < 400;
+                    return SegmentedButton<ClientMode>(
+                      expandedInsets: EdgeInsets.zero,
+                      segments: [
+                        ButtonSegment(
+                          value: ClientMode.player,
+                          icon: compact
+                              ? null
+                              : const Icon(Icons.person_outline),
+                          label: const Text('玩家'),
+                        ),
+                        ButtonSegment(
+                          value: ClientMode.dungeonMaster,
+                          icon: compact
+                              ? null
+                              : const Icon(Icons.shield_outlined),
+                          label: const Text('主持人'),
+                        ),
+                      ],
+                      selected: {mode},
+                      onSelectionChanged: (selection) =>
+                          modeController.setMode(selection.single),
+                    );
+                  },
                 ),
                 const SizedBox(height: 12),
                 Text(

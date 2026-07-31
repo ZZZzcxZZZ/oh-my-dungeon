@@ -2,29 +2,31 @@ import 'dart:async';
 
 import 'package:dnd_table_client/src/features/campaigns/data/local/campaign_cache_repository.dart';
 import 'package:dnd_table_client/src/features/campaigns/data/sync/campaign_sync_api_client.dart';
-import 'package:dnd_table_client/src/features/campaigns/domain/campaign_actor.dart';
-import 'package:dnd_table_client/src/features/campaigns/domain/campaign_actor_audit.dart';
+import 'package:dnd_table_client/src/features/campaigns/domain/campaign_character.dart';
+import 'package:dnd_table_client/src/features/campaigns/domain/campaign_character_audit.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_change.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_event.dart';
 
-CampaignActor testCampaignActor({
-  String id = 'actor-1',
+CampaignCharacter testCampaignCharacter({
+  String id = 'character-1',
   String campaignId = 'campaign-1',
   String? ownerUserId,
   String? sourceCharacterId,
-  String actorType = 'player',
+  String characterType = 'player',
   String status = 'active',
   String lifecycle = 'persistent',
+  bool visibleToPlayers = true,
   Map<String, Object?>? sheet,
   int revision = 1,
-}) => CampaignActor(
+}) => CampaignCharacter(
   id: id,
   campaignId: campaignId,
   ownerUserId: ownerUserId,
   sourceCharacterId: sourceCharacterId,
-  actorType: actorType,
+  characterType: characterType,
   status: status,
   lifecycle: lifecycle,
+  visibleToPlayers: visibleToPlayers,
   sheet: sheet ?? {'name': 'Test Hero', 'currentHp': 10, 'maxHp': 20},
   revision: revision,
   updatedBy: 'user-1',
@@ -57,29 +59,30 @@ CampaignContentEntrySummary testContentEntry({
 
 class MemoryCampaignCacheRepository implements CampaignCacheRepository {
   MemoryCampaignCacheRepository({
-    List<CampaignActor> actors = const [],
+    List<CampaignCharacter> characters = const [],
     List<CampaignContentEntrySummary> entries = const [],
     Map<String, String> cursors = const {},
-  }) : _actors = {for (final a in actors) a.id: a},
+  }) : _characters = {for (final a in characters) a.id: a},
        _entries = {for (final e in entries) e.id: e},
        _cursors = Map.of(cursors);
 
-  final Map<String, CampaignActor> _actors;
+  final Map<String, CampaignCharacter> _characters;
   final Map<String, CampaignContentEntrySummary> _entries;
   final Map<String, String> _cursors;
-  final StreamController<List<CampaignActor>> _controller =
-      StreamController<List<CampaignActor>>.broadcast();
+  final StreamController<List<CampaignCharacter>> _controller =
+      StreamController<List<CampaignCharacter>>.broadcast();
   final StreamController<List<CampaignContentEntrySummary>> _entryController =
       StreamController<List<CampaignContentEntrySummary>>.broadcast();
 
-  List<CampaignActor> get actors => _actors.values.toList(growable: false);
+  List<CampaignCharacter> get characters =>
+      _characters.values.toList(growable: false);
   List<CampaignContentEntrySummary> get entries =>
       _entries.values.toList(growable: false);
 
   void _emit(String campaignId) {
     _controller.add(
-      _actors.values
-          .where((actor) => actor.campaignId == campaignId)
+      _characters.values
+          .where((character) => character.campaignId == campaignId)
           .toList(growable: false),
     );
     _entryController.add(
@@ -90,12 +93,12 @@ class MemoryCampaignCacheRepository implements CampaignCacheRepository {
   }
 
   @override
-  Stream<List<CampaignActor>> watchActors(String campaignId) {
-    final controller = StreamController<List<CampaignActor>>.broadcast();
+  Stream<List<CampaignCharacter>> watchCharacters(String campaignId) {
+    final controller = StreamController<List<CampaignCharacter>>.broadcast();
     scheduleMicrotask(
       () => controller.add(
-        _actors.values
-            .where((actor) => actor.campaignId == campaignId)
+        _characters.values
+            .where((character) => character.campaignId == campaignId)
             .toList(growable: false),
       ),
     );
@@ -121,10 +124,13 @@ class MemoryCampaignCacheRepository implements CampaignCacheRepository {
   }
 
   @override
-  Future<CampaignActor?> getActor(String campaignId, String actorId) async {
-    final actor = _actors[actorId];
-    if (actor == null || actor.campaignId != campaignId) return null;
-    return actor;
+  Future<CampaignCharacter?> getCharacter(
+    String campaignId,
+    String characterId,
+  ) async {
+    final character = _characters[characterId];
+    if (character == null || character.campaignId != campaignId) return null;
+    return character;
   }
 
   @override
@@ -144,12 +150,12 @@ class MemoryCampaignCacheRepository implements CampaignCacheRepository {
   @override
   Future<void> applyPage(String campaignId, CampaignChangePage page) async {
     for (final change in page.items) {
-      if (change.entityType == 'actor') {
+      if (change.entityType == 'character') {
         if (change.operation == 'upsert' && change.entity != null) {
-          final actor = CampaignActor.fromJson(change.entity!);
-          _actors[actor.id] = actor;
+          final character = CampaignCharacter.fromJson(change.entity!);
+          _characters[character.id] = character;
         } else if (change.operation == 'delete') {
-          _actors.remove(change.entityId);
+          _characters.remove(change.entityId);
         }
       } else if (change.entityType == 'content') {
         if (change.operation == 'upsert' && change.entity != null) {
@@ -166,7 +172,9 @@ class MemoryCampaignCacheRepository implements CampaignCacheRepository {
 
   @override
   Future<void> clearCampaign(String campaignId) async {
-    _actors.removeWhere((_, actor) => actor.campaignId == campaignId);
+    _characters.removeWhere(
+      (_, character) => character.campaignId == campaignId,
+    );
     _entries.removeWhere((_, entry) => entry.campaignId == campaignId);
     _cursors.remove(campaignId);
     _emit(campaignId);
@@ -176,43 +184,46 @@ class MemoryCampaignCacheRepository implements CampaignCacheRepository {
 class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
   MemoryCampaignSyncApiClient({
     List<CampaignChangePage> changePages = const [],
-    List<CampaignActorAudit> actorAudits = const [],
+    List<CampaignCharacterAudit> characterAudits = const [],
     this.listChangesException,
   }) : _changePages = List.of(changePages),
-       _actorAudits = List.of(actorAudits);
+       _characterAudits = List.of(characterAudits);
 
   final List<CampaignChangePage> _changePages;
-  final List<CampaignActorAudit> _actorAudits;
+  final List<CampaignCharacterAudit> _characterAudits;
   int _changePageIndex = 0;
   final Object? listChangesException;
 
-  /// 注入下一次 `updateActor` 调用要抛出的异常；用于 409 冲突场景测试。
-  Object? nextUpdateActorException;
+  /// 注入下一次 `updateCharacter` 调用要抛出的异常；用于 409 冲突场景测试。
+  Object? nextUpdateCharacterException;
 
-  /// 注入下一次 `publishActor` 调用要抛出的异常；用于 400/403 错误路径测试。
-  Object? nextPublishActorException;
+  /// 注入下一次 `publishCharacter` 调用要抛出的异常；用于 400/403 错误路径测试。
+  Object? nextPublishCharacterException;
 
-  /// 注入下一次 `createActor` 调用要抛出的异常；用于 400/403 错误路径测试。
-  Object? nextCreateActorException;
+  /// 注入下一次 `createCharacter` 调用要抛出的异常；用于 400/403 错误路径测试。
+  Object? nextCreateCharacterException;
 
   final List<Map<String, Object?>> publishCalls = [];
-  final List<Map<String, Object?>> createActorCalls = [];
-  final List<Map<String, Object?>> updateActorCalls = [];
+  final List<Map<String, Object?>> createCharacterCalls = [];
+  final List<Map<String, Object?>> updateCharacterCalls = [];
   final List<Map<String, Object?>> archiveCalls = [];
   final List<Map<String, Object?>> createEntryCalls = [];
   final List<Map<String, Object?>> updateEntryCalls = [];
   final List<String> deleteEntryCalls = [];
-  final List<String> listActorAuditCalls = [];
+  final List<String> listCharacterAuditCalls = [];
 
   /// Task 3.1 — CampaignEvent 原子事件调用记录, 便于测试断言.
-  final List<Map<String, Object?>> changeActorHpCalls = [];
+  final List<Map<String, Object?>> changeCharacterHpCalls = [];
   final List<Map<String, Object?>> grantItemCalls = [];
+  final List<Map<String, Object?>> addConditionCalls = [];
 
-  /// 注入下一次 `changeActorHp` 调用要抛出的异常; 用于 409/403 错误路径测试.
-  Object? nextChangeActorHpException;
+  /// 注入下一次 `changeCharacterHp` 调用要抛出的异常; 用于 409/403 错误路径测试.
+  Object? nextChangeCharacterHpException;
 
   /// 注入下一次 `grantItem` 调用要抛出的异常; 用于 409/403 错误路径测试.
   Object? nextGrantItemException;
+
+  Object? nextAddConditionException;
 
   @override
   Future<CampaignChangePage> listChanges({
@@ -230,12 +241,12 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
   }
 
   @override
-  Future<CampaignActor> publishActor({
+  Future<CampaignCharacter> publishCharacter({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
     required String sourceCharacterId,
-    required String actorType,
+    required String characterType,
     required int baseRevision,
     required Map<String, Object?> sheet,
   }) async {
@@ -244,126 +255,144 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
       'accessToken': accessToken,
       'campaignId': campaignId,
       'sourceCharacterId': sourceCharacterId,
-      'actorType': actorType,
+      'characterType': characterType,
       'baseRevision': baseRevision,
       'sheet': sheet,
     });
-    final exception = nextPublishActorException;
+    final exception = nextPublishCharacterException;
     if (exception != null) {
-      nextPublishActorException = null;
+      nextPublishCharacterException = null;
       throw exception;
     }
-    return testCampaignActor(
+    return testCampaignCharacter(
       campaignId: campaignId,
       sourceCharacterId: sourceCharacterId,
-      actorType: actorType,
+      characterType: characterType,
       sheet: sheet,
     );
   }
 
   @override
-  Future<CampaignActor> createActor({
+  Future<CampaignCharacter> createCharacter({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorType,
+    required String characterType,
     String? ownerUserId,
     String lifecycle = 'persistent',
     required Map<String, Object?> sheet,
   }) async {
-    createActorCalls.add({
+    createCharacterCalls.add({
       'campaignId': campaignId,
-      'actorType': actorType,
+      'characterType': characterType,
       'ownerUserId': ownerUserId,
       'lifecycle': lifecycle,
       'sheet': sheet,
     });
-    final exception = nextCreateActorException;
+    final exception = nextCreateCharacterException;
     if (exception != null) {
-      nextCreateActorException = null;
+      nextCreateCharacterException = null;
       throw exception;
     }
-    return testCampaignActor(
+    return testCampaignCharacter(
       campaignId: campaignId,
-      actorType: actorType,
+      characterType: characterType,
       ownerUserId: ownerUserId,
       sheet: sheet,
     );
   }
 
   @override
-  Future<List<CampaignActor>> listActors({
+  Future<List<CampaignCharacter>> listCharacters({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-  }) async => [testCampaignActor(campaignId: campaignId)];
+  }) async => [testCampaignCharacter(campaignId: campaignId)];
 
   @override
-  Future<CampaignActor> getActor({
+  Future<CampaignCharacter> getCharacter({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorId,
-  }) async => testCampaignActor(id: actorId, campaignId: campaignId);
+    required String characterId,
+  }) async => testCampaignCharacter(id: characterId, campaignId: campaignId);
 
   @override
-  Future<List<CampaignActorAudit>> listActorAudits({
+  Future<List<CampaignCharacterAudit>> listCharacterAudits({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorId,
+    required String characterId,
   }) async {
-    listActorAuditCalls.add(actorId);
-    return List.unmodifiable(_actorAudits);
+    listCharacterAuditCalls.add(characterId);
+    return List.unmodifiable(_characterAudits);
   }
 
   @override
-  Future<CampaignActor> updateActor({
+  Future<CampaignCharacter> updateCharacter({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorId,
+    required String characterId,
     required int baseRevision,
     required Map<String, Object?> sheet,
     String? lifecycle,
+    bool? visibleToPlayers,
   }) async {
-    updateActorCalls.add({
+    updateCharacterCalls.add({
       'campaignId': campaignId,
-      'actorId': actorId,
+      'characterId': characterId,
       'baseRevision': baseRevision,
       'sheet': sheet,
       'lifecycle': ?lifecycle,
+      'visibleToPlayers': ?visibleToPlayers,
     });
-    final exception = nextUpdateActorException;
+    final exception = nextUpdateCharacterException;
     if (exception != null) {
-      nextUpdateActorException = null;
+      nextUpdateCharacterException = null;
       throw exception;
     }
-    return testCampaignActor(
-      id: actorId,
+    return testCampaignCharacter(
+      id: characterId,
       campaignId: campaignId,
       sheet: sheet,
       lifecycle: lifecycle ?? 'persistent',
+      visibleToPlayers: visibleToPlayers ?? true,
     );
   }
 
   @override
-  Future<CampaignActor> archiveActor({
+  Future<CampaignCharacter> archiveCharacter({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorId,
+    required String characterId,
     required int baseRevision,
   }) async {
     archiveCalls.add({
       'campaignId': campaignId,
-      'actorId': actorId,
+      'characterId': characterId,
       'baseRevision': baseRevision,
     });
-    return testCampaignActor(
-      id: actorId,
+    return testCampaignCharacter(
+      id: characterId,
       campaignId: campaignId,
       status: 'archived',
+    );
+  }
+
+  @override
+  Future<CampaignCharacter> restoreCharacter({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String characterId,
+    required int baseRevision,
+  }) async {
+    return testCampaignCharacter(
+      id: characterId,
+      campaignId: campaignId,
+      status: 'active',
     );
   }
 
@@ -435,31 +464,31 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
   }) async => {'valid': true, 'errors': <String>[]};
 
   @override
-  Future<CampaignEventResult> changeActorHp({
+  Future<CampaignEventResult> changeCharacterHp({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorId,
+    required String characterId,
     required int delta,
     String? reason,
     int? baseRevision,
   }) async {
-    changeActorHpCalls.add({
+    changeCharacterHpCalls.add({
       'campaignId': campaignId,
-      'actorId': actorId,
+      'characterId': characterId,
       'delta': delta,
       'reason': reason,
       'baseRevision': baseRevision,
     });
-    final exception = nextChangeActorHpException;
+    final exception = nextChangeCharacterHpException;
     if (exception != null) {
-      nextChangeActorHpException = null;
+      nextChangeCharacterHpException = null;
       throw exception;
     }
     final baseRevisionValue = baseRevision ?? 1;
     return _buildHpEventResult(
       campaignId: campaignId,
-      actorId: actorId,
+      characterId: characterId,
       delta: delta,
       newRevision: baseRevisionValue + 1,
       reason: reason,
@@ -471,7 +500,7 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorId,
+    required String characterId,
     required String itemId,
     required String name,
     int quantity = 1,
@@ -479,7 +508,7 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
   }) async {
     grantItemCalls.add({
       'campaignId': campaignId,
-      'actorId': actorId,
+      'characterId': characterId,
       'itemId': itemId,
       'name': name,
       'quantity': quantity,
@@ -493,7 +522,7 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
     final baseRevisionValue = baseRevision ?? 1;
     return _buildItemGrantedEventResult(
       campaignId: campaignId,
-      actorId: actorId,
+      characterId: characterId,
       itemId: itemId,
       itemName: name,
       quantity: quantity,
@@ -501,10 +530,80 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
     );
   }
 
-  /// 构造 actor.hp_changed 事件返回. 内存实现不做 clamp, 由服务端负责.
+  @override
+  Future<CampaignEventResult> addCondition({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String characterId,
+    required String type,
+    required String name,
+    int? durationRounds,
+    int? baseRevision,
+  }) async {
+    addConditionCalls.add({
+      'campaignId': campaignId,
+      'characterId': characterId,
+      'type': type,
+      'name': name,
+      'durationRounds': durationRounds,
+      'baseRevision': baseRevision,
+    });
+    final exception = nextAddConditionException;
+    if (exception != null) {
+      nextAddConditionException = null;
+      throw exception;
+    }
+    return CampaignEventResult(
+      character: {
+        'id': characterId,
+        'campaignId': campaignId,
+        'characterType': 'player',
+        'status': 'active',
+        'lifecycle': 'persistent',
+        'sheet': <String, Object?>{
+          'name': 'Arannis',
+          'conditions': <Map<String, Object?>>[
+            {
+              'id': 'condition-1',
+              'type': type,
+              'name': name,
+              'duration': durationRounds == null
+                  ? null
+                  : {
+                      'unit': 'round',
+                      'total': durationRounds,
+                      'remaining': durationRounds,
+                    },
+            },
+          ],
+        },
+        'revision': (baseRevision ?? 1) + 1,
+      },
+      event: CampaignEvent(
+        id: 'event-${DateTime.now().microsecondsSinceEpoch}',
+        campaignId: campaignId,
+        senderId: 'dm-1',
+        campaignCharacterId: characterId,
+        displayName: 'DM',
+        kind: 'system',
+        content: 'Arannis 获得状态：$name',
+        eventData: <String, Object?>{
+          'eventType': CampaignEventTypes.characterConditionAdded,
+          'characterId': characterId,
+          'conditionType': type,
+          'conditionName': name,
+          'durationRounds': durationRounds,
+        },
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+      ),
+    );
+  }
+
+  /// 构造 character.hp_changed 事件返回. 内存实现不做 clamp, 由服务端负责.
   CampaignEventResult _buildHpEventResult({
     required String campaignId,
-    required String actorId,
+    required String characterId,
     required int delta,
     required int newRevision,
     String? reason,
@@ -512,10 +611,10 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
     final previousHp = 20;
     final newHp = previousHp + delta;
     return CampaignEventResult(
-      actor: {
-        'id': actorId,
+      character: {
+        'id': characterId,
         'campaignId': campaignId,
-        'actorType': 'player',
+        'characterType': 'player',
         'status': 'active',
         'lifecycle': 'persistent',
         'sheet': <String, Object?>{
@@ -529,13 +628,13 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
         id: 'event-${DateTime.now().microsecondsSinceEpoch}',
         campaignId: campaignId,
         senderId: 'dm-1',
-        campaignActorId: actorId,
+        campaignCharacterId: characterId,
         displayName: 'DM',
         kind: 'system',
         content: 'Arannis $delta HP ($previousHp → $newHp)',
         eventData: <String, Object?>{
-          'eventType': CampaignEventTypes.actorHpChanged,
-          'actorId': actorId,
+          'eventType': CampaignEventTypes.characterHpChanged,
+          'characterId': characterId,
           'delta': delta,
           'previousHp': previousHp,
           'newHp': newHp,
@@ -546,20 +645,20 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
     );
   }
 
-  /// 构造 actor.item_granted 事件返回.
+  /// 构造 character.item_granted 事件返回.
   CampaignEventResult _buildItemGrantedEventResult({
     required String campaignId,
-    required String actorId,
+    required String characterId,
     required String itemId,
     required String itemName,
     required int quantity,
     required int newRevision,
   }) {
     return CampaignEventResult(
-      actor: {
-        'id': actorId,
+      character: {
+        'id': characterId,
         'campaignId': campaignId,
-        'actorType': 'player',
+        'characterType': 'player',
         'status': 'active',
         'lifecycle': 'persistent',
         'sheet': <String, Object?>{
@@ -574,13 +673,13 @@ class MemoryCampaignSyncApiClient implements CampaignSyncApiClient {
         id: 'event-${DateTime.now().microsecondsSinceEpoch}',
         campaignId: campaignId,
         senderId: 'dm-1',
-        campaignActorId: actorId,
+        campaignCharacterId: characterId,
         displayName: 'DM',
         kind: 'system',
         content: '给 Arannis $itemName ×$quantity',
         eventData: <String, Object?>{
-          'eventType': CampaignEventTypes.actorItemGranted,
-          'actorId': actorId,
+          'eventType': CampaignEventTypes.characterItemGranted,
+          'characterId': characterId,
           'itemId': itemId,
           'itemName': itemName,
           'quantity': quantity,

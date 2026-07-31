@@ -1,9 +1,9 @@
-class CampaignActorAudit {
-  const CampaignActorAudit({
+class CampaignCharacterAudit {
+  const CampaignCharacterAudit({
     required this.id,
-    required this.campaignActorId,
+    required this.campaignCharacterId,
     required this.campaignId,
-    required this.actorUserId,
+    required this.characterUserId,
     required this.baseRevision,
     required this.resultRevision,
     required this.changedPaths,
@@ -13,9 +13,9 @@ class CampaignActorAudit {
   });
 
   final String id;
-  final String campaignActorId;
+  final String campaignCharacterId;
   final String campaignId;
-  final String actorUserId;
+  final String characterUserId;
   final int baseRevision;
   final int resultRevision;
   final List<String> changedPaths;
@@ -23,12 +23,12 @@ class CampaignActorAudit {
   final Map<String, Object?> afterSheet;
   final String createdAt;
 
-  factory CampaignActorAudit.fromJson(Map<String, Object?> json) {
-    return CampaignActorAudit(
+  factory CampaignCharacterAudit.fromJson(Map<String, Object?> json) {
+    return CampaignCharacterAudit(
       id: json['id']?.toString() ?? '',
-      campaignActorId: json['campaignActorId']?.toString() ?? '',
+      campaignCharacterId: json['campaignCharacterId']?.toString() ?? '',
       campaignId: json['campaignId']?.toString() ?? '',
-      actorUserId: json['actorUserId']?.toString() ?? '',
+      characterUserId: json['characterUserId']?.toString() ?? '',
       baseRevision: _intValue(json['baseRevision']),
       resultRevision: _intValue(json['resultRevision']),
       changedPaths: (json['changedPaths'] as List<Object?>? ?? const [])

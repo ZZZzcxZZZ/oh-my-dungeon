@@ -23,7 +23,10 @@ void main() {
         );
         await tester.pump();
 
-        expect(find.byKey(const Key('character-detail-avatar')), findsOneWidget);
+        expect(
+          find.byKey(const Key('character-detail-avatar')),
+          findsOneWidget,
+        );
         expect(find.text('Arannis'), findsWidgets);
         expect(find.text('Elf / Ranger / Lv.3'), findsOneWidget);
         expect(find.text('HP 24/24'), findsOneWidget);
@@ -42,9 +45,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    final longNamed = _character.copyWith(
-      name: '阿兰尼斯·银叶·来自旧林地·游侠·第三纪元·长名测试角色',
-    );
+    final longNamed = _character.copyWith(name: '阿兰尼斯·银叶·来自旧林地·游侠·第三纪元·长名测试角色');
     await tester.pumpWidget(
       MaterialApp(home: CharacterDetailPage(character: longNamed)),
     );

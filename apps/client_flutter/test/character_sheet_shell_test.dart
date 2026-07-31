@@ -34,7 +34,9 @@ void main() {
     expect(find.byType(TabBar), findsNothing);
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.text('动作内容'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('character-sheet-destination-notes')));
+    await tester.tap(
+      find.byKey(const Key('character-sheet-destination-notes')),
+    );
     await tester.pumpAndSettle();
     expect(find.text('资料内容'), findsOneWidget);
     expect(tester.takeException(), isNull);

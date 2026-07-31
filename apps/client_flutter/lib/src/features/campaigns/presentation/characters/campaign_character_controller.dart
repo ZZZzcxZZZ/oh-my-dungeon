@@ -4,8 +4,8 @@ import 'package:flutter/foundation.dart';
 
 import '../../data/local/campaign_cache_repository.dart';
 import '../../data/sync/campaign_sync_api_client.dart';
-import '../../domain/campaign_actor.dart';
-import '../../domain/campaign_actor_audit.dart';
+import '../../domain/campaign_character.dart';
+import '../../domain/campaign_character_audit.dart';
 import '../../domain/campaign_change.dart';
 import '../../../characters/domain/character.dart';
 
@@ -28,10 +28,10 @@ String _describeSyncException(CampaignSyncException exception) {
 }
 
 /// 战役角色管理状态。Player 模式用于发布本地角色到战役；DM 模式用于浏览、
-/// 编辑、归档所有 CampaignActor。所有写操作通过 [CampaignSyncApiClient] 提交，
+/// 编辑、归档所有 CampaignCharacter。所有写操作通过 [CampaignSyncApiClient] 提交，
 /// 成功后立即写本地缓存以避免 UI 等待拉取循环。
-class CampaignActorController extends ChangeNotifier {
-  CampaignActorController({
+class CampaignCharacterController extends ChangeNotifier {
+  CampaignCharacterController({
     required CampaignCacheRepository cacheRepository,
     required CampaignSyncApiClient apiClient,
     required String apiBaseUrl,
@@ -39,7 +39,7 @@ class CampaignActorController extends ChangeNotifier {
     required String currentUserId,
     String Function()? accessTokenProvider,
     String Function()? currentUserIdProvider,
-    Future<void> Function(CampaignActor actor)? onActorPublished,
+    Future<void> Function(CampaignCharacter character)? onCharacterPublished,
   }) : _cacheRepository = cacheRepository,
        _apiClient = apiClient,
        _apiBaseUrl = apiBaseUrl,
@@ -47,7 +47,7 @@ class CampaignActorController extends ChangeNotifier {
        _initialCurrentUserId = currentUserId,
        _accessTokenProvider = accessTokenProvider,
        _currentUserIdProvider = currentUserIdProvider,
-       _onActorPublished = onActorPublished;
+       _onCharacterPublished = onCharacterPublished;
 
   final CampaignCacheRepository _cacheRepository;
   final CampaignSyncApiClient _apiClient;
@@ -56,7 +56,8 @@ class CampaignActorController extends ChangeNotifier {
   final String _initialCurrentUserId;
   final String Function()? _accessTokenProvider;
   final String Function()? _currentUserIdProvider;
-  final Future<void> Function(CampaignActor actor)? _onActorPublished;
+  final Future<void> Function(CampaignCharacter character)?
+  _onCharacterPublished;
 
   String get _accessToken =>
       _accessTokenProvider?.call() ?? _initialAccessToken;
@@ -64,58 +65,62 @@ class CampaignActorController extends ChangeNotifier {
       _currentUserIdProvider?.call() ?? _initialCurrentUserId;
 
   String? _selectedCampaignId;
-  StreamSubscription<List<CampaignActor>>? _subscription;
+  StreamSubscription<List<CampaignCharacter>>? _subscription;
 
-  List<CampaignActor> _actors = [];
+  List<CampaignCharacter> _characters = [];
   String _query = '';
   final Set<String> _activeFilters = {'player', 'npc', 'unclaimed'};
   bool _loading = false;
   String? _error;
   CampaignConflictException? _conflict;
-  final Map<String, List<CampaignActorAudit>> _audits = {};
+  final Map<String, List<CampaignCharacterAudit>> _audits = {};
   final Set<String> _loadingAudits = {};
   final Map<String, String> _auditErrors = {};
 
   String? get selectedCampaignId => _selectedCampaignId;
-  List<CampaignActor> get actors => _actors;
+  List<CampaignCharacter> get characters => _characters;
   String get query => _query;
   Set<String> get activeFilters => Set.unmodifiable(_activeFilters);
   bool get isLoading => _loading;
   String? get error => _error;
   CampaignConflictException? get conflict => _conflict;
   String get currentUserId => _currentUserId;
-  List<CampaignActorAudit> auditsFor(String actorId) =>
-      List.unmodifiable(_audits[actorId] ?? const []);
-  bool isLoadingAudits(String actorId) => _loadingAudits.contains(actorId);
-  String? auditErrorFor(String actorId) => _auditErrors[actorId];
+  List<CampaignCharacterAudit> auditsFor(String characterId) =>
+      List.unmodifiable(_audits[characterId] ?? const []);
+  bool isLoadingAudits(String characterId) =>
+      _loadingAudits.contains(characterId);
+  String? auditErrorFor(String characterId) => _auditErrors[characterId];
 
   /// 根据当前查询和筛选条件过滤后的角色列表。
-  List<CampaignActor> get filteredActors {
+  List<CampaignCharacter> get filteredCharacters {
     final query = _query.trim().toLowerCase();
-    return _actors
-        .where((actor) {
-          if (!_matchesFilters(actor)) return false;
+    return _characters
+        .where((character) {
+          if (!_matchesFilters(character)) return false;
           if (query.isEmpty) return true;
-          final name = actor.sheet['name']?.toString().toLowerCase() ?? '';
+          final name = character.sheet['name']?.toString().toLowerCase() ?? '';
           return name.contains(query);
         })
         .toList(growable: false);
   }
 
-  bool _matchesFilters(CampaignActor actor) {
+  bool _matchesFilters(CampaignCharacter character) {
     if (_activeFilters.contains('archived') && _activeFilters.length == 1) {
-      return actor.status == 'archived';
+      return character.status == 'archived';
     }
-    if (actor.status == 'archived') return _activeFilters.contains('archived');
+    if (character.status == 'archived') {
+      return _activeFilters.contains('archived');
+    }
     if (_activeFilters.contains('unclaimed') &&
-        actor.ownerUserId == null &&
-        actor.actorType != 'npc') {
+        character.ownerUserId == null &&
+        character.characterType != 'npc') {
       return true;
     }
-    if (_activeFilters.contains('player') && actor.actorType == 'player') {
+    if (_activeFilters.contains('player') &&
+        character.characterType == 'player') {
       return true;
     }
-    if (_activeFilters.contains('npc') && actor.actorType == 'npc') {
+    if (_activeFilters.contains('npc') && character.characterType == 'npc') {
       return true;
     }
     return false;
@@ -124,15 +129,17 @@ class CampaignActorController extends ChangeNotifier {
   Future<void> selectCampaign(String campaignId) async {
     if (_selectedCampaignId == campaignId) return;
     _selectedCampaignId = campaignId;
-    _actors = [];
+    _characters = [];
     _audits.clear();
     _loadingAudits.clear();
     _auditErrors.clear();
     _error = null;
     notifyListeners();
     await _subscription?.cancel();
-    _subscription = _cacheRepository.watchActors(campaignId).listen((actors) {
-      _actors = actors;
+    _subscription = _cacheRepository.watchCharacters(campaignId).listen((
+      characters,
+    ) {
+      _characters = characters;
       notifyListeners();
     });
   }
@@ -195,29 +202,29 @@ class CampaignActorController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadActorAudits(String actorId) async {
+  Future<void> loadCharacterAudits(String characterId) async {
     final campaignId = _selectedCampaignId;
-    if (campaignId == null || _loadingAudits.contains(actorId)) return;
-    _loadingAudits.add(actorId);
-    _auditErrors.remove(actorId);
+    if (campaignId == null || _loadingAudits.contains(characterId)) return;
+    _loadingAudits.add(characterId);
+    _auditErrors.remove(characterId);
     notifyListeners();
     try {
-      _audits[actorId] = await _apiClient.listActorAudits(
+      _audits[characterId] = await _apiClient.listCharacterAudits(
         apiBaseUrl: _apiBaseUrl,
         accessToken: _accessToken,
         campaignId: campaignId,
-        actorId: actorId,
+        characterId: characterId,
       );
     } catch (_) {
-      _auditErrors[actorId] = '加载编辑历史失败';
+      _auditErrors[characterId] = '加载编辑历史失败';
     }
-    _loadingAudits.remove(actorId);
+    _loadingAudits.remove(characterId);
     notifyListeners();
   }
 
   Future<bool> publishCharacter(
     CharacterSheet character, {
-    String actorType = 'player',
+    String characterType = 'player',
     Map<String, Object?>? sheetOverride,
     int? baseRevisionOverride,
   }) async {
@@ -229,35 +236,35 @@ class CampaignActorController extends ChangeNotifier {
     }
     _error = null;
     _conflict = null;
-    // Spec §双向同步 切片 A: 重发布必须用本地缓存的 actor.revision 作
-    // baseRevision，否则服务端必然 409。首次发布本地无 actor，传 0。
+    // Spec §双向同步 切片 A: 重发布必须用本地缓存的 character.revision 作
+    // baseRevision，否则服务端必然 409。首次发布本地无 character，传 0。
     // baseRevisionOverride 用于冲突解决"用本地覆盖"时传入服务端最新 revision。
-    final existing = _actors.cast<CampaignActor?>().firstWhere(
+    final existing = _characters.cast<CampaignCharacter?>().firstWhere(
       (a) => a?.sourceCharacterId == character.id,
       orElse: () => null,
     );
     final baseRevision = baseRevisionOverride ?? existing?.revision ?? 0;
     try {
-      final actor = await _apiClient.publishActor(
+      final campaignCharacter = await _apiClient.publishCharacter(
         apiBaseUrl: _apiBaseUrl,
         accessToken: _accessToken,
         campaignId: campaignId,
         sourceCharacterId: character.id,
-        actorType: actorType,
+        characterType: characterType,
         baseRevision: baseRevision,
         sheet: sheetOverride ?? character.toJson(),
       );
       // 立即写本地缓存，避免等待拉取循环。
       await _cacheRepository.applyPage(
         campaignId,
-        _singleChangePage(actor, 'upsert'),
+        _singleChangePage(campaignCharacter, 'upsert'),
       );
-      _upsertActor(actor);
-      // 立即把远端 actor 回写本地角色，避免等下次 pullUntilCurrent 才同步
+      _upsertCharacter(campaignCharacter);
+      // 立即把远端 character 回写本地角色，避免等下次 pullUntilCurrent 才同步
       // 运行时字段。backlinkService 可能为 null（web build 无 database）。
-      final callback = _onActorPublished;
+      final callback = _onCharacterPublished;
       if (callback != null) {
-        await callback(actor);
+        await callback(campaignCharacter);
       }
       return true;
     } on CampaignConflictException catch (e) {
@@ -277,13 +284,13 @@ class CampaignActorController extends ChangeNotifier {
 
   /// DM 创建常驻 NPC / 怪物 / 同伴角色。
   ///
-  /// 走 `/actors`（DM create）端点，不走 `/actors/publish`（玩家自发布）。
-  /// 服务端会校验调用者拥有 `canManageCampaign` 能力，并拒绝 `actorType ==
+  /// 走 `/characters`（DM create）端点，不走 `/characters/publish`（玩家自发布）。
+  /// 服务端会校验调用者拥有 `canManageCampaign` 能力，并拒绝 `characterType ==
   /// 'player'`（玩家角色必须自发布）。
   ///
   /// 见 spec §发言身份 DM 与 §DM角色生命周期：常驻角色 lifecycle=persistent。
-  Future<bool> createDmActor({
-    required String actorType,
+  Future<bool> createDmCharacter({
+    required String characterType,
     required Map<String, Object?> sheet,
     String lifecycle = 'persistent',
   }) async {
@@ -293,18 +300,18 @@ class CampaignActorController extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    if (actorType == 'player') {
+    if (characterType == 'player') {
       _error = '玩家角色请使用发布到战役功能';
       notifyListeners();
       return false;
     }
     _error = null;
     try {
-      final created = await _apiClient.createActor(
+      final created = await _apiClient.createCharacter(
         apiBaseUrl: _apiBaseUrl,
         accessToken: _accessToken,
         campaignId: campaignId,
-        actorType: actorType,
+        characterType: characterType,
         lifecycle: lifecycle,
         sheet: sheet,
       );
@@ -312,7 +319,7 @@ class CampaignActorController extends ChangeNotifier {
         campaignId,
         _singleChangePage(created, 'upsert'),
       );
-      _upsertActor(created);
+      _upsertCharacter(created);
       return true;
     } on CampaignConflictException catch (e) {
       _conflict = e;
@@ -329,31 +336,33 @@ class CampaignActorController extends ChangeNotifier {
     }
   }
 
-  Future<bool> updateActor(
-    CampaignActor actor,
+  Future<bool> updateCharacter(
+    CampaignCharacter character,
     Map<String, Object?> sheet, {
     String? lifecycle,
+    bool? visibleToPlayers,
   }) async {
     final campaignId = _selectedCampaignId;
     if (campaignId == null) return false;
     _error = null;
     _conflict = null;
     try {
-      final updated = await _apiClient.updateActor(
+      final updated = await _apiClient.updateCharacter(
         apiBaseUrl: _apiBaseUrl,
         accessToken: _accessToken,
         campaignId: campaignId,
-        actorId: actor.id,
-        baseRevision: actor.revision,
+        characterId: character.id,
+        baseRevision: character.revision,
         sheet: sheet,
         lifecycle: lifecycle,
+        visibleToPlayers: visibleToPlayers,
       );
       await _cacheRepository.applyPage(
         campaignId,
         _singleChangePage(updated, 'upsert'),
       );
-      _upsertActor(updated);
-      await loadActorAudits(actor.id);
+      _upsertCharacter(updated);
+      await loadCharacterAudits(character.id);
       return true;
     } on CampaignConflictException catch (e) {
       _conflict = e;
@@ -370,24 +379,24 @@ class CampaignActorController extends ChangeNotifier {
     }
   }
 
-  Future<bool> archiveActor(CampaignActor actor) async {
+  Future<bool> archiveCharacter(CampaignCharacter character) async {
     final campaignId = _selectedCampaignId;
     if (campaignId == null) return false;
     _error = null;
     _conflict = null;
     try {
-      final archived = await _apiClient.archiveActor(
+      final archived = await _apiClient.archiveCharacter(
         apiBaseUrl: _apiBaseUrl,
         accessToken: _accessToken,
         campaignId: campaignId,
-        actorId: actor.id,
-        baseRevision: actor.revision,
+        characterId: character.id,
+        baseRevision: character.revision,
       );
       await _cacheRepository.applyPage(
         campaignId,
         _singleChangePage(archived, 'upsert'),
       );
-      _upsertActor(archived);
+      _upsertCharacter(archived);
       return true;
     } on CampaignConflictException catch (e) {
       _conflict = e;
@@ -404,33 +413,72 @@ class CampaignActorController extends ChangeNotifier {
     }
   }
 
-  /// 构造一个仅包含单个 actor 变更的页面，用于写本地缓存。
-  void _upsertActor(CampaignActor actor) {
-    final index = _actors.indexWhere((candidate) => candidate.id == actor.id);
+  Future<bool> restoreCharacter(CampaignCharacter character) async {
+    final campaignId = _selectedCampaignId;
+    if (campaignId == null) return false;
+    _error = null;
+    _conflict = null;
+    try {
+      final restored = await _apiClient.restoreCharacter(
+        apiBaseUrl: _apiBaseUrl,
+        accessToken: _accessToken,
+        campaignId: campaignId,
+        characterId: character.id,
+        baseRevision: character.revision,
+      );
+      await _cacheRepository.applyPage(
+        campaignId,
+        _singleChangePage(restored, 'upsert'),
+      );
+      _upsertCharacter(restored);
+      return true;
+    } on CampaignConflictException catch (e) {
+      _conflict = e;
+      notifyListeners();
+      return false;
+    } on CampaignSyncException catch (e) {
+      _error = _describeSyncException(e);
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _error = '恢复角色失败：网络错误，请检查服务器连接';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// 构造一个仅包含单个 character 变更的页面，用于写本地缓存。
+  void _upsertCharacter(CampaignCharacter character) {
+    final index = _characters.indexWhere(
+      (candidate) => candidate.id == character.id,
+    );
     if (index < 0) {
-      _actors = [..._actors, actor];
+      _characters = [..._characters, character];
     } else {
-      _actors = [..._actors]..[index] = actor;
+      _characters = [..._characters]..[index] = character;
     }
     notifyListeners();
   }
 
-  CampaignChangePage _singleChangePage(CampaignActor actor, String operation) {
+  CampaignChangePage _singleChangePage(
+    CampaignCharacter character,
+    String operation,
+  ) {
     return CampaignChangePage(
       items: [
         CampaignChange(
-          id: 'local-${actor.id}-${actor.revision}',
-          campaignId: actor.campaignId,
-          cursor: '${actor.revision}',
-          entityType: 'actor',
-          entityId: actor.id,
+          id: 'local-${character.id}-${character.revision}',
+          campaignId: character.campaignId,
+          cursor: '${character.revision}',
+          entityType: 'character',
+          entityId: character.id,
           operation: operation,
-          revision: actor.revision,
-          createdAt: actor.updatedAt,
-          entity: actor.toJson(),
+          revision: character.revision,
+          createdAt: character.updatedAt,
+          entity: character.toJson(),
         ),
       ],
-      nextCursor: '${actor.revision}',
+      nextCursor: '${character.revision}',
       hasMore: false,
     );
   }

@@ -21,6 +21,41 @@ void main() {
     );
   });
 
+  test('diff includes structured runtime and readable section changes', () {
+    final before = CharacterSheet.local(id: 'hero', name: '角色', level: 2);
+    final after = before.copyWith(
+      data: const {
+        'description': '新的描述',
+        'characterState': {
+          'resources': [
+            {
+              'id': 'ki',
+              'name': '气',
+              'current': 2,
+              'maximum': 3,
+              'restoreOn': 'shortRest',
+            },
+          ],
+          'conditions': [
+            {'id': 'poisoned', 'type': '中毒'},
+          ],
+        },
+        'contentRefs': {
+          'spells': ['spell:shield'],
+          'features': ['feature:darkvision'],
+        },
+        'markdownSections': {'动作': '### 猛击'},
+      },
+    );
+
+    final labels = CharacterImportDiff.compare(
+      before,
+      after,
+    ).changes.map((item) => item.label);
+
+    expect(labels, containsAll(['描述', '资源', '状态', '法术', '特性', '扩展章节']));
+  });
+
   testWidgets('preview offers create, replace, and merge for a conflict', (
     tester,
   ) async {

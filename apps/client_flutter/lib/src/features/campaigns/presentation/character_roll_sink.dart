@@ -10,7 +10,7 @@ class CharacterRollSink implements CampaignActionSink {
   CharacterRollSink({
     required this.campaignId,
     required this.campaignController,
-    this.campaignActorId,
+    this.campaignCharacterId,
     this.conversationId,
   });
 
@@ -18,7 +18,7 @@ class CharacterRollSink implements CampaignActionSink {
   final CampaignController campaignController;
 
   @override
-  final String? campaignActorId;
+  final String? campaignCharacterId;
 
   /// Plan 2026-07-23 task 5.3: optional conversation scoping. When null,
   /// rolls are broadcast to the campaign-wide main room (legacy behaviour).
@@ -30,7 +30,7 @@ class CharacterRollSink implements CampaignActionSink {
       campaignId: campaignId,
       kind: 'roll',
       content: event.summary,
-      campaignActorId: campaignActorId,
+      campaignCharacterId: campaignCharacterId,
       conversationId: conversationId,
       eventData: <String, Object?>{
         'notation': event.notation,

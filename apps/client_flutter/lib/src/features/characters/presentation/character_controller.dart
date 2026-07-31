@@ -46,6 +46,16 @@ class CharacterController extends ChangeNotifier {
     return character;
   }
 
+  Future<List<CharacterMarkdownExternalChange>>
+  detectExternalMarkdownChanges() {
+    final repository = _repository;
+    if (repository is! CharacterMarkdownChangeRepository) {
+      return Future.value(const []);
+    }
+    return (repository as CharacterMarkdownChangeRepository)
+        .detectExternalMarkdownChanges();
+  }
+
   void loadLocalCharacters() {
     _loading = true;
     _error = null;
@@ -91,6 +101,23 @@ class CharacterController extends ChangeNotifier {
     } catch (e, stack) {
       debugPrint('updateCharacter failed: $e\n$stack');
       _error = '保存角色失败：$e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> deleteCharacter(String characterId) async {
+    _error = null;
+    try {
+      await _repository.delete(characterId);
+      if (_lastCreatedCharacter?.id == characterId) {
+        _lastCreatedCharacter = null;
+      }
+      notifyListeners();
+      return true;
+    } catch (e, stack) {
+      debugPrint('deleteCharacter failed: $e\n$stack');
+      _error = '删除角色失败：$e';
       notifyListeners();
       return false;
     }
@@ -404,30 +431,6 @@ class CharacterController extends ChangeNotifier {
       DateTime.now().toUtc().microsecondsSinceEpoch,
       _requestSequence,
     ].join(':');
-  }
-
-  Future<bool> updateContentRefs({
-    required String characterId,
-    List<String> spells = const [],
-    List<String> items = const [],
-    List<String> features = const [],
-  }) {
-    final character = _characters
-        .where((item) => item.id == characterId)
-        .firstOrNull;
-    if (character == null) return Future.value(false);
-    return updateCharacter(
-      character.copyWith(
-        data: {
-          ...character.dataMap,
-          'contentRefs': {
-            'spells': spells,
-            'items': items,
-            'features': features,
-          },
-        },
-      ),
-    );
   }
 
   Future<bool> updateRuntimeState({

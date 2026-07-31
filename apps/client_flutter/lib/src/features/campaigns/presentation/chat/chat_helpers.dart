@@ -1,56 +1,46 @@
 import 'package:flutter/material.dart';
 
-import '../../domain/campaign_actor.dart';
+import '../../domain/campaign_character.dart';
 
 /// 战役聊天页共享的文本与常量资源。从 campaign_chat_page.dart 抽出，
 /// 供聊天泡泡、成员列表、检定弹窗等子组件复用。
 String chatText(String key) => switch (key) {
-      'act' => '做',
-      'actHint' => '描述动作...',
-      'all' => '全部',
-      'campaignChatRoom' => '战役聊天室',
-      'campaignContentLibrary' => '战役资料库',
-      'campaignMembers' => '战役成员',
-      'characterSheet' => '角色卡',
-      'checkRequest' => '检定请求',
-      'checkRequestHint' => '向玩家发起属性、技能或豁免检定',
-      'contentLibrary' => '资料库',
-      'contentType' => '资料类型',
-      'emptyMembers' => '还没有绑定角色',
-      'emptyContent' => '没有找到可用资料',
-      'emptyChat' => '还没有消息\n从下方开始说话或做动作',
-      'members' => '成员',
-      'moreTableTools' => '更多跑团功能',
-      'noBoundCharacter' => '请先在战役中绑定角色',
-      'invalidDice' => '掷骰表达式无效：',
-      'quickRoll' => '快速掷骰',
-      'retry' => '重试',
-      'rollDice' => '掷骰',
-      'say' => '说',
-      'sayHint' => '说些什么...',
-      'search' => '搜索',
-      'searchContent' => '搜索资料',
-      'sendFailed' => '发送失败',
-      'send' => '发送',
-      'tableLog' => '跑团日志',
-      'tableLogHint' => '查看聊天、掷骰、状态变化和关键事件',
-      'tableTools' => '桌面工具',
-      'tableToolsDescription' => '桌面能力已经并入战役聊天室；常用操作从这里打开。',
-      'tableToolsHint' => '检定、日志和战役现场工具',
-      'unknownSpeaker' => '未知发言者',
-      'unboundCharacter' => '未绑定角色',
-      _ => key,
-    };
-
-const List<String> quickDice = [
-  'd20',
-  'd12',
-  'd10',
-  'd8',
-  'd6',
-  'd4',
-  'd100',
-];
+  'act' => '做',
+  'actHint' => '描述动作...',
+  'all' => '全部',
+  'campaignChatRoom' => '战役聊天室',
+  'campaignContentLibrary' => '战役资料库',
+  'campaignMembers' => '战役成员',
+  'characterSheet' => '角色卡',
+  'checkRequest' => '检定请求',
+  'checkRequestHint' => '向玩家发起属性、技能或豁免检定',
+  'contentLibrary' => '资料库',
+  'contentType' => '资料类型',
+  'emptyMembers' => '还没有绑定角色',
+  'emptyContent' => '没有找到可用资料',
+  'emptyChat' => '还没有消息\n从下方开始说话或做动作',
+  'members' => '成员',
+  'moreTableTools' => '更多跑团功能',
+  'noBoundCharacter' => '请先在战役中绑定角色',
+  'invalidDice' => '掷骰表达式无效：',
+  'quickRoll' => '快速掷骰',
+  'retry' => '重试',
+  'rollDice' => '掷骰',
+  'say' => '说',
+  'sayHint' => '说些什么...',
+  'search' => '搜索',
+  'searchContent' => '搜索资料',
+  'sendFailed' => '发送失败',
+  'send' => '发送',
+  'tableLog' => '跑团日志',
+  'tableLogHint' => '查看聊天、掷骰、状态变化和关键事件',
+  'tableTools' => '桌面工具',
+  'tableToolsDescription' => '桌面能力已经并入战役聊天室；常用操作从这里打开。',
+  'tableToolsHint' => '检定、日志和战役现场工具',
+  'unknownSpeaker' => '未知发言者',
+  'unboundCharacter' => '未绑定角色',
+  _ => key,
+};
 
 const List<String> contentTypeFilters = [
   'spell',
@@ -70,12 +60,12 @@ String avatarText(String value) {
   return trimmed.characters.first;
 }
 
-String actorStatusLine(CampaignActor actor) {
-  final currentHp = actor.sheet['currentHp'];
-  final maxHp = actor.sheet['maxHp'];
-  final armorClass = actor.sheet['armorClass'];
-  final classSummary = actor.sheet['classSummary']?.toString().trim();
-  final level = actor.sheet['level'];
+String characterStatusLine(CampaignCharacter character) {
+  final currentHp = character.sheet['currentHp'];
+  final maxHp = character.sheet['maxHp'];
+  final armorClass = character.sheet['armorClass'];
+  final classSummary = character.sheet['classSummary']?.toString().trim();
+  final level = character.sheet['level'];
   return [
     if (classSummary != null && classSummary.isNotEmpty)
       level is num ? '$classSummary ${level.toInt()}级' : classSummary,
@@ -86,21 +76,21 @@ String actorStatusLine(CampaignActor actor) {
 }
 
 String campaignRoleLabel(String role) => switch (role) {
-      'owner' => '创建者',
-      'dm' || 'manager' => 'DM',
-      'spectator' => '旁观',
-      _ => '玩家',
-    };
+  'owner' => '创建者',
+  'dm' || 'manager' => 'DM',
+  'spectator' => '旁观',
+  _ => '玩家',
+};
 
 String contentTypeLabel(String type) => switch (type) {
-      'background' => '背景',
-      'class' => '职业',
-      'condition' => '状态',
-      'equipment' => '装备',
-      'feat' => '专长',
-      'item' => '物品',
-      'monster' => '怪物',
-      'species' => '种族',
-      'spell' => '法术',
-      _ => type,
-    };
+  'background' => '背景',
+  'class' => '职业',
+  'condition' => '状态',
+  'equipment' => '装备',
+  'feat' => '专长',
+  'item' => '物品',
+  'monster' => '怪物',
+  'species' => '种族',
+  'spell' => '法术',
+  _ => type,
+};

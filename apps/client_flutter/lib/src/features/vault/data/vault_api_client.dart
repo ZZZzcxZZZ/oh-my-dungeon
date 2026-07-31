@@ -18,8 +18,7 @@ abstract interface class VaultApiClient {
 
 /// 基于 `package:http` 的实现。构造时注入 [client] 以便测试用 MockClient 替换。
 class HttpVaultApiClient implements VaultApiClient {
-  HttpVaultApiClient({http.Client? client})
-      : _client = client ?? http.Client();
+  HttpVaultApiClient({http.Client? client}) : _client = client ?? http.Client();
 
   final http.Client _client;
 
@@ -37,14 +36,16 @@ class HttpVaultApiClient implements VaultApiClient {
       },
       body: jsonEncode({
         'operations': operations
-            .map((op) => {
-                  'operationId': op.id,
-                  'entityType': op.entityType,
-                  'entityId': op.entityId,
-                  'baseRevision': op.baseRevision,
-                  'operation': 'upsert',
-                  'payload': jsonDecode(op.payloadJson),
-                })
+            .map(
+              (op) => {
+                'operationId': op.id,
+                'entityType': op.entityType,
+                'entityId': op.entityId,
+                'baseRevision': op.baseRevision,
+                'operation': 'upsert',
+                'payload': jsonDecode(op.payloadJson),
+              },
+            )
             .toList(),
       }),
     );
@@ -115,7 +116,7 @@ class HttpVaultApiClient implements VaultApiClient {
     final List<dynamic> rawDevices = decoded is List<dynamic>
         ? decoded
         : (decoded as Map<String, dynamic>)['devices'] as List<dynamic>? ??
-            const [];
+              const [];
     return rawDevices
         .map((raw) => _parseDevice(raw as Map<String, dynamic>))
         .toList();
@@ -124,9 +125,7 @@ class HttpVaultApiClient implements VaultApiClient {
   @override
   Future<void> revokeDevice(VaultSession session, String deviceId) async {
     final response = await _client.delete(
-      Uri.parse(
-        '${_normalize(session.baseUrl)}/api/vault/devices/$deviceId',
-      ),
+      Uri.parse('${_normalize(session.baseUrl)}/api/vault/devices/$deviceId'),
       headers: {
         'authorization': 'Bearer ${session.accessToken}',
         'x-device-id': session.deviceId,

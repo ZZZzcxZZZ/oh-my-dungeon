@@ -19,6 +19,7 @@ class AppPreferences {
     required this.messageDensity,
     required this.fontScale,
     required this.hpWarningThreshold,
+    this.returnToChatAfterRoll = true,
   });
 
   static const defaults = AppPreferences(
@@ -39,6 +40,7 @@ class AppPreferences {
     messageDensity: 'standard',
     fontScale: 'system',
     hpWarningThreshold: 0.3,
+    returnToChatAfterRoll: true,
   );
 
   final ThemeMode themeMode;
@@ -69,6 +71,7 @@ class AppPreferences {
 
   /// HP 警告阈值（0.0..1.0，默认 0.3），控制头像生命环颜色变化。
   final double hpWarningThreshold;
+  final bool returnToChatAfterRoll;
 
   Color get seedColor => Color(seedColorValue);
 
@@ -90,6 +93,7 @@ class AppPreferences {
     'messageDensity': messageDensity,
     'fontScale': fontScale,
     'hpWarningThreshold': hpWarningThreshold,
+    'returnToChatAfterRoll': returnToChatAfterRoll,
   };
 
   AppPreferences copyWith({
@@ -110,6 +114,7 @@ class AppPreferences {
     String? messageDensity,
     String? fontScale,
     double? hpWarningThreshold,
+    bool? returnToChatAfterRoll,
   }) {
     return AppPreferences(
       themeMode: themeMode ?? this.themeMode,
@@ -131,6 +136,8 @@ class AppPreferences {
       messageDensity: messageDensity ?? this.messageDensity,
       fontScale: fontScale ?? this.fontScale,
       hpWarningThreshold: hpWarningThreshold ?? this.hpWarningThreshold,
+      returnToChatAfterRoll:
+          returnToChatAfterRoll ?? this.returnToChatAfterRoll,
     );
   }
 }

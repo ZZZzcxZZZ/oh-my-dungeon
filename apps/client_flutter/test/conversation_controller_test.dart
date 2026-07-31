@@ -931,7 +931,7 @@ class _RecordingCampaignClient implements CampaignClient {
     required String accessToken,
     required String campaignId,
     required String speakerMode,
-    String? actorId,
+    String? characterId,
   }) => throw UnimplementedError();
 
   @override
@@ -941,10 +941,11 @@ class _RecordingCampaignClient implements CampaignClient {
     required String campaignId,
     required String kind,
     required String content,
-    String? campaignActorId,
+    String? campaignCharacterId,
     String? actionId,
     Map<String, Object?>? eventData,
     Map<String, Object?>? speakerSnapshot,
+    Object? speaker,
     String? conversationId,
   }) => throw UnimplementedError();
 

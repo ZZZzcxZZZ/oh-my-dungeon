@@ -6,8 +6,8 @@ import 'package:dnd_table_client/src/features/campaigns/data/campaign_api_client
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_conversation.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_archive_entry.dart';
-import 'package:dnd_table_client/src/features/campaigns/domain/campaign_actor.dart';
-import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_controller.dart';
+import 'package:dnd_table_client/src/features/campaigns/domain/campaign_character.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/characters/campaign_character_controller.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_center_page.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_controller.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/center/campaign_overview_panel.dart';
@@ -62,10 +62,10 @@ void main() {
   }
 
   /// Spec §DM 角色生命周期: DM 在队伍面板创建常驻 NPC/怪物/同伴需要
-  /// `CampaignActorController` 走 `/actors` 端点。这里构造一个内存版本，
+  /// `CampaignCharacterController` 走 `/characters` 端点。这里构造一个内存版本，
   /// 预先 selectCampaign 以便 DM 写操作能拿到 campaignId。
-  Future<CampaignActorController> buildActorController() async {
-    final controller = CampaignActorController(
+  Future<CampaignCharacterController> buildCharacterController() async {
+    final controller = CampaignCharacterController(
       cacheRepository: MemoryCampaignCacheRepository(),
       apiClient: MemoryCampaignSyncApiClient(),
       apiBaseUrl: apiBaseUrl,
@@ -80,7 +80,7 @@ void main() {
     WidgetTester tester,
     CampaignController controller, {
     Size size = const Size(390, 844),
-    CampaignActorController? actorController,
+    CampaignCharacterController? characterController,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -92,7 +92,7 @@ void main() {
         home: CampaignCenterPage(
           campaign: _campaign,
           controller: controller,
-          actorController: actorController,
+          characterController: characterController,
         ),
       ),
     );
@@ -176,9 +176,9 @@ void main() {
   });
 
   testWidgets(
-    'DM-only manage button only shows when canManageCampaign is true',
+    'all campaign members can create archive entries from the archive panel',
     (tester) async {
-      // Player: no manage affordance.
+      // Player: no archive affordance outside the archive panel.
       final playerAuth = await buildLoggedInAuthController();
       final playerController = await buildCampaignController(
         authController: playerAuth,
@@ -189,6 +189,13 @@ void main() {
         find.byKey(const Key('campaign-create-archive-button')),
         findsNothing,
       );
+      await tester.tap(find.text('档案').last);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('campaign-create-archive-button')),
+        findsOneWidget,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
       playerController.dispose();
       playerAuth.dispose();
 
@@ -196,7 +203,7 @@ void main() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
 
-      // DM: manage affordance appears — but only on the archive panel per
+      // DM: the same affordance appears — but only on the archive panel per
       // spec §档案 (new-entry FAB lives inside the archive panel, not the
       // overview/team/records panels).
       final dmAuth = await buildLoggedInAuthController();
@@ -278,10 +285,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // DM control sheet should appear with its characteristic title and
-    // submenu entries (遭遇控场 / 快捷操作).
+    // 战斗功能按当前范围隐藏，只保留已经可用的快捷操作。
     expect(find.text('DM 控场'), findsWidgets);
-    expect(find.text('遭遇控场'), findsOneWidget);
+    expect(find.text('遭遇控场'), findsNothing);
     expect(find.text('快捷操作'), findsOneWidget);
 
     dmController.dispose();
@@ -381,16 +387,16 @@ void main() {
     authController.dispose();
   });
 
-  testWidgets('overview opens the full sheet for a bound member actor', (
+  testWidgets('overview opens the full sheet for a bound member character', (
     tester,
   ) async {
-    CampaignActor? openedActor;
-    final actor = CampaignActor(
-      id: 'actor-1',
+    CampaignCharacter? openedCharacter;
+    final character = CampaignCharacter(
+      id: 'character-1',
       campaignId: 'camp-1',
       ownerUserId: 'user-1',
       sourceCharacterId: null,
-      actorType: 'player',
+      characterType: 'player',
       status: 'active',
       sheet: const {'name': '莱雅', 'currentHp': 8, 'maxHp': 10},
       revision: 1,
@@ -412,8 +418,8 @@ void main() {
                 role: 'player',
               ),
             ],
-            actors: [actor],
-            onOpenActor: (value) => openedActor = value,
+            characters: [character],
+            onOpenCharacter: (value) => openedCharacter = value,
           ),
         ),
       ),
@@ -421,7 +427,7 @@ void main() {
 
     await tester.tap(find.text('玩家一'));
 
-    expect(openedActor, same(actor));
+    expect(openedCharacter, same(character));
   });
 
   testWidgets(
@@ -503,8 +509,8 @@ void main() {
   );
 
   // Spec §DM 角色生命周期: DM 可在 战役中心 → 角色 创建常驻
-  // NPC/怪物/同伴（actorType: npc/monster/companion，lifecycle: persistent）。
-  testWidgets('DM characters panel shows create persistent actor button', (
+  // NPC/怪物/同伴（characterType: npc/monster/companion，lifecycle: persistent）。
+  testWidgets('DM characters panel shows create persistent character button', (
     tester,
   ) async {
     final dmAuth = await buildLoggedInAuthController();
@@ -512,71 +518,73 @@ void main() {
       authController: dmAuth,
       canManage: true,
     );
-    final actorController = await buildActorController();
+    final characterController = await buildCharacterController();
     await pumpCenterPage(
       tester,
       dmController,
-      actorController: actorController,
+      characterController: characterController,
     );
     await tester.tap(find.text('角色').last);
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const Key('characters-create-actor-button')),
+      find.byKey(const Key('characters-create-character-button')),
       findsOneWidget,
     );
 
-    actorController.dispose();
+    characterController.dispose();
     dmController.dispose();
     dmAuth.dispose();
   });
 
   testWidgets(
-    'player characters panel does not show create persistent actor button',
+    'player characters panel does not show create persistent character button',
     (tester) async {
       final playerAuth = await buildLoggedInAuthController();
       final playerController = await buildCampaignController(
         authController: playerAuth,
         canManage: false,
       );
-      final actorController = await buildActorController();
+      final characterController = await buildCharacterController();
       await pumpCenterPage(
         tester,
         playerController,
-        actorController: actorController,
+        characterController: characterController,
       );
       await tester.tap(find.text('角色').last);
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const Key('characters-create-actor-button')),
+        find.byKey(const Key('characters-create-character-button')),
         findsNothing,
       );
 
-      actorController.dispose();
+      characterController.dispose();
       playerController.dispose();
       playerAuth.dispose();
     },
   );
 
   testWidgets(
-    'tapping create persistent actor button opens form with actor type choices',
+    'tapping create persistent character button opens form with character type choices',
     (tester) async {
       final dmAuth = await buildLoggedInAuthController();
       final dmController = await buildCampaignController(
         authController: dmAuth,
         canManage: true,
       );
-      final actorController = await buildActorController();
+      final characterController = await buildCharacterController();
       await pumpCenterPage(
         tester,
         dmController,
-        actorController: actorController,
+        characterController: characterController,
       );
       await tester.tap(find.text('角色').last);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('characters-create-actor-button')));
+      await tester.tap(
+        find.byKey(const Key('characters-create-character-button')),
+      );
       await tester.pumpAndSettle();
 
       // Form should show NPC / 怪物 / 同伴 options.
@@ -585,17 +593,13 @@ void main() {
       expect(find.text('怪物'), findsOneWidget);
       expect(find.text('同伴'), findsOneWidget);
 
-      actorController.dispose();
+      characterController.dispose();
       dmController.dispose();
       dmAuth.dispose();
     },
   );
 
-  // Spec §全局设置: 战役名称/所有权转移/战役归档/离开战役四项低频操作整合到
-  // 概览面板"战役设置"区块。DM 可见全部 4 项, 普通玩家只见"离开战役"。
-  // 这些操作原来藏在聊天页右上角三点菜单里, 用户要求完全去除三点菜单并
-  // 迁移到战役中心, 与 spec 一致。
-  testWidgets('DM overview panel shows all four global setting entries', (
+  testWidgets('DM overview only exposes the implemented campaign setting', (
     tester,
   ) async {
     final dmAuth = await buildLoggedInAuthController();
@@ -616,22 +620,22 @@ void main() {
     );
     expect(
       find.byKey(const Key('campaign-overview-transfer-ownership')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const Key('campaign-overview-archive-campaign')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const Key('campaign-overview-leave-campaign')),
-      findsOneWidget,
+      findsNothing,
     );
 
     dmController.dispose();
     dmAuth.dispose();
   });
 
-  testWidgets('player overview panel only shows leave campaign entry', (
+  testWidgets('player overview hides unavailable campaign settings', (
     tester,
   ) async {
     final playerAuth = await buildLoggedInAuthController();
@@ -640,13 +644,7 @@ void main() {
       canManage: false,
     );
     await pumpCenterPage(tester, playerController);
-    await tester.ensureVisible(
-      find.byKey(const Key('campaign-overview-settings')),
-    );
-    await tester.tap(find.byKey(const Key('campaign-overview-settings')));
-    await tester.pumpAndSettle();
-
-    // Owner-only entries must NOT appear for non-managers.
+    expect(find.byKey(const Key('campaign-overview-settings')), findsNothing);
     expect(
       find.byKey(const Key('campaign-overview-edit-details')),
       findsNothing,
@@ -659,35 +657,10 @@ void main() {
       find.byKey(const Key('campaign-overview-archive-campaign')),
       findsNothing,
     );
-    // Leave campaign remains available to any member.
     expect(
       find.byKey(const Key('campaign-overview-leave-campaign')),
-      findsOneWidget,
+      findsNothing,
     );
-
-    playerController.dispose();
-    playerAuth.dispose();
-  });
-
-  testWidgets('tapping leave campaign shows the developing snackbar', (
-    tester,
-  ) async {
-    final playerAuth = await buildLoggedInAuthController();
-    final playerController = await buildCampaignController(
-      authController: playerAuth,
-      canManage: false,
-    );
-    await pumpCenterPage(tester, playerController);
-    await tester.ensureVisible(
-      find.byKey(const Key('campaign-overview-settings')),
-    );
-    await tester.tap(find.byKey(const Key('campaign-overview-settings')));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const Key('campaign-overview-leave-campaign')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('该功能正在开发中'), findsOneWidget);
 
     playerController.dispose();
     playerAuth.dispose();
@@ -835,11 +808,11 @@ class _FakeCampaignClient implements CampaignClient {
       joinedAt: '2026-07-09T00:00:00.000Z',
     ),
     members: const [],
-    actors: const [],
+    characters: const [],
     capabilities: CampaignCapabilities(
       canManageCampaign: canManage,
       canManageMembers: canManage,
-      canCreateActors: canManage,
+      canCreateCharacters: canManage,
       canSpeakAsNarrator: canManage,
     ),
   );
@@ -990,7 +963,7 @@ class _FakeCampaignClient implements CampaignClient {
     required String accessToken,
     required String campaignId,
     required String speakerMode,
-    String? actorId,
+    String? characterId,
   }) => throw UnimplementedError();
 
   @override
@@ -1000,10 +973,11 @@ class _FakeCampaignClient implements CampaignClient {
     required String campaignId,
     required String kind,
     required String content,
-    String? campaignActorId,
+    String? campaignCharacterId,
     String? actionId,
     Map<String, Object?>? eventData,
     Map<String, Object?>? speakerSnapshot,
+    Object? speaker,
     String? conversationId,
   }) => throw UnimplementedError();
 

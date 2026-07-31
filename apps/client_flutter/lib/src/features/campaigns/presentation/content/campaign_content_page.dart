@@ -120,9 +120,8 @@ class _CampaignContentPageState extends State<CampaignContentPage> {
                         const SizedBox(height: 4),
                         Text(
                           widget.canEdit ? '点击"新建条目"创建' : '主持人尚未添加资料',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
                         ),
                       ],
                     ),
@@ -155,18 +154,16 @@ class _CampaignContentPageState extends State<CampaignContentPage> {
   Future<void> _showEditor(BuildContext context) async {
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => CampaignContentEditor(
-        controller: widget.controller,
-      ),
+      builder: (dialogContext) =>
+          CampaignContentEditor(controller: widget.controller),
     );
   }
 
   Future<void> _showImportDialog(BuildContext context) async {
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => CampaignJsonImportDialog(
-        controller: widget.controller,
-      ),
+      builder: (dialogContext) =>
+          CampaignJsonImportDialog(controller: widget.controller),
     );
   }
 

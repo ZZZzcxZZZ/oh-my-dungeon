@@ -3,19 +3,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
-    'refreshAfterActorMutation refreshes actors before workspace context',
+    'refreshAfterCharacterMutation refreshes characters before workspace context',
     () async {
       final calls = <String>[];
       final coordinator = CampaignWorkspaceMutationCoordinator(
-        pullActors: () async => calls.add('actors'),
+        pullCharacters: () async => calls.add('characters'),
         loadWorkspace: (campaignId) async {
           calls.add('workspace:$campaignId');
         },
       );
 
-      await coordinator.refreshAfterActorMutation('campaign-1');
+      await coordinator.refreshAfterCharacterMutation('campaign-1');
 
-      expect(calls, ['actors', 'workspace:campaign-1']);
+      expect(calls, ['characters', 'workspace:campaign-1']);
     },
   );
 }

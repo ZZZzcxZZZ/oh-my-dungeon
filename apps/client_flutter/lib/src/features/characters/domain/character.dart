@@ -97,6 +97,18 @@ class CharacterSheet {
   Map<String, Object?> get currencyMap => _asMap(currency);
   List<Object?> get inventoryList => _asList(inventory);
   Map<String, Object?> get dataMap => _asMap(data);
+  String get description => '${dataMap['description'] ?? ''}'.trim();
+  Map<String, Object?> get characterMap => _asMap(dataMap['character']);
+  String get characterKind {
+    return switch (characterMap['kind']) {
+      'npc' || 'monster' || 'companion' => '${characterMap['kind']}',
+      _ => 'player',
+    };
+  }
+
+  bool get isNonPlayerCharacter => characterKind != 'player';
+  Map<String, Object?> get markdownSections =>
+      _asMap(dataMap['markdownSections']);
   Map<String, Object?> get runtimeMap => _asMap(dataMap['runtime']);
   CharacterRuntime get runtime =>
       CharacterRuntime.fromJson({...runtimeMap, 'currentHp': currentHp});
@@ -363,77 +375,4 @@ bool _listEquals<T>(List<T> a, List<T> b) {
     if (a[i] != b[i]) return false;
   }
   return true;
-}
-
-class CharacterCampaignBinding {
-  const CharacterCampaignBinding({
-    required this.id,
-    required this.campaignId,
-    required this.characterId,
-    required this.userId,
-    required this.visibility,
-    required this.status,
-    required this.dmNotes,
-    required this.joinedAt,
-    required this.updatedAt,
-    this.character,
-  });
-
-  final String id;
-  final String campaignId;
-  final String characterId;
-  final String userId;
-  final String visibility;
-  final String status;
-  final String dmNotes;
-  final String joinedAt;
-  final String updatedAt;
-  final CharacterSheet? character;
-
-  factory CharacterCampaignBinding.fromJson(Map<String, Object?> json) {
-    return CharacterCampaignBinding(
-      id: json['id']! as String,
-      campaignId: json['campaignId']! as String,
-      characterId: json['characterId']! as String,
-      userId: json['userId']! as String,
-      visibility: json['visibility']! as String,
-      status: json['status']! as String,
-      dmNotes: json['dmNotes']! as String,
-      joinedAt: json['joinedAt']! as String,
-      updatedAt: json['updatedAt']! as String,
-      character: json['character'] == null
-          ? null
-          : CharacterSheet.fromJson(json['character']! as Map<String, Object?>),
-    );
-  }
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        other is CharacterCampaignBinding &&
-            id == other.id &&
-            campaignId == other.campaignId &&
-            characterId == other.characterId &&
-            userId == other.userId &&
-            visibility == other.visibility &&
-            status == other.status &&
-            dmNotes == other.dmNotes &&
-            joinedAt == other.joinedAt &&
-            updatedAt == other.updatedAt &&
-            character == other.character;
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    id,
-    campaignId,
-    characterId,
-    userId,
-    visibility,
-    status,
-    dmNotes,
-    joinedAt,
-    updatedAt,
-    character,
-  );
 }

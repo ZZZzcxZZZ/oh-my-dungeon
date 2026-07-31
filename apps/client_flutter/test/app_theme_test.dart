@@ -9,6 +9,7 @@ void main() {
       final theme = AppTheme.light(AppPreferences.defaults);
 
       expect(theme.useMaterial3, isTrue);
+      expect(theme.textTheme.bodyMedium?.fontFamily, 'NotoSansSC');
     });
 
     test('uses a tonal ColorScheme derived from the seed color', () {
@@ -22,24 +23,27 @@ void main() {
       expect(theme.colorScheme.primary, isNot(equals(Colors.white)));
     });
 
-    test('exposes navigation bar, rail, app bar, input, dialog, sheet, chip, card, button themes', () {
-      final theme = AppTheme.light(AppPreferences.defaults);
+    test(
+      'exposes navigation bar, rail, app bar, input, dialog, sheet, chip, card, button themes',
+      () {
+        final theme = AppTheme.light(AppPreferences.defaults);
 
-      expect(theme.navigationBarTheme, isNotNull);
-      expect(theme.navigationRailTheme, isNotNull);
-      expect(theme.appBarTheme, isNotNull);
-      expect(theme.inputDecorationTheme, isNotNull);
-      expect(theme.dialogTheme, isNotNull);
-      expect(theme.bottomSheetTheme, isNotNull);
-      expect(theme.chipTheme, isNotNull);
-      expect(theme.cardTheme, isNotNull);
-      // Button themes are present for the M3 button families.
-      expect(theme.filledButtonTheme, isNotNull);
-      expect(theme.elevatedButtonTheme, isNotNull);
-      expect(theme.textButtonTheme, isNotNull);
-      expect(theme.outlinedButtonTheme, isNotNull);
-      expect(theme.segmentedButtonTheme, isNotNull);
-    });
+        expect(theme.navigationBarTheme, isNotNull);
+        expect(theme.navigationRailTheme, isNotNull);
+        expect(theme.appBarTheme, isNotNull);
+        expect(theme.inputDecorationTheme, isNotNull);
+        expect(theme.dialogTheme, isNotNull);
+        expect(theme.bottomSheetTheme, isNotNull);
+        expect(theme.chipTheme, isNotNull);
+        expect(theme.cardTheme, isNotNull);
+        // Button themes are present for the M3 button families.
+        expect(theme.filledButtonTheme, isNotNull);
+        expect(theme.elevatedButtonTheme, isNotNull);
+        expect(theme.textButtonTheme, isNotNull);
+        expect(theme.outlinedButtonTheme, isNotNull);
+        expect(theme.segmentedButtonTheme, isNotNull);
+      },
+    );
 
     test('caps card corner radius at 8 dp', () {
       final theme = AppTheme.light(AppPreferences.defaults);
@@ -84,7 +88,10 @@ void main() {
       );
 
       // The primary tonal color in high contrast should differ from normal.
-      expect(high.colorScheme.primary, isNot(equals(normal.colorScheme.primary)));
+      expect(
+        high.colorScheme.primary,
+        isNot(equals(normal.colorScheme.primary)),
+      );
     });
 
     test('respects the dynamic scheme variant preference', () {
@@ -93,7 +100,10 @@ void main() {
         AppPreferences.defaults.copyWith(dynamicSchemeVariant: 'vibrant'),
       );
 
-      expect(vibrant.colorScheme.primary, isNot(equals(tonal.colorScheme.primary)));
+      expect(
+        vibrant.colorScheme.primary,
+        isNot(equals(tonal.colorScheme.primary)),
+      );
     });
   });
 }

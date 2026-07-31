@@ -3,14 +3,19 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 
 import '../../../../core/database/app_database.dart';
-import '../../domain/campaign_actor.dart';
+import '../../domain/campaign_character.dart';
 import '../../domain/campaign_change.dart';
 
 /// 战役协作数据本地缓存接口。UI 只读本地，远端变更通过 [applyPage] 合并。
 abstract interface class CampaignCacheRepository {
-  Stream<List<CampaignActor>> watchActors(String campaignId);
-  Future<CampaignActor?> getActor(String campaignId, String actorId);
-  Stream<List<CampaignContentEntrySummary>> watchContentEntries(String campaignId);
+  Stream<List<CampaignCharacter>> watchCharacters(String campaignId);
+  Future<CampaignCharacter?> getCharacter(
+    String campaignId,
+    String characterId,
+  );
+  Stream<List<CampaignContentEntrySummary>> watchContentEntries(
+    String campaignId,
+  );
   Future<CampaignContentEntrySummary?> getContentEntry(
     String campaignId,
     String entryId,
@@ -27,22 +32,27 @@ class DriftCampaignCacheRepository implements CampaignCacheRepository {
   final AppDatabase _database;
 
   @override
-  Stream<List<CampaignActor>> watchActors(String campaignId) {
+  Stream<List<CampaignCharacter>> watchCharacters(String campaignId) {
     final db = _database;
-    return (db.select(db.campaignActorsCache)
+    return (db.select(db.campaignCharactersCache)
           ..where((t) => t.campaignId.equals(campaignId))
           ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
         .watch()
-        .map((rows) => rows.map(_toActor).toList(growable: false));
+        .map((rows) => rows.map(_toCharacter).toList(growable: false));
   }
 
   @override
-  Future<CampaignActor?> getActor(String campaignId, String actorId) async {
+  Future<CampaignCharacter?> getCharacter(
+    String campaignId,
+    String characterId,
+  ) async {
     final db = _database;
-    final row = await (db.select(db.campaignActorsCache)
-          ..where((t) => t.id.equals(actorId) & t.campaignId.equals(campaignId)))
-        .getSingleOrNull();
-    return row == null ? null : _toActor(row);
+    final row =
+        await (db.select(db.campaignCharactersCache)..where(
+              (t) => t.id.equals(characterId) & t.campaignId.equals(campaignId),
+            ))
+            .getSingleOrNull();
+    return row == null ? null : _toCharacter(row);
   }
 
   @override
@@ -63,19 +73,20 @@ class DriftCampaignCacheRepository implements CampaignCacheRepository {
     String entryId,
   ) async {
     final db = _database;
-    final row = await (db.select(db.campaignContentCache)
-          ..where(
-              (t) => t.id.equals(entryId) & t.campaignId.equals(campaignId)))
-        .getSingleOrNull();
+    final row =
+        await (db.select(db.campaignContentCache)..where(
+              (t) => t.id.equals(entryId) & t.campaignId.equals(campaignId),
+            ))
+            .getSingleOrNull();
     return row == null ? null : _toEntry(row);
   }
 
   @override
   Future<String> cursorFor(String campaignId) async {
     final db = _database;
-    final row = await (db.select(db.campaignSyncCursors)
-          ..where((t) => t.campaignId.equals(campaignId)))
-        .getSingleOrNull();
+    final row = await (db.select(
+      db.campaignSyncCursors,
+    )..where((t) => t.campaignId.equals(campaignId))).getSingleOrNull();
     return row?.cursor ?? '0';
   }
 
@@ -84,23 +95,23 @@ class DriftCampaignCacheRepository implements CampaignCacheRepository {
     final db = _database;
     await db.transaction(() async {
       for (final change in page.items) {
-        if (change.entityType == 'actor') {
+        if (change.entityType == 'character') {
           if (change.operation == 'upsert' && change.entity != null) {
-            final actor = CampaignActor.fromJson(change.entity!);
-            await _upsertActor(actor);
+            final character = CampaignCharacter.fromJson(change.entity!);
+            await _upsertCharacter(character);
           } else if (change.operation == 'delete') {
-            await (db.delete(db.campaignActorsCache)
-                  ..where((t) => t.id.equals(change.entityId)))
-                .go();
+            await (db.delete(
+              db.campaignCharactersCache,
+            )..where((t) => t.id.equals(change.entityId))).go();
           }
         } else if (change.entityType == 'content') {
           if (change.operation == 'upsert' && change.entity != null) {
             final entry = CampaignContentEntrySummary.fromJson(change.entity!);
             await _upsertEntry(entry);
           } else if (change.operation == 'delete') {
-            await (db.delete(db.campaignContentCache)
-                  ..where((t) => t.id.equals(change.entityId)))
-                .go();
+            await (db.delete(
+              db.campaignContentCache,
+            )..where((t) => t.id.equals(change.entityId))).go();
           }
         }
       }
@@ -112,40 +123,45 @@ class DriftCampaignCacheRepository implements CampaignCacheRepository {
   Future<void> clearCampaign(String campaignId) async {
     final db = _database;
     await db.transaction(() async {
-      await (db.delete(db.campaignActorsCache)
-            ..where((t) => t.campaignId.equals(campaignId)))
-          .go();
-      await (db.delete(db.campaignContentCache)
-            ..where((t) => t.campaignId.equals(campaignId)))
-          .go();
-      await (db.delete(db.campaignSyncCursors)
-            ..where((t) => t.campaignId.equals(campaignId)))
-          .go();
+      await (db.delete(
+        db.campaignCharactersCache,
+      )..where((t) => t.campaignId.equals(campaignId))).go();
+      await (db.delete(
+        db.campaignContentCache,
+      )..where((t) => t.campaignId.equals(campaignId))).go();
+      await (db.delete(
+        db.campaignSyncCursors,
+      )..where((t) => t.campaignId.equals(campaignId))).go();
     });
   }
 
-  Future<void> _upsertActor(CampaignActor actor) async {
+  Future<void> _upsertCharacter(CampaignCharacter character) async {
     final db = _database;
-    await db.into(db.campaignActorsCache).insertOnConflictUpdate(
-          CampaignActorsCacheCompanion.insert(
-            id: actor.id,
-            campaignId: actor.campaignId,
-            ownerUserId: Value(actor.ownerUserId),
-            sourceCharacterId: Value(actor.sourceCharacterId),
-            actorType: actor.actorType,
-            status: actor.status,
-            sheetJson: jsonEncode(actor.sheet),
-            revision: actor.revision,
-            updatedBy: actor.updatedBy,
-            createdAt: _parseDate(actor.createdAt),
-            updatedAt: _parseDate(actor.updatedAt),
+    await db
+        .into(db.campaignCharactersCache)
+        .insertOnConflictUpdate(
+          CampaignCharactersCacheCompanion.insert(
+            id: character.id,
+            campaignId: character.campaignId,
+            ownerUserId: Value(character.ownerUserId),
+            sourceCharacterId: Value(character.sourceCharacterId),
+            characterType: character.characterType,
+            status: character.status,
+            visibleToPlayers: Value(character.visibleToPlayers),
+            sheetJson: jsonEncode(character.sheet),
+            revision: character.revision,
+            updatedBy: character.updatedBy,
+            createdAt: _parseDate(character.createdAt),
+            updatedAt: _parseDate(character.updatedAt),
           ),
         );
   }
 
   Future<void> _upsertEntry(CampaignContentEntrySummary entry) async {
     final db = _database;
-    await db.into(db.campaignContentCache).insertOnConflictUpdate(
+    await db
+        .into(db.campaignContentCache)
+        .insertOnConflictUpdate(
           CampaignContentCacheCompanion.insert(
             id: entry.id,
             campaignId: entry.campaignId,
@@ -158,16 +174,18 @@ class DriftCampaignCacheRepository implements CampaignCacheRepository {
             updatedBy: entry.updatedBy,
             createdAt: _parseDate(entry.createdAt),
             updatedAt: _parseDate(entry.updatedAt),
-            deletedAt: Value(entry.deletedAt == null
-                ? null
-                : _parseDate(entry.deletedAt!)),
+            deletedAt: Value(
+              entry.deletedAt == null ? null : _parseDate(entry.deletedAt!),
+            ),
           ),
         );
   }
 
   Future<void> _saveCursor(String campaignId, String cursor) async {
     final db = _database;
-    await db.into(db.campaignSyncCursors).insertOnConflictUpdate(
+    await db
+        .into(db.campaignSyncCursors)
+        .insertOnConflictUpdate(
           CampaignSyncCursorsCompanion.insert(
             campaignId: campaignId,
             cursor: Value(cursor),
@@ -176,14 +194,15 @@ class DriftCampaignCacheRepository implements CampaignCacheRepository {
         );
   }
 
-  CampaignActor _toActor(CampaignActorsCacheRow row) {
-    return CampaignActor(
+  CampaignCharacter _toCharacter(CampaignCharactersCacheRow row) {
+    return CampaignCharacter(
       id: row.id,
       campaignId: row.campaignId,
       ownerUserId: row.ownerUserId,
       sourceCharacterId: row.sourceCharacterId,
-      actorType: row.actorType,
+      characterType: row.characterType,
       status: row.status,
+      visibleToPlayers: row.visibleToPlayers,
       sheet: _decodeJson(row.sheetJson),
       revision: row.revision,
       updatedBy: row.updatedBy,
@@ -229,19 +248,22 @@ class DriftCampaignCacheRepository implements CampaignCacheRepository {
 /// No-op 实现作为无数据库可用时的回退。
 class EmptyCampaignCacheRepository implements CampaignCacheRepository {
   @override
-  Stream<List<CampaignActor>> watchActors(String campaignId) =>
+  Stream<List<CampaignCharacter>> watchCharacters(String campaignId) =>
       Stream.value(const []);
   @override
-  Future<CampaignActor?> getActor(String campaignId, String actorId) async =>
-      null;
+  Future<CampaignCharacter?> getCharacter(
+    String campaignId,
+    String characterId,
+  ) async => null;
   @override
   Stream<List<CampaignContentEntrySummary>> watchContentEntries(
-          String campaignId) =>
-      Stream.value(const []);
+    String campaignId,
+  ) => Stream.value(const []);
   @override
   Future<CampaignContentEntrySummary?> getContentEntry(
-          String campaignId, String entryId) async =>
-      null;
+    String campaignId,
+    String entryId,
+  ) async => null;
   @override
   Future<String> cursorFor(String campaignId) async => '0';
   @override

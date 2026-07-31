@@ -51,12 +51,12 @@ class CharacterRollEvent {
 
 /// Task 3.3 — 战役动作接收端抽象.
 ///
-/// 角色卡内的检定/扣血/给予装备等动作通过此接口转发到战役聊天与 Actor 同步.
+/// 角色卡内的检定/扣血/给予装备等动作通过此接口转发到战役聊天与 Character 同步.
 /// `CharacterDetailPage` 在战役上下文中接收一个具体实现 (如 `CharacterRollSink`),
 /// 在本地角色卡上下文中保持 null, 仅本地 SnackBar 反馈.
 abstract class CampaignActionSink {
-  /// 关联的 CampaignActor ID (如有). 用于在聊天消息中标记来源 Actor.
-  String? get campaignActorId;
+  /// 关联的 CampaignCharacter ID (如有). 用于在聊天消息中标记来源 Character.
+  String? get campaignCharacterId;
 
   /// 派发一次检定结果到战役聊天.
   Future<void> dispatchRoll(CharacterRollEvent event);
@@ -74,6 +74,7 @@ class CharacterDetailPage extends StatefulWidget {
     this.diceRoller,
     this.onRoll,
     this.sink,
+    this.returnToChatAfterRoll = false,
     this.initialTab = 'overview',
     super.key,
   });
@@ -88,6 +89,7 @@ class CharacterDetailPage extends StatefulWidget {
   final DiceRoller? diceRoller;
   final CharacterRollCallback? onRoll;
   final CampaignActionSink? sink;
+  final bool returnToChatAfterRoll;
   final String initialTab;
 
   @override
@@ -114,7 +116,7 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
     // Task 3.3: 显式 onRoll 优先, 否则回退到 sink.dispatchRoll (Future<void> Function
     // 可赋值给 void Function). 本地角色卡 (sink == null) 退化为纯本地 SnackBar.
     final effectiveRoll =
-        widget.onRoll ?? widget.sink?.dispatchRoll;
+        widget.onRoll ?? (widget.sink == null ? null : _dispatchCampaignRoll);
     return CharacterSheetShell(
       title: _character.name,
       header: _CharacterHeader(character: _character),
@@ -145,6 +147,15 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
             ),
           ),
         ),
+        if (_character.isNonPlayerCharacter)
+          CharacterSheetDestination(
+            id: 'character',
+            label: '怪物资料',
+            icon: Icons.menu_book_outlined,
+            child: _SheetTab(
+              child: _CharacterReferencePanel(character: _character),
+            ),
+          ),
         CharacterSheetDestination(
           id: 'abilities',
           label: '属性',
@@ -234,6 +245,13 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
     );
   }
 
+  Future<void> _dispatchCampaignRoll(CharacterRollEvent event) async {
+    await widget.sink!.dispatchRoll(event);
+    if (widget.returnToChatAfterRoll && mounted) {
+      await Navigator.of(context).maybePop();
+    }
+  }
+
   static String _initialDestinationId(String tab) {
     return switch (tab) {
       'abilities' || 'attributes' => 'abilities',
@@ -242,6 +260,7 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
       'equipment' => 'equipment',
       'resources' => 'resources',
       'features' => 'features',
+      'character' => 'character',
       'profile' || 'details' || 'notes' => 'profile',
       _ => 'overview',
     };
@@ -325,7 +344,7 @@ class _CharacterHeader extends StatelessWidget {
     final subtitle = [
       if (character.raceSummary.isNotEmpty) character.raceSummary,
       if (character.classSummary.isNotEmpty) character.classSummary,
-      'Lv.${character.level}',
+      if (!character.isNonPlayerCharacter) 'Lv.${character.level}',
     ].join(' / ');
 
     return Padding(
@@ -904,6 +923,7 @@ class _SpellsPanelState extends State<_SpellsPanel> {
     if (ability == null &&
         slotMaximums.isEmpty &&
         spellRefs.isEmpty &&
+        resolved.customSpells.isEmpty &&
         widget.onSaveCharacter == null) {
       return const _EmptyPanel(title: '暂无法术引用');
     }
@@ -972,7 +992,7 @@ class _SpellsPanelState extends State<_SpellsPanel> {
                     label: const Text('添加法术'),
                   ),
                 ),
-              if (spellRefs.isEmpty)
+              if (spellRefs.isEmpty && resolved.customSpells.isEmpty)
                 Text('暂无法术', style: Theme.of(context).textTheme.bodyMedium)
               else
                 for (final entry in spellsByLevel.entries) ...[
@@ -1023,6 +1043,23 @@ class _SpellsPanelState extends State<_SpellsPanel> {
                       ),
                     ),
                 ],
+              if (resolved.customSpells.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.only(top: 12, bottom: 4),
+                  child: Text(
+                    '自定义法术',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                for (final spell in resolved.customSpells)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.auto_awesome_outlined),
+                    title: Text(_customSpellName(spell)),
+                    subtitle: Text(_customSpellSummary(spell)),
+                    onTap: () => _openCustomSpell(spell),
+                  ),
+              ],
             ],
           ),
         ),
@@ -1107,6 +1144,50 @@ class _SpellsPanelState extends State<_SpellsPanel> {
       context,
       entry: entry,
       entries: widget.contentEntries,
+    );
+  }
+
+  String _customSpellName(Map<String, Object?> spell) {
+    final name = spell['name']?.toString().trim() ?? '';
+    return name.isEmpty ? '未命名法术' : name;
+  }
+
+  String _customSpellSummary(Map<String, Object?> spell) {
+    final rawLevel = spell['level'];
+    final level = rawLevel is num
+        ? rawLevel.toInt()
+        : int.tryParse('$rawLevel') ?? 99;
+    final school = spell['school']?.toString().trim() ?? '';
+    final parts = <String>[_spellLevelLabel(level)];
+    if (school.isNotEmpty) parts.add(school);
+    return parts.join(' · ');
+  }
+
+  Future<void> _openCustomSpell(Map<String, Object?> spell) {
+    final description = spell['description']?.toString().trim() ?? '';
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(_customSpellName(spell)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _customSpellSummary(spell),
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            const SizedBox(height: 12),
+            Text(description.isEmpty ? '暂无说明' : description),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1702,6 +1783,82 @@ class _FeaturesPanel extends StatelessWidget {
     final level = grant['sourceLevel'];
     return level == null ? source : '$source · $level 级获得';
   }
+}
+
+class _CharacterReferencePanel extends StatelessWidget {
+  const _CharacterReferencePanel({required this.character});
+
+  final CharacterSheet character;
+
+  @override
+  Widget build(BuildContext context) {
+    final characterProfile = character.characterMap;
+    final sections = character.markdownSections;
+    final challengeRating = '${characterProfile['challengeRating'] ?? ''}'
+        .trim();
+    final proficiencyBonus = characterProfile['proficiencyBonus'];
+    final metadata = <String>[
+      if (challengeRating.isNotEmpty) 'CR $challengeRating',
+      if (proficiencyBonus != null) '熟练加值 +$proficiencyBonus',
+      if ('${characterProfile['size'] ?? ''}'.trim().isNotEmpty)
+        '${characterProfile['size']}',
+      if ('${characterProfile['creatureType'] ?? ''}'.trim().isNotEmpty)
+        '${characterProfile['creatureType']}',
+      if ('${characterProfile['alignment'] ?? ''}'.trim().isNotEmpty)
+        '${characterProfile['alignment']}',
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('怪物资料', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [for (final value in metadata) Chip(label: Text(value))],
+        ),
+        if ('${characterProfile['hitPointFormula'] ?? ''}'
+            .trim()
+            .isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(
+            '生命骰 ${characterProfile['hitPointFormula']}',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ],
+        if (character.description.isNotEmpty)
+          _Section(
+            title: '描述',
+            icon: Icons.description_outlined,
+            child: SelectableText(character.description),
+          ),
+        for (final entry in sections.entries)
+          _Section(
+            title: entry.key,
+            icon: _characterSectionIcon(entry.key),
+            child: SelectableText(
+              '${entry.value}'.trim(),
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+        if (sections.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 16),
+            child: Text('暂无特质或动作说明；可从编辑角色补充。'),
+          ),
+      ],
+    );
+  }
+}
+
+IconData _characterSectionIcon(String title) {
+  return switch (title) {
+    '动作' || '附赠动作' || '反应' || '传奇动作' => Icons.bolt_outlined,
+    '特质' => Icons.workspace_premium_outlined,
+    '感官与语言' => Icons.visibility_outlined,
+    _ => Icons.notes_outlined,
+  };
 }
 
 class _ProfilePanel extends StatefulWidget {
@@ -2315,7 +2472,7 @@ class _RuntimeStatusGrid extends StatelessWidget {
               child: _RuntimeStatusTile(
                 key: const Key('runtime-inspiration-panel'),
                 icon: Icons.auto_awesome_outlined,
-                title: '灵感',
+                title: '激励',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -2323,7 +2480,7 @@ class _RuntimeStatusGrid extends StatelessWidget {
                     const Spacer(),
                     FilledButton.tonal(
                       onPressed: onToggleInspiration,
-                      child: Text(inspiration ? '消耗灵感' : '获得灵感'),
+                      child: Text(inspiration ? '消耗激励' : '获得激励'),
                     ),
                   ],
                 ),

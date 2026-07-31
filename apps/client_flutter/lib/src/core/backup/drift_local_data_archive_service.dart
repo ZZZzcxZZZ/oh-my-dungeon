@@ -17,7 +17,7 @@ import 'local_data_archive_service.dart';
 ///
 /// Tables excluded by design:
 /// - [SyncOutbox], [SyncCursors], [MigrationMarkers] — transient sync state
-/// - [CampaignActorsCache], [CampaignActorBacklinks], [CampaignContentCache],
+/// - [CampaignCharactersCache], [CampaignCharacterBacklinks], [CampaignContentCache],
 ///   [CampaignSyncCursors], [CharacterSyncConflicts] — remote cache, re-fetched
 class DriftLocalDataArchiveService implements LocalDataArchiveService {
   DriftLocalDataArchiveService(this._database, {this.clientVersion = '0.1.0'});
@@ -53,14 +53,13 @@ class DriftLocalDataArchiveService implements LocalDataArchiveService {
       'characterContentRefs': characterRefs.map((r) => r.toJson()).toList(),
     };
 
-    final databaseBytes =
-        Uint8List.fromList(utf8.encode(jsonEncode(databaseJson)));
+    final databaseBytes = Uint8List.fromList(
+      utf8.encode(jsonEncode(databaseJson)),
+    );
     final sha256Hash = sha256.convert(databaseBytes).toString();
 
     final archive = Archive();
-    archive.addFile(
-      ArchiveFile.bytes('database.json', databaseBytes),
-    );
+    archive.addFile(ArchiveFile.bytes('database.json', databaseBytes));
 
     for (final asset in assets) {
       final path = 'assets/${asset.packageId}/${asset.relativePath}';
@@ -81,8 +80,9 @@ class DriftLocalDataArchiveService implements LocalDataArchiveService {
       totalSize: totalSize,
       sha256: sha256Hash,
     );
-    final manifestBytes =
-        Uint8List.fromList(utf8.encode(jsonEncode(manifest.toJson())));
+    final manifestBytes = Uint8List.fromList(
+      utf8.encode(jsonEncode(manifest.toJson())),
+    );
     archive.addFile(ArchiveFile.bytes('manifest.json', manifestBytes));
 
     return Uint8List.fromList(ZipEncoder().encode(archive));
@@ -109,8 +109,9 @@ class DriftLocalDataArchiveService implements LocalDataArchiveService {
               as Map<String, Object?>;
       final manifest = LocalBackupManifest.fromJson(manifestJson);
 
-      final databaseBytes =
-          utf8.encode(utf8.decode(databaseFile.content as List<int>));
+      final databaseBytes = utf8.encode(
+        utf8.decode(databaseFile.content as List<int>),
+      );
       final actualHash = sha256.convert(databaseBytes).toString();
 
       if (actualHash != manifest.sha256) {
@@ -118,15 +119,12 @@ class DriftLocalDataArchiveService implements LocalDataArchiveService {
           valid: false,
           manifest: manifest,
           bytes: bytes,
-          error: 'SHA-256 mismatch: expected ${manifest.sha256}, got $actualHash',
+          error:
+              'SHA-256 mismatch: expected ${manifest.sha256}, got $actualHash',
         );
       }
 
-      return ArchivePreview(
-        valid: true,
-        manifest: manifest,
-        bytes: bytes,
-      );
+      return ArchivePreview(valid: true, manifest: manifest, bytes: bytes);
     } catch (e) {
       return ArchivePreview(
         valid: false,
@@ -167,73 +165,83 @@ class DriftLocalDataArchiveService implements LocalDataArchiveService {
 
       // Restore ServerProfiles.
       for (final rowJson
-          in (databaseJson['serverProfiles'] as List).cast<Map<String, Object?>>()) {
-        await db.into(db.serverProfiles).insert(
-              ServerProfileRow.fromJson(rowJson).toCompanion(true),
-            );
+          in (databaseJson['serverProfiles'] as List)
+              .cast<Map<String, Object?>>()) {
+        await db
+            .into(db.serverProfiles)
+            .insert(ServerProfileRow.fromJson(rowJson).toCompanion(true));
       }
       // Restore LocalContentPackages.
-      for (final rowJson in (databaseJson['localContentPackages'] as List)
-          .cast<Map<String, Object?>>()) {
-        await db.into(db.localContentPackages).insert(
-              LocalContentPackageRow.fromJson(rowJson).toCompanion(true),
-            );
+      for (final rowJson
+          in (databaseJson['localContentPackages'] as List)
+              .cast<Map<String, Object?>>()) {
+        await db
+            .into(db.localContentPackages)
+            .insert(LocalContentPackageRow.fromJson(rowJson).toCompanion(true));
       }
       // Restore LocalContentEntries.
-      for (final rowJson in (databaseJson['localContentEntries'] as List)
-          .cast<Map<String, Object?>>()) {
-        await db.into(db.localContentEntries).insert(
-              LocalContentEntryRow.fromJson(rowJson).toCompanion(true),
-            );
+      for (final rowJson
+          in (databaseJson['localContentEntries'] as List)
+              .cast<Map<String, Object?>>()) {
+        await db
+            .into(db.localContentEntries)
+            .insert(LocalContentEntryRow.fromJson(rowJson).toCompanion(true));
       }
       // Restore LocalContentAssets (metadata only — bytes restored below).
-      for (final rowJson in (databaseJson['localContentAssets'] as List)
-          .cast<Map<String, Object?>>()) {
-        await db.into(db.localContentAssets).insert(
-              LocalContentAssetRow.fromJson(rowJson).toCompanion(true),
-            );
+      for (final rowJson
+          in (databaseJson['localContentAssets'] as List)
+              .cast<Map<String, Object?>>()) {
+        await db
+            .into(db.localContentAssets)
+            .insert(LocalContentAssetRow.fromJson(rowJson).toCompanion(true));
       }
       // Restore ContentLinks.
       for (final rowJson
-          in (databaseJson['contentLinks'] as List).cast<Map<String, Object?>>()) {
-        await db.into(db.contentLinks).insert(
-              ContentLinkRow.fromJson(rowJson).toCompanion(true),
-            );
+          in (databaseJson['contentLinks'] as List)
+              .cast<Map<String, Object?>>()) {
+        await db
+            .into(db.contentLinks)
+            .insert(ContentLinkRow.fromJson(rowJson).toCompanion(true));
       }
       // Restore ContentFavorites.
-      for (final rowJson in (databaseJson['contentFavorites'] as List)
-          .cast<Map<String, Object?>>()) {
-        await db.into(db.contentFavorites).insert(
-              ContentFavoriteRow.fromJson(rowJson).toCompanion(true),
-            );
+      for (final rowJson
+          in (databaseJson['contentFavorites'] as List)
+              .cast<Map<String, Object?>>()) {
+        await db
+            .into(db.contentFavorites)
+            .insert(ContentFavoriteRow.fromJson(rowJson).toCompanion(true));
       }
       // Restore ContentNotes.
       for (final rowJson
-          in (databaseJson['contentNotes'] as List).cast<Map<String, Object?>>()) {
-        await db.into(db.contentNotes).insert(
-              ContentNoteRow.fromJson(rowJson).toCompanion(true),
-            );
+          in (databaseJson['contentNotes'] as List)
+              .cast<Map<String, Object?>>()) {
+        await db
+            .into(db.contentNotes)
+            .insert(ContentNoteRow.fromJson(rowJson).toCompanion(true));
       }
       // Restore ContentReadHistory.
-      for (final rowJson in (databaseJson['contentReadHistory'] as List)
-          .cast<Map<String, Object?>>()) {
-        await db.into(db.contentReadHistory).insert(
-              ContentReadHistoryRow.fromJson(rowJson).toCompanion(true),
-            );
+      for (final rowJson
+          in (databaseJson['contentReadHistory'] as List)
+              .cast<Map<String, Object?>>()) {
+        await db
+            .into(db.contentReadHistory)
+            .insert(ContentReadHistoryRow.fromJson(rowJson).toCompanion(true));
       }
       // Restore Characters.
       for (final rowJson
-          in (databaseJson['characters'] as List).cast<Map<String, Object?>>()) {
-        await db.into(db.characters).insert(
-              CharacterRow.fromJson(rowJson).toCompanion(true),
-            );
+          in (databaseJson['characters'] as List)
+              .cast<Map<String, Object?>>()) {
+        await db
+            .into(db.characters)
+            .insert(CharacterRow.fromJson(rowJson).toCompanion(true));
       }
       // Restore CharacterContentRefs.
-      for (final rowJson in (databaseJson['characterContentRefs'] as List)
-          .cast<Map<String, Object?>>()) {
-        await db.into(db.characterContentRefs).insert(
-              CharacterContentRefRow.fromJson(rowJson).toCompanion(true),
-            );
+      for (final rowJson
+          in (databaseJson['characterContentRefs'] as List)
+              .cast<Map<String, Object?>>()) {
+        await db
+            .into(db.characterContentRefs)
+            .insert(CharacterContentRefRow.fromJson(rowJson).toCompanion(true));
       }
     });
 
@@ -246,9 +254,11 @@ class DriftLocalDataArchiveService implements LocalDataArchiveService {
       final packageId = parts.first;
       final relativePath = parts.skip(1).join('/');
       final bytes = Uint8List.fromList(file.content as List<int>);
-      await (db.update(db.localContentAssets)
-            ..where(
-                (t) => t.packageId.equals(packageId) & t.relativePath.equals(relativePath)))
+      await (db.update(db.localContentAssets)..where(
+            (t) =>
+                t.packageId.equals(packageId) &
+                t.relativePath.equals(relativePath),
+          ))
           .write(LocalContentAssetsCompanion(bytes: Value(bytes)));
     }
   }
@@ -257,8 +267,8 @@ class DriftLocalDataArchiveService implements LocalDataArchiveService {
   Future<void> clearCampaignCache() async {
     final db = _database;
     await db.transaction(() async {
-      await db.delete(db.campaignActorsCache).go();
-      await db.delete(db.campaignActorBacklinks).go();
+      await db.delete(db.campaignCharactersCache).go();
+      await db.delete(db.campaignCharacterBacklinks).go();
       await db.delete(db.campaignContentCache).go();
       await db.delete(db.campaignSyncCursors).go();
       await db.delete(db.characterSyncConflicts).go();

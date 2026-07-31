@@ -403,10 +403,7 @@ void main() {
       },
       rules: const {
         'progression': [
-          {
-            'level': 1,
-            'grants': [],
-          },
+          {'level': 1, 'grants': []},
         ],
       },
     );

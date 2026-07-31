@@ -8,16 +8,20 @@ import '../../content/data/local/content_repository.dart';
 import '../../content/domain/content_entry.dart';
 import '../../content/presentation/content_detail_page.dart';
 import '../../content/presentation/content_library_controller.dart';
-import '../../encounters/presentation/encounter_controller.dart';
 import '../../../core/dice/dice_roller.dart';
 import '../../../core/dice/dice_tray_dialog.dart';
 import '../domain/campaign.dart';
-import '../domain/campaign_actor.dart';
+import '../domain/campaign_character.dart';
 import '../domain/campaign_conversation.dart';
-import 'actors/campaign_actor_controller.dart';
-import 'actors/campaign_actor_sheet_launcher.dart';
+import '../domain/campaign_message_speaker.dart';
+import '../data/sync/campaign_sync_api_client.dart';
+import 'characters/campaign_character_controller.dart';
+import 'characters/campaign_character_picker_sheet.dart';
+import 'characters/campaign_character_sheet_launcher.dart';
+import 'characters/dm_quick_ops_sheet.dart';
 import 'campaign_controller.dart';
 import 'campaign_center_page.dart';
+import 'campaign_event_dispatcher.dart';
 import 'center/campaign_archive_editor_page.dart';
 import 'character_roll_sink.dart';
 import 'chat/campaign_chat_composer.dart';
@@ -39,11 +43,10 @@ class CampaignChatPage extends StatefulWidget {
     required this.campaignController,
     required this.contentRepository,
     this.localCharacters = const [],
-    this.campaignActorId,
+    this.campaignCharacterId,
     this.diceRoller,
     this.campaignContentController,
-    this.actorController,
-    this.encounterController,
+    this.characterController,
     this.appPreferencesController,
     this.conversationController,
     this.conversationId,
@@ -55,11 +58,10 @@ class CampaignChatPage extends StatefulWidget {
   final CampaignController campaignController;
   final ContentRepository contentRepository;
   final List<CharacterSheet> localCharacters;
-  final String? campaignActorId;
+  final String? campaignCharacterId;
   final DiceRoller? diceRoller;
   final CampaignContentController? campaignContentController;
-  final CampaignActorController? actorController;
-  final EncounterController? encounterController;
+  final CampaignCharacterController? characterController;
   final AppPreferencesController? appPreferencesController;
 
   /// Plan 2026-07-23 task 5.3: optional conversation scoping. When provided,
@@ -133,7 +135,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     return AnimatedBuilder(
       animation: Listenable.merge([
         widget.campaignController,
-        if (widget.actorController != null) widget.actorController!,
+        if (widget.characterController != null) widget.characterController!,
         if (widget.appPreferencesController != null)
           widget.appPreferencesController!,
         if (widget.conversationController != null)
@@ -153,9 +155,8 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                     builder: (_) => CampaignCenterPage(
                       campaign: widget.campaign,
                       controller: widget.campaignController,
-                      actorController: widget.actorController,
+                      characterController: widget.characterController,
                       contentRepository: widget.contentRepository,
-                      encounterController: widget.encounterController,
                     ),
                   ),
                 ),
@@ -252,54 +253,56 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
   CampaignComposerIdentity get _composerIdentity {
     final resolved = resolveCampaignComposerIdentity(
       workspace: widget.campaignController.workspaceContext,
-      campaignActors: widget.actorController?.actors ?? const [],
+      campaignCharacters: widget.characterController?.characters ?? const [],
       localCharacters: widget.localCharacters,
       fallbackCharacter: widget.character,
-      fallbackActorId: widget.campaignActorId,
+      fallbackCharacterId: widget.campaignCharacterId,
     );
     final draft = _draftIdentity;
     if (draft == null) return resolved;
     return CampaignComposerIdentity(
       displayName: draft.displayName,
-      speakerMode: 'actor',
-      actorId: null,
+      speakerMode: 'character',
+      characterId: null,
       avatarUrl: null,
       healthState: null,
       localCharacter: null,
-      campaignActor: null,
+      campaignCharacter: null,
       subtitle: '临时身份草稿',
     );
   }
 
-  /// 解析消息头像点击：只有能解析到战役 Actor 时才打开统一完整角色卡。
+  /// 解析消息头像点击：只有能解析到战役 Character 时才打开统一完整角色卡。
   VoidCallback? _resolveAvatarTap(CampaignChatMessage message) {
-    final actorId = message.campaignActorId;
-    if (actorId == null || actorId.isEmpty) return null;
-    final controller = widget.actorController;
+    final characterId = message.campaignCharacterId;
+    if (characterId == null || characterId.isEmpty) return null;
+    final controller = widget.characterController;
     if (controller == null) return null;
-    final actor = controller.actors.cast<CampaignActor?>().firstWhere(
-      (a) => a?.id == actorId,
-      orElse: () => null,
-    );
-    if (actor == null) return null;
-    return () => _openActorSheet(actor);
+    final character = controller.characters
+        .cast<CampaignCharacter?>()
+        .firstWhere((a) => a?.id == characterId, orElse: () => null);
+    if (character == null) return null;
+    return () => _openCampaignCharacterSheet(character);
   }
 
-  Future<void> _openActorSheet(CampaignActor actor) {
-    final controller = widget.actorController;
+  Future<void> _openCampaignCharacterSheet(CampaignCharacter character) {
+    final controller = widget.characterController;
     if (controller == null) return Future<void>.value();
-    return openCampaignActorSheet(
+    return openCampaignCharacterSheet(
       context: context,
       controller: controller,
-      actor: actor,
-      canEditAnyActor: _canManageCampaign,
+      character: character,
+      canEditAnyCharacter: _canManageCampaign,
       contentRepository: widget.contentRepository,
       sink: CharacterRollSink(
         campaignId: widget.campaign.id,
         campaignController: widget.campaignController,
-        campaignActorId: actor.id,
+        campaignCharacterId: character.id,
         conversationId: _conversationId,
       ),
+      returnToChatAfterRoll:
+          widget.appPreferencesController?.preferences.returnToChatAfterRoll ??
+          true,
     );
   }
 
@@ -316,10 +319,21 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
           ? 'ooc'
           : (_mode == ChatMode.act ? 'action' : 'say'),
       content: content,
-      campaignActorId: draft == null ? identity.actorId : null,
+      // Keep the legacy fields during the 0.1 rolling upgrade. The explicit
+      // speaker is authoritative on upgraded servers.
+      campaignCharacterId: draft == null ? identity.characterId : null,
       speakerSnapshot: draft == null
           ? null
           : <String, Object?>{'displayName': draft.displayName},
+      speaker: draft != null
+          ? CampaignMessageSpeaker.temporary(displayName: draft.displayName)
+          : switch (identity.speakerMode) {
+              'narrator' => const CampaignMessageSpeaker.narrator(),
+              'ooc' => const CampaignMessageSpeaker.ooc(),
+              _ when identity.characterId != null =>
+                CampaignMessageSpeaker.character(identity.characterId),
+              _ => const CampaignMessageSpeaker.ooc(),
+            },
       conversationId: _conversationId,
     );
     if (!mounted) return sent;
@@ -328,7 +342,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       _controller.clear();
       if (draft != null) {
         // Plan 2026-07-23 task 5.2: the snapshot is use-once — clear the draft
-        // and do NOT refresh the workspace/actor list (no actor was created,
+        // and do NOT refresh the workspace/character list (no character was created,
         // so the DM's previously selected speaker is still active).
         _draftIdentity = null;
       }
@@ -354,8 +368,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
   }
 
   /// Spec §输入栏: 当前身份头像取代原有独立 `+` 按钮。点击后打开底部快捷面板，
-  /// 包含 11 项工具。工具按成员能力和当前上下文动态出现，界面不显示不可用的
-  /// DM 工具。
+  /// 工具按成员能力和当前上下文动态出现，界面不显示不可用的 DM 工具。
   Future<void> _showToolPanel() async {
     final action = await showModalBottomSheet<CampaignChatToolAction>(
       context: context,
@@ -365,14 +378,12 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         identity: _composerIdentity,
         isManager: _canManageCampaign,
         hasCharacterActions: _characterActions.isNotEmpty,
-        draftIdentityName: _draftIdentity?.displayName,
       ),
     );
     if (!mounted || action == null) return;
 
     switch (action) {
       case CampaignChatToolAction.openCharacterSheet:
-      case CampaignChatToolAction.hpStatus:
         _openCharacterSheet();
         break;
       case CampaignChatToolAction.switchIdentity:
@@ -382,13 +393,19 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         await _showRollSheet();
         break;
       case CampaignChatToolAction.skillCheck:
-        await _showCheckRequestTargetPicker();
+        await _showDirectCheckTargetPicker();
+        break;
+      case CampaignChatToolAction.manageHp:
+        await _openDmHpOperation();
+        break;
+      case CampaignChatToolAction.grantItem:
+        await _openDmGrantItemOperation();
+        break;
+      case CampaignChatToolAction.addCondition:
+        await _openDmConditionOperation();
         break;
       case CampaignChatToolAction.contentEntries:
         await _showContentLibrary();
-        break;
-      case CampaignChatToolAction.viewJournal:
-        await _openCampaignRecords();
         break;
       case CampaignChatToolAction.recordClue:
         await _showArchiveCreationForm(initialKind: 'clue');
@@ -396,16 +413,65 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       case CampaignChatToolAction.shareLocation:
         await _showArchiveCreationForm(initialKind: 'location');
         break;
-      case CampaignChatToolAction.groupFiles:
-        await _showArchiveCreationForm(initialKind: 'file');
-        break;
       case CampaignChatToolAction.characterActions:
         await _showCharacterActions();
         break;
-      case CampaignChatToolAction.temporaryIdentity:
-        await _showDraftIdentityForm();
-        break;
     }
+  }
+
+  Future<void> _openDmHpOperation() async {
+    final resources = _dmOperationResources();
+    if (resources == null) return;
+    await DmQuickOpsSheet.showHpOperation(
+      context: context,
+      campaignId: widget.campaign.id,
+      characterController: resources.$1,
+      eventDispatcher: resources.$2,
+    );
+    resources.$2.dispose();
+  }
+
+  Future<void> _openDmGrantItemOperation() async {
+    final resources = _dmOperationResources();
+    if (resources == null) return;
+    await DmQuickOpsSheet.showGrantItemOperation(
+      context: context,
+      campaignId: widget.campaign.id,
+      characterController: resources.$1,
+      eventDispatcher: resources.$2,
+      contentRepository: widget.contentRepository,
+    );
+    resources.$2.dispose();
+  }
+
+  Future<void> _openDmConditionOperation() async {
+    final resources = _dmOperationResources();
+    if (resources == null) return;
+    await DmQuickOpsSheet.showConditionOperation(
+      context: context,
+      campaignId: widget.campaign.id,
+      characterController: resources.$1,
+      eventDispatcher: resources.$2,
+    );
+    resources.$2.dispose();
+  }
+
+  (CampaignCharacterController, CampaignEventDispatcher)?
+  _dmOperationResources() {
+    final characterController = widget.characterController;
+    if (characterController == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('角色资料仍在加载，请稍后重试')));
+      return null;
+    }
+    final dispatcher = CampaignEventDispatcher(
+      apiClient: HttpCampaignSyncApiClient(),
+      apiBaseUrlProvider: () => widget.campaignController.apiBaseUrl,
+      accessTokenProvider: () => widget.campaignController.accessToken ?? '',
+      onCharacterChanged: (_) => characterController.pullUntilCurrent(),
+    );
+    return (characterController, dispatcher);
   }
 
   Future<void> _showIdentitySheet() async {
@@ -418,30 +484,24 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       return;
     }
 
-    final activeActors = workspace.actors
-        .where((actor) => actor.status == 'active')
+    final activeCharacters = workspace.characters
+        .where((character) => character.status == 'active')
         .toList(growable: false);
-    final persistentActors = activeActors
+    final persistentCharacters = activeCharacters
         .where(
-          (actor) =>
-              actor.lifecycle != 'temporary' &&
-              (actor.actorType == 'npc' ||
-                  actor.actorType == 'monster' ||
-                  actor.actorType == 'companion'),
+          (character) =>
+              character.lifecycle != 'temporary' &&
+              (character.characterType == 'npc' ||
+                  character.characterType == 'monster' ||
+                  character.characterType == 'companion'),
         )
         .toList(growable: false);
-    final temporaryActors = activeActors
+    final proxyCharacters = activeCharacters
         .where(
-          (actor) =>
-              actor.lifecycle == 'temporary' && actor.actorType != 'player',
-        )
-        .toList(growable: false);
-    final proxyActors = activeActors
-        .where(
-          (actor) =>
-              actor.ownerUserId != null &&
-              actor.ownerUserId != membership.userId &&
-              actor.actorType == 'player',
+          (character) =>
+              character.ownerUserId != null &&
+              character.ownerUserId != membership.userId &&
+              character.characterType == 'player',
         )
         .toList(growable: false);
 
@@ -453,14 +513,14 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         identity: _composerIdentity,
         membership: membership,
         isManager: _canManageCampaign,
-        persistentActors: persistentActors,
-        temporaryActors: temporaryActors,
-        proxyActors: proxyActors,
-        campaignActors:
-            widget.actorController?.actors ?? const <CampaignActor>[],
+        persistentCharacters: persistentCharacters,
+        proxyCharacters: proxyCharacters,
+        campaignCharacters:
+            widget.characterController?.characters ??
+            const <CampaignCharacter>[],
         hasBoundCharacter:
-            membership.boundActorId != null ||
-            (widget.campaignActorId != null && widget.character != null),
+            membership.boundCharacterId != null ||
+            (widget.campaignCharacterId != null && widget.character != null),
       ),
     );
     if (!mounted || choice == null) return;
@@ -468,8 +528,166 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       await _showDraftIdentityForm();
       return;
     }
+    if (choice.changeBinding) {
+      await _showCharacterBindingSheet(workspace);
+      return;
+    }
 
-    await _updateCampaignSpeaker(choice.speakerMode!, choice.actorId);
+    await _updateCampaignSpeaker(choice.speakerMode!, choice.characterId);
+  }
+
+  Future<void> _showCharacterBindingSheet(
+    CampaignWorkspaceContext workspace,
+  ) async {
+    final membership = workspace.membership;
+    final publishedCandidates = workspace.characters
+        .where(
+          (character) =>
+              character.ownerUserId == membership.userId &&
+              character.characterType == 'player' &&
+              character.status == 'active' &&
+              character.lifecycle != 'temporary',
+        )
+        .toList(growable: false);
+    final publishedSourceIds =
+        widget.characterController?.characters
+            .where(
+              (character) =>
+                  character.campaignId == widget.campaign.id &&
+                  character.ownerUserId == membership.userId &&
+                  character.characterType == 'player' &&
+                  character.status == 'active',
+            )
+            .map((character) => character.sourceCharacterId)
+            .whereType<String>()
+            .toSet() ??
+        const <String>{};
+    final localCandidates = widget.localCharacters
+        .where((character) => !publishedSourceIds.contains(character.id))
+        .toList(growable: false);
+
+    if (publishedCandidates.isEmpty && localCandidates.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先在角色页创建一名玩家角色')));
+      return;
+    }
+
+    final selected = await showModalBottomSheet<_BindingCandidate>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                '绑定角色',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            for (final character in publishedCandidates)
+              ListTile(
+                key: Key('binding-character-${character.id}'),
+                leading: CampaignAvatar(
+                  initials: character.displayName,
+                  health: CampaignAvatar.healthFromState(
+                    character.publicHealthState,
+                  ),
+                ),
+                title: Text(character.displayName),
+                subtitle: Text(
+                  character.id == membership.boundCharacterId ? '当前绑定' : '玩家角色',
+                ),
+                trailing: character.id == membership.boundCharacterId
+                    ? const Icon(Icons.check_rounded)
+                    : const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(
+                  context,
+                ).pop(_BindingCandidate.published(character)),
+              ),
+            if (publishedCandidates.isNotEmpty && localCandidates.isNotEmpty)
+              const Divider(height: 1),
+            for (final character in localCandidates)
+              ListTile(
+                key: Key('binding-local-character-${character.id}'),
+                leading: CampaignAvatar(
+                  initials: character.name,
+                  imageUrl: character.avatarUrl,
+                  healthFraction: CampaignAvatar.fractionFromHp(
+                    character.currentHp,
+                    character.maxHp,
+                  ),
+                ),
+                title: Text(character.name),
+                subtitle: const Text('本地角色 · 选择后自动加入战役'),
+                trailing: const Icon(Icons.add_link_rounded),
+                onTap: () => Navigator.of(
+                  context,
+                ).pop(_BindingCandidate.local(character)),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || selected == null) return;
+
+    var campaignCharacterId = selected.publishedCharacter?.id;
+    final localCharacter = selected.localCharacter;
+    if (localCharacter != null) {
+      final controller = widget.characterController;
+      if (controller == null) {
+        _showBindingError('角色同步服务尚未就绪');
+        return;
+      }
+      if (controller.selectedCampaignId != widget.campaign.id) {
+        await controller.selectCampaign(widget.campaign.id);
+      }
+      final published = await controller.publishCharacter(localCharacter);
+      if (!mounted) return;
+      if (!published) {
+        _showBindingError(controller.error ?? '发布角色失败');
+        return;
+      }
+      for (final character in controller.characters.reversed) {
+        if (character.sourceCharacterId == localCharacter.id &&
+            character.characterType == 'player') {
+          campaignCharacterId = character.id;
+          break;
+        }
+      }
+      if (campaignCharacterId == null) {
+        _showBindingError('角色已发布，但无法读取战役角色');
+        return;
+      }
+    }
+
+    final updated = await widget.campaignController.updateMemberBinding(
+      campaignId: widget.campaign.id,
+      characterId: campaignCharacterId!,
+    );
+    if (!mounted) return;
+    if (!updated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.campaignController.workspaceContextError ?? '绑定角色失败',
+          ),
+        ),
+      );
+      return;
+    }
+  }
+
+  void _showBindingError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _showDraftIdentityForm() {
@@ -488,16 +706,16 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     );
   }
 
-  String? get _activeSpeakerActorId => _composerIdentity.actorId;
+  String? get _activeSpeakerCharacterId => _composerIdentity.characterId;
 
   Future<void> _updateCampaignSpeaker(
     String speakerMode, [
-    String? actorId,
+    String? characterId,
   ]) async {
     final updated = await widget.campaignController.updateSpeaker(
       campaignId: widget.campaign.id,
       speakerMode: speakerMode,
-      actorId: actorId,
+      characterId: characterId,
     );
     if (!mounted || updated) return;
 
@@ -526,23 +744,24 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
             final linksPayload = draft.linkedEntryIds.isEmpty
                 ? null
                 : draft.linkedEntryIds
-                    .map((id) => <String, Object?>{'kind': 'archive', 'id': id})
-                    .toList(growable: false);
+                      .map(
+                        (id) => <String, Object?>{'kind': 'archive', 'id': id},
+                      )
+                      .toList(growable: false);
             final entry = await widget.campaignController.createArchiveEntry(
               campaignId: widget.campaign.id,
               kind: draft.kind,
               title: draft.title,
               summary: draft.summary,
-              bodyBlocks:
-                  draft.bodyBlocks.isEmpty ? null : draft.bodyBlocks,
+              bodyBlocks: draft.bodyBlocks.isEmpty ? null : draft.bodyBlocks,
               tags: draft.tags.isEmpty ? null : draft.tags,
               links: linksPayload,
             );
             if (entry != null) {
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('已保存到战役档案')),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('已保存到战役档案')));
               }
               return true;
             }
@@ -567,7 +786,6 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
 
   Future<void> _showRollSheet() {
     // Spec §输入栏: 关闭工具 sheet 由调用方负责, helper 不应自行 pop。
-    // Task 3.2: 顶部保留快速掷骰 (单骰一键), 下方接入组合式骰子编辑器.
     final quickPresets =
         widget.appPreferencesController?.preferences.quickDicePresets ??
         const <String>[];
@@ -577,39 +795,10 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       isScrollControlled: true,
       builder: (context) {
         return SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  chatText('quickRoll'),
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final notation in quickDice)
-                      FilledButton.tonalIcon(
-                        onPressed: _sending
-                            ? null
-                            : () => _sendRollExpression(notation),
-                        icon: const Icon(Icons.casino_outlined),
-                        label: Text(notation),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                DiceTrayDialog(
-                  diceRoller: widget.diceRoller ?? DiceRoller(),
-                  quickPresets: quickPresets,
-                  onSend: _sendDiceTrayResult,
-                ),
-              ],
-            ),
+          child: DiceTrayDialog(
+            diceRoller: widget.diceRoller ?? DiceRoller(),
+            quickPresets: quickPresets,
+            onSend: _sendDiceTrayResult,
           ),
         );
       },
@@ -673,7 +862,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       campaignId: widget.campaign.id,
       kind: 'action',
       content: action['name']! as String,
-      campaignActorId: _activeSpeakerActorId,
+      campaignCharacterId: _activeSpeakerCharacterId,
       actionId: action['id']! as String,
       conversationId: _conversationId,
     );
@@ -686,32 +875,6 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     }
   }
 
-  Future<void> _sendRollExpression(String notation) async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final roll = (widget.diceRoller ?? DiceRoller()).rollExpression(notation);
-      Navigator.of(context).pop();
-      setState(() => _sending = true);
-      final sent = await widget.campaignController.sendMessage(
-        campaignId: widget.campaign.id,
-        kind: 'roll',
-        content: roll.label,
-        campaignActorId: _activeSpeakerActorId,
-        conversationId: _conversationId,
-      );
-      if (!mounted) return;
-      setState(() => _sending = false);
-      if (!sent) {
-        messenger.showSnackBar(SnackBar(content: Text(chatText('sendFailed'))));
-      }
-    } on DiceRollException catch (error) {
-      Navigator.of(context).pop();
-      messenger.showSnackBar(
-        SnackBar(content: Text('${chatText('invalidDice')}$error')),
-      );
-    }
-  }
-
   /// Task 3.2: 处理组合式骰子编辑器的发送结果.
   /// 携带结构化 eventData (notation/total/rollMode/dc/success) 供聊天渲染检定卡片.
   Future<void> _sendDiceTrayResult(DiceTrayResult result) async {
@@ -719,14 +882,14 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     final label = result.dc == null
         ? '${result.notation} = ${result.total}'
         : '${result.notation} = ${result.total} '
-            '${result.success == true ? '✓' : '✗'} DC ${result.dc}';
+              '${result.success == true ? '✓' : '✗'} DC ${result.dc}';
     Navigator.of(context).pop();
     setState(() => _sending = true);
     final sent = await widget.campaignController.sendMessage(
       campaignId: widget.campaign.id,
       kind: 'roll',
       content: label,
-      campaignActorId: _activeSpeakerActorId,
+      campaignCharacterId: _activeSpeakerCharacterId,
       conversationId: _conversationId,
       eventData: <String, Object?>{
         'notation': result.notation,
@@ -741,22 +904,6 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     if (!sent) {
       messenger.showSnackBar(SnackBar(content: Text(chatText('sendFailed'))));
     }
-  }
-
-  Future<void> _openCampaignRecords() async {
-    // 跳转到战役中心并直接选中记录面板（initialTab=3）。
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => CampaignCenterPage(
-          campaign: widget.campaign,
-          controller: widget.campaignController,
-          actorController: widget.actorController,
-          contentRepository: widget.contentRepository,
-          encounterController: widget.encounterController,
-          initialTab: 3,
-        ),
-      ),
-    );
   }
 
   Future<void> _showContentLibrary() async {
@@ -951,26 +1098,32 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
 
   void _openCharacterSheet() {
     final identity = _composerIdentity;
-    final actorId = identity.actorId;
-    final actorController = widget.actorController;
-    if (actorId != null && actorController != null) {
-      final actor =
-          identity.campaignActor ??
-          actorController.actors
-              .where((candidate) => candidate.id == actorId)
+    final characterId = identity.characterId;
+    final characterController = widget.characterController;
+    if (characterId != null && characterController != null) {
+      final character =
+          identity.campaignCharacter ??
+          characterController.characters
+              .where((candidate) => candidate.id == characterId)
               .firstOrNull;
-      if (actor != null) {
-        openCampaignActorSheet(
+      if (character != null) {
+        openCampaignCharacterSheet(
           context: context,
-          controller: actorController,
-          actor: actor,
-          canEditAnyActor: _canManageCampaign,
+          controller: characterController,
+          character: character,
+          canEditAnyCharacter: _canManageCampaign,
           contentRepository: widget.contentRepository,
           sink: CharacterRollSink(
             campaignId: widget.campaign.id,
             campaignController: widget.campaignController,
-            campaignActorId: actor.id,
+            campaignCharacterId: character.id,
           ),
+          returnToChatAfterRoll:
+              widget
+                  .appPreferencesController
+                  ?.preferences
+                  .returnToChatAfterRoll ??
+              true,
         );
         return;
       }
@@ -982,10 +1135,16 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         MaterialPageRoute(
           builder: (context) => CharacterDetailPage(
             character: character,
+            returnToChatAfterRoll:
+                widget
+                    .appPreferencesController
+                    ?.preferences
+                    .returnToChatAfterRoll ??
+                true,
             sink: CharacterRollSink(
               campaignId: widget.campaign.id,
               campaignController: widget.campaignController,
-              campaignActorId: _activeSpeakerActorId,
+              campaignCharacterId: _activeSpeakerCharacterId,
             ),
           ),
         ),
@@ -998,70 +1157,49 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
     ).showSnackBar(SnackBar(content: Text(chatText('noBoundCharacter'))));
   }
 
-  Future<void> _showCheckRequestTargetPicker() async {
-    final actors = (widget.actorController?.actors ?? const <CampaignActor>[])
-        .where(
-          (actor) => actor.status == 'active' && actor.actorType == 'player',
-        )
-        .toList(growable: false);
-    if (actors.isEmpty) {
+  Future<void> _showDirectCheckTargetPicker() async {
+    final characters =
+        (widget.characterController?.characters ?? const <CampaignCharacter>[])
+            .where((character) => character.status == 'active')
+            .toList(growable: false);
+    if (characters.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('当前没有可代掷检定的玩家角色')));
+      ).showSnackBar(const SnackBar(content: Text('当前没有可代掷检定的角色')));
       return;
     }
-    final selected = await showModalBottomSheet<CampaignActor>(
+    final selected = await showCampaignCharacterPickerSheet(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            const ListTile(
-              leading: Icon(Icons.fact_check_outlined),
-              title: Text('选择代掷目标'),
-            ),
-            for (final actor in actors)
-              ListTile(
-                key: Key('campaign-actor-${actor.id}'),
-                leading: CampaignAvatar(
-                  initials: actor.sheet['name']?.toString() ?? '?',
-                  imageUrl: actor.sheet['avatarUrl'] as String?,
-                ),
-                title: Text(actor.sheet['name']?.toString() ?? '未命名角色'),
-                onTap: () => Navigator.of(context).pop(actor),
-              ),
-          ],
-        ),
-      ),
+      title: '选择代掷目标',
+      characters: characters,
     );
-    if (selected != null && mounted) await _showCheckRequestSheet(selected);
+    if (selected != null && mounted) await _showDirectCheckSheet(selected);
   }
 
-  Future<void> _showCheckRequestSheet(CampaignActor actor) async {
+  Future<void> _showDirectCheckSheet(CampaignCharacter character) async {
     final draft = await showModalBottomSheet<CheckRequestDraft>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (context) => CheckRequestSheet(actor: actor),
+      builder: (context) => CheckRequestSheet(character: character),
     );
     if (draft == null || !mounted || _sending) return;
 
-    final character = campaignActorToCharacterSheet(actor);
+    final characterSheet = campaignCharacterToCharacterSheet(character);
     final modifier = switch (draft.type) {
       'skill' => Dnd5eRules.skillBonus(
         skillName: draft.key,
-        abilities: character.abilityMap,
-        level: character.level,
-        proficient: character.skillMap[draft.key] == true,
+        abilities: characterSheet.abilityMap,
+        level: characterSheet.level,
+        proficient: characterSheet.skillMap[draft.key] == true,
       ),
       'save' => Dnd5eRules.saveBonus(
         ability: draft.key,
-        abilities: character.abilityMap,
-        level: character.level,
-        proficient: character.saveMap[draft.key] == true,
+        abilities: characterSheet.abilityMap,
+        level: characterSheet.level,
+        proficient: characterSheet.saveMap[draft.key] == true,
       ),
-      _ => Dnd5eRules.abilityBonus(character.abilityMap, draft.key),
+      _ => Dnd5eRules.abilityBonus(characterSheet.abilityMap, draft.key),
     };
     final roller = widget.diceRoller ?? DiceRoller();
     final first = roller.rollD20().total;
@@ -1072,18 +1210,20 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       _ => first,
     };
     final total = die + modifier;
-    final actorName = character.name.trim().isEmpty ? '该角色' : character.name;
+    final characterName = characterSheet.name.trim().isEmpty
+        ? '该角色'
+        : characterSheet.name;
 
     setState(() => _sending = true);
     final sent = await widget.campaignController.sendMessage(
       campaignId: widget.campaign.id,
       kind: 'roll',
       content:
-          '$actorName · ${draft.label}：$die ${Dnd5eRules.formatModifier(modifier)} = $total',
-      campaignActorId: actor.id,
+          '$characterName · ${draft.label}：$die ${Dnd5eRules.formatModifier(modifier)} = $total',
+      campaignCharacterId: character.id,
       conversationId: _conversationId,
       eventData: {
-        'targetActorId': actor.id,
+        'targetCharacterId': character.id,
         'checkType': draft.type,
         'checkKey': draft.key,
         'label': draft.label,
@@ -1108,8 +1248,8 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
 
   bool _canRespondToCheck(CampaignChatMessage message) {
     return message.kind == 'checkRequest' &&
-        widget.campaignActorId != null &&
-        message.eventData?['targetActorId'] == widget.campaignActorId &&
+        widget.campaignCharacterId != null &&
+        message.eventData?['targetCharacterId'] == widget.campaignCharacterId &&
         widget.character != null;
   }
 
@@ -1166,7 +1306,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       campaignId: widget.campaign.id,
       kind: 'roll',
       content: '$label：$die ${Dnd5eRules.formatModifier(modifier)} = $total',
-      campaignActorId: widget.campaignActorId,
+      campaignCharacterId: widget.campaignCharacterId,
       conversationId: _conversationId,
       eventData: {
         'requestId': message.id,
@@ -1189,13 +1329,26 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
 ///
 /// Per `2026-07-16-campaign-workspace-refactor-design.md` §快速临时身份:
 /// the DM only needs to enter a display name. The draft lives locally in the
-/// composer until the first message is sent; the server then atomically
-/// creates a temporary CampaignActor + message in a single transaction.
-/// Unsent drafts never reach the server.
+/// composer until the first message is sent. It is serialized into that
+/// message's speaker snapshot and then cleared; no CampaignCharacter is persisted.
+/// Unsent drafts never leave the client.
 class _TemporaryIdentityDraft {
   const _TemporaryIdentityDraft({required this.displayName});
 
   final String displayName;
+}
+
+class _BindingCandidate {
+  const _BindingCandidate._({this.publishedCharacter, this.localCharacter});
+
+  factory _BindingCandidate.published(CampaignWorkspaceCharacter character) =>
+      _BindingCandidate._(publishedCharacter: character);
+
+  factory _BindingCandidate.local(CharacterSheet character) =>
+      _BindingCandidate._(localCharacter: character);
+
+  final CampaignWorkspaceCharacter? publishedCharacter;
+  final CharacterSheet? localCharacter;
 }
 
 /// Bottom sheet form for collecting the display name of a temporary identity.

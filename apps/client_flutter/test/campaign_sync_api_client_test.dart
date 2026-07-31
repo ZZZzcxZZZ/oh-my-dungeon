@@ -6,7 +6,7 @@ import 'package:http/testing.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('listActorAudits loads typed actor edit history', () async {
+  test('listCharacterAudits loads typed character edit history', () async {
     http.Request? captured;
     final client = HttpCampaignSyncApiClient(
       client: MockClient((request) async {
@@ -15,9 +15,9 @@ void main() {
           jsonEncode([
             {
               'id': 'audit-1',
-              'campaignActorId': 'actor-1',
+              'campaignCharacterId': 'character-1',
               'campaignId': 'campaign-1',
-              'actorUserId': 'dm-user',
+              'characterUserId': 'dm-user',
               'baseRevision': 1,
               'resultRevision': 2,
               'changedPaths': ['currentHp'],
@@ -32,17 +32,17 @@ void main() {
       }),
     );
 
-    final audits = await client.listActorAudits(
+    final audits = await client.listCharacterAudits(
       apiBaseUrl: 'https://example.test/api',
       accessToken: 'access-token',
       campaignId: 'campaign-1',
-      actorId: 'actor-1',
+      characterId: 'character-1',
     );
 
     expect(captured?.method, 'GET');
     expect(
       captured?.url.toString(),
-      'https://example.test/api/campaigns/campaign-1/actors/actor-1/audits',
+      'https://example.test/api/campaigns/campaign-1/characters/character-1/audits',
     );
     expect(captured?.headers['authorization'], 'Bearer access-token');
     expect(audits, hasLength(1));

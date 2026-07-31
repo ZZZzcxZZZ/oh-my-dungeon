@@ -50,6 +50,7 @@ class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
+      fontFamily: 'NotoSansSC',
       colorScheme: colorScheme,
       scaffoldBackgroundColor: colorScheme.surface,
       visualDensity: VisualDensity.adaptivePlatformDensity,
@@ -79,10 +80,14 @@ class AppTheme {
       navigationRailTheme: NavigationRailThemeData(
         backgroundColor: colorScheme.surfaceContainer,
         indicatorColor: colorScheme.secondaryContainer,
-        selectedIconTheme: IconThemeData(color: colorScheme.onSecondaryContainer),
+        selectedIconTheme: IconThemeData(
+          color: colorScheme.onSecondaryContainer,
+        ),
         unselectedIconTheme: IconThemeData(color: colorScheme.onSurfaceVariant),
         selectedLabelTextStyle: TextStyle(color: colorScheme.onSurface),
-        unselectedLabelTextStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+        unselectedLabelTextStyle: TextStyle(
+          color: colorScheme.onSurfaceVariant,
+        ),
       ),
       cardTheme: CardThemeData(
         color: colorScheme.surfaceContainerLow,

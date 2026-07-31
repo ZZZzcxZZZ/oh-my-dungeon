@@ -21,6 +21,8 @@ class ServerAndAccountSection extends StatefulWidget {
     this.serverProfilesPageBuilder,
     this.onSwitchToProfile,
     this.vaultSyncActions,
+    this.compact = false,
+    this.onOpenDetails,
     super.key,
   });
 
@@ -31,6 +33,8 @@ class ServerAndAccountSection extends StatefulWidget {
   final WidgetBuilder? serverProfilesPageBuilder;
   final ValueChanged<ServerProfile>? onSwitchToProfile;
   final VaultSyncActions? vaultSyncActions;
+  final bool compact;
+  final VoidCallback? onOpenDetails;
 
   @override
   State<ServerAndAccountSection> createState() =>
@@ -59,6 +63,40 @@ class _ServerAndAccountSectionState extends State<ServerAndAccountSection> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final profile = widget.session.profile;
+
+    if (widget.compact) {
+      final accountLabel = widget.authController.isLoading
+          ? '正在读取账号'
+          : widget.authController.user?.username ?? '未登录';
+      return SettingsSection(
+        title: '服务器与账户',
+        leading: Icon(Icons.cloud_outlined, color: colorScheme.primary),
+        children: [
+          Card(
+            child: ListTile(
+              key: const Key('server-account-summary'),
+              leading: CircleAvatar(
+                backgroundColor: colorScheme.secondaryContainer,
+                foregroundColor: colorScheme.onSecondaryContainer,
+                child: Icon(
+                  profile == null
+                      ? Icons.cloud_off_outlined
+                      : Icons.cloud_done_outlined,
+                ),
+              ),
+              title: Text(profile?.name ?? '本地模式'),
+              subtitle: Text(
+                profile == null ? accountLabel : '$accountLabel · 已选择服务器',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: widget.onOpenDetails,
+            ),
+          ),
+        ],
+      );
+    }
 
     return SettingsSection(
       title: '服务器与账户',
@@ -103,10 +141,7 @@ class _ServerAndAccountSectionState extends State<ServerAndAccountSection> {
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: Text(
-                        '切换服务器',
-                        style: theme.textTheme.labelMedium,
-                      ),
+                      child: Text('切换服务器', style: theme.textTheme.labelMedium),
                     ),
                   ),
                   for (final p in _allProfiles)
@@ -167,18 +202,14 @@ class _ServerAndAccountSectionState extends State<ServerAndAccountSection> {
   Future<void> _openAuthPage(BuildContext context) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (context) =>
-            AuthPage(authController: widget.authController),
+        builder: (context) => AuthPage(authController: widget.authController),
       ),
     );
   }
 }
 
 class _AccountCard extends StatelessWidget {
-  const _AccountCard({
-    required this.authController,
-    required this.onLogin,
-  });
+  const _AccountCard({required this.authController, required this.onLogin});
 
   final AuthController authController;
   final VoidCallback onLogin;
@@ -186,9 +217,7 @@ class _AccountCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (authController.isLoading) {
-      return const Card(
-        child: ListTile(leading: CircularProgressIndicator()),
-      );
+      return const Card(child: ListTile(leading: CircularProgressIndicator()));
     }
 
     if (!authController.isLoggedIn) {
@@ -197,10 +226,7 @@ class _AccountCard extends StatelessWidget {
           leading: const Icon(Icons.lock_outline),
           title: const Text('未登录'),
           subtitle: const Text('登录后可管理战役与跑团'),
-          trailing: FilledButton(
-            onPressed: onLogin,
-            child: const Text('登录'),
-          ),
+          trailing: FilledButton(onPressed: onLogin, child: const Text('登录')),
         ),
       );
     }

@@ -9,93 +9,92 @@ import 'package:flutter_test/flutter_test.dart';
 // 子职业通过 progression choice + subclassOf 关系加载；属性生成支持
 // 标准数组/购点/随机并在审核页显示来源；升级页点击关联条目使用当前 reader。
 void main() {
-  testWidgets(
-    'auto-grants are shown separately from required choices',
-    (tester) async {
-      tester.view.physicalSize = const Size(1200, 1500);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets('auto-grants are shown separately from required choices', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: CharacterEditorPage(
-            defaultCreationMethod: 'standard',
-            contentEntries: [
-              _entry(
-                id: 'guide:class/fighter',
-                type: 'class',
-                name: '战士',
-                revision: 1,
-                structured: const {'hitDie': 'd10'},
-                rules: const {
-                  'progression': [
-                    {
-                      'level': 1,
-                      'grants': [
-                        {
-                          'id': 'second-wind',
-                          'kind': 'feature',
-                          'entryId': 'guide:class-feature/second-wind',
-                          'label': '回气',
-                        },
-                      ],
-                      'choices': [
-                        {
-                          'id': 'fighting-style',
-                          'label': '选择战斗风格',
-                          'optionType': 'classFeature',
-                          'minimum': 1,
-                          'maximum': 1,
-                          'optionEntryIds': ['guide:class-feature/defense'],
-                        },
-                      ],
-                    },
-                  ],
-                },
-              ),
-              _entry(
-                id: 'guide:background/soldier',
-                type: 'background',
-                name: '士兵',
-                revision: 1,
-                rules: const {},
-              ),
-              _entry(
-                id: 'guide:species/human',
-                type: 'species',
-                name: '人类',
-                revision: 1,
-                rules: const {},
-              ),
-              _entry(
-                id: 'guide:class-feature/second-wind',
-                type: 'classFeature',
-                name: '回气',
-                revision: 1,
-                rules: const {},
-              ),
-              _entry(
-                id: 'guide:class-feature/defense',
-                type: 'classFeature',
-                name: '防御战斗风格',
-                revision: 1,
-                rules: const {},
-              ),
-            ],
-            onSubmit: (draft) async => true,
-          ),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          contentEntries: [
+            _entry(
+              id: 'guide:class/fighter',
+              type: 'class',
+              name: '战士',
+              revision: 1,
+              structured: const {'hitDie': 'd10'},
+              rules: const {
+                'progression': [
+                  {
+                    'level': 1,
+                    'grants': [
+                      {
+                        'id': 'second-wind',
+                        'kind': 'feature',
+                        'entryId': 'guide:class-feature/second-wind',
+                        'label': '回气',
+                      },
+                    ],
+                    'choices': [
+                      {
+                        'id': 'fighting-style',
+                        'label': '选择战斗风格',
+                        'optionType': 'classFeature',
+                        'minimum': 1,
+                        'maximum': 1,
+                        'optionEntryIds': ['guide:class-feature/defense'],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ),
+            _entry(
+              id: 'guide:background/soldier',
+              type: 'background',
+              name: '士兵',
+              revision: 1,
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:species/human',
+              type: 'species',
+              name: '人类',
+              revision: 1,
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:class-feature/second-wind',
+              type: 'classFeature',
+              name: '回气',
+              revision: 1,
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:class-feature/defense',
+              type: 'classFeature',
+              name: '防御战斗风格',
+              revision: 1,
+              rules: const {},
+            ),
+          ],
+          onSubmit: (draft) async => true,
         ),
-      );
+      ),
+    );
 
-      // 自动授予单独显示在"自动获得"卡片中。
-      expect(find.text('自动获得'), findsOneWidget);
-      expect(find.text('回气'), findsOneWidget);
-      // 必选项显示为独立的规则选择卡片。
-      expect(find.text('选择战斗风格'), findsOneWidget);
-      expect(find.text('防御战斗风格'), findsOneWidget);
-    },
-  );
+    // 自动授予单独显示在"自动获得"卡片中。
+    expect(find.text('自动获得'), findsOneWidget);
+    expect(find.text('回气'), findsOneWidget);
+    // 必选项显示为独立的规则选择卡片。
+    expect(find.text('选择战斗风格'), findsOneWidget);
+    expect(find.text('防御战斗风格'), findsOneWidget);
+  });
 
   testWidgets('required choices block creation until resolved', (tester) async {
     tester.view.physicalSize = const Size(1200, 1500);
@@ -269,9 +268,13 @@ void main() {
       // 选择职业并将等级提升到 3 以解锁子职业选择。
       await tester.tap(find.text('战士'), warnIfMissed: false);
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('standard-level-increment-button')));
+      await tester.tap(
+        find.byKey(const Key('standard-level-increment-button')),
+      );
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('standard-level-increment-button')));
+      await tester.tap(
+        find.byKey(const Key('standard-level-increment-button')),
+      );
       await tester.pumpAndSettle();
 
       // 只有 subclassOf 当前职业的子职业才出现；不硬编码职业名称。
@@ -336,85 +339,136 @@ void main() {
   );
 
   // GAP: 升级页 _ChoiceOptions 缺少打开 reader 的 IconButton。
-  testWidgets(
-    'upgrade page choice options open the reader on tap',
-    (tester) async {
-      final entries = <ContentEntry>[
-        _entry(
-          id: 'class:fighter',
-          type: 'class',
-          name: '战士',
-          structured: const {'hitDie': 10},
-          rules: const {
-            'progression': [
-              {
-                'level': 2,
-                'choices': [
-                  {
-                    'id': 'style',
-                    'label': '战斗风格',
-                    'optionType': 'feat',
-                    'minimum': 1,
-                    'maximum': 1,
-                  },
-                ],
-              },
-            ],
-          },
-        ),
-        _entry(id: 'feat:defense', type: 'feat', name: '防御'),
-      ];
-      final character = CharacterSheet.local(
-        id: 'hero',
-        name: '阿雅',
-        level: 1,
-        classSummary: '战士',
-      ).copyWith(
-        maxHp: 12,
-        currentHp: 12,
-        abilities: const {
-          'str': 16,
-          'dex': 12,
-          'con': 14,
-          'int': 10,
-          'wis': 10,
-          'cha': 8,
+  testWidgets('upgrade page choice options open the reader on tap', (
+    tester,
+  ) async {
+    final entries = <ContentEntry>[
+      _entry(
+        id: 'class:fighter',
+        type: 'class',
+        name: '战士',
+        structured: const {'hitDie': 10},
+        rules: const {
+          'progression': [
+            {
+              'level': 2,
+              'choices': [
+                {
+                  'id': 'style',
+                  'label': '战斗风格',
+                  'optionType': 'feat',
+                  'minimum': 1,
+                  'maximum': 1,
+                },
+              ],
+            },
+          ],
         },
-        data: const {
-          'build': {
-            'level': 1,
-            'selections': {'class': 'class:fighter'},
-            'choices': {},
+      ),
+      _entry(id: 'feat:defense', type: 'feat', name: '防御'),
+    ];
+    final character =
+        CharacterSheet.local(
+          id: 'hero',
+          name: '阿雅',
+          level: 1,
+          classSummary: '战士',
+        ).copyWith(
+          maxHp: 12,
+          currentHp: 12,
+          abilities: const {
+            'str': 16,
+            'dex': 12,
+            'con': 14,
+            'int': 10,
+            'wis': 10,
+            'cha': 8,
           },
-        },
-      );
+          data: const {
+            'build': {
+              'level': 1,
+              'selections': {'class': 'class:fighter'},
+              'choices': {},
+            },
+          },
+        );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: CharacterUpgradePage(
-            character: character,
-            contentEntries: entries,
-            onApply: (value) async => true,
-          ),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterUpgradePage(
+          character: character,
+          contentEntries: entries,
+          onApply: (value) async => true,
         ),
-      );
+      ),
+    );
 
-      // 升级页的选项应提供打开 reader 的按钮（与创建向导一致的 key 规范）。
-      expect(
-        find.byKey(const Key('builder-open-entry-feat:defense')),
-        findsOneWidget,
-      );
-      await tester.tap(find.byKey(const Key('builder-open-entry-feat:defense')));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('content-detail-close')), findsOneWidget);
-      await tester.tap(find.byKey(const Key('content-detail-close')));
-      await tester.pumpAndSettle();
-    },
-  );
+    // 升级页的选项应提供打开 reader 的按钮（与创建向导一致的 key 规范）。
+    expect(
+      find.byKey(const Key('builder-open-entry-feat:defense')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('builder-open-entry-feat:defense')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('content-detail-close')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('content-detail-close')));
+    await tester.pumpAndSettle();
+  });
 
   // GAP: 审核页未显示属性生成来源。
+  testWidgets('review step shows the ability generation source', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          contentEntries: [
+            _entry(
+              id: 'guide:class/fighter',
+              type: 'class',
+              name: '战士',
+              revision: 1,
+              structured: const {'hitDie': 'd10'},
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:background/soldier',
+              type: 'background',
+              name: '士兵',
+              revision: 1,
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:species/human',
+              type: 'species',
+              name: '人类',
+              revision: 1,
+              rules: const {},
+            ),
+          ],
+          onSubmit: (draft) async => true,
+        ),
+      ),
+    );
+
+    // 选择购点生成方式。
+    await _goToDesktopStep(tester, 3);
+    await tester.tap(find.byKey(const Key('ability-method-point-buy')));
+    await tester.pumpAndSettle();
+
+    // 审核页应显示属性生成来源。
+    await _goToDesktopStep(tester, 8);
+    expect(find.text('27 点购点'), findsOneWidget);
+  });
+
   testWidgets(
-    'review step shows the ability generation source',
+    'spell step filters by class and level while keeping custom spells separate',
     (tester) async {
       tester.view.physicalSize = const Size(1200, 1500);
       tester.view.devicePixelRatio = 1;
@@ -427,26 +481,52 @@ void main() {
             defaultCreationMethod: 'standard',
             contentEntries: [
               _entry(
-                id: 'guide:class/fighter',
+                id: 'guide:class/wizard',
                 type: 'class',
-                name: '战士',
-                revision: 1,
-                structured: const {'hitDie': 'd10'},
-                rules: const {},
+                name: '法师 / Wizard',
+                structured: const {
+                  'hitDie': 'd6',
+                  'spellcasting': {
+                    'mode': 'prepared',
+                    'ability': 'int',
+                    'listTags': ['spell-list:wizard'],
+                    'progression': [
+                      {
+                        'level': 1,
+                        'maximumSpellLevel': 1,
+                        'maximumCantrips': 3,
+                        'maximumLeveledSpells': 4,
+                      },
+                    ],
+                  },
+                },
               ),
               _entry(
-                id: 'guide:background/soldier',
+                id: 'guide:background/sage',
                 type: 'background',
-                name: '士兵',
-                revision: 1,
-                rules: const {},
+                name: '贤者',
+              ),
+              _entry(id: 'guide:species/human', type: 'species', name: '人类'),
+              _entry(
+                id: 'guide:spell/alarm',
+                type: 'spell',
+                name: '警报术',
+                structured: const {'level': 1, 'school': '防护'},
+                tags: const ['spell-list:wizard'],
               ),
               _entry(
-                id: 'guide:species/human',
-                type: 'species',
-                name: '人类',
-                revision: 1,
-                rules: const {},
+                id: 'guide:spell/wish',
+                type: 'spell',
+                name: '祈愿术',
+                structured: const {'level': 9, 'school': '咒法'},
+                tags: const ['spell-list:wizard'],
+              ),
+              _entry(
+                id: 'guide:spell/cure-wounds',
+                type: 'spell',
+                name: '疗伤术',
+                structured: const {'level': 1, 'school': '防护'},
+                tags: const ['spell-list:cleric'],
               ),
             ],
             onSubmit: (draft) async => true,
@@ -454,16 +534,73 @@ void main() {
         ),
       );
 
-      // 选择购点生成方式。
-      await _goToDesktopStep(tester, 3);
-      await tester.tap(find.byKey(const Key('ability-method-point-buy')));
+      await _goToDesktopStep(tester, 6);
+
+      expect(find.textContaining('最高 1 环'), findsOneWidget);
+      expect(find.text('警报术'), findsOneWidget);
+      expect(find.text('祈愿术'), findsNothing);
+      expect(find.text('疗伤术'), findsNothing);
+      expect(find.byKey(const Key('spell-choice-search')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('add-custom-spell')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('custom-spell-name')),
+        '自创星火',
+      );
+      await tester.tap(find.byKey(const Key('custom-spell-confirm')));
       await tester.pumpAndSettle();
 
-      // 审核页应显示属性生成来源。
-      await _goToDesktopStep(tester, 8);
-      expect(find.text('27 点购点'), findsOneWidget);
+      expect(find.text('自创星火'), findsOneWidget);
+      expect(find.text('自定义法术不计入规则选择上限。'), findsOneWidget);
     },
   );
+
+  testWidgets('equipment budget warns but never blocks overspending', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          contentEntries: [
+            _entry(
+              id: 'guide:class/wizard',
+              type: 'class',
+              name: '法师',
+              structured: const {
+                'hitDie': 'd6',
+                'startingEquipment': '选择A或B：(A) 法术书；或(B) 55GP',
+              },
+            ),
+            _entry(id: 'guide:background/sage', type: 'background', name: '贤者'),
+            _entry(id: 'guide:species/human', type: 'species', name: '人类'),
+            _entry(
+              id: 'guide:equipment/plate',
+              type: 'equipment',
+              name: '昂贵板甲',
+              structured: const {'price': '60 GP'},
+            ),
+          ],
+          onSubmit: (draft) async => true,
+        ),
+      ),
+    );
+
+    await _goToDesktopStep(tester, 5);
+    expect(find.text('建议金币上限 55 GP'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilterChip, '昂贵板甲'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已选总价 60 GP'), findsOneWidget);
+    expect(find.text('已超出建议上限，仍可继续创建和购买。'), findsOneWidget);
+    expect(find.widgetWithText(FilterChip, '昂贵板甲'), findsOneWidget);
+  });
 }
 
 Future<void> _goToDesktopStep(WidgetTester tester, int index) async {
@@ -481,6 +618,7 @@ ContentEntry _entry({
   Map<String, Object?> structured = const {},
   Map<String, Object?>? rules,
   List<Map<String, Object?>> relations = const [],
+  List<String> tags = const [],
 }) {
   return ContentEntry.fromJson({
     'id': id,
@@ -492,5 +630,6 @@ ContentEntry _entry({
     'structured': structured,
     'rules': ?rules,
     'relations': relations,
+    'tags': tags,
   });
 }

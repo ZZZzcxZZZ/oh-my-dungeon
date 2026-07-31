@@ -5,105 +5,109 @@ import '../../../characters/presentation/character_detail_page.dart';
 import '../../../content/data/local/content_repository.dart';
 import '../../../content/domain/content_entry.dart';
 import '../../data/sync/campaign_sync_api_client.dart';
-import '../../domain/campaign_actor.dart';
-import 'campaign_actor_controller.dart';
+import '../../domain/campaign_character.dart';
+import 'campaign_character_controller.dart';
 
-bool canEditCampaignActor({
-  required CampaignActor actor,
+bool canEditCampaignCharacter({
+  required CampaignCharacter character,
   required String currentUserId,
-  required bool canEditAnyActor,
+  required bool canEditAnyCharacter,
 }) {
-  return canEditAnyActor || actor.ownerUserId == currentUserId;
+  return canEditAnyCharacter || character.ownerUserId == currentUserId;
 }
 
-CharacterSheet campaignActorToCharacterSheet(CampaignActor actor) {
-  final name = actor.sheet['name']?.toString().trim();
-  final level = _positiveInt(actor.sheet['level'], fallback: 1);
+CharacterSheet campaignCharacterToCharacterSheet(CampaignCharacter character) {
+  final name = character.sheet['name']?.toString().trim();
+  final level = _positiveInt(character.sheet['level'], fallback: 1);
   final seed = CharacterSheet.local(
-    id: actor.id,
+    id: character.id,
     name: name == null || name.isEmpty ? '未命名角色' : name,
     level: level,
   );
   final json = <String, Object?>{
     ...seed.toJson(),
-    ...actor.sheet,
-    'id': actor.id,
-    'ownerUserId': actor.ownerUserId ?? 'campaign',
+    ...character.sheet,
+    'id': character.id,
+    'ownerUserId': character.ownerUserId ?? 'campaign',
     'name': name == null || name.isEmpty ? '未命名角色' : name,
-    'system': actor.sheet['system'] is String
-        ? actor.sheet['system']
+    'system': character.sheet['system'] is String
+        ? character.sheet['system']
         : 'dnd5e-2024',
     'level': level,
-    'classSummary': actor.sheet['classSummary']?.toString() ?? '',
-    'raceSummary': actor.sheet['raceSummary']?.toString() ?? '',
-    'currentHp': _intValue(actor.sheet['currentHp']),
-    'maxHp': _intValue(actor.sheet['maxHp']),
-    'armorClass': _intValue(actor.sheet['armorClass'], fallback: 10),
-    'speed': _intValue(actor.sheet['speed'], fallback: 30),
-    'initiativeBonus': _intValue(actor.sheet['initiativeBonus']),
-    'notes': actor.sheet['notes']?.toString() ?? '',
-    'createdAt': actor.sheet['createdAt']?.toString().isNotEmpty == true
-        ? actor.sheet['createdAt']
-        : actor.createdAt,
-    'updatedAt': actor.sheet['updatedAt']?.toString().isNotEmpty == true
-        ? actor.sheet['updatedAt']
-        : actor.updatedAt,
+    'classSummary': character.sheet['classSummary']?.toString() ?? '',
+    'raceSummary': character.sheet['raceSummary']?.toString() ?? '',
+    'currentHp': _intValue(character.sheet['currentHp']),
+    'maxHp': _intValue(character.sheet['maxHp']),
+    'armorClass': _intValue(character.sheet['armorClass'], fallback: 10),
+    'speed': _intValue(character.sheet['speed'], fallback: 30),
+    'initiativeBonus': _intValue(character.sheet['initiativeBonus']),
+    'notes': character.sheet['notes']?.toString() ?? '',
+    'createdAt': character.sheet['createdAt']?.toString().isNotEmpty == true
+        ? character.sheet['createdAt']
+        : character.createdAt,
+    'updatedAt': character.sheet['updatedAt']?.toString().isNotEmpty == true
+        ? character.sheet['updatedAt']
+        : character.updatedAt,
   };
   return CharacterSheet.fromJson(json);
 }
 
-Future<void> openCampaignActorSheet({
+Future<void> openCampaignCharacterSheet({
   required BuildContext context,
-  required CampaignActorController controller,
-  required CampaignActor actor,
-  required bool canEditAnyActor,
+  required CampaignCharacterController controller,
+  required CampaignCharacter character,
+  required bool canEditAnyCharacter,
   ContentRepository? contentRepository,
   CampaignActionSink? sink,
+  bool returnToChatAfterRoll = false,
 }) async {
-  final canEdit = canEditCampaignActor(
-    actor: actor,
+  final canEdit = canEditCampaignCharacter(
+    character: character,
     currentUserId: controller.currentUserId,
-    canEditAnyActor: canEditAnyActor,
+    canEditAnyCharacter: canEditAnyCharacter,
   );
   final contentEntries = await _loadContentEntries(contentRepository);
   if (!context.mounted) return;
 
   await Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
-      builder: (context) => CampaignActorFullSheetPage(
+      builder: (context) => CampaignCharacterFullSheetPage(
         controller: controller,
-        actorId: actor.id,
+        characterId: character.id,
         canEdit: canEdit,
         contentEntries: contentEntries,
         sink: sink,
+        returnToChatAfterRoll: returnToChatAfterRoll,
       ),
     ),
   );
 }
 
-class CampaignActorFullSheetPage extends StatefulWidget {
-  const CampaignActorFullSheetPage({
+class CampaignCharacterFullSheetPage extends StatefulWidget {
+  const CampaignCharacterFullSheetPage({
     required this.controller,
-    required this.actorId,
+    required this.characterId,
     required this.canEdit,
     required this.contentEntries,
     this.sink,
+    this.returnToChatAfterRoll = false,
     super.key,
   });
 
-  final CampaignActorController controller;
-  final String actorId;
+  final CampaignCharacterController controller;
+  final String characterId;
   final bool canEdit;
   final List<ContentEntry> contentEntries;
   final CampaignActionSink? sink;
+  final bool returnToChatAfterRoll;
 
   @override
-  State<CampaignActorFullSheetPage> createState() =>
-      _CampaignActorFullSheetPageState();
+  State<CampaignCharacterFullSheetPage> createState() =>
+      _CampaignCharacterFullSheetPageState();
 }
 
-class _CampaignActorFullSheetPageState
-    extends State<CampaignActorFullSheetPage> {
+class _CampaignCharacterFullSheetPageState
+    extends State<CampaignCharacterFullSheetPage> {
   bool _conflictDialogOpen = false;
 
   @override
@@ -139,7 +143,7 @@ class _CampaignActorFullSheetPageState
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        key: const Key('actor-conflict-dialog'),
+        key: const Key('character-conflict-dialog'),
         title: const Text('版本冲突'),
         content: Text('$name 已被其他主持人修改。\n服务器当前 HP $currentHp/$maxHp'),
         actions: [
@@ -166,16 +170,20 @@ class _CampaignActorFullSheetPageState
 
   @override
   Widget build(BuildContext context) {
-    final actor = _latestActor(widget.controller, widget.actorId);
-    if (actor == null) {
+    final campaignCharacter = _latestCharacter(
+      widget.controller,
+      widget.characterId,
+    );
+    if (campaignCharacter == null) {
       return const Scaffold(body: Center(child: Text('角色已不存在')));
     }
-    final character = campaignActorToCharacterSheet(actor);
+    final character = campaignCharacterToCharacterSheet(campaignCharacter);
     return CharacterDetailPage(
-      key: const Key('campaign-actor-full-sheet'),
+      key: const Key('campaign-character-full-sheet'),
       character: character,
       contentEntries: widget.contentEntries,
       sink: widget.sink,
+      returnToChatAfterRoll: widget.returnToChatAfterRoll,
       onUpdateRuntime: widget.canEdit
           ? ({
               currentHp,
@@ -188,7 +196,7 @@ class _CampaignActorFullSheetPageState
               classResourcesUsed,
             }) => _updateRuntime(
               controller: widget.controller,
-              actorId: widget.actorId,
+              characterId: widget.characterId,
               currentHp: currentHp,
               temporaryHp: temporaryHp,
               inspiration: inspiration,
@@ -202,7 +210,7 @@ class _CampaignActorFullSheetPageState
       onUpdateInventory: widget.canEdit
           ? ({inventory, currency}) => _updateInventory(
               controller: widget.controller,
-              actorId: widget.actorId,
+              characterId: widget.characterId,
               inventory: inventory,
               currency: currency,
             )
@@ -210,7 +218,7 @@ class _CampaignActorFullSheetPageState
       onSaveCharacter: widget.canEdit
           ? (character) => _saveCharacter(
               controller: widget.controller,
-              actorId: widget.actorId,
+              characterId: widget.characterId,
               character: character,
             )
           : null,
@@ -229,32 +237,32 @@ Future<List<ContentEntry>> _loadContentEntries(
   }
 }
 
-CampaignActor? _latestActor(
-  CampaignActorController controller,
-  String actorId,
+CampaignCharacter? _latestCharacter(
+  CampaignCharacterController controller,
+  String characterId,
 ) {
-  for (final actor in controller.actors) {
-    if (actor.id == actorId) return actor;
+  for (final character in controller.characters) {
+    if (character.id == characterId) return character;
   }
   return null;
 }
 
 Future<bool> _saveCharacter({
-  required CampaignActorController controller,
-  required String actorId,
+  required CampaignCharacterController controller,
+  required String characterId,
   required CharacterSheet character,
 }) async {
-  final actor = _latestActor(controller, actorId);
-  if (actor == null) return false;
-  return controller.updateActor(actor, <String, Object?>{
-    ...actor.sheet,
+  final campaignCharacter = _latestCharacter(controller, characterId);
+  if (campaignCharacter == null) return false;
+  return controller.updateCharacter(campaignCharacter, <String, Object?>{
+    ...campaignCharacter.sheet,
     ...character.toJson(),
   });
 }
 
 Future<void> _updateRuntime({
-  required CampaignActorController controller,
-  required String actorId,
+  required CampaignCharacterController controller,
+  required String characterId,
   int? currentHp,
   int? temporaryHp,
   bool? inspiration,
@@ -264,9 +272,9 @@ Future<void> _updateRuntime({
   Map<String, int>? spellSlotsUsed,
   Map<String, int>? classResourcesUsed,
 }) async {
-  final actor = _latestActor(controller, actorId);
-  if (actor == null) return;
-  final character = campaignActorToCharacterSheet(actor);
+  final campaignCharacter = _latestCharacter(controller, characterId);
+  if (campaignCharacter == null) return;
+  final character = campaignCharacterToCharacterSheet(campaignCharacter);
   final runtime = Map<String, Object?>.from(character.runtimeMap);
   if (temporaryHp != null) runtime['temporaryHp'] = temporaryHp;
   if (inspiration != null) runtime['inspiration'] = inspiration;
@@ -285,23 +293,23 @@ Future<void> _updateRuntime({
   final data = <String, Object?>{...character.dataMap, 'runtime': runtime};
   await _saveCharacter(
     controller: controller,
-    actorId: actorId,
+    characterId: characterId,
     character: character.copyWith(currentHp: currentHp, data: data),
   );
 }
 
 Future<void> _updateInventory({
-  required CampaignActorController controller,
-  required String actorId,
+  required CampaignCharacterController controller,
+  required String characterId,
   List<Map<String, Object>>? inventory,
   Map<String, int>? currency,
 }) async {
-  final actor = _latestActor(controller, actorId);
-  if (actor == null) return;
-  final character = campaignActorToCharacterSheet(actor);
+  final campaignCharacter = _latestCharacter(controller, characterId);
+  if (campaignCharacter == null) return;
+  final character = campaignCharacterToCharacterSheet(campaignCharacter);
   await _saveCharacter(
     controller: controller,
-    actorId: actorId,
+    characterId: characterId,
     character: character.copyWith(inventory: inventory, currency: currency),
   );
 }

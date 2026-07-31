@@ -7,10 +7,60 @@ import 'settings_section.dart';
 ///
 /// Task 1.3 新增项 — 参考 docs/superpowers/plans/2026-07-23-user-feedback-integration-hardening.md。
 /// Task 3.2: 快捷骰预设编辑器 (quickDicePresets) 与组合式骰子编辑器联动.
-class GameplaySettingsSection extends StatelessWidget {
+class GameplaySettingsSection extends StatefulWidget {
   const GameplaySettingsSection({required this.controller, super.key});
 
   final AppPreferencesController controller;
+
+  @override
+  State<GameplaySettingsSection> createState() =>
+      _GameplaySettingsSectionState();
+
+  static String? validatePreset(String input) {
+    if (input.isEmpty) return '不能为空';
+    final tokens = input.split(RegExp(r'\s+\+\s+'));
+    for (final token in tokens) {
+      final match = RegExp(
+        r'^(\d+)d(\d+)(?:kh1|kl1)?([+-]\d+)?$',
+      ).firstMatch(token);
+      if (match == null) {
+        return '格式无效, 请使用如 1d20+5 或 2d6+3 的表达式';
+      }
+    }
+    return null;
+  }
+}
+
+class _GameplaySettingsSectionState extends State<GameplaySettingsSection> {
+  late final TextEditingController _diceController;
+
+  AppPreferencesController get controller => widget.controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _diceController = TextEditingController(
+      text: controller.preferences.defaultDice,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant GameplaySettingsSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final current = controller.preferences.defaultDice;
+    if (_diceController.text != current) {
+      _diceController.value = TextEditingValue(
+        text: current,
+        selection: TextSelection.collapsed(offset: current.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _diceController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,6 +75,31 @@ class GameplaySettingsSection extends StatelessWidget {
         Card(
           child: Column(
             children: [
+              ListTile(
+                leading: const Icon(Icons.casino_outlined),
+                title: const Text('默认骰子'),
+                subtitle: TextField(
+                  controller: _diceController,
+                  decoration: const InputDecoration(
+                    hintText: '1d20',
+                    isDense: true,
+                  ),
+                  onSubmitted: controller.setDefaultDice,
+                ),
+                trailing: IconButton.filledTonal(
+                  tooltip: '保存默认骰子',
+                  onPressed: () =>
+                      controller.setDefaultDice(_diceController.text),
+                  icon: const Icon(Icons.save_outlined),
+                ),
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.fact_check_outlined),
+                title: const Text('掷骰前确认'),
+                subtitle: const Text('掷出默认骰子前先确认，避免误触'),
+                value: preferences.confirmBeforeRoll,
+                onChanged: controller.setConfirmBeforeRoll,
+              ),
               ListTile(
                 leading: const Icon(Icons.swap_horiz_outlined),
                 title: const Text('默认掷骰模式'),
@@ -49,10 +124,7 @@ class GameplaySettingsSection extends StatelessWidget {
                   items: const [
                     DropdownMenuItem(value: 'compact', child: Text('紧凑')),
                     DropdownMenuItem(value: 'standard', child: Text('标准')),
-                    DropdownMenuItem(
-                      value: 'comfortable',
-                      child: Text('宽松'),
-                    ),
+                    DropdownMenuItem(value: 'comfortable', child: Text('宽松')),
                   ],
                   onChanged: (value) {
                     if (value != null) controller.setMessageDensity(value);
@@ -76,6 +148,21 @@ class GameplaySettingsSection extends StatelessWidget {
                   },
                 ),
               ),
+              SwitchListTile(
+                secondary: const Icon(Icons.account_circle_outlined),
+                title: const Text('连续消息合并头像'),
+                subtitle: const Text('同一角色连续发言时，只在第一条显示头像和名称'),
+                value: preferences.groupConsecutiveChatMessages,
+                onChanged: controller.setGroupConsecutiveChatMessages,
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.keyboard_return_outlined),
+                title: const Text('检定后返回聊天室'),
+                subtitle: const Text('从战役角色卡掷骰后自动回到聊天'),
+                value: preferences.returnToChatAfterRoll,
+                onChanged: controller.setReturnToChatAfterRoll,
+              ),
+              _CharacterDefaultTabTile(controller: controller),
             ],
           ),
         ),
@@ -212,21 +299,43 @@ class GameplaySettingsSection extends StatelessWidget {
     current.add(result);
     await controller.setQuickDicePresets(current);
   }
+}
 
-  /// 验证预设表达式. 返回 null 表示合法, 否则返回错误消息.
-  /// 支持单组 (1d20+5) 和多组 (1d20+5 + 2d6+3, 用 ' + ' 分隔).
-  static String? validatePreset(String input) {
-    if (input.isEmpty) return '不能为空';
-    final tokens = input.split(RegExp(r'\s+\+\s+'));
-    for (final token in tokens) {
-      final match = RegExp(
-        r'^(\d+)d(\d+)(?:kh1|kl1)?([+-]\d+)?$',
-      ).firstMatch(token);
-      if (match == null) {
-        return '格式无效, 请使用如 1d20+5 或 2d6+3 的表达式';
-      }
-    }
-    return null;
+class _CharacterDefaultTabTile extends StatelessWidget {
+  const _CharacterDefaultTabTile({required this.controller});
+
+  final AppPreferencesController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final preferences = controller.preferences;
+    final defaultTab = switch (preferences.defaultCharacterTab) {
+      'status' => 'overview',
+      'details' || 'notes' => 'profile',
+      final value => value,
+    };
+    return ListTile(
+      leading: const Icon(Icons.tab_outlined),
+      title: const Text('默认角色卡标签'),
+      subtitle: const Text('打开角色详情时优先关注的页面'),
+      trailing: DropdownButton<String>(
+        value: defaultTab,
+        items: const [
+          DropdownMenuItem(value: 'overview', child: Text('总览')),
+          DropdownMenuItem(value: 'actions', child: Text('动作')),
+          DropdownMenuItem(value: 'spells', child: Text('法术')),
+          DropdownMenuItem(value: 'equipment', child: Text('装备')),
+          DropdownMenuItem(value: 'resources', child: Text('资源')),
+          DropdownMenuItem(value: 'features', child: Text('特性')),
+          DropdownMenuItem(value: 'profile', child: Text('角色资料')),
+        ],
+        onChanged: (value) {
+          if (value != null) {
+            controller.setDefaultCharacterTab(value);
+          }
+        },
+      ),
+    );
   }
 }
 

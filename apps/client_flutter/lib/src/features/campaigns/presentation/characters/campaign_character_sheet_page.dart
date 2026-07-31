@@ -4,34 +4,36 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/sync/campaign_sync_api_client.dart';
-import '../../domain/campaign_actor.dart';
-import 'campaign_actor_controller.dart';
+import '../../domain/campaign_character.dart';
+import 'campaign_character_controller.dart';
 
 /// 战役角色详情页。DM 可编辑 HP/AC/速度/状态/备注等字段；每次成功更新都会
-/// 通过 [CampaignActorController] 提交到服务器并写回本地缓存。
-class CampaignActorSheetPage extends StatefulWidget {
-  const CampaignActorSheetPage({
+/// 通过 [CampaignCharacterController] 提交到服务器并写回本地缓存。
+class CampaignCharacterSheetPage extends StatefulWidget {
+  const CampaignCharacterSheetPage({
     required this.controller,
-    required this.actorId,
+    required this.characterId,
     required this.canEdit,
     super.key,
   });
 
-  final CampaignActorController controller;
-  final String actorId;
+  final CampaignCharacterController controller;
+  final String characterId;
   final bool canEdit;
 
   @override
-  State<CampaignActorSheetPage> createState() => _CampaignActorSheetPageState();
+  State<CampaignCharacterSheetPage> createState() =>
+      _CampaignCharacterSheetPageState();
 }
 
-class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
+class _CampaignCharacterSheetPageState
+    extends State<CampaignCharacterSheetPage> {
   @override
   void initState() {
     super.initState();
     widget.controller.addListener(_onControllerChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) widget.controller.loadActorAudits(widget.actorId);
+      if (mounted) widget.controller.loadCharacterAudits(widget.characterId);
     });
   }
 
@@ -57,7 +59,7 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
-        return _ActorConflictDialog(
+        return _CharacterConflictDialog(
           conflict: conflict,
           onReload: () {
             widget.controller.clearConflict();
@@ -74,24 +76,24 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
     _conflictDialogOpen = false;
   }
 
-  CampaignActor? get _actor {
-    return widget.controller.actors
-        .where((actor) => actor.id == widget.actorId)
+  CampaignCharacter? get _character {
+    return widget.controller.characters
+        .where((character) => character.id == widget.characterId)
         .firstOrNull;
   }
 
   @override
   Widget build(BuildContext context) {
-    final actor = _actor;
-    if (actor == null) {
+    final character = _character;
+    if (character == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('角色')),
         body: const Center(child: Text('角色已不存在')),
       );
     }
-    final sheet = Map<String, Object?>.from(actor.sheet);
+    final sheet = Map<String, Object?>.from(character.sheet);
     return Scaffold(
-      key: const Key('campaign-actor-sheet'),
+      key: const Key('campaign-character-sheet'),
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
@@ -103,20 +105,20 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
                     IconButton(
                       tooltip: '归档',
                       icon: const Icon(Icons.archive_outlined),
-                      onPressed: () => _confirmArchive(actor),
+                      onPressed: () => _confirmArchive(character),
                     ),
                   ]
                 : null,
           ),
           SliverList(
             delegate: SliverChildListDelegate([
-              _buildSummaryCard(context, actor, sheet),
+              _buildSummaryCard(context, character, sheet),
               _buildRuntimeSection(context, sheet),
               _buildRuleLedgerSection(context, sheet),
-              _buildHpSection(context, actor, sheet),
-              _buildBuildFields(context, actor, sheet),
-              _buildNotesSection(context, actor, sheet),
-              _buildAuditSection(context, actor),
+              _buildHpSection(context, character, sheet),
+              _buildBuildFields(context, character, sheet),
+              _buildNotesSection(context, character, sheet),
+              _buildAuditSection(context, character),
               const SizedBox(height: 32),
             ]),
           ),
@@ -127,7 +129,7 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
 
   Widget _buildSummaryCard(
     BuildContext context,
-    CampaignActor actor,
+    CampaignCharacter character,
     Map<String, Object?> sheet,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -153,12 +155,12 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
                 ),
                 if (widget.canEdit)
                   IconButton(
-                    key: const Key('campaign-actor-avatar-picker'),
+                    key: const Key('campaign-character-avatar-picker'),
                     tooltip: '更换头像',
                     icon: const Icon(Icons.add_a_photo_outlined),
-                    onPressed: actor.status == 'archived'
+                    onPressed: character.status == 'archived'
                         ? null
-                        : () => _pickAvatar(actor, sheet),
+                        : () => _pickAvatar(character, sheet),
                   ),
               ],
             ),
@@ -169,7 +171,7 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
               children: [
                 if (armorClass > 0) Chip(label: Text('AC $armorClass')),
                 if (speed > 0) Chip(label: Text('速度 $speed')),
-                if (actor.status == 'archived')
+                if (character.status == 'archived')
                   Chip(
                     label: Text(
                       '已归档',
@@ -186,7 +188,7 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
 
   Widget _buildHpSection(
     BuildContext context,
-    CampaignActor actor,
+    CampaignCharacter character,
     Map<String, Object?> sheet,
   ) {
     final currentHp = _asInt(sheet['currentHp']);
@@ -204,18 +206,18 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
                 IconButton(
                   tooltip: '受到 1 点伤害',
                   icon: const Icon(Icons.remove_circle_outline),
-                  onPressed: actor.status == 'archived'
+                  onPressed: character.status == 'archived'
                       ? null
-                      : () => _updateHp(actor, sheet, currentHp - 1),
+                      : () => _updateHp(character, sheet, currentHp - 1),
                 ),
               Text('当前 HP $currentHp/$maxHp'),
               if (widget.canEdit)
                 IconButton(
                   tooltip: '恢复 1 点 HP',
                   icon: const Icon(Icons.add_circle_outline),
-                  onPressed: actor.status == 'archived'
+                  onPressed: character.status == 'archived'
                       ? null
-                      : () => _updateHp(actor, sheet, currentHp + 1),
+                      : () => _updateHp(character, sheet, currentHp + 1),
                 ),
             ],
           ),
@@ -244,7 +246,7 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
         runSpacing: 8,
         children: [
           Chip(label: Text('临时 HP $temporaryHp')),
-          if (runtime['inspiration'] == true) const Chip(label: Text('有灵感')),
+          if (runtime['inspiration'] == true) const Chip(label: Text('有激励')),
           for (final condition in conditions)
             Chip(
               avatar: const Icon(Icons.warning_amber_outlined, size: 18),
@@ -276,7 +278,7 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
       icon: Icons.account_tree_outlined,
       child: grants.isEmpty
           ? Text(
-              '该 Actor 还没有规则授予快照',
+              '该 Character 还没有规则授予快照',
               style: TextStyle(color: Theme.of(context).colorScheme.outline),
             )
           : Column(
@@ -297,10 +299,10 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
     );
   }
 
-  Widget _buildAuditSection(BuildContext context, CampaignActor actor) {
-    final loading = widget.controller.isLoadingAudits(actor.id);
-    final error = widget.controller.auditErrorFor(actor.id);
-    final audits = widget.controller.auditsFor(actor.id).reversed.toList();
+  Widget _buildAuditSection(BuildContext context, CampaignCharacter character) {
+    final loading = widget.controller.isLoadingAudits(character.id);
+    final error = widget.controller.auditErrorFor(character.id);
+    final audits = widget.controller.auditsFor(character.id).reversed.toList();
     return _SheetSection(
       title: '编辑历史',
       icon: Icons.history_outlined,
@@ -308,7 +310,7 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
         tooltip: '刷新编辑历史',
         onPressed: loading
             ? null
-            : () => widget.controller.loadActorAudits(actor.id),
+            : () => widget.controller.loadCharacterAudits(character.id),
         icon: const Icon(Icons.refresh),
       ),
       child: loading && audits.isEmpty
@@ -333,7 +335,7 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
                       '版本 ${audit.baseRevision} → ${audit.resultRevision}',
                     ),
                     subtitle: Text(
-                      '${audit.changedPaths.join(', ')}\n操作人 ${audit.actorUserId}',
+                      '${audit.changedPaths.join(', ')}\n操作人 ${audit.characterUserId}',
                     ),
                     isThreeLine: true,
                   ),
@@ -357,7 +359,7 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
 
   Widget _buildBuildFields(
     BuildContext context,
-    CampaignActor actor,
+    CampaignCharacter character,
     Map<String, Object?> sheet,
   ) {
     final abilities = sheet['abilities'];
@@ -390,10 +392,10 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
                   child: OutlinedButton.icon(
                     icon: const Icon(Icons.shield_outlined),
                     label: Text('AC $armorClass'),
-                    onPressed: actor.status == 'archived'
+                    onPressed: character.status == 'archived'
                         ? null
                         : () => _editNumericField(
-                            actor,
+                            character,
                             sheet,
                             'armorClass',
                             'AC',
@@ -406,10 +408,10 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
                   child: OutlinedButton.icon(
                     icon: const Icon(Icons.directions_run),
                     label: Text('速度 $speed'),
-                    onPressed: actor.status == 'archived'
+                    onPressed: character.status == 'archived'
                         ? null
                         : () => _editNumericField(
-                            actor,
+                            character,
                             sheet,
                             'speed',
                             '速度',
@@ -441,7 +443,7 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
 
   Widget _buildNotesSection(
     BuildContext context,
-    CampaignActor actor,
+    CampaignCharacter character,
     Map<String, Object?> sheet,
   ) {
     final notes = sheet['notes']?.toString() ?? '';
@@ -464,7 +466,7 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
               ),
               maxLines: 4,
               onSubmitted: (value) =>
-                  _updateField(actor, sheet, 'notes', value),
+                  _updateField(character, sheet, 'notes', value),
             )
           else
             Text(notes.trim().isEmpty ? '暂无备注' : notes),
@@ -474,17 +476,17 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
   }
 
   Future<void> _updateHp(
-    CampaignActor actor,
+    CampaignCharacter character,
     Map<String, Object?> sheet,
     int newHp,
   ) async {
     final updated = Map<String, Object?>.from(sheet);
     updated['currentHp'] = newHp;
-    await widget.controller.updateActor(actor, updated);
+    await widget.controller.updateCharacter(character, updated);
   }
 
   Future<void> _pickAvatar(
-    CampaignActor actor,
+    CampaignCharacter character,
     Map<String, Object?> sheet,
   ) async {
     final result = await FilePicker.platform.pickFiles(
@@ -509,22 +511,22 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
     };
     final updated = Map<String, Object?>.from(sheet);
     updated['avatarUrl'] = 'data:$mimeType;base64,${base64Encode(bytes)}';
-    await widget.controller.updateActor(actor, updated);
+    await widget.controller.updateCharacter(character, updated);
   }
 
   Future<void> _updateField(
-    CampaignActor actor,
+    CampaignCharacter character,
     Map<String, Object?> sheet,
     String key,
     Object? value,
   ) async {
     final updated = Map<String, Object?>.from(sheet);
     updated[key] = value;
-    await widget.controller.updateActor(actor, updated);
+    await widget.controller.updateCharacter(character, updated);
   }
 
   Future<void> _editNumericField(
-    CampaignActor actor,
+    CampaignCharacter character,
     Map<String, Object?> sheet,
     String key,
     String label,
@@ -556,15 +558,15 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
       ),
     );
     if (value == null) return;
-    await _updateField(actor, sheet, key, value);
+    await _updateField(character, sheet, key, value);
   }
 
-  Future<void> _confirmArchive(CampaignActor actor) async {
+  Future<void> _confirmArchive(CampaignCharacter character) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('归档角色'),
-        content: Text('确认归档 ${actor.sheet['name'] ?? '此角色'}？归档后可在筛选中恢复。'),
+        content: Text('确认归档 ${character.sheet['name'] ?? '此角色'}？归档后可在筛选中恢复。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -578,7 +580,7 @@ class _CampaignActorSheetPageState extends State<CampaignActorSheetPage> {
       ),
     );
     if (confirmed != true) return;
-    final success = await widget.controller.archiveActor(actor);
+    final success = await widget.controller.archiveCharacter(character);
     if (!mounted) return;
     if (success) {
       Navigator.of(context).pop();
@@ -636,8 +638,8 @@ class _SheetSection extends StatelessWidget {
   }
 }
 
-class _ActorConflictDialog extends StatelessWidget {
-  const _ActorConflictDialog({
+class _CharacterConflictDialog extends StatelessWidget {
+  const _CharacterConflictDialog({
     required this.conflict,
     required this.onReload,
     required this.onKeepLocal,
@@ -658,7 +660,7 @@ class _ActorConflictDialog extends StatelessWidget {
     final name = sheet['name']?.toString() ?? '(未命名)';
     final revision = current['revision'];
     return AlertDialog(
-      key: const Key('actor-conflict-dialog'),
+      key: const Key('character-conflict-dialog'),
       title: const Text('版本冲突'),
       content: SingleChildScrollView(
         child: Column(

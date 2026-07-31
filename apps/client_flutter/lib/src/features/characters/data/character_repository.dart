@@ -1,5 +1,19 @@
 import '../domain/character.dart';
 
+class CharacterMarkdownExternalChange {
+  const CharacterMarkdownExternalChange({
+    required this.existing,
+    required this.imported,
+  });
+
+  final CharacterSheet existing;
+  final CharacterSheet imported;
+}
+
+abstract interface class CharacterMarkdownChangeRepository {
+  Future<List<CharacterMarkdownExternalChange>> detectExternalMarkdownChanges();
+}
+
 /// 角色本地持久化接口。UI 只读本地，网络同步只把远端变化合并到本地表。
 abstract interface class CharacterRepository {
   Stream<List<CharacterSheet>> watchOwnedCharacters();

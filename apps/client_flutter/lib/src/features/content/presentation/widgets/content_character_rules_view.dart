@@ -4,15 +4,21 @@ import '../../domain/content_entry.dart';
 import '../../../rules/domain/character_rule_definition.dart';
 
 class ContentCharacterRulesView extends StatelessWidget {
-  const ContentCharacterRulesView({required this.entry, super.key});
+  const ContentCharacterRulesView({
+    required this.entry,
+    this.hiddenFeatureTargets = const {},
+    super.key,
+  });
 
   final ContentEntry entry;
+  final Set<String> hiddenFeatureTargets;
 
   @override
   Widget build(BuildContext context) {
     final rules = entry.rules;
     if (rules == null) return const SizedBox.shrink();
     final theme = Theme.of(context);
+    final immediateGrants = _visibleGrants(rules.grants);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -31,24 +37,37 @@ class ContentCharacterRulesView extends StatelessWidget {
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
-        if (rules.grants.isNotEmpty || rules.choices.isNotEmpty) ...[
+        if (immediateGrants.isNotEmpty || rules.choices.isNotEmpty) ...[
           const SizedBox(height: 8),
           _RuleGroup(
             title: '选择后立即获得',
-            grants: rules.grants,
+            grants: immediateGrants,
             choices: rules.choices,
           ),
         ],
-        for (final step in rules.progression) ...[
-          const SizedBox(height: 8),
-          _RuleGroup(
-            title: '等级 ${step.level}',
-            grants: step.grants,
-            choices: step.choices,
-          ),
-        ],
+        for (final step in rules.progression)
+          if (_visibleGrants(step.grants).isNotEmpty ||
+              step.choices.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _RuleGroup(
+              title: '等级 ${step.level}',
+              grants: _visibleGrants(step.grants),
+              choices: step.choices,
+            ),
+          ],
       ],
     );
+  }
+
+  List<RuleGrantDefinition> _visibleGrants(List<RuleGrantDefinition> grants) {
+    return grants
+        .where(
+          (grant) =>
+              grant.kind != RuleGrantKind.feature ||
+              grant.target == null ||
+              !hiddenFeatureTargets.contains(grant.target),
+        )
+        .toList(growable: false);
   }
 }
 

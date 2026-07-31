@@ -17,9 +17,7 @@ void main() {
     var picked = 0;
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(
-          body: AvatarPicker(onPick: () => picked++),
-        ),
+        home: Scaffold(body: AvatarPicker(onPick: () => picked++)),
       ),
     );
 
@@ -45,16 +43,14 @@ void main() {
     expect(uploaded, 1);
   });
 
-  testWidgets('upload button is disabled until a preview is picked',
-      (tester) async {
+  testWidgets('upload button is disabled until a preview is picked', (
+    tester,
+  ) async {
     var uploaded = 0;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: AvatarPicker(
-            onPick: () {},
-            onUpload: () => uploaded++,
-          ),
+          body: AvatarPicker(onPick: () {}, onUpload: () => uploaded++),
         ),
       ),
     );
@@ -85,10 +81,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: AvatarPicker(
-            onPick: () {},
-            error: '图片太大，请压缩后重试',
-          ),
+          body: AvatarPicker(onPick: () {}, error: '图片太大，请压缩后重试'),
         ),
       ),
     );

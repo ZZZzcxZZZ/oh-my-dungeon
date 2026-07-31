@@ -48,14 +48,11 @@ class ContentClassFeatureList extends StatelessWidget {
             ListTile(
               leading: const Icon(Icons.auto_awesome_outlined),
               title: Text(feature.name),
-              subtitle:
-                  feature.summary.isEmpty ? null : Text(feature.summary),
+              subtitle: feature.summary.isEmpty ? null : Text(feature.summary),
               trailing: onFeatureTap == null
                   ? null
                   : const Icon(Icons.chevron_right),
-              onTap: onFeatureTap == null
-                  ? null
-                  : () => onFeatureTap!(feature),
+              onTap: onFeatureTap == null ? null : () => onFeatureTap!(feature),
             ),
         ],
       ],

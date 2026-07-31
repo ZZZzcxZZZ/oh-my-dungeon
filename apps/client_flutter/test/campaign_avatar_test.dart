@@ -1,7 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign.dart';
-import 'package:dnd_table_client/src/features/campaigns/domain/campaign_actor.dart';
+import 'package:dnd_table_client/src/features/campaigns/domain/campaign_character.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/chat/campaign_composer_identity.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/widgets/campaign_avatar.dart';
 import 'package:flutter/material.dart';
@@ -58,8 +58,8 @@ void main() {
     });
   });
 
-  test('composer health prefers the current campaign actor sheet', () {
-    const actorId = 'actor-1';
+  test('composer health prefers the current campaign character sheet', () {
+    const characterId = 'character-1';
     const workspace = CampaignWorkspaceContext(
       campaign: Campaign(
         id: 'campaign-1',
@@ -78,15 +78,15 @@ void main() {
         role: 'owner',
         displayName: 'DM',
         joinedAt: '',
-        activeSpeakerActorId: actorId,
-        speakerMode: 'actor',
+        activeSpeakerCharacterId: characterId,
+        speakerMode: 'character',
       ),
       members: [],
-      actors: [
-        CampaignWorkspaceActor(
-          id: actorId,
+      characters: [
+        CampaignWorkspaceCharacter(
+          id: characterId,
           ownerUserId: 'dm-1',
-          actorType: 'npc',
+          characterType: 'npc',
           status: 'active',
           lifecycle: 'persistent',
           displayName: 'Guard',
@@ -97,16 +97,16 @@ void main() {
       capabilities: CampaignCapabilities(
         canManageCampaign: true,
         canManageMembers: true,
-        canCreateActors: true,
+        canCreateCharacters: true,
         canSpeakAsNarrator: true,
       ),
     );
-    const campaignActor = CampaignActor(
-      id: actorId,
+    const campaignCharacter = CampaignCharacter(
+      id: characterId,
       campaignId: 'campaign-1',
       ownerUserId: 'dm-1',
       sourceCharacterId: null,
-      actorType: 'npc',
+      characterType: 'npc',
       status: 'active',
       sheet: {'name': 'Guard', 'currentHp': 2, 'maxHp': 20, 'armorClass': 13},
       revision: 2,
@@ -117,7 +117,7 @@ void main() {
 
     final identity = resolveCampaignComposerIdentity(
       workspace: workspace,
-      campaignActors: const [campaignActor],
+      campaignCharacters: const [campaignCharacter],
       localCharacters: const [],
     );
 

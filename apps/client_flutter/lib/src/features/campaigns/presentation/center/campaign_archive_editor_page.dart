@@ -62,12 +62,12 @@ class CampaignArchiveEditorPage extends StatefulWidget {
       _CampaignArchiveEditorPageState();
 }
 
-class _CampaignArchiveEditorPageState
-    extends State<CampaignArchiveEditorPage> {
+class _CampaignArchiveEditorPageState extends State<CampaignArchiveEditorPage> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _summaryController = TextEditingController();
   final _tagInputController = TextEditingController();
+  final _linkSearchController = TextEditingController();
 
   late String _kind = widget.initialKind;
   final List<_BodyBlockDraft> _blocks = [];
@@ -87,6 +87,7 @@ class _CampaignArchiveEditorPageState
     _titleController.dispose();
     _summaryController.dispose();
     _tagInputController.dispose();
+    _linkSearchController.dispose();
     for (final block in _blocks) {
       block.dispose();
     }
@@ -114,15 +115,13 @@ class _CampaignArchiveEditorPageState
                 const SizedBox(height: 16),
                 _buildTitleField(theme),
                 const SizedBox(height: 16),
+                _buildTagsSection(theme),
+                const SizedBox(height: 16),
                 _buildSummaryField(theme),
                 const SizedBox(height: 16),
                 _buildBodySection(theme),
                 const SizedBox(height: 16),
-                _buildTagsSection(theme),
-                const SizedBox(height: 16),
                 _buildLinksSection(theme),
-                const SizedBox(height: 16),
-                _buildAttachmentPlaceholder(theme),
                 const SizedBox(height: 24),
               ],
             ),
@@ -222,8 +221,8 @@ class _CampaignArchiveEditorPageState
         Text(
           '每个块独立编辑；列表块用换行分隔条目',
           style: theme.textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
+            color: colorScheme.onSurfaceVariant,
+          ),
         ),
       ],
     );
@@ -290,24 +289,43 @@ class _CampaignArchiveEditorPageState
           Text(
             '当前战役暂无其他档案可关联',
             style: theme.textTheme.labelSmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
+              color: colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       );
     }
+    final query = _linkSearchController.text.trim().toLowerCase();
+    final visibleEntries = widget.existingEntries.where((entry) {
+      if (_linkedEntryIds.contains(entry.id)) return true;
+      return query.isEmpty ||
+          entry.title.toLowerCase().contains(query) ||
+          entry.summary.toLowerCase().contains(query) ||
+          _kindLabel(entry.kind).toLowerCase().contains(query);
+    });
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('关联条目', style: theme.textTheme.labelLarge),
         const SizedBox(height: 4),
         Text(
-          '勾选要关联的档案条目',
+          '搜索并勾选要关联的档案条目',
           style: theme.textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
+            color: colorScheme.onSurfaceVariant,
+          ),
         ),
-        for (final entry in widget.existingEntries)
+        const SizedBox(height: 8),
+        TextField(
+          key: const Key('archive-editor-link-search'),
+          controller: _linkSearchController,
+          decoration: const InputDecoration(
+            labelText: '搜索关联条目',
+            prefixIcon: Icon(Icons.search),
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 8),
+        for (final entry in visibleEntries)
           CheckboxListTile(
             dense: true,
             controlAffinity: ListTileControlAffinity.leading,
@@ -322,23 +340,6 @@ class _CampaignArchiveEditorPageState
             title: Text(entry.title),
             subtitle: Text(_kindLabel(entry.kind)),
           ),
-      ],
-    );
-  }
-
-  Widget _buildAttachmentPlaceholder(ThemeData theme) {
-    final colorScheme = theme.colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('附件引用', style: theme.textTheme.labelLarge),
-        const SizedBox(height: 4),
-        Text(
-          '附件上传功能即将推出',
-          style: theme.textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-        ),
       ],
     );
   }
@@ -367,9 +368,9 @@ class _CampaignArchiveEditorPageState
     if (ok) {
       Navigator.of(context).pop(true);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('创建失败，请重试')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('创建失败，请重试')));
     }
   }
 
@@ -418,11 +419,7 @@ class _BodyBlockCard extends StatelessWidget {
   final _BodyBlockDraft block;
   final VoidCallback onRemove;
 
-  static const _typeLabels = {
-    'paragraph': '段落',
-    'heading': '标题',
-    'list': '列表',
-  };
+  static const _typeLabels = {'paragraph': '段落', 'heading': '标题', 'list': '列表'};
 
   @override
   Widget build(BuildContext context) {
@@ -448,8 +445,8 @@ class _BodyBlockCard extends StatelessWidget {
                   child: Text(
                     _typeLabels[block.type] ?? block.type,
                     style: theme.textTheme.labelSmall?.copyWith(
-                          color: colorScheme.onSecondaryContainer,
-                        ),
+                      color: colorScheme.onSecondaryContainer,
+                    ),
                   ),
                 ),
                 const Spacer(),

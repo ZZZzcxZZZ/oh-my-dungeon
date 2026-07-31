@@ -24,8 +24,7 @@ class DataManagementPage extends StatefulWidget {
   /// Platform-agnostic saver: writes [bytes] to a user-chosen path and
   /// returns whether the save succeeded. Defaults to a no-op when not
   /// provided (e.g. in tests).
-  final Future<bool> Function(Uint8List bytes, String suggestedName)?
-      fileSaver;
+  final Future<bool> Function(Uint8List bytes, String suggestedName)? fileSaver;
 
   /// Platform-agnostic picker: returns archive bytes selected by the user,
   /// or `null` if the user cancelled. Defaults to returning `null` when not
@@ -95,10 +94,7 @@ class _DataManagementPageState extends State<DataManagementPage> {
       final saver = widget.fileSaver;
       if (saver != null) {
         final stamp = DateTime.now().toIso8601String();
-        final saved = await saver(
-          bytes,
-          'dnd-table-$stamp.dndtable-backup',
-        );
+        final saved = await saver(bytes, 'dnd-table-$stamp.dndtable-backup');
         if (!saved) {
           setState(() => _statusMessage = '备份已生成但未保存到文件。');
           return;
@@ -179,11 +175,7 @@ class _DataManagementPageState extends State<DataManagementPage> {
                   _previewRow(dialogContext, '条目', preview.entryCount),
                   _previewRow(dialogContext, '资源', preview.assetCount),
                   _previewRow(dialogContext, '角色', preview.characterCount),
-                  _previewRow(
-                    dialogContext,
-                    '总大小',
-                    '${preview.totalSize} B',
-                  ),
+                  _previewRow(dialogContext, '总大小', '${preview.totalSize} B'),
                   if (preview.manifest != null)
                     _previewRow(
                       dialogContext,
@@ -216,11 +208,12 @@ class _DataManagementPageState extends State<DataManagementPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
           Text('$value'),
         ],
       ),

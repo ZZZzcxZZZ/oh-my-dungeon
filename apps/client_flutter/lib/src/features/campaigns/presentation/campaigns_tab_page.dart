@@ -6,16 +6,17 @@ import '../../characters/domain/character.dart';
 import '../../characters/presentation/character_controller.dart';
 import '../../client_mode/domain/client_mode.dart';
 import '../../content/data/local/content_repository.dart';
-import '../../encounters/presentation/encounter_controller.dart';
 import '../../../core/dice/dice_roller.dart';
 import '../../server_home/domain/active_server_session.dart';
 import '../domain/campaign.dart';
 import '../domain/campaign_conversation.dart';
-import 'actors/campaign_actor_controller.dart';
+import 'characters/campaign_character_controller.dart';
 import 'campaign_chat_page.dart';
 import 'campaign_controller.dart';
+import 'campaign_mode_guard.dart';
 import 'content/campaign_content_controller.dart';
 import 'conversation_controller.dart';
+import 'widgets/campaign_list_tile.dart';
 
 /// Top-level "战役" tab.
 ///
@@ -33,8 +34,7 @@ class CampaignsTabPage extends StatefulWidget {
     this.diceRoller,
     this.onCampaignOpened,
     this.campaignContentController,
-    this.actorController,
-    this.encounterController,
+    this.campaignCharacterController,
     this.conversationController,
     super.key,
   });
@@ -49,8 +49,7 @@ class CampaignsTabPage extends StatefulWidget {
   final DiceRoller? diceRoller;
   final Future<void> Function(String campaignId)? onCampaignOpened;
   final CampaignContentController? campaignContentController;
-  final CampaignActorController? actorController;
-  final EncounterController? encounterController;
+  final CampaignCharacterController? campaignCharacterController;
   final ConversationController? conversationController;
 
   @override
@@ -61,10 +60,6 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
   /// Spec §客户端工作模式: 模式提示每个战役每会话只显示一次。已提示过
   /// 的战役 ID 加入此集合后不再弹窗，避免反复打扰用户。
   final Set<String> _modePromptShownCampaignIds = <String>{};
-
-  /// Plan 2026-07-23 task 5.1: 同一时间只允许一个卡片展开（accordion）。
-  /// null 表示全部收起。
-  String? _expandedCampaignId;
 
   @override
   void initState() {
@@ -85,6 +80,8 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
         widget.authController,
         widget.campaignController,
         widget.characterController,
+        if (widget.campaignCharacterController != null)
+          widget.campaignCharacterController!,
         widget.modeController,
         widget.appPreferencesController,
         widget.session,
@@ -101,7 +98,7 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
 
         final campaigns = widget.campaignController.campaigns;
         // Spec §客户端工作模式: 战役创建入口只在 DM 模式显示。Player 模式
-        // 下隐藏 FAB，仅保留加入/刷新入口；owner 在 Player 模式进入战役
+        // 下隐藏 FAB，仅保留加入入口；owner 在 Player 模式进入战役
         // 时会收到一键切换 DM 模式的提示（见 Task 4.2）。
         final isDmMode = widget.modeController.mode == ClientMode.dungeonMaster;
         return Scaffold(
@@ -112,11 +109,6 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
                 tooltip: '使用邀请码加入战役',
                 onPressed: _showJoinDialog,
                 icon: const Icon(Icons.login_outlined),
-              ),
-              IconButton(
-                tooltip: '刷新战役',
-                onPressed: _maybeLoadCampaigns,
-                icon: const Icon(Icons.refresh),
               ),
             ],
           ),
@@ -240,41 +232,55 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
           Divider(height: compact ? 1 : 6, indent: 72),
       itemBuilder: (context, index) {
         final campaign = campaigns[index];
-        final isOwner = campaign.ownerId == currentUserId;
         final character = _primaryCharacter();
         // Plan 2026-07-23 task 5.3: conversations are scoped to the active
         // campaign in the conversation controller. When the controller tracks
         // a different campaign, fall back to an empty list (the card still
         // shows the main entry from Task 5.1).
         final conversationController = widget.conversationController;
-        final conversations = conversationController != null &&
+        final conversations =
+            conversationController != null &&
                 conversationController.activeCampaignId == campaign.id
             ? conversationController.conversations
             : const <CampaignConversation>[];
-        return _CampaignChatListItem(
+        final secondaryConversations = conversations
+            .where(
+              (conversation) =>
+                  !conversation.isMain && !conversation.isArchived,
+            )
+            .map(
+              (conversation) => CampaignListConversation(
+                id: conversation.id,
+                title: conversation.title.isEmpty
+                    ? (conversation.kind == 'group' ? '未命名小群' : '私聊')
+                    : conversation.title,
+                kind: conversation.kind == 'group'
+                    ? CampaignConversationKind.group
+                    : CampaignConversationKind.direct,
+                lastMessage: conversation.lastMessage?.content,
+                unreadCount: conversation.unreadCount,
+              ),
+            )
+            .toList(growable: false);
+        return CampaignListTile(
           campaign: campaign,
-          character: character,
-          isOwner: isOwner,
-          compact: compact,
-          isExpanded: _expandedCampaignId == campaign.id,
-          conversations: conversations,
-          onExpandToggle: () {
-            // Load conversations lazily when the card is first expanded so
-            // the list shows direct/group entries alongside the main room.
+          currentUserId: currentUserId ?? '',
+          conversations: secondaryConversations,
+          onExpand: () {
             if (widget.conversationController != null &&
                 widget.conversationController!.activeCampaignId !=
                     campaign.id) {
               widget.conversationController!.loadConversations(campaign.id);
             }
-            setState(() {
-              // Toggle this card; if another card was expanded, it collapses.
-              _expandedCampaignId =
-                  _expandedCampaignId == campaign.id ? null : campaign.id;
-            });
           },
           onTap: () => _openCampaignChat(campaign, character),
-          onConversationTap: (conversation) =>
-              _openCampaignChat(campaign, character, conversation: conversation),
+          onConversationTap: (conversationId) {
+            final conversation = conversations
+                .where((item) => item.id == conversationId)
+                .firstOrNull;
+            if (conversation == null) return;
+            _openCampaignChat(campaign, character, conversation: conversation);
+          },
           onCreateDirect: () => _showCreateDirectDialog(campaign),
           onCreateGroup: () => _showCreateGroupDialog(campaign),
         );
@@ -302,11 +308,13 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
 
     await widget.onCampaignOpened?.call(campaign.id);
     if (!mounted) return;
-    // Plan 2026-07-23 task 5.3: pre-select the tapped conversation so the
-    // chat page scopes messages to it on load.
-    if (conversation != null && widget.conversationController != null) {
-      widget.conversationController!
-          .setActiveConversation(conversation.isMain ? null : conversation.id);
+    // The campaign summary is always the main-room entry. Explicit secondary
+    // conversation taps provide an id; a null conversation must clear any
+    // previously selected private/group chat.
+    if (widget.conversationController != null) {
+      widget.conversationController!.setActiveConversation(
+        conversation != null && !conversation.isMain ? conversation.id : null,
+      );
     }
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -317,10 +325,9 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
           campaignController: widget.campaignController,
           contentRepository: widget.contentRepository,
           campaignContentController: widget.campaignContentController,
-          actorController: widget.actorController,
-          encounterController: widget.encounterController,
+          characterController: widget.campaignCharacterController,
           appPreferencesController: widget.appPreferencesController,
-          campaignActorId: null,
+          campaignCharacterId: null,
           diceRoller: widget.diceRoller,
           conversationController: widget.conversationController,
         ),
@@ -337,17 +344,14 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
     final currentUserId = widget.authController.user?.id;
     if (currentUserId == null) return false;
 
-    final membership = campaign.memberPreview
-        .where((m) => m.userId == currentUserId)
-        .firstOrNull;
-    final isOwnerOrDm =
-        campaign.ownerId == currentUserId ||
-        membership?.role == 'owner' ||
-        membership?.role == 'dm';
+    final isOwner = campaign.ownerId == currentUserId;
     final currentMode = widget.modeController.mode;
+    final access = CampaignModeGuard.evaluate(
+      isCampaignOwner: isOwner,
+      currentMode: currentMode,
+    );
 
-    // Spec §客户端工作模式: owner/dm 在 Player 模式提示一键切换 DM 模式。
-    if (isOwnerOrDm && currentMode == ClientMode.player) {
+    if (access == CampaignModeAccess.switchToDungeonMaster) {
       _modePromptShownCampaignIds.add(campaign.id);
       final switchToDm = await _showSwitchToDmDialog(campaign);
       if (switchToDm && mounted) {
@@ -358,12 +362,15 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
       return switchToDm;
     }
 
-    // Spec §客户端工作模式: 普通玩家即使切换到 DM 模式，仍然只拥有
-    // 该战役的 player 权限。提示用户当前模式不影响其权限。
-    if (!isOwnerOrDm && currentMode == ClientMode.dungeonMaster) {
+    if (access == CampaignModeAccess.switchToPlayer) {
       _modePromptShownCampaignIds.add(campaign.id);
-      await _showPlayerOnlyDialog(campaign);
-      return true;
+      final switchToPlayer = await _showSwitchToPlayerDialog(campaign);
+      if (switchToPlayer && mounted) {
+        await widget.modeController.setMode(ClientMode.player);
+      } else {
+        _modePromptShownCampaignIds.remove(campaign.id);
+      }
+      return switchToPlayer;
     }
     return true;
   }
@@ -397,26 +404,32 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
         false;
   }
 
-  Future<void> _showPlayerOnlyDialog(Campaign campaign) async {
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) => AlertDialog(
-        key: const Key('mode-player-only-dialog'),
-        title: const Text('以玩家身份参与'),
-        content: Text(
-          '你在战役「${campaign.name}」中是玩家。主持人模式是应用偏好，'
-          '不会改变你在该战役中的权限；只有战役主持人才能使用 DM 工具。',
-        ),
-        actions: [
-          FilledButton(
-            key: const Key('mode-player-only-ack'),
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('知道了'),
+  Future<bool> _showSwitchToPlayerDialog(Campaign campaign) async {
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            key: const Key('mode-player-only-dialog'),
+            title: const Text('切换到玩家模式？'),
+            content: Text(
+              '你在战役「${campaign.name}」中是玩家。切换到玩家模式后即可进入，'
+              '主持人工具只对战役创建者开放。',
+            ),
+            actions: [
+              TextButton(
+                key: const Key('mode-switch-stay-dm'),
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                key: const Key('mode-switch-confirm-player'),
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('切换到玩家模式'),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
+        ) ??
+        false;
   }
 
   Future<void> _showCreateDialog() async {
@@ -502,9 +515,7 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
         .where((m) => m.userId != currentUserId)
         .toList();
     if (candidates.isEmpty) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('暂无其他成员可发起私聊')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('暂无其他成员可发起私聊')));
       return;
     }
     final selected = await showDialog<CampaignMemberPreview>(
@@ -553,9 +564,7 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
       await _openCampaignChat(campaign, character, conversation: conversation);
     } else {
       messenger.showSnackBar(
-        SnackBar(
-          content: Text('创建私聊失败：${controller.error ?? '未知错误'}'),
-        ),
+        SnackBar(content: Text('创建私聊失败：${controller.error ?? '未知错误'}')),
       );
     }
   }
@@ -590,8 +599,17 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
                         border: OutlineInputBorder(),
                       ),
                       autofocus: true,
+                      onChanged: (_) => setState(() {}),
                     ),
                     const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '至少选择两名成员',
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
                     Expanded(
                       child: candidates.isEmpty
                           ? const Center(child: Text('暂无其他成员'))
@@ -630,14 +648,14 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
                   child: const Text('取消'),
                 ),
                 FilledButton(
-                  onPressed: titleController.text.trim().isEmpty
+                  onPressed:
+                      titleController.text.trim().isEmpty ||
+                          selectedIds.length < 2
                       ? null
-                      : () => Navigator.of(context).pop(
-                            (
-                              title: titleController.text.trim(),
-                              ids: selectedIds.toList(),
-                            ),
-                          ),
+                      : () => Navigator.of(context).pop((
+                          title: titleController.text.trim(),
+                          ids: selectedIds.toList(),
+                        )),
                   child: const Text('创建'),
                 ),
               ],
@@ -660,9 +678,7 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
       await _openCampaignChat(campaign, character, conversation: conversation);
     } else {
       messenger.showSnackBar(
-        SnackBar(
-          content: Text('创建小群失败：${controller.error ?? '未知错误'}'),
-        ),
+        SnackBar(content: Text('创建小群失败：${controller.error ?? '未知错误'}')),
       );
     }
   }
@@ -885,622 +901,4 @@ class _CampaignCreationDraft {
 
   final String name;
   final String description;
-}
-
-/// 群聊式战役列表条目。
-///
-/// 左侧是绑定角色头像（若有）叠放战役成员头像缩略；右侧是战役名 + 时间，
-/// 副标题为最近消息摘要或成员/系统占位。整条可点击进入战役聊天室。
-class _CampaignChatListItem extends StatelessWidget {
-  const _CampaignChatListItem({
-    required this.campaign,
-    required this.character,
-    required this.isOwner,
-    required this.compact,
-    required this.isExpanded,
-    required this.conversations,
-    required this.onExpandToggle,
-    required this.onTap,
-    required this.onConversationTap,
-    required this.onCreateDirect,
-    required this.onCreateGroup,
-  });
-
-  final Campaign campaign;
-  final CharacterSheet? character;
-  final bool isOwner;
-  final bool compact;
-  final bool isExpanded;
-  final List<CampaignConversation> conversations;
-  final VoidCallback onExpandToggle;
-  final VoidCallback onTap;
-  final ValueChanged<CampaignConversation> onConversationTap;
-  final VoidCallback onCreateDirect;
-  final VoidCallback onCreateGroup;
-
-  static const _memberAvatarOverlap = 14.0;
-  static const _memberAvatarSize = 22.0;
-  static const _memberAvatarMax = 3;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final lastMessage = campaign.lastMessage;
-    final memberPreview = campaign.memberPreview;
-
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 8 : 12,
-          vertical: compact ? 6 : 10,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Collapsed row — always visible.
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildLeading(context),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildHeader(theme),
-                      const SizedBox(height: 4),
-                      _buildSubtitle(theme, lastMessage, memberPreview),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _buildTrailing(theme, lastMessage),
-                // Plan 2026-07-23 task 5.1: expand/collapse chevron.
-                IconButton(
-                  key: const Key('campaign-card-expand-toggle'),
-                  icon: Icon(
-                    isExpanded
-                        ? Icons.expand_less
-                        : Icons.expand_more,
-                    size: 22,
-                  ),
-                  tooltip: isExpanded ? '收起' : '展开',
-                  onPressed: onExpandToggle,
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 32,
-                    minHeight: 32,
-                  ),
-                ),
-              ],
-            ),
-            // Plan 2026-07-23 task 5.1: expanded content with smooth size
-            // animation. AnimatedSize handles the reveal/collapse transition.
-            AnimatedSize(
-              duration: const Duration(milliseconds: 240),
-              curve: Curves.easeInOutCubic,
-              alignment: Alignment.topCenter,
-              child: isExpanded
-                  ? _buildExpandedContent(theme)
-                  : const SizedBox(width: double.infinity, height: 0),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Expanded content: description, member count, unread summary, the pinned
-  /// main chat entry, and any direct/group conversations the user can see.
-  /// Plan 2026-07-23 task 5.1 + task 5.3.
-  Widget _buildExpandedContent(ThemeData theme) {
-    final colorScheme = theme.colorScheme;
-    final memberCount = campaign.memberPreview.length;
-    final mainConversation = conversations.where((c) => c.isMain).toList();
-    final directConversations = conversations
-        .where((c) => c.kind == 'direct' && !c.isArchived)
-        .toList()
-      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    final groupConversations = conversations
-        .where((c) => c.kind == 'group' && !c.isArchived)
-        .toList()
-      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    final mainConversationObj =
-        mainConversation.isNotEmpty ? mainConversation.first : null;
-    final directCount = directConversations.length;
-    final groupCount = groupConversations.length;
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (campaign.description.isNotEmpty)
-            Text(
-              campaign.description,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 12,
-            runSpacing: 4,
-            children: [
-              if (memberCount > 0)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.group_outlined,
-                      size: 14,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '$memberCount 位成员',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              if (campaign.unreadCount > 0)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.mark_chat_unread_outlined,
-                      size: 14,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '未读 ${campaign.unreadCount}',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Pinned main chat entry — primary action.
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              key: const Key('campaign-card-main-chat-entry'),
-              onPressed: mainConversationObj == null
-                  ? onTap
-                  : () => onConversationTap(mainConversationObj),
-              icon: const Icon(Icons.push_pin_outlined, size: 18),
-              label: const Text('主聊天室'),
-            ),
-          ),
-          if (directCount > 0) ...[
-            const SizedBox(height: 12),
-            _ConversationSectionHeader(
-              icon: Icons.person_outline,
-              label: '私聊 ($directCount)',
-            ),
-            ...directConversations.map(
-              (c) => _ConversationRow(
-                conversation: c,
-                onTap: () => onConversationTap(c),
-              ),
-            ),
-          ],
-          if (groupCount > 0) ...[
-            const SizedBox(height: 12),
-            _ConversationSectionHeader(
-              icon: Icons.groups_outlined,
-              label: '小群 ($groupCount)',
-            ),
-            ...groupConversations.map(
-              (c) => _ConversationRow(
-                conversation: c,
-                onTap: () => onConversationTap(c),
-              ),
-            ),
-          ],
-          const SizedBox(height: 8),
-          // Secondary entries: create private chat / create group chat.
-          Row(
-            children: [
-              Expanded(
-                child: _SecondaryEntryButton(
-                  icon: Icons.person_add_alt_1_outlined,
-                  label: '发起私聊',
-                  countText: directCount == 0 ? '0' : '$directCount',
-                  onPressed: onCreateDirect,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _SecondaryEntryButton(
-                  icon: Icons.group_add_outlined,
-                  label: '创建小群',
-                  countText: groupCount == 0 ? '0' : '$groupCount',
-                  onPressed: onCreateGroup,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLeading(BuildContext context) {
-    final character = this.character;
-    final avatarUrl = character?.avatarUrl?.trim();
-    final hasCharacterAvatar = character != null;
-    final leadingAvatar = hasCharacterAvatar
-        ? CircleAvatar(
-            radius: 22,
-            backgroundImage: avatarUrl == null || avatarUrl.isEmpty
-                ? null
-                : NetworkImage(avatarUrl),
-            child: avatarUrl == null || avatarUrl.isEmpty
-                ? Text(_avatarText(character.name))
-                : null,
-          )
-        : const CircleAvatar(radius: 22, child: Icon(Icons.castle_outlined));
-
-    final extraMembers = campaign.memberPreview
-        .where((m) => m.userId != character?.id)
-        .take(_memberAvatarMax)
-        .toList();
-    if (extraMembers.isEmpty) {
-      return leadingAvatar;
-    }
-
-    return SizedBox(
-      width: 44 + extraMembers.length * _memberAvatarOverlap.toDouble(),
-      height: 44,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          ...extraMembers.asMap().entries.map((entry) {
-            final index = entry.key;
-            final member = entry.value;
-            final left = 22 + index * _memberAvatarOverlap;
-            return Positioned(
-              left: left,
-              bottom: 0,
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 1.5),
-                ),
-                child: CircleAvatar(
-                  radius: _memberAvatarSize / 2,
-                  backgroundColor: Colors.grey.shade400,
-                  child: Text(
-                    _avatarText(member.displayName),
-                    style: const TextStyle(fontSize: 10, color: Colors.white),
-                  ),
-                ),
-              ),
-            );
-          }),
-          leadingAvatar,
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeader(ThemeData theme) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            campaign.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        if (isOwner)
-          Container(
-            margin: const EdgeInsets.only(left: 6),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              '主持人',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onPrimaryContainer,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildSubtitle(
-    ThemeData theme,
-    CampaignChatMessage? lastMessage,
-    List<CampaignMemberPreview> memberPreview,
-  ) {
-    if (lastMessage != null) {
-      final prefix = lastMessage.displayName.isEmpty
-          ? ''
-          : '${lastMessage.displayName}: ';
-      final content = lastMessage.kind == 'action'
-          ? '* ${lastMessage.content}'
-          : lastMessage.content;
-      return Text(
-        '$prefix$content',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.bodyMedium?.copyWith(
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      );
-    }
-
-    final memberCount = memberPreview.length;
-    final summary = memberCount == 0
-        ? campaign.description.isEmpty
-              ? campaign.system
-              : campaign.description
-        : '$memberCount 位成员';
-    return Text(
-      summary,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: theme.textTheme.bodyMedium?.copyWith(
-        color: theme.colorScheme.onSurfaceVariant,
-      ),
-    );
-  }
-
-  Widget _buildTrailing(ThemeData theme, CampaignChatMessage? lastMessage) {
-    final timeText = _formatListTime(lastMessage?.createdAt);
-    if (timeText == null && campaign.unreadCount == 0) {
-      return const SizedBox(width: 0);
-    }
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        if (timeText != null)
-          Text(
-            timeText,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        if (campaign.unreadCount > 0) ...[
-          const SizedBox(height: 4),
-          Badge(
-            label: Text(
-              campaign.unreadCount > 99 ? '99+' : '${campaign.unreadCount}',
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-/// Secondary entry button (private chat / group chat) in the expanded card.
-/// Shows an icon + label + count badge. Plan 2026-07-23 task 5.1.
-class _SecondaryEntryButton extends StatelessWidget {
-  const _SecondaryEntryButton({
-    required this.icon,
-    required this.label,
-    required this.countText,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String label;
-  final String countText;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        visualDensity: VisualDensity.compact,
-      ),
-      icon: Icon(icon, size: 18, color: colorScheme.onSurfaceVariant),
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: colorScheme.onSurface,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-            decoration: BoxDecoration(
-              color: colorScheme.secondaryContainer,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              countText,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSecondaryContainer,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Plan 2026-07-23 task 5.3: section header for direct/group conversation
-/// groups inside the expanded card.
-class _ConversationSectionHeader extends StatelessWidget {
-  const _ConversationSectionHeader({
-    required this.icon,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(top: 4, bottom: 4),
-      child: Row(
-        children: [
-          Icon(icon, size: 14, color: colorScheme.onSurfaceVariant),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Plan 2026-07-23 task 5.3: a single conversation row inside the expanded
-/// card. Shows the conversation title (or a fallback), the last message
-/// preview, time, and an unread badge. Tapping opens that conversation.
-class _ConversationRow extends StatelessWidget {
-  const _ConversationRow({
-    required this.conversation,
-    required this.onTap,
-  });
-
-  final CampaignConversation conversation;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final lastMessage = conversation.lastMessage;
-    final lastMessageText = lastMessage == null
-        ? '暂无消息'
-        : lastMessage.kind == 'action'
-            ? '* ${lastMessage.content}'
-            : lastMessage.content;
-    final title = conversation.kind == 'group'
-        ? (conversation.title.isEmpty ? '未命名小群' : conversation.title)
-        : (conversation.title.isEmpty ? '私聊' : conversation.title);
-    final timeText = _formatListTime(lastMessage?.createdAt ?? conversation.updatedAt);
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 14,
-              backgroundColor: colorScheme.secondaryContainer,
-              child: Icon(
-                conversation.kind == 'group'
-                    ? Icons.groups_outlined
-                    : Icons.person_outline,
-                size: 16,
-                color: colorScheme.onSecondaryContainer,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  Text(
-                    lastMessageText,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (timeText != null)
-                  Text(
-                    timeText,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                if (conversation.unreadCount > 0) ...[
-                  const SizedBox(height: 2),
-                  Badge(
-                    label: Text(
-                      conversation.unreadCount > 99
-                          ? '99+'
-                          : '${conversation.unreadCount}',
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-String _avatarText(String value) {
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) return '?';
-  return String.fromCharCode(trimmed.runes.first).toUpperCase();
-}
-
-String? _formatListTime(String? iso) {
-  if (iso == null || iso.isEmpty) return null;
-  final dt = DateTime.tryParse(iso);
-  if (dt == null) return null;
-  final local = dt.toLocal();
-  final now = DateTime.now();
-  if (local.year == now.year &&
-      local.month == now.month &&
-      local.day == now.day) {
-    return '${local.hour.toString().padLeft(2, '0')}:'
-        '${local.minute.toString().padLeft(2, '0')}';
-  }
-  return '${local.month.toString().padLeft(2, '0')}/'
-      '${local.day.toString().padLeft(2, '0')}';
 }

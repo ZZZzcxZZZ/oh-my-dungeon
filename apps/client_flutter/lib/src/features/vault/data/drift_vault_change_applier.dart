@@ -49,10 +49,9 @@ class DriftVaultChangeApplier implements VaultChangeApplier {
   Future<void> _applyCharacter(VaultChange change) async {
     final payload = jsonDecode(change.payloadJson) as Map<String, Object?>;
     final character = CharacterSheet.fromJson(payload);
-    await DriftCharacterRepository(_database).saveRemote(
-      character,
-      change.revision,
-    );
+    await DriftCharacterRepository(
+      _database,
+    ).saveRemote(character, change.revision);
   }
 
   Future<void> _applyFavorite(VaultChange change) async {
@@ -61,16 +60,18 @@ class DriftVaultChangeApplier implements VaultChangeApplier {
     final favorite = payload['favorite'] as bool? ?? false;
     final db = _database;
     if (change.operation != 'delete' && favorite) {
-      await db.into(db.contentFavorites).insertOnConflictUpdate(
+      await db
+          .into(db.contentFavorites)
+          .insertOnConflictUpdate(
             ContentFavoritesCompanion.insert(
               entryKey: entryKey,
               createdAt: DateTime.now(),
             ),
           );
     } else {
-      await (db.delete(db.contentFavorites)
-            ..where((t) => t.entryKey.equals(entryKey)))
-          .go();
+      await (db.delete(
+        db.contentFavorites,
+      )..where((t) => t.entryKey.equals(entryKey))).go();
     }
   }
 
@@ -80,12 +81,14 @@ class DriftVaultChangeApplier implements VaultChangeApplier {
     final markdown = payload['markdown'] as String? ?? '';
     final db = _database;
     if (change.operation == 'delete') {
-      await (db.delete(db.contentNotes)
-            ..where((table) => table.entryKey.equals(entryKey)))
-          .go();
+      await (db.delete(
+        db.contentNotes,
+      )..where((table) => table.entryKey.equals(entryKey))).go();
       return;
     }
-    await db.into(db.contentNotes).insertOnConflictUpdate(
+    await db
+        .into(db.contentNotes)
+        .insertOnConflictUpdate(
           ContentNotesCompanion.insert(
             entryKey: entryKey,
             markdown: markdown,
@@ -95,7 +98,9 @@ class DriftVaultChangeApplier implements VaultChangeApplier {
   }
 
   Future<void> _saveRevision(VaultChange change) async {
-    await _database.into(_database.vaultEntityRevisions).insertOnConflictUpdate(
+    await _database
+        .into(_database.vaultEntityRevisions)
+        .insertOnConflictUpdate(
           VaultEntityRevisionsCompanion.insert(
             entityType: change.entityType,
             entityId: change.entityId,

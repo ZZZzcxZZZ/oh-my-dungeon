@@ -78,35 +78,34 @@ class MemoryLocalDataArchiveService implements LocalDataArchiveService {
 }
 
 void main() {
-  testWidgets(
-    'opens data tools and requires confirmation before restore',
-    (tester) async {
-      final service = MemoryLocalDataArchiveService(validPreview: true);
-      await tester.pumpWidget(MaterialApp(
-        home: DataManagementPage(archiveService: service),
-      ));
+  testWidgets('opens data tools and requires confirmation before restore', (
+    tester,
+  ) async {
+    final service = MemoryLocalDataArchiveService(validPreview: true);
+    await tester.pumpWidget(
+      MaterialApp(home: DataManagementPage(archiveService: service)),
+    );
 
-      // Tap "恢复备份" — must NOT restore immediately.
-      await tester.tap(find.text('恢复备份'));
-      await tester.pumpAndSettle();
+    // Tap "恢复备份" — must NOT restore immediately.
+    await tester.tap(find.text('恢复备份'));
+    await tester.pumpAndSettle();
 
-      // The confirmation dialog must appear.
-      expect(find.text('将替换此设备上的本地数据'), findsOneWidget);
-      expect(service.restoreCalls, 0);
+    // The confirmation dialog must appear.
+    expect(find.text('将替换此设备上的本地数据'), findsOneWidget);
+    expect(service.restoreCalls, 0);
 
-      // Confirm by tapping the affirmative action.
-      await tester.tap(find.text('确认恢复'));
-      await tester.pumpAndSettle();
+    // Confirm by tapping the affirmative action.
+    await tester.tap(find.text('确认恢复'));
+    await tester.pumpAndSettle();
 
-      expect(service.restoreCalls, 1);
-    },
-  );
+    expect(service.restoreCalls, 1);
+  });
 
   testWidgets('export backup invokes the archive service', (tester) async {
     final service = MemoryLocalDataArchiveService(validPreview: true);
-    await tester.pumpWidget(MaterialApp(
-      home: DataManagementPage(archiveService: service),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(home: DataManagementPage(archiveService: service)),
+    );
 
     await tester.tap(find.text('导出备份'));
     await tester.pumpAndSettle();
@@ -116,9 +115,9 @@ void main() {
 
   testWidgets('clear campaign cache requires confirmation', (tester) async {
     final service = MemoryLocalDataArchiveService(validPreview: true);
-    await tester.pumpWidget(MaterialApp(
-      home: DataManagementPage(archiveService: service),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(home: DataManagementPage(archiveService: service)),
+    );
 
     await tester.tap(find.text('清理战役缓存'));
     await tester.pumpAndSettle();
@@ -134,9 +133,9 @@ void main() {
 
   testWidgets('rebuild content index requires confirmation', (tester) async {
     final service = MemoryLocalDataArchiveService(validPreview: true);
-    await tester.pumpWidget(MaterialApp(
-      home: DataManagementPage(archiveService: service),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(home: DataManagementPage(archiveService: service)),
+    );
 
     await tester.tap(find.text('重建资料索引'));
     await tester.pumpAndSettle();
@@ -149,29 +148,29 @@ void main() {
     expect(service.rebuildIndexCalls, 1);
   });
 
-  testWidgets(
-    'restore shows preview details before confirmation',
-    (tester) async {
-      final service = MemoryLocalDataArchiveService(validPreview: true);
-      await tester.pumpWidget(MaterialApp(
-        home: DataManagementPage(archiveService: service),
-      ));
+  testWidgets('restore shows preview details before confirmation', (
+    tester,
+  ) async {
+    final service = MemoryLocalDataArchiveService(validPreview: true);
+    await tester.pumpWidget(
+      MaterialApp(home: DataManagementPage(archiveService: service)),
+    );
 
-      await tester.tap(find.text('恢复备份'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('恢复备份'));
+    await tester.pumpAndSettle();
 
-      // The dialog must surface preview details before the user confirms.
-      expect(find.textContaining('角色'), findsWidgets);
-      expect(find.textContaining('资料包'), findsWidgets);
-    },
-  );
+    // The dialog must surface preview details before the user confirms.
+    expect(find.textContaining('角色'), findsWidgets);
+    expect(find.textContaining('资料包'), findsWidgets);
+  });
 
-  testWidgets('restore with invalid preview blocks confirmation',
-      (tester) async {
+  testWidgets('restore with invalid preview blocks confirmation', (
+    tester,
+  ) async {
     final service = MemoryLocalDataArchiveService(validPreview: false);
-    await tester.pumpWidget(MaterialApp(
-      home: DataManagementPage(archiveService: service),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(home: DataManagementPage(archiveService: service)),
+    );
 
     await tester.tap(find.text('恢复备份'));
     await tester.pumpAndSettle();

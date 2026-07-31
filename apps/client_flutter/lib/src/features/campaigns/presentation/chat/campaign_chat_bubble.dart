@@ -42,7 +42,7 @@ class CampaignChatBubble extends StatelessWidget {
       );
     }
     if (message.kind == 'roll') {
-      return _actorMessage(
+      return _characterMessage(
         context,
         key: const Key('roll-message'),
         displayName: displayName,
@@ -54,7 +54,7 @@ class CampaignChatBubble extends StatelessWidget {
     }
     if (message.kind == 'action') {
       final snapshot = message.actionSnapshot;
-      return _actorMessage(
+      return _characterMessage(
         context,
         key: snapshot == null
             ? const Key('action-message')
@@ -94,7 +94,7 @@ class CampaignChatBubble extends StatelessWidget {
       );
     }
 
-    return _actorMessage(
+    return _characterMessage(
       context,
       key: const Key('say-message'),
       displayName: displayName,
@@ -109,13 +109,13 @@ class CampaignChatBubble extends StatelessWidget {
     );
   }
 
-  Widget _actorMessage(
+  Widget _characterMessage(
     BuildContext context, {
     required Key key,
     required String displayName,
     required Widget child,
   }) {
-    return _CampaignActorMessage(
+    return _CampaignCharacterMessage(
       key: key,
       displayName: displayName,
       avatarUrl: message.avatarUrl,
@@ -129,8 +129,8 @@ class CampaignChatBubble extends StatelessWidget {
   }
 }
 
-class _CampaignActorMessage extends StatelessWidget {
-  const _CampaignActorMessage({
+class _CampaignCharacterMessage extends StatelessWidget {
+  const _CampaignCharacterMessage({
     required this.displayName,
     required this.avatarUrl,
     required this.healthState,
@@ -205,10 +205,13 @@ class _NarratorMessage extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
       child: Row(
         children: [
-          Expanded(child: Divider(color: theme.colorScheme.outlineVariant)),
-          const SizedBox(width: 12),
+          SizedBox(
+            key: const Key('narrator-leading-rule'),
+            width: 24,
+            child: Divider(color: theme.colorScheme.outlineVariant),
+          ),
+          const SizedBox(width: 8),
           Expanded(
-            flex: 2,
             child: Text(
               content,
               textAlign: TextAlign.center,
@@ -219,8 +222,12 @@ class _NarratorMessage extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(child: Divider(color: theme.colorScheme.outlineVariant)),
+          const SizedBox(width: 8),
+          SizedBox(
+            key: const Key('narrator-trailing-rule'),
+            width: 24,
+            child: Divider(color: theme.colorScheme.outlineVariant),
+          ),
         ],
       ),
     );

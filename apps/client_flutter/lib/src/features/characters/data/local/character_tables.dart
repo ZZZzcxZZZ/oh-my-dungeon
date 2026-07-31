@@ -6,6 +6,13 @@ class Characters extends Table {
   TextColumn get id => text()();
   TextColumn get ownerLocalId => text().withDefault(const Constant('local'))();
   TextColumn get sheetJson => text()();
+
+  /// Readable derivative regenerated from [sheetJson] on every write.
+  ///
+  /// Nullable only so backups created before schema v10 remain importable.
+  TextColumn get markdownMirror => text().nullable()();
+  BoolColumn get markdownDirty =>
+      boolean().withDefault(const Constant(false))();
   IntColumn get revision => integer().withDefault(const Constant(1))();
   IntColumn get syncRevision => integer().nullable()();
   DateTimeColumn get archivedAt => dateTime().nullable()();

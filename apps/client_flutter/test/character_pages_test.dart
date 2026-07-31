@@ -51,7 +51,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('临时 HP 5'), findsOneWidget);
-    expect(find.text('灵感'), findsOneWidget);
+    expect(find.text('激励'), findsOneWidget);
     expect(find.text('中毒'), findsOneWidget);
     expect(find.text('倒地'), findsOneWidget);
     expect(find.text('死亡豁免 1/2'), findsOneWidget);
@@ -465,7 +465,7 @@ void main() {
 
     await tester.tap(find.byTooltip('+1 临时 HP'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '消耗灵感'));
+    await tester.tap(find.widgetWithText(FilledButton, '消耗激励'));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('condition-search-field')),
@@ -1333,7 +1333,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('标准创建角色'), findsOneWidget);
-    for (final step in ['职业', '背景', '物种', '属性', '熟练', '详情', '审核']) {
+    for (final step in ['职业', '背景', '物种', '属性', '熟练', '故事', '审核']) {
       expect(find.text(step), findsWidgets);
     }
     expect(find.byKey(const Key('builder-step-5')), findsNothing);
@@ -1839,7 +1839,7 @@ void main() {
         home: CharacterEditorPage(
           defaultCreationMethod: 'standard',
           contentEntries: const [
-            _fighterContent,
+            _wizardContent,
             _aasimarContent,
             _acolyteContent,
             _magicMissileContent,
@@ -1877,7 +1877,7 @@ void main() {
     expect(submitted, isNotNull);
     final data = submitted!.data;
     expect(data['contentRefs'], {
-      'spells': ['魔法飞弹 / Magic Missile'],
+      'spells': ['content-spell-magic-missile'],
       'items': ['长剑 / Longsword', '治疗药水 / Potion of Healing'],
       'features': <String>[],
     });
@@ -2014,7 +2014,7 @@ void main() {
     },
   );
 
-  testWidgets('standard build details step exposes avatar picker', (
+  testWidgets('standard build story step captures avatar and story fields', (
     tester,
   ) async {
     final fakeBytes = _validPngBytes;
@@ -2034,17 +2034,25 @@ void main() {
 
     expect(find.text('标准创建角色'), findsOneWidget);
 
-    // 跳到"详情"步骤（step 7）。
-    await _goToBuilderStep(tester, 7, '详情');
+    // 跳到“故事”步骤（step 7）。
+    await _goToBuilderStep(tester, 7, '故事');
     await tester.pumpAndSettle();
 
-    // 详情步骤出现头像选择器。
+    // 故事步骤提供头像及结构化人物故事字段。
     expect(
       find.byKey(const Key('standard-character-avatar-picker')),
       findsOneWidget,
     );
     await tester.tap(find.widgetWithText(OutlinedButton, '选择图片'));
     await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('character-story-appearance')),
+      '银色短发',
+    );
+    await tester.enterText(
+      find.byKey(const Key('character-story-backstory')),
+      '在沿海剧团长大。',
+    );
 
     // 回到职业步骤填名字并提交。
     await _goToBuilderStep(tester, 0, '职业');
@@ -2061,6 +2069,14 @@ void main() {
     expect(submitted, isNotNull);
     expect(submitted!.avatarUrl, isNotNull);
     expect(submitted!.avatarUrl!.startsWith('data:image/jpeg;base64,'), isTrue);
+    expect(
+      (submitted!.data['story'] as Map<String, Object?>)['appearance'],
+      '银色短发',
+    );
+    expect(
+      (submitted!.data['story'] as Map<String, Object?>)['backstory'],
+      '在沿海剧团长大。',
+    );
   });
 
   // Spec §统一业务列表: 动作/法术/装备/资源/特性使用同一紧凑行规范（contentPadding zero）；
@@ -2122,26 +2138,18 @@ void main() {
       // 法术按环位分组：戏法在前，一环在后。
       expect(find.text('戏法'), findsOneWidget);
       expect(find.text('一环'), findsOneWidget);
-      final cantripIndex = tester
-          .getCenter(find.text('戏法'))
-          .dy;
+      final cantripIndex = tester.getCenter(find.text('戏法')).dy;
       final leveledIndex = tester.getCenter(find.text('一环')).dy;
       expect(cantripIndex, lessThan(leveledIndex));
 
       // 紧凑行规范：contentPadding 为 zero。
       final magicMissileTile = tester.widget<ListTile>(
-        find.ancestor(
-          of: find.text('魔法飞弹'),
-          matching: find.byType(ListTile),
-        ),
+        find.ancestor(of: find.text('魔法飞弹'), matching: find.byType(ListTile)),
       );
       expect(magicMissileTile.contentPadding, EdgeInsets.zero);
 
       // 列表尾部提供添加命令。
-      expect(
-        find.widgetWithText(FilledButton, '添加法术'),
-        findsOneWidget,
-      );
+      expect(find.widgetWithText(FilledButton, '添加法术'), findsOneWidget);
 
       // 点击关联条目打开 reader 浮层。
       await tester.ensureVisible(find.text('魔法飞弹').last);
@@ -2153,6 +2161,47 @@ void main() {
       await tester.pumpAndSettle();
     },
   );
+
+  testWidgets('spells panel renders custom spells and opens their details', (
+    tester,
+  ) async {
+    final character = _character.copyWith(
+      data: <String, Object?>{
+        'manualOverrides': <String, Object?>{
+          'spells': <String, Object?>{
+            'custom': <Map<String, Object?>>[
+              {
+                'id': 'custom-spell-1',
+                'name': '星火束',
+                'level': 1,
+                'school': '塑能',
+                'description': '一道只属于这个角色的星光。',
+              },
+            ],
+          },
+        },
+      },
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterDetailPage(
+          character: character,
+          contentEntries: const [],
+          initialTab: 'spells',
+          onSaveCharacter: (_) async => true,
+        ),
+      ),
+    );
+
+    expect(find.text('自定义法术'), findsOneWidget);
+    expect(find.text('星火束'), findsOneWidget);
+    expect(find.text('一环 · 塑能'), findsOneWidget);
+
+    await tester.tap(find.text('星火束'));
+    await tester.pumpAndSettle();
+    expect(find.text('一道只属于这个角色的星光。'), findsOneWidget);
+  });
 
   testWidgets(
     'equipment panel places currency above items and opens the reader on tap',
@@ -2193,17 +2242,11 @@ void main() {
       expect(currencyIndex, lessThan(itemsIndex));
 
       // 列表尾部提供从资料库添加命令。
-      expect(
-        find.widgetWithText(FilledButton, '从资料库添加'),
-        findsOneWidget,
-      );
+      expect(find.widgetWithText(FilledButton, '从资料库添加'), findsOneWidget);
 
       // 装备行使用紧凑行规范。
       final longbowTile = tester.widget<ListTile>(
-        find.ancestor(
-          of: find.text('长弓 x1'),
-          matching: find.byType(ListTile),
-        ),
+        find.ancestor(of: find.text('长弓 x1'), matching: find.byType(ListTile)),
       );
       expect(longbowTile.contentPadding, EdgeInsets.zero);
       expect(longbowTile.dense, isTrue);
@@ -2262,19 +2305,13 @@ void main() {
 
       // 紧凑行规范：dense + contentPadding zero。
       final grantTile = tester.widget<ListTile>(
-        find.ancestor(
-          of: find.text('回气'),
-          matching: find.byType(ListTile),
-        ),
+        find.ancestor(of: find.text('回气'), matching: find.byType(ListTile)),
       );
       expect(grantTile.contentPadding, EdgeInsets.zero);
       expect(grantTile.dense, isTrue);
 
       // 列表尾部提供从资料库添加命令。
-      expect(
-        find.widgetWithText(FilledButton, '从资料库添加'),
-        findsOneWidget,
-      );
+      expect(find.widgetWithText(FilledButton, '从资料库添加'), findsOneWidget);
 
       // 点击带 entryId 的特性打开 reader 浮层。
       await tester.tap(find.text('回气').last);
@@ -2335,61 +2372,142 @@ void main() {
       expect(find.text('不自动恢复'), findsOneWidget);
 
       // 列表尾部提供添加资源命令。
-      expect(
-        find.widgetWithText(FilledButton, '添加资源'),
-        findsOneWidget,
-      );
+      expect(find.widgetWithText(FilledButton, '添加资源'), findsOneWidget);
     },
   );
 
+  testWidgets('actions panel renders rule actions with compact rows', (
+    tester,
+  ) async {
+    final character = _character.copyWith(
+      data: <String, Object?>{
+        'actions': <Map<String, Object?>>[
+          <String, Object?>{
+            'id': 'riposte',
+            'name': '还击',
+            'entryId': 'guide:feature/riposte',
+            'formula': '1d8+2',
+          },
+        ],
+      },
+    );
+    final riposte = ContentEntry.fromJson({
+      'id': 'guide:feature/riposte',
+      'type': 'classFeature',
+      'slug': 'riposte',
+      'name': '还击',
+      'body': <Map<String, Object?>>[],
+      'revision': 1,
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterDetailPage(
+          character: character,
+          contentEntries: [riposte],
+          initialTab: 'actions',
+        ),
+      ),
+    );
+
+    expect(find.text('资料动作'), findsOneWidget);
+    expect(find.text('还击'), findsOneWidget);
+
+    // 紧凑行规范：dense + contentPadding zero。
+    final actionTile = tester.widget<ListTile>(
+      find.ancestor(of: find.text('还击'), matching: find.byType(ListTile)),
+    );
+    expect(actionTile.contentPadding, EdgeInsets.zero);
+    expect(actionTile.dense, isTrue);
+  });
+
   testWidgets(
-    'actions panel renders rule actions with compact rows',
+    'monster character uses the full sheet and exposes stat-block sections',
     (tester) async {
-      final character = _character.copyWith(
-        data: <String, Object?>{
-          'actions': <Map<String, Object?>>[
-            <String, Object?>{
-              'id': 'riposte',
-              'name': '还击',
-              'entryId': 'guide:feature/riposte',
-              'formula': '1d8+2',
-            },
-          ],
+      final monster = _character.copyWith(
+        name: '丧尸',
+        level: 1,
+        classSummary: '怪物 · CR 1/4',
+        raceSummary: '中型亡灵',
+        data: const {
+          'character': {
+            'kind': 'monster',
+            'templateRef': 'private-mm2024:monster/zombie',
+            'size': 'medium',
+            'creatureType': 'undead',
+            'alignment': 'neutral-evil',
+            'challengeRating': '1/4',
+            'proficiencyBonus': 2,
+          },
+          'markdownSections': {
+            '感官与语言': '- 黑暗视觉：60 尺\n- 被动察觉：8',
+            '特质': '### 不死坚韧\n\n受到致命伤害时进行体质豁免。',
+            '动作': '### 重击\n\n- 命中：+3\n- 伤害：1d8+1 钝击',
+          },
         },
       );
-      final riposte = ContentEntry.fromJson({
-        'id': 'guide:feature/riposte',
-        'type': 'classFeature',
-        'slug': 'riposte',
-        'name': '还击',
-        'body': <Map<String, Object?>>[],
-        'revision': 1,
-      });
 
       await tester.pumpWidget(
         MaterialApp(
           home: CharacterDetailPage(
-            character: character,
-            contentEntries: [riposte],
-            initialTab: 'actions',
+            character: monster,
+            initialTab: 'character',
           ),
         ),
       );
 
-      expect(find.text('资料动作'), findsOneWidget);
-      expect(find.text('还击'), findsOneWidget);
-
-      // 紧凑行规范：dense + contentPadding zero。
-      final actionTile = tester.widget<ListTile>(
-        find.ancestor(
-          of: find.text('还击'),
-          matching: find.byType(ListTile),
-        ),
-      );
-      expect(actionTile.contentPadding, EdgeInsets.zero);
-      expect(actionTile.dense, isTrue);
+      expect(find.text('怪物资料'), findsWidgets);
+      expect(find.text('CR 1/4'), findsOneWidget);
+      expect(find.text('特质'), findsOneWidget);
+      expect(find.textContaining('不死坚韧'), findsOneWidget);
+      expect(find.text('动作'), findsWidgets);
+      expect(find.textContaining('重击'), findsOneWidget);
     },
   );
+
+  testWidgets('full editor preserves and edits monster character sections', (
+    tester,
+  ) async {
+    CharacterEditDraft? saved;
+    final monster = _character.copyWith(
+      name: '丧尸',
+      data: const {
+        'character': {
+          'kind': 'monster',
+          'challengeRating': '1/4',
+          'creatureType': 'undead',
+        },
+        'markdownSections': {'特质': '### 不死坚韧', '动作': '### 重击'},
+      },
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          initialCharacter: monster,
+          onSubmit: (draft) async {
+            saved = draft;
+            return false;
+          },
+        ),
+      ),
+    );
+
+    expect(find.byKey(const Key('character-kind-field')), findsOneWidget);
+    expect(find.byKey(const Key('character-section-actions')), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const Key('character-section-actions')),
+      '### 腐烂重击\n\n- 伤害：2d6',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '保存角色'));
+    await tester.pumpAndSettle();
+
+    expect(saved, isNotNull);
+    final character = saved!.data['character'] as Map<Object?, Object?>;
+    final sections = saved!.data['markdownSections'] as Map<Object?, Object?>;
+    expect(character['kind'], 'monster');
+    expect(sections['动作'], contains('腐烂重击'));
+  });
 }
 
 const _validPngDataUrl =
@@ -2462,7 +2580,7 @@ class _RecordingSink implements CampaignActionSink {
   final List<CharacterRollEvent> events = [];
 
   @override
-  String? get campaignActorId => 'actor-rec';
+  String? get campaignCharacterId => 'character-rec';
 
   @override
   Future<void> dispatchRoll(CharacterRollEvent event) async {
@@ -2486,6 +2604,35 @@ const _fighterContent = ContentEntry(
     'weaponProficiency': '简易武器与军用武器',
     'armorProficiency': '轻甲、中甲、重甲与盾牌',
     'startingEquipment': '链甲、巨剑、轻弩、20支弩矢、地城套组以及4GP',
+  },
+  tags: ['private-phb-2024-index', 'class'],
+  source: ContentSource(label: 'Private PHB 2024 PDF Index'),
+);
+
+const _wizardContent = ContentEntry(
+  id: 'content-class-wizard',
+  type: 'class',
+  slug: 'class-wizard',
+  name: '法师 / Wizard',
+  body: [],
+  revision: 1,
+  structured: {
+    'primaryAbility': '智力',
+    'hitDie': 'd6',
+    'startingEquipment': '法术书、长袍、匕首以及5GP',
+    'spellcasting': {
+      'mode': 'prepared',
+      'ability': 'int',
+      'listTags': ['spell-list:wizard'],
+      'progression': [
+        {
+          'level': 1,
+          'maximumSpellLevel': 1,
+          'maximumCantrips': 3,
+          'maximumLeveledSpells': 4,
+        },
+      ],
+    },
   },
   tags: ['private-phb-2024-index', 'class'],
   source: ContentSource(label: 'Private PHB 2024 PDF Index'),
@@ -2522,8 +2669,13 @@ const _magicMissileContent = ContentEntry(
   name: '魔法飞弹 / Magic Missile',
   body: [],
   revision: 1,
-  structured: {'page': 290},
-  tags: ['private-phb-2024-index', 'spell'],
+  structured: {
+    'page': 290,
+    'level': 1,
+    'school': '塑能',
+    'classes': ['法师'],
+  },
+  tags: ['private-phb-2024-index', 'spell', 'spell-list:wizard'],
   source: ContentSource(label: 'Private PHB 2024 PDF Index'),
 );
 

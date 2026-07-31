@@ -1,14 +1,14 @@
 class CampaignWorkspaceMutationCoordinator {
   const CampaignWorkspaceMutationCoordinator({
-    required this.pullActors,
+    required this.pullCharacters,
     required this.loadWorkspace,
   });
 
-  final Future<void> Function() pullActors;
+  final Future<void> Function() pullCharacters;
   final Future<void> Function(String campaignId) loadWorkspace;
 
-  Future<void> refreshAfterActorMutation(String campaignId) async {
-    await pullActors();
+  Future<void> refreshAfterCharacterMutation(String campaignId) async {
+    await pullCharacters();
     await loadWorkspace(campaignId);
   }
 }

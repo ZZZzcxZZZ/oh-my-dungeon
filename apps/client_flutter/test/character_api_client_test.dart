@@ -73,32 +73,6 @@ final _character = CharacterSheet(
   updatedAt: '2026-07-09T00:00:00.000Z',
 );
 
-final _bindingJson = {
-  'id': 'bind-1',
-  'campaignId': 'camp-1',
-  'characterId': 'char-1',
-  'userId': 'user-1',
-  'visibility': 'party',
-  'status': 'active',
-  'dmNotes': '',
-  'joinedAt': '2026-07-09T00:00:00.000Z',
-  'updatedAt': '2026-07-09T00:00:00.000Z',
-  'character': _characterJson,
-};
-
-final _binding = CharacterCampaignBinding(
-  id: 'bind-1',
-  campaignId: 'camp-1',
-  characterId: 'char-1',
-  userId: 'user-1',
-  visibility: 'party',
-  status: 'active',
-  dmNotes: '',
-  joinedAt: '2026-07-09T00:00:00.000Z',
-  updatedAt: '2026-07-09T00:00:00.000Z',
-  character: _character,
-);
-
 void main() {
   group('CharacterApiClient.createCharacter', () {
     test('posts basic fields and returns the created character', () async {
@@ -289,89 +263,6 @@ void main() {
         'currency': {'gp': 35},
         'notes': '偏好远程侦察。',
       });
-    });
-  });
-
-  group('CharacterApiClient.bindCharacterToCampaign', () {
-    test('posts campaign id and returns the binding', () async {
-      http.Request? captured;
-      final client = CharacterApiClient(
-        httpClient: MockClient((request) async {
-          captured = request;
-          return http.Response(jsonEncode(_bindingJson), 201);
-        }),
-      );
-
-      final result = await client.bindCharacterToCampaign(
-        apiBaseUrl: _apiBaseUrl,
-        accessToken: _accessToken,
-        characterId: 'char-1',
-        campaignId: 'camp-1',
-      );
-
-      expect(captured?.method, 'POST');
-      expect(
-        captured?.url.toString(),
-        '$_apiBaseUrl/characters/char-1/campaign-bindings',
-      );
-      expect(jsonDecode(captured!.body), {'campaignId': 'camp-1'});
-      expect(result, _binding);
-    });
-  });
-
-  group('CharacterApiClient.listCampaignCharacters', () {
-    test('returns character bindings for a campaign', () async {
-      http.Request? captured;
-      final client = CharacterApiClient(
-        httpClient: MockClient((request) async {
-          captured = request;
-          return http.Response(jsonEncode([_bindingJson]), 200);
-        }),
-      );
-
-      final result = await client.listCampaignCharacters(
-        apiBaseUrl: _apiBaseUrl,
-        accessToken: _accessToken,
-        campaignId: 'camp-1',
-      );
-
-      expect(captured?.method, 'GET');
-      expect(
-        captured?.url.toString(),
-        '$_apiBaseUrl/campaigns/camp-1/characters',
-      );
-      expect(result, [_binding]);
-    });
-  });
-
-  group('CharacterApiClient.adjustCampaignCharacterHp', () {
-    test('posts a hp delta and returns the updated character', () async {
-      http.Request? captured;
-      final client = CharacterApiClient(
-        httpClient: MockClient((request) async {
-          captured = request;
-          return http.Response(
-            jsonEncode({..._characterJson, 'currentHp': 18}),
-            201,
-          );
-        }),
-      );
-
-      final result = await client.adjustCampaignCharacterHp(
-        apiBaseUrl: _apiBaseUrl,
-        accessToken: _accessToken,
-        campaignId: 'camp-1',
-        characterId: 'char-1',
-        delta: -6,
-      );
-
-      expect(captured?.method, 'POST');
-      expect(
-        captured?.url.toString(),
-        '$_apiBaseUrl/campaigns/camp-1/characters/char-1/hp',
-      );
-      expect(jsonDecode(captured!.body), {'delta': -6});
-      expect(result.currentHp, 18);
     });
   });
 

@@ -121,7 +121,7 @@ void main() {
         home: CharacterConflictResolutionPage(
           controller: banner,
           characterController: characterController,
-          actorController: null, // 没有 actorController：会显示提示而不是 publish
+          campaignCharacterController: null,
         ),
       ),
     );
@@ -130,7 +130,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '用本地覆盖'));
     await tester.pumpAndSettle();
 
-    // actorController 为空时提示 "未连接到战役，无法覆盖"，不应 markResolved。
+    // characterController 为空时提示 "未连接到战役，无法覆盖"，不应 markResolved。
     expect(repository.markResolvedCalls, isEmpty);
     expect(find.text('未连接到战役，无法覆盖'), findsOneWidget);
 
@@ -200,7 +200,7 @@ CharacterSyncConflict _conflict({
   return CharacterSyncConflict(
     id: id,
     characterId: characterId,
-    campaignActorId: 'actor-$id',
+    campaignCharacterId: 'character-$id',
     fieldPath: 'build',
     localValueJson: jsonEncode(localSheet),
     remoteValueJson: jsonEncode(remoteSheet),

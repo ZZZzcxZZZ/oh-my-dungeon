@@ -1,6 +1,7 @@
 import 'package:dnd_table_client/src/features/campaigns/data/sync/campaign_sync_api_client.dart';
-import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_controller.dart';
-import 'package:dnd_table_client/src/features/campaigns/presentation/actors/publish_character_sheet.dart';
+import 'package:dnd_table_client/src/features/campaigns/domain/campaign_character.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/characters/campaign_character_controller.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/characters/publish_character_sheet.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/widgets/avatar_picker.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:flutter/material.dart';
@@ -19,12 +20,12 @@ void main() {
     raceSummary: '人类',
   );
 
-  Future<CampaignActorController> buildController({
+  Future<CampaignCharacterController> buildController({
     MemoryCampaignSyncApiClient? apiClient,
     String currentUserId = 'user-1',
   }) async {
     final client = apiClient ?? MemoryCampaignSyncApiClient();
-    final controller = CampaignActorController(
+    final controller = CampaignCharacterController(
       cacheRepository: MemoryCampaignCacheRepository(),
       apiClient: client,
       apiBaseUrl: 'https://example.test',
@@ -37,9 +38,10 @@ void main() {
 
   Future<void> pumpSheet(
     WidgetTester tester,
-    CampaignActorController controller, {
+    CampaignCharacterController controller, {
     CharacterSheet? character,
-    bool allowDmActorTypes = false,
+    bool allowDmCharacterTypes = false,
+    Future<void> Function(CampaignCharacter character)? onPublished,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -47,7 +49,8 @@ void main() {
           body: PublishCharacterSheet(
             controller: controller,
             character: character ?? sampleCharacter,
-            allowDmActorTypes: allowDmActorTypes,
+            allowDmCharacterTypes: allowDmCharacterTypes,
+            onPublished: onPublished,
           ),
         ),
       ),
@@ -67,32 +70,30 @@ void main() {
   });
 
   // Spec §头像来源: 本地角色头像随发布自动上传到战役，无需用户干预。
-  testWidgets(
-    'automatically uploads character avatar URL when publishing',
-    (tester) async {
-      final apiClient = MemoryCampaignSyncApiClient();
-      final controller = await buildController(apiClient: apiClient);
-      const avatarUrl = 'data:image/png;base64,SGVsbG8=';
-      final characterWithAvatar = sampleCharacter.copyWith(
-        avatarUrl: avatarUrl,
-      );
+  testWidgets('automatically uploads character avatar URL when publishing', (
+    tester,
+  ) async {
+    final apiClient = MemoryCampaignSyncApiClient();
+    final controller = await buildController(apiClient: apiClient);
+    const avatarUrl = 'data:image/png;base64,SGVsbG8=';
+    final characterWithAvatar = sampleCharacter.copyWith(avatarUrl: avatarUrl);
 
-      await pumpSheet(tester, controller, character: characterWithAvatar);
-      await tester.tap(find.widgetWithText(FilledButton, '发布'));
-      await tester.pumpAndSettle();
+    await pumpSheet(tester, controller, character: characterWithAvatar);
+    await tester.tap(find.widgetWithText(FilledButton, '发布'));
+    await tester.pumpAndSettle();
 
-      expect(apiClient.publishCalls, hasLength(1));
-      final sheet =
-          apiClient.publishCalls.single['sheet']! as Map<String, Object?>;
-      expect(sheet['avatarUrl'], avatarUrl);
+    expect(apiClient.publishCalls, hasLength(1));
+    final sheet =
+        apiClient.publishCalls.single['sheet']! as Map<String, Object?>;
+    expect(sheet['avatarUrl'], avatarUrl);
 
-      controller.dispose();
-    },
-  );
+    controller.dispose();
+  });
 
   // Spec §头像来源: 本地角色未设置头像时，sheet 不携带 avatarUrl 字段。
-  testWidgets('publishes without avatarUrl when character has none',
-      (tester) async {
+  testWidgets('publishes without avatarUrl when character has none', (
+    tester,
+  ) async {
     final apiClient = MemoryCampaignSyncApiClient();
     final controller = await buildController(apiClient: apiClient);
 
@@ -108,12 +109,31 @@ void main() {
     controller.dispose();
   });
 
+  testWidgets('returns the published player character for immediate binding', (
+    tester,
+  ) async {
+    final controller = await buildController();
+    CampaignCharacter? published;
+    await pumpSheet(
+      tester,
+      controller,
+      onPublished: (character) async => published = character,
+    );
+
+    await tester.tap(find.widgetWithText(FilledButton, '发布'));
+    await tester.pumpAndSettle();
+
+    expect(published?.sourceCharacterId, sampleCharacter.id);
+    expect(published?.characterType, 'player');
+    controller.dispose();
+  });
+
   // Spec compliance: DM must be able to create persistent NPC/monster/companion
-  // actors. The previous sheet routed ALL actor types through the player-only
-  // /actors/publish endpoint, which rejects non-player types with HTTP 400.
-  // Now selecting NPC/companion/monster routes through /actors (DM create).
+  // characters. The previous sheet routed ALL character types through the player-only
+  // /characters/publish endpoint, which rejects non-player types with HTTP 400.
+  // Now selecting NPC/companion/monster routes through /characters (DM create).
   testWidgets(
-    'selecting NPC routes through createActor (DM endpoint), not publishActor',
+    'selecting NPC routes through createCharacter (DM endpoint), not publishCharacter',
     (tester) async {
       final apiClient = MemoryCampaignSyncApiClient();
       final controller = await buildController(
@@ -121,21 +141,24 @@ void main() {
         currentUserId: 'dm-1',
       );
 
-      await pumpSheet(tester, controller, allowDmActorTypes: true);
+      await pumpSheet(tester, controller, allowDmCharacterTypes: true);
 
       await tester.tap(find.text('NPC'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, '发布'));
       await tester.pumpAndSettle();
 
-      expect(apiClient.publishCalls, isEmpty,
-          reason: 'NPC creation must go through the DM create endpoint');
-      expect(apiClient.createActorCalls, hasLength(1));
-      expect(apiClient.createActorCalls.single['actorType'], 'npc');
       expect(
-        apiClient.createActorCalls.single['lifecycle'],
+        apiClient.publishCalls,
+        isEmpty,
+        reason: 'NPC creation must go through the DM create endpoint',
+      );
+      expect(apiClient.createCharacterCalls, hasLength(1));
+      expect(apiClient.createCharacterCalls.single['characterType'], 'npc');
+      expect(
+        apiClient.createCharacterCalls.single['lifecycle'],
         'persistent',
-        reason: 'DM-created actors are persistent by spec §DM角色生命周期',
+        reason: 'DM-created characters are persistent by spec §DM角色生命周期',
       );
 
       controller.dispose();
@@ -143,7 +166,7 @@ void main() {
   );
 
   testWidgets(
-    'selecting monster routes through createActor with persistent lifecycle',
+    'selecting monster routes through createCharacter with persistent lifecycle',
     (tester) async {
       final apiClient = MemoryCampaignSyncApiClient();
       final controller = await buildController(
@@ -151,7 +174,7 @@ void main() {
         currentUserId: 'dm-1',
       );
 
-      await pumpSheet(tester, controller, allowDmActorTypes: true);
+      await pumpSheet(tester, controller, allowDmCharacterTypes: true);
 
       await tester.tap(find.text('怪物'));
       await tester.pumpAndSettle();
@@ -159,8 +182,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(apiClient.publishCalls, isEmpty);
-      expect(apiClient.createActorCalls.single['actorType'], 'monster');
-      expect(apiClient.createActorCalls.single['lifecycle'], 'persistent');
+      expect(apiClient.createCharacterCalls.single['characterType'], 'monster');
+      expect(apiClient.createCharacterCalls.single['lifecycle'], 'persistent');
 
       controller.dispose();
     },
@@ -171,7 +194,7 @@ void main() {
     'surfaces server error message in SnackBar instead of generic failure',
     (tester) async {
       final apiClient = MemoryCampaignSyncApiClient();
-      apiClient.nextPublishActorException = const CampaignSyncException(
+      apiClient.nextPublishCharacterException = const CampaignSyncException(
         'sourceCharacterId is required',
         statusCode: 400,
       );
@@ -182,7 +205,10 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, '发布'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('sourceCharacterId is required'), findsOneWidget);
+      expect(
+        find.textContaining('sourceCharacterId is required'),
+        findsOneWidget,
+      );
 
       controller.dispose();
     },

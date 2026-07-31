@@ -17,9 +17,9 @@ class ServerProfileMigrator {
   static const _markerKey = 'server-profiles-v1';
 
   Future<bool> hasMigrated() async {
-    final row = await (_database.select(_database.migrationMarkers)
-          ..where((t) => t.key.equals(_markerKey)))
-        .getSingleOrNull();
+    final row = await (_database.select(
+      _database.migrationMarkers,
+    )..where((t) => t.key.equals(_markerKey))).getSingleOrNull();
     return row != null;
   }
 
@@ -38,7 +38,9 @@ class ServerProfileMigrator {
       if (defaultId != null) {
         await drift.setDefaultProfileId(defaultId);
       }
-      await _database.into(_database.migrationMarkers).insertOnConflictUpdate(
+      await _database
+          .into(_database.migrationMarkers)
+          .insertOnConflictUpdate(
             MigrationMarkersCompanion.insert(
               key: _markerKey,
               completedAt: DateTime.now(),

@@ -74,7 +74,9 @@ Widget _metadataRows(
                 ),
               ),
             ),
-            Expanded(child: Text(value)),
+            Expanded(
+              child: Text(value, maxLines: 2, overflow: TextOverflow.ellipsis),
+            ),
           ],
         ),
       ),
@@ -306,13 +308,18 @@ class _ItemDefinition extends _BaseDefinition {
   String get type => 'item';
 
   @override
-  String get label => '物品';
+  String get label => '物品与装备';
 
   @override
   IconData get icon => Icons.inventory_2_outlined;
 
   @override
   List<ContentFieldDefinition> get searchableFields => const [
+    ContentFieldDefinition(key: 'category', label: '类别'),
+    ContentFieldDefinition(key: 'cost', label: '价格'),
+    ContentFieldDefinition(key: 'weight', label: '重量'),
+    ContentFieldDefinition(key: 'damage', label: '伤害'),
+    ContentFieldDefinition(key: 'armorClass', label: 'AC'),
     ContentFieldDefinition(key: 'rarity', label: '稀有度'),
     ContentFieldDefinition(key: 'attunement', label: '同调'),
   ];

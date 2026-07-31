@@ -62,7 +62,7 @@ void main() {
               'revision': 1,
               'payload': {'markdown': 'hello'},
               'createdAt': '2026-07-14T00:00:00.000Z',
-            }
+            },
           ],
           'hasMore': false,
         }),
@@ -84,7 +84,9 @@ void main() {
         jsonEncode({
           'applied': [],
           'skipped': [],
-          'conflicts': [{'entityId': 'character-1', 'currentRevision': 5}],
+          'conflicts': [
+            {'entityId': 'character-1', 'currentRevision': 5},
+          ],
         }),
         409,
         headers: {'content-type': 'application/json'},

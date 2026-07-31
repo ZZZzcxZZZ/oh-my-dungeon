@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// Plan 2026-07-23 task 4.4: 合并两套档案创建表单为单一 CampaignArchiveEditorPage。
 ///
 /// 覆盖：
-/// - 七个字段按顺序渲染（类型 → 标题 → 摘要 → 正文 → 标签 → 关联条目 → 附件引用）
+/// - 字段按顺序渲染（类型 → 标题 → 标签 → 摘要 → 正文 → 关联条目）
 /// - 字段间距统一 SizedBox(height: 16)
 /// - 提交按钮为全宽 FilledButton
 /// - 标题为空时提交显示校验错误
@@ -33,63 +33,61 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets(
-    'renders all seven field sections in the specified order',
-    (tester) async {
-      await pumpEditorPage(tester);
+  testWidgets('renders working field sections in the specified order', (
+    tester,
+  ) async {
+    await pumpEditorPage(tester);
 
-      // Field order: 类型 → 标题 → 摘要 → 正文 → 标签 → 关联条目 → 附件引用
-      final kindLabel = find.text('类型');
-      final titleLabel = find.text('标题');
-      final summaryLabel = find.text('摘要');
-      final bodyLabel = find.text('正文');
-      final tagsLabel = find.text('标签');
-      final linksLabel = find.text('关联条目');
-      final attachmentLabel = find.text('附件引用');
+    // Field order: 类型 → 标题 → 标签 → 摘要 → 正文 → 关联条目
+    final kindLabel = find.text('类型');
+    final titleLabel = find.text('标题');
+    final summaryLabel = find.text('摘要');
+    final bodyLabel = find.text('正文');
+    final tagsLabel = find.text('标签');
+    final linksLabel = find.text('关联条目');
 
-      expect(kindLabel, findsOneWidget);
-      expect(titleLabel, findsOneWidget);
-      expect(summaryLabel, findsOneWidget);
-      expect(bodyLabel, findsOneWidget);
-      expect(tagsLabel, findsOneWidget);
-      expect(linksLabel, findsOneWidget);
-      expect(attachmentLabel, findsOneWidget);
+    expect(kindLabel, findsOneWidget);
+    expect(titleLabel, findsOneWidget);
+    expect(summaryLabel, findsOneWidget);
+    expect(bodyLabel, findsOneWidget);
+    expect(tagsLabel, findsOneWidget);
+    expect(linksLabel, findsOneWidget);
+    expect(find.text('附件引用'), findsNothing);
+    expect(find.text('附件上传功能即将推出'), findsNothing);
 
-      // Verify order: each label's y should be strictly increasing.
-      final ys = [
-        tester.getCenter(kindLabel).dy,
-        tester.getCenter(titleLabel).dy,
-        tester.getCenter(summaryLabel).dy,
-        tester.getCenter(bodyLabel).dy,
-        tester.getCenter(tagsLabel).dy,
-        tester.getCenter(linksLabel).dy,
-        tester.getCenter(attachmentLabel).dy,
-      ];
-      for (int i = 1; i < ys.length; i++) {
-        expect(ys[i], greaterThan(ys[i - 1]),
-            reason: 'field at index $i should appear below field at ${i - 1}');
-      }
-    },
-  );
-
-  testWidgets(
-    'submit button is a full-width FilledButton',
-    (tester) async {
-      await pumpEditorPage(tester);
-
-      final buttonFinder = find.ancestor(
-        of: find.text('创建'),
-        matching: find.byType(FilledButton),
+    // Verify order: each label's y should be strictly increasing.
+    final ys = [
+      tester.getCenter(kindLabel).dy,
+      tester.getCenter(titleLabel).dy,
+      tester.getCenter(tagsLabel).dy,
+      tester.getCenter(summaryLabel).dy,
+      tester.getCenter(bodyLabel).dy,
+      tester.getCenter(linksLabel).dy,
+    ];
+    for (int i = 1; i < ys.length; i++) {
+      expect(
+        ys[i],
+        greaterThan(ys[i - 1]),
+        reason: 'field at index $i should appear below field at ${i - 1}',
       );
-      expect(buttonFinder, findsOneWidget);
+    }
+  });
 
-      // Full-width: the button's width should match the available content width.
-      final screenWidth = tester.getSize(find.byType(Scaffold)).width;
-      final buttonWidth = tester.getSize(buttonFinder).width;
-      // Allow for horizontal padding (the bottom bar has 16px padding each side).
-      expect(buttonWidth, greaterThanOrEqualTo(screenWidth - 48));
-    },
-  );
+  testWidgets('submit button is a full-width FilledButton', (tester) async {
+    await pumpEditorPage(tester);
+
+    final buttonFinder = find.ancestor(
+      of: find.text('创建'),
+      matching: find.byType(FilledButton),
+    );
+    expect(buttonFinder, findsOneWidget);
+
+    // Full-width: the button's width should match the available content width.
+    final screenWidth = tester.getSize(find.byType(Scaffold)).width;
+    final buttonWidth = tester.getSize(buttonFinder).width;
+    // Allow for horizontal padding (the bottom bar has 16px padding each side).
+    expect(buttonWidth, greaterThanOrEqualTo(screenWidth - 48));
+  });
 
   testWidgets(
     'submitting with an empty title shows a validation error and does not call onSubmit',
@@ -123,14 +121,8 @@ void main() {
         },
       );
 
-      await tester.enterText(
-        find.widgetWithText(TextFormField, '标题'),
-        '失落之城',
-      );
-      await tester.enterText(
-        find.widgetWithText(TextFormField, '摘要'),
-        '传说笔记',
-      );
+      await tester.enterText(find.widgetWithText(TextFormField, '标题'), '失落之城');
+      await tester.enterText(find.widgetWithText(TextFormField, '摘要'), '传说笔记');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
@@ -184,51 +176,45 @@ void main() {
     },
   );
 
-  testWidgets(
-    'tag chip input can add and delete tags',
-    (tester) async {
-      CampaignArchiveDraft? captured;
-      await pumpEditorPage(
-        tester,
-        onSubmit: (draft) async {
-          captured = draft;
-          return true;
-        },
-      );
+  testWidgets('tag chip input can add and delete tags', (tester) async {
+    CampaignArchiveDraft? captured;
+    await pumpEditorPage(
+      tester,
+      onSubmit: (draft) async {
+        captured = draft;
+        return true;
+      },
+    );
 
-      await tester.enterText(
-        find.widgetWithText(TextFormField, '标题'),
-        '带标签的条目',
-      );
-      await tester.testTextInput.receiveAction(TextInputAction.done);
-      await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextFormField, '标题'), '带标签的条目');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
 
-      // Add a tag via the tag input field.
-      await tester.enterText(
-        find.byKey(const Key('archive-editor-tag-input')),
-        'lore',
-      );
-      await tester.testTextInput.receiveAction(TextInputAction.done);
-      await tester.pumpAndSettle();
+    // Add a tag via the tag input field.
+    await tester.enterText(
+      find.byKey(const Key('archive-editor-tag-input')),
+      'lore',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
 
-      // The tag should now appear as a chip.
-      expect(find.text('lore'), findsWidgets);
+    // The tag should now appear as a chip.
+    expect(find.text('lore'), findsWidgets);
 
-      // Add a second tag.
-      await tester.enterText(
-        find.byKey(const Key('archive-editor-tag-input')),
-        'map',
-      );
-      await tester.testTextInput.receiveAction(TextInputAction.done);
-      await tester.pumpAndSettle();
+    // Add a second tag.
+    await tester.enterText(
+      find.byKey(const Key('archive-editor-tag-input')),
+      'map',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.text('创建'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('创建'));
+    await tester.pumpAndSettle();
 
-      expect(captured, isNotNull);
-      expect(captured!.tags, containsAll(['lore', 'map']));
-    },
-  );
+    expect(captured, isNotNull);
+    expect(captured!.tags, containsAll(['lore', 'map']));
+  });
 
   testWidgets(
     'links multi-select shows existing entries and carries selection on submit',
@@ -266,16 +252,21 @@ void main() {
         },
       );
 
-      await tester.enterText(
-        find.widgetWithText(TextFormField, '标题'),
-        '主条目',
-      );
+      await tester.enterText(find.widgetWithText(TextFormField, '标题'), '主条目');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
       // The links section should list the existing entries.
       expect(find.text('黑森林'), findsOneWidget);
       expect(find.text('旧日记'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const Key('archive-editor-link-search')),
+        '黑森',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('黑森林'), findsOneWidget);
+      expect(find.text('旧日记'), findsNothing);
 
       // Select the first entry. The links section sits below the fold, so
       // scroll it into view before tapping.
@@ -293,13 +284,10 @@ void main() {
     },
   );
 
-  testWidgets(
-    'initialKind pre-fills the kind dropdown',
-    (tester) async {
-      await pumpEditorPage(tester, initialKind: 'clue');
+  testWidgets('initialKind pre-fills the kind dropdown', (tester) async {
+    await pumpEditorPage(tester, initialKind: 'clue');
 
-      // The dropdown should show the clue label.
-      expect(find.text('线索'), findsWidgets);
-    },
-  );
+    // The dropdown should show the clue label.
+    expect(find.text('线索'), findsWidgets);
+  });
 }

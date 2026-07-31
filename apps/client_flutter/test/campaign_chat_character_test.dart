@@ -7,7 +7,7 @@ import 'package:dnd_table_client/src/features/campaigns/data/campaign_socket_ser
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_conversation.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_archive_entry.dart';
-import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_controller.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/characters/campaign_character_controller.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_detail_page.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_chat_page.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_controller.dart';
@@ -73,10 +73,11 @@ final _character = CharacterSheet.fromJson({
 void main() {
   late AuthController authController;
   late CampaignController campaignController;
-  late CharacterController characterController;
+  late CharacterController localCharacterController;
   late ContentRepository contentRepository;
   late _RecordingCampaignClient campaignClient;
-  late CampaignActorController actorController;
+  late CampaignCharacterController campaignCharacterController;
+  late MemoryCampaignSyncApiClient campaignSyncClient;
 
   setUp(() async {
     final tokenStore = InMemoryAuthTokenStore();
@@ -103,18 +104,19 @@ void main() {
       campaignSocketService: NoopCampaignSocketService(),
     );
 
-    characterController = CharacterController(
+    localCharacterController = CharacterController(
       repository: MemoryCharacterRepository(initial: [_character]),
     );
 
     contentRepository = MemoryContentRepository(
       initialEntries: [testFighterEntry()],
     );
-    actorController = CampaignActorController(
+    campaignSyncClient = MemoryCampaignSyncApiClient();
+    campaignCharacterController = CampaignCharacterController(
       cacheRepository: MemoryCampaignCacheRepository(
-        actors: [
-          testCampaignActor(
-            id: 'actor-player',
+        characters: [
+          testCampaignCharacter(
+            id: 'character-player',
             campaignId: _campaign.id,
             ownerUserId: 'user-2',
             sourceCharacterId: _character.id,
@@ -122,25 +124,25 @@ void main() {
           ),
         ],
       ),
-      apiClient: MemoryCampaignSyncApiClient(),
+      apiClient: campaignSyncClient,
       apiBaseUrl: _apiBaseUrl,
       accessToken: 'access-token',
       currentUserId: 'user-1',
     );
-    await actorController.selectCampaign(_campaign.id);
+    await campaignCharacterController.selectCampaign(_campaign.id);
     await Future<void>.delayed(Duration.zero);
   });
 
   tearDown(() {
     campaignController.dispose();
-    characterController.dispose();
-    actorController.dispose();
+    localCharacterController.dispose();
+    campaignCharacterController.dispose();
     authController.dispose();
   });
 
   Future<void> pumpChatPage(
     WidgetTester tester, {
-    String? campaignActorId,
+    String? campaignCharacterId,
     bool isDm = false,
     DiceRoller? diceRoller,
     CampaignContentController? campaignContentController,
@@ -154,10 +156,11 @@ void main() {
         home: CampaignChatPage(
           campaign: _campaign,
           character: _character,
-          campaignActorId: campaignActorId,
+          campaignCharacterId: campaignCharacterId,
           campaignController: campaignController,
           contentRepository: contentRepository,
-          actorController: actorController,
+          characterController: campaignCharacterController,
+          localCharacters: [_character],
           diceRoller: diceRoller,
           campaignContentController: campaignContentController,
         ),
@@ -167,9 +170,9 @@ void main() {
   }
 
   testWidgets('action mode sends an italic action message', (tester) async {
-    await pumpChatPage(tester, campaignActorId: 'actor-1');
+    await pumpChatPage(tester, campaignCharacterId: 'character-1');
 
-    await tester.tap(find.byKey(const Key('chat-mode-action')));
+    await tester.tap(find.byKey(const Key('chat-mode-toggle')));
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -191,7 +194,7 @@ void main() {
         id: 'system-1',
         campaignId: 'camp-1',
         senderId: 'user-1',
-        campaignActorId: null,
+        campaignCharacterId: null,
         displayName: 'ranger',
         avatarUrl: null,
         kind: 'system',
@@ -214,7 +217,7 @@ void main() {
         id: 'narrator-1',
         campaignId: 'camp-1',
         senderId: 'user-1',
-        campaignActorId: null,
+        campaignCharacterId: null,
         displayName: '旁白 / DM',
         avatarUrl: null,
         speakerMode: 'narrator',
@@ -238,7 +241,7 @@ void main() {
           id: 'health-1',
           campaignId: 'camp-1',
           senderId: 'user-2',
-          campaignActorId: 'actor-player',
+          campaignCharacterId: 'character-player',
           displayName: 'Arannis',
           avatarUrl: null,
           publicHealthState: 'injured',
@@ -261,12 +264,12 @@ void main() {
       expect(avatar.health, CampaignAvatarHealth.injured);
       expect(avatar.healthFraction, 0.42);
 
-      final actor = actorController.actors.singleWhere(
-        (candidate) => candidate.id == 'actor-player',
+      final character = campaignCharacterController.characters.singleWhere(
+        (candidate) => candidate.id == 'character-player',
       );
       expect(
-        await actorController.updateActor(actor, {
-          ...actor.sheet,
+        await campaignCharacterController.updateCharacter(character, {
+          ...character.sheet,
           'currentHp': 2,
           'maxHp': 10,
         }),
@@ -274,11 +277,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final updatedActor = actorController.actors.singleWhere(
-        (candidate) => candidate.id == 'actor-player',
-      );
-      expect(updatedActor.sheet['currentHp'], 2);
-      expect(updatedActor.sheet['maxHp'], 10);
+      final updatedCharacter = campaignCharacterController.characters
+          .singleWhere((candidate) => candidate.id == 'character-player');
+      expect(updatedCharacter.sheet['currentHp'], 2);
+      expect(updatedCharacter.sheet['maxHp'], 10);
       avatar = tester.widget<CampaignAvatar>(messageAvatar);
       expect(avatar.health, CampaignAvatarHealth.injured);
       expect(avatar.healthFraction, 0.42);
@@ -286,9 +288,9 @@ void main() {
   );
 
   testWidgets(
-    'tool panel current identity uses the actor current HP fraction',
+    'tool panel current identity uses the character current HP fraction',
     (tester) async {
-      await pumpChatPage(tester, campaignActorId: 'actor-player');
+      await pumpChatPage(tester, campaignCharacterId: 'character-player');
 
       await tester.tap(find.byKey(const Key('campaign-chat-identity')));
       await tester.pumpAndSettle();
@@ -303,37 +305,42 @@ void main() {
     },
   );
 
-  testWidgets('identity switch uses current actor HP over workspace grade', (
-    tester,
-  ) async {
-    campaignClient.canManageCampaign = true;
-    campaignClient.workspaceActors = const [
-      CampaignWorkspaceActor(
-        id: 'actor-player',
-        ownerUserId: 'user-2',
-        actorType: 'player',
-        status: 'active',
-        lifecycle: 'persistent',
-        displayName: 'Arannis',
-        avatarAssetId: null,
-        publicHealthState: 'critical',
-      ),
-    ];
-    await pumpChatPage(tester, isDm: true, campaignActorId: 'actor-player');
+  testWidgets(
+    'identity switch uses current character HP over workspace grade',
+    (tester) async {
+      campaignClient.canManageCampaign = true;
+      campaignClient.workspaceCharacters = const [
+        CampaignWorkspaceCharacter(
+          id: 'character-player',
+          ownerUserId: 'user-2',
+          characterType: 'player',
+          status: 'active',
+          lifecycle: 'persistent',
+          displayName: 'Arannis',
+          avatarAssetId: null,
+          publicHealthState: 'critical',
+        ),
+      ];
+      await pumpChatPage(
+        tester,
+        isDm: true,
+        campaignCharacterId: 'character-player',
+      );
 
-    await tester.tap(find.byKey(const Key('campaign-chat-identity')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('tool-dm-identity-switch')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('tool-dm-identity-switch')));
+      await tester.pumpAndSettle();
 
-    final avatarFinder = find.descendant(
-      of: find.byKey(const Key('identity-actor-actor-player')),
-      matching: find.byType(CampaignAvatar),
-    );
-    final avatar = tester.widget<CampaignAvatar>(avatarFinder);
-    expect(avatar.health, CampaignAvatarHealth.healthy);
-    expect(avatar.healthFraction, 0.7);
-  });
+      final avatarFinder = find.descendant(
+        of: find.byKey(const Key('identity-character-character-player')),
+        matching: find.byType(CampaignAvatar),
+      );
+      final avatar = tester.widget<CampaignAvatar>(avatarFinder);
+      expect(avatar.health, CampaignAvatarHealth.healthy);
+      expect(avatar.healthFraction, 0.7);
+    },
+  );
 
   testWidgets('content tool reads the offline campaign-aware repository', (
     tester,
@@ -342,17 +349,14 @@ void main() {
 
     await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('资料条目'));
+    await tester.tap(find.text('资料库'));
     await tester.pumpAndSettle();
 
     expect(find.text('战士'), findsOneWidget);
   });
 
   testWidgets('say mode sends a bubble message', (tester) async {
-    await pumpChatPage(tester, campaignActorId: 'actor-1');
-
-    await tester.tap(find.byKey(const Key('chat-mode-say')));
-    await tester.pumpAndSettle();
+    await pumpChatPage(tester, campaignCharacterId: 'character-1');
 
     await tester.enterText(
       find.byKey(const Key('campaign-chat-input')),
@@ -366,7 +370,7 @@ void main() {
   });
 
   testWidgets('character action tool sends a stable action id', (tester) async {
-    await pumpChatPage(tester, campaignActorId: 'actor-1');
+    await pumpChatPage(tester, campaignCharacterId: 'character-1');
 
     await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
@@ -381,18 +385,18 @@ void main() {
     final call = campaignClient.sendMessageCalls.single;
     expect(call.kind, 'action');
     expect(call.content, '动作如潮');
-    expect(call.campaignActorId, 'actor-1');
+    expect(call.campaignCharacterId, 'character-1');
     expect(call.actionId, 'action-surge');
     expect(find.byKey(const Key('rules-action-message')), findsOneWidget);
     expect(find.textContaining('guide:feature/action-surge'), findsOneWidget);
   });
 
   testWidgets(
-    'sendMessage uses campaignActorId not characterId or displayName',
+    'sendMessage uses campaignCharacterId not characterId or displayName',
     (tester) async {
-      await pumpChatPage(tester, campaignActorId: 'actor-1');
+      await pumpChatPage(tester, campaignCharacterId: 'character-1');
 
-      await tester.tap(find.byKey(const Key('chat-mode-action')));
+      await tester.tap(find.byKey(const Key('chat-mode-toggle')));
       await tester.pumpAndSettle();
 
       await tester.enterText(
@@ -404,29 +408,36 @@ void main() {
 
       expect(campaignClient.sendMessageCalls, hasLength(1));
       final call = campaignClient.sendMessageCalls.single;
-      expect(call.campaignActorId, 'actor-1');
+      expect(call.campaignCharacterId, 'character-1');
       expect(call.kind, 'action');
       expect(call.content, '推开大门');
     },
   );
 
-  testWidgets('sendMessage sends null campaignActorId when no actor is bound', (
-    tester,
-  ) async {
-    await pumpChatPage(tester);
+  testWidgets(
+    'sendMessage sends null campaignCharacterId when no character is bound',
+    (tester) async {
+      await pumpChatPage(tester);
 
-    await tester.enterText(find.byKey(const Key('campaign-chat-input')), '你好');
-    await tester.tap(find.byKey(const Key('campaign-chat-send')));
-    await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('campaign-chat-input')),
+        '你好',
+      );
+      await tester.tap(find.byKey(const Key('campaign-chat-send')));
+      await tester.pumpAndSettle();
 
-    expect(campaignClient.sendMessageCalls, hasLength(1));
-    expect(campaignClient.sendMessageCalls.single.campaignActorId, isNull);
-  });
+      expect(campaignClient.sendMessageCalls, hasLength(1));
+      expect(
+        campaignClient.sendMessageCalls.single.campaignCharacterId,
+        isNull,
+      );
+    },
+  );
 
   testWidgets('opens character information from the composer identity button', (
     tester,
   ) async {
-    await pumpChatPage(tester, campaignActorId: 'actor-1');
+    await pumpChatPage(tester, campaignCharacterId: 'character-1');
 
     await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
@@ -437,7 +448,7 @@ void main() {
   testWidgets('keeps identity in the composer instead of a tall chat header', (
     tester,
   ) async {
-    await pumpChatPage(tester, campaignActorId: 'actor-1');
+    await pumpChatPage(tester, campaignCharacterId: 'character-1');
 
     expect(find.byKey(const Key('campaign-chat-identity')), findsOneWidget);
     expect(find.byKey(const Key('campaign-chat-identity-bar')), findsNothing);
@@ -454,7 +465,7 @@ void main() {
     },
   );
 
-  testWidgets('member sheet joins campaign membership with actor status', (
+  testWidgets('member sheet joins campaign membership with character status', (
     tester,
   ) async {
     await pumpChatPage(tester, isDm: true);
@@ -480,7 +491,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('代掷检定'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('campaign-actor-actor-player')));
+    await tester.tap(
+      find.byKey(const Key('campaign-character-character-player')),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('check-type-skill')));
     await tester.pumpAndSettle();
@@ -489,8 +502,11 @@ void main() {
 
     final call = campaignClient.sendMessageCalls.single;
     expect(call.kind, 'roll');
-    expect(call.campaignActorId, 'actor-player');
-    expect(call.eventData, containsPair('targetActorId', 'actor-player'));
+    expect(call.campaignCharacterId, 'character-player');
+    expect(
+      call.eventData,
+      containsPair('targetCharacterId', 'character-player'),
+    );
     expect(call.eventData, containsPair('checkType', 'skill'));
     expect(call.eventData, containsPair('checkKey', '杂技'));
     expect(call.eventData, containsPair('dmRolled', true));
@@ -505,14 +521,14 @@ void main() {
         id: 'request-1',
         campaignId: 'camp-1',
         senderId: 'user-1',
-        campaignActorId: null,
+        campaignCharacterId: null,
         displayName: 'DM',
         avatarUrl: null,
         kind: 'checkRequest',
         content: '要求 Arannis 进行杂技技能检定',
         createdAt: '2026-07-09T00:00:00.000Z',
         eventData: {
-          'targetActorId': 'actor-1',
+          'targetCharacterId': 'character-1',
           'checkType': 'skill',
           'checkKey': '杂技',
           'label': '杂技技能检定',
@@ -523,7 +539,7 @@ void main() {
 
     await pumpChatPage(
       tester,
-      campaignActorId: 'actor-1',
+      campaignCharacterId: 'character-1',
       diceRoller: DiceRoller(nextInt: (_) => 9),
     );
     await tester.tap(find.byKey(const Key('respond-check-request')));
@@ -531,7 +547,7 @@ void main() {
 
     final call = campaignClient.sendMessageCalls.single;
     expect(call.kind, 'roll');
-    expect(call.campaignActorId, 'actor-1');
+    expect(call.campaignCharacterId, 'character-1');
     expect(call.eventData, {
       'requestId': 'request-1',
       'notation': 'd20',
@@ -541,14 +557,14 @@ void main() {
   });
 
   testWidgets(
-    'tapping a chat bubble avatar opens the full read-only actor sheet',
+    'tapping a chat bubble avatar opens the full read-only character sheet',
     (tester) async {
       campaignClient.messages = const [
         CampaignChatMessage(
           id: 'avatar-1',
           campaignId: 'camp-1',
           senderId: 'user-2',
-          campaignActorId: 'actor-player',
+          campaignCharacterId: 'character-player',
           displayName: 'Arannis',
           avatarUrl: null,
           kind: 'say',
@@ -586,7 +602,7 @@ void main() {
         id: 'avatar-dm-1',
         campaignId: 'camp-1',
         senderId: 'user-2',
-        campaignActorId: 'actor-player',
+        campaignCharacterId: 'character-player',
         displayName: 'Arannis',
         avatarUrl: null,
         kind: 'say',
@@ -611,7 +627,7 @@ void main() {
     expect(sheet.onUpdateInventory, isNotNull);
     expect(sheet.onSaveCharacter, isNotNull);
   });
-  testWidgets('avatar without a resolvable actor stays silent on tap', (
+  testWidgets('avatar without a resolvable character stays silent on tap', (
     tester,
   ) async {
     campaignClient.messages = const [
@@ -619,7 +635,7 @@ void main() {
         id: 'avatar-2',
         campaignId: 'camp-1',
         senderId: 'user-2',
-        campaignActorId: null,
+        campaignCharacterId: null,
         displayName: 'Stranger',
         avatarUrl: null,
         kind: 'say',
@@ -649,7 +665,9 @@ void main() {
       await tester.tap(find.byKey(const Key('campaign-chat-identity')));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('identity-temporary-entry')));
+      await tester.tap(find.byKey(const Key('tool-dm-identity-switch')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('identity-quick-temporary-entry')));
       await tester.pumpAndSettle();
 
       await tester.enterText(
@@ -670,7 +688,7 @@ void main() {
       final call = campaignClient.sendMessageCalls.single;
       expect(call.speakerSnapshot, isNotNull);
       expect(call.speakerSnapshot!['displayName'], '旅店老板');
-      expect(call.campaignActorId, isNull);
+      expect(call.campaignCharacterId, isNull);
       expect(call.kind, anyOf('say', 'action'));
       expect(call.content, '欢迎光临');
     },
@@ -688,7 +706,9 @@ void main() {
 
       await tester.tap(find.byKey(const Key('campaign-chat-identity')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('identity-temporary-entry')));
+      await tester.tap(find.byKey(const Key('tool-dm-identity-switch')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('identity-quick-temporary-entry')));
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const Key('draft-identity-name')),
@@ -726,10 +746,10 @@ void main() {
           home: CampaignChatPage(
             campaign: _campaign,
             character: _character,
-            campaignActorId: 'actor-1',
+            campaignCharacterId: 'character-1',
             campaignController: campaignController,
             contentRepository: contentRepository,
-            actorController: actorController,
+            characterController: campaignCharacterController,
           ),
         ),
       );
@@ -752,44 +772,44 @@ void main() {
   // Spec §发言身份 DM: DM uses 旁白/DM, 场外, 常驻 NPC/怪物/同伴, 临时角色,
   // 代管玩家角色. DM must NOT be asked to "绑定角色" — that path is for players.
   testWidgets(
-    'DM identity panel shows narrator/ooc/persistent actors/temp/proxy sections and no bound-character entry',
+    'DM identity panel shows narrator/ooc/persistent characters/temp/proxy sections and no bound-character entry',
     (tester) async {
       campaignClient.canManageCampaign = true;
-      campaignClient.workspaceActors = [
-        const CampaignWorkspaceActor(
-          id: 'actor-npc-1',
+      campaignClient.workspaceCharacters = [
+        const CampaignWorkspaceCharacter(
+          id: 'character-npc-1',
           ownerUserId: null,
-          actorType: 'npc',
+          characterType: 'npc',
           status: 'active',
           lifecycle: 'persistent',
           displayName: '酒馆老板',
           avatarAssetId: null,
           publicHealthState: 'unknown',
         ),
-        const CampaignWorkspaceActor(
-          id: 'actor-monster-1',
+        const CampaignWorkspaceCharacter(
+          id: 'character-monster-1',
           ownerUserId: 'user-1',
-          actorType: 'monster',
+          characterType: 'monster',
           status: 'active',
           lifecycle: 'persistent',
           displayName: '哥布林',
           avatarAssetId: null,
           publicHealthState: 'unknown',
         ),
-        const CampaignWorkspaceActor(
-          id: 'actor-temp-1',
+        const CampaignWorkspaceCharacter(
+          id: 'character-temp-1',
           ownerUserId: null,
-          actorType: 'npc',
+          characterType: 'npc',
           status: 'active',
           lifecycle: 'temporary',
           displayName: '临时守卫',
           avatarAssetId: null,
           publicHealthState: 'healthy',
         ),
-        const CampaignWorkspaceActor(
-          id: 'actor-player-2',
+        const CampaignWorkspaceCharacter(
+          id: 'character-player-2',
           ownerUserId: 'user-2',
-          actorType: 'player',
+          characterType: 'player',
           status: 'active',
           lifecycle: 'persistent',
           displayName: 'Arannis',
@@ -802,8 +822,8 @@ void main() {
       await tester.tap(find.byKey(const Key('campaign-chat-identity')));
       await tester.pumpAndSettle();
 
-      // 快速临时身份 lives in the merged tool panel per spec §输入栏.
-      expect(find.byKey(const Key('identity-temporary-entry')), findsOneWidget);
+      // 临时身份只有一个入口，位于身份切换面板中。
+      expect(find.byKey(const Key('identity-temporary-entry')), findsNothing);
 
       // Open the DM identity sub-panel via the "DM 身份切换" entry.
       await tester.tap(find.byKey(const Key('tool-dm-identity-switch')));
@@ -813,20 +833,20 @@ void main() {
       expect(find.byKey(const Key('identity-narrator-entry')), findsOneWidget);
       expect(find.byKey(const Key('identity-ooc-entry')), findsOneWidget);
       expect(
-        find.byKey(const Key('identity-actor-actor-npc-1')),
+        find.byKey(const Key('identity-character-character-npc-1')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const Key('identity-actor-actor-monster-1')),
+        find.byKey(const Key('identity-character-character-monster-1')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const Key('identity-actor-actor-temp-1')),
-        findsOneWidget,
+        find.byKey(const Key('identity-character-character-temp-1')),
+        findsNothing,
       );
-      // Proxy entry for player-owned actor (ownerUserId != current user).
+      // Proxy entry for player-owned character (ownerUserId != current user).
       expect(
-        find.byKey(const Key('identity-actor-actor-player-2')),
+        find.byKey(const Key('identity-character-character-player-2')),
         findsOneWidget,
       );
 
@@ -846,7 +866,7 @@ void main() {
     tester,
   ) async {
     campaignClient.canManageCampaign = true;
-    campaignClient.workspaceActors = const [];
+    campaignClient.workspaceCharacters = const [];
 
     await pumpChatPage(tester, isDm: true);
     await tester.tap(find.byKey(const Key('campaign-chat-identity')));
@@ -867,23 +887,20 @@ void main() {
     expect(find.byKey(const Key('draft-identity-name')), findsOneWidget);
   });
 
-  testWidgets('say and action modes show text labels with semantic icons', (
+  testWidgets('say and action modes use compact semantic icon controls', (
     tester,
   ) async {
-    await pumpChatPage(tester, campaignActorId: 'actor-1');
+    await pumpChatPage(tester, campaignCharacterId: 'character-1');
 
-    // Task 1.2: 滑块切换动画改为带文字标签（说/做），不再仅显示图标。
-    expect(find.text('说'), findsWidgets);
-    expect(find.text('做'), findsWidgets);
-    expect(find.byKey(const Key('chat-mode-say')), findsOneWidget);
-    expect(find.byKey(const Key('chat-mode-action')), findsOneWidget);
+    expect(find.byKey(const Key('chat-mode-toggle')), findsOneWidget);
+    expect(find.byTooltip('当前为说话，点击切换为动作'), findsOneWidget);
   });
 
   testWidgets(
     'player identity panel does not expose the quick temporary identity entry',
     (tester) async {
       campaignClient.canManageCampaign = false;
-      campaignClient.workspaceActors = const [];
+      campaignClient.workspaceCharacters = const [];
 
       await pumpChatPage(tester, isDm: false);
       await tester.tap(find.byKey(const Key('campaign-chat-identity')));
@@ -905,8 +922,8 @@ void main() {
     'unbound player identity panel shows only bound-character and ooc entries',
     (tester) async {
       campaignClient.canManageCampaign = false;
-      campaignClient.workspaceActors = const [];
-      // Membership has no boundActorId — simulates unbound player.
+      campaignClient.workspaceCharacters = const [];
+      // Membership has no boundCharacterId — simulates unbound player.
       campaignClient.workspaceMembership = const CampaignMembership(
         id: 'member-1',
         campaignId: 'camp-1',
@@ -940,15 +957,116 @@ void main() {
     },
   );
 
+  testWidgets(
+    'unbound player can select and bind an owned campaign character',
+    (tester) async {
+      campaignClient.canManageCampaign = false;
+      campaignClient.workspaceMembership = const CampaignMembership(
+        id: 'member-1',
+        campaignId: 'camp-1',
+        userId: 'user-1',
+        role: 'player',
+        displayName: 'Player One',
+        joinedAt: '2026-07-09T00:00:00.000Z',
+      );
+      campaignClient.workspaceCharacters = const [
+        CampaignWorkspaceCharacter(
+          id: 'owned-character',
+          ownerUserId: 'user-1',
+          characterType: 'player',
+          status: 'active',
+          lifecycle: 'persistent',
+          displayName: '阿伦',
+          avatarAssetId: null,
+          publicHealthState: 'healthy',
+        ),
+      ];
+
+      await pumpChatPage(tester, isDm: false);
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('tool-player-identity-switch')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('identity-bound-character-entry')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('binding-character-owned-character')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const Key('binding-character-owned-character')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(campaignClient.bindingCalls, [
+        (
+          campaignId: 'camp-1',
+          userId: 'user-1',
+          characterId: 'owned-character',
+        ),
+      ]);
+      expect(
+        campaignController.workspaceContext?.membership.boundCharacterId,
+        'owned-character',
+      );
+    },
+  );
+
+  testWidgets(
+    'unbound player can publish and bind a local character in one flow',
+    (tester) async {
+      campaignClient.canManageCampaign = false;
+      campaignClient.workspaceMembership = const CampaignMembership(
+        id: 'member-1',
+        campaignId: 'camp-1',
+        userId: 'user-1',
+        role: 'player',
+        displayName: 'Player One',
+        joinedAt: '2026-07-09T00:00:00.000Z',
+      );
+      campaignClient.workspaceCharacters = const [];
+
+      await pumpChatPage(tester, isDm: false);
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('tool-player-identity-switch')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('identity-bound-character-entry')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('binding-local-character-char-1')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const Key('binding-local-character-char-1')));
+      await tester.pumpAndSettle();
+
+      expect(campaignSyncClient.publishCalls, hasLength(1));
+      expect(
+        campaignSyncClient.publishCalls.single['sourceCharacterId'],
+        'char-1',
+      );
+      expect(campaignClient.bindingCalls, hasLength(1));
+      expect(campaignClient.bindingCalls.single.characterId, isNotEmpty);
+    },
+  );
+
   // Spec §输入栏: 当前身份头像取代原有独立 `+` 按钮. The separate `+` button
   // must be removed from the composer; the avatar tap opens the merged panel
-  // with 11 spec-defined tools.
+  // with a compact set of working tools.
   testWidgets(
-    'merged tool panel shows 11 spec entries and removes the + button',
+    'merged tool panel exposes working tools once and removes the + button',
     (tester) async {
       campaignClient.canManageCampaign = true;
-      campaignClient.workspaceActors = const [];
-      await pumpChatPage(tester, isDm: true, campaignActorId: 'actor-1');
+      campaignClient.workspaceCharacters = const [];
+      await pumpChatPage(
+        tester,
+        isDm: true,
+        campaignCharacterId: 'character-1',
+      );
 
       // The separate `+` button (tooltip 更多跑团功能) must NOT exist.
       expect(find.byTooltip('更多跑团功能'), findsNothing);
@@ -957,37 +1075,85 @@ void main() {
       await tester.tap(find.byKey(const Key('campaign-chat-identity')));
       await tester.pumpAndSettle();
 
-      // Spec §输入栏 11 tools (DM sees all):
-      // 1. 当前身份精确信息 (header)
+      // Current identity and working tools are available.
       expect(find.byKey(const Key('tool-current-identity')), findsOneWidget);
-      // 2. 打开角色卡
+      // 角色卡与身份切换整合进顶部身份摘要，不占用工具网格。
       expect(
         find.byKey(const Key('tool-open-character-sheet')),
         findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('campaign-tool-grid')),
+          matching: find.byKey(const Key('tool-open-character-sheet')),
+        ),
+        findsNothing,
       );
       // 3. 掷骰
       expect(find.byKey(const Key('tool-roll-dice')), findsOneWidget);
       // 4. 技能检定
       expect(find.byKey(const Key('tool-skill-check')), findsOneWidget);
-      // 5. HP 与状态
-      expect(find.byKey(const Key('tool-hp-status')), findsOneWidget);
+      // DM 原子操作直接出现在同一层，不再套一层“快捷操作”目录。
+      expect(find.byKey(const Key('tool-manage-hp')), findsOneWidget);
+      expect(find.byKey(const Key('tool-grant-item')), findsOneWidget);
+      expect(find.byKey(const Key('tool-add-condition')), findsOneWidget);
+      expect(find.byKey(const Key('tool-dm-quick-ops')), findsNothing);
+      // 角色状态统一从角色卡进入，不再重复一个“HP 与状态”入口。
+      expect(find.byKey(const Key('tool-hp-status')), findsNothing);
       // 6. 资料条目
       expect(find.byKey(const Key('tool-content-entries')), findsOneWidget);
       // 7. 记录线索
       expect(find.byKey(const Key('tool-record-clue')), findsOneWidget);
       // 8. 分享地点
       expect(find.byKey(const Key('tool-share-location')), findsOneWidget);
-      // 9. 群文件
-      expect(find.byKey(const Key('tool-group-files')), findsOneWidget);
+      // 未完成的群文件上传不对外暴露。
+      expect(find.byKey(const Key('tool-group-files')), findsNothing);
       // 10. DM 身份切换 (DM only)
       expect(find.byKey(const Key('tool-dm-identity-switch')), findsOneWidget);
-      // 11. 快速临时身份 (DM only)
-      expect(find.byKey(const Key('identity-temporary-entry')), findsOneWidget);
+      expect(
+        tester.getCenter(find.byKey(const Key('tool-dm-identity-switch'))).dx,
+        greaterThan(
+          tester.getCenter(find.byKey(const Key('tool-current-identity'))).dx,
+        ),
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('campaign-tool-grid')),
+          matching: find.byKey(const Key('tool-dm-identity-switch')),
+        ),
+        findsNothing,
+      );
+      expect(find.byKey(const Key('tool-view-journal')), findsNothing);
+      // Temporary identity is not duplicated in this tool grid.
+      expect(find.byKey(const Key('identity-temporary-entry')), findsNothing);
 
       // Player-only entry must NOT appear for DM.
       expect(
         find.byKey(const Key('tool-player-identity-switch')),
         findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'identity switch button lives inside current identity information row',
+    (tester) async {
+      campaignClient.canManageCampaign = true;
+      await pumpChatPage(
+        tester,
+        isDm: true,
+        campaignCharacterId: 'character-1',
+      );
+
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('tool-current-identity')),
+          matching: find.byKey(const Key('tool-dm-identity-switch')),
+        ),
+        findsOneWidget,
       );
     },
   );
@@ -998,8 +1164,12 @@ void main() {
     'player merged tool panel hides DM-only entries and shows player identity switch',
     (tester) async {
       campaignClient.canManageCampaign = false;
-      campaignClient.workspaceActors = const [];
-      await pumpChatPage(tester, isDm: false, campaignActorId: 'actor-1');
+      campaignClient.workspaceCharacters = const [];
+      await pumpChatPage(
+        tester,
+        isDm: false,
+        campaignCharacterId: 'character-1',
+      );
 
       expect(find.byTooltip('更多跑团功能'), findsNothing);
 
@@ -1013,14 +1183,14 @@ void main() {
         findsOneWidget,
       );
       expect(find.byKey(const Key('tool-roll-dice')), findsOneWidget);
-      expect(find.byKey(const Key('tool-hp-status')), findsOneWidget);
+      expect(find.byKey(const Key('tool-hp-status')), findsNothing);
       expect(find.byKey(const Key('tool-content-entries')), findsOneWidget);
 
-      // These actions write manager-owned campaign state. The server rejects
-      // them for players, so the UI must not advertise dead controls.
+      // Player members may create durable campaign archive entries, while
+      // manager-only character operations remain hidden.
       expect(find.byKey(const Key('tool-skill-check')), findsNothing);
-      expect(find.byKey(const Key('tool-record-clue')), findsNothing);
-      expect(find.byKey(const Key('tool-share-location')), findsNothing);
+      expect(find.byKey(const Key('tool-record-clue')), findsOneWidget);
+      expect(find.byKey(const Key('tool-share-location')), findsOneWidget);
       expect(find.byKey(const Key('tool-group-files')), findsNothing);
 
       // Player gets "切换发言身份" instead of "DM 身份切换".
@@ -1028,6 +1198,14 @@ void main() {
         find.byKey(const Key('tool-player-identity-switch')),
         findsOneWidget,
       );
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('campaign-tool-grid')),
+          matching: find.byKey(const Key('tool-player-identity-switch')),
+        ),
+        findsNothing,
+      );
+      expect(find.byKey(const Key('tool-view-journal')), findsNothing);
       expect(find.byKey(const Key('tool-dm-identity-switch')), findsNothing);
 
       // DM-only entries must NOT appear for player.
@@ -1046,14 +1224,14 @@ void main() {
         role: 'owner',
         displayName: 'Dungeon Master',
         joinedAt: '2026-07-09T00:00:00.000Z',
-        activeSpeakerActorId: 'actor-npc-1',
-        speakerMode: 'actor',
+        activeSpeakerCharacterId: 'character-npc-1',
+        speakerMode: 'character',
       );
-      campaignClient.workspaceActors = const [
-        CampaignWorkspaceActor(
-          id: 'actor-npc-1',
+      campaignClient.workspaceCharacters = const [
+        CampaignWorkspaceCharacter(
+          id: 'character-npc-1',
           ownerUserId: 'user-1',
-          actorType: 'npc',
+          characterType: 'npc',
           status: 'active',
           lifecycle: 'persistent',
           displayName: '酒馆老板',
@@ -1086,8 +1264,7 @@ void main() {
 
     await pumpChatPage(tester);
 
-    expect(find.byKey(const Key('chat-mode-say')), findsNothing);
-    expect(find.byKey(const Key('chat-mode-action')), findsNothing);
+    expect(find.byKey(const Key('chat-mode-toggle')), findsNothing);
     final input = tester.widget<TextField>(
       find.byKey(const Key('campaign-chat-input')),
     );
@@ -1095,7 +1272,7 @@ void main() {
   });
 
   testWidgets(
-    'active campaign actor exposes character actions without legacy actor id',
+    'active campaign character exposes character actions without legacy character id',
     (tester) async {
       campaignClient.workspaceMembership = const CampaignMembership(
         id: 'member-1',
@@ -1104,14 +1281,14 @@ void main() {
         role: 'owner',
         displayName: 'Dungeon Master',
         joinedAt: '2026-07-09T00:00:00.000Z',
-        activeSpeakerActorId: 'actor-player',
-        speakerMode: 'actor',
+        activeSpeakerCharacterId: 'character-player',
+        speakerMode: 'character',
       );
-      campaignClient.workspaceActors = const [
-        CampaignWorkspaceActor(
-          id: 'actor-player',
+      campaignClient.workspaceCharacters = const [
+        CampaignWorkspaceCharacter(
+          id: 'character-player',
           ownerUserId: 'user-2',
-          actorType: 'player',
+          characterType: 'player',
           status: 'active',
           lifecycle: 'persistent',
           displayName: 'Arannis',
@@ -1136,29 +1313,32 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await pumpChatPage(tester, isDm: true, campaignActorId: 'actor-1');
+    await pumpChatPage(tester, isDm: true, campaignCharacterId: 'character-1');
     await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
     expect(find.byKey(const Key('tool-dm-identity-switch')), findsOneWidget);
-    expect(find.byKey(const Key('identity-temporary-entry')), findsOneWidget);
+    expect(find.byKey(const Key('identity-temporary-entry')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('tool-dm-identity-switch')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('identity-quick-temporary-entry')),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('tool sheet groups actions by frequency', (tester) async {
-    await pumpChatPage(tester, isDm: true, campaignActorId: 'actor-1');
+  testWidgets('tool sheet uses a compact multi-column action grid', (
+    tester,
+  ) async {
+    await pumpChatPage(tester, isDm: true, campaignCharacterId: 'character-1');
     await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
 
-    final primary = find.byKey(const Key('tool-primary-actions'));
-    final campaign = find.byKey(const Key('tool-campaign-actions'));
     expect(find.text('Arannis'), findsWidgets);
-    expect(primary, findsOneWidget);
-    expect(campaign, findsOneWidget);
-    expect(
-      tester.getTopLeft(primary).dy,
-      lessThan(tester.getTopLeft(campaign).dy),
-    );
+    expect(find.byKey(const Key('campaign-tool-grid')), findsOneWidget);
+    expect(find.byType(GridView), findsOneWidget);
   });
 
   // Spec §档案: 资料、地点、线索和文件统一属于战役档案, 可从聊天跳转。
@@ -1173,7 +1353,10 @@ void main() {
     await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('tool-record-clue')));
+    final recordClue = find.byKey(const Key('tool-record-clue'));
+    await tester.ensureVisible(recordClue);
+    await tester.pumpAndSettle();
+    await tester.tap(recordClue);
     await tester.pumpAndSettle();
 
     expect(find.text('新建战役条目'), findsOneWidget);
@@ -1199,7 +1382,10 @@ void main() {
       await tester.tap(find.byKey(const Key('campaign-chat-identity')));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('tool-share-location')));
+      final shareLocation = find.byKey(const Key('tool-share-location'));
+      await tester.ensureVisible(shareLocation);
+      await tester.pumpAndSettle();
+      await tester.tap(shareLocation);
       await tester.pumpAndSettle();
 
       expect(find.text('新建战役条目'), findsOneWidget);
@@ -1216,28 +1402,13 @@ void main() {
     },
   );
 
-  testWidgets('group files tool opens archive creation form with kind=file', (
-    tester,
-  ) async {
+  testWidgets('unfinished group files tool is hidden', (tester) async {
     await pumpChatPage(tester, isDm: true);
 
     await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('tool-group-files')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('新建战役条目'), findsOneWidget);
-    expect(find.text('文件'), findsWidgets);
-
-    await tester.enterText(find.byType(TextFormField).first, 'NPC关系图');
-    await tester.tap(find.text('创建'));
-    await tester.pumpAndSettle();
-
-    expect(campaignClient.createArchiveEntryCalls, hasLength(1));
-    final call = campaignClient.createArchiveEntryCalls.single;
-    expect(call.kind, 'file');
-    expect(call.title, 'NPC关系图');
+    expect(find.byKey(const Key('tool-group-files')), findsNothing);
   });
 
   testWidgets('chat shell only exposes campaign navigation', (tester) async {
@@ -1246,7 +1417,7 @@ void main() {
         id: 'shell-message',
         campaignId: 'camp-1',
         senderId: 'user-2',
-        campaignActorId: null,
+        campaignCharacterId: null,
         displayName: 'Player Two',
         avatarUrl: null,
         kind: 'say',
@@ -1284,7 +1455,10 @@ void main() {
     await tester.pumpAndSettle();
 
     // The composer is for quick lookup; package management stays in campaign center.
-    await tester.tap(find.byKey(const Key('tool-content-entries')));
+    final contentEntries = find.byKey(const Key('tool-content-entries'));
+    await tester.ensureVisible(contentEntries);
+    await tester.pumpAndSettle();
+    await tester.tap(contentEntries);
     await tester.pumpAndSettle();
 
     expect(find.text('战役资料库'), findsOneWidget);
@@ -1311,7 +1485,10 @@ void main() {
       await tester.pumpAndSettle();
 
       // 掷骰 sheet 应当出现, 聊天页仍应保留在栈中 (输入框可见)。
-      expect(find.text('快速掷骰'), findsOneWidget);
+      expect(find.text('组合掷骰'), findsOneWidget);
+      expect(find.text('d4'), findsOneWidget);
+      expect(find.text('攻击'), findsNothing);
+      expect(find.text('伤害'), findsNothing);
       expect(find.byKey(const Key('campaign-chat-input')), findsOneWidget);
 
       // 关闭掷骰 sheet 后, 聊天页应仍然可见。
@@ -1324,8 +1501,8 @@ void main() {
   testWidgets('tool panel character actions keeps chat page on stage', (
     tester,
   ) async {
-    // 角色动作条目仅在 _characterActions 非空且 campaignActorId 非空时出现。
-    await pumpChatPage(tester, isDm: true, campaignActorId: 'actor-1');
+    // 角色动作条目仅在 _characterActions 非空且 campaignCharacterId 非空时出现。
+    await pumpChatPage(tester, isDm: true, campaignCharacterId: 'character-1');
 
     await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
@@ -1343,7 +1520,11 @@ void main() {
   testWidgets('tool panel open character sheet keeps chat page on stage', (
     tester,
   ) async {
-    await pumpChatPage(tester, isDm: true, campaignActorId: 'actor-player');
+    await pumpChatPage(
+      tester,
+      isDm: true,
+      campaignCharacterId: 'character-player',
+    );
 
     await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
@@ -1371,7 +1552,10 @@ void main() {
     await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('tool-content-entries')));
+    final contentEntries = find.byKey(const Key('tool-content-entries'));
+    await tester.ensureVisible(contentEntries);
+    await tester.pumpAndSettle();
+    await tester.tap(contentEntries);
     await tester.pumpAndSettle();
 
     // 资料库 sheet 出现时聊天页输入框仍应在栈中。
@@ -1397,7 +1581,8 @@ void main() {
   });
 }
 
-class _RecordingCampaignClient implements CampaignClient {
+class _RecordingCampaignClient
+    implements CampaignClient, CampaignBindingClient {
   @override
   Future<void> markCampaignRead({
     required String apiBaseUrl,
@@ -1417,7 +1602,7 @@ class _RecordingCampaignClient implements CampaignClient {
     required String accessToken,
     required String campaignId,
     required String speakerMode,
-    String? actorId,
+    String? characterId,
   }) => throw UnimplementedError();
   @override
   Future<List<CampaignArchiveEntry>> listArchives({
@@ -1492,13 +1677,44 @@ class _RecordingCampaignClient implements CampaignClient {
   bool canManageCampaign = false;
   CampaignApiException? sendMessageException;
 
-  /// Test-only injection: workspace actors returned by getWorkspaceContext.
+  /// Test-only injection: workspace characters returned by getWorkspaceContext.
   /// Used by spec compliance tests for DM identity switching panel.
-  List<CampaignWorkspaceActor> workspaceActors = const [];
+  List<CampaignWorkspaceCharacter> workspaceCharacters = const [];
 
   /// Test-only injection: membership returned by getWorkspaceContext.
-  /// Allows tests to vary speakerMode / boundActorId per scenario.
+  /// Allows tests to vary speakerMode / boundCharacterId per scenario.
   CampaignMembership? workspaceMembership;
+  final List<({String campaignId, String userId, String? characterId})>
+  bindingCalls = [];
+
+  @override
+  Future<CampaignMembership> updateMemberBinding({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String userId,
+    required String? characterId,
+  }) async {
+    bindingCalls.add((
+      campaignId: campaignId,
+      userId: userId,
+      characterId: characterId,
+    ));
+    final current = workspaceMembership;
+    final updated = CampaignMembership(
+      id: current?.id ?? 'member-1',
+      campaignId: campaignId,
+      userId: userId,
+      role: current?.role ?? 'player',
+      displayName: current?.displayName ?? 'Player One',
+      joinedAt: current?.joinedAt ?? '2026-07-09T00:00:00.000Z',
+      boundCharacterId: characterId,
+      speakerMode: 'boundCharacter',
+      lastReadAt: current?.lastReadAt,
+    );
+    workspaceMembership = updated;
+    return updated;
+  }
 
   @override
   Future<CampaignWorkspaceContext> getWorkspaceContext({
@@ -1519,11 +1735,11 @@ class _RecordingCampaignClient implements CampaignClient {
             joinedAt: '2026-07-09T00:00:00.000Z',
           ),
       members: _campaign.memberPreview,
-      actors: workspaceActors,
+      characters: workspaceCharacters,
       capabilities: CampaignCapabilities(
         canManageCampaign: canManageCampaign,
         canManageMembers: canManageCampaign,
-        canCreateActors: canManageCampaign,
+        canCreateCharacters: canManageCampaign,
         canSpeakAsNarrator: canManageCampaign,
       ),
     );
@@ -1601,17 +1817,18 @@ class _RecordingCampaignClient implements CampaignClient {
     required String campaignId,
     required String kind,
     required String content,
-    String? campaignActorId,
+    String? campaignCharacterId,
     String? actionId,
     Map<String, Object?>? eventData,
     Map<String, Object?>? speakerSnapshot,
+    Object? speaker,
     String? conversationId,
   }) async {
     sendMessageCalls.add(
       _SentMessageCall(
         kind: kind,
         content: content,
-        campaignActorId: campaignActorId,
+        campaignCharacterId: campaignCharacterId,
         actionId: actionId,
         eventData: eventData,
         speakerSnapshot: speakerSnapshot,
@@ -1625,7 +1842,7 @@ class _RecordingCampaignClient implements CampaignClient {
       id: 'msg-${sendMessageCalls.length}',
       campaignId: campaignId,
       senderId: 'user-1',
-      campaignActorId: campaignActorId,
+      campaignCharacterId: campaignCharacterId,
       displayName: 'Arannis',
       avatarUrl: null,
       kind: kind,
@@ -1638,7 +1855,7 @@ class _RecordingCampaignClient implements CampaignClient {
               'name': content,
               'entryId': 'guide:feature/action-surge',
               'formula': '1/use',
-              'actorRevision': 3,
+              'characterRevision': 3,
             },
       eventData: eventData,
     );
@@ -1718,7 +1935,7 @@ class _SentMessageCall {
   const _SentMessageCall({
     required this.kind,
     required this.content,
-    required this.campaignActorId,
+    required this.campaignCharacterId,
     required this.actionId,
     required this.eventData,
     required this.speakerSnapshot,
@@ -1726,7 +1943,7 @@ class _SentMessageCall {
 
   final String kind;
   final String content;
-  final String? campaignActorId;
+  final String? campaignCharacterId;
   final String? actionId;
   final Map<String, Object?>? eventData;
   final Map<String, Object?>? speakerSnapshot;

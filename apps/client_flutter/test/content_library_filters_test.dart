@@ -74,8 +74,16 @@ void main() {
 
         expect(find.byType(SearchBar), findsOneWidget);
         expect(find.byKey(const Key('content-filter-button')), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(SearchBar),
+            matching: find.byKey(const Key('content-filter-button')),
+          ),
+          findsOneWidget,
+        );
         // 不显示巨大的下拉框.
         expect(find.byType(DropdownMenu), findsNothing);
+        expect(find.byType(FilterChip), findsNothing);
       },
     );
 
@@ -94,7 +102,7 @@ void main() {
     });
 
     testWidgets(
-      'type picker exposes registered class features and equipment bundles',
+      'type picker exposes class features and hides internal bundle types',
       (tester) async {
         await tester.pumpWidget(buildContentTestApp(entries: _spellEntries()));
         await tester.pumpAndSettle();
@@ -103,7 +111,8 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('职业特性'), findsOneWidget);
-        expect(find.text('装备方案'), findsOneWidget);
+        expect(find.text('装备方案'), findsNothing);
+        expect(find.text('规则'), findsNothing);
       },
     );
 
@@ -128,7 +137,7 @@ void main() {
     );
 
     testWidgets(
-      'selecting a spell level facet shows FilterChip and filters results',
+      'selecting a spell level facet shows a compact count and filters results',
       (tester) async {
         await tester.pumpWidget(buildContentTestApp(entries: _spellEntries()));
         await tester.pumpAndSettle();
@@ -154,14 +163,8 @@ void main() {
         expect(find.text('飞行术'), findsOneWidget);
         expect(find.text('火焰箭'), findsNothing);
 
-        // 已启用的 FilterChip 显示在搜索栏下方.
-        expect(
-          find.descendant(
-            of: find.byType(FilterChip),
-            matching: find.textContaining('3环'),
-          ),
-          findsOneWidget,
-        );
+        expect(find.byTooltip('筛选，已启用 2 项'), findsOneWidget);
+        expect(find.byType(FilterChip), findsNothing);
       },
     );
 
@@ -199,7 +202,7 @@ void main() {
       expect(find.text('飞行术'), findsOneWidget);
     });
 
-    testWidgets('tapping a FilterChip label removes that filter', (
+    testWidgets('active filters are cleared from the compact filter sheet', (
       tester,
     ) async {
       await tester.pumpWidget(buildContentTestApp(entries: _spellEntries()));
@@ -213,20 +216,16 @@ void main() {
       await tester.tap(find.byKey(const Key('content-filter-apply')));
       await tester.pumpAndSettle();
 
-      // 类型 FilterChip 可见.
-      final typeChip = find.descendant(
-        of: find.byType(FilterChip),
-        matching: find.textContaining('法术'),
-      );
-      expect(typeChip, findsOneWidget);
+      expect(find.byTooltip('筛选，已启用 1 项'), findsOneWidget);
+      expect(find.byType(FilterChip), findsNothing);
 
-      // 点击 FilterChip 移除类型筛选.
-      await tester.tap(typeChip);
+      await tester.tap(find.byKey(const Key('content-filter-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('content-filter-clear')));
+      await tester.tap(find.byKey(const Key('content-filter-apply')));
       await tester.pumpAndSettle();
 
-      // 类型筛选被移除, 战士也可见 (如果有).
-      // 这里只验证 FilterChip 消失.
-      expect(typeChip, findsNothing);
+      expect(find.byTooltip('筛选'), findsOneWidget);
     });
   });
 }

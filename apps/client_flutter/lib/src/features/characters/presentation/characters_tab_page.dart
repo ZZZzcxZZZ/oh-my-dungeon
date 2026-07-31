@@ -6,17 +6,22 @@ import 'package:flutter/material.dart';
 
 import '../../../core/presentation/avatar_image_provider.dart';
 import '../../app_preferences/presentation/app_preferences_controller.dart';
-import '../../campaigns/presentation/actors/campaign_actor_controller.dart';
-import '../../campaigns/presentation/actors/publish_character_sheet.dart';
+import '../../campaigns/domain/campaign.dart';
+import '../../campaigns/domain/campaign_character.dart';
+import '../../campaigns/presentation/characters/campaign_character_controller.dart';
+import '../../campaigns/presentation/characters/campaign_character_sheet_launcher.dart';
 import '../../campaigns/presentation/campaign_controller.dart';
+import '../../campaigns/presentation/center/campaign_characters_panel.dart';
 import '../../client_mode/domain/client_mode.dart';
 import '../../content/data/local/content_repository.dart';
 import '../../content/domain/content_entry.dart';
 import '../data/local/character_sync_conflict_repository.dart';
 import '../data/character_markdown_codec.dart';
+import '../data/character_repository.dart';
 import '../domain/character.dart';
 import '../domain/character_rule_projector.dart';
 import '../domain/dnd5e_rules.dart';
+import '../domain/monster_template_factory.dart';
 import 'character_conflict_banner_controller.dart';
 import 'character_conflict_resolution_page.dart';
 import 'character_detail_page.dart';
@@ -31,10 +36,9 @@ class CharactersTabPage extends StatefulWidget {
     this.campaignController,
     this.contentRepository,
     this.localContentRepository,
-    this.onCampaignContentSelected,
     this.appPreferencesController,
     this.modeController,
-    this.actorController,
+    this.campaignCharacterController,
     this.conflictBannerController,
     this.onUseRemoteConflict,
     super.key,
@@ -44,12 +48,11 @@ class CharactersTabPage extends StatefulWidget {
   final CampaignController? campaignController;
   final ContentRepository? contentRepository;
   final ContentRepository? localContentRepository;
-  final Future<void> Function(String campaignId)? onCampaignContentSelected;
   final AppPreferencesController? appPreferencesController;
   final ClientModeController? modeController;
-  final CampaignActorController? actorController;
+  final CampaignCharacterController? campaignCharacterController;
 
-  /// 角色 vs Actor 同步冲突 banner。仅在桌面/移动端有本地数据库时注入。
+  /// 角色 vs Character 同步冲突 banner。仅在桌面/移动端有本地数据库时注入。
   final CharacterConflictBannerController? conflictBannerController;
   final Future<bool> Function(CharacterSyncConflict conflict)?
   onUseRemoteConflict;
@@ -59,12 +62,18 @@ class CharactersTabPage extends StatefulWidget {
 }
 
 class _CharactersTabPageState extends State<CharactersTabPage> {
+  String? _expandedCampaignId;
+  List<CharacterMarkdownExternalChange> _externalMarkdownChanges = const [];
+
   @override
   void initState() {
     super.initState();
     widget.modeController?.addListener(_onModeChanged);
-    widget.actorController?.addListener(_onActorChanged);
+    widget.campaignCharacterController?.addListener(_onCharacterChanged);
     widget.conflictBannerController?.addListener(_onBannerChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkExternalMarkdownChanges();
+    });
   }
 
   @override
@@ -74,9 +83,12 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
       oldWidget.modeController?.removeListener(_onModeChanged);
       widget.modeController?.addListener(_onModeChanged);
     }
-    if (oldWidget.actorController != widget.actorController) {
-      oldWidget.actorController?.removeListener(_onActorChanged);
-      widget.actorController?.addListener(_onActorChanged);
+    if (oldWidget.campaignCharacterController !=
+        widget.campaignCharacterController) {
+      oldWidget.campaignCharacterController?.removeListener(
+        _onCharacterChanged,
+      );
+      widget.campaignCharacterController?.addListener(_onCharacterChanged);
     }
     if (oldWidget.conflictBannerController != widget.conflictBannerController) {
       oldWidget.conflictBannerController?.removeListener(_onBannerChanged);
@@ -87,7 +99,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
   @override
   void dispose() {
     widget.modeController?.removeListener(_onModeChanged);
-    widget.actorController?.removeListener(_onActorChanged);
+    widget.campaignCharacterController?.removeListener(_onCharacterChanged);
     widget.conflictBannerController?.removeListener(_onBannerChanged);
     super.dispose();
   }
@@ -96,7 +108,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     if (mounted) setState(() {});
   }
 
-  void _onActorChanged() {
+  void _onCharacterChanged() {
     if (mounted) setState(() {});
   }
 
@@ -129,24 +141,279 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
           floatingActionButton: FloatingActionButton.extended(
             key: const Key('create_character'),
             heroTag: 'create_character',
-            onPressed: _isDmModeWithCampaign
-                ? _showDmCreateMenu
-                : _openCreatePage,
+            onPressed: _isDmMode ? _showDmCreateMenu : _openCreatePage,
             icon: const Icon(Icons.person_add_alt_1),
             label: const Text('新角色'),
           ),
-          body: KeyedSubtree(
-            key: const Key('player-local-characters'),
-            child: Column(
-              children: [
-                if (widget.conflictBannerController?.hasUnresolved ?? false)
-                  _buildConflictBanner(context),
-                Expanded(child: _buildCharacterList(context)),
-              ],
-            ),
-          ),
+          body: _isDmMode
+              ? _buildDmCharacterDirectory(context)
+              : KeyedSubtree(
+                  key: const Key('player-local-characters'),
+                  child: Column(
+                    children: [
+                      if (_externalMarkdownChanges.isNotEmpty)
+                        _buildExternalMarkdownBanner(context),
+                      if (widget.conflictBannerController?.hasUnresolved ??
+                          false)
+                        _buildConflictBanner(context),
+                      Expanded(child: _buildCharacterList(context)),
+                    ],
+                  ),
+                ),
         );
       },
+    );
+  }
+
+  Widget _buildExternalMarkdownBanner(BuildContext context) {
+    final change = _externalMarkdownChanges.first;
+    return MaterialBanner(
+      key: const Key('external-character-markdown-banner'),
+      leading: const Icon(Icons.difference_outlined),
+      content: Text('“${change.existing.name}”的 Markdown 文件已在应用外修改'),
+      actions: [
+        TextButton(
+          onPressed: () {
+            setState(() {
+              _externalMarkdownChanges = _externalMarkdownChanges.sublist(1);
+            });
+          },
+          child: const Text('忽略'),
+        ),
+        FilledButton.tonal(
+          onPressed: () => _reviewExternalMarkdownChange(change),
+          child: const Text('查看差异'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _checkExternalMarkdownChanges() async {
+    final changes = await widget.controller.detectExternalMarkdownChanges();
+    if (!mounted || changes.isEmpty) return;
+    setState(() => _externalMarkdownChanges = changes);
+  }
+
+  Future<void> _reviewExternalMarkdownChange(
+    CharacterMarkdownExternalChange change,
+  ) async {
+    final action = await showModalBottomSheet<CharacterImportAction>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => CharacterImportPreviewSheet(
+        imported: change.imported,
+        existing: change.existing,
+        onSelected: (value) => Navigator.pop(sheetContext, value),
+      ),
+    );
+    if (action == null || !mounted) return;
+    final character = switch (action) {
+      CharacterImportAction.create => _asNewCharacter(change.imported),
+      CharacterImportAction.replace => _replaceCharacter(
+        change.existing,
+        change.imported,
+      ),
+      CharacterImportAction.merge => _mergeCharacter(
+        change.existing,
+        change.imported,
+      ),
+    };
+    final saved = await widget.controller.updateCharacter(character);
+    if (!mounted || !saved) return;
+    setState(() {
+      _externalMarkdownChanges = _externalMarkdownChanges
+          .where((item) => item != change)
+          .toList(growable: false);
+    });
+  }
+
+  Widget _buildDmCharacterDirectory(BuildContext context) {
+    final campaignController = widget.campaignController;
+    final characterController = widget.campaignCharacterController;
+    final campaigns = campaignController?.campaigns ?? const <Campaign>[];
+
+    return KeyedSubtree(
+      key: const Key('dm-campaign-character-directory'),
+      child: switch ((
+        campaignController?.isLoading ?? false,
+        campaignController?.error,
+        campaigns.isEmpty,
+        characterController,
+      )) {
+        (true, _, _, _) => const Center(child: CircularProgressIndicator()),
+        (_, final String error, _, _) => _CharacterDirectoryMessage(
+          icon: Icons.cloud_off_outlined,
+          message: error,
+        ),
+        (_, _, true, _) => const _CharacterDirectoryMessage(
+          icon: Icons.campaign_outlined,
+          message: '还没有可管理的战役\n请先在战役页创建或加入战役',
+        ),
+        (_, _, _, null) => const _CharacterDirectoryMessage(
+          icon: Icons.sync_problem_outlined,
+          message: '战役角色服务尚未就绪',
+        ),
+        _ => RefreshIndicator(
+          onRefresh: () async {
+            await campaignController!.loadCampaigns();
+            final campaignId = _expandedCampaignId;
+            if (campaignId != null) {
+              await _loadDmCampaign(campaignId);
+            }
+          },
+          child: ListView.separated(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
+            itemCount: campaigns.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final campaign = campaigns[index];
+              final expanded = _expandedCampaignId == campaign.id;
+              return Card.outlined(
+                clipBehavior: Clip.antiAlias,
+                child: ExpansionTile(
+                  key: Key('dm-campaign-group-${campaign.id}'),
+                  initiallyExpanded: expanded,
+                  maintainState: false,
+                  leading: CircleAvatar(
+                    child: Text(
+                      campaign.name.trim().isEmpty
+                          ? '?'
+                          : campaign.name.characters.first.toUpperCase(),
+                    ),
+                  ),
+                  title: Text(campaign.name),
+                  subtitle: Text(
+                    campaign.description.trim().isEmpty
+                        ? campaign.system
+                        : campaign.description,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onExpansionChanged: (value) {
+                    if (!value) {
+                      if (_expandedCampaignId == campaign.id) {
+                        setState(() => _expandedCampaignId = null);
+                      }
+                      return;
+                    }
+                    setState(() => _expandedCampaignId = campaign.id);
+                    _loadDmCampaign(campaign.id);
+                  },
+                  children: [
+                    if (expanded)
+                      _buildExpandedCampaignCharacters(
+                        context,
+                        campaign,
+                        characterController!,
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      },
+    );
+  }
+
+  Future<void> _loadDmCampaign(String campaignId) async {
+    final campaignController = widget.campaignController;
+    final characterController = widget.campaignCharacterController;
+    if (campaignController == null || characterController == null) return;
+    await Future.wait([
+      campaignController.loadWorkspaceContext(campaignId),
+      characterController.selectCampaign(campaignId),
+    ]);
+    await characterController.pullUntilCurrent();
+  }
+
+  Widget _buildExpandedCampaignCharacters(
+    BuildContext context,
+    Campaign campaign,
+    CampaignCharacterController controller,
+  ) {
+    if (controller.selectedCampaignId != campaign.id || controller.isLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (controller.error != null) {
+      return _CharacterDirectoryMessage(
+        icon: Icons.sync_problem_outlined,
+        message: controller.error!,
+      );
+    }
+
+    final workspace = widget.campaignController?.workspaceContext;
+    return CampaignCharactersPanel(
+      key: Key('dm-campaign-characters-panel-${campaign.id}'),
+      characters: controller.characters,
+      isManager: workspace?.capabilities.canEditAnyCharacter ?? false,
+      embedded: true,
+      activeSpeakerCharacterId: workspace?.membership.activeSpeakerCharacterId,
+      onOpenCharacter: _openCampaignCharacter,
+      onArchiveCharacter: ({required CampaignCharacter character}) async {
+        final success = await controller.archiveCharacter(character);
+        return success ? null : (controller.error ?? '归档失败');
+      },
+      onRestoreCharacter: ({required CampaignCharacter character}) async {
+        final success = await controller.restoreCharacter(character);
+        return success ? null : (controller.error ?? '恢复失败');
+      },
+      onBatchArchive: ({required List<String> characterIds}) async {
+        for (final characterId in characterIds) {
+          final character = controller.characters
+              .where((item) => item.id == characterId)
+              .firstOrNull;
+          if (character == null) continue;
+          final success = await controller.archiveCharacter(character);
+          if (!success) return controller.error ?? '归档失败';
+        }
+        return null;
+      },
+      onSetActiveSpeaker: ({required CampaignCharacter character}) async {
+        final success =
+            await widget.campaignController?.updateSpeaker(
+              campaignId: campaign.id,
+              speakerMode: 'character',
+              characterId: character.id,
+            ) ??
+            false;
+        return success
+            ? null
+            : (widget.campaignController?.workspaceContextError ?? '切换身份失败');
+      },
+      onSetVisibility:
+          ({
+            required CampaignCharacter character,
+            required bool visibleToPlayers,
+          }) async {
+            final success = await controller.updateCharacter(
+              character,
+              character.sheet,
+              visibleToPlayers: visibleToPlayers,
+            );
+            return success ? null : (controller.error ?? '更新可见性失败');
+          },
+    );
+  }
+
+  Future<void> _openCampaignCharacter(CampaignCharacter character) async {
+    final controller = widget.campaignCharacterController;
+    if (controller == null) return;
+    final workspace = widget.campaignController?.workspaceContext;
+    final canEditAnyCharacter =
+        workspace?.campaign.id == character.campaignId &&
+        (workspace?.capabilities.canEditAnyCharacter ?? false);
+    await openCampaignCharacterSheet(
+      context: context,
+      controller: controller,
+      character: character,
+      canEditAnyCharacter: canEditAnyCharacter,
+      contentRepository:
+          widget.contentRepository ?? widget.localContentRepository,
     );
   }
 
@@ -195,7 +462,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
         builder: (_) => CharacterConflictResolutionPage(
           controller: banner,
           characterController: widget.controller,
-          actorController: widget.actorController,
+          campaignCharacterController: widget.campaignCharacterController,
           onUseRemote: widget.onUseRemoteConflict,
         ),
       ),
@@ -238,14 +505,10 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
         final character = characters[index];
         return _CharacterCard(
           character: character,
-          canPublish: widget.actorController != null,
           onOpen: () => _openDetailPage(character),
           onEdit: () => _openEditPage(character),
-          onContentRefs: () => _showContentRefsDialog(character),
           onExport: () => _exportMarkdown(character),
-          onPublish: widget.actorController == null
-              ? null
-              : () => _showPublishSheet(character),
+          onDelete: () => _deleteCharacter(character),
           onHpDelta: (delta) => _adjustHp(character, delta),
           onUpgrade: character.level >= 20
               ? null
@@ -259,12 +522,14 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
   /// Spec §DM 角色生命周期: DM 模式下角色栏 FAB 弹出菜单, 提供:
   /// 1. 快速创建 NPC (常驻, name + HP + type)
   /// 2. 完整创建角色 (existing full character editor)
-  /// 仅当 DM 模式且已选中战役时启用。
-  /// 一次性发言身份改用 speakerSnapshot 直接写入消息，不再创建 Actor。
-  bool get _isDmModeWithCampaign {
-    final isDm = widget.modeController?.mode == ClientMode.dungeonMaster;
-    final campaignId = widget.actorController?.selectedCampaignId;
-    return isDm && campaignId != null && campaignId.isNotEmpty;
+  /// DM 始终可以创建本地角色或从怪物模板建立完整角色卡；只有常驻
+  /// 战役 NPC 需要已选中的战役。
+  /// 一次性发言身份改用 speakerSnapshot 直接写入消息，不再创建 Character。
+  bool get _isDmMode => widget.modeController?.mode == ClientMode.dungeonMaster;
+
+  bool get _hasSelectedCampaign {
+    final campaignId = widget.campaignCharacterController?.selectedCampaignId;
+    return campaignId != null && campaignId.isNotEmpty;
   }
 
   Future<void> _showDmCreateMenu() async {
@@ -273,15 +538,16 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
       builder: (context) => SimpleDialog(
         title: const Text('创建角色'),
         children: [
-          SimpleDialogOption(
-            key: const Key('dm-create-quick-npc'),
-            onPressed: () => Navigator.of(context).pop('quickNpc'),
-            child: const ListTile(
-              leading: Icon(Icons.smart_toy_outlined),
-              title: Text('快速创建 NPC'),
-              subtitle: Text('输入名称和 HP，创建常驻 NPC/怪物/同伴'),
+          if (_hasSelectedCampaign)
+            SimpleDialogOption(
+              key: const Key('dm-create-quick-npc'),
+              onPressed: () => Navigator.of(context).pop('quickNpc'),
+              child: const ListTile(
+                leading: Icon(Icons.smart_toy_outlined),
+                title: Text('快速创建 NPC'),
+                subtitle: Text('输入名称和 HP，创建当前战役的常驻 NPC'),
+              ),
             ),
-          ),
           SimpleDialogOption(
             key: const Key('dm-create-full'),
             onPressed: () => Navigator.of(context).pop('full'),
@@ -289,6 +555,15 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
               leading: Icon(Icons.edit_note),
               title: Text('完整创建角色'),
               subtitle: Text('打开完整角色编辑器'),
+            ),
+          ),
+          SimpleDialogOption(
+            key: const Key('dm-create-from-monster'),
+            onPressed: () => Navigator.of(context).pop('monsterTemplate'),
+            child: const ListTile(
+              leading: Icon(Icons.menu_book_outlined),
+              title: Text('从怪物资料创建'),
+              subtitle: Text('搜索怪物模板，预填完整角色卡'),
             ),
           ),
         ],
@@ -300,16 +575,64 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
         await _showQuickNpcForm();
       case 'full':
         await _openCreatePage();
+      case 'monsterTemplate':
+        await _createFromMonsterTemplate();
     }
   }
 
+  Future<void> _createFromMonsterTemplate() async {
+    final repository =
+        widget.localContentRepository ?? widget.contentRepository;
+    if (repository == null) return;
+    final monsters = await repository.search(
+      const ContentQuery(type: 'monster'),
+    );
+    if (!mounted) return;
+    if (monsters.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('资料库中没有怪物模板')));
+      return;
+    }
+    final selected = await _pickMonsterTemplate(context, monsters);
+    if (selected == null || !mounted) return;
+
+    final initialDraft = MonsterTemplateFactory.fromEntry(selected);
+    final preview = initialDraft.toLocalCharacter();
+    final messenger = ScaffoldMessenger.of(context);
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) => CharacterEditorPage(
+          initialCharacter: preview,
+          contentEntries: monsters,
+          onPickImage: _pickAvatarImage,
+          onSubmit: (draft) async {
+            final success = await widget.controller.createCharacter(draft);
+            if (mounted) {
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Text(
+                    success
+                        ? '已从 ${selected.name} 创建角色'
+                        : (widget.controller.error ?? '创建失败'),
+                  ),
+                ),
+              );
+            }
+            return success;
+          },
+        ),
+      ),
+    );
+  }
+
   Future<void> _showQuickNpcForm() async {
-    final actorController = widget.actorController;
-    if (actorController == null) return;
+    final campaignCharacterController = widget.campaignCharacterController;
+    if (campaignCharacterController == null) return;
 
     final nameController = TextEditingController();
     final hpController = TextEditingController();
-    var actorType = 'npc';
+    var characterType = 'npc';
     final formKey = GlobalKey<FormState>();
 
     final confirmed = await showDialog<bool>(
@@ -329,21 +652,21 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
                     children: [
                       ChoiceChip(
                         label: const Text('NPC'),
-                        selected: actorType == 'npc',
+                        selected: characterType == 'npc',
                         onSelected: (_) =>
-                            setDialogState(() => actorType = 'npc'),
+                            setDialogState(() => characterType = 'npc'),
                       ),
                       ChoiceChip(
                         label: const Text('怪物'),
-                        selected: actorType == 'monster',
+                        selected: characterType == 'monster',
                         onSelected: (_) =>
-                            setDialogState(() => actorType = 'monster'),
+                            setDialogState(() => characterType = 'monster'),
                       ),
                       ChoiceChip(
                         label: const Text('同伴'),
-                        selected: actorType == 'companion',
+                        selected: characterType == 'companion',
                         onSelected: (_) =>
-                            setDialogState(() => actorType = 'companion'),
+                            setDialogState(() => characterType = 'companion'),
                       ),
                     ],
                   ),
@@ -399,8 +722,8 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     final messenger = ScaffoldMessenger.of(context);
     final maxHpText = hpController.text.trim();
     final maxHp = maxHpText.isEmpty ? null : int.tryParse(maxHpText);
-    final success = await actorController.createDmActor(
-      actorType: actorType,
+    final success = await campaignCharacterController.createDmCharacter(
+      characterType: characterType,
       lifecycle: 'persistent',
       sheet: {
         'name': nameController.text.trim(),
@@ -414,7 +737,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          success ? '已创建常驻 NPC' : (actorController.error ?? '创建失败'),
+          success ? '已创建常驻 NPC' : (campaignCharacterController.error ?? '创建失败'),
         ),
       ),
     );
@@ -423,23 +746,17 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
   Future<void> _openCreatePage() async {
     final messenger = ScaffoldMessenger.of(context);
     widget.controller.takeLastCreatedCharacter();
-    final campaignId = await _selectCampaignContentSource();
-    if (!mounted) return;
-    final repository = campaignId == null
-        ? (widget.localContentRepository ?? widget.contentRepository)
-        : widget.contentRepository;
+    final repository =
+        widget.localContentRepository ?? widget.contentRepository;
     List<ContentEntry> contentEntries = const [];
     if (repository != null) {
-      if (campaignId != null) {
-        await widget.onCampaignContentSelected?.call(campaignId);
-      }
-      if (!mounted) return;
       contentEntries = await repository.search(const ContentQuery());
     }
     if (!mounted) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (context) => CharacterEditorPage(
+          defaultCreationMethod: 'standard',
           contentEntries: contentEntries,
           onPickImage: _pickAvatarImage,
           onSubmit: (draft) async {
@@ -458,42 +775,6 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
         ),
       ),
     );
-  }
-
-  Future<String?> _selectCampaignContentSource() async {
-    final campaigns = widget.campaignController?.campaigns ?? const [];
-    if (campaigns.isEmpty) return null;
-    var selectedId = campaigns.first.id;
-    return showDialog<String>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('选择创建资料'),
-          content: DropdownMenu<String>(
-            initialSelection: selectedId,
-            label: const Text('战役资料库'),
-            dropdownMenuEntries: [
-              for (final campaign in campaigns)
-                DropdownMenuEntry(value: campaign.id, label: campaign.name),
-            ],
-            onSelected: (value) {
-              if (value != null) setDialogState(() => selectedId = value);
-            },
-          ),
-          actions: [
-            TextButton.icon(
-              onPressed: () => Navigator.of(context).pop(''),
-              icon: const Icon(Icons.public),
-              label: const Text('使用通用资料'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(selectedId),
-              child: const Text('继续'),
-            ),
-          ],
-        ),
-      ),
-    ).then((value) => value?.isEmpty ?? true ? null : value);
   }
 
   Future<void> _openDetailPage(CharacterSheet character) async {
@@ -652,84 +933,31 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     );
   }
 
-  Future<void> _showContentRefsDialog(CharacterSheet character) async {
-    final refs = _contentRefsFromCharacter(character);
-    final spellsController = TextEditingController(
-      text: refs.spells.join(', '),
-    );
-    final itemsController = TextEditingController(text: refs.items.join(', '));
-    final featuresController = TextEditingController(
-      text: refs.features.join(', '),
-    );
-    final messenger = ScaffoldMessenger.of(context);
-
-    final result = await showDialog<_ContentRefs>(
+  Future<void> _deleteCharacter(CharacterSheet character) async {
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('内容引用'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: spellsController,
-                decoration: const InputDecoration(labelText: '法术 ID'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: itemsController,
-                decoration: const InputDecoration(labelText: '装备/物品 ID'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: featuresController,
-                decoration: const InputDecoration(labelText: '特性/专长 ID'),
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: const Text('删除角色？'),
+        content: Text('“${character.name}”将从本地角色库中永久删除。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(
-                _ContentRefs(
-                  spells: _splitRefs(spellsController.text),
-                  items: _splitRefs(itemsController.text),
-                  features: _splitRefs(featuresController.text),
-                ),
-              ),
-              child: const Text('保存'),
-            ),
-          ],
-        );
-      },
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
     );
+    if (confirmed != true || !mounted) return;
 
-    if (result == null) return;
-
-    final success = await widget.controller.updateContentRefs(
-      characterId: character.id,
-      spells: result.spells,
-      items: result.items,
-      features: result.features,
-    );
+    final success = await widget.controller.deleteCharacter(character.id);
     if (!mounted) return;
-    messenger.showSnackBar(
-      SnackBar(content: Text(success ? '内容引用已保存' : '保存失败')),
-    );
-  }
-
-  Future<void> _showPublishSheet(CharacterSheet character) async {
-    final actorController = widget.actorController;
-    if (actorController == null) return;
-    await showDialog<void>(
-      context: context,
-      builder: (context) => PublishCharacterSheet(
-        controller: actorController,
-        character: character,
-        allowDmActorTypes: _isDmModeWithCampaign,
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(success ? '角色已删除' : (widget.controller.error ?? '删除失败')),
       ),
     );
   }
@@ -830,26 +1058,129 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
   }
 }
 
+Future<ContentEntry?> _pickMonsterTemplate(
+  BuildContext context,
+  List<ContentEntry> monsters,
+) {
+  var query = '';
+  return showModalBottomSheet<ContentEntry>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setSheetState) {
+        final normalized = query.trim().toLowerCase();
+        final filtered = monsters
+            .where((entry) {
+              if (normalized.isEmpty) return true;
+              return entry.name.toLowerCase().contains(normalized) ||
+                  entry.aliases.any(
+                    (alias) => alias.toLowerCase().contains(normalized),
+                  ) ||
+                  entry.summary.toLowerCase().contains(normalized);
+            })
+            .toList(growable: false);
+        return SafeArea(
+          child: FractionallySizedBox(
+            heightFactor: 0.82,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: Text(
+                    '选择怪物模板',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: SearchBar(
+                    key: const Key('monster-template-search'),
+                    hintText: '搜索名称、别名或类型',
+                    leading: const Icon(Icons.search),
+                    onChanged: (value) => setSheetState(() => query = value),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: filtered.isEmpty
+                      ? const Center(child: Text('没有匹配的怪物'))
+                      : ListView.builder(
+                          itemCount: filtered.length,
+                          itemBuilder: (context, index) {
+                            final entry = filtered[index];
+                            return ListTile(
+                              key: Key('monster-template-${entry.id}'),
+                              leading: const Icon(Icons.smart_toy_outlined),
+                              title: Text(entry.name),
+                              subtitle: Text(
+                                entry.summary.isEmpty ? '怪物' : entry.summary,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => Navigator.of(context).pop(entry),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    ),
+  );
+}
+
+class _CharacterDirectoryMessage extends StatelessWidget {
+  const _CharacterDirectoryMessage({required this.icon, required this.message});
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 40, color: colors.onSurfaceVariant),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CharacterCard extends StatefulWidget {
   const _CharacterCard({
     required this.character,
-    required this.canPublish,
     required this.onOpen,
     required this.onEdit,
-    required this.onContentRefs,
     required this.onExport,
+    required this.onDelete,
     required this.onHpDelta,
     this.onUpgrade,
-    this.onPublish,
   });
 
   final CharacterSheet character;
-  final bool canPublish;
   final VoidCallback onOpen;
   final VoidCallback onEdit;
-  final VoidCallback onContentRefs;
   final VoidCallback onExport;
-  final VoidCallback? onPublish;
+  final VoidCallback onDelete;
   final ValueChanged<int> onHpDelta;
   final VoidCallback? onUpgrade;
 
@@ -873,7 +1204,8 @@ class _CharacterCardState extends State<_CharacterCard> {
       if (widget.character.raceSummary.isNotEmpty) widget.character.raceSummary,
       if (widget.character.classSummary.isNotEmpty)
         widget.character.classSummary,
-      'Lv.${widget.character.level}',
+      if (!widget.character.isNonPlayerCharacter)
+        'Lv.${widget.character.level}',
     ].join(' / ');
 
     final perceptionBonus = Dnd5eRules.skillBonus(
@@ -1013,41 +1345,47 @@ class _CharacterCardState extends State<_CharacterCard> {
                                 switch (action) {
                                   case _CharacterAction.edit:
                                     widget.onEdit();
-                                  case _CharacterAction.contentRefs:
-                                    widget.onContentRefs();
                                   case _CharacterAction.exportMarkdown:
                                     widget.onExport();
+                                  case _CharacterAction.delete:
+                                    widget.onDelete();
                                 }
                               },
-                              itemBuilder: (context) => const [
-                                PopupMenuItem(
+                              itemBuilder: (context) => [
+                                const PopupMenuItem(
                                   value: _CharacterAction.edit,
                                   child: Text('编辑'),
                                 ),
-                                PopupMenuItem(
-                                  value: _CharacterAction.contentRefs,
-                                  child: Text('内容引用'),
-                                ),
-                                PopupMenuItem(
+                                const PopupMenuItem(
                                   value: _CharacterAction.exportMarkdown,
                                   child: Text('导出 Markdown'),
+                                ),
+                                PopupMenuItem(
+                                  value: _CharacterAction.delete,
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.delete_outline,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.error,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        '删除角色',
+                                        style: TextStyle(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.error,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
                           ],
                         ),
-                        if (widget.canPublish && widget.onPublish != null)
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton.icon(
-                              key: Key(
-                                'publish-character-${widget.character.id}',
-                              ),
-                              onPressed: widget.onPublish,
-                              icon: const Icon(Icons.campaign_outlined),
-                              label: const Text('发布到战役'),
-                            ),
-                          ),
                       ],
                     ),
                   )
@@ -1161,52 +1499,11 @@ class _CharacterSummaryTile extends StatelessWidget {
   }
 }
 
-enum _CharacterAction { edit, contentRefs, exportMarkdown }
+enum _CharacterAction { edit, exportMarkdown, delete }
 
 String? emptyToNull(String? value) {
   if (value == null || value.isEmpty) return null;
   return value;
-}
-
-class _ContentRefs {
-  const _ContentRefs({
-    required this.spells,
-    required this.items,
-    required this.features,
-  });
-
-  final List<String> spells;
-  final List<String> items;
-  final List<String> features;
-}
-
-_ContentRefs _contentRefsFromCharacter(CharacterSheet character) {
-  final data = character.data;
-  if (data is! Map) {
-    return const _ContentRefs(spells: [], items: [], features: []);
-  }
-  final refs = data['contentRefs'];
-  if (refs is! Map) {
-    return const _ContentRefs(spells: [], items: [], features: []);
-  }
-  return _ContentRefs(
-    spells: _stringList(refs['spells']),
-    items: _stringList(refs['items']),
-    features: _stringList(refs['features']),
-  );
-}
-
-List<String> _stringList(Object? value) {
-  if (value is! List) return const [];
-  return value.whereType<String>().toList(growable: false);
-}
-
-List<String> _splitRefs(String value) {
-  return value
-      .split(',')
-      .map((item) => item.trim())
-      .where((item) => item.isNotEmpty)
-      .toList(growable: false);
 }
 
 CharacterSheet _asNewCharacter(CharacterSheet imported) {

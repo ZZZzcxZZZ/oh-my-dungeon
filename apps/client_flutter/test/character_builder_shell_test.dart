@@ -10,11 +10,12 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     var selected = -1;
 
-    await tester.pumpWidget(
-      _harness(onSelected: (index) => selected = index),
-    );
+    await tester.pumpWidget(_harness(onSelected: (index) => selected = index));
 
-    expect(find.byKey(const Key('builder-mobile-step-selector')), findsOneWidget);
+    expect(
+      find.byKey(const Key('builder-mobile-step-selector')),
+      findsOneWidget,
+    );
     expect(find.byType(NavigationRail), findsNothing);
     await tester.tap(find.byKey(const Key('builder-mobile-step-selector')));
     await tester.pumpAndSettle();
@@ -30,9 +31,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     var selected = -1;
 
-    await tester.pumpWidget(
-      _harness(onSelected: (index) => selected = index),
-    );
+    await tester.pumpWidget(_harness(onSelected: (index) => selected = index));
 
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.byKey(const Key('builder-mobile-step-selector')), findsNothing);

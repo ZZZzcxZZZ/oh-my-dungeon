@@ -4,7 +4,7 @@ import 'package:drift/drift.dart';
 
 import '../../../../core/database/app_database.dart';
 
-/// 角色 vs 战役 Actor 双向同步冲突的领域视图。
+/// 角色 vs 战役 Character 双向同步冲突的领域视图。
 ///
 /// `localValueJson` / `remoteValueJson` 是 sheet 或子字段的 JSON 字符串；
 /// UI 负责解码并对比展示。`resolvedAt` 为 null 表示未解决。
@@ -12,7 +12,7 @@ class CharacterSyncConflict {
   const CharacterSyncConflict({
     required this.id,
     required this.characterId,
-    required this.campaignActorId,
+    required this.campaignCharacterId,
     required this.fieldPath,
     required this.localValueJson,
     required this.remoteValueJson,
@@ -22,7 +22,7 @@ class CharacterSyncConflict {
 
   final String id;
   final String characterId;
-  final String campaignActorId;
+  final String campaignCharacterId;
   final String fieldPath;
   final String localValueJson;
   final String remoteValueJson;
@@ -32,7 +32,7 @@ class CharacterSyncConflict {
   bool get isResolved => resolvedAt != null;
 }
 
-/// 角色 vs Actor 冲突读取/解决接口。
+/// 角色 vs Character 冲突读取/解决接口。
 abstract interface class CharacterSyncConflictRepository {
   /// 监听某角色的未解决冲突。已解决的冲突不会出现在列表中。
   Stream<List<CharacterSyncConflict>> watchUnresolved(String characterId);
@@ -79,9 +79,9 @@ class DriftCharacterSyncConflictRepository
   @override
   Future<void> markResolved(String conflictId) async {
     final db = _database;
-    await (db.update(db.characterSyncConflicts)
-          ..where((t) => t.id.equals(conflictId)))
-        .write(
+    await (db.update(
+      db.characterSyncConflicts,
+    )..where((t) => t.id.equals(conflictId))).write(
       CharacterSyncConflictsCompanion(resolvedAt: Value(DateTime.now())),
     );
   }
@@ -89,16 +89,16 @@ class DriftCharacterSyncConflictRepository
   @override
   Future<void> clearForCharacter(String characterId) async {
     final db = _database;
-    await (db.delete(db.characterSyncConflicts)
-          ..where((t) => t.characterId.equals(characterId)))
-        .go();
+    await (db.delete(
+      db.characterSyncConflicts,
+    )..where((t) => t.characterId.equals(characterId))).go();
   }
 
   CharacterSyncConflict _toDomain(CharacterSyncConflictRow row) {
     return CharacterSyncConflict(
       id: row.id,
       characterId: row.characterId,
-      campaignActorId: row.campaignActorId,
+      campaignCharacterId: row.campaignCharacterId,
       fieldPath: row.fieldPath,
       localValueJson: row.localValueJson,
       remoteValueJson: row.remoteValueJson,

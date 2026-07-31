@@ -145,9 +145,7 @@ class _CharacterSheetShellState extends State<CharacterSheetShell>
               NavigationRailDestination(
                 icon: Icon(
                   destination.icon,
-                  key: Key(
-                    'character-sheet-destination-${destination.id}',
-                  ),
+                  key: Key('character-sheet-destination-${destination.id}'),
                 ),
                 selectedIcon: Icon(
                   destination.icon,

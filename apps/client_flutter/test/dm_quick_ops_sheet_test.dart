@@ -4,8 +4,8 @@ import 'package:dnd_table_client/src/features/campaigns/data/campaign_socket_ser
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_conversation.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_archive_entry.dart';
-import 'package:dnd_table_client/src/features/campaigns/presentation/actors/campaign_actor_controller.dart';
-import 'package:dnd_table_client/src/features/campaigns/presentation/actors/dm_quick_ops_sheet.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/characters/campaign_character_controller.dart';
+import 'package:dnd_table_client/src/features/campaigns/presentation/characters/dm_quick_ops_sheet.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_controller.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/campaign_event_dispatcher.dart';
 import 'package:dnd_table_client/src/features/auth/presentation/auth_controller.dart';
@@ -31,7 +31,7 @@ void main() {
     lastKnownVersion: '0.1.0',
   );
 
-  late CampaignActorController actorController;
+  late CampaignCharacterController characterController;
   late MemoryCampaignSyncApiClient syncClient;
   late CampaignEventDispatcher dispatcher;
   late CampaignController campaignController;
@@ -39,15 +39,15 @@ void main() {
 
   setUp(() async {
     syncClient = MemoryCampaignSyncApiClient();
-    actorController = CampaignActorController(
+    characterController = CampaignCharacterController(
       cacheRepository: MemoryCampaignCacheRepository(
-        actors: [
-          testCampaignActor(
+        characters: [
+          testCampaignCharacter(
             id: 'a1',
             campaignId: 'c1',
             sheet: {'name': 'Gandalf', 'currentHp': 52, 'maxHp': 60},
           ),
-          testCampaignActor(
+          testCampaignCharacter(
             id: 'a2',
             campaignId: 'c1',
             sheet: {'name': 'Frodo', 'currentHp': 28, 'maxHp': 30},
@@ -59,7 +59,7 @@ void main() {
       accessToken: 'tok',
       currentUserId: 'dm-1',
     );
-    await actorController.selectCampaign('c1');
+    await characterController.selectCampaign('c1');
 
     final tokenStore = InMemoryAuthTokenStore();
     await tokenStore.saveTokens(
@@ -93,7 +93,7 @@ void main() {
   });
 
   tearDown(() {
-    actorController.dispose();
+    characterController.dispose();
     campaignController.dispose();
     authController.dispose();
   });
@@ -108,11 +108,9 @@ void main() {
         home: Scaffold(
           body: DmQuickOpsSheet(
             campaignId: 'c1',
-            actorController: actorController,
+            characterController: characterController,
             eventDispatcher: dispatcher,
-            campaignController: campaignController,
             contentRepository: contentRepository,
-            diceRoller: diceRoller ?? DiceRoller(nextInt: (max) => max - 1),
           ),
         ),
       ),
@@ -120,7 +118,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('batch HP change applies to selected actors (Task 3.4)', (
+  testWidgets('batch HP change applies to selected characters (Task 3.4)', (
     tester,
   ) async {
     await pumpSheet(tester);
@@ -129,7 +127,7 @@ void main() {
     await tester.tap(find.text('批量扣血/治疗'));
     await tester.pumpAndSettle();
 
-    // Select both actors via checkboxes.
+    // Select both characters via checkboxes.
     final checkboxes = find.byType(Checkbox);
     expect(checkboxes, findsNWidgets(2));
     await tester.tap(checkboxes.at(0));
@@ -137,22 +135,25 @@ void main() {
     await tester.tap(checkboxes.at(1));
     await tester.pumpAndSettle();
 
-    // Enter damage delta -5.
-    await tester.enterText(find.byKey(const Key('dm-batch-hp-delta')), '-5');
+    expect(find.text('伤害'), findsWidgets);
+    expect(find.text('治疗'), findsWidgets);
+
+    // Damage mode uses a positive amount; the sheet applies the sign.
+    await tester.enterText(find.byKey(const Key('dm-batch-hp-delta')), '5');
     await tester.pumpAndSettle();
 
     // Apply.
     await tester.tap(find.byKey(const Key('dm-batch-hp-apply')));
     await tester.pumpAndSettle();
 
-    // Two changeActorHp calls with delta=-5.
-    expect(syncClient.changeActorHpCalls, hasLength(2));
-    expect(syncClient.changeActorHpCalls[0]['delta'], -5);
-    expect(syncClient.changeActorHpCalls[1]['delta'], -5);
-    final actorIds = syncClient.changeActorHpCalls
-        .map((c) => c['actorId'])
+    // Two changeCharacterHp calls with delta=-5.
+    expect(syncClient.changeCharacterHpCalls, hasLength(2));
+    expect(syncClient.changeCharacterHpCalls[0]['delta'], -5);
+    expect(syncClient.changeCharacterHpCalls[1]['delta'], -5);
+    final characterIds = syncClient.changeCharacterHpCalls
+        .map((c) => c['characterId'])
         .toSet();
-    expect(actorIds, {'a1', 'a2'});
+    expect(characterIds, {'a1', 'a2'});
   });
 
   testWidgets('grant item writes inventory and emits event (Task 3.4)', (
@@ -162,7 +163,7 @@ void main() {
       initialEntries: const [
         ContentEntry(
           id: 'item-longsword',
-          type: 'equipment',
+          type: 'item',
           slug: 'longsword',
           name: '长剑',
           body: [],
@@ -175,61 +176,75 @@ void main() {
     );
     await pumpSheet(tester, contentRepository: contentRepo);
 
-    await tester.tap(find.text('给予装备'));
+    await tester.tap(find.text('给予物品'));
     await tester.pumpAndSettle();
 
-    // Pick actor a1.
+    // Pick character a1.
     await tester.tap(find.text('Gandalf'));
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const Key('dm-item-search')), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('dm-item-search')), '长剑');
+    await tester.pumpAndSettle();
+
     // Pick the longsword item — this dispatches grantItem immediately.
-    await tester.tap(find.text('长剑'));
+    await tester.tap(find.widgetWithText(ListTile, '长剑'));
     await tester.pumpAndSettle();
 
     expect(syncClient.grantItemCalls, hasLength(1));
-    expect(syncClient.grantItemCalls.single['actorId'], 'a1');
+    expect(syncClient.grantItemCalls.single['characterId'], 'a1');
     expect(syncClient.grantItemCalls.single['itemId'], 'item-longsword');
     expect(syncClient.grantItemCalls.single['name'], '长剑');
   });
 
-  testWidgets('quick check rolls d20 and sends chat message (Task 3.4)', (
-    tester,
-  ) async {
-    final recordingClient = _RecordingCampaignClient();
-    campaignController = CampaignController(
-      apiBaseUrl: profile.apiBaseUrl,
-      authController: authController,
-      campaignClient: recordingClient,
-      campaignSocketService: NoopCampaignSocketService(),
+  testWidgets('grant item supports a custom item name', (tester) async {
+    await pumpSheet(tester);
+
+    await tester.tap(find.text('给予物品'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Gandalf'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('dm-custom-item')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('dm-custom-item-name')),
+      '酒馆钥匙',
     );
-
-    await pumpSheet(tester, diceRoller: DiceRoller(nextInt: (max) => 17));
-
-    await tester.tap(find.text('快速检定'));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('dm-custom-item-confirm')));
     await tester.pumpAndSettle();
 
-    // Pick actor a2 (Frodo).
+    expect(syncClient.grantItemCalls, hasLength(1));
+    expect(syncClient.grantItemCalls.single['name'], '酒馆钥匙');
+  });
+
+  testWidgets('grant condition writes structured state and emits event', (
+    tester,
+  ) async {
+    await pumpSheet(tester);
+
+    await tester.tap(find.text('给予状态'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Frodo'));
     await tester.pumpAndSettle();
 
-    // Set DC 15.
-    await tester.enterText(find.byKey(const Key('dm-quick-check-dc')), '15');
+    await tester.tap(find.text('中毒'));
+    await tester.enterText(find.byKey(const Key('dm-condition-duration')), '3');
+    await tester.tap(find.byKey(const Key('dm-condition-apply')));
     await tester.pumpAndSettle();
 
-    // Roll.
-    await tester.tap(find.byKey(const Key('dm-quick-check-roll')));
-    await tester.pumpAndSettle();
+    expect(syncClient.addConditionCalls, hasLength(1));
+    expect(syncClient.addConditionCalls.single['characterId'], 'a2');
+    expect(syncClient.addConditionCalls.single['type'], 'poisoned');
+    expect(syncClient.addConditionCalls.single['name'], '中毒');
+    expect(syncClient.addConditionCalls.single['durationRounds'], 3);
+  });
 
-    expect(recordingClient.sentMessages, hasLength(1));
-    final msg = recordingClient.sentMessages.single;
-    expect(msg.kind, 'roll');
-    expect(msg.campaignActorId, 'a2');
-    expect(
-      (msg.eventData?['total'] as num?)?.toInt(),
-      18,
-    ); // 17+1 = 18 (dex +1)
-    expect((msg.eventData?['dc'] as num?)?.toInt(), 15);
-    expect(msg.eventData?['success'], true);
+  testWidgets('does not duplicate direct check inside DM operations', (
+    tester,
+  ) async {
+    await pumpSheet(tester);
+    expect(find.text('快速检定'), findsNothing);
   });
 }
 
@@ -289,7 +304,7 @@ class _RecordingCampaignClient implements CampaignClient {
     required String accessToken,
     required String campaignId,
     required String speakerMode,
-    String? actorId,
+    String? characterId,
   }) => throw UnimplementedError();
   @override
   Future<List<CampaignArchiveEntry>> listArchives({
@@ -388,16 +403,17 @@ class _RecordingCampaignClient implements CampaignClient {
     required String campaignId,
     required String kind,
     required String content,
-    String? campaignActorId,
+    String? campaignCharacterId,
     String? actionId,
     Map<String, Object?>? eventData,
     Map<String, Object?>? speakerSnapshot,
+    Object? speaker,
     String? conversationId,
   }) async {
     final msg = _SentMessage(
       kind: kind,
       content: content,
-      campaignActorId: campaignActorId,
+      campaignCharacterId: campaignCharacterId,
       eventData: eventData,
     );
     sentMessages.add(msg);
@@ -405,7 +421,7 @@ class _RecordingCampaignClient implements CampaignClient {
       id: 'm-${sentMessages.length}',
       campaignId: campaignId,
       senderId: 'dm-1',
-      campaignActorId: campaignActorId,
+      campaignCharacterId: campaignCharacterId,
       displayName: 'DM',
       avatarUrl: null,
       kind: kind,
@@ -497,11 +513,11 @@ class _SentMessage {
   const _SentMessage({
     required this.kind,
     required this.content,
-    this.campaignActorId,
+    this.campaignCharacterId,
     this.eventData,
   });
   final String kind;
   final String content;
-  final String? campaignActorId;
+  final String? campaignCharacterId;
   final Map<String, Object?>? eventData;
 }

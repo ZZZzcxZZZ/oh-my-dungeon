@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('parses well-known server metadata', () {
     final metadata = ServerMetadata.fromJson({
+      'instanceId': 'instance-1',
       'name': 'D&D Table Tool',
       'version': '0.1.0',
       'apiBaseUrl': 'http://localhost:3000/api',
@@ -13,9 +14,10 @@ void main() {
       'serverMode': 'self_hosted',
       'supportedSystems': ['dnd5e'],
       'apiVersion': '1',
-      'features': ['campaignArchives', 'campaignActors', 'campaignChat'],
+      'features': ['campaignArchives', 'campaignCharacters', 'campaignChat'],
     });
 
+    expect(metadata.instanceId, 'instance-1');
     expect(metadata.name, 'D&D Table Tool');
     expect(metadata.registrationEnabled, isTrue);
     expect(metadata.supportedSystems, ['dnd5e']);
@@ -25,6 +27,7 @@ void main() {
 
   test('creates a server profile from discovered metadata', () {
     const metadata = ServerMetadata(
+      instanceId: 'instance-1',
       name: 'Home Table',
       version: '0.1.0',
       apiBaseUrl: 'https://table.example.com/api',
@@ -41,21 +44,50 @@ void main() {
       metadata: metadata,
     );
 
-    expect(profile.id, 'table.example.com');
-    expect(profile.name, 'Home Table');
+    expect(profile.id, 'instance-1');
+    expect(profile.serverName, 'Home Table');
+    expect(profile.localAlias, isNull);
+    expect(profile.displayName, 'Home Table');
     expect(profile.websocketUrl, 'wss://table.example.com/realtime');
   });
 
-  test('repairs legacy profiles that stored the server origin as the API URL', () {
-    final profile = ServerProfile.fromJson({
-      'id': '127.0.0.1',
-      'name': 'Local preview',
-      'baseUrl': 'http://127.0.0.1:5174',
-      'apiBaseUrl': 'http://127.0.0.1:5174',
-      'websocketUrl': 'ws://127.0.0.1:3000/realtime',
-      'lastKnownVersion': '0.1.0',
-    });
+  test('keeps a local alias separate from the discovered server name', () {
+    const metadata = ServerMetadata(
+      instanceId: 'instance-1',
+      name: 'Silver Sword',
+      version: '0.1.0',
+      apiBaseUrl: 'https://table.example.com/api',
+      websocketUrl: 'wss://table.example.com/campaigns',
+      registrationEnabled: true,
+      serverMode: 'self_hosted',
+      supportedSystems: ['dnd5e'],
+    );
 
-    expect(profile.apiBaseUrl, 'http://127.0.0.1:5174/api');
+    final profile = ServerProfile.fromMetadata(
+      baseUrl: 'https://table.example.com',
+      metadata: metadata,
+    ).copyWith(localAlias: '周五团');
+
+    expect(profile.serverName, 'Silver Sword');
+    expect(profile.localAlias, '周五团');
+    expect(profile.displayName, '周五团');
   });
+
+  test(
+    'repairs legacy profiles that stored the server origin as the API URL',
+    () {
+      final profile = ServerProfile.fromJson({
+        'id': '127.0.0.1',
+        'name': 'Local preview',
+        'baseUrl': 'http://127.0.0.1:5174',
+        'apiBaseUrl': 'http://127.0.0.1:5174',
+        'websocketUrl': 'ws://127.0.0.1:3000/realtime',
+        'lastKnownVersion': '0.1.0',
+      });
+
+      expect(profile.apiBaseUrl, 'http://127.0.0.1:5174/api');
+      expect(profile.serverName, 'Local preview');
+      expect(profile.displayName, 'Local preview');
+    },
+  );
 }

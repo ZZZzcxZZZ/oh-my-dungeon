@@ -2,24 +2,35 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../domain/auth_session.dart';
+
 class StoredAuthTokens {
   const StoredAuthTokens({
     required this.accessToken,
     required this.refreshToken,
+    this.user,
   });
 
   final String accessToken;
   final String refreshToken;
+  final AuthUser? user;
 
   factory StoredAuthTokens.fromJson(Map<String, Object?> json) {
     return StoredAuthTokens(
       accessToken: json['accessToken']! as String,
       refreshToken: json['refreshToken']! as String,
+      user: json['user'] is Map<String, Object?>
+          ? AuthUser.fromJson(json['user']! as Map<String, Object?>)
+          : null,
     );
   }
 
   Map<String, Object?> toJson() {
-    return {'accessToken': accessToken, 'refreshToken': refreshToken};
+    return {
+      'accessToken': accessToken,
+      'refreshToken': refreshToken,
+      if (user != null) 'user': user!.toJson(),
+    };
   }
 
   @override
@@ -27,11 +38,12 @@ class StoredAuthTokens {
     return identical(this, other) ||
         other is StoredAuthTokens &&
             accessToken == other.accessToken &&
-            refreshToken == other.refreshToken;
+            refreshToken == other.refreshToken &&
+            user == other.user;
   }
 
   @override
-  int get hashCode => Object.hash(accessToken, refreshToken);
+  int get hashCode => Object.hash(accessToken, refreshToken, user);
 }
 
 abstract class AuthTokenStore {

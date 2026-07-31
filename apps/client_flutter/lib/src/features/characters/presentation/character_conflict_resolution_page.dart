@@ -2,30 +2,30 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
-import '../../campaigns/presentation/actors/campaign_actor_controller.dart';
+import '../../campaigns/presentation/characters/campaign_character_controller.dart';
 import '../data/local/character_sync_conflict_repository.dart';
 import '../domain/character.dart';
 import 'character_conflict_banner_controller.dart';
 import 'character_controller.dart';
 
-/// 角色 vs 战役 Actor 同步冲突解决页。
+/// 角色 vs 战役 Character 同步冲突解决页。
 ///
 /// 列出所有未解决冲突，每个冲突显示本地 vs 远端 sheet 的关键差异，并提供：
-/// - 用本地覆盖：调 actorController.publishCharacter 重发本地角色
+/// - 用本地覆盖：调 characterController.publishCharacter 重发本地角色
 /// - 用远端覆盖：应用冲突发生时捕获的远端快照后 markResolved
 /// - 稍后处理：关闭页面，冲突保留
 class CharacterConflictResolutionPage extends StatelessWidget {
   const CharacterConflictResolutionPage({
     required this.controller,
     required this.characterController,
-    this.actorController,
+    this.campaignCharacterController,
     this.onUseRemote,
     super.key,
   });
 
   final CharacterConflictBannerController controller;
   final CharacterController characterController;
-  final CampaignActorController? actorController;
+  final CampaignCharacterController? campaignCharacterController;
   final Future<bool> Function(CharacterSyncConflict conflict)? onUseRemote;
 
   @override
@@ -80,8 +80,8 @@ class CharacterConflictResolutionPage extends StatelessWidget {
     BuildContext context,
     CharacterSyncConflict conflict,
   ) async {
-    final actor = actorController;
-    if (actor == null) {
+    final campaignController = campaignCharacterController;
+    if (campaignController == null) {
       _showSnack(context, '未连接到战役，无法覆盖');
       return;
     }
@@ -92,7 +92,7 @@ class CharacterConflictResolutionPage extends StatelessWidget {
       _showSnack(context, '本地角色已被删除');
       return;
     }
-    final success = await actor.publishCharacter(
+    final success = await campaignController.publishCharacter(
       character,
       baseRevisionOverride: _extractRevision(conflict.remoteValueJson),
     );
@@ -101,7 +101,7 @@ class CharacterConflictResolutionPage extends StatelessWidget {
       if (context.mounted) _showSnack(context, '已用本地版本覆盖');
     } else {
       if (context.mounted) {
-        _showSnack(context, actor.error ?? '覆盖失败');
+        _showSnack(context, campaignController.error ?? '覆盖失败');
       }
     }
   }

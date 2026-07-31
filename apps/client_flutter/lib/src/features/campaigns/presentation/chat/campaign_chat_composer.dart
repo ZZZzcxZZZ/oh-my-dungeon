@@ -46,9 +46,9 @@ class CampaignChatComposer extends StatelessWidget {
                 onDiscard: onDiscardDraft,
               ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Tooltip(
                     message: '当前身份与跑团工具',
@@ -60,7 +60,7 @@ class CampaignChatComposer extends StatelessWidget {
                         identity.healthState,
                       ),
                       healthFraction: identity.healthFraction,
-                      size: 32,
+                      size: 44,
                       tapTargetSize: 48,
                       onTap: sending ? null : onIdentityTap,
                     ),
@@ -75,18 +75,22 @@ class CampaignChatComposer extends StatelessWidget {
                         borderRadius: BorderRadius.circular(24),
                       ),
                       child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          if (!identity.isOoc)
-                            SizedBox(
-                              width: 96,
-                              height: 48,
-                              child: ChatModePicker(
-                                mode: mode,
-                                enabled: !sending,
-                                onChanged: onModeChanged,
+                          if (identity.supportsSayAction) ...[
+                            Padding(
+                              padding: const EdgeInsets.all(4),
+                              child: SizedBox.square(
+                                dimension: 40,
+                                child: ChatModePicker(
+                                  mode: mode,
+                                  enabled: !sending,
+                                  onChanged: onModeChanged,
+                                ),
                               ),
                             ),
+                            const SizedBox(width: 2),
+                          ],
                           Expanded(
                             child: TextField(
                               key: const Key('campaign-chat-input'),
@@ -101,11 +105,11 @@ class CampaignChatComposer extends StatelessWidget {
                                 border: InputBorder.none,
                                 enabledBorder: InputBorder.none,
                                 focusedBorder: InputBorder.none,
-                                contentPadding: EdgeInsets.only(
-                                  left: identity.isOoc ? 14 : 6,
-                                  right: 12,
-                                  top: 12,
-                                  bottom: 12,
+                                contentPadding: EdgeInsets.fromLTRB(
+                                  identity.supportsSayAction ? 4 : 16,
+                                  12,
+                                  14,
+                                  12,
                                 ),
                               ),
                               onSubmitted: sending ? null : (_) => _submit(),
@@ -117,17 +121,43 @@ class CampaignChatComposer extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   SizedBox.square(
+                    key: const Key('campaign-chat-send-target'),
                     dimension: 48,
-                    child: IconButton.filled(
-                      key: const Key('campaign-chat-send'),
-                      tooltip: chatText('send'),
-                      onPressed: sending ? null : _submit,
-                      icon: sending
-                          ? const SizedBox.square(
-                              dimension: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.send_rounded),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        AnimatedContainer(
+                          key: const Key('campaign-chat-send-visual'),
+                          duration: const Duration(milliseconds: 150),
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: sending
+                                ? colors.onSurface.withValues(alpha: 0.12)
+                                : colors.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        IconButton(
+                          key: const Key('campaign-chat-send'),
+                          tooltip: chatText('send'),
+                          style: IconButton.styleFrom(
+                            fixedSize: const Size.square(48),
+                            foregroundColor: colors.onPrimary,
+                            disabledForegroundColor: colors.onSurface
+                                .withValues(alpha: 0.38),
+                          ),
+                          onPressed: sending ? null : _submit,
+                          icon: sending
+                              ? const SizedBox.square(
+                                  dimension: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.send_rounded),
+                        ),
+                      ],
                     ),
                   ),
                 ],

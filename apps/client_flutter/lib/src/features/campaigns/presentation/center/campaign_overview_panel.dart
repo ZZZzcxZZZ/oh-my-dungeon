@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/campaign.dart';
-import '../../domain/campaign_actor.dart';
+import '../../domain/campaign_character.dart';
 import '../widgets/campaign_avatar.dart';
 import '../widgets/invite_share.dart';
 
@@ -24,10 +24,10 @@ class CampaignOverviewPanel extends StatelessWidget {
     required this.campaign,
     required this.canManage,
     this.members = const [],
-    this.actors = const [],
+    this.characters = const [],
     this.invites = const [],
     this.onCreateInvite,
-    this.onOpenActor,
+    this.onOpenCharacter,
     this.campaignName,
     this.serverUrl,
     this.onOpenDmControl,
@@ -41,10 +41,10 @@ class CampaignOverviewPanel extends StatelessWidget {
   final Campaign campaign;
   final bool canManage;
   final List<CampaignMemberPreview> members;
-  final List<CampaignActor> actors;
+  final List<CampaignCharacter> characters;
   final List<CampaignInvite> invites;
   final Future<CampaignInvite?> Function()? onCreateInvite;
-  final ValueChanged<CampaignActor>? onOpenActor;
+  final ValueChanged<CampaignCharacter>? onOpenCharacter;
   final String? campaignName;
   final String? serverUrl;
 
@@ -117,7 +117,7 @@ class CampaignOverviewPanel extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: _CampaignSummary(members: members, actors: actors),
+            child: _CampaignSummary(members: members, characters: characters),
           ),
           if (canManage && onCreateInvite != null)
             Padding(
@@ -131,8 +131,8 @@ class CampaignOverviewPanel extends StatelessWidget {
             ),
           _CampaignMemberList(
             members: members,
-            actors: actors,
-            onOpenActor: onOpenActor,
+            characters: characters,
+            onOpenCharacter: onOpenCharacter,
           ),
           // Plan 2026-07-23 Task 1.1: section divider 防止成员列表与下方
           // DM 工具卡/设置区块"黏在一起"。
@@ -209,8 +209,9 @@ class _DmControlEntry extends StatelessWidget {
                       const Text('主持工具'),
                       Text(
                         '遭遇、成员状态与 DM 私有工具',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: colors.onSurfaceVariant),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
@@ -226,15 +227,19 @@ class _DmControlEntry extends StatelessWidget {
 }
 
 class _CampaignSummary extends StatelessWidget {
-  const _CampaignSummary({required this.members, required this.actors});
+  const _CampaignSummary({required this.members, required this.characters});
 
   final List<CampaignMemberPreview> members;
-  final List<CampaignActor> actors;
+  final List<CampaignCharacter> characters;
 
   @override
   Widget build(BuildContext context) {
-    final active = actors.where((actor) => actor.status != 'archived').toList();
-    final players = active.where((actor) => actor.actorType == 'player').length;
+    final active = characters
+        .where((character) => character.status != 'archived')
+        .toList();
+    final players = active
+        .where((character) => character.characterType == 'player')
+        .length;
     final supporting = active.length - players;
     return Container(
       key: const Key('campaign-overview-stats'),
@@ -281,13 +286,13 @@ class _CampaignMetric extends StatelessWidget {
 class _CampaignMemberList extends StatelessWidget {
   const _CampaignMemberList({
     required this.members,
-    required this.actors,
-    required this.onOpenActor,
+    required this.characters,
+    required this.onOpenCharacter,
   });
 
   final List<CampaignMemberPreview> members;
-  final List<CampaignActor> actors;
-  final ValueChanged<CampaignActor>? onOpenActor;
+  final List<CampaignCharacter> characters;
+  final ValueChanged<CampaignCharacter>? onOpenCharacter;
 
   @override
   Widget build(BuildContext context) {
@@ -311,41 +316,41 @@ class _CampaignMemberList extends StatelessWidget {
   }
 
   Widget _memberTile(CampaignMemberPreview member) {
-    final actor = actors
+    final character = characters
         .where(
           (candidate) =>
               candidate.ownerUserId == member.userId &&
-              candidate.actorType == 'player' &&
+              candidate.characterType == 'player' &&
               candidate.status != 'archived',
         )
         .firstOrNull;
-    final actorName = actor?.sheet['name']?.toString().trim();
+    final characterName = character?.sheet['name']?.toString().trim();
     return ListTile(
       leading: CampaignAvatar(
-        initials: actorName?.isNotEmpty == true
-            ? actorName!
+        initials: characterName?.isNotEmpty == true
+            ? characterName!
             : member.displayName,
-        imageUrl: actor?.sheet['avatarUrl'] as String?,
+        imageUrl: character?.sheet['avatarUrl'] as String?,
         health: CampaignAvatar.healthFromHp(
-          actor?.sheet['currentHp'] as num?,
-          actor?.sheet['maxHp'] as num?,
+          character?.sheet['currentHp'] as num?,
+          character?.sheet['maxHp'] as num?,
         ),
         healthFraction: CampaignAvatar.fractionFromHp(
-          actor?.sheet['currentHp'] as num?,
-          actor?.sheet['maxHp'] as num?,
+          character?.sheet['currentHp'] as num?,
+          character?.sheet['maxHp'] as num?,
         ),
         size: 40,
       ),
       title: Text(member.displayName),
       subtitle: Text(
-        actorName?.isNotEmpty == true
-            ? '$actorName · ${_roleLabel(member.role)}'
+        characterName?.isNotEmpty == true
+            ? '$characterName · ${_roleLabel(member.role)}'
             : '${_roleLabel(member.role)} · 未绑定角色',
       ),
-      trailing: actor == null ? null : const Icon(Icons.chevron_right),
-      onTap: actor == null || onOpenActor == null
+      trailing: character == null ? null : const Icon(Icons.chevron_right),
+      onTap: character == null || onOpenCharacter == null
           ? null
-          : () => onOpenActor!(actor),
+          : () => onOpenCharacter!(character),
     );
   }
 }

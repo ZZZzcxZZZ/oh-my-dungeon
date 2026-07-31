@@ -104,6 +104,11 @@ void main() {
         const StoredAuthTokens(
           accessToken: 'fresh-access',
           refreshToken: 'refresh-token',
+          user: AuthUser(
+            id: 'user-1',
+            username: 'ranger',
+            email: 'ranger@example.com',
+          ),
         ),
       );
     },
@@ -236,6 +241,11 @@ void main() {
       StoredAuthTokens(
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
+        user: const AuthUser(
+          id: 'user-1',
+          username: 'ranger',
+          email: 'ranger@example.com',
+        ),
       ),
     );
   });

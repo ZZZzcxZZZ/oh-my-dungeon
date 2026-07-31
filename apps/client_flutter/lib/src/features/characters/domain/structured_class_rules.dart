@@ -106,9 +106,7 @@ abstract final class StructuredClassRules {
   }
 
   /// 职业初始装备自由挑选上限。null 表示该职业未声明自由挑选模式。
-  static StartingEquipmentChoice? startingEquipmentChoice(
-    ContentEntry? entry,
-  ) {
+  static StartingEquipmentChoice? startingEquipmentChoice(ContentEntry? entry) {
     final structured = entry?.structured;
     if (structured == null) return null;
     final raw = structured['startingEquipmentChoice'];

@@ -27,7 +27,8 @@ void main() {
       String? summary,
       List<Map<String, Object?>>? bodyBlocks,
       List<String>? tags,
-    })? onUpdate,
+    })?
+    onUpdate,
     Future<bool> Function(CampaignArchiveEntry entry)? onArchive,
   }) async {
     await tester.pumpWidget(
@@ -69,14 +70,21 @@ void main() {
         'bodyBlocks': [
           {'type': 'paragraph', 'text': '群山深处隐藏着失落之城的入口。'},
           {'type': 'heading', 'text': '关键线索', 'level': 2},
-          {'type': 'list', 'items': ['石碑', '符文']},
+          {
+            'type': 'list',
+            'items': ['石碑', '符文'],
+          },
         ],
         'tags': ['lore', 'map'],
         'links': [
-          {'kind': 'actor', 'id': 'actor-1', 'label': '守护者'}
+          {'kind': 'character', 'id': 'character-1', 'label': '守护者'},
         ],
         'attachmentRefs': [
-          {'kind': 'image', 'url': 'https://example.com/a.png', 'label': '地图照片'}
+          {
+            'kind': 'image',
+            'url': 'https://example.com/a.png',
+            'label': '地图照片',
+          },
         ],
       },
       'pinned': false,
@@ -87,11 +95,7 @@ void main() {
   }
 
   testWidgets('archive load errors offer a clear retry action', (tester) async {
-    await pumpPanel(
-      tester,
-      entries: const [],
-      error: '当前服务器版本不支持战役档案，请更新服务端',
-    );
+    await pumpPanel(tester, entries: const [], error: '当前服务器版本不支持战役档案，请更新服务端');
 
     expect(find.text('当前服务器版本不支持战役档案，请更新服务端'), findsOneWidget);
     expect(find.text('重试'), findsOneWidget);
@@ -110,7 +114,7 @@ void main() {
         'payload': {
           'body': '地图上标记着失落之城的入口，位于群山深处。',
           'sourceMessageId': 'msg-42',
-          'relatedActorId': 'actor-1',
+          'relatedCharacterId': 'character-1',
           'relatedLocationId': 'archive-loc-1',
         },
         'pinned': false,
@@ -127,10 +131,7 @@ void main() {
       expect(find.text('古老的地图'), findsWidgets);
       expect(find.text('文档'), findsOneWidget);
       expect(find.text('一张羊皮纸地图'), findsWidgets);
-      expect(
-        find.text('地图上标记着失落之城的入口，位于群山深处。'),
-        findsOneWidget,
-      );
+      expect(find.text('地图上标记着失落之城的入口，位于群山深处。'), findsOneWidget);
     },
   );
 
@@ -146,7 +147,7 @@ void main() {
         'payload': {
           'body': '符号与古老教派有关。',
           'sourceMessageId': 'msg-99',
-          'relatedActorId': 'actor-5',
+          'relatedCharacterId': 'character-5',
           'relatedLocationId': 'archive-loc-3',
         },
         'pinned': true,
@@ -297,34 +298,71 @@ void main() {
     },
   );
 
-  // ---- Adaptive layout (BottomSheet vs Dialog) ----
-
-  testWidgets('archive detail uses a near-full-height BottomSheet on narrow screens', (
+  testWidgets('archive detail reuses the content reader for rich body blocks', (
     tester,
   ) async {
-    // Force narrow surface.
-    tester.view.physicalSize = const Size(400, 800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+    final entry = CampaignArchiveEntry.fromJson({
+      'id': 'archive-rich-body',
+      'campaignId': 'camp-1',
+      'kind': 'document',
+      'title': '补给清单',
+      'summary': '',
+      'payload': {
+        'bodyBlocks': [
+          {
+            'type': 'table',
+            'headers': ['物品', '数量'],
+            'rows': [
+              ['治疗药水', '2'],
+            ],
+          },
+          {'type': 'quote', 'text': '只在紧急时使用。'},
+        ],
+      },
+      'pinned': false,
+      'updatedAt': '2026-07-23T00:00:00.000Z',
+    });
 
-    final entry = wikiEntry();
     await pumpPanel(tester, entries: [entry]);
-
-    await tester.tap(find.text('失落之城'));
+    await tester.tap(find.text('补给清单'));
     await tester.pumpAndSettle();
 
-    // A modal bottom sheet is on screen.
-    expect(find.byType(BottomSheet), findsOneWidget);
-    // No Dialog wrapper on narrow screens.
-    expect(find.byType(Dialog), findsNothing);
-
-    // The sheet should occupy most of the viewport height (>= 85%).
-    final sheetBox = tester.getRect(find.byType(BottomSheet));
-    expect(sheetBox.height, greaterThanOrEqualTo(800 * 0.85));
+    expect(find.byType(DataTable), findsOneWidget);
+    expect(find.text('治疗药水'), findsOneWidget);
+    expect(find.text('只在紧急时使用。'), findsOneWidget);
   });
 
-  testWidgets('archive detail uses a max-width-760 Dialog on wide screens', (tester) async {
+  // ---- Adaptive layout (BottomSheet vs Dialog) ----
+
+  testWidgets(
+    'archive detail uses a near-full-height BottomSheet on narrow screens',
+    (tester) async {
+      // Force narrow surface.
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final entry = wikiEntry();
+      await pumpPanel(tester, entries: [entry]);
+
+      await tester.tap(find.text('失落之城'));
+      await tester.pumpAndSettle();
+
+      // A modal bottom sheet is on screen.
+      expect(find.byType(BottomSheet), findsOneWidget);
+      // No Dialog wrapper on narrow screens.
+      expect(find.byType(Dialog), findsNothing);
+
+      // The sheet should occupy most of the viewport height (>= 85%).
+      final sheetBox = tester.getRect(find.byType(BottomSheet));
+      expect(sheetBox.height, greaterThanOrEqualTo(800 * 0.85));
+    },
+  );
+
+  testWidgets('archive detail uses a max-width-760 Dialog on wide screens', (
+    tester,
+  ) async {
     // Force wide surface.
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1.0;
@@ -355,7 +393,9 @@ void main() {
 
   // ---- Edit permission gating ----
 
-  testWidgets('edit button shows when user is the entry creator', (tester) async {
+  testWidgets('edit button shows when user is the entry creator', (
+    tester,
+  ) async {
     final entry = wikiEntry(createdBy: 'user-1');
 
     await pumpPanel(
@@ -369,7 +409,30 @@ void main() {
     expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
   });
 
-  testWidgets('edit button shows when user is a manager even if not creator', (tester) async {
+  testWidgets('archive button shows for the entry creator', (tester) async {
+    final entry = wikiEntry(createdBy: 'user-1');
+    CampaignArchiveEntry? archived;
+
+    await pumpPanel(
+      tester,
+      entries: [entry],
+      canManage: false,
+      currentUserId: 'user-1',
+      onArchive: (entry) async {
+        archived = entry;
+        return true;
+      },
+    );
+
+    expect(find.byIcon(Icons.archive_outlined), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.archive_outlined));
+    await tester.pumpAndSettle();
+    expect(archived?.id, entry.id);
+  });
+
+  testWidgets('edit button shows when user is a manager even if not creator', (
+    tester,
+  ) async {
     final entry = wikiEntry(createdBy: 'user-other');
 
     await pumpPanel(
@@ -383,18 +446,21 @@ void main() {
     expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
   });
 
-  testWidgets('edit button is hidden when user is neither creator nor manager', (tester) async {
-    final entry = wikiEntry(createdBy: 'user-other');
+  testWidgets(
+    'edit button is hidden when user is neither creator nor manager',
+    (tester) async {
+      final entry = wikiEntry(createdBy: 'user-other');
 
-    await pumpPanel(
-      tester,
-      entries: [entry],
-      canManage: false,
-      currentUserId: 'user-1',
-    );
+      await pumpPanel(
+        tester,
+        entries: [entry],
+        canManage: false,
+        currentUserId: 'user-1',
+      );
 
-    expect(find.byIcon(Icons.edit_outlined), findsNothing);
-  });
+      expect(find.byIcon(Icons.edit_outlined), findsNothing);
+    },
+  );
 
   // ---- Edit form with body + tags ----
 
@@ -472,7 +538,9 @@ void main() {
 
   // ---- List rows show tags ----
 
-  testWidgets('archive list rows display tags as compact chips', (tester) async {
+  testWidgets('archive list rows display tags as compact chips', (
+    tester,
+  ) async {
     final entry = wikiEntry();
 
     await pumpPanel(tester, entries: [entry]);
@@ -540,7 +608,9 @@ void main() {
           'kind': 'document',
           'title': 'Entry A',
           'summary': '',
-          'payload': {'tags': ['lore', 'map']},
+          'payload': {
+            'tags': ['lore', 'map'],
+          },
           'pinned': false,
           'updatedAt': '2026-07-23T00:00:00.000Z',
         }),
@@ -550,7 +620,9 @@ void main() {
           'kind': 'clue',
           'title': 'Entry B',
           'summary': '',
-          'payload': {'tags': ['map']},
+          'payload': {
+            'tags': ['map'],
+          },
           'pinned': false,
           'updatedAt': '2026-07-23T00:00:00.000Z',
         }),
@@ -581,7 +653,9 @@ void main() {
           'kind': 'document',
           'title': 'Entry A',
           'summary': '',
-          'payload': {'tags': ['lore']},
+          'payload': {
+            'tags': ['lore'],
+          },
           'pinned': false,
           'updatedAt': '2026-07-23T00:00:00.000Z',
         }),
@@ -612,7 +686,9 @@ void main() {
           'kind': 'document',
           'title': 'Entry A',
           'summary': '',
-          'payload': {'tags': ['lore', 'map']},
+          'payload': {
+            'tags': ['lore', 'map'],
+          },
           'pinned': false,
           'updatedAt': '2026-07-23T00:00:00.000Z',
         }),
@@ -637,28 +713,27 @@ void main() {
     },
   );
 
-  testWidgets(
-    'tag filter area is hidden when no entries carry tags',
-    (tester) async {
-      final entries = [
-        CampaignArchiveEntry.fromJson({
-          'id': 'a-1',
-          'campaignId': 'camp-1',
-          'kind': 'document',
-          'title': 'Untagged',
-          'summary': '',
-          'payload': {},
-          'pinned': false,
-          'updatedAt': '2026-07-23T00:00:00.000Z',
-        }),
-      ];
+  testWidgets('tag filter area is hidden when no entries carry tags', (
+    tester,
+  ) async {
+    final entries = [
+      CampaignArchiveEntry.fromJson({
+        'id': 'a-1',
+        'campaignId': 'camp-1',
+        'kind': 'document',
+        'title': 'Untagged',
+        'summary': '',
+        'payload': {},
+        'pinned': false,
+        'updatedAt': '2026-07-23T00:00:00.000Z',
+      }),
+    ];
 
-      await pumpStatefulPanel(tester, entries: entries);
+    await pumpStatefulPanel(tester, entries: entries);
 
-      expect(find.byKey(const Key('archive-tag-filter-area')), findsNothing);
-      expect(find.byType(FilterChip), findsNothing);
-    },
-  );
+    expect(find.byKey(const Key('archive-tag-filter-area')), findsNothing);
+    expect(find.byType(FilterChip), findsNothing);
+  });
 
   testWidgets(
     'selected tag chips show a clear-all action that empties the selection',
@@ -670,7 +745,9 @@ void main() {
           'kind': 'document',
           'title': 'Entry A',
           'summary': '',
-          'payload': {'tags': ['lore']},
+          'payload': {
+            'tags': ['lore'],
+          },
           'pinned': false,
           'updatedAt': '2026-07-23T00:00:00.000Z',
         }),
@@ -689,7 +766,9 @@ void main() {
 
       // After clearing: no chips are selected and the clear button is gone.
       expect(
-        (tester.widget<FilterChip>(find.widgetWithText(FilterChip, 'lore'))).selected,
+        (tester.widget<FilterChip>(
+          find.widgetWithText(FilterChip, 'lore'),
+        )).selected,
         isFalse,
       );
       expect(find.text('清除标签'), findsNothing);
@@ -724,28 +803,27 @@ void main() {
     },
   );
 
-  testWidgets(
-    'detail footer omits editor suffix when updatedByName is null',
-    (tester) async {
-      final entry = CampaignArchiveEntry.fromJson({
-        'id': 'archive-1',
-        'campaignId': 'camp-1',
-        'kind': 'document',
-        'title': '无署名笔记',
-        'summary': '',
-        'payload': const {},
-        'pinned': false,
-        'updatedAt': '2026-07-23T14:32:11.000Z',
-      });
+  testWidgets('detail footer omits editor suffix when updatedByName is null', (
+    tester,
+  ) async {
+    final entry = CampaignArchiveEntry.fromJson({
+      'id': 'archive-1',
+      'campaignId': 'camp-1',
+      'kind': 'document',
+      'title': '无署名笔记',
+      'summary': '',
+      'payload': const {},
+      'pinned': false,
+      'updatedAt': '2026-07-23T14:32:11.000Z',
+    });
 
-      await pumpPanel(tester, entries: [entry]);
-      await tester.tap(find.text('无署名笔记'));
-      await tester.pumpAndSettle();
+    await pumpPanel(tester, entries: [entry]);
+    await tester.tap(find.text('无署名笔记'));
+    await tester.pumpAndSettle();
 
-      expect(find.text('更新于 2026-07-23'), findsOneWidget);
-      expect(find.textContaining('由'), findsNothing);
-    },
-  );
+    expect(find.text('更新于 2026-07-23'), findsOneWidget);
+    expect(find.textContaining('由'), findsNothing);
+  });
 
   testWidgets(
     'detail footer falls back to createdByName when updatedByName is absent',
@@ -770,26 +848,25 @@ void main() {
     },
   );
 
-  testWidgets(
-    'list row shows editor name and formatted date metadata',
-    (tester) async {
-      final entry = CampaignArchiveEntry.fromJson({
-        'id': 'archive-1',
-        'campaignId': 'camp-1',
-        'kind': 'document',
-        'title': '行元数据',
-        'summary': '',
-        'payload': const {},
-        'pinned': false,
-        'updatedAt': '2026-07-23T14:32:11.000Z',
-        'updatedByName': '王五',
-      });
+  testWidgets('list row shows editor name and formatted date metadata', (
+    tester,
+  ) async {
+    final entry = CampaignArchiveEntry.fromJson({
+      'id': 'archive-1',
+      'campaignId': 'camp-1',
+      'kind': 'document',
+      'title': '行元数据',
+      'summary': '',
+      'payload': const {},
+      'pinned': false,
+      'updatedAt': '2026-07-23T14:32:11.000Z',
+      'updatedByName': '王五',
+    });
 
-      await pumpPanel(tester, entries: [entry]);
+    await pumpPanel(tester, entries: [entry]);
 
-      expect(find.text('由 王五 · 2026-07-23'), findsOneWidget);
-    },
-  );
+    expect(find.text('由 王五 · 2026-07-23'), findsOneWidget);
+  });
 
   testWidgets(
     'list row shows only formatted date when editor name is unknown',

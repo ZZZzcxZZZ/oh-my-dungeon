@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../domain/campaign.dart';
+import '../domain/campaign_message_speaker.dart';
 import '../domain/campaign_archive_entry.dart';
 import '../domain/campaign_conversation.dart';
 
@@ -37,7 +38,7 @@ abstract class CampaignClient {
     required String accessToken,
     required String campaignId,
     required String speakerMode,
-    String? actorId,
+    String? characterId,
   });
 
   Future<void> markCampaignRead({
@@ -92,10 +93,11 @@ abstract class CampaignClient {
     required String campaignId,
     required String kind,
     required String content,
-    String? campaignActorId,
+    String? campaignCharacterId,
     String? actionId,
     Map<String, Object?>? eventData,
     Map<String, Object?>? speakerSnapshot,
+    CampaignMessageSpeaker? speaker,
     String? conversationId,
   });
 
@@ -177,7 +179,17 @@ abstract class CampaignClient {
   });
 }
 
-class CampaignApiClient implements CampaignClient {
+abstract interface class CampaignBindingClient {
+  Future<CampaignMembership> updateMemberBinding({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String userId,
+    required String? characterId,
+  });
+}
+
+class CampaignApiClient implements CampaignClient, CampaignBindingClient {
   CampaignApiClient({http.Client? httpClient})
     : _httpClient = httpClient ?? http.Client();
 
@@ -404,10 +416,10 @@ class CampaignApiClient implements CampaignClient {
     required String accessToken,
     required String campaignId,
     required String speakerMode,
-    String? actorId,
+    String? characterId,
   }) async {
     final body = <String, Object?>{'speakerMode': speakerMode};
-    if (actorId != null) body['actorId'] = actorId;
+    if (characterId != null) body['characterId'] = characterId;
     final response = await _httpClient.put(
       Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/speaker'),
       headers: {
@@ -415,6 +427,31 @@ class CampaignApiClient implements CampaignClient {
         'authorization': 'Bearer $accessToken',
       },
       body: jsonEncode(body),
+    );
+    if (response.statusCode != 200) throw _toException(response);
+    return CampaignMembership.fromJson(
+      jsonDecode(response.body) as Map<String, Object?>,
+    );
+  }
+
+  @override
+  Future<CampaignMembership> updateMemberBinding({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String userId,
+    required String? characterId,
+  }) async {
+    final response = await _httpClient.put(
+      Uri.parse(
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/'
+        'members/$userId/binding',
+      ),
+      headers: {
+        'content-type': 'application/json',
+        'authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({'characterId': characterId}),
     );
     if (response.statusCode != 200) throw _toException(response);
     return CampaignMembership.fromJson(
@@ -566,20 +603,22 @@ class CampaignApiClient implements CampaignClient {
     required String campaignId,
     required String kind,
     required String content,
-    String? campaignActorId,
+    String? campaignCharacterId,
     String? actionId,
     Map<String, Object?>? eventData,
     Map<String, Object?>? speakerSnapshot,
+    CampaignMessageSpeaker? speaker,
     String? conversationId,
   }) async {
     final body = <String, Object?>{
       'kind': kind,
       'content': content,
-      'campaignActorId': campaignActorId,
+      'campaignCharacterId': campaignCharacterId,
     };
     if (actionId != null) body['actionId'] = actionId;
     if (eventData != null) body['eventData'] = eventData;
     if (speakerSnapshot != null) body['speakerSnapshot'] = speakerSnapshot;
+    if (speaker != null) body['speaker'] = speaker.toJson();
     if (conversationId != null && conversationId.isNotEmpty) {
       body['conversationId'] = conversationId;
     }

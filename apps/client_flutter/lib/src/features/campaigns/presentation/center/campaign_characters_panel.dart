@@ -1,43 +1,57 @@
 import 'package:flutter/material.dart';
 
-import '../../domain/campaign_actor.dart';
+import '../../domain/campaign_character.dart';
 import '../widgets/campaign_avatar.dart';
 
-typedef CreateCampaignActor =
+typedef CreateCampaignCharacter =
     Future<String?> Function({
-      required String actorType,
+      required String characterType,
       required String displayName,
       required String lifecycle,
       int? maxHp,
     });
 
-typedef CampaignActorAction =
-    Future<String?> Function({required CampaignActor actor});
+typedef CampaignCharacterAction =
+    Future<String?> Function({required CampaignCharacter character});
 
-typedef BatchCampaignActorAction =
-    Future<String?> Function({required List<String> actorIds});
+typedef CampaignCharacterVisibilityAction =
+    Future<String?> Function({
+      required CampaignCharacter character,
+      required bool visibleToPlayers,
+    });
+
+typedef BatchCampaignCharacterAction =
+    Future<String?> Function({required List<String> characterIds});
 
 class CampaignCharactersPanel extends StatefulWidget {
   const CampaignCharactersPanel({
-    required this.actors,
+    required this.characters,
     required this.isManager,
-    required this.onOpenActor,
-    this.onCreateActor,
-    this.onArchiveActor,
+    required this.onOpenCharacter,
+    this.onCreateCharacter,
+    this.onArchiveCharacter,
+    this.onRestoreCharacter,
     this.onBatchArchive,
     this.onSetActiveSpeaker,
-    this.activeSpeakerActorId,
+    this.onSetVisibility,
+    this.activeSpeakerCharacterId,
+    this.embedded = false,
+    this.archivedInitiallyExpanded = false,
     super.key,
   });
 
-  final List<CampaignActor> actors;
+  final List<CampaignCharacter> characters;
   final bool isManager;
-  final ValueChanged<CampaignActor> onOpenActor;
-  final CreateCampaignActor? onCreateActor;
-  final CampaignActorAction? onArchiveActor;
-  final BatchCampaignActorAction? onBatchArchive;
-  final CampaignActorAction? onSetActiveSpeaker;
-  final String? activeSpeakerActorId;
+  final ValueChanged<CampaignCharacter> onOpenCharacter;
+  final CreateCampaignCharacter? onCreateCharacter;
+  final CampaignCharacterAction? onArchiveCharacter;
+  final CampaignCharacterAction? onRestoreCharacter;
+  final BatchCampaignCharacterAction? onBatchArchive;
+  final CampaignCharacterAction? onSetActiveSpeaker;
+  final CampaignCharacterVisibilityAction? onSetVisibility;
+  final String? activeSpeakerCharacterId;
+  final bool embedded;
+  final bool archivedInitiallyExpanded;
 
   @override
   State<CampaignCharactersPanel> createState() =>
@@ -46,20 +60,31 @@ class CampaignCharactersPanel extends StatefulWidget {
 
 class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
   bool _selecting = false;
-  bool _archivedExpanded = false;
+  late bool _archivedExpanded = widget.archivedInitiallyExpanded;
   final Set<String> _selectedIds = {};
 
   @override
+  void didUpdateWidget(covariant CampaignCharactersPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.archivedInitiallyExpanded &&
+        widget.archivedInitiallyExpanded) {
+      _archivedExpanded = true;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final sections = <(String, String, List<CampaignActor>)>[
-      ('player', '玩家角色', _actorsFor('player')),
-      ('npc', '常驻 NPC', _actorsFor('npc')),
-      ('archived', '归档角色', _actorsFor('archived')),
+    final sections = <(String, String, List<CampaignCharacter>)>[
+      ('player', '玩家角色', _charactersFor('player')),
+      ('npc', '常驻 NPC', _charactersFor('npc')),
+      ('archived', '归档角色', _charactersFor('archived')),
     ].where((section) => section.$3.isNotEmpty).toList(growable: false);
 
     return KeyedSubtree(
       key: widget.key ?? const Key('campaign-characters-panel'),
       child: ListView(
+        shrinkWrap: widget.embedded,
+        physics: widget.embedded ? const NeverScrollableScrollPhysics() : null,
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
         children: [
           if (widget.isManager) _buildToolbar(context),
@@ -81,7 +106,8 @@ class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
                   : null,
             ),
             if (section.$1 != 'archived' || _archivedExpanded)
-              for (final actor in section.$3) _buildActorRow(context, actor),
+              for (final character in section.$3)
+                _buildCharacterRow(context, character),
           ],
         ],
       ),
@@ -93,9 +119,9 @@ class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          if (widget.onCreateActor != null)
+          if (widget.onCreateCharacter != null)
             FilledButton.tonalIcon(
-              key: const Key('characters-create-actor-button'),
+              key: const Key('characters-create-character-button'),
               onPressed: _showCreateDialog,
               icon: const Icon(Icons.person_add_alt_1_outlined),
               label: const Text('新建角色'),
@@ -124,49 +150,58 @@ class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
     );
   }
 
-  Widget _buildActorRow(BuildContext context, CampaignActor actor) {
-    final name = actor.sheet['name']?.toString().trim();
+  Widget _buildCharacterRow(BuildContext context, CampaignCharacter character) {
+    final name = character.sheet['name']?.toString().trim();
     final displayName = name?.isNotEmpty == true ? name! : '未命名角色';
-    final selectable = actor.status != 'archived';
-    final selected = _selectedIds.contains(actor.id);
-    final active = actor.id == widget.activeSpeakerActorId;
+    final selectable = character.status != 'archived';
+    final selected = _selectedIds.contains(character.id);
+    final active = character.id == widget.activeSpeakerCharacterId;
     return ListTile(
-      key: Key('actor-row-${actor.id}'),
+      key: Key('character-row-${character.id}'),
       onTap: _selecting && selectable
-          ? () => _toggleSelection(actor.id)
-          : () => widget.onOpenActor(actor),
+          ? () => _toggleSelection(character.id)
+          : () => widget.onOpenCharacter(character),
       leading: _selecting && selectable
           ? Checkbox(
               value: selected,
-              onChanged: (_) => _toggleSelection(actor.id),
+              onChanged: (_) => _toggleSelection(character.id),
             )
           : CampaignAvatar(
               initials: displayName,
-              imageUrl: actor.sheet['avatarUrl'] as String?,
+              imageUrl: character.sheet['avatarUrl'] as String?,
               health: CampaignAvatar.healthFromHp(
-                actor.sheet['currentHp'] as num?,
-                actor.sheet['maxHp'] as num?,
+                character.sheet['currentHp'] as num?,
+                character.sheet['maxHp'] as num?,
               ),
               healthFraction: CampaignAvatar.fractionFromHp(
-                actor.sheet['currentHp'] as num?,
-                actor.sheet['maxHp'] as num?,
+                character.sheet['currentHp'] as num?,
+                character.sheet['maxHp'] as num?,
               ),
               size: 40,
             ),
       title: Text(displayName),
-      subtitle: Text(_actorSubtitle(actor, active: active)),
+      subtitle: Text(_characterSubtitle(character, active: active)),
       trailing: _selecting
           ? null
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (active) const Icon(Icons.record_voice_over, size: 18),
-                if (widget.isManager && actor.status != 'archived')
-                  _ActorMenu(
-                    actor: actor,
+                if (widget.isManager)
+                  _CharacterMenu(
+                    character: character,
                     canSetActive: widget.onSetActiveSpeaker != null && !active,
-                    canArchive: widget.onArchiveActor != null,
-                    onSelected: (action) => _runActorAction(actor, action),
+                    canArchive:
+                        widget.onArchiveCharacter != null &&
+                        character.status != 'archived',
+                    canRestore:
+                        widget.onRestoreCharacter != null &&
+                        character.status == 'archived',
+                    canSetVisibility:
+                        widget.onSetVisibility != null &&
+                        character.characterType != 'player',
+                    onSelected: (action) =>
+                        _runCharacterAction(character, action),
                   )
                 else
                   const Icon(Icons.chevron_right),
@@ -175,15 +210,15 @@ class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
     );
   }
 
-  List<CampaignActor> _actorsFor(String section) {
-    final result = widget.actors
-        .where((actor) {
-          if (section == 'archived') return actor.status == 'archived';
-          if (actor.status == 'archived') return false;
+  List<CampaignCharacter> _charactersFor(String section) {
+    final result = widget.characters
+        .where((character) {
+          if (section == 'archived') return character.status == 'archived';
+          if (character.status == 'archived') return false;
           // 临时角色已废弃（改用 speakerSnapshot），遗留数据不展示。
-          if (actor.lifecycle == 'temporary') return false;
-          if (section == 'player') return actor.actorType == 'player';
-          return actor.actorType != 'player';
+          if (character.lifecycle == 'temporary') return false;
+          if (section == 'player') return character.characterType == 'player';
+          return character.characterType != 'player';
         })
         .toList(growable: false);
     result.sort((left, right) {
@@ -194,29 +229,51 @@ class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
     return result;
   }
 
-  String _actorSubtitle(CampaignActor actor, {required bool active}) {
-    final parts = <String>[_actorTypeLabel(actor.actorType)];
-    if (actor.status == 'archived') parts.add('已归档');
+  String _characterSubtitle(
+    CampaignCharacter character, {
+    required bool active,
+  }) {
+    final parts = <String>[_characterTypeLabel(character.characterType)];
+    if (character.characterType != 'player') {
+      parts.add(character.visibleToPlayers ? '玩家可见' : '未公开');
+    }
+    if (character.status == 'archived') parts.add('已归档');
     if (active) parts.add('当前发言身份');
     return parts.join(' · ');
   }
 
-  void _toggleSelection(String actorId) {
+  void _toggleSelection(String characterId) {
     setState(() {
-      if (!_selectedIds.add(actorId)) _selectedIds.remove(actorId);
+      if (!_selectedIds.add(characterId)) _selectedIds.remove(characterId);
     });
   }
 
-  Future<void> _runActorAction(
-    CampaignActor actor,
-    _ActorMenuAction action,
+  Future<void> _runCharacterAction(
+    CampaignCharacter character,
+    _CharacterMenuAction action,
   ) async {
+    if (action == _CharacterMenuAction.reveal ||
+        action == _CharacterMenuAction.hide) {
+      final callback = widget.onSetVisibility;
+      if (callback == null) return;
+      final error = await callback(
+        character: character,
+        visibleToPlayers: action == _CharacterMenuAction.reveal,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error ?? _successMessage(action))));
+      return;
+    }
     final callback = switch (action) {
-      _ActorMenuAction.setActive => widget.onSetActiveSpeaker,
-      _ActorMenuAction.archive => widget.onArchiveActor,
+      _CharacterMenuAction.setActive => widget.onSetActiveSpeaker,
+      _CharacterMenuAction.archive => widget.onArchiveCharacter,
+      _CharacterMenuAction.restore => widget.onRestoreCharacter,
+      _CharacterMenuAction.reveal || _CharacterMenuAction.hide => null,
     };
     if (callback == null) return;
-    final error = await callback(actor: actor);
+    final error = await callback(character: character);
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
@@ -227,7 +284,7 @@ class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
     final callback = widget.onBatchArchive;
     if (callback == null || _selectedIds.isEmpty) return;
     final ids = _selectedIds.toList(growable: false);
-    final error = await callback(actorIds: ids);
+    final error = await callback(characterIds: ids);
     if (!mounted) return;
     if (error == null) {
       setState(() {
@@ -241,15 +298,15 @@ class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
   }
 
   Future<void> _showCreateDialog() async {
-    final callback = widget.onCreateActor;
+    final callback = widget.onCreateCharacter;
     if (callback == null) return;
-    final draft = await showDialog<_ActorDraft>(
+    final draft = await showDialog<_CharacterDraft>(
       context: context,
-      builder: (context) => const _CreateActorDialog(),
+      builder: (context) => const _CreateCharacterDialog(),
     );
     if (draft == null || !mounted) return;
     final error = await callback(
-      actorType: draft.actorType,
+      characterType: draft.characterType,
       displayName: draft.displayName,
       lifecycle: draft.lifecycle,
       maxHp: draft.maxHp,
@@ -260,9 +317,12 @@ class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
     ).showSnackBar(SnackBar(content: Text(error ?? '角色已创建')));
   }
 
-  String _successMessage(_ActorMenuAction action) => switch (action) {
-    _ActorMenuAction.setActive => '已切换发言身份',
-    _ActorMenuAction.archive => '角色已归档',
+  String _successMessage(_CharacterMenuAction action) => switch (action) {
+    _CharacterMenuAction.setActive => '已切换发言身份',
+    _CharacterMenuAction.archive => '角色已归档',
+    _CharacterMenuAction.restore => '角色已恢复',
+    _CharacterMenuAction.reveal => '已对玩家公开',
+    _CharacterMenuAction.hide => '已对玩家隐藏',
   };
 }
 
@@ -320,41 +380,67 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-enum _ActorMenuAction { setActive, archive }
+enum _CharacterMenuAction { setActive, reveal, hide, archive, restore }
 
-class _ActorMenu extends StatelessWidget {
-  const _ActorMenu({
-    required this.actor,
+class _CharacterMenu extends StatelessWidget {
+  const _CharacterMenu({
+    required this.character,
     required this.canSetActive,
     required this.canArchive,
+    required this.canRestore,
+    required this.canSetVisibility,
     required this.onSelected,
   });
 
-  final CampaignActor actor;
+  final CampaignCharacter character;
   final bool canSetActive;
   final bool canArchive;
-  final ValueChanged<_ActorMenuAction> onSelected;
+  final bool canRestore;
+  final bool canSetVisibility;
+  final ValueChanged<_CharacterMenuAction> onSelected;
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<_ActorMenuAction>(
+    return PopupMenuButton<_CharacterMenuAction>(
       tooltip: '角色操作',
       onSelected: onSelected,
       itemBuilder: (context) => [
         if (canSetActive)
           const PopupMenuItem(
-            value: _ActorMenuAction.setActive,
+            value: _CharacterMenuAction.setActive,
             child: ListTile(
               leading: Icon(Icons.record_voice_over_outlined),
               title: Text('设为发言身份'),
             ),
           ),
+        if (canSetVisibility)
+          PopupMenuItem(
+            value: character.visibleToPlayers
+                ? _CharacterMenuAction.hide
+                : _CharacterMenuAction.reveal,
+            child: ListTile(
+              leading: Icon(
+                character.visibleToPlayers
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+              ),
+              title: Text(character.visibleToPlayers ? '对玩家隐藏' : '公开给玩家'),
+            ),
+          ),
         if (canArchive)
           const PopupMenuItem(
-            value: _ActorMenuAction.archive,
+            value: _CharacterMenuAction.archive,
             child: ListTile(
               leading: Icon(Icons.archive_outlined),
               title: Text('归档'),
+            ),
+          ),
+        if (canRestore)
+          const PopupMenuItem(
+            value: _CharacterMenuAction.restore,
+            child: ListTile(
+              leading: Icon(Icons.unarchive_outlined),
+              title: Text('恢复'),
             ),
           ),
       ],
@@ -362,31 +448,31 @@ class _ActorMenu extends StatelessWidget {
   }
 }
 
-class _ActorDraft {
-  const _ActorDraft({
-    required this.actorType,
+class _CharacterDraft {
+  const _CharacterDraft({
+    required this.characterType,
     required this.displayName,
     required this.lifecycle,
     required this.maxHp,
   });
 
-  final String actorType;
+  final String characterType;
   final String displayName;
   final String lifecycle;
   final int? maxHp;
 }
 
-class _CreateActorDialog extends StatefulWidget {
-  const _CreateActorDialog();
+class _CreateCharacterDialog extends StatefulWidget {
+  const _CreateCharacterDialog();
 
   @override
-  State<_CreateActorDialog> createState() => _CreateActorDialogState();
+  State<_CreateCharacterDialog> createState() => _CreateCharacterDialogState();
 }
 
-class _CreateActorDialogState extends State<_CreateActorDialog> {
+class _CreateCharacterDialogState extends State<_CreateCharacterDialog> {
   final _nameController = TextEditingController();
   final _hpController = TextEditingController();
-  String _actorType = 'npc';
+  String _characterType = 'npc';
 
   @override
   void dispose() {
@@ -415,9 +501,9 @@ class _CreateActorDialogState extends State<_CreateActorDialog> {
                 ButtonSegment(value: 'monster', label: Text('怪物')),
                 ButtonSegment(value: 'companion', label: Text('同伴')),
               ],
-              selected: {_actorType},
+              selected: {_characterType},
               onSelectionChanged: (value) =>
-                  setState(() => _actorType = value.single),
+                  setState(() => _characterType = value.single),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -438,8 +524,8 @@ class _CreateActorDialogState extends State<_CreateActorDialog> {
             final name = _nameController.text.trim();
             if (name.isEmpty) return;
             Navigator.of(context).pop(
-              _ActorDraft(
-                actorType: _actorType,
+              _CharacterDraft(
+                characterType: _characterType,
                 displayName: name,
                 lifecycle: 'persistent',
                 maxHp: int.tryParse(_hpController.text.trim()),
@@ -453,7 +539,7 @@ class _CreateActorDialogState extends State<_CreateActorDialog> {
   }
 }
 
-String _actorTypeLabel(String actorType) => switch (actorType) {
+String _characterTypeLabel(String characterType) => switch (characterType) {
   'player' => '玩家角色',
   'npc' => 'NPC',
   'monster' => '怪物',

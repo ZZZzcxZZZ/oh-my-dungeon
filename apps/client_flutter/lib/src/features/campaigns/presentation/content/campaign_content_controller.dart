@@ -19,13 +19,13 @@ class CampaignContentController extends ChangeNotifier {
     required String currentUserId,
     String Function()? accessTokenProvider,
     String Function()? currentUserIdProvider,
-  })  : _cacheRepository = cacheRepository,
-        _apiClient = apiClient,
-        _apiBaseUrl = apiBaseUrl,
-        _initialAccessToken = accessToken,
-        _initialCurrentUserId = currentUserId,
-        _accessTokenProvider = accessTokenProvider,
-        _currentUserIdProvider = currentUserIdProvider;
+  }) : _cacheRepository = cacheRepository,
+       _apiClient = apiClient,
+       _apiBaseUrl = apiBaseUrl,
+       _initialAccessToken = accessToken,
+       _initialCurrentUserId = currentUserId,
+       _accessTokenProvider = accessTokenProvider,
+       _currentUserIdProvider = currentUserIdProvider;
 
   final CampaignCacheRepository _cacheRepository;
   final CampaignSyncApiClient _apiClient;
@@ -35,7 +35,8 @@ class CampaignContentController extends ChangeNotifier {
   final String Function()? _accessTokenProvider;
   final String Function()? _currentUserIdProvider;
 
-  String get _accessToken => _accessTokenProvider?.call() ?? _initialAccessToken;
+  String get _accessToken =>
+      _accessTokenProvider?.call() ?? _initialAccessToken;
   String get _currentUserId =>
       _currentUserIdProvider?.call() ?? _initialCurrentUserId;
 
@@ -58,12 +59,16 @@ class CampaignContentController extends ChangeNotifier {
   List<CampaignContentEntrySummary> get filteredEntries {
     final query = _query.trim().toLowerCase();
     if (query.isEmpty) return _entries;
-    return _entries.where((entry) {
-      final name = entry.name.toLowerCase();
-      final slug = entry.slug.toLowerCase();
-      final type = entry.type.toLowerCase();
-      return name.contains(query) || slug.contains(query) || type.contains(query);
-    }).toList(growable: false);
+    return _entries
+        .where((entry) {
+          final name = entry.name.toLowerCase();
+          final slug = entry.slug.toLowerCase();
+          final type = entry.type.toLowerCase();
+          return name.contains(query) ||
+              slug.contains(query) ||
+              type.contains(query);
+        })
+        .toList(growable: false);
   }
 
   Future<void> selectCampaign(String campaignId) async {
@@ -73,12 +78,12 @@ class CampaignContentController extends ChangeNotifier {
     _error = null;
     notifyListeners();
     await _subscription?.cancel();
-    _subscription = _cacheRepository.watchContentEntries(campaignId).listen(
-      (entries) {
-        _entries = entries;
-        notifyListeners();
-      },
-    );
+    _subscription = _cacheRepository.watchContentEntries(campaignId).listen((
+      entries,
+    ) {
+      _entries = entries;
+      notifyListeners();
+    });
   }
 
   void setQuery(String value) {
@@ -208,7 +213,10 @@ class CampaignContentController extends ChangeNotifier {
   }) async {
     final campaignId = _selectedCampaignId;
     if (campaignId == null) {
-      return {'valid': false, 'errors': ['未选择战役']};
+      return {
+        'valid': false,
+        'errors': ['未选择战役'],
+      };
     }
     try {
       return await _apiClient.validateEntry(
@@ -221,7 +229,10 @@ class CampaignContentController extends ChangeNotifier {
         entry: entry,
       );
     } catch (e) {
-      return {'valid': false, 'errors': ['$e']};
+      return {
+        'valid': false,
+        'errors': ['$e'],
+      };
     }
   }
 

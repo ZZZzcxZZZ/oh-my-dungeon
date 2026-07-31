@@ -5,6 +5,7 @@ import 'package:drift/drift.dart';
 class ServerProfiles extends Table {
   TextColumn get id => text()();
   TextColumn get name => text()();
+  TextColumn get localAlias => text().nullable()();
   TextColumn get baseUrl => text()();
   TextColumn get apiBaseUrl => text()();
   TextColumn get websocketUrl => text()();

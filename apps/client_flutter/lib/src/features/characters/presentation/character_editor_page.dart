@@ -8,8 +8,10 @@ import '../domain/ability_score_generator.dart';
 import '../domain/character.dart';
 import '../domain/character_edit_draft.dart';
 import '../domain/dnd5e_rules.dart';
+import '../domain/equipment_cost.dart';
 import '../domain/quick_build.dart';
 import '../domain/rules_driven_character_builder.dart';
+import '../domain/spell_selection_policy.dart';
 import '../domain/structured_class_rules.dart';
 import '../../content/domain/content_entry.dart';
 import '../../content/presentation/content_entry_preview_page.dart';
@@ -55,6 +57,10 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
   late final TextEditingController _initiativeController;
   late final TextEditingController _inventoryController;
   late final TextEditingController _notesController;
+  late final TextEditingController _descriptionController;
+  late final Map<String, TextEditingController> _characterControllers;
+  late final Map<String, TextEditingController> _characterSectionControllers;
+  late String _characterKind;
   late final Map<String, TextEditingController> _abilityControllers;
   late final Map<String, TextEditingController> _currencyControllers;
   late final Map<String, bool> _saves;
@@ -71,6 +77,8 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
   String? _avatarPickError;
 
   String? get _currentAvatarUrl => widget.initialCharacter?.avatarUrl;
+  bool get _editingCharacter =>
+      widget.initialCharacter?.isNonPlayerCharacter == true;
 
   /// 把当前已选/已存在的头像序列化为可存入 CharacterEditDraft.avatarUrl
   /// 的字符串。新选图片编码为 data URL；未选则保留初始头像或 null。
@@ -139,6 +147,30 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
       text: _inventoryToLines(character?.inventoryList ?? const []),
     );
     _notesController = TextEditingController(text: character?.notes ?? '');
+    _descriptionController = TextEditingController(
+      text: character?.description ?? '',
+    );
+    final characterProfile =
+        character?.characterMap ?? const <String, Object?>{};
+    _characterKind = character?.characterKind ?? 'player';
+    _characterControllers = {
+      for (final key in const [
+        'templateRef',
+        'size',
+        'creatureType',
+        'alignment',
+        'challengeRating',
+        'proficiencyBonus',
+        'hitPointFormula',
+      ])
+        key: TextEditingController(text: '${characterProfile[key] ?? ''}'),
+    };
+    final markdownSections =
+        character?.markdownSections ?? const <String, Object?>{};
+    _characterSectionControllers = {
+      for (final title in const ['感官与语言', '特质', '动作', '附赠动作', '反应', '传奇动作'])
+        title: TextEditingController(text: '${markdownSections[title] ?? ''}'),
+    };
     _abilityControllers = {
       for (final entry in Dnd5eRules.abilityLabels.entries)
         entry.key: TextEditingController(
@@ -176,6 +208,13 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
     _initiativeController.dispose();
     _inventoryController.dispose();
     _notesController.dispose();
+    _descriptionController.dispose();
+    for (final controller in _characterControllers.values) {
+      controller.dispose();
+    }
+    for (final controller in _characterSectionControllers.values) {
+      controller.dispose();
+    }
     for (final controller in _abilityControllers.values) {
       controller.dispose();
     }
@@ -314,6 +353,7 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                 ],
               ),
             ),
+            if (_editingCharacter) _buildCharacterEditor(context),
             _Section(
               title: '战斗',
               child: Row(
@@ -449,6 +489,100 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
       ),
       keyboardType: TextInputType.number,
       onChanged: onChanged,
+    );
+  }
+
+  Widget _buildCharacterEditor(BuildContext context) {
+    return _Section(
+      title: '怪物与 NPC 资料',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DropdownButtonFormField<String>(
+            key: const Key('character-kind-field'),
+            initialValue: _characterKind,
+            decoration: const InputDecoration(
+              labelText: '类型',
+              border: OutlineInputBorder(),
+            ),
+            items: const [
+              DropdownMenuItem(value: 'monster', child: Text('怪物')),
+              DropdownMenuItem(value: 'npc', child: Text('NPC')),
+              DropdownMenuItem(value: 'companion', child: Text('同伴')),
+            ],
+            onChanged: (value) {
+              if (value != null) setState(() => _characterKind = value);
+            },
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final fieldWidth = constraints.maxWidth >= 680
+                  ? (constraints.maxWidth - 12) / 2
+                  : constraints.maxWidth;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  for (final field in const [
+                    ('templateRef', '模板引用'),
+                    ('size', '体型'),
+                    ('creatureType', '生物类型'),
+                    ('alignment', '阵营'),
+                    ('challengeRating', '挑战等级 CR'),
+                    ('proficiencyBonus', '熟练加值'),
+                    ('hitPointFormula', '生命骰公式'),
+                  ])
+                    SizedBox(
+                      width: fieldWidth,
+                      child: TextField(
+                        controller: _characterControllers[field.$1],
+                        decoration: InputDecoration(
+                          labelText: field.$2,
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            key: const Key('character-description-field'),
+            controller: _descriptionController,
+            minLines: 3,
+            maxLines: 8,
+            decoration: const InputDecoration(
+              labelText: '描述',
+              hintText: '外观、习性、背景或主持人说明',
+              alignLabelWithHint: true,
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text('图鉴区块', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          for (final entry in _characterSectionControllers.entries)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: TextField(
+                key: Key(
+                  'character-section-${_characterSectionKey(entry.key)}',
+                ),
+                controller: entry.value,
+                minLines: 3,
+                maxLines: 8,
+                decoration: InputDecoration(
+                  labelText: entry.key,
+                  hintText: '支持标题、列表和骰式等可读 Markdown',
+                  alignLabelWithHint: true,
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -643,9 +777,9 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
       // 必须复位按钮状态并把真实错误打到 console 方便定位。
       debugPrint('character _submit failed: $e\n$stack');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存角色失败：$e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('保存角色失败：$e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -674,7 +808,7 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
       final hasStructuredRules = selectedEntryIds.any(
         (entryId) => entries[entryId]?.rules != null,
       );
-      final draft = hasStructuredRules
+      final baseDraft = hasStructuredRules
           ? RulesDrivenCharacterBuilder(entries: entries).build(
               name: name,
               build: CharacterBuild(
@@ -712,8 +846,24 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                 backgroundEntryId: quickDraft.backgroundEntryId,
                 ruleChoices: quickDraft.ruleChoices,
                 avatarUrl: quickDraft.avatarUrl ?? _effectiveAvatarUrl,
+                appearance: quickDraft.appearance,
+                personalityTraits: quickDraft.personalityTraits,
+                ideals: quickDraft.ideals,
+                bonds: quickDraft.bonds,
+                flaws: quickDraft.flaws,
+                backstory: quickDraft.backstory,
+                privateNotes: quickDraft.privateNotes,
+                customSpells: quickDraft.customSpells,
               ),
             );
+      final draft = baseDraft.copyWith(
+        data: {
+          ...baseDraft.data,
+          'story': quickDraft.storyData,
+          if (quickDraft.customSpells.isNotEmpty)
+            'manualOverrides': quickDraft.manualOverridesData,
+        },
+      );
       final ok = await widget.onSubmit(draft);
       if (!mounted) return;
       if (ok) {
@@ -728,9 +878,9 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
       // 一直灰着且无任何提示 (用户报告"一直不能创建角色"的直接原因)。
       debugPrint('character _submitQuickBuild failed: $e\n$stack');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('创建角色失败：$e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('创建角色失败：$e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -744,6 +894,19 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
             int.tryParse(entry.value.text.trim()) ??
             Dnd5eRules.defaultAbilities[entry.key]!,
     };
+    final baseData =
+        _appliedRulesData ?? widget.initialCharacter?.dataMap ?? const {};
+    final characterSections =
+        <String, Object?>{
+          ...widget.initialCharacter?.markdownSections ??
+              const <String, Object?>{},
+          for (final entry in _characterSectionControllers.entries)
+            if (entry.value.text.trim().isNotEmpty)
+              entry.key: entry.value.text.trim(),
+        }..removeWhere((key, value) {
+          return _characterSectionControllers.containsKey(key) &&
+              '$value'.trim().isEmpty;
+        });
     return CharacterEditDraft(
       name: name,
       level: _intValue(_levelController, 1),
@@ -770,9 +933,33 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
       },
       notes: _notesController.text.trim(),
       avatarUrl: _effectiveAvatarUrl,
-      data: _appliedRulesData ?? widget.initialCharacter?.dataMap ?? const {},
+      data: {
+        ...baseData,
+        'description': _descriptionController.text.trim(),
+        if (_editingCharacter)
+          'character': {
+            ...widget.initialCharacter!.characterMap,
+            'kind': _characterKind,
+            for (final entry in _characterControllers.entries)
+              if (entry.value.text.trim().isNotEmpty)
+                entry.key: entry.value.text.trim(),
+          },
+        if (_editingCharacter) 'markdownSections': characterSections,
+      },
     );
   }
+}
+
+String _characterSectionKey(String title) {
+  return switch (title) {
+    '感官与语言' => 'senses',
+    '特质' => 'traits',
+    '动作' => 'actions',
+    '附赠动作' => 'bonus-actions',
+    '反应' => 'reactions',
+    '传奇动作' => 'legendary-actions',
+    _ => title,
+  };
 }
 
 class _CharacterUpgradePreview {
@@ -1023,8 +1210,6 @@ class _CreationChoiceCard extends StatelessWidget {
   }
 }
 
-
-
 class _StandardBuildPage extends StatefulWidget {
   const _StandardBuildPage({
     required this.contentEntries,
@@ -1043,7 +1228,7 @@ class _StandardBuildPage extends StatefulWidget {
 }
 
 class _StandardBuildPageState extends State<_StandardBuildPage> {
-  static const _steps = ['职业', '背景', '物种', '属性', '熟练', '装备', '法术', '详情', '审核'];
+  static const _steps = ['职业', '背景', '物种', '属性', '熟练', '装备', '法术', '故事', '审核'];
   static const _stepIcons = [
     Icons.shield_outlined,
     Icons.history_edu_outlined,
@@ -1057,6 +1242,13 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
   ];
 
   final _nameController = TextEditingController();
+  final _appearanceController = TextEditingController();
+  final _personalityController = TextEditingController();
+  final _idealsController = TextEditingController();
+  final _bondsController = TextEditingController();
+  final _flawsController = TextEditingController();
+  final _backstoryController = TextEditingController();
+  final _privateNotesController = TextEditingController();
   int _currentStep = 0;
   late String _className;
   late String _species;
@@ -1066,6 +1258,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
   String? _backgroundEntryId;
   int _level = 1;
   final Set<String> _selectedSpellRefs = {};
+  final List<Map<String, Object?>> _customSpells = [];
   final Set<String> _selectedItemRefs = {};
   final Map<String, Set<String>> _ruleChoices = {};
   late Set<String> _selectedSkillProficiencies;
@@ -1145,6 +1338,13 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
   @override
   void dispose() {
     _nameController.dispose();
+    _appearanceController.dispose();
+    _personalityController.dispose();
+    _idealsController.dispose();
+    _bondsController.dispose();
+    _flawsController.dispose();
+    _backstoryController.dispose();
+    _privateNotesController.dispose();
     for (final controller in _abilityControllers.values) {
       controller.dispose();
     }
@@ -1174,7 +1374,14 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       'background',
       _defaultBackgroundOptions,
     );
-    final spellOptions = _contentChoiceLabels('spell', const []);
+    final spellSelectionRules = SpellSelectionPolicy.rulesFor(
+      classEntry: _entryById(_classEntryId),
+      characterLevel: _level,
+    );
+    final eligibleSpellEntries = SpellSelectionPolicy.eligibleSpells(
+      entries: widget.contentEntries,
+      rules: spellSelectionRules,
+    );
     final itemOptions = _contentChoiceLabelsForTypes(const [
       'equipment',
       'item',
@@ -1195,7 +1402,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
           hasStructuredStartingEquipment ||
           activeRuleChoices.any((choice) => choice.builderStep == 5))
         5,
-      if (spellOptions.isNotEmpty ||
+      if (_hasContentChoices('spell') ||
           activeRuleChoices.any((choice) => choice.builderStep == 6))
         6,
       7,
@@ -1212,8 +1419,10 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       classOptions: classOptions,
       speciesOptions: speciesOptions,
       backgroundOptions: backgroundOptions,
-      spellOptions: spellOptions,
+      spellEntries: eligibleSpellEntries,
+      spellSelectionRules: spellSelectionRules,
       itemOptions: itemOptions,
+      startingEquipment: startingEquipment,
       activeRuleChoices: activeRuleChoices,
       review: review,
       summary: summary,
@@ -1294,6 +1503,14 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
           entry.key: entry.value.toList(growable: false),
       },
       avatarUrl: _avatarDataUrl,
+      appearance: _appearanceController.text,
+      personalityTraits: _personalityController.text,
+      ideals: _idealsController.text,
+      bonds: _bondsController.text,
+      flaws: _flawsController.text,
+      backstory: _backstoryController.text,
+      privateNotes: _privateNotesController.text,
+      customSpells: List.unmodifiable(_customSpells),
     );
   }
 
@@ -1302,8 +1519,10 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     required List<String> classOptions,
     required List<String> speciesOptions,
     required List<String> backgroundOptions,
-    required List<String> spellOptions,
+    required List<ContentEntry> spellEntries,
+    required SpellSelectionRules spellSelectionRules,
     required List<String> itemOptions,
+    required Object? startingEquipment,
     required List<_ActiveRuleChoice> activeRuleChoices,
     required _StandardBuildReview review,
     required String summary,
@@ -1472,7 +1691,17 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
             fields: const ['startingEquipment'],
           ),
           ...ruleChoiceWidgets,
-          if (ruleChoiceWidgets.isEmpty)
+          if (ruleChoiceWidgets.isEmpty) ...[
+            _EquipmentBudgetSummary(
+              startingEquipment: startingEquipment,
+              selectedNames: _selectedItemRefs,
+              entries: widget.contentEntries
+                  .where(
+                    (entry) =>
+                        entry.type == 'equipment' || entry.type == 'item',
+                  )
+                  .toList(growable: false),
+            ),
             _MultiChoiceSection(
               title: '选择装备',
               selected: _selectedItemRefs,
@@ -1490,6 +1719,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
                 _entryById(_classEntryId),
               )?.maximum,
             ),
+          ],
         ],
       ),
       6 => Column(
@@ -1497,20 +1727,21 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         children: [
           ...ruleChoiceWidgets,
           if (ruleChoiceWidgets.isEmpty)
-            _MultiChoiceSection(
-              title: '选择法术',
+            _SpellChoiceSection(
+              entries: spellEntries,
               selected: _selectedSpellRefs,
-              options: spellOptions,
-              sourceLabel: _hasContentChoices('spell') ? '来自资料库' : null,
-              emptyLabel: '资料库中暂无法术；可先跳过。',
-              onOpenOption: (name) => _openEntryByTypeAndName('spell', name),
               onChanged: (next) =>
                   setState(() => _replaceSet(_selectedSpellRefs, next)),
-              maximum: StructuredClassRules.preparedSpellLimit(
-                _entryById(_classEntryId),
-                abilities: _abilityScores,
-                level: _level,
-              ),
+              maximum: spellSelectionRules.maximum,
+              maximumCantrips: spellSelectionRules.maximumCantrips,
+              maximumLeveledSpells: spellSelectionRules.maximumLeveledSpells,
+              maximumSpellLevel: spellSelectionRules.maximumSpellLevel,
+              automaticRulesConfigured: spellSelectionRules.configured,
+              customSpells: _customSpells,
+              onAddCustom: _addCustomSpell,
+              onRemoveCustom: (index) =>
+                  setState(() => _customSpells.removeAt(index)),
+              onOpenEntry: (entry) => _openEntry(entry),
             ),
         ],
       ),
@@ -1520,6 +1751,13 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         isPickingAvatar: _pickingAvatar,
         avatarPickError: _avatarPickError,
         onPickAvatar: _pickAvatarImage,
+        appearanceController: _appearanceController,
+        personalityController: _personalityController,
+        idealsController: _idealsController,
+        bondsController: _bondsController,
+        flawsController: _flawsController,
+        backstoryController: _backstoryController,
+        privateNotesController: _privateNotesController,
       ),
       8 => _BuilderReviewStep(
         summary: summary,
@@ -1546,7 +1784,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       '熟练' => '技能、工具、武器、防具与豁免。',
       '装备' => '职业装备、金币购买或自定义装备。',
       '法术' => '戏法、准备法术、法术位和专注。',
-      '详情' => '名字、头像、阵营、外貌与背景。',
+      '故事' => '头像、外貌、性格、牵绊与背景故事。',
       '审核' => '检查缺失项、来源和手动覆盖。',
       _ => '',
     };
@@ -1672,6 +1910,24 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
 
   void _openEntryByTypeAndName(String type, String name) {
     _openEntryByTypesAndName([type], name);
+  }
+
+  void _openEntry(ContentEntry entry) {
+    showContentEntryPreviewDialog(
+      context,
+      entry: entry,
+      entries: widget.contentEntries,
+    );
+  }
+
+  Future<void> _addCustomSpell() async {
+    final result = await showDialog<Map<String, Object?>>(
+      context: context,
+      builder: (dialogContext) => const _CustomSpellDialog(),
+    );
+    if (result != null && mounted) {
+      setState(() => _customSpells.add(result));
+    }
   }
 
   List<ContentEntry> _ruleEntriesForStep(
@@ -2105,6 +2361,13 @@ class _DetailsStep extends StatelessWidget {
     required this.isPickingAvatar,
     required this.avatarPickError,
     required this.onPickAvatar,
+    required this.appearanceController,
+    required this.personalityController,
+    required this.idealsController,
+    required this.bondsController,
+    required this.flawsController,
+    required this.backstoryController,
+    required this.privateNotesController,
   });
 
   final String name;
@@ -2112,6 +2375,13 @@ class _DetailsStep extends StatelessWidget {
   final bool isPickingAvatar;
   final String? avatarPickError;
   final VoidCallback onPickAvatar;
+  final TextEditingController appearanceController;
+  final TextEditingController personalityController;
+  final TextEditingController idealsController;
+  final TextEditingController bondsController;
+  final TextEditingController flawsController;
+  final TextEditingController backstoryController;
+  final TextEditingController privateNotesController;
 
   @override
   Widget build(BuildContext context) {
@@ -2126,11 +2396,76 @@ class _DetailsStep extends StatelessWidget {
           onPick: onPickAvatar,
         ),
         const SizedBox(height: 12),
-        Card.outlined(
-          child: ListTile(
-            leading: const Icon(Icons.person_outline),
-            title: Text(name.trim().isEmpty ? '角色名尚未填写' : name.trim()),
-            subtitle: const Text('角色名位于每个步骤顶部；头像、外貌和人物经历可在角色卡中继续完善。'),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.person_outline),
+          title: Text(name.trim().isEmpty ? '角色名尚未填写' : name.trim()),
+          subtitle: const Text('除角色名外，其余故事信息均可稍后补充。'),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          key: const Key('character-story-appearance'),
+          controller: appearanceController,
+          maxLines: 2,
+          decoration: const InputDecoration(
+            labelText: '外貌',
+            hintText: '体态、服饰、显著特征',
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          key: const Key('character-story-personality'),
+          controller: personalityController,
+          maxLines: 2,
+          decoration: const InputDecoration(labelText: '性格特点'),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                key: const Key('character-story-ideals'),
+                controller: idealsController,
+                maxLines: 2,
+                decoration: const InputDecoration(labelText: '理念'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                key: const Key('character-story-bonds'),
+                controller: bondsController,
+                maxLines: 2,
+                decoration: const InputDecoration(labelText: '牵绊'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          key: const Key('character-story-flaws'),
+          controller: flawsController,
+          maxLines: 2,
+          decoration: const InputDecoration(labelText: '缺点'),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          key: const Key('character-story-backstory'),
+          controller: backstoryController,
+          minLines: 4,
+          maxLines: 8,
+          decoration: const InputDecoration(labelText: '背景故事'),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          key: const Key('character-story-private-notes'),
+          controller: privateNotesController,
+          minLines: 2,
+          maxLines: 5,
+          decoration: const InputDecoration(
+            labelText: '私密笔记',
+            helperText: '仅保存在角色卡中，不作为公开人物简介。',
           ),
         ),
       ],
@@ -3078,6 +3413,448 @@ class _SkillProficiencySection extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CustomSpellDialog extends StatefulWidget {
+  const _CustomSpellDialog();
+
+  @override
+  State<_CustomSpellDialog> createState() => _CustomSpellDialogState();
+}
+
+class _CustomSpellDialogState extends State<_CustomSpellDialog> {
+  final _nameController = TextEditingController();
+  final _schoolController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  int _level = 0;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _schoolController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('添加自定义法术'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              key: const Key('custom-spell-name'),
+              controller: _nameController,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: '名称'),
+            ),
+            const SizedBox(height: 12),
+            DropdownMenu<int>(
+              key: const Key('custom-spell-level'),
+              initialSelection: _level,
+              label: const Text('环位'),
+              expandedInsets: EdgeInsets.zero,
+              dropdownMenuEntries: [
+                for (var value = 0; value <= 9; value++)
+                  DropdownMenuEntry(
+                    value: value,
+                    label: value == 0 ? '戏法' : '$value 环',
+                  ),
+              ],
+              onSelected: (value) {
+                if (value != null) setState(() => _level = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _schoolController,
+              decoration: const InputDecoration(labelText: '学派（可选）'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _descriptionController,
+              minLines: 2,
+              maxLines: 5,
+              decoration: const InputDecoration(labelText: '说明（可选）'),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          key: const Key('custom-spell-confirm'),
+          onPressed: () {
+            final name = _nameController.text.trim();
+            if (name.isEmpty) return;
+            Navigator.of(context).pop({
+              'id': 'custom-spell-${DateTime.now().microsecondsSinceEpoch}',
+              'name': name,
+              'level': _level,
+              'school': _schoolController.text.trim(),
+              'description': _descriptionController.text.trim(),
+            });
+          },
+          child: const Text('添加'),
+        ),
+      ],
+    );
+  }
+}
+
+class _SpellChoiceSection extends StatefulWidget {
+  const _SpellChoiceSection({
+    required this.entries,
+    required this.selected,
+    required this.onChanged,
+    required this.maximum,
+    required this.maximumCantrips,
+    required this.maximumLeveledSpells,
+    required this.maximumSpellLevel,
+    required this.automaticRulesConfigured,
+    required this.customSpells,
+    required this.onAddCustom,
+    required this.onRemoveCustom,
+    required this.onOpenEntry,
+  });
+
+  final List<ContentEntry> entries;
+  final Set<String> selected;
+  final ValueChanged<Set<String>> onChanged;
+  final int? maximum;
+  final int? maximumCantrips;
+  final int? maximumLeveledSpells;
+  final int maximumSpellLevel;
+  final bool automaticRulesConfigured;
+  final List<Map<String, Object?>> customSpells;
+  final VoidCallback onAddCustom;
+  final ValueChanged<int> onRemoveCustom;
+  final ValueChanged<ContentEntry> onOpenEntry;
+
+  @override
+  State<_SpellChoiceSection> createState() => _SpellChoiceSectionState();
+}
+
+class _SpellChoiceSectionState extends State<_SpellChoiceSection> {
+  final _searchController = TextEditingController();
+  int? _level;
+  String? _school;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final schools =
+        widget.entries
+            .map(SpellSelectionPolicy.spellSchool)
+            .where((value) => value.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+    final query = _searchController.text.trim().toLowerCase();
+    final filtered = widget.entries
+        .where((entry) {
+          final level = SpellSelectionPolicy.spellLevel(entry);
+          if (_level != null && level != _level) return false;
+          if (_school != null &&
+              SpellSelectionPolicy.spellSchool(entry) != _school) {
+            return false;
+          }
+          return query.isEmpty ||
+              entry.name.toLowerCase().contains(query) ||
+              entry.aliases.any((alias) => alias.toLowerCase().contains(query));
+        })
+        .toList(growable: false);
+    final selectedCantrips = widget.selected.where((id) {
+      final entry = widget.entries.where((entry) => entry.id == id).firstOrNull;
+      return entry != null && SpellSelectionPolicy.spellLevel(entry) == 0;
+    }).length;
+    final selectedLeveledSpells = widget.selected.length - selectedCantrips;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(child: Text('规则法术', style: theme.textTheme.titleMedium)),
+            Text(
+              _selectionCountLabel(
+                selectedCantrips: selectedCantrips,
+                selectedLeveledSpells: selectedLeveledSpells,
+              ),
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          !widget.automaticRulesConfigured
+              ? '该职业未提供自动法术规则；仍可在下方添加自定义法术。'
+              : '按职业列表与当前等级筛选，最高 ${widget.maximumSpellLevel} 环',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          key: const Key('spell-choice-search'),
+          controller: _searchController,
+          decoration: const InputDecoration(
+            labelText: '搜索法术',
+            prefixIcon: Icon(Icons.search),
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            DropdownMenu<int?>(
+              key: const Key('spell-choice-level-filter'),
+              initialSelection: _level,
+              label: const Text('环位'),
+              width: 136,
+              dropdownMenuEntries: [
+                const DropdownMenuEntry(value: null, label: '全部环位'),
+                for (var value = 0; value <= widget.maximumSpellLevel; value++)
+                  DropdownMenuEntry(
+                    value: value,
+                    label: value == 0 ? '戏法' : '$value 环',
+                  ),
+              ],
+              onSelected: (value) => setState(() => _level = value),
+            ),
+            if (schools.isNotEmpty)
+              DropdownMenu<String?>(
+                key: const Key('spell-choice-school-filter'),
+                initialSelection: _school,
+                label: const Text('学派'),
+                width: 160,
+                dropdownMenuEntries: [
+                  const DropdownMenuEntry(value: null, label: '全部学派'),
+                  for (final school in schools)
+                    DropdownMenuEntry(value: school, label: school),
+                ],
+                onSelected: (value) => setState(() => _school = value),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (filtered.isEmpty)
+          Text(widget.entries.isEmpty ? '没有符合当前职业与等级的规则法术。' : '没有符合筛选条件的法术。')
+        else
+          for (final entry in filtered)
+            _SpellOptionTile(
+              entry: entry,
+              selected: widget.selected,
+              selectedCantrips: selectedCantrips,
+              selectedLeveledSpells: selectedLeveledSpells,
+              maximum: widget.maximum,
+              maximumCantrips: widget.maximumCantrips,
+              maximumLeveledSpells: widget.maximumLeveledSpells,
+              onChanged: widget.onChanged,
+              onOpenEntry: widget.onOpenEntry,
+            ),
+        const Divider(height: 32),
+        Row(
+          children: [
+            Expanded(child: Text('自定义法术', style: theme.textTheme.titleMedium)),
+            FilledButton.tonalIcon(
+              key: const Key('add-custom-spell'),
+              onPressed: widget.onAddCustom,
+              icon: const Icon(Icons.add),
+              label: const Text('添加'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '自定义法术不计入规则选择上限。',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        for (var index = 0; index < widget.customSpells.length; index++)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.auto_awesome_outlined),
+            title: Text('${widget.customSpells[index]['name']}'),
+            subtitle: Text(
+              _spellLevelLabel(widget.customSpells[index]['level'] as int?),
+            ),
+            trailing: IconButton(
+              tooltip: '移除自定义法术',
+              onPressed: () => widget.onRemoveCustom(index),
+              icon: const Icon(Icons.delete_outline),
+            ),
+          ),
+      ],
+    );
+  }
+
+  static String _spellLevelLabel(int? level) {
+    if (level == null) return '未分类';
+    return level == 0 ? '戏法' : '$level 环';
+  }
+
+  String _selectionCountLabel({
+    required int selectedCantrips,
+    required int selectedLeveledSpells,
+  }) {
+    if (widget.maximumCantrips != null || widget.maximumLeveledSpells != null) {
+      return '戏法 $selectedCantrips/${widget.maximumCantrips ?? '不限'}'
+          ' · 法术 $selectedLeveledSpells/${widget.maximumLeveledSpells ?? '不限'}';
+    }
+    return widget.maximum == null
+        ? '已选 ${widget.selected.length}'
+        : '已选 ${widget.selected.length} / ${widget.maximum}';
+  }
+}
+
+class _SpellOptionTile extends StatelessWidget {
+  const _SpellOptionTile({
+    required this.entry,
+    required this.selected,
+    required this.selectedCantrips,
+    required this.selectedLeveledSpells,
+    required this.maximum,
+    required this.maximumCantrips,
+    required this.maximumLeveledSpells,
+    required this.onChanged,
+    required this.onOpenEntry,
+  });
+
+  final ContentEntry entry;
+  final Set<String> selected;
+  final int selectedCantrips;
+  final int selectedLeveledSpells;
+  final int? maximum;
+  final int? maximumCantrips;
+  final int? maximumLeveledSpells;
+  final ValueChanged<Set<String>> onChanged;
+  final ValueChanged<ContentEntry> onOpenEntry;
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = selected.contains(entry.id);
+    final isCantrip = SpellSelectionPolicy.spellLevel(entry) == 0;
+    final categoryMaximum = isCantrip ? maximumCantrips : maximumLeveledSpells;
+    final categorySelected = isCantrip
+        ? selectedCantrips
+        : selectedLeveledSpells;
+    final totalAtLimit = maximum != null && selected.length >= maximum!;
+    final categoryAtLimit =
+        categoryMaximum != null && categorySelected >= categoryMaximum;
+
+    return CheckboxListTile(
+      key: Key('spell-choice-${entry.id}'),
+      contentPadding: EdgeInsets.zero,
+      value: isSelected,
+      enabled: isSelected || (!totalAtLimit && !categoryAtLimit),
+      title: Text(entry.name),
+      subtitle: Text(
+        '${_SpellChoiceSectionState._spellLevelLabel(SpellSelectionPolicy.spellLevel(entry))}'
+        '${SpellSelectionPolicy.spellSchool(entry).isEmpty ? '' : ' · ${SpellSelectionPolicy.spellSchool(entry)}'}',
+      ),
+      secondary: IconButton(
+        tooltip: '查看${entry.name}',
+        onPressed: () => onOpenEntry(entry),
+        icon: const Icon(Icons.open_in_new),
+      ),
+      onChanged: (checked) {
+        final next = Set<String>.from(selected);
+        if (checked == true) {
+          if (!totalAtLimit && !categoryAtLimit) next.add(entry.id);
+        } else {
+          next.remove(entry.id);
+        }
+        onChanged(next);
+      },
+    );
+  }
+}
+
+class _EquipmentBudgetSummary extends StatelessWidget {
+  const _EquipmentBudgetSummary({
+    required this.startingEquipment,
+    required this.selectedNames,
+    required this.entries,
+  });
+
+  final Object? startingEquipment;
+  final Set<String> selectedNames;
+  final List<ContentEntry> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    final budget = EquipmentCost.suggestedBudget(startingEquipment);
+    var total = const EquipmentCost(0);
+    var unpriced = 0;
+    for (final name in selectedNames) {
+      final entry = entries
+          .where((candidate) => candidate.name.trim() == name.trim())
+          .firstOrNull;
+      final price = EquipmentCost.parse(entry?.structured['price']);
+      if (price == null) {
+        unpriced++;
+      } else {
+        total += price;
+      }
+    }
+    final overBudget =
+        budget != null && total.copperPieces > budget.copperPieces;
+    final colors = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Material(
+        color: overBudget ? colors.errorContainer : colors.secondaryContainer,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                overBudget ? Icons.info_outline : Icons.paid_outlined,
+                color: overBudget
+                    ? colors.onErrorContainer
+                    : colors.onSecondaryContainer,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '已选总价 ${total.format()}',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    if (budget != null) Text('建议金币上限 ${budget.format()}'),
+                    if (unpriced > 0) Text('$unpriced 件自定义或资料物品未标价'),
+                    if (overBudget) const Text('已超出建议上限，仍可继续创建和购买。'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

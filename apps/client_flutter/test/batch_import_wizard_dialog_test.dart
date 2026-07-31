@@ -32,16 +32,10 @@ void main() {
       'system': 'dnd5e-2024',
       'entryCount': entryCount,
       'entries': [
-        {
-          ...testFighterEntry().toJson(),
-          'id': '$id:class/fighter',
-        },
+        {...testFighterEntry().toJson(), 'id': '$id:class/fighter'},
       ],
     });
-    return PickedContentFile(
-      name: '$id.json',
-      bytes: utf8.encode(json),
-    );
+    return PickedContentFile(name: '$id.json', bytes: utf8.encode(json));
   }
 
   PickedContentFile invalidFile({required String id}) {
@@ -54,16 +48,10 @@ void main() {
       'system': 'dnd5e-2024',
       'entryCount': 99,
       'entries': [
-        {
-          ...testFighterEntry().toJson(),
-          'id': '$id:class/fighter',
-        },
+        {...testFighterEntry().toJson(), 'id': '$id:class/fighter'},
       ],
     });
-    return PickedContentFile(
-      name: '$id.json',
-      bytes: utf8.encode(json),
-    );
+    return PickedContentFile(name: '$id.json', bytes: utf8.encode(json));
   }
 
   Future<void> pumpDialog(
@@ -79,10 +67,8 @@ void main() {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 showDialog<void>(
                   context: context,
-                  builder: (_) => BatchImportWizardDialog(
-                    files: files,
-                    importer: importer,
-                  ),
+                  builder: (_) =>
+                      BatchImportWizardDialog(files: files, importer: importer),
                 );
               });
               return const SizedBox.shrink();
@@ -94,8 +80,9 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('renders preview for each picked file with checkbox',
-      (tester) async {
+  testWidgets('renders preview for each picked file with checkbox', (
+    tester,
+  ) async {
     await pumpDialog(
       tester,
       files: [
@@ -125,14 +112,12 @@ void main() {
 
     final packages = await repository.watchPackages().first;
     expect(packages.map((p) => p.id), containsAll(['alpha', 'beta']));
-    expect(
-      await repository.search(const ContentQuery()),
-      hasLength(2),
-    );
+    expect(await repository.search(const ContentQuery()), hasLength(2));
   });
 
-  testWidgets('marks invalid files as disabled with error hint',
-      (tester) async {
+  testWidgets('marks invalid files as disabled with error hint', (
+    tester,
+  ) async {
     await pumpDialog(
       tester,
       files: [
@@ -169,8 +154,9 @@ void main() {
     expect(packages.map((p) => p.id), ['alpha']);
   });
 
-  testWidgets('shows summary snackbar after batch import completes',
-      (tester) async {
+  testWidgets('shows summary snackbar after batch import completes', (
+    tester,
+  ) async {
     await pumpDialog(
       tester,
       files: [
@@ -185,8 +171,9 @@ void main() {
     expect(find.textContaining('已导入 2 个资料包'), findsOneWidget);
   });
 
-  testWidgets('select all and deselect all toggle buttons work',
-      (tester) async {
+  testWidgets('select all and deselect all toggle buttons work', (
+    tester,
+  ) async {
     await pumpDialog(
       tester,
       files: [

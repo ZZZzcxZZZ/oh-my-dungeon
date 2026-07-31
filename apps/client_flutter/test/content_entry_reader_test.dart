@@ -5,22 +5,25 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('shouldShowMetadataView', () {
-    test('false when body already has a statBlock (avoids duplicate metadata)', () {
-      final entry = ContentEntry(
-        id: 'pkg:spell:fire-bolt',
-        type: 'spell',
-        slug: 'fire-bolt',
-        name: '火焰箭',
-        structured: const {'level': 0, 'school': '塑能'},
-        body: const [
-          StatBlockBlock(fields: {'环阶': '戏法', '学派': '塑能'}),
-          ParagraphBlock(text: '描述正文。'),
-        ],
-        revision: 1,
-      );
+    test(
+      'false when body already has a statBlock (avoids duplicate metadata)',
+      () {
+        final entry = ContentEntry(
+          id: 'pkg:spell:fire-bolt',
+          type: 'spell',
+          slug: 'fire-bolt',
+          name: '火焰箭',
+          structured: const {'level': 0, 'school': '塑能'},
+          body: const [
+            StatBlockBlock(fields: {'环阶': '戏法', '学派': '塑能'}),
+            ParagraphBlock(text: '描述正文。'),
+          ],
+          revision: 1,
+        );
 
-      expect(shouldShowMetadataView(entry), isFalse);
-    });
+        expect(shouldShowMetadataView(entry), isFalse);
+      },
+    );
 
     test('true when structured present but body has no statBlock', () {
       final entry = ContentEntry(

@@ -1,5 +1,6 @@
 import 'package:dnd_table_client/src/app/dnd_table_app.dart';
 import 'package:dnd_table_client/src/core/database/app_database.dart';
+import 'package:dnd_table_client/src/core/dice/dice_tray_dialog.dart';
 import 'package:dnd_table_client/src/features/auth/data/auth_api_client.dart';
 import 'package:dnd_table_client/src/features/auth/data/auth_token_store.dart';
 import 'package:dnd_table_client/src/features/auth/domain/auth_session.dart';
@@ -161,6 +162,8 @@ void main() {
 
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('server-account-summary')));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.widgetWithText(FilledButton, '管理服务器'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, '管理服务器'));
@@ -188,6 +191,8 @@ void main() {
 
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('server-account-summary')));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.widgetWithText(FilledButton, '管理服务器'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, '管理服务器'));
@@ -195,7 +200,7 @@ void main() {
 
     await tester.tap(find.byTooltip('服务器操作'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('编辑名称'));
+    await tester.tap(find.text('编辑备注'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Main Campaign');
     await tester.tap(find.text('保存'));
@@ -218,6 +223,8 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('server-account-summary')));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.widgetWithText(FilledButton, '管理服务器'));
     await tester.pumpAndSettle();
@@ -257,8 +264,10 @@ void main() {
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
     expect(find.text('Local Table'), findsOneWidget);
-    expect(find.text('http://localhost:3000'), findsOneWidget);
     expect(find.text('玩家'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('server-account-summary')));
+    await tester.pumpAndSettle();
+    expect(find.text('http://localhost:3000'), findsOneWidget);
     expect(find.text('未登录'), findsOneWidget);
   });
 
@@ -305,8 +314,8 @@ void main() {
     expect(find.text('主题色'), findsOneWidget);
     expect(find.text('高对比 Material 3'), findsOneWidget);
     expect(find.text('默认骰子'), findsOneWidget);
-    expect(find.text('掷骰确认'), findsOneWidget);
-    expect(find.text('合并连续消息头像'), findsOneWidget);
+    expect(find.text('掷骰前确认'), findsOneWidget);
+    expect(find.text('连续消息合并头像'), findsOneWidget);
     // Task 1.3: 新增"游戏与跑团"区块, 收纳默认掷骰模式/消息密度/字体缩放/HP 譨戒阈值。
     expect(find.text('游戏与跑团'), findsOneWidget);
     expect(find.text('默认掷骰模式'), findsOneWidget);
@@ -468,7 +477,7 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('characters tab opens the creation choice page by default', (
+  testWidgets('characters tab opens the standard creation guide directly', (
     tester,
   ) async {
     final preferencesController = AppPreferencesController(
@@ -493,10 +502,8 @@ void main() {
     await tester.tap(find.widgetWithText(FloatingActionButton, '新角色'));
     await tester.pumpAndSettle();
 
-    // Task 1.3: 删除"默认创建方式"偏好后, 编辑器始终从选择页开始。
-    // 用户手动选择"标准创建"才会进入标准构建流程, 不再依赖偏好。
-    expect(find.text('选择创建方式'), findsOneWidget);
-    expect(find.text('标准创建'), findsWidgets);
+    expect(find.text('标准创建角色'), findsOneWidget);
+    expect(find.text('选择创建方式'), findsNothing);
     expect(find.text('快速创建'), findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -542,7 +549,7 @@ void main() {
     preferencesController.dispose();
   });
 
-  testWidgets('campaigns list shows character avatar and status summary', (
+  testWidgets('campaigns list shows one campaign icon and status summary', (
     tester,
   ) async {
     final tokenStore = InMemoryAuthTokenStore();
@@ -592,9 +599,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(CircleAvatar), findsWidgets);
-    expect(find.text('A'), findsOneWidget);
-    // 战役名和角色首字母头像应可见。
+    expect(find.byKey(const Key('campaign-card-leading-icon')), findsOneWidget);
+    expect(find.text('A'), findsNothing);
+    // 战役名和单一战役图标应可见；成员头像不再堆叠在卡片下方。
     expect(find.text('Starter Campaign'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -682,7 +689,7 @@ void main() {
           id: 'msg-0',
           campaignId: 'camp-1',
           senderId: 'user-1',
-          campaignActorId: 'actor-1',
+          campaignCharacterId: 'character-1',
           displayName: 'Arannis',
           avatarUrl: null,
           kind: 'say',
@@ -715,7 +722,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Group-chat-style list: last message summary + character status.
-    expect(find.textContaining('Arannis: 酒馆里已经坐满了冒险者'), findsOneWidget);
+    expect(find.text('酒馆里已经坐满了冒险者'), findsOneWidget);
     expect(find.text('主持人'), findsOneWidget);
 
     await tester.tap(find.text('Starter Campaign'));
@@ -725,8 +732,7 @@ void main() {
     expect(find.text('酒馆里已经坐满了冒险者'), findsOneWidget);
     // Identity now lives in the compact composer instead of a tall header.
     expect(find.byKey(const Key('campaign-chat-identity')), findsOneWidget);
-    expect(find.byKey(const Key('chat-mode-say')), findsOneWidget);
-    expect(find.byKey(const Key('chat-mode-action')), findsOneWidget);
+    expect(find.byKey(const Key('chat-mode-toggle')), findsOneWidget);
     // Spec §输入栏: separate `+` button is removed; avatar opens merged panel.
     expect(find.byTooltip('更多跑团功能'), findsNothing);
 
@@ -738,7 +744,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('今晚从酒馆开始'), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('chat-mode-action')));
+    await tester.tap(find.byKey(const Key('chat-mode-toggle')));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('campaign-chat-input')),
@@ -750,27 +756,30 @@ void main() {
     final actionText = tester.widget<Text>(find.text('推开吱呀作响的木门'));
     expect(actionText.style?.fontStyle, FontStyle.italic);
     expect(campaignClient.sentMessages.last.kind, 'action');
-    expect(campaignClient.sentMessages.last.campaignActorId, isNull);
+    expect(campaignClient.sentMessages.last.campaignCharacterId, isNull);
 
     await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
     // Spec §输入栏 merged tool panel: 桌面工具 entry removed; labels follow spec.
     expect(find.text('代掷检定'), findsOneWidget);
     expect(find.text('掷骰'), findsOneWidget);
-    expect(find.text('资料条目'), findsOneWidget);
+    expect(find.text('资料库'), findsOneWidget);
+    expect(find.text('生命值'), findsOneWidget);
+    expect(find.text('给予物品'), findsOneWidget);
 
     await tester.tap(find.text('掷骰'));
     await tester.pumpAndSettle();
-    expect(find.text('快速掷骰'), findsOneWidget);
-    await tester.tap(find.text('d20'));
+    expect(find.text('组合掷骰'), findsOneWidget);
+    await tester.tap(find.byKey(DiceTrayDialog.sendKey));
     await tester.pumpAndSettle();
-    expect(find.text('d20 = 20'), findsOneWidget);
+    expect(find.text('1d20 = 20'), findsOneWidget);
     expect(campaignClient.sentMessages.last.kind, 'roll');
-    expect(campaignClient.sentMessages.last.content, 'd20 = 20');
+    expect(campaignClient.sentMessages.last.content, '1d20 = 20');
 
     await tester.tap(find.byKey(const Key('campaign-chat-identity')));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.byKey(const Key('tool-content-entries')));
     await tester.tap(find.byKey(const Key('tool-content-entries')));
     for (var i = 0; i < 10 && find.text('战役资料库').evaluate().isEmpty; i++) {
       await tester.runAsync(
@@ -829,7 +838,7 @@ void main() {
                 id: 'msg-conditions',
                 campaignId: 'camp-1',
                 senderId: 'user-1',
-                campaignActorId: 'actor-1',
+                campaignCharacterId: 'character-1',
                 displayName: 'Arannis',
                 avatarUrl: null,
                 kind: 'say',
@@ -910,7 +919,9 @@ void main() {
     // spec-defined 11 tools directly. Verify a few key tools are present.
     expect(find.text('掷骰'), findsOneWidget);
     expect(find.text('代掷检定'), findsOneWidget);
-    expect(find.text('资料条目'), findsOneWidget);
+    expect(find.text('资料库'), findsOneWidget);
+    expect(find.text('生命值'), findsOneWidget);
+    expect(find.text('给予物品'), findsOneWidget);
     // 桌面工具 info-only sheet is gone.
     expect(find.text('桌面工具'), findsNothing);
 
@@ -1012,73 +1023,67 @@ void main() {
     },
   );
 
-  testWidgets('character creation can use only selected campaign content', (
-    tester,
-  ) async {
-    final preferencesController = AppPreferencesController(
-      store: InMemoryAppPreferencesStore(),
-    );
-    await preferencesController.initialize();
-    final authController = AuthController(
-      tokenStore: InMemoryAuthTokenStore(),
-      authClient: _FakeAuthClient(),
-      serverProfileId: profile.id,
-      apiBaseUrl: profile.apiBaseUrl,
-    );
-    final campaignController = _FixedCampaignController(authController);
-    String? activeCampaignId;
-    final contentRepository = CampaignAwareContentRepository(
-      local: MemoryContentRepository(),
-      campaign: MemoryCampaignCacheRepository(
-        entries: [
-          testContentEntry(
-            id: _campaignFighterContent.id,
-            campaignId: _campaign.id,
-            type: _campaignFighterContent.type,
-            slug: _campaignFighterContent.slug,
-            name: _campaignFighterContent.name,
-          ),
-        ],
-      ),
-      activeCampaignId: () => activeCampaignId,
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: CharactersTabPage(
-          controller: CharacterController(
-            repository: MemoryCharacterRepository(),
-          ),
-          campaignController: campaignController,
-          contentRepository: contentRepository,
-          localContentRepository: MemoryContentRepository(
-            initialEntries: const [_fighterEntry],
-          ),
-          onCampaignContentSelected: (campaignId) async {
-            activeCampaignId = campaignId;
-          },
-          appPreferencesController: preferencesController,
+  testWidgets(
+    'character creation always uses local content without a source gate',
+    (tester) async {
+      final preferencesController = AppPreferencesController(
+        store: InMemoryAppPreferencesStore(),
+      );
+      await preferencesController.initialize();
+      final authController = AuthController(
+        tokenStore: InMemoryAuthTokenStore(),
+        authClient: _FakeAuthClient(),
+        serverProfileId: profile.id,
+        apiBaseUrl: profile.apiBaseUrl,
+      );
+      final campaignController = _FixedCampaignController(authController);
+      final contentRepository = CampaignAwareContentRepository(
+        local: MemoryContentRepository(),
+        campaign: MemoryCampaignCacheRepository(
+          entries: [
+            testContentEntry(
+              id: _campaignFighterContent.id,
+              campaignId: _campaign.id,
+              type: _campaignFighterContent.type,
+              slug: _campaignFighterContent.slug,
+              name: _campaignFighterContent.name,
+            ),
+          ],
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FloatingActionButton, '新角色'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('继续'));
-    await tester.pumpAndSettle();
-    // Task 1.3: 删除"默认创建方式"偏好后, 编辑器先展示选择页, 用户手动选择"标准创建"。
-    await tester.tap(find.text('标准创建').last);
-    await tester.pumpAndSettle();
+        activeCampaignId: () => _campaign.id,
+      );
 
-    expect(find.text('战役战士 / Campaign Fighter'), findsOneWidget);
-    expect(find.text('战士 / Fighter'), findsNothing);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharactersTabPage(
+            controller: CharacterController(
+              repository: MemoryCharacterRepository(),
+            ),
+            campaignController: campaignController,
+            contentRepository: contentRepository,
+            localContentRepository: MemoryContentRepository(
+              initialEntries: const [_fighterEntry],
+            ),
+            appPreferencesController: preferencesController,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FloatingActionButton, '新角色'));
+      await tester.pumpAndSettle();
+      expect(find.text('选择创建资料'), findsNothing);
+      expect(find.text('标准创建角色'), findsOneWidget);
 
-    await tester.pumpWidget(const SizedBox.shrink());
-    preferencesController.dispose();
-    campaignController.dispose();
-    authController.dispose();
-  });
-  testWidgets('shows dm encounter control from campaign chat tools', (
+      expect(find.text('战士 / Fighter'), findsOneWidget);
+      expect(find.text('战役战士 / Campaign Fighter'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      preferencesController.dispose();
+      campaignController.dispose();
+      authController.dispose();
+    },
+  );
+  testWidgets('hides deferred encounter control from campaign tools', (
     tester,
   ) async {
     final store = InMemoryServerProfileStore();
@@ -1118,7 +1123,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('遭遇控场'), findsOneWidget);
+    expect(find.text('遭遇控场'), findsNothing);
     expect(find.text('快捷操作'), findsOneWidget);
   });
 
@@ -1174,6 +1179,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('服务器与账户'), findsOneWidget);
+    expect(find.text('本地模式'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('server-account-summary')));
+    await tester.pumpAndSettle();
     expect(find.text('尚未连接服务器'), findsOneWidget);
     expect(find.text('离线'), findsOneWidget);
     expect(find.text('仅保存在此设备'), findsOneWidget);
@@ -1306,7 +1314,7 @@ class _FakeCampaignClient implements CampaignClient {
     required String accessToken,
     required String campaignId,
     required String speakerMode,
-    String? actorId,
+    String? characterId,
   }) => throw UnimplementedError();
   @override
   Future<List<CampaignArchiveEntry>> listArchives({
@@ -1382,11 +1390,11 @@ class _FakeCampaignClient implements CampaignClient {
         joinedAt: '2026-07-09T00:00:00.000Z',
       ),
       members: _servedCampaign.memberPreview,
-      actors: const [],
+      characters: const [],
       capabilities: CampaignCapabilities(
         canManageCampaign: canManage,
         canManageMembers: canManage,
-        canCreateActors: canManage,
+        canCreateCharacters: canManage,
         canSpeakAsNarrator: canManage,
       ),
     );
@@ -1470,24 +1478,25 @@ class _FakeCampaignClient implements CampaignClient {
     required String campaignId,
     required String kind,
     required String content,
-    String? campaignActorId,
+    String? campaignCharacterId,
     String? actionId,
     Map<String, Object?>? eventData,
     Map<String, Object?>? speakerSnapshot,
+    Object? speaker,
     String? conversationId,
   }) async {
     sentMessages.add(
       _SentCampaignMessage(
         kind: kind,
         content: content,
-        campaignActorId: campaignActorId,
+        campaignCharacterId: campaignCharacterId,
       ),
     );
     final message = CampaignChatMessage(
       id: 'msg-${_messages.length + 1}',
       campaignId: campaignId,
       senderId: 'user-1',
-      campaignActorId: campaignActorId,
+      campaignCharacterId: campaignCharacterId,
       displayName: 'Arannis',
       avatarUrl: null,
       kind: kind,
@@ -1572,12 +1581,12 @@ class _SentCampaignMessage {
   const _SentCampaignMessage({
     required this.kind,
     required this.content,
-    required this.campaignActorId,
+    required this.campaignCharacterId,
   });
 
   final String kind;
   final String content;
-  final String? campaignActorId;
+  final String? campaignCharacterId;
 }
 
 const _campaign = Campaign(

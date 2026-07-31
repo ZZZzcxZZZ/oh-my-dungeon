@@ -21,34 +21,33 @@ void main() {
     updatedAt: '2026-07-01T00:00:00.000Z',
   );
 
-  CampaignMemberPreview member(String id, String name) => CampaignMemberPreview(
-        userId: id,
-        displayName: name,
-        role: 'player',
-      );
+  CampaignMemberPreview member(String id, String name) =>
+      CampaignMemberPreview(userId: id, displayName: name, role: 'player');
 
   Widget harness(Widget child) => MaterialApp(home: Scaffold(body: child));
 
   group('CampaignOverviewPanel 区块分隔', () {
-    testWidgets('DM 模式：成员列表与 DM 工具卡之间存在 Divider',
-        (tester) async {
-      await tester.pumpWidget(harness(
-        CampaignOverviewPanel(
-          campaign: campaign,
-          canManage: true,
-          members: [member('u-1', '玩家A'), member('u-2', '玩家B')],
-          onOpenDmControl: () {},
-          onEditDetails: () {},
-          onTransferOwnership: () {},
-          onArchiveCampaign: () {},
-          onLeaveCampaign: () {},
+    testWidgets('DM 模式：成员列表与 DM 工具卡之间存在 Divider', (tester) async {
+      await tester.pumpWidget(
+        harness(
+          CampaignOverviewPanel(
+            campaign: campaign,
+            canManage: true,
+            members: [member('u-1', '玩家A'), member('u-2', '玩家B')],
+            onOpenDmControl: () {},
+            onEditDetails: () {},
+            onTransferOwnership: () {},
+            onArchiveCampaign: () {},
+            onLeaveCampaign: () {},
+          ),
         ),
-      ));
+      );
       await tester.pumpAndSettle();
 
       final memberList = find.byKey(const Key('campaign-member-list'));
-      final dmControl =
-          find.byKey(const Key('campaign-overview-dm-control-entry'));
+      final dmControl = find.byKey(
+        const Key('campaign-overview-dm-control-entry'),
+      );
       expect(memberList, findsOneWidget);
       expect(dmControl, findsOneWidget);
 
@@ -56,24 +55,27 @@ void main() {
       expect(find.byType(Divider), findsWidgets);
     });
 
-    testWidgets('DM 工具卡不再使用 surfaceContainerHigh 高对比背景',
-        (tester) async {
-      await tester.pumpWidget(harness(
-        CampaignOverviewPanel(
-          campaign: campaign,
-          canManage: true,
-          members: [member('u-1', '玩家A')],
-          onOpenDmControl: () {},
+    testWidgets('DM 工具卡不再使用 surfaceContainerHigh 高对比背景', (tester) async {
+      await tester.pumpWidget(
+        harness(
+          CampaignOverviewPanel(
+            campaign: campaign,
+            canManage: true,
+            members: [member('u-1', '玩家A')],
+            onOpenDmControl: () {},
+          ),
         ),
-      ));
+      );
       await tester.pumpAndSettle();
 
-      final dmControl =
-          find.byKey(const Key('campaign-overview-dm-control-entry'));
+      final dmControl = find.byKey(
+        const Key('campaign-overview-dm-control-entry'),
+      );
       expect(dmControl, findsOneWidget);
 
       final materials = tester.widgetList<Material>(
-          find.descendant(of: dmControl, matching: find.byType(Material)));
+        find.descendant(of: dmControl, matching: find.byType(Material)),
+      );
       final theme = Theme.of(tester.element(dmControl)).colorScheme;
       for (final m in materials) {
         expect(
@@ -85,36 +87,46 @@ void main() {
     });
 
     testWidgets('DM 工具卡使用 outlineVariant border 降权', (tester) async {
-      await tester.pumpWidget(harness(
-        CampaignOverviewPanel(
-          campaign: campaign,
-          canManage: true,
-          members: [member('u-1', '玩家A')],
-          onOpenDmControl: () {},
+      await tester.pumpWidget(
+        harness(
+          CampaignOverviewPanel(
+            campaign: campaign,
+            canManage: true,
+            members: [member('u-1', '玩家A')],
+            onOpenDmControl: () {},
+          ),
         ),
-      ));
+      );
       await tester.pumpAndSettle();
 
-      final dmControl =
-          find.byKey(const Key('campaign-overview-dm-control-entry'));
+      final dmControl = find.byKey(
+        const Key('campaign-overview-dm-control-entry'),
+      );
       final container = tester.widget<Container>(dmControl);
       final decoration = container.decoration;
-      expect(decoration, isA<BoxDecoration>(),
-          reason: 'DM 工具卡应使用 BoxDecoration 包裹');
-      expect((decoration as BoxDecoration).border, isNotNull,
-          reason: 'DM 工具卡应使用 Border(outlineVariant) 降低视觉权重');
+      expect(
+        decoration,
+        isA<BoxDecoration>(),
+        reason: 'DM 工具卡应使用 BoxDecoration 包裹',
+      );
+      expect(
+        (decoration as BoxDecoration).border,
+        isNotNull,
+        reason: 'DM 工具卡应使用 Border(outlineVariant) 降低视觉权重',
+      );
     });
 
-    testWidgets('玩家模式：成员列表与战役设置区块之间存在 Divider',
-        (tester) async {
-      await tester.pumpWidget(harness(
-        CampaignOverviewPanel(
-          campaign: campaign,
-          canManage: false,
-          members: [member('u-1', '玩家A')],
-          onLeaveCampaign: () {},
+    testWidgets('玩家模式：成员列表与战役设置区块之间存在 Divider', (tester) async {
+      await tester.pumpWidget(
+        harness(
+          CampaignOverviewPanel(
+            campaign: campaign,
+            canManage: false,
+            members: [member('u-1', '玩家A')],
+            onLeaveCampaign: () {},
+          ),
         ),
-      ));
+      );
       await tester.pumpAndSettle();
 
       final memberList = find.byKey(const Key('campaign-member-list'));

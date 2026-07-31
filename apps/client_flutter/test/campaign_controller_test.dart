@@ -72,10 +72,37 @@ void main() {
 
     await controller.loadWorkspaceContext('camp-1');
 
-    expect(controller.workspaceContext?.membership.boundActorId, 'actor-1');
+    expect(
+      controller.workspaceContext?.membership.boundCharacterId,
+      'character-1',
+    );
     expect(
       controller.workspaceContext?.capabilities.canManageCampaign,
       isFalse,
+    );
+
+    controller.dispose();
+    authController.dispose();
+  });
+
+  test('binds the current player through the campaign controller', () async {
+    final authController = await buildLoggedInAuthController();
+    final controller = CampaignController(
+      apiBaseUrl: apiBaseUrl,
+      authController: authController,
+      campaignClient: _FakeCampaignClient(),
+    );
+
+    await controller.loadWorkspaceContext('camp-1');
+    final updated = await controller.updateMemberBinding(
+      campaignId: 'camp-1',
+      characterId: 'character-2',
+    );
+
+    expect(updated, isTrue);
+    expect(
+      controller.workspaceContext?.membership.boundCharacterId,
+      'character-2',
     );
 
     controller.dispose();
@@ -126,40 +153,42 @@ void main() {
   );
 
   // Spec §双向同步 切片 A: socket 收到 campaign:changed 信号后应触发
-  // onCampaignChanged 回调，由调用方接入 actorController.pullUntilCurrent。
+  // onCampaignChanged 回调，由调用方接入 characterController.pullUntilCurrent。
   test(
     'connectCampaignChat subscribes to changeStream and invokes onCampaignChanged',
     () async {
       final authController = await buildLoggedInAuthController();
       final socket = _FakeCampaignSocketService();
-      int changeCallCount = 0;
+      final signals = <CampaignChangeSignal>[];
       final controller = CampaignController(
         apiBaseUrl: apiBaseUrl,
         authController: authController,
         campaignClient: _FakeCampaignClient(),
         campaignSocketService: socket,
-        onCampaignChanged: () async {
-          changeCallCount += 1;
+        onCampaignChanged: (signal) async {
+          signals.add(signal);
         },
       );
 
       await controller.connectCampaignChat('camp-1');
-      socket.emitChange();
+      socket.emitChange(entityType: 'character', cursor: '7');
       await Future<void>.delayed(Duration.zero);
 
-      expect(changeCallCount, 1);
+      expect(signals, hasLength(1));
+      expect(signals.single.entityType, 'character');
+      expect(signals.single.cursor, '7');
 
       // 多次信号都应触发。
       socket.emitChange();
       socket.emitChange();
       await Future<void>.delayed(Duration.zero);
-      expect(changeCallCount, 3);
+      expect(signals, hasLength(3));
 
       // 断开后不再触发。
       await controller.disconnectCampaignChat();
       socket.emitChange();
       await Future<void>.delayed(Duration.zero);
-      expect(changeCallCount, 3);
+      expect(signals, hasLength(3));
 
       controller.dispose();
       authController.dispose();
@@ -171,7 +200,7 @@ const _remoteMessage = CampaignChatMessage(
   id: 'msg-remote',
   campaignId: 'camp-1',
   senderId: 'user-2',
-  campaignActorId: 'actor-2',
+  campaignCharacterId: 'character-2',
   displayName: 'Mira',
   avatarUrl: null,
   kind: 'say',
@@ -181,7 +210,7 @@ const _remoteMessage = CampaignChatMessage(
 
 class _FakeCampaignSocketService implements CampaignSocketService {
   final _messageController = StreamController<CampaignChatMessage>.broadcast();
-  final _changeController = StreamController<void>.broadcast();
+  final _changeController = StreamController<CampaignChangeSignal>.broadcast();
   final List<({String serverOrigin, String accessToken, String campaignId})>
   connectCalls = [];
   int disconnectCount = 0;
@@ -211,18 +240,24 @@ class _FakeCampaignSocketService implements CampaignSocketService {
   Stream<CampaignChatMessage> get messageStream => _messageController.stream;
 
   @override
-  Stream<void> get changeStream => _changeController.stream;
+  Stream<CampaignChangeSignal> get changeStream => _changeController.stream;
 
   void emitMessage(CampaignChatMessage message) {
     _messageController.add(message);
   }
 
-  void emitChange() {
-    _changeController.add(null);
+  void emitChange({String entityType = 'character', String? cursor}) {
+    _changeController.add(
+      CampaignChangeSignal(
+        campaignId: 'camp-1',
+        entityType: entityType,
+        cursor: cursor,
+      ),
+    );
   }
 }
 
-class _FakeCampaignClient implements CampaignClient {
+class _FakeCampaignClient implements CampaignClient, CampaignBindingClient {
   String? lastMessageQuery;
   @override
   Future<void> markCampaignRead({
@@ -243,7 +278,7 @@ class _FakeCampaignClient implements CampaignClient {
     required String accessToken,
     required String campaignId,
     required String speakerMode,
-    String? actorId,
+    String? characterId,
   }) => throw UnimplementedError();
   @override
   Future<List<CampaignArchiveEntry>> listArchives({
@@ -326,17 +361,37 @@ class _FakeCampaignClient implements CampaignClient {
         role: 'player',
         displayName: 'ranger',
         joinedAt: '2026-07-09T00:00:00.000Z',
-        boundActorId: 'actor-1',
-        activeSpeakerActorId: 'actor-1',
+        boundCharacterId: 'character-1',
+        activeSpeakerCharacterId: 'character-1',
       ),
       members: const [],
-      actors: const [],
+      characters: const [],
       capabilities: const CampaignCapabilities(
         canManageCampaign: false,
         canManageMembers: false,
-        canCreateActors: false,
+        canCreateCharacters: false,
         canSpeakAsNarrator: false,
       ),
+    );
+  }
+
+  @override
+  Future<CampaignMembership> updateMemberBinding({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String userId,
+    required String? characterId,
+  }) async {
+    return CampaignMembership(
+      id: 'member-1',
+      campaignId: campaignId,
+      userId: userId,
+      role: 'player',
+      displayName: 'ranger',
+      joinedAt: '2026-07-09T00:00:00.000Z',
+      boundCharacterId: characterId,
+      speakerMode: 'boundCharacter',
     );
   }
 
@@ -415,10 +470,11 @@ class _FakeCampaignClient implements CampaignClient {
     required String campaignId,
     required String kind,
     required String content,
-    String? campaignActorId,
+    String? campaignCharacterId,
     String? actionId,
     Map<String, Object?>? eventData,
     Map<String, Object?>? speakerSnapshot,
+    Object? speaker,
     String? conversationId,
   }) {
     throw UnimplementedError();

@@ -1,5 +1,6 @@
 class ServerMetadata {
   const ServerMetadata({
+    required this.instanceId,
     required this.name,
     required this.version,
     required this.apiBaseUrl,
@@ -11,6 +12,7 @@ class ServerMetadata {
     this.features = const [],
   });
 
+  final String instanceId;
   final String name;
   final String version;
   final String apiBaseUrl;
@@ -23,6 +25,7 @@ class ServerMetadata {
 
   factory ServerMetadata.fromJson(Map<String, Object?> json) {
     return ServerMetadata(
+      instanceId: json['instanceId'] as String,
       name: json['name'] as String,
       version: json['version'] as String,
       apiBaseUrl: json['apiBaseUrl'] as String,

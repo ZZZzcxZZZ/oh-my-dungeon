@@ -131,5 +131,38 @@ void main() {
         'classResourcesUsed': {'second_wind': 0, 'action_surge': 0},
       });
     });
+
+    test(
+      'stores readable structured story fields without hiding them in notes',
+      () {
+        const selection = QuickBuildSelection(
+          name: 'Aria',
+          className: '吟游诗人',
+          species: '人类',
+          background: '艺人',
+          level: 1,
+          appearance: '银色短发，旅行斗篷',
+          personalityTraits: '遇事先讲一个故事',
+          ideals: '自由',
+          bonds: '寻找失踪的导师',
+          flaws: '过度自信',
+          backstory: '在沿海剧团长大。',
+          privateNotes: '不向队友公开真实姓氏。',
+        );
+
+        final draft = QuickBuildService.build(selection);
+
+        expect(draft.data['story'], {
+          'appearance': '银色短发，旅行斗篷',
+          'personalityTraits': '遇事先讲一个故事',
+          'ideals': '自由',
+          'bonds': '寻找失踪的导师',
+          'flaws': '过度自信',
+          'backstory': '在沿海剧团长大。',
+          'privateNotes': '不向队友公开真实姓氏。',
+        });
+        expect(draft.notes, isNot(contains('不向队友公开真实姓氏')));
+      },
+    );
   });
 }

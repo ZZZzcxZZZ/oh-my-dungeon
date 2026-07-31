@@ -10,9 +10,8 @@ class SocketIoCampaignSocketService implements CampaignSocketService {
   io.Socket? _socket;
   bool _connected = false;
 
-  final _messageController =
-      StreamController<CampaignChatMessage>.broadcast();
-  final _changeController = StreamController<void>.broadcast();
+  final _messageController = StreamController<CampaignChatMessage>.broadcast();
+  final _changeController = StreamController<CampaignChangeSignal>.broadcast();
 
   @override
   bool get isConnected => _connected;
@@ -21,7 +20,7 @@ class SocketIoCampaignSocketService implements CampaignSocketService {
   Stream<CampaignChatMessage> get messageStream => _messageController.stream;
 
   @override
-  Stream<void> get changeStream => _changeController.stream;
+  Stream<CampaignChangeSignal> get changeStream => _changeController.stream;
 
   @override
   Future<void> connect({
@@ -64,10 +63,18 @@ class SocketIoCampaignSocketService implements CampaignSocketService {
         final message = _parseMessage(data);
         if (message != null) _messageController.add(message);
       })
-      ..on('campaign:changed', (_) {
-        // 服务端 payload 是 { campaignId, cursor, entityType }，客户端只需
-        // 知道"有变更"即可触发增量 pullUntilCurrent，无需解析 payload。
-        _changeController.add(null);
+      ..on('campaign:changed', (data) {
+        final json = _asJson(data);
+        final campaign = json?['campaignId']?.toString();
+        final entityType = json?['entityType']?.toString();
+        if (campaign == null || entityType == null) return;
+        _changeController.add(
+          CampaignChangeSignal(
+            campaignId: campaign,
+            entityType: entityType,
+            cursor: json?['cursor']?.toString(),
+          ),
+        );
       });
 
     _socket!.connect();

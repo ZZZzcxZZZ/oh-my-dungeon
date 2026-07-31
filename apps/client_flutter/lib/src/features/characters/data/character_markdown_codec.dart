@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:yaml/yaml.dart';
 
@@ -33,15 +36,57 @@ class CharacterMarkdownCodec {
   String encode(
     CharacterSheet character, {
     CharacterMarkdownMode mode = CharacterMarkdownMode.profile,
+    int revision = 1,
   }) {
     final state = _stateFor(character);
+    final contentHash = sha256
+        .convert(utf8.encode(jsonEncode(character.toJson())))
+        .toString();
+    final characterProfile = _map(character.dataMap['character']);
+    final kind = _metadataText(characterProfile, 'kind', fallback: 'player');
+    final speed = _map(characterProfile['speed']);
     final buffer = StringBuffer()
       ..writeln('---')
-      ..writeln('format: dnd-table-character/v1')
+      ..writeln('format: dnd-table-character/v2')
+      ..writeln('kind: ${_safeCharacterKind(kind)}')
+      ..writeln('name: ${_yamlScalar(character.name)}')
       ..writeln('mode: ${mode.name}')
       ..writeln('id: ${_yamlScalar(character.id)}')
+      ..writeln('revision: ${revision.clamp(1, 1 << 31)}')
+      ..writeln('contentHash: sha256:$contentHash')
+      ..writeln('generatedAt: ${character.updatedAt}')
       ..writeln('owner: ${_yamlScalar(character.ownerUserId)}')
       ..writeln('system: ${_yamlScalar(character.system)}')
+      ..writeln('level: ${character.level}');
+    for (final field in const [
+      'templateRef',
+      'size',
+      'creatureType',
+      'alignment',
+      'challengeRating',
+      'proficiencyBonus',
+    ]) {
+      if (characterProfile[field] != null &&
+          '${characterProfile[field]}'.trim().isNotEmpty) {
+        buffer.writeln('$field: ${_yamlScalar(characterProfile[field])}');
+      }
+    }
+    buffer
+      ..writeln('armorClass: ${character.armorClass}')
+      ..writeln('hitPoints:')
+      ..writeln('  current: ${state.hitPoints.current}')
+      ..writeln('  maximum: ${state.hitPoints.maximum}');
+    if (characterProfile['hitPointFormula'] != null) {
+      buffer.writeln(
+        '  formula: ${_yamlScalar(characterProfile['hitPointFormula'])}',
+      );
+    }
+    buffer
+      ..writeln('speed:')
+      ..writeln('  walk: ${_integer(speed['walk'] ?? character.speed)}')
+      ..writeln('abilities:')
+      ..write(_encodeYamlMap(character.abilityMap, indent: 2))
+      ..writeln('initiativeBonus: ${character.initiativeBonus}')
       ..writeln('createdAt: ${_yamlScalar(character.createdAt)}')
       ..writeln('updatedAt: ${_yamlScalar(character.updatedAt)}');
     if (character.avatarUrl != null) {
@@ -165,20 +210,58 @@ class CharacterMarkdownCodec {
     for (final entry in character.currencyMap.entries) {
       buffer.writeln('| ${_cell(entry.key)} | ${_integer(entry.value)} |');
     }
-    buffer
-      ..writeln()
-      ..writeln('## 笔记')
-      ..writeln()
-      ..writeln(character.notes.trimRight())
-      ..writeln();
+    if (character.description.isNotEmpty) {
+      buffer
+        ..writeln()
+        ..writeln('## 描述')
+        ..writeln()
+        ..writeln(character.description)
+        ..writeln();
+    }
+    final monster = _map(character.dataMap['monster']);
+    for (final group in _monsterGroupSections.entries) {
+      final entries = _mapList(monster[group.key]);
+      if (entries.isEmpty) continue;
+      buffer
+        ..writeln()
+        ..writeln('## ${group.value}')
+        ..writeln();
+      for (final entry in entries) {
+        _writeMonsterEntry(buffer, entry);
+      }
+    }
+    if (character.notes.trim().isNotEmpty) {
+      buffer
+        ..writeln()
+        ..writeln('## 笔记')
+        ..writeln()
+        ..writeln(character.notes.trimRight())
+        ..writeln();
+    }
     final extraSections = _map(character.dataMap['markdownSections']);
     for (final entry in extraSections.entries) {
       if (_knownSections.contains(_normalizeHeading(entry.key))) continue;
+      final structuredGroup =
+          _monsterSectionGroups[_normalizeHeading(entry.key)];
+      if (structuredGroup != null &&
+          _mapList(monster[structuredGroup]).isNotEmpty) {
+        continue;
+      }
       buffer
         ..writeln('## ${entry.key}')
         ..writeln()
         ..writeln('${entry.value}'.trim())
         ..writeln();
+    }
+    final monsterMetadata = <String, Object?>{
+      for (final key in const ['senses', 'languages', 'challenge'])
+        if (monster[key] != null) key: monster[key],
+    };
+    if (monsterMetadata.isNotEmpty) {
+      buffer
+        ..writeln('## 怪物资料')
+        ..writeln();
+      _writeMonsterMetadata(buffer, monsterMetadata);
     }
     return buffer.toString();
   }
@@ -186,7 +269,11 @@ class CharacterMarkdownCodec {
   CharacterMarkdownImport decode(String source) {
     final envelope = _parseFrontMatter(source);
     final metadata = envelope.metadata;
-    if (metadata['format'] != 'dnd-table-character/v1') {
+    final format = metadata['format'];
+    final isCharacterFormat =
+        format == 'dnd-table-character/v2' ||
+        format == 'dnd-table-character/v1';
+    if (!isCharacterFormat) {
       throw const CharacterMarkdownFormatException('不支持的角色卡 Markdown 格式');
     }
     final normalizedBody = _normalizeTableWhitespace(envelope.body);
@@ -201,9 +288,33 @@ class CharacterMarkdownCodec {
     final skills = _tableMap(sections['技能'], keyColumn: 0, valueColumn: 1);
     final combat = _tableMap(sections['战斗'], keyColumn: 0, valueColumn: 1);
     final currency = _tableMap(sections['货币'], keyColumn: 0, valueColumn: 1);
-    final level = _requiredInt(basics['等级'], '等级');
-    final currentHp = _requiredInt(combat['当前 HP'], '当前 HP');
-    final maxHp = _requiredInt(combat['最大 HP'], '最大 HP');
+    final characterHitPoints = _map(metadata['hitPoints']);
+    final characterAbilities = _map(metadata['abilities']);
+    final characterSpeed = _map(metadata['speed']);
+    final level = isCharacterFormat
+        ? _characterFieldInt(
+            basics['等级'],
+            metadata['level'],
+            field: '等级',
+            fallback: 1,
+          )
+        : _requiredInt(basics['等级'], '等级');
+    final currentHp = isCharacterFormat
+        ? _characterFieldInt(
+            combat['当前 HP'],
+            characterHitPoints['current'],
+            field: '当前 HP',
+            fallback: 0,
+          )
+        : _requiredInt(combat['当前 HP'], '当前 HP');
+    final maxHp = isCharacterFormat
+        ? _characterFieldInt(
+            combat['最大 HP'],
+            characterHitPoints['maximum'],
+            field: '最大 HP',
+            fallback: currentHp,
+          )
+        : _requiredInt(combat['最大 HP'], '最大 HP');
     final resources = _parseResources(sections['资源'], envelope.body);
     final conditions = _parseConditions(sections['状态'], envelope.body);
     final items = _parseItems(sections['装备'], envelope.body);
@@ -213,11 +324,20 @@ class CharacterMarkdownCodec {
       'hitPoints': {
         'current': currentHp,
         'maximum': maxHp,
-        'temporary': _requiredInt(combat['临时 HP'], '临时 HP'),
+        'temporary': isCharacterFormat
+            ? _optionalInt(
+                combat['临时 HP'] ?? characterHitPoints['temporary'],
+                fallback: 0,
+              )
+            : _requiredInt(combat['临时 HP'], '临时 HP'),
       },
       'deathSaves': {
-        'successes': _requiredInt(combat['死亡豁免成功'], '死亡豁免成功'),
-        'failures': _requiredInt(combat['死亡豁免失败'], '死亡豁免失败'),
+        'successes': isCharacterFormat
+            ? _optionalInt(combat['死亡豁免成功'], fallback: 0)
+            : _requiredInt(combat['死亡豁免成功'], '死亡豁免成功'),
+        'failures': isCharacterFormat
+            ? _optionalInt(combat['死亡豁免失败'], fallback: 0)
+            : _requiredInt(combat['死亡豁免失败'], '死亡豁免失败'),
       },
       'resources': resources.map((item) => item.toJson()).toList(),
       'conditions': conditions.map((item) => item.toJson()).toList(),
@@ -227,13 +347,57 @@ class CharacterMarkdownCodec {
     final unknownSections = <String, Object?>{};
     for (final entry in sections.entries) {
       if (_knownSections.contains(_normalizeHeading(entry.key))) continue;
-      final text = entry.value.map(_nodeText).join('\n\n').trim();
+      final text = _nodesToReadableMarkdown(entry.value);
       if (text.isNotEmpty) unknownSections[entry.key] = text;
     }
     final notes = sections['笔记']?.map(_nodeText).join('\n').trim() ?? '';
+    final description = sections['描述']?.map(_nodeText).join('\n').trim() ?? '';
+    final monster = _parseMonsterGroups(envelope.body);
     final now = DateTime.now().toUtc().toIso8601String();
+    final characterKind = _metadataText(metadata, 'kind', fallback: 'player');
+    final challengeRating = _metadataText(metadata, 'challengeRating');
+    final raceSummary = basics['种族']?.trim().isNotEmpty == true
+        ? basics['种族']!.trim()
+        : _characterRaceSummary(metadata);
+    final classSummary = basics['职业']?.trim().isNotEmpty == true
+        ? basics['职业']!.trim()
+        : characterKind == 'monster'
+        ? [
+            '怪物',
+            if (challengeRating.isNotEmpty) 'CR $challengeRating',
+          ].join(' · ')
+        : '';
+    final resolvedAbilities = <String, int>{
+      for (final entry in _abilityLabels.entries)
+        entry.key: isCharacterFormat
+            ? _optionalInt(
+                abilities[entry.value] ?? characterAbilities[entry.key],
+                fallback: 10,
+              )
+            : _requiredInt(abilities[entry.value], entry.value),
+    };
+    final characterData = isCharacterFormat
+        ? <String, Object?>{
+            'kind': characterKind,
+            for (final field in const [
+              'templateRef',
+              'size',
+              'creatureType',
+              'alignment',
+              'challengeRating',
+              'proficiencyBonus',
+            ])
+              if (metadata[field] != null) field: metadata[field],
+            if (characterHitPoints['formula'] != null)
+              'hitPointFormula': characterHitPoints['formula'],
+            'speed': characterSpeed,
+          }
+        : const <String, Object?>{};
     final data = <String, Object?>{
       'characterState': state.toJson(),
+      if (description.isNotEmpty) 'description': description,
+      if (isCharacterFormat) 'character': characterData,
+      if (monster.isNotEmpty) 'monster': monster,
       if (unknownSections.isNotEmpty) 'markdownSections': unknownSections,
     };
     final character = CharacterSheet(
@@ -241,21 +405,27 @@ class CharacterMarkdownCodec {
       ownerUserId: _metadataText(metadata, 'owner', fallback: 'local'),
       name: basics['名称']?.trim().isNotEmpty == true
           ? basics['名称']!.trim()
-          : title,
+          : _metadataText(metadata, 'name', fallback: title),
       avatarUrl: _metadataText(metadata, 'avatar').nullIfEmpty,
       system: _metadataText(metadata, 'system', fallback: 'dnd5e-2024'),
       level: level,
-      classSummary: basics['职业']?.trim() ?? '',
-      raceSummary: basics['种族']?.trim() ?? '',
+      classSummary: classSummary,
+      raceSummary: raceSummary,
       currentHp: state.hitPoints.current,
       maxHp: state.hitPoints.maximum,
-      armorClass: _requiredInt(combat['AC'], 'AC'),
-      speed: _requiredInt(combat['速度'], '速度'),
-      initiativeBonus: _requiredInt(combat['先攻'], '先攻'),
-      abilities: {
-        for (final entry in _abilityLabels.entries)
-          entry.key: _requiredInt(abilities[entry.value], entry.value),
-      },
+      armorClass: isCharacterFormat
+          ? _optionalInt(combat['AC'] ?? metadata['armorClass'], fallback: 10)
+          : _requiredInt(combat['AC'], 'AC'),
+      speed: isCharacterFormat
+          ? _optionalInt(combat['速度'] ?? characterSpeed['walk'], fallback: 30)
+          : _requiredInt(combat['速度'], '速度'),
+      initiativeBonus: isCharacterFormat
+          ? _optionalInt(
+              combat['先攻'] ?? metadata['initiativeBonus'],
+              fallback: ((resolvedAbilities['dex']! - 10) / 2).floor(),
+            )
+          : _requiredInt(combat['先攻'], '先攻'),
+      abilities: resolvedAbilities,
       saves: {
         for (final entry in _abilityLabels.entries)
           entry.key: saves[entry.value]?.trim() == '是',
@@ -282,6 +452,243 @@ class CharacterMarkdownCodec {
           : CharacterMarkdownMode.profile,
     );
   }
+}
+
+void _writeMonsterEntry(StringBuffer buffer, Map<String, Object?> entry) {
+  final name = '${entry['name'] ?? ''}'.trim();
+  if (name.isEmpty) return;
+  final description = '${entry['description'] ?? ''}'.trim();
+  buffer
+    ..writeln('### $name')
+    ..writeln();
+  if (description.isNotEmpty) {
+    buffer
+      ..writeln(description)
+      ..writeln();
+  }
+  final attack = _map(entry['attack']);
+  final damage = _map(entry['damage']);
+  final uses = _map(entry['uses']);
+  final attackBonus = attack['bonus'] ?? entry['attackBonus'];
+  if (attackBonus != null) {
+    buffer.writeln('**命中加值：** ${_signedNumber(attackBonus)}');
+  }
+  if ('${attack['reach'] ?? ''}'.trim().isNotEmpty) {
+    buffer.writeln('**触及：** ${attack['reach']}');
+  }
+  if ('${attack['range'] ?? ''}'.trim().isNotEmpty) {
+    buffer.writeln('**射程：** ${attack['range']}');
+  }
+  if ('${damage['expression'] ?? ''}'.trim().isNotEmpty) {
+    final damageType = '${damage['type'] ?? ''}'.trim();
+    buffer.writeln(
+      '**伤害：** `${damage['expression']}`${damageType.isEmpty ? '' : ' $damageType'}',
+    );
+  }
+  if (uses['maximum'] != null) {
+    buffer.writeln('**次数：** ${uses['maximum']}');
+  }
+  if ('${uses['restoreOn'] ?? ''}'.trim().isNotEmpty) {
+    buffer.writeln('**恢复：** ${uses['restoreOn']}');
+  }
+  if (entry['cost'] != null) {
+    buffer.writeln('**消耗：** ${entry['cost']}');
+  }
+  if ('${entry['ability'] ?? ''}'.trim().isNotEmpty) {
+    buffer.writeln('**施法属性：** ${entry['ability']}');
+  }
+  if (entry['saveDc'] != null) {
+    buffer.writeln('**豁免 DC：** ${entry['saveDc']}');
+  }
+  final spells = entry['spells'];
+  if (spells is List && spells.isNotEmpty) {
+    buffer.writeln('**法术：** ${spells.join('、')}');
+  }
+  final metadata = base64UrlEncode(utf8.encode(jsonEncode(entry)));
+  buffer
+    ..writeln()
+    ..writeln('<!-- dnd:monster-entry=$metadata -->')
+    ..writeln();
+}
+
+Map<String, Object?> _parseMonsterGroups(String body) {
+  final result = <String, Object?>{};
+  final metadataMatch = RegExp(
+    r'<!--\s*dnd:monster-data=([A-Za-z0-9_=-]+)\s*-->',
+  ).firstMatch(body);
+  if (metadataMatch != null) {
+    try {
+      result.addAll(
+        _deepMap(
+          jsonDecode(utf8.decode(base64Url.decode(metadataMatch.group(1)!))),
+        ),
+      );
+    } on FormatException {
+      // The readable summary remains importable if hidden metadata was edited.
+    }
+  }
+  final sectionPattern = RegExp(r'^##\s+([^\n]+)\s*$', multiLine: true);
+  final headings = sectionPattern.allMatches(body).toList(growable: false);
+  for (var index = 0; index < headings.length; index++) {
+    final heading = _normalizeHeading(headings[index].group(1)!);
+    final group = _monsterSectionGroups[heading];
+    if (group == null) continue;
+    final start = headings[index].end;
+    final end = index + 1 < headings.length
+        ? headings[index + 1].start
+        : body.length;
+    final section = body.substring(start, end);
+    final entries = _parseMonsterEntries(section, group);
+    if (entries.isNotEmpty) result[group] = entries;
+  }
+  return result;
+}
+
+List<Map<String, Object?>> _parseMonsterEntries(String section, String group) {
+  final headingPattern = RegExp(r'^###\s+([^\n]+)\s*$', multiLine: true);
+  final headings = headingPattern.allMatches(section).toList(growable: false);
+  final entries = <Map<String, Object?>>[];
+  for (var index = 0; index < headings.length; index++) {
+    final name = headings[index].group(1)!.trim();
+    final start = headings[index].end;
+    final end = index + 1 < headings.length
+        ? headings[index + 1].start
+        : section.length;
+    final source = section.substring(start, end);
+    final metadataMatch = RegExp(
+      r'<!--\s*dnd:monster-entry=([A-Za-z0-9_=-]+)\s*-->',
+    ).firstMatch(source);
+    var entry = <String, Object?>{'id': _slug(name)};
+    if (metadataMatch != null) {
+      try {
+        final decoded = jsonDecode(
+          utf8.decode(base64Url.decode(metadataMatch.group(1)!)),
+        );
+        if (decoded is Map) entry = _deepMap(decoded);
+      } on FormatException {
+        // The visible fields below still form a valid editable entry.
+      }
+    }
+    final visible = source
+        .replaceAll(RegExp(r'<!--\s*dnd:monster-entry=.*?-->'), '')
+        .trim();
+    final lines = visible.split('\n');
+    final descriptionLines = <String>[];
+    for (final line in lines) {
+      if (line.trimLeft().startsWith('**')) break;
+      descriptionLines.add(line);
+    }
+    entry['name'] = name;
+    entry['description'] = descriptionLines.join('\n').trim();
+
+    final attackBonus = _readMonsterInt(visible, '命中加值');
+    if (attackBonus != null) {
+      if (group == 'spellcasting' || entry.containsKey('attackBonus')) {
+        entry['attackBonus'] = attackBonus;
+      } else {
+        entry['attack'] = {..._map(entry['attack']), 'bonus': attackBonus};
+      }
+    }
+    final reach = _readMonsterText(visible, '触及');
+    final range = _readMonsterText(visible, '射程');
+    if (reach.isNotEmpty || range.isNotEmpty) {
+      entry['attack'] = {
+        ..._map(entry['attack']),
+        if (reach.isNotEmpty) 'reach': reach,
+        if (range.isNotEmpty) 'range': range,
+      };
+    }
+    final damageMatch = RegExp(
+      r'^\*\*伤害：\*\*\s*`([^`]+)`\s*(.*)$',
+      multiLine: true,
+    ).firstMatch(visible);
+    if (damageMatch != null) {
+      entry['damage'] = {
+        'expression': damageMatch.group(1)!.trim(),
+        if (damageMatch.group(2)!.trim().isNotEmpty)
+          'type': damageMatch.group(2)!.trim(),
+      };
+    }
+    final maximum = _readMonsterInt(visible, '次数');
+    final restoreOn = _readMonsterText(visible, '恢复');
+    if (maximum != null || restoreOn.isNotEmpty) {
+      final uses = _map(entry['uses']);
+      if (maximum != null) uses['maximum'] = maximum;
+      if (restoreOn.isNotEmpty) uses['restoreOn'] = restoreOn;
+      entry['uses'] = uses;
+    }
+    final cost = _readMonsterInt(visible, '消耗');
+    if (cost != null) entry['cost'] = cost;
+    final ability = _readMonsterText(visible, '施法属性');
+    if (ability.isNotEmpty) entry['ability'] = ability;
+    final saveDc = _readMonsterInt(visible, '豁免 DC');
+    if (saveDc != null) entry['saveDc'] = saveDc;
+    final spells = _readMonsterText(visible, '法术');
+    if (spells.isNotEmpty) {
+      entry['spells'] = spells
+          .split(RegExp(r'[、,，]'))
+          .map((spell) => spell.trim())
+          .where((spell) => spell.isNotEmpty)
+          .toList(growable: false);
+    }
+    entries.add(entry);
+  }
+  return entries;
+}
+
+int? _readMonsterInt(String source, String label) {
+  final value = _readMonsterText(source, label).replaceFirst('+', '');
+  return int.tryParse(value);
+}
+
+String _readMonsterText(String source, String label) {
+  final match = RegExp(
+    '^\\*\\*${RegExp.escape(label)}：\\*\\*\\s*(.+)\$',
+    multiLine: true,
+  ).firstMatch(source);
+  return match?.group(1)?.trim() ?? '';
+}
+
+void _writeMonsterMetadata(StringBuffer buffer, Map<String, Object?> metadata) {
+  final senses = metadata['senses'];
+  final languages = metadata['languages'];
+  final challenge = _map(metadata['challenge']);
+  if (senses is List && senses.isNotEmpty) {
+    buffer.writeln('- **感官：** ${senses.join('、')}');
+  } else if ('$senses'.trim().isNotEmpty && senses != null) {
+    buffer.writeln('- **感官：** $senses');
+  }
+  if (languages is List && languages.isNotEmpty) {
+    buffer.writeln('- **语言：** ${languages.join('、')}');
+  } else if ('$languages'.trim().isNotEmpty && languages != null) {
+    buffer.writeln('- **语言：** $languages');
+  }
+  if (challenge.isNotEmpty) {
+    final rating = '${challenge['rating'] ?? ''}'.trim();
+    final proficiency = challenge['proficiencyBonus'];
+    if (rating.isNotEmpty) {
+      buffer.writeln(
+        '- **挑战等级：** $rating'
+        '${proficiency == null ? '' : '（熟练加值 +$proficiency）'}',
+      );
+    }
+  }
+  final encoded = base64UrlEncode(utf8.encode(jsonEncode(metadata)));
+  buffer
+    ..writeln()
+    ..writeln('<!-- dnd:monster-data=$encoded -->')
+    ..writeln();
+}
+
+List<Map<String, Object?>> _mapList(Object? value) {
+  if (value is! List) return const [];
+  return value.whereType<Map>().map(_deepMap).toList(growable: false);
+}
+
+String _signedNumber(Object value) {
+  final number = value is num ? value : num.tryParse('$value');
+  if (number == null || number < 0) return '$value';
+  return '+$value';
 }
 
 String _normalizeTableWhitespace(String source) {
@@ -474,6 +881,45 @@ String _nodeText(md.Node node) {
   return '';
 }
 
+String _nodesToReadableMarkdown(List<md.Node> nodes) {
+  final blocks = <String>[];
+  for (final node in nodes) {
+    if (node is md.Text) {
+      if (node.text.trim().isNotEmpty) blocks.add(node.text.trim());
+      continue;
+    }
+    if (node is! md.Element) continue;
+    final heading = RegExp(r'^h([3-6])$').firstMatch(node.tag);
+    if (heading != null) {
+      blocks.add(
+        '${'#' * int.parse(heading.group(1)!)} ${node.textContent.trim()}',
+      );
+      continue;
+    }
+    if (node.tag == 'ul' || node.tag == 'ol') {
+      var index = 0;
+      final items = <String>[];
+      for (final child in node.children ?? const <md.Node>[]) {
+        if (child is! md.Element || child.tag != 'li') continue;
+        index += 1;
+        final marker = node.tag == 'ol' ? '$index.' : '-';
+        items.add('$marker ${child.textContent.trim()}');
+      }
+      if (items.isNotEmpty) blocks.add(items.join('\n'));
+      continue;
+    }
+    if (node.tag == 'blockquote') {
+      blocks.add(
+        node.textContent.trim().split('\n').map((line) => '> $line').join('\n'),
+      );
+      continue;
+    }
+    final text = node.textContent.trim();
+    if (text.isNotEmpty) blocks.add(text);
+  }
+  return blocks.join('\n\n').trim();
+}
+
 CharacterDocument _stateFor(CharacterSheet character) {
   final canonical = _map(character.dataMap['characterState']);
   return CharacterDocument.fromJson({
@@ -542,6 +988,36 @@ int _requiredInt(Object? value, String field) {
   return parsed;
 }
 
+int _optionalInt(Object? value, {required int fallback}) {
+  if (value is num) return value.toInt();
+  return int.tryParse('$value'.trim()) ?? fallback;
+}
+
+int _characterFieldInt(
+  Object? readableValue,
+  Object? structuredValue, {
+  required String field,
+  required int fallback,
+}) {
+  if (readableValue != null) return _requiredInt(readableValue, field);
+  return _optionalInt(structuredValue, fallback: fallback);
+}
+
+String _characterRaceSummary(Map<String, Object?> metadata) {
+  final parts = [
+    _metadataText(metadata, 'size'),
+    _metadataText(metadata, 'creatureType'),
+  ].where((value) => value.isNotEmpty).toList(growable: false);
+  return parts.join(' ');
+}
+
+String _safeCharacterKind(String value) {
+  return switch (value) {
+    'player' || 'npc' || 'monster' || 'companion' => value,
+    _ => 'player',
+  };
+}
+
 int _integer(Object? value) => value is num ? value.toInt() : 0;
 String _restoreLabel(String value) => switch (value) {
   'shortRest' => '短休',
@@ -601,7 +1077,28 @@ const _knownSections = {
   '状态',
   '装备',
   '货币',
+  '描述',
   '笔记',
+  '怪物资料',
+};
+
+const _monsterGroupSections = <String, String>{
+  'traits': '特性',
+  'actions': '动作',
+  'bonusActions': '附赠动作',
+  'reactions': '反应',
+  'legendaryActions': '传奇动作',
+  'spellcasting': '施法',
+};
+
+const _monsterSectionGroups = <String, String>{
+  '特性': 'traits',
+  '特质': 'traits',
+  '动作': 'actions',
+  '附赠动作': 'bonusActions',
+  '反应': 'reactions',
+  '传奇动作': 'legendaryActions',
+  '施法': 'spellcasting',
 };
 
 extension on String {

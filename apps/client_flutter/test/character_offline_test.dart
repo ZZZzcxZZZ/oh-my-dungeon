@@ -18,7 +18,9 @@ Widget buildOfflineCharacterApp(CharacterRepository repository) {
 }
 
 void main() {
-  testWidgets('creates and edits a character without an auth session', (tester) async {
+  testWidgets('creates and edits a character without an auth session', (
+    tester,
+  ) async {
     final repository = MemoryCharacterRepository();
     final controller = CharacterController(repository: repository);
     // Task 1.3: 编辑器现在默认进入"选择创建方式"页面, 此处直接构造
@@ -52,45 +54,43 @@ void main() {
   });
 
   // Spec §头像来源: 角色列表卡片应优先显示头像图片，无头像时退回首字母。
-  testWidgets(
-    'character list card shows avatar image when avatarUrl is set',
-    (tester) async {
-      final avatarUrl = Uri.dataFromBytes(
-        base64Decode(_validPngBase64),
-        mimeType: 'image/png',
-      ).toString();
-      final repository = MemoryCharacterRepository(
-        initial: [
-          testCharacter(id: 'c1', name: 'Hero').copyWith(avatarUrl: avatarUrl),
-        ],
-      );
-      await tester.pumpWidget(buildOfflineCharacterApp(repository));
-      await tester.pumpAndSettle();
+  testWidgets('character list card shows avatar image when avatarUrl is set', (
+    tester,
+  ) async {
+    final avatarUrl = Uri.dataFromBytes(
+      base64Decode(_validPngBase64),
+      mimeType: 'image/png',
+    ).toString();
+    final repository = MemoryCharacterRepository(
+      initial: [
+        testCharacter(id: 'c1', name: 'Hero').copyWith(avatarUrl: avatarUrl),
+      ],
+    );
+    await tester.pumpWidget(buildOfflineCharacterApp(repository));
+    await tester.pumpAndSettle();
 
-      final avatar = tester.widget<CircleAvatar>(
-        find.byKey(const Key('character-list-avatar-c1')),
-      );
-      expect(avatar.backgroundImage, isNotNull);
-      expect(avatar.child, isNull);
-    },
-  );
+    final avatar = tester.widget<CircleAvatar>(
+      find.byKey(const Key('character-list-avatar-c1')),
+    );
+    expect(avatar.backgroundImage, isNotNull);
+    expect(avatar.child, isNull);
+  });
 
-  testWidgets(
-    'character list card falls back to initial when no avatar',
-    (tester) async {
-      final repository = MemoryCharacterRepository(
-        initial: [testCharacter(id: 'c1', name: 'Hero')],
-      );
-      await tester.pumpWidget(buildOfflineCharacterApp(repository));
-      await tester.pumpAndSettle();
+  testWidgets('character list card falls back to initial when no avatar', (
+    tester,
+  ) async {
+    final repository = MemoryCharacterRepository(
+      initial: [testCharacter(id: 'c1', name: 'Hero')],
+    );
+    await tester.pumpWidget(buildOfflineCharacterApp(repository));
+    await tester.pumpAndSettle();
 
-      final avatar = tester.widget<CircleAvatar>(
-        find.byKey(const Key('character-list-avatar-c1')),
-      );
-      expect(avatar.backgroundImage, isNull);
-      expect(avatar.child, isNotNull);
-    },
-  );
+    final avatar = tester.widget<CircleAvatar>(
+      find.byKey(const Key('character-list-avatar-c1')),
+    );
+    expect(avatar.backgroundImage, isNull);
+    expect(avatar.child, isNotNull);
+  });
 }
 
 const _validPngBase64 =

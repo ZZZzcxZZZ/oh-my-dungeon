@@ -15,11 +15,11 @@ class _FakeSyncClient implements CampaignSyncApiClient {
   Map<String, dynamic>? lastItemArgs;
 
   @override
-  Future<CampaignEventResult> changeActorHp({
+  Future<CampaignEventResult> changeCharacterHp({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorId,
+    required String characterId,
     required int delta,
     String? reason,
     int? baseRevision,
@@ -27,7 +27,7 @@ class _FakeSyncClient implements CampaignSyncApiClient {
     hpCallCount++;
     lastHpArgs = {
       'campaignId': campaignId,
-      'actorId': actorId,
+      'characterId': characterId,
       'delta': delta,
       'reason': reason,
       'baseRevision': baseRevision,
@@ -41,7 +41,7 @@ class _FakeSyncClient implements CampaignSyncApiClient {
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorId,
+    required String characterId,
     required String itemId,
     required String name,
     int quantity = 1,
@@ -50,7 +50,7 @@ class _FakeSyncClient implements CampaignSyncApiClient {
     itemCallCount++;
     lastItemArgs = {
       'campaignId': campaignId,
-      'actorId': actorId,
+      'characterId': characterId,
       'itemId': itemId,
       'name': name,
       'quantity': quantity,
@@ -66,63 +66,63 @@ class _FakeSyncClient implements CampaignSyncApiClient {
 }
 
 CampaignEventResult _hpResult(int newRevision) => CampaignEventResult(
-      actor: {
-        'id': 'actor-1',
-        'revision': newRevision,
-        'sheet': {'name': 'Arannis', 'currentHp': 12, 'maxHp': 30},
-      },
-      event: CampaignEvent(
-        id: 'msg-1',
-        campaignId: 'camp-1',
-        senderId: 'dm-1',
-        campaignActorId: 'actor-1',
-        displayName: 'dm',
-        kind: 'system',
-        content: 'Arannis -8 HP (20 → 12)',
-        eventData: {
-          'eventType': 'actor.hp_changed',
-          'delta': -8,
-          'from': 20,
-          'to': 12,
-        },
-        createdAt: '2026-07-23T00:00:00.000Z',
-      ),
-    );
+  character: {
+    'id': 'character-1',
+    'revision': newRevision,
+    'sheet': {'name': 'Arannis', 'currentHp': 12, 'maxHp': 30},
+  },
+  event: CampaignEvent(
+    id: 'msg-1',
+    campaignId: 'camp-1',
+    senderId: 'dm-1',
+    campaignCharacterId: 'character-1',
+    displayName: 'dm',
+    kind: 'system',
+    content: 'Arannis -8 HP (20 → 12)',
+    eventData: {
+      'eventType': 'character.hp_changed',
+      'delta': -8,
+      'from': 20,
+      'to': 12,
+    },
+    createdAt: '2026-07-23T00:00:00.000Z',
+  ),
+);
 
 CampaignEventResult _itemResult(int newRevision) => CampaignEventResult(
-      actor: {
-        'id': 'actor-1',
-        'revision': newRevision,
-        'sheet': {
-          'name': 'Arannis',
-          'inventory': [
-            {'itemId': 'item-longsword', 'name': '长剑', 'quantity': 1},
-          ],
-        },
-      },
-      event: CampaignEvent(
-        id: 'msg-2',
-        campaignId: 'camp-1',
-        senderId: 'dm-1',
-        campaignActorId: 'actor-1',
-        displayName: 'dm',
-        kind: 'system',
-        content: '给 Arannis 长剑 ×1',
-        eventData: {
-          'eventType': 'actor.item_granted',
-          'itemId': 'item-longsword',
-          'quantity': 1,
-        },
-        createdAt: '2026-07-23T00:00:00.000Z',
-      ),
-    );
+  character: {
+    'id': 'character-1',
+    'revision': newRevision,
+    'sheet': {
+      'name': 'Arannis',
+      'inventory': [
+        {'itemId': 'item-longsword', 'name': '长剑', 'quantity': 1},
+      ],
+    },
+  },
+  event: CampaignEvent(
+    id: 'msg-2',
+    campaignId: 'camp-1',
+    senderId: 'dm-1',
+    campaignCharacterId: 'character-1',
+    displayName: 'dm',
+    kind: 'system',
+    content: '给 Arannis 长剑 ×1',
+    eventData: {
+      'eventType': 'character.item_granted',
+      'itemId': 'item-longsword',
+      'quantity': 1,
+    },
+    createdAt: '2026-07-23T00:00:00.000Z',
+  ),
+);
 
 void main() {
   group('CampaignEventDispatcher (Task 3.1)', () {
-    test('changeActorHp calls API and invokes callbacks', () async {
+    test('changeCharacterHp calls API and invokes callbacks', () async {
       final client = _FakeSyncClient(hpResult: _hpResult(2));
       CampaignEvent? dispatchedEvent;
-      Map<String, Object?>? changedActor;
+      Map<String, Object?>? changedCharacter;
 
       final dispatcher = CampaignEventDispatcher(
         apiClient: client,
@@ -131,22 +131,22 @@ void main() {
         onEventDispatched: (event) async {
           dispatchedEvent = event;
         },
-        onActorChanged: (actor) async {
-          changedActor = actor;
+        onCharacterChanged: (character) async {
+          changedCharacter = character;
         },
       );
 
-      final revision = await dispatcher.changeActorHp(
+      final revision = await dispatcher.changeCharacterHp(
         campaignId: 'camp-1',
-        actorId: 'actor-1',
+        characterId: 'character-1',
         delta: -8,
       );
 
       expect(revision, 2);
       expect(client.hpCallCount, 1);
       expect(client.lastHpArgs?['delta'], -8);
-      expect(changedActor?['revision'], 2);
-      expect(dispatchedEvent?.eventType, 'actor.hp_changed');
+      expect(changedCharacter?['revision'], 2);
+      expect(dispatchedEvent?.eventType, 'character.hp_changed');
       expect(dispatchedEvent?.eventData['delta'], -8);
     });
 
@@ -165,7 +165,7 @@ void main() {
 
       final revision = await dispatcher.grantItem(
         campaignId: 'camp-1',
-        actorId: 'actor-1',
+        characterId: 'character-1',
         itemId: 'item-longsword',
         name: '长剑',
         quantity: 1,
@@ -175,7 +175,7 @@ void main() {
       expect(client.itemCallCount, 1);
       expect(client.lastItemArgs?['itemId'], 'item-longsword');
       expect(client.lastItemArgs?['quantity'], 1);
-      expect(dispatchedEvent?.eventType, 'actor.item_granted');
+      expect(dispatchedEvent?.eventType, 'character.item_granted');
     });
 
     test('sets lastError and rethrows on failure', () async {
@@ -189,9 +189,9 @@ void main() {
       );
 
       await expectLater(
-        dispatcher.changeActorHp(
+        dispatcher.changeCharacterHp(
           campaignId: 'camp-1',
-          actorId: 'actor-1',
+          characterId: 'character-1',
           delta: -5,
         ),
         throwsA(isA<CampaignSyncException>()),
@@ -209,14 +209,14 @@ void main() {
         apiClient: client,
         apiBaseUrlProvider: () => 'https://example.com',
         accessTokenProvider: () => 'token',
-        onActorChanged: (actor) async {
+        onCharacterChanged: (character) async {
           dispatchingDuringCall = dispatcher.isDispatching;
         },
       );
 
-      await dispatcher.changeActorHp(
+      await dispatcher.changeCharacterHp(
         campaignId: 'camp-1',
-        actorId: 'actor-1',
+        characterId: 'character-1',
         delta: -8,
       );
 

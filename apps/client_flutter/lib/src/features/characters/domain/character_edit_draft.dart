@@ -45,6 +45,29 @@ class CharacterEditDraft {
   final Map<String, Object?> data;
   final List<CharacterContentReference> contentReferences;
 
+  CharacterEditDraft copyWith({Map<String, Object?>? data}) {
+    return CharacterEditDraft(
+      name: name,
+      level: level,
+      classSummary: classSummary,
+      raceSummary: raceSummary,
+      currentHp: currentHp,
+      maxHp: maxHp,
+      armorClass: armorClass,
+      speed: speed,
+      initiativeBonus: initiativeBonus,
+      abilities: abilities,
+      saves: saves,
+      skills: skills,
+      inventory: inventory,
+      currency: currency,
+      notes: notes,
+      avatarUrl: avatarUrl,
+      data: data ?? this.data,
+      contentReferences: contentReferences,
+    );
+  }
+
   static int _idCounter = 0;
 
   CharacterSheet toLocalCharacter() {

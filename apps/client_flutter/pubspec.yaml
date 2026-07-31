@@ -63,6 +63,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   build_runner: ^2.6.0
   drift_dev: ^2.34.0
+  sqlite3: ^3.1.6
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -76,6 +77,11 @@ flutter:
 
   assets:
     - assets/bundled_content.json
+
+  fonts:
+    - family: NotoSansSC
+      fonts:
+        - asset: assets/fonts/NotoSansSC-Variable.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

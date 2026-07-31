@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../content/data/local/content_repository.dart';
-import '../../encounters/presentation/encounter_controller.dart';
-import '../../encounters/presentation/encounter_panel_page.dart';
 
 import '../data/sync/campaign_sync_api_client.dart';
 import '../domain/campaign.dart';
-import '../domain/campaign_actor.dart';
-import 'actors/campaign_actor_controller.dart';
-import 'actors/campaign_actor_sheet_launcher.dart';
-import 'actors/dm_quick_ops_sheet.dart';
+import '../domain/campaign_character.dart';
+import 'characters/campaign_character_controller.dart';
+import 'characters/campaign_character_sheet_launcher.dart';
+import 'characters/dm_quick_ops_sheet.dart';
 import 'campaign_controller.dart';
 import 'campaign_detail_page.dart';
 import 'campaign_event_dispatcher.dart';
@@ -31,18 +29,16 @@ class CampaignCenterPage extends StatefulWidget {
   const CampaignCenterPage({
     required this.campaign,
     required this.controller,
-    this.actorController,
+    this.characterController,
     this.contentRepository,
-    this.encounterController,
     this.initialTab = 0,
     super.key,
   });
 
   final Campaign campaign;
   final CampaignController controller;
-  final CampaignActorController? actorController;
+  final CampaignCharacterController? characterController;
   final ContentRepository? contentRepository;
-  final EncounterController? encounterController;
 
   /// 初始选中的面板下标。0=概览 1=角色 2=档案。
   final int initialTab;
@@ -80,16 +76,17 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
       widget.controller.workspaceContext?.capabilities.canManageCampaign ??
       false;
 
-  List<CampaignActor> get _actors => widget.actorController?.actors ?? const [];
+  List<CampaignCharacter> get _characters =>
+      widget.characterController?.characters ?? const [];
 
   List<CampaignMemberPreview> get _members =>
       widget.controller.workspaceContext?.members ??
       widget.campaign.memberPreview;
 
-  /// Spec §完整管理: 当前发言身份 actorId, 从服务端 workspaceContext 读取,
-  /// 用于在队伍面板高亮"使用中"的 actor。
-  String? get _activeSpeakerActorId =>
-      widget.controller.workspaceContext?.membership.activeSpeakerActorId;
+  /// Spec §完整管理: 当前发言身份 characterId, 从服务端 workspaceContext 读取,
+  /// 用于在队伍面板高亮"使用中"的 character。
+  String? get _activeSpeakerCharacterId =>
+      widget.controller.workspaceContext?.membership.activeSpeakerCharacterId;
 
   /// Spec §档案: 当前用户 ID, 用于客户端判断"是否条目创建者"以决定编辑按钮
   /// 可见性。权限最终仍由服务端 capabilities 与 `createdBy` 校验, 这里只是
@@ -102,7 +99,7 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
     return AnimatedBuilder(
       animation: Listenable.merge([
         widget.controller,
-        if (widget.actorController != null) widget.actorController!,
+        if (widget.characterController != null) widget.characterController!,
       ]),
       builder: (context, _) => LayoutBuilder(
         builder: (context, constraints) {
@@ -121,10 +118,11 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
   }
 
   Widget? _buildManageFab() {
-    // Spec §档案: 新建条目 FAB 只在档案面板出现, 概览/队伍/记录面板不显示。
+    // Every campaign member may create archive entries. Management
+    // capabilities still gate editing other members' entries elsewhere.
     // Plan 2026-07-23 Task 1.4: 统一为 FAB.extended + 语义化图标，与角色
     // 新建按钮风格一致。
-    if (!_canManage) return null;
+    if (_currentUserId == null) return null;
     if (_currentIndex != 2) return null;
     return FloatingActionButton.extended(
       key: const Key('campaign-create-archive-button'),
@@ -246,7 +244,7 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
           campaign: widget.campaign,
           canManage: _canManage,
           members: _members,
-          actors: _actors,
+          characters: _characters,
           invites: _canManage ? widget.controller.invites : const [],
           campaignName: widget.campaign.name,
           serverUrl: widget.controller.apiBaseUrl,
@@ -256,94 +254,120 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
                   maxUses: 1,
                 )
               : null,
-          onOpenActor: _openActorSheet,
+          onOpenCharacter: _openCharacterSheet,
           onOpenDmControl: _canManage ? _showDmControlSheet : null,
-          // Spec §全局设置: 4 项低频操作整合到概览面板, DM 可见全部 4 项,
-          // 普通玩家只见"离开战役"。
           onEditDetails: _canManage ? _openCampaignManagement : null,
-          onTransferOwnership: _canManage ? _showNotImplemented : null,
-          onArchiveCampaign: _canManage ? _showNotImplemented : null,
-          onLeaveCampaign: _showNotImplemented,
         );
       case 1:
         return CampaignCharactersPanel(
-          actors: _actors,
+          characters: _characters,
           isManager: _canManage,
-          onOpenActor: _openActorSheet,
-          activeSpeakerActorId: _activeSpeakerActorId,
-          onCreateActor: _canManage && widget.actorController != null
+          onOpenCharacter: _openCharacterSheet,
+          activeSpeakerCharacterId: _activeSpeakerCharacterId,
+          onCreateCharacter: _canManage && widget.characterController != null
               ? ({
-                  required String actorType,
+                  required String characterType,
                   required String displayName,
                   required String lifecycle,
                   int? maxHp,
                 }) async {
                   // AuthController.ensureValidAccessToken 会基于 JWT exp
-                  // 主动预刷新；actor controller 的同步 accessTokenProvider
+                  // 主动预刷新；character controller 的同步 accessTokenProvider
                   // 会读到刷新后的 token。
                   final token = await widget.controller.authController
                       .ensureValidAccessToken();
                   if (token == null) return '登录已过期，请重新登录';
-                  final success = await widget.actorController!.createDmActor(
-                    actorType: actorType,
-                    lifecycle: lifecycle,
-                    sheet: {
-                      'name': displayName,
-                      'maxHp': ?maxHp,
-                      'currentHp': ?maxHp,
-                    },
-                  );
+                  final success = await widget.characterController!
+                      .createDmCharacter(
+                        characterType: characterType,
+                        lifecycle: lifecycle,
+                        sheet: {
+                          'name': displayName,
+                          'maxHp': ?maxHp,
+                          'currentHp': ?maxHp,
+                        },
+                      );
                   return success
                       ? null
-                      : (widget.actorController!.error ?? '创建失败');
+                      : (widget.characterController!.error ?? '创建失败');
                 }
               : null,
-          onArchiveActor: _canManage && widget.actorController != null
-              ? ({required CampaignActor actor}) async {
+          onArchiveCharacter: _canManage && widget.characterController != null
+              ? ({required CampaignCharacter character}) async {
                   final token = await widget.controller.authController
                       .ensureValidAccessToken();
                   if (token == null) return '登录已过期，请重新登录';
-                  final success = await widget.actorController!.archiveActor(
-                    actor,
-                  );
+                  final success = await widget.characterController!
+                      .archiveCharacter(character);
                   return success
                       ? null
-                      : (widget.actorController!.error ?? '归档失败');
+                      : (widget.characterController!.error ?? '归档失败');
                 }
               : null,
-          onBatchArchive: _canManage && widget.actorController != null
-              ? ({required List<String> actorIds}) async {
+          onRestoreCharacter: _canManage && widget.characterController != null
+              ? ({required CampaignCharacter character}) async {
+                  final token = await widget.controller.authController
+                      .ensureValidAccessToken();
+                  if (token == null) return '登录已过期，请重新登录';
+                  final success = await widget.characterController!
+                      .restoreCharacter(character);
+                  return success
+                      ? null
+                      : (widget.characterController!.error ?? '恢复失败');
+                }
+              : null,
+          onBatchArchive: _canManage && widget.characterController != null
+              ? ({required List<String> characterIds}) async {
                   final token = await widget.controller.authController
                       .ensureValidAccessToken();
                   if (token == null) return '登录已过期，请重新登录';
                   var lastError = '归档失败';
-                  for (final id in actorIds) {
-                    final actor = _actors
+                  for (final id in characterIds) {
+                    final character = _characters
                         .where((candidate) => candidate.id == id)
                         .firstOrNull;
-                    if (actor == null) continue;
-                    final success = await widget.actorController!.archiveActor(
-                      actor,
-                    );
+                    if (character == null) continue;
+                    final success = await widget.characterController!
+                        .archiveCharacter(character);
                     if (!success) {
-                      lastError = widget.actorController!.error ?? lastError;
+                      lastError =
+                          widget.characterController!.error ?? lastError;
                     }
                   }
-                  return lastError == '归档失败' && actorIds.isNotEmpty
+                  return lastError == '归档失败' && characterIds.isNotEmpty
                       ? null
                       : lastError;
                 }
               : null,
           onSetActiveSpeaker: _canManage
-              ? ({required CampaignActor actor}) async {
+              ? ({required CampaignCharacter character}) async {
                   final success = await widget.controller.updateSpeaker(
                     campaignId: widget.campaign.id,
-                    speakerMode: 'actor',
-                    actorId: actor.id,
+                    speakerMode: 'character',
+                    characterId: character.id,
                   );
                   return success
                       ? null
                       : (widget.controller.workspaceContextError ?? '切换发言身份失败');
+                }
+              : null,
+          onSetVisibility: _canManage && widget.characterController != null
+              ? ({
+                  required CampaignCharacter character,
+                  required bool visibleToPlayers,
+                }) async {
+                  final token = await widget.controller.authController
+                      .ensureValidAccessToken();
+                  if (token == null) return '登录已过期，请重新登录';
+                  final success = await widget.characterController!
+                      .updateCharacter(
+                        character,
+                        character.sheet,
+                        visibleToPlayers: visibleToPlayers,
+                      );
+                  return success
+                      ? null
+                      : (widget.characterController!.error ?? '更新可见性失败');
                 }
               : null,
         );
@@ -406,14 +430,14 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
     }
   }
 
-  void _openActorSheet(CampaignActor actor) {
-    final controller = widget.actorController;
+  void _openCharacterSheet(CampaignCharacter character) {
+    final controller = widget.characterController;
     if (controller == null) return;
-    openCampaignActorSheet(
+    openCampaignCharacterSheet(
       context: context,
       controller: controller,
-      actor: actor,
-      canEditAnyActor: _canManage,
+      character: character,
+      canEditAnyCharacter: _canManage,
       contentRepository: widget.contentRepository,
     );
   }
@@ -430,32 +454,31 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
             final linksPayload = draft.linkedEntryIds.isEmpty
                 ? null
                 : draft.linkedEntryIds
-                    .map((id) => <String, Object?>{'kind': 'archive', 'id': id})
-                    .toList(growable: false);
+                      .map(
+                        (id) => <String, Object?>{'kind': 'archive', 'id': id},
+                      )
+                      .toList(growable: false);
             final entry = await widget.controller.createArchiveEntry(
               campaignId: widget.campaign.id,
               kind: draft.kind,
               title: draft.title,
               summary: draft.summary,
-              bodyBlocks:
-                  draft.bodyBlocks.isEmpty ? null : draft.bodyBlocks,
+              bodyBlocks: draft.bodyBlocks.isEmpty ? null : draft.bodyBlocks,
               tags: draft.tags.isEmpty ? null : draft.tags,
               links: linksPayload,
             );
             if (entry != null) {
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('已保存到战役档案')),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('已保存到战役档案')));
               }
               return true;
             }
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(
-                    widget.controller.archivesError ?? '创建失败',
-                  ),
+                  content: Text(widget.controller.archivesError ?? '创建失败'),
                 ),
               );
             }
@@ -486,23 +509,13 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
               children: [
                 Text('DM 控场', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 8),
-                const Text('遭遇、快捷操作等控场工具集中在此处。'),
+                const Text('常用主持操作集中在此处。'),
                 const SizedBox(height: 12),
-                ListTile(
-                  leading: const Icon(Icons.shield_outlined),
-                  title: const Text('遭遇控场'),
-                  subtitle: const Text('管理先攻、回合、敌人生命值和状态'),
-                  enabled: widget.encounterController != null,
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    _openEncounterPanel();
-                  },
-                ),
                 ListTile(
                   leading: const Icon(Icons.bolt_outlined),
                   title: const Text('快捷操作'),
                   subtitle: const Text('批量扣血、给予装备、快速检定'),
-                  enabled: widget.actorController != null,
+                  enabled: widget.characterController != null,
                   onTap: () {
                     Navigator.of(sheetContext).pop();
                     _openDmQuickOps();
@@ -520,16 +533,16 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
   /// 三个原子操作. dispatcher 用 CampaignController 的 apiBaseUrl 和
   /// accessTokenProvider 按需构造, 避免向上层传新依赖.
   Future<void> _openDmQuickOps() async {
-    final actorController = widget.actorController;
-    if (actorController == null) return;
+    final characterController = widget.characterController;
+    if (characterController == null) return;
     final dispatcher = CampaignEventDispatcher(
       apiClient: HttpCampaignSyncApiClient(),
       apiBaseUrlProvider: () => widget.controller.apiBaseUrl,
       accessTokenProvider: () => widget.controller.accessToken ?? '',
-      onActorChanged: (actorSummary) async {
-        // 服务端原子完成 HP/物品变更后, 触发 actorController 增量拉取,
+      onCharacterChanged: (characterSummary) async {
+        // 服务端原子完成 HP/物品变更后, 触发 characterController 增量拉取,
         // 保证本地缓存与服务端一致.
-        await actorController.pullUntilCurrent();
+        await characterController.pullUntilCurrent();
       },
     );
     await showModalBottomSheet<void>(
@@ -539,28 +552,9 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
       builder: (_) => SafeArea(
         child: DmQuickOpsSheet(
           campaignId: widget.campaign.id,
-          actorController: actorController,
+          characterController: characterController,
           eventDispatcher: dispatcher,
-          campaignController: widget.controller,
           contentRepository: widget.contentRepository,
-        ),
-      ),
-    );
-  }
-
-  /// Spec §遭遇控场: 把遭遇面板作为 DM 控场的子页面打开, 入口位于
-  /// 战役中心 → 概览 → DM 控场底部页。无 controller 时静默不响应。
-  Future<void> _openEncounterPanel() async {
-    final controller = widget.encounterController;
-    if (controller == null) return;
-    // 进入控场页前先拉一次该战役的遭遇列表, 顺便让 controller 知道活跃遭遇。
-    await controller.loadEncounters(widget.campaign.id);
-    if (!mounted) return;
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => _EncounterControlHostPage(
-          controller: controller,
-          campaignId: widget.campaign.id,
         ),
       ),
     );
@@ -574,89 +568,6 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
           controller: widget.controller,
           campaignId: widget.campaign.id,
         ),
-      ),
-    );
-  }
-
-  /// Spec §全局设置: 所有权转移、战役归档、离开战役三项暂未实现的服务端
-  /// 操作，统一显示"开发中"提示，避免静默无反馈。
-  void _showNotImplemented() {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('该功能正在开发中')));
-  }
-}
-
-/// DM 控场遭遇面板的承载页面: 提供 Scaffold + AppBar, 把
-/// [EncounterPanelPage] 嵌入 body, 并在空态时承接"新建遭遇"流程。
-class _EncounterControlHostPage extends StatefulWidget {
-  const _EncounterControlHostPage({
-    required this.controller,
-    required this.campaignId,
-  });
-
-  final EncounterController controller;
-  final String campaignId;
-
-  @override
-  State<_EncounterControlHostPage> createState() =>
-      _EncounterControlHostPageState();
-}
-
-class _EncounterControlHostPageState extends State<_EncounterControlHostPage> {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('遭遇控场')),
-      body: EncounterPanelPage(
-        controller: widget.controller,
-        campaignId: widget.campaignId,
-        onCreateEncounter: _showCreateEncounterDialog,
-      ),
-    );
-  }
-
-  Future<void> _showCreateEncounterDialog() async {
-    final nameController = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('新建遭遇'),
-          content: TextField(
-            key: const Key('encounter-create-name-field'),
-            controller: nameController,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: '遭遇名称',
-              hintText: '例如: 哥布林伏击',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(nameController.text.trim());
-              },
-              child: const Text('创建'),
-            ),
-          ],
-        );
-      },
-    );
-    nameController.dispose();
-    if (name == null || name.isEmpty || !mounted) return;
-    final success = await widget.controller.createEncounter(
-      campaignId: widget.campaignId,
-      name: name,
-    );
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(success ? '已创建遭遇: $name' : (widget.controller.error ?? '创建失败')),
       ),
     );
   }

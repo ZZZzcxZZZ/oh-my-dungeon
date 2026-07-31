@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../domain/campaign_archive_entry.dart';
+import '../../../content/domain/content_block.dart';
+import '../../../content/presentation/widgets/content_block_view.dart';
 
 /// Plan 2026-07-23 task 4.3: 将服务端 ISO 时间戳格式化为 `yyyy-MM-dd`，
 /// 去除时分秒。使用显式 pattern 而非 `DateFormat.yMd()`，避免 locale
@@ -80,7 +82,8 @@ class CampaignArchivePanel extends StatelessWidget {
     String? summary,
     List<Map<String, Object?>>? bodyBlocks,
     List<String>? tags,
-  })? onUpdate;
+  })?
+  onUpdate;
 
   /// ID of the user currently viewing the campaign. Used to determine whether
   /// the per-entry edit button should be shown (creator-or-manager rule).
@@ -99,6 +102,13 @@ class CampaignArchivePanel extends StatelessWidget {
 
   bool _canEditEntry(CampaignArchiveEntry entry) {
     if (onUpdate == null) return false;
+    if (canManage) return true;
+    final creator = entry.createdBy;
+    if (creator == null || currentUserId == null) return false;
+    return creator == currentUserId;
+  }
+
+  bool _canArchiveEntry(CampaignArchiveEntry entry) {
     if (canManage) return true;
     final creator = entry.createdBy;
     if (creator == null || currentUserId == null) return false;
@@ -209,9 +219,7 @@ class CampaignArchivePanel extends StatelessWidget {
                 ],
               ),
             ),
-          Expanded(
-            child: _buildBody(context),
-          ),
+          Expanded(child: _buildBody(context)),
         ],
       ),
     );
@@ -244,10 +252,7 @@ class CampaignArchivePanel extends StatelessWidget {
     }
     if (entries.isEmpty) {
       return Center(
-        child: Text(
-          '尚无共享档案',
-          style: Theme.of(context).textTheme.bodyLarge,
-        ),
+        child: Text('尚无共享档案', style: Theme.of(context).textTheme.bodyLarge),
       );
     }
     return RefreshIndicator(
@@ -261,7 +266,7 @@ class CampaignArchivePanel extends StatelessWidget {
           return _ArchiveListRow(
             entry: entry,
             canEdit: _canEditEntry(entry),
-            canArchive: canManage,
+            canArchive: _canArchiveEntry(entry),
             onTap: () => _showArchiveDetail(context, entry),
             onArchive: () => onArchive(entry),
             onEdit: onUpdate == null
@@ -336,8 +341,8 @@ class _ArchiveListRow extends StatelessWidget {
                       Text(
                         entry.summary,
                         style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -348,8 +353,7 @@ class _ArchiveListRow extends StatelessWidget {
                         spacing: 4,
                         runSpacing: 4,
                         children: [
-                          for (final tag in tags.take(4))
-                            _TagChip(label: tag),
+                          for (final tag in tags.take(4)) _TagChip(label: tag),
                         ],
                       ),
                     ],
@@ -359,8 +363,8 @@ class _ArchiveListRow extends StatelessWidget {
                       _archiveRowMetadata(entry),
                       key: const Key('archive-row-metadata'),
                       style: theme.textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
+                        color: colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -401,8 +405,8 @@ class _TagChip extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSecondaryContainer,
-            ),
+          color: Theme.of(context).colorScheme.onSecondaryContainer,
+        ),
       ),
     );
   }
@@ -453,10 +457,7 @@ Future<void> _showArchiveDetail(
     builder: (sheetContext) {
       final height = MediaQuery.of(sheetContext).size.height;
       return SafeArea(
-        child: SizedBox(
-          height: height * 0.9,
-          child: content,
-        ),
+        child: SizedBox(height: height * 0.9, child: content),
       );
     },
   );
@@ -473,17 +474,18 @@ class _ArchiveDetailContent extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final legacyBody = entry.legacyBody;
     final sourceMessageId = entry.payload['sourceMessageId'] as String?;
-    final relatedActorId = entry.payload['relatedActorId'] as String?;
+    final relatedCharacterId = entry.payload['relatedCharacterId'] as String?;
     final relatedLocationId = entry.payload['relatedLocationId'] as String?;
     final relatedEntryIds = entry.payload['relatedEntryIds'];
 
-    final bodyBlocks = entry.bodyBlocks;
+    final bodyBlocks = _parseArchiveBodyBlocks(entry.bodyBlocks);
     final tags = entry.tags;
     final links = entry.links;
     final attachments = entry.attachmentRefs;
 
-    final hasLegacyMetadata = sourceMessageId != null ||
-        relatedActorId != null ||
+    final hasLegacyMetadata =
+        sourceMessageId != null ||
+        relatedCharacterId != null ||
         relatedLocationId != null ||
         relatedEntryIds != null;
 
@@ -510,8 +512,8 @@ class _ArchiveDetailContent extends StatelessWidget {
                   Text(
                     _archiveKindLabel(entry.kind),
                     style: theme.textTheme.labelLarge?.copyWith(
-                          color: colorScheme.onSurface,
-                        ),
+                      color: colorScheme.onSurface,
+                    ),
                   ),
                   const Spacer(),
                   if (entry.pinned)
@@ -534,8 +536,8 @@ class _ArchiveDetailContent extends StatelessWidget {
               Text(
                 entry.summary,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
+                  color: colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
             // Body: structured blocks take precedence; fall back to legacy text.
@@ -543,7 +545,16 @@ class _ArchiveDetailContent extends StatelessWidget {
               const SizedBox(height: 16),
               Text('正文', style: theme.textTheme.labelLarge),
               const SizedBox(height: 6),
-              _BodyBlocksView(blocks: bodyBlocks),
+              Container(
+                key: const Key('archive-detail-body-blocks'),
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: ContentBlockView(blocks: bodyBlocks),
+              ),
             ] else if (legacyBody.isNotEmpty) ...[
               const SizedBox(height: 16),
               Text('正文', style: theme.textTheme.labelLarge),
@@ -592,8 +603,7 @@ class _ArchiveDetailContent extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final att in attachments)
-                    _AttachmentRow(ref: att),
+                  for (final att in attachments) _AttachmentRow(ref: att),
                 ],
               ),
             ],
@@ -610,10 +620,10 @@ class _ArchiveDetailContent extends StatelessWidget {
                       icon: Icons.forum_outlined,
                       label: '来源消息：$sourceMessageId',
                     ),
-                  if (relatedActorId != null)
+                  if (relatedCharacterId != null)
                     _ArchiveMetaChip(
                       icon: Icons.person_outline,
-                      label: '关联角色：$relatedActorId',
+                      label: '关联角色：$relatedCharacterId',
                     ),
                   if (relatedLocationId != null)
                     _ArchiveMetaChip(
@@ -636,8 +646,8 @@ class _ArchiveDetailContent extends StatelessWidget {
               _archiveFooter(entry),
               key: const Key('archive-detail-footer'),
               style: theme.textTheme.labelSmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -646,81 +656,21 @@ class _ArchiveDetailContent extends StatelessWidget {
   }
 }
 
-/// Renders structured body blocks: paragraphs, headings, lists.
-/// Avoids nested cards — keeps each block flat with simple spacing.
-class _BodyBlocksView extends StatelessWidget {
-  const _BodyBlocksView({required this.blocks});
-  final List<Map<String, Object?>> blocks;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Container(
-      key: const Key('archive-detail-body-blocks'),
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final block in blocks) _renderBlock(context, block),
-        ],
-      ),
-    );
-  }
-
-  Widget _renderBlock(BuildContext context, Map<String, Object?> block) {
-    final theme = Theme.of(context);
-    final type = block['type'] as String? ?? 'paragraph';
-    final text = block['text'] as String? ?? '';
-    switch (type) {
-      case 'heading':
-        final level = block['level'] as int? ?? 2;
-        final style = level == 1
-            ? theme.textTheme.titleLarge
-            : level == 2
-                ? theme.textTheme.titleMedium
-                : theme.textTheme.titleSmall;
-        return Padding(
-          padding: const EdgeInsets.only(top: 12, bottom: 4),
-          child: Text(text, style: style),
-        );
-      case 'list':
-        final items = (block['items'] as List?)
-                ?.whereType<String>()
-                .toList(growable: false) ??
-            const <String>[];
-        return Padding(
-          padding: const EdgeInsets.only(top: 4, bottom: 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final item in items)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 1),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('• '),
-                      Expanded(child: Text(item)),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        );
-      case 'paragraph':
-      default:
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Text(text, style: theme.textTheme.bodyMedium),
-        );
+List<ContentBlock> _parseArchiveBodyBlocks(
+  List<Map<String, Object?>> rawBlocks,
+) {
+  final blocks = <ContentBlock>[];
+  for (final raw in rawBlocks) {
+    try {
+      blocks.add(ContentBlock.fromJson(raw));
+    } on Object {
+      final text = raw['text'];
+      if (text is String && text.trim().isNotEmpty) {
+        blocks.add(ParagraphBlock(text: text));
+      }
     }
   }
+  return blocks;
 }
 
 class _ArchiveMetaChip extends StatelessWidget {
@@ -743,8 +693,8 @@ class _ArchiveMetaChip extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
       ],
     );
@@ -784,32 +734,32 @@ class _AttachmentRow extends StatelessWidget {
 }
 
 IconData _archiveIcon(String kind) => switch (kind) {
-      'location' => Icons.place_outlined,
-      'document' => Icons.description_outlined,
-      'file' => Icons.attach_file_outlined,
-      _ => Icons.lightbulb_outline,
-    };
+  'location' => Icons.place_outlined,
+  'document' => Icons.description_outlined,
+  'file' => Icons.attach_file_outlined,
+  _ => Icons.lightbulb_outline,
+};
 
 IconData _linkIcon(String? kind) => switch (kind) {
-      'actor' => Icons.person_outline,
-      'location' => Icons.place_outlined,
-      'document' => Icons.description_outlined,
-      _ => Icons.link,
-    };
+  'character' => Icons.person_outline,
+  'location' => Icons.place_outlined,
+  'document' => Icons.description_outlined,
+  _ => Icons.link,
+};
 
 IconData _attachmentIcon(String kind) => switch (kind) {
-      'image' => Icons.image_outlined,
-      'audio' => Icons.audiotrack_outlined,
-      'video' => Icons.movie_outlined,
-      _ => Icons.attach_file_outlined,
-    };
+  'image' => Icons.image_outlined,
+  'audio' => Icons.audiotrack_outlined,
+  'video' => Icons.movie_outlined,
+  _ => Icons.attach_file_outlined,
+};
 
 String _archiveKindLabel(String kind) => switch (kind) {
-      'location' => '地点',
-      'document' => '文档',
-      'file' => '文件',
-      _ => '线索',
-    };
+  'location' => '地点',
+  'document' => '文档',
+  'file' => '文件',
+  _ => '线索',
+};
 
 String _linkLabel(Map<String, Object?> link) {
   final label = link['label'] as String?;
@@ -833,7 +783,8 @@ Future<void> _showEditForm(
     String? summary,
     List<Map<String, Object?>>? bodyBlocks,
     List<String>? tags,
-  }) onUpdate,
+  })
+  onUpdate,
 ) async {
   await showModalBottomSheet<void>(
     context: context,
@@ -863,10 +814,7 @@ Future<void> _showEditForm(
 }
 
 class _ArchiveEditForm extends StatefulWidget {
-  const _ArchiveEditForm({
-    required this.entry,
-    required this.onSubmit,
-  });
+  const _ArchiveEditForm({required this.entry, required this.onSubmit});
 
   final CampaignArchiveEntry entry;
 
@@ -875,7 +823,8 @@ class _ArchiveEditForm extends StatefulWidget {
     String? summary,
     List<Map<String, Object?>>? bodyBlocks,
     List<String>? tags,
-  }) onSubmit;
+  })
+  onSubmit;
 
   @override
   State<_ArchiveEditForm> createState() => _ArchiveEditFormState();
@@ -927,12 +876,7 @@ class _ArchiveEditFormState extends State<_ArchiveEditForm> {
         .where((line) => line.isNotEmpty)
         .toList(growable: false);
     return lines
-        .map(
-          (line) => <String, Object?>{
-            'type': 'paragraph',
-            'text': line,
-          },
-        )
+        .map((line) => <String, Object?>{'type': 'paragraph', 'text': line})
         .toList(growable: false);
   }
 
@@ -958,9 +902,9 @@ class _ArchiveEditFormState extends State<_ArchiveEditForm> {
     if (success) {
       Navigator.of(context).pop();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('保存失败，请稍后重试')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('保存失败，请稍后重试')));
     }
   }
 
@@ -1016,7 +960,9 @@ class _ArchiveEditFormState extends State<_ArchiveEditForm> {
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               TextButton(
-                onPressed: _submitting ? null : () => Navigator.of(context).pop(),
+                onPressed: _submitting
+                    ? null
+                    : () => Navigator.of(context).pop(),
                 child: const Text('取消'),
               ),
               const SizedBox(width: 8),

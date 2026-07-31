@@ -67,9 +67,11 @@ class CharacterBuilderShell extends StatelessWidget {
                           isExpanded: true,
                           icon: const Icon(Icons.expand_more),
                           items: [
-                            for (var index = 0;
-                                index < destinations.length;
-                                index++)
+                            for (
+                              var index = 0;
+                              index < destinations.length;
+                              index++
+                            )
                               DropdownMenuItem(
                                 value: index,
                                 child: Text(

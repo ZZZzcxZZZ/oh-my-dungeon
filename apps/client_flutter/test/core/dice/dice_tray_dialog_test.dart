@@ -10,7 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// - 修改数量 / 面数 / 修正后表达式预览实时更新
 /// - 多组骰子相加, 表达式合并
 /// - 优势 / 劣势切换后表达式变为 2d20kh1 / 2d20kl1
-/// - 内置预设 (攻击 / 伤害 / 救赎 / 死亡救赎) 填入表达式
+/// - 不显示写死的攻击 / 伤害预设
 /// - 用户自定义预设渲染为按钮
 /// - 发送按钮触发 onSend 回调, 携带正确 notation 与 total
 /// - 非法表达式时发送按钮禁用, 显示错误提示
@@ -28,8 +28,9 @@ void main() {
 
   group('DiceTrayDialog (Task 3.2)', () {
     test('正则验证: 1d20+5 应正确解析', () {
-      final match = RegExp(r'^(\d+)d(\d+)(?:kh1|kl1)?([+-]\d+)?$')
-          .firstMatch('1d20+5');
+      final match = RegExp(
+        r'^(\d+)d(\d+)(?:kh1|kl1)?([+-]\d+)?$',
+      ).firstMatch('1d20+5');
       expect(match, isNotNull, reason: '正则应匹配 1d20+5');
       expect(match!.group(1), '1');
       expect(match.group(2), '20');
@@ -38,12 +39,7 @@ void main() {
 
     testWidgets('默认显示一组 d20 + 修正 0, 表达式预览为 1d20+0', (tester) async {
       await tester.pumpWidget(
-        harness(
-          DiceTrayDialog(
-            diceRoller: fixedRoller(),
-            onSend: (_) {},
-          ),
-        ),
+        harness(DiceTrayDialog(diceRoller: fixedRoller(), onSend: (_) {})),
       );
 
       // 默认应看到表达式预览
@@ -52,33 +48,21 @@ void main() {
 
     testWidgets('修改数量为 2 后表达式变为 2d20+0', (tester) async {
       await tester.pumpWidget(
-        harness(
-          DiceTrayDialog(
-            diceRoller: fixedRoller(),
-            onSend: (_) {},
-          ),
-        ),
+        harness(DiceTrayDialog(diceRoller: fixedRoller(), onSend: (_) {})),
       );
 
-      // 找到第一组数量 dropdown 并展开
-      await tester.tap(find.byType(DropdownButton<int>).first);
-      await tester.pumpAndSettle();
-
-      // 选择 2
-      await tester.tap(find.text('2').last);
-      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('dice-tray-count-0')),
+        '2',
+      );
+      await tester.pump();
 
       expect(find.textContaining('2d20'), findsOneWidget);
     });
 
     testWidgets('添加骰子组后表达式合并显示 +', (tester) async {
       await tester.pumpWidget(
-        harness(
-          DiceTrayDialog(
-            diceRoller: fixedRoller(),
-            onSend: (_) {},
-          ),
-        ),
+        harness(DiceTrayDialog(diceRoller: fixedRoller(), onSend: (_) {})),
       );
 
       // 点击「加骰子组」按钮
@@ -91,12 +75,7 @@ void main() {
 
     testWidgets('优势模式切换后表达式变为 2d20kh1+修正', (tester) async {
       await tester.pumpWidget(
-        harness(
-          DiceTrayDialog(
-            diceRoller: fixedRoller(),
-            onSend: (_) {},
-          ),
-        ),
+        harness(DiceTrayDialog(diceRoller: fixedRoller(), onSend: (_) {})),
       );
 
       // 点击「优势」分段按钮
@@ -108,12 +87,7 @@ void main() {
 
     testWidgets('劣势模式切换后表达式变为 2d20kl1+修正', (tester) async {
       await tester.pumpWidget(
-        harness(
-          DiceTrayDialog(
-            diceRoller: fixedRoller(),
-            onSend: (_) {},
-          ),
-        ),
+        harness(DiceTrayDialog(diceRoller: fixedRoller(), onSend: (_) {})),
       );
 
       await tester.tap(find.text('劣势'));
@@ -122,23 +96,14 @@ void main() {
       expect(find.textContaining('2d20kl1'), findsOneWidget);
     });
 
-    testWidgets('内置预设按钮填入对应表达式', (tester) async {
+    testWidgets('不显示写死的攻击和伤害预设', (tester) async {
       await tester.pumpWidget(
-        harness(
-          DiceTrayDialog(
-            diceRoller: fixedRoller(),
-            onSend: (_) {},
-          ),
-        ),
+        harness(DiceTrayDialog(diceRoller: fixedRoller(), onSend: (_) {})),
       );
 
-      // 点击「攻击」预设 (1d20+5). 用 byKey 定位避免 tap 坐标问题.
-      final attackButton = find.byKey(const ValueKey('dice-tray-builtin-攻击'));
-      await tester.ensureVisible(attackButton);
-      await tester.tap(attackButton, warnIfMissed: false);
-      await tester.pumpAndSettle();
-
-      expect(find.textContaining('1d20+5'), findsOneWidget);
+      expect(find.text('攻击'), findsNothing);
+      expect(find.text('伤害'), findsNothing);
+      expect(find.text('救赎'), findsNothing);
     });
 
     testWidgets('用户自定义预设渲染为按钮', (tester) async {
@@ -195,13 +160,15 @@ void main() {
         harness(
           DiceTrayDialog(
             diceRoller: fixedRoller(),
+            quickPresets: const ['1d20+5'],
             onSend: (result) => captured = result,
           ),
         ),
       );
 
-      // 选择「攻击」预设 (1d20+5)
-      final attackButton = find.byKey(const ValueKey('dice-tray-builtin-攻击'));
+      final attackButton = find.byKey(
+        const ValueKey('dice-tray-preset-1d20+5'),
+      );
       await tester.ensureVisible(attackButton);
       await tester.tap(attackButton, warnIfMissed: false);
       await tester.pumpAndSettle();
@@ -224,13 +191,15 @@ void main() {
         harness(
           DiceTrayDialog(
             diceRoller: fixedRoller(),
+            quickPresets: const ['1d20+5'],
             onSend: (result) => captured = result,
           ),
         ),
       );
 
-      // 选择攻击预设 (1d20+5 = 25)
-      final attackButton = find.byKey(const ValueKey('dice-tray-builtin-攻击'));
+      final attackButton = find.byKey(
+        const ValueKey('dice-tray-preset-1d20+5'),
+      );
       await tester.ensureVisible(attackButton);
       await tester.tap(attackButton, warnIfMissed: false);
       await tester.pumpAndSettle();
@@ -254,13 +223,15 @@ void main() {
         harness(
           DiceTrayDialog(
             diceRoller: fixedRoller(),
+            quickPresets: const ['1d20+5'],
             onSend: (result) => captured = result,
           ),
         ),
       );
 
-      // 选择攻击预设 (1d20+5 = 25)
-      final attackButton = find.byKey(const ValueKey('dice-tray-builtin-攻击'));
+      final attackButton = find.byKey(
+        const ValueKey('dice-tray-preset-1d20+5'),
+      );
       await tester.ensureVisible(attackButton);
       await tester.tap(attackButton, warnIfMissed: false);
       await tester.pumpAndSettle();
@@ -280,15 +251,10 @@ void main() {
 
     testWidgets('删除骰子组后表达式只保留剩余组', (tester) async {
       await tester.pumpWidget(
-        harness(
-          DiceTrayDialog(
-            diceRoller: fixedRoller(),
-            onSend: (_) {},
-          ),
-        ),
+        harness(DiceTrayDialog(diceRoller: fixedRoller(), onSend: (_) {})),
       );
 
-      // 加一组 (默认 1 组, 加后 2 组, 每组 3 个 dropdown = 6 个)
+      // 加一组后删除第一组。
       await tester.tap(find.byKey(DiceTrayDialog.addGroupKey));
       await tester.pumpAndSettle();
 
@@ -296,18 +262,13 @@ void main() {
       await tester.tap(find.byKey(DiceTrayDialog.removeGroupKey(0)));
       await tester.pumpAndSettle();
 
-      // 应只剩一组 = 3 个 dropdown
-      expect(find.byType(DropdownButton<int>), findsNWidgets(3));
+      expect(find.byKey(const ValueKey('dice-tray-count-0')), findsOneWidget);
+      expect(find.byKey(const ValueKey('dice-tray-count-1')), findsNothing);
     });
 
     testWidgets('只有一组时删除按钮禁用', (tester) async {
       await tester.pumpWidget(
-        harness(
-          DiceTrayDialog(
-            diceRoller: fixedRoller(),
-            onSend: (_) {},
-          ),
-        ),
+        harness(DiceTrayDialog(diceRoller: fixedRoller(), onSend: (_) {})),
       );
 
       // 只有一组时, 删除按钮应禁用 (onPressed 为 null)
@@ -319,21 +280,15 @@ void main() {
 
     testWidgets('解析失败时发送按钮禁用并显示错误', (tester) async {
       await tester.pumpWidget(
-        harness(
-          DiceTrayDialog(
-            diceRoller: fixedRoller(),
-            onSend: (_) {},
-          ),
-        ),
+        harness(DiceTrayDialog(diceRoller: fixedRoller(), onSend: (_) {})),
       );
 
-      // 把数量改成 0 (非法表达式 0d20+0). 直接调用 dropdown 的 onChanged 回调,
-      // 绕过 overlay 在 widget test 中的遮挡问题.
-      final countDropdown = tester.widget<DropdownButton<int>>(
+      // 把数量改成 0 (非法表达式 0d20).
+      await tester.enterText(
         find.byKey(const ValueKey('dice-tray-count-0')),
+        '0',
       );
-      countDropdown.onChanged!(0);
-      await tester.pumpAndSettle();
+      await tester.pump();
 
       // 发送按钮应禁用
       await tester.ensureVisible(find.byKey(DiceTrayDialog.sendKey));
@@ -341,6 +296,87 @@ void main() {
         find.byKey(DiceTrayDialog.sendKey),
       );
       expect(sendButton.onPressed, isNull);
+    });
+
+    testWidgets('数量和加值支持直接输入任意整数', (tester) async {
+      await tester.pumpWidget(
+        harness(DiceTrayDialog(diceRoller: fixedRoller(), onSend: (_) {})),
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('dice-tray-count-0')),
+        '12',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('dice-tray-modifier-0')),
+        '17',
+      );
+      await tester.pump();
+
+      expect(find.textContaining('12d20+17'), findsOneWidget);
+    });
+
+    testWidgets('骰面使用单选控件并更新组合表达式', (tester) async {
+      await tester.pumpWidget(
+        harness(DiceTrayDialog(diceRoller: fixedRoller(), onSend: (_) {})),
+      );
+
+      expect(find.byKey(const ValueKey('dice-tray-sides-20')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('dice-tray-sides-8')));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('1d8'), findsOneWidget);
+      expect(find.byType(DropdownButton<int>), findsNothing);
+    });
+
+    testWidgets('可选择 character 目标并随结果返回', (tester) async {
+      DiceTrayResult? captured;
+      await tester.pumpWidget(
+        harness(
+          DiceTrayDialog(
+            diceRoller: fixedRoller(),
+            characterTargets: const [
+              DiceTrayCharacterTarget(id: 'character-1', name: '艾尔'),
+              DiceTrayCharacterTarget(id: 'character-2', name: '林恩'),
+            ],
+            onSend: (result) => captured = result,
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(DiceTrayDialog.characterTargetKey));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('林恩').last);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(DiceTrayDialog.sendKey));
+      await tester.tap(find.byKey(DiceTrayDialog.sendKey));
+      await tester.pumpAndSettle();
+
+      expect(captured?.characterId, 'character-2');
+      expect(captured?.characterName, '林恩');
+      expect(find.textContaining('actor'), findsNothing);
+    });
+
+    testWidgets('组合骰在 320 逻辑像素宽度下不溢出', (tester) async {
+      tester.view.physicalSize = const Size(320, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        harness(
+          DiceTrayDialog(
+            diceRoller: fixedRoller(),
+            characterTargets: const [
+              DiceTrayCharacterTarget(id: 'character-1', name: '名称很长的测试角色'),
+            ],
+            onSend: (_) {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
     });
   });
 }

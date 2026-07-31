@@ -7,24 +7,28 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/content_test_support.dart';
 
 Widget _buildApp(List<ContentEntry> entries) => MaterialApp(
-      home: ContentLibraryPage(
-        controller: ContentLibraryController(
-          repository: MemoryContentRepository(initialEntries: entries),
-        ),
-        onImportRequested: () {},
-      ),
-    );
+  home: ContentLibraryPage(
+    controller: ContentLibraryController(
+      repository: MemoryContentRepository(initialEntries: entries),
+    ),
+    onImportRequested: () {},
+  ),
+);
 
-ContentEntry _entry(String id, String type, String name, Map<String, Object?> structured) =>
-    ContentEntry.fromJson({
-      'id': id,
-      'type': type,
-      'slug': id.split('/').last,
-      'name': name,
-      'body': <Map<String, Object?>>[],
-      'revision': 1,
-      'structured': structured,
-    });
+ContentEntry _entry(
+  String id,
+  String type,
+  String name,
+  Map<String, Object?> structured,
+) => ContentEntry.fromJson({
+  'id': id,
+  'type': type,
+  'slug': id.split('/').last,
+  'name': name,
+  'body': <Map<String, Object?>>[],
+  'revision': 1,
+  'structured': structured,
+});
 
 void main() {
   group('facet fields extension (Task 2.3)', () {
@@ -67,7 +71,9 @@ void main() {
       );
     });
 
-    testWidgets('background type exposes skillProficiencies facet', (tester) async {
+    testWidgets('background type exposes skillProficiencies facet', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _buildApp([
           _entry('example:background/sage', 'background', '贤者', {
@@ -131,15 +137,13 @@ void main() {
       );
     });
 
-    testWidgets('rule type exposes category facet', (tester) async {
+    testWidgets('rule and equipment bundle are not exposed as categories', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _buildApp([
-          _entry('example:rule/combat', 'rule', '战斗规则', {
-            'category': '战斗',
-          }),
-          _entry('example:rule/magic', 'rule', '魔法规则', {
-            'category': '魔法',
-          }),
+          _entry('example:rule/combat', 'rule', '战斗规则', {'category': '战斗'}),
+          _entry('example:rule/magic', 'rule', '魔法规则', {'category': '魔法'}),
         ]),
       );
       await tester.pumpAndSettle();
@@ -147,19 +151,14 @@ void main() {
       await tester.tap(find.byKey(const Key('content-filter-button')));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('规则').last);
-      await tester.pumpAndSettle();
-      await tester.pump();
-      await tester.pumpAndSettle();
-
       final sheet = find.byType(BottomSheet);
       expect(
-        find.descendant(of: sheet, matching: find.text('分类')),
-        findsOneWidget,
+        find.descendant(of: sheet, matching: find.text('规则')),
+        findsNothing,
       );
       expect(
-        find.descendant(of: sheet, matching: find.textContaining('战斗')),
-        findsWidgets,
+        find.descendant(of: sheet, matching: find.text('装备方案')),
+        findsNothing,
       );
     });
   });

@@ -2,10 +2,10 @@ import 'dart:convert';
 
 import 'package:dnd_table_client/src/core/database/app_database.dart';
 import 'package:dnd_table_client/src/features/campaigns/data/local/campaign_cache_repository.dart';
-import 'package:dnd_table_client/src/features/campaigns/data/sync/campaign_actor_backlink_service.dart';
+import 'package:dnd_table_client/src/features/campaigns/data/sync/campaign_character_backlink_service.dart';
 import 'package:dnd_table_client/src/features/campaigns/data/sync/campaign_sync_api_client.dart';
 import 'package:dnd_table_client/src/features/campaigns/data/sync/campaign_sync_service.dart';
-import 'package:dnd_table_client/src/features/campaigns/domain/campaign_actor.dart';
+import 'package:dnd_table_client/src/features/campaigns/domain/campaign_character.dart';
 import 'package:dnd_table_client/src/features/campaigns/domain/campaign_change.dart';
 import 'package:dnd_table_client/src/features/characters/data/local/drift_character_repository.dart';
 import 'package:dnd_table_client/src/features/characters/data/local/character_sync_conflict_repository.dart';
@@ -54,9 +54,9 @@ CampaignChange _contentChange({
   );
 }
 
-CampaignChange _actorChange({
+CampaignChange _characterChange({
   required String changeId,
-  required String actorId,
+  required String characterId,
   required String cursor,
   String? ownerUserId,
   String? sourceCharacterId,
@@ -67,17 +67,17 @@ CampaignChange _actorChange({
     id: changeId,
     campaignId: _campaignId,
     cursor: cursor,
-    entityType: 'actor',
-    entityId: actorId,
+    entityType: 'character',
+    entityId: characterId,
     operation: 'upsert',
     revision: revision,
     createdAt: '2026-01-01T00:00:00.000Z',
     entity: {
-      'id': actorId,
+      'id': characterId,
       'campaignId': _campaignId,
       'ownerUserId': ownerUserId,
       'sourceCharacterId': sourceCharacterId,
-      'actorType': 'player',
+      'characterType': 'player',
       'status': 'active',
       'sheet': sheet ?? {'name': 'Hero', 'currentHp': 10, 'maxHp': 20},
       'revision': revision,
@@ -122,7 +122,7 @@ void main() {
           ),
         ],
       );
-      final backlinkService = CampaignActorBacklinkService(
+      final backlinkService = CampaignCharacterBacklinkService(
         characterRepository: DriftCharacterRepository(database),
         database: database,
       );
@@ -152,7 +152,7 @@ void main() {
       expect(await cacheRepository.cursorFor(_campaignId), '2');
     });
 
-    test('processes actor backlinks for owned actors', () async {
+    test('processes character backlinks for owned characters', () async {
       final database = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(database.close);
       final characterRepository = DriftCharacterRepository(database);
@@ -165,9 +165,9 @@ void main() {
         changePages: [
           CampaignChangePage(
             items: [
-              _actorChange(
+              _characterChange(
                 changeId: 'c1',
-                actorId: 'actor-1',
+                characterId: 'character-1',
                 cursor: '1',
                 ownerUserId: _userId,
                 sourceCharacterId: 'char-1',
@@ -186,7 +186,7 @@ void main() {
           ),
         ],
       );
-      final backlinkService = CampaignActorBacklinkService(
+      final backlinkService = CampaignCharacterBacklinkService(
         characterRepository: characterRepository,
         database: database,
       );
@@ -214,11 +214,12 @@ void main() {
       expect(updated.classSummary, '战士');
       expect(updated.notes, 'DM note');
       // Backlink row should record the applied revision.
-      final backlinkRow = await (database.select(
-        database.campaignActorBacklinks,
-      )..where((t) => t.campaignActorId.equals('actor-1'))).getSingleOrNull();
+      final backlinkRow =
+          await (database.select(database.campaignCharacterBacklinks)
+                ..where((t) => t.campaignCharacterId.equals('character-1')))
+              .getSingleOrNull();
       expect(backlinkRow, isNotNull);
-      expect(backlinkRow!.lastAppliedActorRevision, 1);
+      expect(backlinkRow!.lastAppliedCharacterRevision, 1);
     });
 
     test('records a conflict after the local character changed', () async {
@@ -228,15 +229,15 @@ void main() {
       await characterRepository.save(
         CharacterSheet.local(id: 'char-1', name: 'Hero', level: 1),
       );
-      final backlinkService = CampaignActorBacklinkService(
+      final backlinkService = CampaignCharacterBacklinkService(
         characterRepository: characterRepository,
         database: database,
       );
-      await backlinkService.applyPublishedActorToCharacter(
-        CampaignActor.fromJson(
-          _actorChange(
+      await backlinkService.applyPublishedCharacterToCharacter(
+        CampaignCharacter.fromJson(
+          _characterChange(
             changeId: 'c1',
-            actorId: 'actor-1',
+            characterId: 'character-1',
             cursor: '1',
             ownerUserId: _userId,
             sourceCharacterId: 'char-1',
@@ -249,11 +250,11 @@ void main() {
         local!.copyWith(abilities: const {'str': 18}),
       );
 
-      await backlinkService.applyActorToCharacter(
-        CampaignActor.fromJson(
-          _actorChange(
+      await backlinkService.applyCharacterToCharacter(
+        CampaignCharacter.fromJson(
+          _characterChange(
             changeId: 'c2',
-            actorId: 'actor-1',
+            characterId: 'character-1',
             cursor: '2',
             ownerUserId: _userId,
             sourceCharacterId: 'char-1',
@@ -272,11 +273,11 @@ void main() {
       expect(conflicts, hasLength(1));
       expect(conflicts.single.remoteValueJson, contains('"revision":2'));
 
-      await backlinkService.applyActorToCharacter(
-        CampaignActor.fromJson(
-          _actorChange(
+      await backlinkService.applyCharacterToCharacter(
+        CampaignCharacter.fromJson(
+          _characterChange(
             changeId: 'c3',
-            actorId: 'actor-1',
+            characterId: 'character-1',
             cursor: '3',
             ownerUserId: _userId,
             sourceCharacterId: 'char-1',
@@ -307,14 +308,14 @@ void main() {
         level: 1,
       ).copyWith(abilities: const {'str': 18});
       await characterRepository.save(local);
-      final backlinkService = CampaignActorBacklinkService(
+      final backlinkService = CampaignCharacterBacklinkService(
         characterRepository: characterRepository,
         database: database,
       );
       final conflict = CharacterSyncConflict(
         id: 'conflict-1',
         characterId: 'char-1',
-        campaignActorId: 'actor-1',
+        campaignCharacterId: 'character-1',
         fieldPath: 'build',
         localValueJson: jsonEncode(local.toJson()),
         remoteValueJson: jsonEncode({
@@ -333,9 +334,9 @@ void main() {
         12,
       );
       final backlink = await database
-          .select(database.campaignActorBacklinks)
+          .select(database.campaignCharacterBacklinks)
           .getSingle();
-      expect(backlink.lastAppliedActorRevision, 7);
+      expect(backlink.lastAppliedCharacterRevision, 7);
     });
 
     test('401 response returns paused result and keeps cursor', () async {
@@ -348,7 +349,7 @@ void main() {
           statusCode: 401,
         ),
       );
-      final backlinkService = CampaignActorBacklinkService(
+      final backlinkService = CampaignCharacterBacklinkService(
         characterRepository: DriftCharacterRepository(database),
         database: database,
       );
@@ -380,7 +381,7 @@ void main() {
           statusCode: 403,
         ),
       );
-      final backlinkService = CampaignActorBacklinkService(
+      final backlinkService = CampaignCharacterBacklinkService(
         characterRepository: DriftCharacterRepository(database),
         database: database,
       );
@@ -409,7 +410,7 @@ void main() {
       final apiClient = MemoryCampaignSyncApiClient(
         listChangesException: Exception('Network error'),
       );
-      final backlinkService = CampaignActorBacklinkService(
+      final backlinkService = CampaignCharacterBacklinkService(
         characterRepository: DriftCharacterRepository(database),
         database: database,
       );

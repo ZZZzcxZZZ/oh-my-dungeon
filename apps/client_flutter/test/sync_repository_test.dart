@@ -36,8 +36,8 @@ void main() {
     const operation = SyncOperation(
       id: 'op-2',
       scope: 'campaign',
-      entityType: 'actor',
-      entityId: 'actor-1',
+      entityType: 'character',
+      entityId: 'character-1',
       baseRevision: 0,
       payloadJson: '{}',
     );

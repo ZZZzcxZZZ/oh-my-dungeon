@@ -11,12 +11,12 @@ void main() {
     test('groups adjacent ordinary messages from the same speaker', () {
       final first = _message(
         id: '1',
-        actorId: 'actor-1',
+        characterId: 'character-1',
         createdAt: '2026-07-22T10:00:00Z',
       );
       final second = _message(
         id: '2',
-        actorId: 'actor-1',
+        characterId: 'character-1',
         createdAt: '2026-07-22T10:03:00Z',
       );
 
@@ -34,12 +34,12 @@ void main() {
     test('keeps every avatar when message grouping is disabled', () {
       final first = _message(
         id: '1',
-        actorId: 'actor-1',
+        characterId: 'character-1',
         createdAt: '2026-07-22T10:00:00Z',
       );
       final second = _message(
         id: '2',
-        actorId: 'actor-1',
+        characterId: 'character-1',
         createdAt: '2026-07-22T10:01:00Z',
       );
 
@@ -53,15 +53,15 @@ void main() {
       expect(presentation.showIdentity, isTrue);
     });
 
-    test('starts a new group when the active actor changes', () {
+    test('starts a new group when the active character changes', () {
       final first = _message(
         id: '1',
-        actorId: 'actor-1',
+        characterId: 'character-1',
         createdAt: '2026-07-22T10:00:00Z',
       );
       final second = _message(
         id: '2',
-        actorId: 'actor-2',
+        characterId: 'character-2',
         createdAt: '2026-07-22T10:01:00Z',
       );
 
@@ -78,12 +78,12 @@ void main() {
     test('starts a new group and time section after ten minutes', () {
       final first = _message(
         id: '1',
-        actorId: 'actor-1',
+        characterId: 'character-1',
         createdAt: '2026-07-22T10:00:00Z',
       );
       final second = _message(
         id: '2',
-        actorId: 'actor-1',
+        characterId: 'character-1',
         createdAt: '2026-07-22T10:10:00Z',
       );
 
@@ -101,12 +101,12 @@ void main() {
     test('event messages never merge into ordinary speaker groups', () {
       final previous = _message(
         id: '1',
-        actorId: 'actor-1',
+        characterId: 'character-1',
         createdAt: '2026-07-22T10:00:00Z',
       );
       final event = _message(
         id: '2',
-        actorId: 'actor-1',
+        characterId: 'character-1',
         kind: 'roll',
         createdAt: '2026-07-22T10:01:00Z',
       );
@@ -130,13 +130,13 @@ void main() {
         messages: [
           _message(
             id: 'other',
-            actorId: 'actor-2',
+            characterId: 'character-2',
             senderId: 'user-2',
             createdAt: '2026-07-22T10:00:00Z',
           ),
           _message(
             id: 'own',
-            actorId: 'actor-1',
+            characterId: 'character-1',
             createdAt: '2026-07-22T10:01:00Z',
           ),
         ],
@@ -156,46 +156,47 @@ void main() {
       );
     });
 
-    testWidgets('anchors actor rows to opposite edges on a phone viewport', (
-      tester,
-    ) async {
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(390, 844);
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+    testWidgets(
+      'anchors character rows to opposite edges on a phone viewport',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(390, 844);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
 
-      await _pumpTimeline(
-        tester,
-        messages: [
-          _message(
-            id: 'other',
-            actorId: 'other-actor',
-            senderId: 'user-2',
-            createdAt: '2026-07-22T10:00:00Z',
-          ),
-          _message(
-            id: 'own',
-            actorId: 'own-actor',
-            createdAt: '2026-07-22T10:01:00Z',
-          ),
-        ],
-      );
+        await _pumpTimeline(
+          tester,
+          messages: [
+            _message(
+              id: 'other',
+              characterId: 'other-character',
+              senderId: 'user-2',
+              createdAt: '2026-07-22T10:00:00Z',
+            ),
+            _message(
+              id: 'own',
+              characterId: 'own-character',
+              createdAt: '2026-07-22T10:01:00Z',
+            ),
+          ],
+        );
 
-      final otherAvatar = find.descendant(
-        of: find.byKey(const Key('message-align-other')),
-        matching: find.byType(CampaignAvatar),
-      );
-      final ownAvatar = find.descendant(
-        of: find.byKey(const Key('message-align-own')),
-        matching: find.byType(CampaignAvatar),
-      );
-      final otherRect = tester.getRect(otherAvatar);
-      final ownRect = tester.getRect(ownAvatar);
+        final otherAvatar = find.descendant(
+          of: find.byKey(const Key('message-align-other')),
+          matching: find.byType(CampaignAvatar),
+        );
+        final ownAvatar = find.descendant(
+          of: find.byKey(const Key('message-align-own')),
+          matching: find.byType(CampaignAvatar),
+        );
+        final otherRect = tester.getRect(otherAvatar);
+        final ownRect = tester.getRect(ownAvatar);
 
-      expect(otherRect.left, lessThanOrEqualTo(16));
-      expect(ownRect.right, greaterThanOrEqualTo(374));
-      expect(tester.takeException(), isNull);
-    });
+        expect(otherRect.left, lessThanOrEqualTo(16));
+        expect(ownRect.right, greaterThanOrEqualTo(374));
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets('hides repeated identity for an adjacent speaker group', (
       tester,
@@ -205,12 +206,12 @@ void main() {
         messages: [
           _message(
             id: 'first',
-            actorId: 'actor-1',
+            characterId: 'character-1',
             createdAt: '2026-07-22T10:00:00Z',
           ),
           _message(
             id: 'second',
-            actorId: 'actor-1',
+            characterId: 'character-1',
             createdAt: '2026-07-22T10:01:00Z',
           ),
         ],
@@ -242,12 +243,12 @@ void main() {
         messages: [
           _message(
             id: 'first',
-            actorId: 'actor-1',
+            characterId: 'character-1',
             createdAt: '2026-07-22T10:00:00Z',
           ),
           _message(
             id: 'second',
-            actorId: 'actor-1',
+            characterId: 'character-1',
             createdAt: '2026-07-22T10:01:00Z',
           ),
         ],
@@ -267,7 +268,7 @@ void main() {
         messages: [
           _message(
             id: 'check',
-            actorId: 'actor-1',
+            characterId: 'character-1',
             kind: 'checkRequest',
             createdAt: '2026-07-22T10:00:00Z',
           ),
@@ -295,7 +296,7 @@ void main() {
           messages: [
             _message(
               id: 'narration',
-              actorId: 'narrator',
+              characterId: 'narrator',
               speakerMode: 'narrator',
               createdAt: '2026-07-22T10:00:00Z',
             ),
@@ -331,7 +332,7 @@ void main() {
               for (var index = 0; index < 30; index++)
                 _message(
                   id: index == 29 ? 'latest-message' : 'message-$index',
-                  actorId: '一位拥有非常非常长名称的角色-$index-without-spaces',
+                  characterId: '一位拥有非常非常长名称的角色-$index-without-spaces',
                   createdAt:
                       '2026-07-22T10:${index.toString().padLeft(2, '0')}:00Z',
                 ),
@@ -374,18 +375,18 @@ Future<void> _pumpTimeline(
 
 CampaignChatMessage _message({
   required String id,
-  required String actorId,
+  required String characterId,
   required String createdAt,
   String kind = 'say',
   String senderId = 'user-1',
-  String speakerMode = 'actor',
+  String speakerMode = 'character',
 }) {
   return CampaignChatMessage(
     id: id,
     campaignId: 'campaign-1',
     senderId: senderId,
-    campaignActorId: actorId,
-    displayName: actorId,
+    campaignCharacterId: characterId,
+    displayName: characterId,
     avatarUrl: null,
     speakerMode: speakerMode,
     kind: kind,

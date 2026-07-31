@@ -74,25 +74,17 @@ void main() {
     controller.dispose();
   });
 
-  test('updates lightweight content refs on a character', () async {
+  test('deletes a local character', () async {
     final repository = MemoryCharacterRepository(initial: [_character]);
     final controller = CharacterController(repository: repository);
     await drainStream();
 
-    final ok = await controller.updateContentRefs(
-      characterId: 'char-1',
-      spells: const ['spell-1'],
-      items: const ['item-1'],
-      features: const ['feature-1'],
-    );
+    final ok = await controller.deleteCharacter('char-1');
+    await drainStream();
 
     expect(ok, isTrue);
-    final stored = await repository.getById('char-1');
-    expect(stored?.dataMap['contentRefs'], {
-      'spells': ['spell-1'],
-      'items': ['item-1'],
-      'features': ['feature-1'],
-    });
+    expect(await repository.getById('char-1'), isNull);
+    expect(controller.characters, isEmpty);
 
     controller.dispose();
   });

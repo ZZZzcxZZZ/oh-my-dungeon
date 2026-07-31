@@ -87,13 +87,28 @@ class ConversationController extends ChangeNotifier {
   /// campaign's conversations. If the active conversation is not present in
   /// the new list (e.g. the user left the campaign), it is reset to main.
   Future<void> loadConversations(String campaignId) async {
+    await _fetchConversations(campaignId, exposeLoading: true);
+  }
+
+  /// Refreshes only the conversation directory without replacing the page
+  /// with a loading state. The current conversation remains selected whenever
+  /// it is still returned by the server.
+  Future<void> refreshConversations(String campaignId) async {
+    if (_activeCampaignId != campaignId) return;
+    await _fetchConversations(campaignId, exposeLoading: false);
+  }
+
+  Future<void> _fetchConversations(
+    String campaignId, {
+    required bool exposeLoading,
+  }) async {
     final token = await authController.ensureValidAccessToken();
     if (token == null) return;
 
     _activeCampaignId = campaignId;
-    _loading = true;
+    if (exposeLoading) _loading = true;
     _error = null;
-    notifyListeners();
+    if (exposeLoading) notifyListeners();
 
     try {
       _conversations = await campaignClient.listConversations(
@@ -104,8 +119,7 @@ class ConversationController extends ChangeNotifier {
       // Preserve active selection only if still present; otherwise fall back
       // to main (which is always present for an active campaign member).
       final activeId = _activeConversationId;
-      if (activeId != null &&
-          !_conversations.any((c) => c.id == activeId)) {
+      if (activeId != null && !_conversations.any((c) => c.id == activeId)) {
         _activeConversationId = null;
       }
     } on CampaignApiException catch (e) {
@@ -114,7 +128,7 @@ class ConversationController extends ChangeNotifier {
       _error = 'Failed to load conversations';
     }
 
-    _loading = false;
+    if (exposeLoading) _loading = false;
     notifyListeners();
   }
 

@@ -75,6 +75,10 @@ class AppPreferencesController extends ChangeNotifier {
     return _save(_preferences.copyWith(groupConsecutiveChatMessages: value));
   }
 
+  Future<void> setReturnToChatAfterRoll(bool value) {
+    return _save(_preferences.copyWith(returnToChatAfterRoll: value));
+  }
+
   /// Task 1.3 新增自定义项 setter。
   Future<void> setDefaultRollMode(String value) {
     final normalized = switch (value) {
@@ -86,8 +90,9 @@ class AppPreferencesController extends ChangeNotifier {
 
   Future<void> setQuickDicePresets(List<String> presets) {
     // 限制最多 6 个，超出按顺序截断（参考 D&D Beyond / Foundry dice tray）。
-    final clamped =
-        presets.length > 6 ? presets.sublist(0, 6) : List<String>.of(presets);
+    final clamped = presets.length > 6
+        ? presets.sublist(0, 6)
+        : List<String>.of(presets);
     return _save(_preferences.copyWith(quickDicePresets: clamped));
   }
 
@@ -109,9 +114,7 @@ class AppPreferencesController extends ChangeNotifier {
 
   Future<void> setHpWarningThreshold(double value) {
     // 0.0..1.0 之外做钳制（默认 0.3），控制头像生命环警告色变化。
-    final clamped = value < 0.0
-        ? 0.0
-        : (value > 1.0 ? 1.0 : value);
+    final clamped = value < 0.0 ? 0.0 : (value > 1.0 ? 1.0 : value);
     return _save(_preferences.copyWith(hpWarningThreshold: clamped));
   }
 

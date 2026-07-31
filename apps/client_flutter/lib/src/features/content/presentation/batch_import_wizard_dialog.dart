@@ -62,10 +62,7 @@ class _BatchImportWizardDialogState extends State<BatchImportWizardDialog> {
           entryCount: 0,
           entries: const [],
           errors: [
-            ContentValidationError(
-              path: file.name,
-              message: error.message,
-            ),
+            ContentValidationError(path: file.name, message: error.message),
           ],
           assets: const {},
           contentHash: '',
@@ -81,12 +78,7 @@ class _BatchImportWizardDialogState extends State<BatchImportWizardDialog> {
           system: '',
           entryCount: 0,
           entries: const [],
-          errors: [
-            ContentValidationError(
-              path: file.name,
-              message: '$error',
-            ),
-          ],
+          errors: [ContentValidationError(path: file.name, message: '$error')],
           assets: const {},
           contentHash: '',
         );
@@ -114,9 +106,7 @@ class _BatchImportWizardDialogState extends State<BatchImportWizardDialog> {
       }
     }
     if (!mounted) return;
-    messenger.showSnackBar(
-      SnackBar(content: Text('已导入 $imported 个资料包')),
-    );
+    messenger.showSnackBar(SnackBar(content: Text('已导入 $imported 个资料包')));
     navigator.pop();
   }
 
@@ -124,7 +114,9 @@ class _BatchImportWizardDialogState extends State<BatchImportWizardDialog> {
     setState(() {
       _selectedIndex
         ..clear()
-        ..addAll(_reports.entries.where((e) => e.value.valid).map((e) => e.key));
+        ..addAll(
+          _reports.entries.where((e) => e.value.valid).map((e) => e.key),
+        );
     });
   }
 
@@ -174,14 +166,8 @@ class _BatchImportWizardDialogState extends State<BatchImportWizardDialog> {
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: _selectAll,
-          child: const Text('全选'),
-        ),
-        TextButton(
-          onPressed: _deselectAll,
-          child: const Text('取消全选'),
-        ),
+        TextButton(onPressed: _selectAll, child: const Text('全选')),
+        TextButton(onPressed: _deselectAll, child: const Text('取消全选')),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('取消'),
@@ -239,9 +225,7 @@ class _PreviewCard extends StatelessWidget {
                       Icon(
                         valid ? Icons.check_circle : Icons.error_outline,
                         size: 18,
-                        color: valid
-                            ? colorScheme.primary
-                            : colorScheme.error,
+                        color: valid ? colorScheme.primary : colorScheme.error,
                       ),
                     ],
                   ),

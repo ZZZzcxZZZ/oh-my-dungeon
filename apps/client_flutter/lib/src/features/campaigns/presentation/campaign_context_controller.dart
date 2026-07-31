@@ -70,7 +70,7 @@ class CampaignContextController extends ChangeNotifier {
   Future<bool> updateSpeaker({
     required String campaignId,
     required String speakerMode,
-    String? actorId,
+    String? characterId,
   }) async {
     final token = await authController.ensureValidAccessToken();
     if (token == null) return false;
@@ -81,7 +81,7 @@ class CampaignContextController extends ChangeNotifier {
         accessToken: token,
         campaignId: campaignId,
         speakerMode: speakerMode,
-        actorId: actorId,
+        characterId: characterId,
       );
       final context = _workspaceContext;
       if (context != null) {
@@ -93,6 +93,40 @@ class CampaignContextController extends ChangeNotifier {
       _workspaceContextError = error.message;
     } catch (_) {
       _workspaceContextError = 'Failed to update campaign speaker';
+    }
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> updateMemberBinding({
+    required String campaignId,
+    required String? characterId,
+  }) async {
+    final token = await authController.ensureValidAccessToken();
+    final context = _workspaceContext;
+    if (token == null ||
+        context == null ||
+        campaignClient is! CampaignBindingClient) {
+      return false;
+    }
+    final bindingClient = campaignClient as CampaignBindingClient;
+
+    _workspaceContextError = null;
+    try {
+      final membership = await bindingClient.updateMemberBinding(
+        apiBaseUrl: apiBaseUrl,
+        accessToken: token,
+        campaignId: campaignId,
+        userId: context.membership.userId,
+        characterId: characterId,
+      );
+      _workspaceContext = context.copyWith(membership: membership);
+      notifyListeners();
+      return true;
+    } on CampaignApiException catch (error) {
+      _workspaceContextError = error.message;
+    } catch (_) {
+      _workspaceContextError = '绑定角色失败';
     }
     notifyListeners();
     return false;

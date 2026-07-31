@@ -43,6 +43,8 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
   static const _messageDensityKey = 'app_preferences.message_density';
   static const _fontScaleKey = 'app_preferences.font_scale';
   static const _hpWarningThresholdKey = 'app_preferences.hp_warning_threshold';
+  static const _returnToChatAfterRollKey =
+      'app_preferences.return_to_chat_after_roll';
 
   @override
   Future<AppPreferences> load() async {
@@ -96,6 +98,9 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
       hpWarningThreshold:
           _preferences.getDouble(_hpWarningThresholdKey) ??
           AppPreferences.defaults.hpWarningThreshold,
+      returnToChatAfterRoll:
+          _preferences.getBool(_returnToChatAfterRollKey) ??
+          AppPreferences.defaults.returnToChatAfterRoll,
     );
   }
 
@@ -137,16 +142,26 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
       _groupConsecutiveChatMessagesKey,
       preferences.groupConsecutiveChatMessages,
     );
-    await _preferences.setString(_defaultRollModeKey, preferences.defaultRollMode);
+    await _preferences.setString(
+      _defaultRollModeKey,
+      preferences.defaultRollMode,
+    );
     await _preferences.setStringList(
       _quickDicePresetsKey,
       preferences.quickDicePresets,
     );
-    await _preferences.setString(_messageDensityKey, preferences.messageDensity);
+    await _preferences.setString(
+      _messageDensityKey,
+      preferences.messageDensity,
+    );
     await _preferences.setString(_fontScaleKey, preferences.fontScale);
     await _preferences.setDouble(
       _hpWarningThresholdKey,
       preferences.hpWarningThreshold,
+    );
+    await _preferences.setBool(
+      _returnToChatAfterRollKey,
+      preferences.returnToChatAfterRoll,
     );
     final repo = syncRepository;
     if (repo != null) {

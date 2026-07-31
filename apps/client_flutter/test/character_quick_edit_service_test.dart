@@ -88,37 +88,26 @@ void main() {
   // 不允许 widget 直接改写 data JSON。下面的用例补齐 service 的覆盖。
   group('feature overrides', () {
     test('addFeature then removeAddedFeature restores the overrides', () {
-      final original = CharacterSheet.local(
-        id: 'hero',
-        name: 'Hero',
-        level: 1,
-      );
+      final original = CharacterSheet.local(id: 'hero', name: 'Hero', level: 1);
 
       final added = service.addFeature(original, 'feature:great-weapon-master');
       final overrides = CharacterManualOverrides.fromCharacter(added);
-      expect(
-        overrides.addedFeatureEntryIds,
-        <String>['feature:great-weapon-master'],
-      );
+      expect(overrides.addedFeatureEntryIds, <String>[
+        'feature:great-weapon-master',
+      ]);
 
       final removed = service.removeAddedFeature(
         added,
         'feature:great-weapon-master',
       );
       expect(
-        CharacterManualOverrides.fromCharacter(
-          removed,
-        ).addedFeatureEntryIds,
+        CharacterManualOverrides.fromCharacter(removed).addedFeatureEntryIds,
         isEmpty,
       );
     });
 
     test('setGrantHidden toggles a grant key in the overrides', () {
-      final original = CharacterSheet.local(
-        id: 'hero',
-        name: 'Hero',
-        level: 1,
-      );
+      final original = CharacterSheet.local(id: 'hero', name: 'Hero', level: 1);
 
       final hidden = service.setGrantHidden(
         original,
@@ -141,41 +130,38 @@ void main() {
       );
     });
 
-    test('addCustomFeature then removeCustomFeature manages the custom list', () {
-      final original = CharacterSheet.local(
-        id: 'hero',
-        name: 'Hero',
-        level: 1,
-      );
+    test(
+      'addCustomFeature then removeCustomFeature manages the custom list',
+      () {
+        final original = CharacterSheet.local(
+          id: 'hero',
+          name: 'Hero',
+          level: 1,
+        );
 
-      final added = service.addCustomFeature(
-        original,
-        name: '家园守护',
-        description: '当盟友在身边倒下时获得 +2 攻击',
-      );
-      final customFeatures = CharacterManualOverrides
-          .fromCharacter(added)
-          .customFeatures;
-      expect(customFeatures, hasLength(1));
-      expect(customFeatures.first['name'], '家园守护');
-      expect(customFeatures.first['description'], contains('盟友'));
+        final added = service.addCustomFeature(
+          original,
+          name: '家园守护',
+          description: '当盟友在身边倒下时获得 +2 攻击',
+        );
+        final customFeatures = CharacterManualOverrides.fromCharacter(
+          added,
+        ).customFeatures;
+        expect(customFeatures, hasLength(1));
+        expect(customFeatures.first['name'], '家园守护');
+        expect(customFeatures.first['description'], contains('盟友'));
 
-      final id = customFeatures.first['id'] as String;
-      final removed = service.removeCustomFeature(added, id);
-      expect(
-        CharacterManualOverrides.fromCharacter(
-          removed,
-        ).customFeatures,
-        isEmpty,
-      );
-    });
+        final id = customFeatures.first['id'] as String;
+        final removed = service.removeCustomFeature(added, id);
+        expect(
+          CharacterManualOverrides.fromCharacter(removed).customFeatures,
+          isEmpty,
+        );
+      },
+    );
 
     test('addCustomFeature with blank name is a no-op', () {
-      final original = CharacterSheet.local(
-        id: 'hero',
-        name: 'Hero',
-        level: 1,
-      );
+      final original = CharacterSheet.local(id: 'hero', name: 'Hero', level: 1);
 
       final edited = service.addCustomFeature(
         original,
@@ -191,20 +177,16 @@ void main() {
 
   group('custom actions', () {
     test('addCustomAction then removeCustomAction manages the action list', () {
-      final original = CharacterSheet.local(
-        id: 'hero',
-        name: 'Hero',
-        level: 1,
-      );
+      final original = CharacterSheet.local(id: 'hero', name: 'Hero', level: 1);
 
       final added = service.addCustomAction(
         original,
         name: '鼓舞',
         description: '盟友获得 1d4 鼓舞骰',
       );
-      final actions = CharacterManualOverrides
-          .fromCharacter(added)
-          .customActions;
+      final actions = CharacterManualOverrides.fromCharacter(
+        added,
+      ).customActions;
       expect(actions, hasLength(1));
       expect(actions.first['name'], '鼓舞');
       expect(actions.first['description'], contains('鼓舞骰'));
@@ -212,19 +194,13 @@ void main() {
       final id = actions.first['id'] as String;
       final removed = service.removeCustomAction(added, id);
       expect(
-        CharacterManualOverrides.fromCharacter(
-          removed,
-        ).customActions,
+        CharacterManualOverrides.fromCharacter(removed).customActions,
         isEmpty,
       );
     });
 
     test('addCustomAction with blank name is a no-op', () {
-      final original = CharacterSheet.local(
-        id: 'hero',
-        name: 'Hero',
-        level: 1,
-      );
+      final original = CharacterSheet.local(id: 'hero', name: 'Hero', level: 1);
 
       final edited = service.addCustomAction(
         original,

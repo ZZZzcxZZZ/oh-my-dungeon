@@ -22,10 +22,7 @@ class CampaignInviteTile extends StatelessWidget {
         leading: const Icon(Icons.confirmation_number),
         title: SelectableText(
           invite.code,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1),
         ),
         subtitle: Text(
           '角色：${invite.roleOnJoin} | 已用：${invite.usedCount}/${invite.maxUses}',

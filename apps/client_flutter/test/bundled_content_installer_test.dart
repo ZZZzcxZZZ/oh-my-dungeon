@@ -22,6 +22,23 @@ const _bundle = '''{
 }''';
 
 void main() {
+  test('installs multiple independent bundled packages', () async {
+    final repository = MemoryContentRepository();
+    final second = _bundle
+        .replaceAll('test.bundle', 'test.monsters')
+        .replaceAll('Example feat', 'Example monster')
+        .replaceAll('"feat"', '"monster"');
+    final installer = BundledContentInstaller(
+      repository: repository,
+      loadBundle: () async => '{"packages":[$_bundle,$second]}',
+    );
+
+    expect(await installer.installIfAvailable(), isTrue);
+    expect(await repository.getByKey('test.bundle:feat/example'), isNotNull);
+    expect(await repository.getByKey('test.monsters:feat/example'), isNotNull);
+    expect(await installer.installIfAvailable(), isFalse);
+  });
+
   test('imports a valid bundled package only once per version', () async {
     final repository = MemoryContentRepository();
     final installer = BundledContentInstaller(

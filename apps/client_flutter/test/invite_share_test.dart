@@ -9,10 +9,7 @@ void main() {
     });
 
     test('包含战役名（当提供时）', () {
-      final text = formatInviteShareText(
-        code: 'ABC123',
-        campaignName: '失落矿坑',
-      );
+      final text = formatInviteShareText(code: 'ABC123', campaignName: '失落矿坑');
       expect(text, contains('失落矿坑'));
       expect(text, contains('ABC123'));
     });

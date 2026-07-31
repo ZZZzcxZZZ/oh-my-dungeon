@@ -47,8 +47,10 @@ void main() {
       'hasMore': false,
     });
     await repository.applyPage('campaign-1', page);
-    expect((await repository.getContentEntry('campaign-1', 'entry-1'))!.name,
-        '月港');
+    expect(
+      (await repository.getContentEntry('campaign-1', 'entry-1'))!.name,
+      '月港',
+    );
     expect(await repository.cursorFor('campaign-1'), '1');
   });
 
@@ -84,7 +86,10 @@ void main() {
       'hasMore': false,
     });
     await repository.applyPage('campaign-1', upsertPage);
-    expect(await repository.getContentEntry('campaign-1', 'entry-1'), isNotNull);
+    expect(
+      await repository.getContentEntry('campaign-1', 'entry-1'),
+      isNotNull,
+    );
 
     final deletePage = CampaignChangePage.fromJson({
       'items': [
@@ -113,17 +118,17 @@ void main() {
           'id': 'change-1',
           'campaignId': 'campaign-1',
           'cursor': '1',
-          'entityType': 'actor',
-          'entityId': 'actor-1',
+          'entityType': 'character',
+          'entityId': 'character-1',
           'operation': 'upsert',
           'revision': 1,
           'createdAt': '2026-01-01T00:00:00.000Z',
           'entity': {
-            'id': 'actor-1',
+            'id': 'character-1',
             'campaignId': 'campaign-1',
             'ownerUserId': 'user-1',
             'sourceCharacterId': null,
-            'actorType': 'player',
+            'characterType': 'player',
             'status': 'active',
             'sheet': {'name': 'Hero', 'currentHp': 10, 'maxHp': 20},
             'revision': 1,
@@ -139,87 +144,100 @@ void main() {
     await repository.applyPage('campaign-1', page);
     await repository.applyPage('campaign-1', page);
 
-    final actor = await repository.getActor('campaign-1', 'actor-1');
-    expect(actor, isNotNull);
-    expect(actor!.id, 'actor-1');
-    expect(actor.sheet['name'], 'Hero');
+    final character = await repository.getCharacter(
+      'campaign-1',
+      'character-1',
+    );
+    expect(character, isNotNull);
+    expect(character!.id, 'character-1');
+    expect(character.sheet['name'], 'Hero');
   });
 
   test('cursorFor returns "0" when no cursor exists', () async {
     expect(await repository.cursorFor('campaign-1'), '0');
   });
 
-  test('clearCampaign removes all actors and entries for a campaign',
-      () async {
-    final page = CampaignChangePage.fromJson({
-      'items': [
-        {
-          'id': 'change-1',
-          'campaignId': 'campaign-1',
-          'cursor': '1',
-          'entityType': 'actor',
-          'entityId': 'actor-1',
-          'operation': 'upsert',
-          'revision': 1,
-          'createdAt': '2026-01-01T00:00:00.000Z',
-          'entity': {
-            'id': 'actor-1',
+  test(
+    'clearCampaign removes all characters and entries for a campaign',
+    () async {
+      final page = CampaignChangePage.fromJson({
+        'items': [
+          {
+            'id': 'change-1',
             'campaignId': 'campaign-1',
-            'ownerUserId': 'user-1',
-            'sourceCharacterId': null,
-            'actorType': 'player',
-            'status': 'active',
-            'sheet': {'name': 'Hero', 'currentHp': 10, 'maxHp': 20},
+            'cursor': '1',
+            'entityType': 'character',
+            'entityId': 'character-1',
+            'operation': 'upsert',
             'revision': 1,
-            'updatedBy': 'user-1',
             'createdAt': '2026-01-01T00:00:00.000Z',
-            'updatedAt': '2026-01-01T00:00:00.000Z',
+            'entity': {
+              'id': 'character-1',
+              'campaignId': 'campaign-1',
+              'ownerUserId': 'user-1',
+              'sourceCharacterId': null,
+              'characterType': 'player',
+              'status': 'active',
+              'sheet': {'name': 'Hero', 'currentHp': 10, 'maxHp': 20},
+              'revision': 1,
+              'updatedBy': 'user-1',
+              'createdAt': '2026-01-01T00:00:00.000Z',
+              'updatedAt': '2026-01-01T00:00:00.000Z',
+            },
           },
-        },
-        {
-          'id': 'change-2',
-          'campaignId': 'campaign-1',
-          'cursor': '1',
-          'entityType': 'content',
-          'entityId': 'entry-1',
-          'operation': 'upsert',
-          'revision': 1,
-          'createdAt': '2026-01-01T00:00:00.000Z',
-          'entity': {
-            'id': 'entry-1',
+          {
+            'id': 'change-2',
             'campaignId': 'campaign-1',
-            'type': 'location',
-            'slug': 'moon-harbor',
-            'name': '月港',
-            'entry': {'body': <Map<String, Object?>>[]},
+            'cursor': '1',
+            'entityType': 'content',
+            'entityId': 'entry-1',
+            'operation': 'upsert',
             'revision': 1,
-            'createdBy': 'u1',
-            'updatedBy': 'u1',
             'createdAt': '2026-01-01T00:00:00.000Z',
-            'updatedAt': '2026-01-01T00:00:00.000Z',
-            'deletedAt': null,
+            'entity': {
+              'id': 'entry-1',
+              'campaignId': 'campaign-1',
+              'type': 'location',
+              'slug': 'moon-harbor',
+              'name': '月港',
+              'entry': {'body': <Map<String, Object?>>[]},
+              'revision': 1,
+              'createdBy': 'u1',
+              'updatedBy': 'u1',
+              'createdAt': '2026-01-01T00:00:00.000Z',
+              'updatedAt': '2026-01-01T00:00:00.000Z',
+              'deletedAt': null,
+            },
           },
-        },
-      ],
-      'nextCursor': '1',
-      'hasMore': false,
-    });
-    await repository.applyPage('campaign-1', page);
-    expect(await repository.getActor('campaign-1', 'actor-1'), isNotNull);
-    expect(await repository.getContentEntry('campaign-1', 'entry-1'),
-        isNotNull);
+        ],
+        'nextCursor': '1',
+        'hasMore': false,
+      });
+      await repository.applyPage('campaign-1', page);
+      expect(
+        await repository.getCharacter('campaign-1', 'character-1'),
+        isNotNull,
+      );
+      expect(
+        await repository.getContentEntry('campaign-1', 'entry-1'),
+        isNotNull,
+      );
 
-    await repository.clearCampaign('campaign-1');
-    expect(await repository.getActor('campaign-1', 'actor-1'), isNull);
-    expect(await repository.getContentEntry('campaign-1', 'entry-1'), isNull);
-    expect(await repository.cursorFor('campaign-1'), '0');
-  });
+      await repository.clearCampaign('campaign-1');
+      expect(
+        await repository.getCharacter('campaign-1', 'character-1'),
+        isNull,
+      );
+      expect(await repository.getContentEntry('campaign-1', 'entry-1'), isNull);
+      expect(await repository.cursorFor('campaign-1'), '0');
+    },
+  );
 
-  test('watchActors emits updated list after applyPage', () async {
+  test('watchCharacters emits updated list after applyPage', () async {
     final emitted = <List<String>>[];
     final subscription = repository
-        .watchActors('campaign-1')
-        .map((actors) => actors.map((a) => a.id).toList())
+        .watchCharacters('campaign-1')
+        .map((characters) => characters.map((a) => a.id).toList())
         .listen(emitted.add);
 
     // Allow initial emit to settle.
@@ -231,17 +249,17 @@ void main() {
           'id': 'change-1',
           'campaignId': 'campaign-1',
           'cursor': '1',
-          'entityType': 'actor',
-          'entityId': 'actor-1',
+          'entityType': 'character',
+          'entityId': 'character-1',
           'operation': 'upsert',
           'revision': 1,
           'createdAt': '2026-01-01T00:00:00.000Z',
           'entity': {
-            'id': 'actor-1',
+            'id': 'character-1',
             'campaignId': 'campaign-1',
             'ownerUserId': 'user-1',
             'sourceCharacterId': null,
-            'actorType': 'player',
+            'characterType': 'player',
             'status': 'active',
             'sheet': {'name': 'Hero', 'currentHp': 10, 'maxHp': 20},
             'revision': 1,
@@ -258,7 +276,7 @@ void main() {
     // Allow watch stream to deliver.
     await Future<void>.delayed(Duration.zero);
 
-    expect(emitted, containsOnce(['actor-1']));
+    expect(emitted, containsOnce(['character-1']));
     await subscription.cancel();
   });
 }

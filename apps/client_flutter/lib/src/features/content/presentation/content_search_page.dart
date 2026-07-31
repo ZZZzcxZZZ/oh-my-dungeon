@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/widgets/app_search_bar.dart';
 import '../domain/content_entry.dart';
 import 'content_home_page.dart';
 import 'content_library_controller.dart';
@@ -15,7 +16,6 @@ class _FacetField {
 const _typeFilters = <String?>[
   null,
   'spell',
-  'equipment',
   'item',
   'species',
   'class',
@@ -23,10 +23,8 @@ const _typeFilters = <String?>[
   'classFeature',
   'background',
   'feat',
-  'equipmentBundle',
   'monster',
   'condition',
-  'rule',
 ];
 
 const _spellLevelLabels = <String, String>{
@@ -62,12 +60,11 @@ List<_FacetField> _facetFieldsFor(String? type) {
         _FacetField(key: 'class', label: '职业'),
         _FacetField(key: 'level', label: '等级'),
       ];
-    case 'equipment':
-      return const [_FacetField(key: 'category', label: '类别')];
     case 'item':
-      return const [_FacetField(key: 'rarity', label: '稀有度')];
-    case 'equipmentBundle':
-      return const [_FacetField(key: 'source', label: '来源')];
+      return const [
+        _FacetField(key: 'category', label: '类别'),
+        _FacetField(key: 'rarity', label: '稀有度'),
+      ];
     case 'feat':
       return const [
         _FacetField(key: 'category', label: '类别'),
@@ -86,13 +83,9 @@ List<_FacetField> _facetFieldsFor(String? type) {
         _FacetField(key: 'speed', label: '速度'),
       ];
     case 'background':
-      return const [
-        _FacetField(key: 'skillProficiencies', label: '技能熟练'),
-      ];
+      return const [_FacetField(key: 'skillProficiencies', label: '技能熟练')];
     case 'condition':
       return const [_FacetField(key: 'duration', label: '持续')];
-    case 'rule':
-      return const [_FacetField(key: 'category', label: '分类')];
     default:
       return const [];
   }
@@ -196,31 +189,10 @@ class _ContentSearchPageState extends State<ContentSearchPage> {
       _favoritesOnly ||
       _facets.values.any((set) => set.isNotEmpty);
 
-  void _removeType() {
-    setState(() {
-      _selectedType = null;
-      _facets = const {};
-    });
-    _runSearch();
-  }
-
-  void _toggleFavorites() {
-    setState(() => _favoritesOnly = !_favoritesOnly);
-    _runSearch();
-  }
-
-  void _removeFacet(String field, String value) {
-    setState(() {
-      final current = Set<String>.from(_facets[field] ?? const {});
-      current.remove(value);
-      if (current.isEmpty) {
-        _facets = Map.of(_facets)..remove(field);
-      } else {
-        _facets = Map.of(_facets)..[field] = current;
-      }
-    });
-    _runSearch();
-  }
+  int get _activeFilterCount =>
+      (_selectedType == null ? 0 : 1) +
+      (_favoritesOnly ? 1 : 0) +
+      _facets.values.fold<int>(0, (sum, values) => sum + values.length);
 
   Future<void> _openFilterSheet() async {
     final result = await showModalBottomSheet<_FilterResult>(
@@ -256,54 +228,12 @@ class _ContentSearchPageState extends State<ContentSearchPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SearchBar(
+                AppSearchBar(
                   controller: _searchController,
                   hintText: '搜索名称、关键字…',
-                  leading: const Icon(Icons.search),
                   onSubmitted: (_) => _runSearch(),
-                ),
-                const SizedBox(height: 8),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      ActionChip(
-                        key: const Key('content-filter-button'),
-                        avatar: const Icon(Icons.tune, size: 18),
-                        label: const Text('筛选'),
-                        onPressed: _openFilterSheet,
-                      ),
-                      FilterChip(
-                        label: const Text('收藏'),
-                        selected: _favoritesOnly,
-                        onSelected: (_) => _toggleFavorites(),
-                      ),
-                      if (_selectedType != null)
-                        FilterChip(
-                          label: Text(
-                            registry.definitionFor(_selectedType!).label,
-                          ),
-                          onSelected: (_) => _removeType(),
-                        ),
-                      for (final fieldEntry in _facets.entries)
-                        for (final value in fieldEntry.value)
-                          FilterChip(
-                            label: Text(
-                              _selectedType == null
-                                  ? value
-                                  : _facetValueLabel(
-                                      _selectedType!,
-                                      fieldEntry.key,
-                                      value,
-                                    ),
-                            ),
-                            onSelected: (_) =>
-                                _removeFacet(fieldEntry.key, value),
-                          ),
-                    ],
-                  ),
+                  onFilterPressed: _openFilterSheet,
+                  activeFilterCount: _activeFilterCount,
                 ),
               ],
             ),
@@ -511,8 +441,7 @@ class _FilterSheetState extends State<_FilterSheet> {
         return Container(
           decoration: BoxDecoration(
             color: colorScheme.surface,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: Column(
             children: [
@@ -530,8 +459,10 @@ class _FilterSheetState extends State<_FilterSheet> {
                 ),
               ),
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
                 child: Row(
                   children: [
                     Text('筛选', style: theme.textTheme.titleMedium),
@@ -596,13 +527,9 @@ class _FilterSheetState extends State<_FilterSheet> {
                                 title: field.label,
                                 icon: _facetFieldIcon(field.key),
                                 options: _facetOptions[field.key]!,
-                                selectedValues:
-                                    _facets[field.key] ?? const {},
-                                valueLabel: (value) => _facetValueLabel(
-                                  _type!,
-                                  field.key,
-                                  value,
-                                ),
+                                selectedValues: _facets[field.key] ?? const {},
+                                valueLabel: (value) =>
+                                    _facetValueLabel(_type!, field.key, value),
                                 onToggle: (value) =>
                                     _toggleFacet(field.key, value),
                               ),
@@ -683,9 +610,7 @@ class _FacetSection extends StatelessWidget {
             children: [
               for (final option in options)
                 FilterChip(
-                  label: Text(
-                    '${valueLabel(option.value)} (${option.count})',
-                  ),
+                  label: Text('${valueLabel(option.value)} (${option.count})'),
                   selected: selectedValues.contains(option.value),
                   onSelected: (_) => onToggle(option.value),
                 ),

@@ -29,6 +29,7 @@ void main() {
     expect(controller.preferences.messageDensity, 'standard');
     expect(controller.preferences.fontScale, 'system');
     expect(controller.preferences.hpWarningThreshold, 0.3);
+    expect(controller.preferences.returnToChatAfterRoll, isTrue);
   });
 
   test('persists preference changes and notifies listeners', () async {
@@ -55,11 +56,12 @@ void main() {
     await controller.setMessageDensity('comfortable');
     await controller.setFontScale('large');
     await controller.setHpWarningThreshold(0.5);
+    await controller.setReturnToChatAfterRoll(false);
 
     final reloaded = AppPreferencesController(store: store);
     await reloaded.initialize();
 
-    expect(notifications, 16);
+    expect(notifications, 17);
     expect(reloaded.preferences.themeMode, ThemeMode.dark);
     expect(reloaded.preferences.defaultDice, '2d20kh1');
     expect(reloaded.preferences.compactLists, isTrue);
@@ -72,13 +74,11 @@ void main() {
     expect(reloaded.preferences.logCharacterRuntimeChanges, isFalse);
     expect(reloaded.preferences.groupConsecutiveChatMessages, isFalse);
     expect(reloaded.preferences.defaultRollMode, 'advantage');
-    expect(
-      reloaded.preferences.quickDicePresets,
-      ['1d20+5', '8d6', '2d20kh1'],
-    );
+    expect(reloaded.preferences.quickDicePresets, ['1d20+5', '8d6', '2d20kh1']);
     expect(reloaded.preferences.messageDensity, 'comfortable');
     expect(reloaded.preferences.fontScale, 'large');
     expect(reloaded.preferences.hpWarningThreshold, 0.5);
+    expect(reloaded.preferences.returnToChatAfterRoll, isFalse);
   });
 
   test('quickDicePresets rejects more than 6 entries', () async {
@@ -86,9 +86,15 @@ void main() {
     final controller = AppPreferencesController(store: store);
     await controller.initialize();
 
-    await controller.setQuickDicePresets(
-      const ['1d20', '2d6', '3d8', '4d10', '5d12', '6d4', '7d20'],
-    );
+    await controller.setQuickDicePresets(const [
+      '1d20',
+      '2d6',
+      '3d8',
+      '4d10',
+      '5d12',
+      '6d4',
+      '7d20',
+    ]);
 
     expect(controller.preferences.quickDicePresets.length, 6);
     expect(controller.preferences.quickDicePresets.last, '6d4');
@@ -170,6 +176,7 @@ void main() {
       await first.setMessageDensity('compact');
       await first.setFontScale('medium');
       await first.setHpWarningThreshold(0.25);
+      await first.setReturnToChatAfterRoll(false);
 
       final reloaded = AppPreferencesController(store: store);
       await reloaded.initialize();
@@ -194,6 +201,7 @@ void main() {
       expect(reloaded.preferences.messageDensity, 'compact');
       expect(reloaded.preferences.fontScale, 'medium');
       expect(reloaded.preferences.hpWarningThreshold, 0.25);
+      expect(reloaded.preferences.returnToChatAfterRoll, isFalse);
     },
   );
 }

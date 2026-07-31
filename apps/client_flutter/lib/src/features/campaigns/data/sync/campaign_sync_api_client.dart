@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import '../../domain/campaign_actor.dart';
-import '../../domain/campaign_actor_audit.dart';
+import '../../domain/campaign_character.dart';
+import '../../domain/campaign_character_audit.dart';
 import '../../domain/campaign_change.dart';
 import '../../domain/campaign_event.dart';
 
@@ -39,61 +39,70 @@ abstract interface class CampaignSyncApiClient {
     int? limit,
   });
 
-  Future<CampaignActor> publishActor({
+  Future<CampaignCharacter> publishCharacter({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
     required String sourceCharacterId,
-    required String actorType,
+    required String characterType,
     required int baseRevision,
     required Map<String, Object?> sheet,
   });
 
-  Future<CampaignActor> createActor({
+  Future<CampaignCharacter> createCharacter({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorType,
+    required String characterType,
     String? ownerUserId,
     String lifecycle = 'persistent',
     required Map<String, Object?> sheet,
   });
 
-  Future<List<CampaignActor>> listActors({
+  Future<List<CampaignCharacter>> listCharacters({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
   });
 
-  Future<CampaignActor> getActor({
+  Future<CampaignCharacter> getCharacter({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorId,
+    required String characterId,
   });
 
-  Future<List<CampaignActorAudit>> listActorAudits({
+  Future<List<CampaignCharacterAudit>> listCharacterAudits({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorId,
+    required String characterId,
   });
 
-  Future<CampaignActor> updateActor({
+  Future<CampaignCharacter> updateCharacter({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorId,
+    required String characterId,
     required int baseRevision,
     required Map<String, Object?> sheet,
     String? lifecycle,
+    bool? visibleToPlayers,
   });
 
-  Future<CampaignActor> archiveActor({
+  Future<CampaignCharacter> archiveCharacter({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorId,
+    required String characterId,
+    required int baseRevision,
+  });
+
+  Future<CampaignCharacter> restoreCharacter({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String characterId,
     required int baseRevision,
   });
 
@@ -135,26 +144,38 @@ abstract interface class CampaignSyncApiClient {
 
   // Task 3.1 — CampaignEvent 原子事件端点.
 
-  /// 调整 actor HP (delta < 0 伤害, > 0 治疗), 同事务追加 actor.hp_changed 事件.
-  Future<CampaignEventResult> changeActorHp({
+  /// 调整 character HP (delta < 0 伤害, > 0 治疗), 同事务追加 character.hp_changed 事件.
+  Future<CampaignEventResult> changeCharacterHp({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorId,
+    required String characterId,
     required int delta,
     String? reason,
     int? baseRevision,
   });
 
-  /// 给予 actor 物品, 同事务追加 actor.item_granted 事件.
+  /// 给予 character 物品, 同事务追加 character.item_granted 事件.
   Future<CampaignEventResult> grantItem({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorId,
+    required String characterId,
     required String itemId,
     required String name,
     int quantity,
+    int? baseRevision,
+  });
+
+  /// 给予 character 结构化状态, 同事务追加 character.condition_added 事件.
+  Future<CampaignEventResult> addCondition({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String characterId,
+    required String type,
+    required String name,
+    int? durationRounds,
     int? baseRevision,
   });
 }
@@ -189,23 +210,23 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
   }
 
   @override
-  Future<CampaignActor> publishActor({
+  Future<CampaignCharacter> publishCharacter({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
     required String sourceCharacterId,
-    required String actorType,
+    required String characterType,
     required int baseRevision,
     required Map<String, Object?> sheet,
   }) async {
     final response = await _client.post(
       Uri.parse(
-        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/actors/publish',
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/characters/publish',
       ),
       headers: _headers(accessToken),
       body: jsonEncode({
         'sourceCharacterId': sourceCharacterId,
-        'actorType': actorType,
+        'characterType': characterType,
         'baseRevision': baseRevision,
         'sheet': sheet,
       }),
@@ -216,26 +237,29 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
     if (response.statusCode != 201) {
       throw _toException(response);
     }
-    return CampaignActor.fromJson(
+    return CampaignCharacter.fromJson(
       jsonDecode(response.body) as Map<String, Object?>,
     );
   }
 
   @override
-  Future<CampaignActor> createActor({
+  Future<CampaignCharacter> createCharacter({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorType,
+    required String characterType,
     String? ownerUserId,
     String lifecycle = 'persistent',
     required Map<String, Object?> sheet,
   }) async {
-    final body = <String, Object?>{'actorType': actorType, 'sheet': sheet};
+    final body = <String, Object?>{
+      'characterType': characterType,
+      'sheet': sheet,
+    };
     if (ownerUserId != null) body['ownerUserId'] = ownerUserId;
     if (lifecycle != 'persistent') body['lifecycle'] = lifecycle;
     final response = await _client.post(
-      Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/actors'),
+      Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/characters'),
       headers: _headers(accessToken),
       body: jsonEncode(body),
     );
@@ -245,19 +269,19 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
     if (response.statusCode != 201) {
       throw _toException(response);
     }
-    return CampaignActor.fromJson(
+    return CampaignCharacter.fromJson(
       jsonDecode(response.body) as Map<String, Object?>,
     );
   }
 
   @override
-  Future<List<CampaignActor>> listActors({
+  Future<List<CampaignCharacter>> listCharacters({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
   }) async {
     final response = await _client.get(
-      Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/actors'),
+      Uri.parse('${_normalize(apiBaseUrl)}/campaigns/$campaignId/characters'),
       headers: _headers(accessToken),
     );
     if (response.statusCode != 200) {
@@ -265,41 +289,41 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
     }
     final decoded = jsonDecode(response.body) as List<Object?>;
     return decoded
-        .map((item) => CampaignActor.fromJson(item as Map<String, Object?>))
+        .map((item) => CampaignCharacter.fromJson(item as Map<String, Object?>))
         .toList(growable: false);
   }
 
   @override
-  Future<CampaignActor> getActor({
+  Future<CampaignCharacter> getCharacter({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorId,
+    required String characterId,
   }) async {
     final response = await _client.get(
       Uri.parse(
-        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/actors/$actorId',
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/characters/$characterId',
       ),
       headers: _headers(accessToken),
     );
     if (response.statusCode != 200) {
       throw _toException(response);
     }
-    return CampaignActor.fromJson(
+    return CampaignCharacter.fromJson(
       jsonDecode(response.body) as Map<String, Object?>,
     );
   }
 
   @override
-  Future<List<CampaignActorAudit>> listActorAudits({
+  Future<List<CampaignCharacterAudit>> listCharacterAudits({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorId,
+    required String characterId,
   }) async {
     final response = await _client.get(
       Uri.parse(
-        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/actors/$actorId/audits',
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/characters/$characterId/audits',
       ),
       headers: _headers(accessToken),
     );
@@ -311,29 +335,31 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
         .whereType<Map>()
         .map(
           (item) =>
-              CampaignActorAudit.fromJson(Map<String, Object?>.from(item)),
+              CampaignCharacterAudit.fromJson(Map<String, Object?>.from(item)),
         )
         .toList(growable: false);
   }
 
   @override
-  Future<CampaignActor> updateActor({
+  Future<CampaignCharacter> updateCharacter({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorId,
+    required String characterId,
     required int baseRevision,
     required Map<String, Object?> sheet,
     String? lifecycle,
+    bool? visibleToPlayers,
   }) async {
     final body = <String, Object?>{
       'baseRevision': baseRevision,
       'sheet': sheet,
       'lifecycle': ?lifecycle,
+      'visibleToPlayers': ?visibleToPlayers,
     };
     final response = await _client.put(
       Uri.parse(
-        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/actors/$actorId',
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/characters/$characterId',
       ),
       headers: _headers(accessToken),
       body: jsonEncode(body),
@@ -344,22 +370,22 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
     if (response.statusCode != 200) {
       throw _toException(response);
     }
-    return CampaignActor.fromJson(
+    return CampaignCharacter.fromJson(
       jsonDecode(response.body) as Map<String, Object?>,
     );
   }
 
   @override
-  Future<CampaignActor> archiveActor({
+  Future<CampaignCharacter> archiveCharacter({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorId,
+    required String characterId,
     required int baseRevision,
   }) async {
     final response = await _client.post(
       Uri.parse(
-        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/actors/$actorId/archive',
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/characters/$characterId/archive',
       ),
       headers: _headers(accessToken),
       body: jsonEncode({'baseRevision': baseRevision}),
@@ -370,7 +396,33 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
     if (response.statusCode != 200) {
       throw _toException(response);
     }
-    return CampaignActor.fromJson(
+    return CampaignCharacter.fromJson(
+      jsonDecode(response.body) as Map<String, Object?>,
+    );
+  }
+
+  @override
+  Future<CampaignCharacter> restoreCharacter({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String characterId,
+    required int baseRevision,
+  }) async {
+    final response = await _client.post(
+      Uri.parse(
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/characters/$characterId/restore',
+      ),
+      headers: _headers(accessToken),
+      body: jsonEncode({'baseRevision': baseRevision}),
+    );
+    if (response.statusCode == 409) {
+      throw CampaignConflictException(_decodeConflict(response));
+    }
+    if (response.statusCode != 200) {
+      throw _toException(response);
+    }
+    return CampaignCharacter.fromJson(
       jsonDecode(response.body) as Map<String, Object?>,
     );
   }
@@ -484,21 +536,23 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
   // Task 3.1 — CampaignEvent 原子事件端点实现.
 
   @override
-  Future<CampaignEventResult> changeActorHp({
+  Future<CampaignEventResult> changeCharacterHp({
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorId,
+    required String characterId,
     required int delta,
     String? reason,
     int? baseRevision,
   }) async {
     final body = <String, Object?>{'delta': delta};
-    if (reason != null && reason.trim().isNotEmpty) body['reason'] = reason.trim();
+    if (reason != null && reason.trim().isNotEmpty) {
+      body['reason'] = reason.trim();
+    }
     if (baseRevision != null) body['baseRevision'] = baseRevision;
     final response = await _client.post(
       Uri.parse(
-        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/actors/$actorId/hp',
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/characters/$characterId/hp',
       ),
       headers: _headers(accessToken),
       body: jsonEncode(body),
@@ -519,7 +573,7 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
     required String apiBaseUrl,
     required String accessToken,
     required String campaignId,
-    required String actorId,
+    required String characterId,
     required String itemId,
     required String name,
     int quantity = 1,
@@ -533,7 +587,41 @@ class HttpCampaignSyncApiClient implements CampaignSyncApiClient {
     if (baseRevision != null) body['baseRevision'] = baseRevision;
     final response = await _client.post(
       Uri.parse(
-        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/actors/$actorId/items',
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/characters/$characterId/items',
+      ),
+      headers: _headers(accessToken),
+      body: jsonEncode(body),
+    );
+    if (response.statusCode == 409) {
+      throw CampaignConflictException(_decodeConflict(response));
+    }
+    if (response.statusCode != 201) {
+      throw _toException(response);
+    }
+    return CampaignEventResult.fromJson(
+      jsonDecode(response.body) as Map<String, Object?>,
+    );
+  }
+
+  @override
+  Future<CampaignEventResult> addCondition({
+    required String apiBaseUrl,
+    required String accessToken,
+    required String campaignId,
+    required String characterId,
+    required String type,
+    required String name,
+    int? durationRounds,
+    int? baseRevision,
+  }) async {
+    final body = <String, Object?>{'type': type, 'name': name};
+    if (durationRounds != null) {
+      body['durationRounds'] = durationRounds;
+    }
+    if (baseRevision != null) body['baseRevision'] = baseRevision;
+    final response = await _client.post(
+      Uri.parse(
+        '${_normalize(apiBaseUrl)}/campaigns/$campaignId/characters/$characterId/conditions',
       ),
       headers: _headers(accessToken),
       body: jsonEncode(body),

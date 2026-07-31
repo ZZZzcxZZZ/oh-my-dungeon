@@ -51,9 +51,27 @@ class CharacterImportDiff {
     add('属性', before.abilityMap, after.abilityMap);
     add('装备', before.inventoryList, after.inventoryList);
     add('货币', before.currencyMap, after.currencyMap);
+    add('描述', before.description, after.description);
+    final beforeState = _map(before.dataMap['characterState']);
+    final afterState = _map(after.dataMap['characterState']);
+    add('资源', beforeState['resources'], afterState['resources']);
+    add('状态', beforeState['conditions'], afterState['conditions']);
+    final beforeRefs = _map(before.dataMap['contentRefs']);
+    final afterRefs = _map(after.dataMap['contentRefs']);
+    add('法术', beforeRefs['spells'], afterRefs['spells']);
+    add('特性', beforeRefs['features'], afterRefs['features']);
+    add('扩展章节', before.markdownSections, after.markdownSections);
     add('笔记', before.notes, after.notes);
     return CharacterImportDiff(changes);
   }
 
   final List<CharacterImportChange> changes;
+}
+
+Map<String, Object?> _map(Object? value) {
+  if (value is Map<String, Object?>) return value;
+  if (value is Map) {
+    return value.map((key, item) => MapEntry('$key', item));
+  }
+  return const {};
 }

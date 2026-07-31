@@ -9,7 +9,9 @@ import 'support/content_test_support.dart';
 
 void main() {
   group('read-only content library', () {
-    testWidgets('empty library has no package management entry', (tester) async {
+    testWidgets('empty library has no package management entry', (
+      tester,
+    ) async {
       final repository = MemoryContentRepository(initialEntries: const []);
       await tester.pumpWidget(
         MaterialApp(
@@ -27,30 +29,33 @@ void main() {
       expect(find.byTooltip('导入资料包'), findsNothing);
     });
 
-    testWidgets('search results list has no edit note or duplicate affordances',
-        (tester) async {
-      final repository = MemoryContentRepository(
-        initialEntries: [testFighterEntry()],
-      );
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ContentLibraryPage(
-            controller: ContentLibraryController(repository: repository),
-            onImportRequested: () {},
+    testWidgets(
+      'search results list has no edit note or duplicate affordances',
+      (tester) async {
+        final repository = MemoryContentRepository(
+          initialEntries: [testFighterEntry()],
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ContentLibraryPage(
+              controller: ContentLibraryController(repository: repository),
+              onImportRequested: () {},
+            ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      expect(find.text('战士'), findsOneWidget);
-      expect(find.byTooltip('编辑条目'), findsNothing);
-      expect(find.byTooltip('复制条目'), findsNothing);
-      expect(find.text('笔记'), findsNothing);
-      expect(find.text('记录你的笔记…'), findsNothing);
-    });
+        expect(find.text('战士'), findsOneWidget);
+        expect(find.byTooltip('编辑条目'), findsNothing);
+        expect(find.byTooltip('复制条目'), findsNothing);
+        expect(find.text('笔记'), findsNothing);
+        expect(find.text('记录你的笔记…'), findsNothing);
+      },
+    );
 
-    testWidgets('detail reader has no edit duplicate or note entry',
-        (tester) async {
+    testWidgets('detail reader has no edit duplicate or note entry', (
+      tester,
+    ) async {
       const entryKey = 'example:class/fighter';
       final repository = MemoryContentRepository(
         initialEntries: [testFighterEntry()],

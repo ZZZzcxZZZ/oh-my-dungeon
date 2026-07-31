@@ -79,9 +79,9 @@ class _CampaignDetailPageState extends State<CampaignDetailPage> {
                     TextButton.icon(
                       onPressed: () {
                         Clipboard.setData(ClipboardData(text: invite.code));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('邀请码已复制')),
-                        );
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(const SnackBar(content: Text('邀请码已复制')));
                       },
                       icon: const Icon(Icons.copy),
                       label: const Text('复制'),
@@ -204,9 +204,9 @@ class _CampaignDetailPageState extends State<CampaignDetailPage> {
             invite: invite,
             onCopy: () {
               Clipboard.setData(ClipboardData(text: invite.code));
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('邀请码已复制')),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('邀请码已复制')));
             },
             onShare: () async {
               final messenger = ScaffoldMessenger.of(context);

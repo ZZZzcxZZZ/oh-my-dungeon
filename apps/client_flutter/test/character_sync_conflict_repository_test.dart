@@ -16,21 +16,21 @@ void main() {
       database,
       id: 'conflict-1',
       characterId: 'char-1',
-      campaignActorId: 'actor-1',
+      campaignCharacterId: 'character-1',
       resolvedAt: null,
     );
     await _seedConflict(
       database,
       id: 'conflict-2',
       characterId: 'char-1',
-      campaignActorId: 'actor-2',
+      campaignCharacterId: 'character-2',
       resolvedAt: null,
     );
     await _seedConflict(
       database,
       id: 'conflict-3',
       characterId: 'char-2',
-      campaignActorId: 'actor-3',
+      campaignCharacterId: 'character-3',
       resolvedAt: DateTime(2026, 7, 1),
     );
   });
@@ -39,17 +39,19 @@ void main() {
     await database.close();
   });
 
-  test('watchUnresolved emits only unresolved conflicts for the character',
-      () async {
-    final stream = repository.watchUnresolved('char-1');
-    final first = await stream.first;
+  test(
+    'watchUnresolved emits only unresolved conflicts for the character',
+    () async {
+      final stream = repository.watchUnresolved('char-1');
+      final first = await stream.first;
 
-    expect(first, hasLength(2));
-    expect(first.map((c) => c.id).toSet(), {'conflict-1', 'conflict-2'});
-    for (final conflict in first) {
-      expect(conflict.isResolved, isFalse);
-    }
-  });
+      expect(first, hasLength(2));
+      expect(first.map((c) => c.id).toSet(), {'conflict-1', 'conflict-2'});
+      for (final conflict in first) {
+        expect(conflict.isResolved, isFalse);
+      }
+    },
+  );
 
   test('watchAllUnresolved emits all unresolved across characters', () async {
     final stream = repository.watchAllUnresolved();
@@ -88,7 +90,7 @@ void main() {
     final conflict = first.singleWhere((c) => c.id == 'conflict-1');
 
     expect(conflict.characterId, 'char-1');
-    expect(conflict.campaignActorId, 'actor-1');
+    expect(conflict.campaignCharacterId, 'character-1');
     expect(conflict.fieldPath, 'build');
     expect(conflict.localValueJson, contains('localSheet'));
     expect(conflict.remoteValueJson, contains('remoteSheet'));
@@ -101,14 +103,16 @@ Future<void> _seedConflict(
   AppDatabase database, {
   required String id,
   required String characterId,
-  required String campaignActorId,
+  required String campaignCharacterId,
   required DateTime? resolvedAt,
 }) async {
-  await database.into(database.characterSyncConflicts).insert(
+  await database
+      .into(database.characterSyncConflicts)
+      .insert(
         CharacterSyncConflictsCompanion.insert(
           id: id,
           characterId: characterId,
-          campaignActorId: campaignActorId,
+          campaignCharacterId: campaignCharacterId,
           fieldPath: 'build',
           localValueJson: Value('{"localSheet": true}'),
           remoteValueJson: Value('{"remoteSheet": true}'),

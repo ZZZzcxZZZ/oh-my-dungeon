@@ -17,6 +17,14 @@ class QuickBuildSelection {
     this.backgroundEntryId,
     this.ruleChoices = const <String, List<String>>{},
     this.avatarUrl,
+    this.appearance = '',
+    this.personalityTraits = '',
+    this.ideals = '',
+    this.bonds = '',
+    this.flaws = '',
+    this.backstory = '',
+    this.privateNotes = '',
+    this.customSpells = const <Map<String, Object?>>[],
   });
 
   final String name;
@@ -32,6 +40,39 @@ class QuickBuildSelection {
   final String? speciesEntryId;
   final String? backgroundEntryId;
   final Map<String, List<String>> ruleChoices;
+  final String appearance;
+  final String personalityTraits;
+  final String ideals;
+  final String bonds;
+  final String flaws;
+  final String backstory;
+  final String privateNotes;
+  final List<Map<String, Object?>> customSpells;
+
+  Map<String, Object?> get storyData => {
+    'appearance': appearance.trim(),
+    'personalityTraits': personalityTraits.trim(),
+    'ideals': ideals.trim(),
+    'bonds': bonds.trim(),
+    'flaws': flaws.trim(),
+    'backstory': backstory.trim(),
+    'privateNotes': privateNotes.trim(),
+  };
+
+  Map<String, Object?> get manualOverridesData => {
+    'features': {
+      'addedEntryIds': <String>[],
+      'hiddenGrantKeys': <String>[],
+      'custom': <Map<String, Object?>>[],
+    },
+    'spells': {
+      'addedEntryIds': <String>[],
+      'removedEntryIds': <String>[],
+      'preparedEntryIds': <String>[],
+      'custom': customSpells,
+    },
+    'actions': {'custom': <Map<String, Object?>>[]},
+  };
 
   /// 角色头像（data URL 或本地文件路径）。规范 §头像来源：本地角色头像
   /// 离线保存在客户端，绑定战役后自动上传。
@@ -79,6 +120,9 @@ class QuickBuildService {
           'D&D 2024 快速创建：${selection.species} / ${selection.background} / ${selection.className}。',
       avatarUrl: selection.avatarUrl,
       data: {
+        'story': selection.storyData,
+        if (selection.customSpells.isNotEmpty)
+          'manualOverrides': selection.manualOverridesData,
         'contentRefs': {
           'spells': [
             for (final spell in selection.spellRefs)

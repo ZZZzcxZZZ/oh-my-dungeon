@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../characters/domain/dnd5e_rules.dart';
-import '../../domain/campaign_actor.dart';
+import '../../domain/campaign_character.dart';
 
 /// DM 向玩家发起检定请求的草稿。由 [CheckRequestSheet] 返回给宿主页面，
 /// 宿主页面再调用 sendMessage 提交 kind=checkRequest。
@@ -24,9 +24,9 @@ class CheckRequestDraft {
 /// 检定请求表单：选择类型（属性/豁免/技能）、项目、可选 DC、掷骰模式，
 /// 提交后通过 Navigator.pop 返回 [CheckRequestDraft]。
 class CheckRequestSheet extends StatefulWidget {
-  const CheckRequestSheet({required this.actor, super.key});
+  const CheckRequestSheet({required this.character, super.key});
 
-  final CampaignActor actor;
+  final CampaignCharacter character;
 
   @override
   State<CheckRequestSheet> createState() => _CheckRequestSheetState();
@@ -62,7 +62,7 @@ class _CheckRequestSheetState extends State<CheckRequestSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final name = widget.actor.sheet['name']?.toString().trim();
+    final name = widget.character.sheet['name']?.toString().trim();
     return SafeArea(
       child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(

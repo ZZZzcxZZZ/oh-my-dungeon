@@ -51,20 +51,24 @@ class ContentLibraryController extends ChangeNotifier {
     try {
       // 把 parentClass 从 structured facets 中拆出, 由控制器解析关系.
       final structuredFacets = Map<String, Set<String>>.of(facets);
-      final Set<String>? parentClassSelection =
-          type == 'subclass'
+      final Set<String>? parentClassSelection = type == 'subclass'
           ? structuredFacets.remove(_parentClassField)
           : null;
 
       var entries = await repository.search(
         ContentQuery(
           text: text,
-          type: type,
+          type: type == 'item' ? null : type,
           favoritesOnly: favoritesOnly,
           packageId: packageId,
           facets: structuredFacets,
         ),
       );
+      if (type == 'item') {
+        entries = entries
+            .where((entry) => entry.type == 'item' || entry.type == 'equipment')
+            .toList(growable: false);
+      }
 
       if (parentClassSelection != null && parentClassSelection.isNotEmpty) {
         final classIdToName = await _resolveClassIdToName();
@@ -117,7 +121,14 @@ class ContentLibraryController extends ChangeNotifier {
     required Iterable<String> fields,
   }) async {
     final fieldList = fields.toList();
-    final entries = await repository.search(ContentQuery(type: type));
+    var entries = await repository.search(
+      ContentQuery(type: type == 'item' ? null : type),
+    );
+    if (type == 'item') {
+      entries = entries
+          .where((entry) => entry.type == 'item' || entry.type == 'equipment')
+          .toList(growable: false);
+    }
     final counts = <String, Map<String, int>>{
       for (final field in fieldList) field: <String, int>{},
     };
@@ -157,10 +168,11 @@ class ContentLibraryController extends ChangeNotifier {
 
     return {
       for (final field in fieldList)
-        field: (counts[field]!.entries.toList()
-              ..sort((a, b) => a.key.compareTo(b.key)))
-            .map((e) => FacetOption(value: e.key, count: e.value))
-            .toList(),
+        field:
+            (counts[field]!.entries.toList()
+                  ..sort((a, b) => a.key.compareTo(b.key)))
+                .map((e) => FacetOption(value: e.key, count: e.value))
+                .toList(),
     };
   }
 

@@ -40,7 +40,7 @@ void main() {
     expect(registry.definitionFor('spell').label, '法术');
     expect(registry.definitionFor('equipment').label, '装备');
     expect(registry.definitionFor('equipmentBundle').label, '装备方案');
-    expect(registry.definitionFor('item').label, '物品');
+    expect(registry.definitionFor('item').label, '物品与装备');
     expect(registry.definitionFor('condition').label, '状态');
     expect(registry.definitionFor('rule').label, '规则');
     expect(registry.definitionFor('monster').label, '怪物');

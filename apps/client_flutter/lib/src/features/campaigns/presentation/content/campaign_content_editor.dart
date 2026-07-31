@@ -6,10 +6,7 @@ import 'campaign_content_controller.dart';
 /// dependency、overlay、patch 或 slug 等工程概念。slug 由服务端自动生成。
 /// 保存时调用 [CampaignContentController.createEntry]。
 class CampaignContentEditor extends StatefulWidget {
-  const CampaignContentEditor({
-    required this.controller,
-    super.key,
-  });
+  const CampaignContentEditor({required this.controller, super.key});
 
   final CampaignContentController controller;
 
@@ -58,9 +55,9 @@ class _CampaignContentEditorState extends State<CampaignContentEditor> {
     if (success) {
       Navigator.of(context).pop();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('保存失败，请稍后重试')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('保存失败，请稍后重试')));
     }
   }
 
@@ -78,12 +75,7 @@ class _CampaignContentEditorState extends State<CampaignContentEditor> {
               initialSelection: _type,
               label: const Text('类型'),
               dropdownMenuEntries: _typeOptions.entries
-                  .map(
-                    (e) => DropdownMenuEntry(
-                      value: e.key,
-                      label: e.value,
-                    ),
-                  )
+                  .map((e) => DropdownMenuEntry(value: e.key, label: e.value))
                   .toList(),
               onSelected: (value) {
                 if (value != null) {

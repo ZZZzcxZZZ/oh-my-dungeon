@@ -272,7 +272,12 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
                   onSubclassTap: (subclass) => widget.onOpenEntry(subclass.id),
                 ),
             ],
-            ContentCharacterRulesView(entry: entry),
+            ContentCharacterRulesView(
+              entry: entry,
+              hiddenFeatureTargets: entry.type == 'class'
+                  ? _classFeatures.map((feature) => feature.id).toSet()
+                  : const {},
+            ),
           ],
         ),
       ),
@@ -302,8 +307,7 @@ class _ContentSubclassList extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.school_outlined),
             title: Text(subclass.name),
-            subtitle:
-                subclass.summary.isEmpty ? null : Text(subclass.summary),
+            subtitle: subclass.summary.isEmpty ? null : Text(subclass.summary),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => onSubclassTap(subclass),
           ),

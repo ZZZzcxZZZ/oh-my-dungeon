@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../../characters/domain/character.dart';
 import '../../data/sync/campaign_sync_api_client.dart';
-import 'campaign_actor_controller.dart';
+import '../../domain/campaign_character.dart';
+import 'campaign_character_controller.dart';
 
-/// 把本地角色卡发布为 CampaignActor 的对话框。
-/// 玩家模式可见；调用 [CampaignActorController.publishCharacter] 提交到战役。
+/// 把本地角色卡发布为 CampaignCharacter 的对话框。
+/// 玩家模式可见；调用 [CampaignCharacterController.publishCharacter] 提交到战役。
 ///
 /// Spec §头像来源: 战役角色头像由本地角色绑定战役后自动上传。本对话框不再
 /// 暴露手动头像选择入口；角色卡已有的 `avatarUrl`（data URL 或 http(s) URL）
@@ -14,20 +15,22 @@ class PublishCharacterSheet extends StatefulWidget {
   const PublishCharacterSheet({
     required this.controller,
     required this.character,
-    this.allowDmActorTypes = false,
+    this.allowDmCharacterTypes = false,
+    this.onPublished,
     super.key,
   });
 
-  final CampaignActorController controller;
+  final CampaignCharacterController controller;
   final CharacterSheet character;
-  final bool allowDmActorTypes;
+  final bool allowDmCharacterTypes;
+  final Future<void> Function(CampaignCharacter character)? onPublished;
 
   @override
   State<PublishCharacterSheet> createState() => _PublishCharacterSheetState();
 }
 
 class _PublishCharacterSheetState extends State<PublishCharacterSheet> {
-  String _actorType = 'player';
+  String _characterType = 'player';
   bool _submitting = false;
 
   @override
@@ -61,7 +64,7 @@ class _PublishCharacterSheetState extends State<PublishCharacterSheet> {
                 Chip(label: Text('AC ${widget.character.armorClass}')),
               ],
             ),
-            if (widget.allowDmActorTypes) ...[
+            if (widget.allowDmCharacterTypes) ...[
               const SizedBox(height: 16),
               Text('角色类型', style: Theme.of(context).textTheme.labelLarge),
               const SizedBox(height: 4),
@@ -71,23 +74,26 @@ class _PublishCharacterSheetState extends State<PublishCharacterSheet> {
                 children: [
                   ChoiceChip(
                     label: const Text('玩家角色'),
-                    selected: _actorType == 'player',
-                    onSelected: (_) => setState(() => _actorType = 'player'),
+                    selected: _characterType == 'player',
+                    onSelected: (_) =>
+                        setState(() => _characterType = 'player'),
                   ),
                   ChoiceChip(
                     label: const Text('NPC'),
-                    selected: _actorType == 'npc',
-                    onSelected: (_) => setState(() => _actorType = 'npc'),
+                    selected: _characterType == 'npc',
+                    onSelected: (_) => setState(() => _characterType = 'npc'),
                   ),
                   ChoiceChip(
                     label: const Text('怪物'),
-                    selected: _actorType == 'monster',
-                    onSelected: (_) => setState(() => _actorType = 'monster'),
+                    selected: _characterType == 'monster',
+                    onSelected: (_) =>
+                        setState(() => _characterType = 'monster'),
                   ),
                   ChoiceChip(
                     label: const Text('同伴'),
-                    selected: _actorType == 'companion',
-                    onSelected: (_) => setState(() => _actorType = 'companion'),
+                    selected: _characterType == 'companion',
+                    onSelected: (_) =>
+                        setState(() => _characterType = 'companion'),
                   ),
                 ],
               ),
@@ -120,26 +126,33 @@ class _PublishCharacterSheetState extends State<PublishCharacterSheet> {
     // Spec §头像来源: 本地角色头像随发布自动上传。直接使用角色卡上的
     // avatarUrl（data URL 或 http(s) URL），无需用户在发布对话框手动选择。
     final sheet = widget.character.toJson();
-    // 玩家角色走 /actors/publish 自发布端点；NPC / 怪物 / 同伴走 /actors
+    // 玩家角色走 /characters/publish 自发布端点；NPC / 怪物 / 同伴走 /characters
     // DM 创建端点（lifecycle=persistent）。两个端点权限和数据约束不同，
-    // 不能混用：服务端会拒绝 player 类型走 createActor，也拒绝非 player
-    // 类型走 publishActor。
+    // 不能混用：服务端会拒绝 player 类型走 createCharacter，也拒绝非 player
+    // 类型走 publishCharacter。
     final bool success;
-    if (_actorType == 'player') {
+    if (_characterType == 'player') {
       success = await widget.controller.publishCharacter(
         widget.character,
-        actorType: _actorType,
+        characterType: _characterType,
         sheetOverride: sheet,
       );
     } else {
-      success = await widget.controller.createDmActor(
-        actorType: _actorType,
+      success = await widget.controller.createDmCharacter(
+        characterType: _characterType,
         sheet: sheet,
       );
     }
     if (!mounted) return;
     setState(() => _submitting = false);
     if (success) {
+      if (_characterType == 'player' && widget.onPublished != null) {
+        final published = _publishedPlayerCharacter();
+        if (published != null) {
+          await widget.onPublished!(published);
+          if (!mounted) return;
+        }
+      }
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('已发布到战役')));
@@ -149,13 +162,23 @@ class _PublishCharacterSheetState extends State<PublishCharacterSheet> {
     // Spec §双向同步 切片 A: 409 冲突时显示对比对话框，提供"用本地覆盖"
     // （用服务端最新 revision 重试）和"用远端覆盖"（pull 后关闭）。
     final conflict = widget.controller.conflict;
-    if (conflict != null && _actorType == 'player') {
+    if (conflict != null && _characterType == 'player') {
       await _showConflictDialog(conflict, sheet);
       return;
     }
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(widget.controller.error ?? '发布失败')));
+  }
+
+  CampaignCharacter? _publishedPlayerCharacter() {
+    for (final character in widget.controller.characters) {
+      if (character.sourceCharacterId == widget.character.id &&
+          character.characterType == 'player') {
+        return character;
+      }
+    }
+    return null;
   }
 
   Future<void> _showConflictDialog(
@@ -231,7 +254,7 @@ class _PublishCharacterSheetState extends State<PublishCharacterSheet> {
     setState(() => _submitting = true);
     final retrySuccess = await controller.publishCharacter(
       widget.character,
-      actorType: _actorType,
+      characterType: _characterType,
       sheetOverride: sheet,
       baseRevisionOverride: remoteRevisionInt,
     );

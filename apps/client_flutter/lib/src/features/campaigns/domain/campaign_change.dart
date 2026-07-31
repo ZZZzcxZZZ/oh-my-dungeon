@@ -34,9 +34,7 @@ class CampaignChange {
       operation: json['operation']?.toString() ?? '',
       revision: revisionValue is num ? revisionValue.toInt() : 0,
       createdAt: json['createdAt']?.toString() ?? '',
-      entity: entity is Map
-          ? Map<String, Object?>.from(entity)
-          : null,
+      entity: entity is Map ? Map<String, Object?>.from(entity) : null,
     );
   }
 
@@ -57,16 +55,16 @@ class CampaignChange {
 
   @override
   int get hashCode => Object.hash(
-        id,
-        campaignId,
-        cursor,
-        entityType,
-        entityId,
-        operation,
-        revision,
-        createdAt,
-        entity == null ? null : Object.hashAllUnordered(entity!.entries),
-      );
+    id,
+    campaignId,
+    cursor,
+    entityType,
+    entityId,
+    operation,
+    revision,
+    createdAt,
+    entity == null ? null : Object.hashAllUnordered(entity!.entries),
+  );
 }
 
 /// 战役内容条目摘要。entry 为松散 JSON 结构。
@@ -121,19 +119,19 @@ class CampaignContentEntrySummary {
   }
 
   Map<String, Object?> toJson() => {
-        'id': id,
-        'campaignId': campaignId,
-        'type': type,
-        'slug': slug,
-        'name': name,
-        'entry': entry,
-        'revision': revision,
-        'createdBy': createdBy,
-        'updatedBy': updatedBy,
-        'createdAt': createdAt,
-        'updatedAt': updatedAt,
-        'deletedAt': deletedAt,
-      };
+    'id': id,
+    'campaignId': campaignId,
+    'type': type,
+    'slug': slug,
+    'name': name,
+    'entry': entry,
+    'revision': revision,
+    'createdBy': createdBy,
+    'updatedBy': updatedBy,
+    'createdAt': createdAt,
+    'updatedAt': updatedAt,
+    'deletedAt': deletedAt,
+  };
 
   @override
   bool operator ==(Object other) {
@@ -155,19 +153,19 @@ class CampaignContentEntrySummary {
 
   @override
   int get hashCode => Object.hash(
-        id,
-        campaignId,
-        type,
-        slug,
-        name,
-        revision,
-        createdBy,
-        updatedBy,
-        createdAt,
-        updatedAt,
-        deletedAt,
-        Object.hashAllUnordered(entry.entries),
-      );
+    id,
+    campaignId,
+    type,
+    slug,
+    name,
+    revision,
+    createdBy,
+    updatedBy,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    Object.hashAllUnordered(entry.entries),
+  );
 }
 
 /// 一页战役变更。nextCursor 为空字符串或 '0' 表示无更多数据。

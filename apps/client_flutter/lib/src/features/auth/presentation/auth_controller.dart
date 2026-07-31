@@ -23,11 +23,13 @@ class AuthController extends ChangeNotifier {
   AuthUser? _user;
   StoredAuthTokens? _tokens;
   bool _loading = false;
+  bool _initialized = false;
   bool _autoLoginEnabled = true;
   String? _error;
 
   AuthUser? get user => _user;
   bool get isLoading => _loading;
+  bool get initialized => _initialized;
   bool get isLoggedIn => _user != null && _tokens != null;
   bool get autoLoginEnabled => _autoLoginEnabled;
   String? get error => _error;
@@ -82,6 +84,7 @@ class AuthController extends ChangeNotifier {
       final refreshedTokens = StoredAuthTokens(
         accessToken: newAccessToken,
         refreshToken: tokens.refreshToken,
+        user: _user ?? tokens.user,
       );
       _tokens = refreshedTokens;
       if (_autoLoginEnabled) {
@@ -90,13 +93,22 @@ class AuthController extends ChangeNotifier {
       completer.complete();
       notifyListeners();
       return newAccessToken;
+    } on AuthApiException catch (error) {
+      if (error.statusCode == 401 || error.statusCode == 403) {
+        await tokenStore.clearTokens(serverProfileId);
+        _user = null;
+        _tokens = null;
+        _error = null;
+      } else {
+        _error = '暂时无法连接服务器，本地数据仍可使用。';
+      }
+      completer.complete();
+      notifyListeners();
+      return null;
     } catch (_) {
-      // refresh 失败（refresh token 也过期 / 网络问题）：清空会话，
-      // 让 UI 退回登录页。不抛出，避免业务层 try/catch 误判。
-      await tokenStore.clearTokens(serverProfileId);
-      _user = null;
-      _tokens = null;
-      _error = null;
+      // 网络中断不等于退出登录。保留用户和 token，使账号工作区仍可离线
+      // 使用；后续网络请求会再次尝试刷新。
+      _error = '暂时无法连接服务器，本地数据仍可使用。';
       completer.complete();
       notifyListeners();
       return null;
@@ -128,37 +140,46 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<void> initialize() async {
+    if (_loading || _initialized) return;
     _loading = true;
     _error = null;
     notifyListeners();
 
-    _autoLoginEnabled = await tokenStore.getAutoLoginEnabled(serverProfileId);
-    if (!_autoLoginEnabled) {
-      await tokenStore.clearTokens(serverProfileId);
-      _loading = false;
-      notifyListeners();
-      return;
-    }
+    try {
+      _autoLoginEnabled = await tokenStore.getAutoLoginEnabled(serverProfileId);
+      if (!_autoLoginEnabled) {
+        await tokenStore.clearTokens(serverProfileId);
+        return;
+      }
 
-    final tokens = await tokenStore.getTokens(serverProfileId);
-    if (tokens == null) {
-      _loading = false;
-      notifyListeners();
-      return;
-    }
+      final tokens = await tokenStore.getTokens(serverProfileId);
+      if (tokens == null) return;
 
-    await _restoreSession(tokens);
-    _loading = false;
-    notifyListeners();
+      await _restoreSession(tokens);
+    } catch (_) {
+      _error = '无法读取本地登录状态，请重新登录。';
+    } finally {
+      _loading = false;
+      _initialized = true;
+      notifyListeners();
+    }
   }
 
   Future<void> _restoreSession(StoredAuthTokens tokens) async {
+    _user = tokens.user;
+    _tokens = tokens;
     try {
-      _user = await authClient.me(
+      final user = await authClient.me(
         apiBaseUrl: apiBaseUrl,
         accessToken: tokens.accessToken,
       );
-      _tokens = tokens;
+      _user = user;
+      _tokens = StoredAuthTokens(
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        user: user,
+      );
+      await tokenStore.saveTokens(serverProfileId, _tokens!);
       return;
     } on AuthApiException catch (error) {
       if (error.statusCode != 401) {
@@ -175,13 +196,14 @@ class AuthController extends ChangeNotifier {
         apiBaseUrl: apiBaseUrl,
         refreshToken: tokens.refreshToken,
       );
-      final refreshedTokens = StoredAuthTokens(
-        accessToken: accessToken,
-        refreshToken: tokens.refreshToken,
-      );
       final user = await authClient.me(
         apiBaseUrl: apiBaseUrl,
         accessToken: accessToken,
+      );
+      final refreshedTokens = StoredAuthTokens(
+        accessToken: accessToken,
+        refreshToken: tokens.refreshToken,
+        user: user,
       );
       _tokens = refreshedTokens;
       _user = user;
@@ -189,6 +211,8 @@ class AuthController extends ChangeNotifier {
     } on AuthApiException catch (error) {
       if (error.statusCode == 401 || error.statusCode == 403) {
         await tokenStore.clearTokens(serverProfileId);
+        _user = null;
+        _tokens = null;
         return;
       }
       _error = error.message;
@@ -224,6 +248,7 @@ class AuthController extends ChangeNotifier {
       _tokens = StoredAuthTokens(
         accessToken: session.accessToken,
         refreshToken: session.refreshToken,
+        user: session.user,
       );
       if (_autoLoginEnabled) {
         await tokenStore.saveTokens(serverProfileId, _tokens!);

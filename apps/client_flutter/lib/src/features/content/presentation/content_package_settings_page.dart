@@ -68,9 +68,9 @@ class _ContentPackageSettingsPageState
           : await widget.importer.previewJson(utf8.decode(file.bytes));
     } on FormatException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to read package: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Unable to read package: $error')));
       return;
     }
     if (!mounted) return;
@@ -93,10 +93,8 @@ class _ContentPackageSettingsPageState
     if (!mounted) return;
     await showDialog<void>(
       context: context,
-      builder: (_) => BatchImportWizardDialog(
-        files: files,
-        importer: widget.importer,
-      ),
+      builder: (_) =>
+          BatchImportWizardDialog(files: files, importer: widget.importer),
     );
   }
 
@@ -157,9 +155,7 @@ class _ContentPackageSettingsPageState
     if (confirmed != true) return;
     final entryCount = await widget.repository.clearAllPackages();
     if (!mounted) return;
-    messenger.showSnackBar(
-      SnackBar(content: Text('已清除 $entryCount 个条目')),
-    );
+    messenger.showSnackBar(SnackBar(content: Text('已清除 $entryCount 个条目')));
   }
 
   @override
@@ -205,8 +201,8 @@ class _ContentPackageSettingsPageState
                     children: [
                       Switch(
                         value: _enabled[package.id] ?? false,
-                        onChanged: (value) =>
-                            widget.repository.setPackageEnabled(package.id, value),
+                        onChanged: (value) => widget.repository
+                            .setPackageEnabled(package.id, value),
                       ),
                       IconButton(
                         icon: const Icon(Icons.delete_outline),

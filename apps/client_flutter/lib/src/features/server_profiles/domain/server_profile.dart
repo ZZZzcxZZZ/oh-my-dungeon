@@ -3,27 +3,41 @@ import 'server_metadata.dart';
 class ServerProfile {
   const ServerProfile({
     required this.id,
-    required this.name,
+    String? serverName,
+    String? name,
+    this.localAlias,
     required this.baseUrl,
     required this.apiBaseUrl,
     required this.websocketUrl,
     required this.lastKnownVersion,
-  });
+  }) : assert(serverName != null || name != null),
+       serverName = serverName ?? name ?? '';
 
   final String id;
-  final String name;
+  final String serverName;
+  final String? localAlias;
   final String baseUrl;
   final String apiBaseUrl;
   final String websocketUrl;
   final String lastKnownVersion;
+
+  String get instanceId => id;
+  String get displayName {
+    final alias = localAlias?.trim() ?? '';
+    return alias.isEmpty ? serverName : alias;
+  }
+
+  /// Compatibility getter for older call sites. New code should choose
+  /// [serverName] or [displayName] explicitly.
+  String get name => displayName;
 
   factory ServerProfile.fromMetadata({
     required String baseUrl,
     required ServerMetadata metadata,
   }) {
     return ServerProfile(
-      id: Uri.parse(baseUrl).host,
-      name: metadata.name,
+      id: metadata.instanceId,
+      serverName: metadata.name,
       baseUrl: baseUrl,
       apiBaseUrl: normalizeApiBaseUrl(metadata.apiBaseUrl),
       websocketUrl: metadata.websocketUrl,
@@ -33,7 +47,8 @@ class ServerProfile {
 
   ServerProfile copyWith({
     String? id,
-    String? name,
+    String? serverName,
+    String? localAlias,
     String? baseUrl,
     String? apiBaseUrl,
     String? websocketUrl,
@@ -41,7 +56,8 @@ class ServerProfile {
   }) {
     return ServerProfile(
       id: id ?? this.id,
-      name: name ?? this.name,
+      serverName: serverName ?? this.serverName,
+      localAlias: localAlias ?? this.localAlias,
       baseUrl: baseUrl ?? this.baseUrl,
       apiBaseUrl: apiBaseUrl ?? this.apiBaseUrl,
       websocketUrl: websocketUrl ?? this.websocketUrl,
@@ -51,8 +67,9 @@ class ServerProfile {
 
   factory ServerProfile.fromJson(Map<String, Object?> json) {
     return ServerProfile(
-      id: json['id']! as String,
-      name: json['name']! as String,
+      id: (json['instanceId'] ?? json['id'])! as String,
+      serverName: (json['serverName'] ?? json['name'])! as String,
+      localAlias: json['localAlias'] as String?,
       baseUrl: json['baseUrl']! as String,
       apiBaseUrl: normalizeApiBaseUrl(json['apiBaseUrl']! as String),
       websocketUrl: json['websocketUrl']! as String,
@@ -63,7 +80,10 @@ class ServerProfile {
   Map<String, Object?> toJson() {
     return {
       'id': id,
-      'name': name,
+      'instanceId': instanceId,
+      'name': serverName,
+      'serverName': serverName,
+      'localAlias': localAlias,
       'baseUrl': baseUrl,
       'apiBaseUrl': apiBaseUrl,
       'websocketUrl': websocketUrl,
@@ -84,7 +104,8 @@ class ServerProfile {
         other is ServerProfile &&
             runtimeType == other.runtimeType &&
             id == other.id &&
-            name == other.name &&
+            serverName == other.serverName &&
+            localAlias == other.localAlias &&
             baseUrl == other.baseUrl &&
             apiBaseUrl == other.apiBaseUrl &&
             websocketUrl == other.websocketUrl &&
@@ -95,7 +116,8 @@ class ServerProfile {
   int get hashCode {
     return Object.hash(
       id,
-      name,
+      serverName,
+      localAlias,
       baseUrl,
       apiBaseUrl,
       websocketUrl,

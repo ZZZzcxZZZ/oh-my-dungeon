@@ -87,7 +87,9 @@ class _ServerProfilesPageState extends State<ServerProfilesPage> {
       );
       await widget.store.saveProfile(profile);
       _refreshProfiles();
-      messenger.showSnackBar(SnackBar(content: Text('已连接到 ${profile.name}')));
+      messenger.showSnackBar(
+        SnackBar(content: Text('已连接到 ${profile.serverName}')),
+      );
     } catch (error) {
       messenger.showSnackBar(SnackBar(content: Text('连接失败：$error')));
     }
@@ -99,16 +101,20 @@ class _ServerProfilesPageState extends State<ServerProfilesPage> {
   }
 
   Future<void> _showEditProfileDialog(ServerProfile profile) async {
-    final controller = TextEditingController(text: profile.name);
+    final controller = TextEditingController(text: profile.localAlias ?? '');
 
     final nextName = await showDialog<String>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('编辑名称'),
+          title: const Text('服务器备注'),
           content: TextField(
             controller: controller,
-            decoration: const InputDecoration(labelText: '服务器名称'),
+            decoration: InputDecoration(
+              labelText: '私人备注',
+              hintText: profile.serverName,
+              helperText: '仅保存在当前设备',
+            ),
             autofocus: true,
           ),
           actions: [
@@ -125,9 +131,9 @@ class _ServerProfilesPageState extends State<ServerProfilesPage> {
       },
     );
 
-    if (nextName == null || nextName.trim().isEmpty) return;
+    if (nextName == null) return;
 
-    await widget.store.saveProfile(profile.copyWith(name: nextName.trim()));
+    await widget.store.saveProfile(profile.copyWith(localAlias: nextName.trim()));
     _refreshProfiles();
   }
 
@@ -137,7 +143,7 @@ class _ServerProfilesPageState extends State<ServerProfilesPage> {
       builder: (context) {
         return AlertDialog(
           title: const Text('删除服务器'),
-          content: Text('确认删除 ${profile.name}？'),
+          content: Text('确认删除 ${profile.displayName}？'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -236,8 +242,12 @@ class _ServerProfilesPageState extends State<ServerProfilesPage> {
               final isDefault = profile.id == data.defaultProfileId;
               return ListTile(
                 leading: const Icon(Icons.dns_outlined),
-                title: Text(profile.name),
-                subtitle: Text(profile.baseUrl),
+                title: Text(profile.displayName),
+                subtitle: Text(
+                  profile.localAlias?.trim().isNotEmpty == true
+                      ? '${profile.serverName}\n${profile.baseUrl}'
+                      : profile.baseUrl,
+                ),
                 onTap: () async {
                   await widget.store.setDefaultProfileId(profile.id);
                   widget.onProfileActivated?.call(profile);
@@ -290,7 +300,7 @@ class _ServerProfileTrailing extends StatelessWidget {
                 ),
               const PopupMenuItem(
                 value: _ServerProfileAction.editName,
-                child: Text('编辑名称'),
+                child: Text('编辑备注'),
               ),
               const PopupMenuItem(
                 value: _ServerProfileAction.delete,

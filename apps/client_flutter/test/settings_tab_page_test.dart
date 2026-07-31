@@ -81,13 +81,7 @@ void main() {
   testWidgets('renders sections in the fixed IA order', (tester) async {
     await pumpSettings(tester);
 
-    final labels = <String>[
-      '外观与体验',
-      '资料与存储',
-      '服务器与账户',
-      '角色模式',
-      '关于',
-    ];
+    final labels = <String>['服务器与账户', '角色模式', '外观与体验', '游戏与跑团', '资料与存储', '关于'];
     final indices = <int>[];
     for (final label in labels) {
       final found = find.text(label);
@@ -108,6 +102,65 @@ void main() {
     }
   });
 
+  testWidgets('keeps gameplay preferences out of appearance', (tester) async {
+    await pumpSettings(tester);
+
+    final appearanceHeader = find.text('外观与体验').first;
+    final gameplayHeader = find.text('游戏与跑团').first;
+    final contentHeader = find.text('资料与存储').first;
+    final appearanceTop = tester.getTopLeft(appearanceHeader).dy;
+    final gameplayTop = tester.getTopLeft(gameplayHeader).dy;
+    final contentTop = tester.getTopLeft(contentHeader).dy;
+
+    for (final label in ['默认骰子', '掷骰前确认', '连续消息合并头像', '默认角色卡标签']) {
+      final setting = find.text(label).first;
+      final top = tester.getTopLeft(setting).dy;
+      expect(top, greaterThan(gameplayTop));
+      expect(top, lessThan(contentTop));
+      expect(top, isNot(inInclusiveRange(appearanceTop, gameplayTop)));
+    }
+  });
+
+  testWidgets('compact segmented controls keep labels on one line', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await pumpSettings(tester);
+
+    final roleControl = tester.widget<SegmentedButton<ClientMode>>(
+      find.byType(SegmentedButton<ClientMode>),
+    );
+    final themeControl = tester.widget<SegmentedButton<ThemeMode>>(
+      find.byType(SegmentedButton<ThemeMode>),
+    );
+    expect(
+      roleControl.segments.every((segment) => segment.icon == null),
+      isTrue,
+    );
+    expect(
+      themeControl.segments.every((segment) => segment.icon == null),
+      isTrue,
+    );
+
+    for (final label in ['玩家', '主持人', '系统', '浅色', '深色']) {
+      final size = tester.getSize(find.text(label).first);
+      expect(
+        size.height,
+        lessThanOrEqualTo(24),
+        reason: '$label should not wrap in compact width',
+      );
+      expect(
+        size.width,
+        greaterThanOrEqualTo(label.length * 12),
+        reason: '$label should retain horizontal label width',
+      );
+    }
+  });
+
   testWidgets('does not render display-only settings', (tester) async {
     await pumpSettings(tester);
 
@@ -117,22 +170,24 @@ void main() {
     expect(find.text('显示 Legacy 内容'), findsNothing);
   });
 
-  testWidgets('server/account/sync rows live only under 服务器与账户', (tester) async {
-    await pumpSettings(tester);
+  testWidgets(
+    'server and account use a compact first-row summary and details page',
+    (tester) async {
+      await pumpSettings(tester);
 
-    // "服务器" header is no longer a standalone section; the merged section
-    // title is "服务器与账户".
-    expect(find.text('服务器'), findsNothing);
-    expect(find.text('账号'), findsNothing);
-    expect(find.text('同步'), findsNothing);
+      expect(find.text('服务器与账户'), findsOneWidget);
+      expect(find.text('Local Table'), findsOneWidget);
+      expect(find.byKey(const Key('server-account-summary')), findsOneWidget);
+      expect(find.text('http://localhost:3000'), findsNothing);
 
-    // But the merged section title is present exactly once.
-    expect(find.text('服务器与账户'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('server-account-summary')));
+      await tester.pumpAndSettle();
 
-    // Server info card is present under the merged section.
-    expect(find.text('Local Table'), findsOneWidget);
-    expect(find.text('http://localhost:3000'), findsOneWidget);
-  });
+      expect(find.text('服务器与账号'), findsOneWidget);
+      expect(find.text('http://localhost:3000'), findsOneWidget);
+      expect(find.text('未登录'), findsOneWidget);
+    },
+  );
 
   testWidgets('caps content width at 760 dp on wide screens', (tester) async {
     tester.view.physicalSize = const Size(1400, 1000);
@@ -146,10 +201,12 @@ void main() {
     expect(scrollable, findsOneWidget);
 
     final constrainedBox = tester.widget<ConstrainedBox>(
-      find.ancestor(
-        of: find.text('外观与体验'),
-        matching: find.byType(ConstrainedBox),
-      ).first,
+      find
+          .ancestor(
+            of: find.text('外观与体验'),
+            matching: find.byType(ConstrainedBox),
+          )
+          .first,
     );
     final max = constrainedBox.constraints.maxWidth;
     expect(max, lessThanOrEqualTo(760));
@@ -170,7 +227,10 @@ void main() {
     expect(find.byIcon(Icons.check), findsWidgets); // selected preset check
     expect(find.text('自定义'), findsOneWidget);
 
-    await tester.enterText(find.byKey(const Key('seed-color-hex-input')), '0061A4');
+    await tester.enterText(
+      find.byKey(const Key('seed-color-hex-input')),
+      '0061A4',
+    );
     await tester.pump();
     await tester.pumpAndSettle();
 
@@ -216,16 +276,14 @@ void main() {
     // No Card should contain another Card.
     final cards = find.byType(Card);
     for (final cardElement in cards.evaluate()) {
-      final cardFinder = find.byElementPredicate((element) => element == cardElement);
+      final cardFinder = find.byElementPredicate(
+        (element) => element == cardElement,
+      );
       final inner = find.descendant(
         of: cardFinder,
         matching: find.byType(Card),
       );
-      expect(
-        inner.evaluate(),
-        isEmpty,
-        reason: 'Card nests another Card',
-      );
+      expect(inner.evaluate(), isEmpty, reason: 'Card nests another Card');
     }
   });
 
@@ -289,24 +347,23 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
-    expect(
-      preferencesController.preferences.quickDicePresets,
-      ['1d20+5', '2d6+3'],
-    );
+    expect(preferencesController.preferences.quickDicePresets, [
+      '1d20+5',
+      '2d6+3',
+    ]);
     expect(find.text('2/6'), findsOneWidget);
 
     // Delete the first preset. Tap the delete icon inside the chip.
-    await tester.tap(find.descendant(
-      of: find.byKey(const Key('quick-dice-preset-0')),
-      matching: find.byIcon(Icons.cancel),
-    ));
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const Key('quick-dice-preset-0')),
+        matching: find.byIcon(Icons.cancel),
+      ),
+    );
     await tester.pump();
     await tester.pumpAndSettle();
 
-    expect(
-      preferencesController.preferences.quickDicePresets,
-      ['2d6+3'],
-    );
+    expect(preferencesController.preferences.quickDicePresets, ['2d6+3']);
     expect(find.text('1/6'), findsOneWidget);
   });
 
@@ -336,10 +393,7 @@ void main() {
     // Dialog stays open with error text.
     expect(find.text('添加快捷骰预设'), findsOneWidget);
     expect(find.textContaining('格式无效'), findsOneWidget);
-    expect(
-      preferencesController.preferences.quickDicePresets,
-      isEmpty,
-    );
+    expect(preferencesController.preferences.quickDicePresets, isEmpty);
 
     // Cancel.
     await tester.tap(find.widgetWithText(TextButton, '取消'));

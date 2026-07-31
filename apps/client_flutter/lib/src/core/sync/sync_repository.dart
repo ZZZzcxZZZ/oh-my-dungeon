@@ -25,7 +25,9 @@ class DriftSyncRepository implements SyncRepository {
 
   @override
   Future<void> enqueue(SyncOperation operation) async {
-    await _database.into(_database.syncOutbox).insertOnConflictUpdate(
+    await _database
+        .into(_database.syncOutbox)
+        .insertOnConflictUpdate(
           SyncOutboxCompanion.insert(
             id: operation.id,
             scope: operation.scope,
@@ -41,37 +43,42 @@ class DriftSyncRepository implements SyncRepository {
 
   @override
   Future<List<SyncOperation>> pending({required String scope}) async {
-    final rows = await (_database.select(_database.syncOutbox)
-          ..where((t) => t.scope.equals(scope))
-          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
-        .get();
+    final rows =
+        await (_database.select(_database.syncOutbox)
+              ..where((t) => t.scope.equals(scope))
+              ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+            .get();
     return rows
-        .map((row) => SyncOperation(
-              id: row.id,
-              scope: row.scope,
-              entityType: row.entityType,
-              entityId: row.entityId,
-              baseRevision: row.baseRevision,
-              payloadJson: row.payloadJson,
-              attempts: row.attempts,
-            ))
+        .map(
+          (row) => SyncOperation(
+            id: row.id,
+            scope: row.scope,
+            entityType: row.entityType,
+            entityId: row.entityId,
+            baseRevision: row.baseRevision,
+            payloadJson: row.payloadJson,
+            attempts: row.attempts,
+          ),
+        )
         .toList();
   }
 
   @override
   Future<void> markCompleted(String operationId) async {
-    await (_database.delete(_database.syncOutbox)
-          ..where((t) => t.id.equals(operationId)))
-        .go();
+    await (_database.delete(
+      _database.syncOutbox,
+    )..where((t) => t.id.equals(operationId))).go();
   }
 
   @override
   Future<void> markAttemptFailed(String operationId) async {
-    final row = await (_database.select(_database.syncOutbox)
-          ..where((t) => t.id.equals(operationId)))
-        .getSingleOrNull();
+    final row = await (_database.select(
+      _database.syncOutbox,
+    )..where((t) => t.id.equals(operationId))).getSingleOrNull();
     if (row == null) return;
-    await _database.into(_database.syncOutbox).insertOnConflictUpdate(
+    await _database
+        .into(_database.syncOutbox)
+        .insertOnConflictUpdate(
           SyncOutboxCompanion.insert(
             id: row.id,
             scope: row.scope,
@@ -87,9 +94,11 @@ class DriftSyncRepository implements SyncRepository {
 
   @override
   Future<String?> readCursor(String scope, String remoteId) async {
-    final row = await (_database.select(_database.syncCursors)
-          ..where((t) => t.scope.equals(scope) & t.remoteId.equals(remoteId)))
-        .getSingleOrNull();
+    final row =
+        await (_database.select(_database.syncCursors)..where(
+              (t) => t.scope.equals(scope) & t.remoteId.equals(remoteId),
+            ))
+            .getSingleOrNull();
     return row?.cursor;
   }
 
@@ -99,7 +108,9 @@ class DriftSyncRepository implements SyncRepository {
     required String remoteId,
     required String cursor,
   }) async {
-    await _database.into(_database.syncCursors).insertOnConflictUpdate(
+    await _database
+        .into(_database.syncCursors)
+        .insertOnConflictUpdate(
           SyncCursorsCompanion.insert(
             scope: scope,
             remoteId: remoteId,

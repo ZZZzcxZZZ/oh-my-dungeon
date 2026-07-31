@@ -35,31 +35,42 @@ void main() {
     late ContentLibraryController controller;
 
     setUp(() {
-      final repository = MemoryContentRepository(initialEntries: [
-        _class('example:class/fighter', '战士'),
-        _class('example:class/wizard', '法师'),
-        _subclass('example:subclass/champion', '冠军', 'example:class/fighter'),
-        _subclass('example:subclass/battle-master', '战斗大师', 'example:class/fighter'),
-        _subclass('example:subclass/evoker', '塑能师', 'example:class/wizard'),
-      ]);
+      final repository = MemoryContentRepository(
+        initialEntries: [
+          _class('example:class/fighter', '战士'),
+          _class('example:class/wizard', '法师'),
+          _subclass('example:subclass/champion', '冠军', 'example:class/fighter'),
+          _subclass(
+            'example:subclass/battle-master',
+            '战斗大师',
+            'example:class/fighter',
+          ),
+          _subclass('example:subclass/evoker', '塑能师', 'example:class/wizard'),
+        ],
+      );
       controller = ContentLibraryController(repository: repository);
     });
 
     tearDown(() => controller.dispose());
 
-    test('facetOptions resolves parentClass names from subclassOf relations', () async {
-      final options = await controller.facetOptions(
-        type: 'subclass',
-        fields: const ['parentClass'],
-      );
-      // 父职业名按 Unicode 序排列: 战 (U+6218) < 法 (U+6CD5) -> 战士, 法师.
-      expect(options['parentClass'], ['战士', '法师']);
-    });
+    test(
+      'facetOptions resolves parentClass names from subclassOf relations',
+      () async {
+        final options = await controller.facetOptions(
+          type: 'subclass',
+          fields: const ['parentClass'],
+        );
+        // 父职业名按 Unicode 序排列: 战 (U+6218) < 法 (U+6CD5) -> 战士, 法师.
+        expect(options['parentClass'], ['战士', '法师']);
+      },
+    );
 
     test('search filters subclasses by parentClass name', () async {
       await controller.search(
         type: 'subclass',
-        facets: const {'parentClass': {'战士'}},
+        facets: const {
+          'parentClass': {'战士'},
+        },
       );
       final names = controller.results.map((e) => e.name).toList()..sort();
       // 冠 (U+51A0) < 战 (U+6218) -> 冠军, 战斗大师.
@@ -69,110 +80,147 @@ void main() {
     test('selecting wizard returns only wizard subclasses', () async {
       await controller.search(
         type: 'subclass',
-        facets: const {'parentClass': {'法师'}},
+        facets: const {
+          'parentClass': {'法师'},
+        },
       );
       expect(controller.results.map((e) => e.name), ['塑能师']);
     });
 
-    test('subclass without subclassOf relation is excluded from parentClass facet',
-        () async {
-      final repository = MemoryContentRepository(initialEntries: [
-        _class('example:class/fighter', '战士'),
-        _subclass('example:subclass/champion', '冠军', 'example:class/fighter'),
-        // 孤儿子职业, 无任何关系.
-        ContentEntry.fromJson({
-          'id': 'example:subclass/orphan',
-          'type': 'subclass',
-          'slug': 'orphan',
-          'name': '孤儿',
-          'body': <Map<String, Object?>>[],
-          'revision': 1,
-        }),
-      ]);
-      final localController = ContentLibraryController(repository: repository);
-      addTearDown(localController.dispose);
-
-      final options = await localController.facetOptions(
-        type: 'subclass',
-        fields: const ['parentClass'],
-      );
-      expect(options['parentClass'], ['战士']);
-    });
-
-    test('facetOptions ignores any stale structured.parentClass value', () async {
-      // 即使旧数据残留 structured.parentClass, 也应只读 subclassOf 关系.
-      final repository = MemoryContentRepository(initialEntries: [
-        _class('example:class/fighter', '战士'),
-        ContentEntry.fromJson({
-          'id': 'example:subclass/champion',
-          'type': 'subclass',
-          'slug': 'champion',
-          'name': '冠军',
-          'body': <Map<String, Object?>>[],
-          'revision': 1,
-          'structured': {'parentClass': 'WRONG_STALE_VALUE'},
-          'relations': [
-            {'type': 'subclassOf', 'targetId': 'example:class/fighter'},
+    test(
+      'subclass without subclassOf relation is excluded from parentClass facet',
+      () async {
+        final repository = MemoryContentRepository(
+          initialEntries: [
+            _class('example:class/fighter', '战士'),
+            _subclass(
+              'example:subclass/champion',
+              '冠军',
+              'example:class/fighter',
+            ),
+            // 孤儿子职业, 无任何关系.
+            ContentEntry.fromJson({
+              'id': 'example:subclass/orphan',
+              'type': 'subclass',
+              'slug': 'orphan',
+              'name': '孤儿',
+              'body': <Map<String, Object?>>[],
+              'revision': 1,
+            }),
           ],
-        }),
-      ]);
-      final localController = ContentLibraryController(repository: repository);
-      addTearDown(localController.dispose);
+        );
+        final localController = ContentLibraryController(
+          repository: repository,
+        );
+        addTearDown(localController.dispose);
 
-      final options = await localController.facetOptions(
-        type: 'subclass',
-        fields: const ['parentClass'],
-      );
-      expect(options['parentClass'], ['战士']);
-    });
+        final options = await localController.facetOptions(
+          type: 'subclass',
+          fields: const ['parentClass'],
+        );
+        expect(options['parentClass'], ['战士']);
+      },
+    );
+
+    test(
+      'facetOptions ignores any stale structured.parentClass value',
+      () async {
+        // 即使旧数据残留 structured.parentClass, 也应只读 subclassOf 关系.
+        final repository = MemoryContentRepository(
+          initialEntries: [
+            _class('example:class/fighter', '战士'),
+            ContentEntry.fromJson({
+              'id': 'example:subclass/champion',
+              'type': 'subclass',
+              'slug': 'champion',
+              'name': '冠军',
+              'body': <Map<String, Object?>>[],
+              'revision': 1,
+              'structured': {'parentClass': 'WRONG_STALE_VALUE'},
+              'relations': [
+                {'type': 'subclassOf', 'targetId': 'example:class/fighter'},
+              ],
+            }),
+          ],
+        );
+        final localController = ContentLibraryController(
+          repository: repository,
+        );
+        addTearDown(localController.dispose);
+
+        final options = await localController.facetOptions(
+          type: 'subclass',
+          fields: const ['parentClass'],
+        );
+        expect(options['parentClass'], ['战士']);
+      },
+    );
   });
 
   group('subclass parentClass facet UI (Task 2.1)', () {
-    testWidgets('filter sheet exposes parentClass facet options for subclass type',
-        (tester) async {
-      final repository = MemoryContentRepository(initialEntries: [
-        _class('example:class/fighter', '战士'),
-        _class('example:class/wizard', '法师'),
-        _subclass('example:subclass/champion', '冠军', 'example:class/fighter'),
-        _subclass('example:subclass/evoker', '塑能师', 'example:class/wizard'),
-      ]);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ContentLibraryPage(
-            controller: ContentLibraryController(repository: repository),
-            onImportRequested: () {},
+    testWidgets(
+      'filter sheet exposes parentClass facet options for subclass type',
+      (tester) async {
+        final repository = MemoryContentRepository(
+          initialEntries: [
+            _class('example:class/fighter', '战士'),
+            _class('example:class/wizard', '法师'),
+            _subclass(
+              'example:subclass/champion',
+              '冠军',
+              'example:class/fighter',
+            ),
+            _subclass('example:subclass/evoker', '塑能师', 'example:class/wizard'),
+          ],
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ContentLibraryPage(
+              controller: ContentLibraryController(repository: repository),
+              onImportRequested: () {},
+            ),
           ),
-        ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('content-filter-button')));
+        await tester.pumpAndSettle();
+
+        // 选择子职业类型.
+        await tester.tap(find.text('子职').last);
+        await tester.pumpAndSettle();
+
+        // 所属职业 facet 区块可见, 且列出父职业名 (而非裸 entryKey).
+        // 注意: 主页背景 ListView 也展示了 "战士"/"法师" 职业条目,
+        // 所以断言要限定在 BottomSheet 后代内.
+        // Task 2.2: facet chip 标签带计数后缀 (如 "战士 (1)"), 改用 textContaining.
+        final sheet = find.byType(BottomSheet);
+        expect(
+          find.descendant(of: sheet, matching: find.text('所属职业')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: sheet, matching: find.textContaining('战士')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: sheet, matching: find.textContaining('法师')),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets('selecting parentClass facet filters subclasses', (
+      tester,
+    ) async {
+      final repository = MemoryContentRepository(
+        initialEntries: [
+          _class('example:class/fighter', '战士'),
+          _class('example:class/wizard', '法师'),
+          _subclass('example:subclass/champion', '冠军', 'example:class/fighter'),
+          _subclass('example:subclass/evoker', '塑能师', 'example:class/wizard'),
+        ],
       );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byKey(const Key('content-filter-button')));
-      await tester.pumpAndSettle();
-
-      // 选择子职业类型.
-      await tester.tap(find.text('子职').last);
-      await tester.pumpAndSettle();
-
-      // 所属职业 facet 区块可见, 且列出父职业名 (而非裸 entryKey).
-      // 注意: 主页背景 ListView 也展示了 "战士"/"法师" 职业条目,
-      // 所以断言要限定在 BottomSheet 后代内.
-      // Task 2.2: facet chip 标签带计数后缀 (如 "战士 (1)"), 改用 textContaining.
-      final sheet = find.byType(BottomSheet);
-      expect(find.descendant(of: sheet, matching: find.text('所属职业')),
-          findsOneWidget);
-      expect(find.descendant(of: sheet, matching: find.textContaining('战士')),
-          findsOneWidget);
-      expect(find.descendant(of: sheet, matching: find.textContaining('法师')),
-          findsOneWidget);
-    });
-
-    testWidgets('selecting parentClass facet filters subclasses', (tester) async {
-      final repository = MemoryContentRepository(initialEntries: [
-        _class('example:class/fighter', '战士'),
-        _class('example:class/wizard', '法师'),
-        _subclass('example:subclass/champion', '冠军', 'example:class/fighter'),
-        _subclass('example:subclass/evoker', '塑能师', 'example:class/wizard'),
-      ]);
       await tester.pumpWidget(
         MaterialApp(
           home: ContentLibraryPage(

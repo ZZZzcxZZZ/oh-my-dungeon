@@ -66,7 +66,7 @@ CharacterSyncConflict _conflict(String id, String characterId) {
   return CharacterSyncConflict(
     id: id,
     characterId: characterId,
-    campaignActorId: 'actor-$id',
+    campaignCharacterId: 'character-$id',
     fieldPath: 'build',
     localValueJson: '{}',
     remoteValueJson: '{}',

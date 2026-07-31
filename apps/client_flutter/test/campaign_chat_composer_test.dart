@@ -31,7 +31,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('uses accessible compact controls and a 48px avatar target', (
+  testWidgets('uses equal targets and equal 44px visible controls', (
     tester,
   ) async {
     final text = TextEditingController();
@@ -44,14 +44,23 @@ void main() {
       tester.getSize(find.byKey(const Key('campaign-avatar-target'))),
       const Size.square(48),
     );
-    // Plan 2026-07-23 Task 1.2: 现在显示「说」「做」文字标签 + 图标。
-    expect(find.text('说'), findsOneWidget);
-    expect(find.text('做'), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const Key('campaign-chat-send-target'))),
+      const Size.square(48),
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('campaign-avatar-visual'))),
+      const Size.square(44),
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('campaign-chat-send-visual'))),
+      const Size.square(44),
+    );
     expect(find.byType(ChatModePicker), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('groups mode and text inside one composer input surface', (
+  testWidgets('embeds the single mode toggle inside the capsule input', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -72,7 +81,9 @@ void main() {
     );
     final modeControl = tester.getRect(find.byType(ChatModePicker));
     final input = tester.getRect(find.byKey(const Key('campaign-chat-input')));
-    final send = tester.getRect(find.byKey(const Key('campaign-chat-send')));
+    final send = tester.getRect(
+      find.byKey(const Key('campaign-chat-send-target')),
+    );
 
     expect(avatar.right, lessThan(surface.left));
     expect(surface.right, lessThan(send.left));
@@ -82,7 +93,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('uses the previous two compact mode buttons', (tester) async {
+  testWidgets('uses one circular mode button that toggles on tap', (
+    tester,
+  ) async {
     var mode = ChatMode.say;
     await tester.pumpWidget(
       MaterialApp(
@@ -91,7 +104,7 @@ void main() {
             builder: (context, setState) => Align(
               alignment: Alignment.bottomLeft,
               child: SizedBox(
-                width: 96,
+                width: 40,
                 child: ChatModePicker(
                   mode: mode,
                   enabled: true,
@@ -104,27 +117,13 @@ void main() {
       ),
     );
 
-    expect(find.byKey(const Key('chat-mode-track')), findsNothing);
-    // Plan 2026-07-23 Task 1.2: 引入滑动 thumb，现在存在。
-    expect(find.byKey(const Key('chat-mode-thumb')), findsOneWidget);
-    expect(
-      tester
-          .widget<ChatModeHalf>(find.byKey(const Key('chat-mode-say')))
-          .selected,
-      isTrue,
-    );
+    expect(find.byKey(const Key('chat-mode-toggle')), findsOneWidget);
+    expect(find.byKey(const Key('chat-mode-thumb')), findsNothing);
 
-    // Plan 2026-07-23 Task 1.2: 点击 act 按钮触发切换。
-    await tester.tap(find.byKey(const Key('chat-mode-action')));
+    await tester.tap(find.byKey(const Key('chat-mode-toggle')));
     await tester.pumpAndSettle();
 
     expect(mode, ChatMode.act);
-    expect(
-      tester
-          .widget<ChatModeHalf>(find.byKey(const Key('chat-mode-action')))
-          .selected,
-      isTrue,
-    );
   });
 
   testWidgets('shows a dismissible temporary identity banner', (tester) async {
@@ -144,6 +143,35 @@ void main() {
     await tester.tap(find.byKey(const Key('discard-draft-identity')));
     expect(discarded, isTrue);
   });
+
+  for (final speakerMode in ['narrator', 'ooc']) {
+    testWidgets('$speakerMode identity hides the say/action mode control', (
+      tester,
+    ) async {
+      final text = TextEditingController();
+      addTearDown(text.dispose);
+      await tester.pumpWidget(
+        _harness(
+          controller: text,
+          identity: CampaignComposerIdentity(
+            displayName: speakerMode == 'narrator' ? '旁白 / DM' : '场外',
+            speakerMode: speakerMode,
+            characterId: null,
+            avatarUrl: null,
+            healthState: null,
+            localCharacter: null,
+            campaignCharacter: null,
+            subtitle: '',
+          ),
+          onSend: (_) async => true,
+        ),
+      );
+
+      expect(find.byType(ChatModePicker), findsNothing);
+      expect(find.byKey(const Key('campaign-chat-input')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   for (final size in const [Size(390, 844), Size(1280, 720)]) {
     testWidgets('handles long content at ${size.width}x${size.height}', (
@@ -174,6 +202,16 @@ void main() {
 Widget _harness({
   required TextEditingController controller,
   required Future<bool> Function(String content) onSend,
+  CampaignComposerIdentity identity = const CampaignComposerIdentity(
+    displayName: '阿莱娜',
+    speakerMode: 'character',
+    characterId: 'character-1',
+    avatarUrl: null,
+    healthState: 'healthy',
+    localCharacter: null,
+    campaignCharacter: null,
+    subtitle: 'HP 8/10',
+  ),
   EdgeInsets viewInsets = EdgeInsets.zero,
   String? draftIdentityName,
   VoidCallback? onDiscardDraft,
@@ -185,16 +223,7 @@ Widget _harness({
         body: Align(
           alignment: Alignment.bottomCenter,
           child: CampaignChatComposer(
-            identity: const CampaignComposerIdentity(
-              displayName: '阿莱娜',
-              speakerMode: 'actor',
-              actorId: 'actor-1',
-              avatarUrl: null,
-              healthState: 'healthy',
-              localCharacter: null,
-              campaignActor: null,
-              subtitle: 'HP 8/10',
-            ),
+            identity: identity,
             mode: ChatMode.say,
             controller: controller,
             sending: false,

@@ -1,15 +1,23 @@
 import 'package:drift/drift.dart';
 
 /// 战役角色本地缓存。来源是远端战役变更流的 upsert。
-@DataClassName('CampaignActorsCacheRow')
-@TableIndex(name: 'idx_campaign_actors_campaign_status', columns: {#campaignId, #status})
-class CampaignActorsCache extends Table {
+@DataClassName('CampaignCharactersCacheRow')
+@TableIndex(
+  name: 'idx_campaign_characters_campaign_status',
+  columns: {#campaignId, #status},
+)
+class CampaignCharactersCache extends Table {
+  @override
+  String get tableName => 'campaign_characters_cache';
+
   TextColumn get id => text()();
   TextColumn get campaignId => text()();
   TextColumn get ownerUserId => text().nullable()();
   TextColumn get sourceCharacterId => text().nullable()();
-  TextColumn get actorType => text()();
+  TextColumn get characterType => text().named('character_type')();
   TextColumn get status => text()();
+  BoolColumn get visibleToPlayers =>
+      boolean().withDefault(const Constant(true))();
   TextColumn get sheetJson => text()();
   IntColumn get revision => integer()();
   TextColumn get updatedBy => text()();
@@ -20,21 +28,30 @@ class CampaignActorsCache extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
-/// 角色与战役 Actor 双向同步基线。campaignActorId 为主键。
-@DataClassName('CampaignActorBacklinkRow')
-class CampaignActorBacklinks extends Table {
-  TextColumn get campaignActorId => text()();
+/// 角色与战役 Character 双向同步基线。campaignCharacterId 为主键。
+@DataClassName('CampaignCharacterBacklinkRow')
+class CampaignCharacterBacklinks extends Table {
+  @override
+  String get tableName => 'campaign_character_backlinks';
+
+  TextColumn get campaignCharacterId => text().named('campaign_character_id')();
   TextColumn get sourceCharacterId => text()();
-  IntColumn get lastPublishedLocalRevision => integer().withDefault(const Constant(0))();
-  IntColumn get lastAppliedActorRevision => integer().withDefault(const Constant(0))();
+  IntColumn get lastPublishedLocalRevision =>
+      integer().withDefault(const Constant(0))();
+  IntColumn get lastAppliedCharacterRevision => integer()
+      .named('last_applied_character_revision')
+      .withDefault(const Constant(0))();
 
   @override
-  Set<Column<Object>> get primaryKey => {campaignActorId};
+  Set<Column<Object>> get primaryKey => {campaignCharacterId};
 }
 
 /// 战役内容条目本地缓存。
 @DataClassName('CampaignContentCacheRow')
-@TableIndex(name: 'idx_campaign_content_campaign_type_deleted', columns: {#campaignId, #type, #deletedAt})
+@TableIndex(
+  name: 'idx_campaign_content_campaign_type_deleted',
+  columns: {#campaignId, #type, #deletedAt},
+)
 class CampaignContentCache extends Table {
   TextColumn get id => text()();
   TextColumn get campaignId => text()();
@@ -64,13 +81,16 @@ class CampaignSyncCursors extends Table {
   Set<Column<Object>> get primaryKey => {campaignId};
 }
 
-/// 角色与 Actor 双向同步冲突记录，由角色页比较解决。
+/// 角色与 Character 双向同步冲突记录，由角色页比较解决。
 @DataClassName('CharacterSyncConflictRow')
-@TableIndex(name: 'idx_character_sync_conflicts_character', columns: {#characterId})
+@TableIndex(
+  name: 'idx_character_sync_conflicts_character',
+  columns: {#characterId},
+)
 class CharacterSyncConflicts extends Table {
   TextColumn get id => text()();
   TextColumn get characterId => text()();
-  TextColumn get campaignActorId => text()();
+  TextColumn get campaignCharacterId => text().named('campaign_character_id')();
   TextColumn get fieldPath => text()();
   TextColumn get localValueJson => text().withDefault(const Constant('{}'))();
   TextColumn get remoteValueJson => text().withDefault(const Constant('{}'))();

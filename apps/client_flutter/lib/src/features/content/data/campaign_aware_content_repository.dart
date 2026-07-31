@@ -171,9 +171,7 @@ class CampaignAwareContentRepository implements ContentRepository {
       return local.updateEntry(rebased);
     }
     if (entry.id.startsWith(_campaignPrefix)) {
-      throw StateError(
-        'Cannot edit campaign-scoped entry ${entry.id} locally',
-      );
+      throw StateError('Cannot edit campaign-scoped entry ${entry.id} locally');
     }
     return local.updateEntry(entry);
   }

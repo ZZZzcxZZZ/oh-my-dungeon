@@ -29,7 +29,7 @@ class CampaignMessagePresentation {
     final sameSpeaker =
         previous != null &&
         previous.senderId == current.senderId &&
-        previous.campaignActorId == current.campaignActorId &&
+        previous.campaignCharacterId == current.campaignCharacterId &&
         previous.speakerMode == current.speakerMode;
 
     return CampaignMessagePresentation(

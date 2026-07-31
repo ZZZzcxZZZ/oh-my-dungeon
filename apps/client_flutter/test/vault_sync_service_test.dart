@@ -37,7 +37,9 @@ void main() {
       baseUrl: 'https://table.example',
       accessToken: 'token',
     );
-    final outbox = MemorySyncRepository(pendingOperations: [characterOperation]);
+    final outbox = MemorySyncRepository(
+      pendingOperations: [characterOperation],
+    );
     final api = MemoryVaultApiClient(
       changes: VaultChangePage(
         cursor: '8',
@@ -99,15 +101,36 @@ void main() {
         VaultChangePage(
           cursor: '5',
           changes: [
-            const VaultChange(cursor: '1', operation: 'upsert', entityType: 'note', entityId: 'note-1', revision: 1, payloadJson: '{}'),
-            const VaultChange(cursor: '2', operation: 'upsert', entityType: 'note', entityId: 'note-2', revision: 1, payloadJson: '{}'),
+            const VaultChange(
+              cursor: '1',
+              operation: 'upsert',
+              entityType: 'note',
+              entityId: 'note-1',
+              revision: 1,
+              payloadJson: '{}',
+            ),
+            const VaultChange(
+              cursor: '2',
+              operation: 'upsert',
+              entityType: 'note',
+              entityId: 'note-2',
+              revision: 1,
+              payloadJson: '{}',
+            ),
           ],
           hasMore: true,
         ),
         VaultChangePage(
           cursor: '5',
           changes: [
-            const VaultChange(cursor: '3', operation: 'upsert', entityType: 'note', entityId: 'note-3', revision: 1, payloadJson: '{}'),
+            const VaultChange(
+              cursor: '3',
+              operation: 'upsert',
+              entityType: 'note',
+              entityId: 'note-3',
+              revision: 1,
+              payloadJson: '{}',
+            ),
           ],
           hasMore: false,
         ),
@@ -142,11 +165,13 @@ void main() {
       payloadJson: '{"name":"Arannis"}',
     );
     final outbox = MemorySyncRepository(pendingOperations: [operation]);
-    final api = MemoryVaultApiClient(pushResult: const VaultPushResult(
-      applied: [],
-      skipped: [],
-      conflicts: [VaultConflict(entityId: 'character-1', currentRevision: 5)],
-    ));
+    final api = MemoryVaultApiClient(
+      pushResult: const VaultPushResult(
+        applied: [],
+        skipped: [],
+        conflicts: [VaultConflict(entityId: 'character-1', currentRevision: 5)],
+      ),
+    );
     final applier = MemoryVaultChangeApplier();
     final service = VaultSyncService(
       syncRepository: outbox,
@@ -158,55 +183,73 @@ void main() {
     expect(result.phase, SyncPhase.conflict);
   });
 
-  test('DriftVaultChangeApplier applies remote character without re-enqueuing', () async {
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    final applier = DriftVaultChangeApplier(database);
-    final character = testCharacter(id: 'char-1', name: 'Arannis');
-    final change = VaultChange(
-      cursor: '1',
-      operation: 'upsert',
-      entityType: 'character',
-      entityId: character.id,
-      revision: 5,
-      payloadJson: jsonEncode(character.toJson()),
-    );
+  test(
+    'DriftVaultChangeApplier applies remote character without re-enqueuing',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      final applier = DriftVaultChangeApplier(database);
+      final character = testCharacter(id: 'char-1', name: 'Arannis');
+      final change = VaultChange(
+        cursor: '1',
+        operation: 'upsert',
+        entityType: 'character',
+        entityId: character.id,
+        revision: 5,
+        payloadJson: jsonEncode(character.toJson()),
+      );
 
-    await applier.applyAll([change]);
+      await applier.applyAll([change]);
 
-    final saved = await DriftCharacterRepository(database).getById(character.id);
-    expect(saved, isNotNull);
-    expect(saved!.name, 'Arannis');
+      final saved = await DriftCharacterRepository(
+        database,
+      ).getById(character.id);
+      expect(saved, isNotNull);
+      expect(saved!.name, 'Arannis');
 
-    final pending = await DriftSyncRepository(database).pending(scope: 'vault');
-    expect(pending, isEmpty);
-    await database.close();
-  });
+      final pending = await DriftSyncRepository(
+        database,
+      ).pending(scope: 'vault');
+      expect(pending, isEmpty);
+      await database.close();
+    },
+  );
 
-  test('DriftVaultChangeApplier applies remote favorite and note without re-enqueuing', () async {
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    final applier = DriftVaultChangeApplier(database);
+  test(
+    'DriftVaultChangeApplier applies remote favorite and note without re-enqueuing',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      final applier = DriftVaultChangeApplier(database);
 
-    final favoriteChange = VaultChange(
-      cursor: '1',
-      operation: 'upsert',
-      entityType: 'favorite',
-      entityId: 'example:class/fighter',
-      revision: 1,
-      payloadJson: jsonEncode({'entryKey': 'example:class/fighter', 'favorite': true}),
-    );
-    final noteChange = VaultChange(
-      cursor: '2',
-      operation: 'upsert',
-      entityType: 'note',
-      entityId: 'example:class/fighter',
-      revision: 1,
-      payloadJson: jsonEncode({'entryKey': 'example:class/fighter', 'markdown': 'Synced note'}),
-    );
+      final favoriteChange = VaultChange(
+        cursor: '1',
+        operation: 'upsert',
+        entityType: 'favorite',
+        entityId: 'example:class/fighter',
+        revision: 1,
+        payloadJson: jsonEncode({
+          'entryKey': 'example:class/fighter',
+          'favorite': true,
+        }),
+      );
+      final noteChange = VaultChange(
+        cursor: '2',
+        operation: 'upsert',
+        entityType: 'note',
+        entityId: 'example:class/fighter',
+        revision: 1,
+        payloadJson: jsonEncode({
+          'entryKey': 'example:class/fighter',
+          'markdown': 'Synced note',
+        }),
+      );
 
-    await applier.applyAll([favoriteChange, noteChange]);
+      await applier.applyAll([favoriteChange, noteChange]);
 
-    final pending = await DriftSyncRepository(database).pending(scope: 'vault');
-    expect(pending, isEmpty);
-    await database.close();
-  });
+      final pending = await DriftSyncRepository(
+        database,
+      ).pending(scope: 'vault');
+      expect(pending, isEmpty);
+      await database.close();
+    },
+  );
 }

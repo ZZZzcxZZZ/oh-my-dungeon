@@ -4,16 +4,12 @@ import 'content_library_controller.dart';
 import 'content_type_registry.dart';
 
 class ContentHomePage extends StatelessWidget {
-  const ContentHomePage({
-    required this.controller,
-    super.key,
-  });
+  const ContentHomePage({required this.controller, super.key});
 
   final ContentLibraryController controller;
 
   static const _categories = <String>[
     'spell',
-    'equipment',
     'item',
     'species',
     'class',
@@ -21,7 +17,6 @@ class ContentHomePage extends StatelessWidget {
     'feat',
     'monster',
     'condition',
-    'rule',
   ];
 
   @override

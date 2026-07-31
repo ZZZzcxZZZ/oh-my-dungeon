@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('groups class features by level and fires tap callback',
-      (tester) async {
+  testWidgets('groups class features by level and fires tap callback', (
+    tester,
+  ) async {
     ContentEntry? opened;
     final fighter = ContentEntry.fromJson({
       'id': 'example:class/fighter',

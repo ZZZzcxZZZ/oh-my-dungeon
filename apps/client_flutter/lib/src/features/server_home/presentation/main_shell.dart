@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -12,21 +13,24 @@ import '../../../core/sync/sync_status_controller.dart';
 import '../../../features/app_preferences/presentation/app_preferences_controller.dart';
 import '../../../features/auth/data/auth_api_client.dart';
 import '../../../features/auth/data/auth_token_store.dart';
+import '../../../features/auth/domain/auth_session.dart';
 import '../../../features/auth/presentation/auth_controller.dart';
 import '../../../features/campaigns/data/campaign_api_client.dart';
 import '../../../features/campaigns/data/campaign_socket_service.dart';
 import '../../../features/campaigns/data/local/campaign_cache_repository.dart';
 import '../../../features/campaigns/data/socket_io_campaign_socket_service.dart';
 import '../../../features/campaigns/data/sync/campaign_sync_api_client.dart';
-import '../../../features/campaigns/data/sync/campaign_actor_backlink_service.dart';
+import '../../../features/campaigns/data/sync/campaign_character_backlink_service.dart';
 import '../../../features/campaigns/data/sync/campaign_sync_service.dart';
-import '../../../features/campaigns/presentation/actors/campaign_actor_controller.dart';
+import '../../../features/campaigns/presentation/characters/campaign_character_controller.dart';
 import '../../../features/campaigns/presentation/content/campaign_content_controller.dart';
 import '../../../features/campaigns/presentation/conversation_controller.dart';
 import '../../../features/campaigns/presentation/campaign_controller.dart';
+import '../../../features/campaigns/presentation/campaign_refresh_coordinator.dart';
 import '../../../features/campaigns/presentation/campaigns_tab_page.dart';
 import '../../../features/characters/data/character_repository.dart';
 import '../../../features/characters/data/character_api_client.dart';
+import '../../../features/characters/data/character_markdown_mirror_store.dart';
 import '../../../features/characters/data/local/character_sync_conflict_repository.dart';
 import '../../../features/characters/data/local/drift_character_repository.dart';
 import '../../../features/characters/presentation/character_conflict_banner_controller.dart';
@@ -41,8 +45,6 @@ import '../../../features/content/domain/content_file_picker.dart';
 import '../../../features/content/presentation/content_library_controller.dart';
 import '../../../features/content/presentation/content_library_page.dart';
 import '../../../features/content/presentation/content_package_settings_page.dart';
-import '../../../features/encounters/data/encounter_api_client.dart';
-import '../../../features/encounters/presentation/encounter_controller.dart';
 import '../../../core/dice/dice_roller.dart';
 import '../../../features/server_profiles/domain/server_profile.dart';
 import '../../../features/server_profiles/data/server_profile_store.dart';
@@ -72,8 +74,10 @@ class MainShell extends StatefulWidget {
     this.serverProfileStore,
     this.serverProfilesPageBuilder,
     this.onSwitchToProfile,
+    this.onAuthUserChanged,
     this.enableBackgroundSync = true,
     this.bundledContentLoader,
+    this.workspaceStorageKey,
     super.key,
   });
 
@@ -89,14 +93,16 @@ class MainShell extends StatefulWidget {
   final ServerProfileStore? serverProfileStore;
   final WidgetBuilder? serverProfilesPageBuilder;
   final ValueChanged<ServerProfile>? onSwitchToProfile;
+  final Future<void> Function(AuthUser? user)? onAuthUserChanged;
   final bool enableBackgroundSync;
   final Future<String> Function()? bundledContentLoader;
+  final String? workspaceStorageKey;
 
   @override
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   late final AuthController _authController;
   late final CampaignController _campaignController;
   late final CharacterController _characterController;
@@ -107,11 +113,11 @@ class _MainShellState extends State<MainShell> {
   late final ContentPackageImporter _contentImporter;
   late final ContentLibraryController _libraryController;
   late final CampaignSocketService _campaignSocketService;
-  late final CampaignActorController _actorController;
+  late final CampaignCharacterController _campaignCharacterController;
   late final CampaignContentController _campaignContentController;
-  late final EncounterController _encounterController;
   late final ConversationController _conversationController;
-  CampaignActorBacklinkService? _backlinkService;
+  late final CampaignRefreshCoordinator _campaignRefreshCoordinator;
+  CampaignCharacterBacklinkService? _backlinkService;
   CampaignSyncService? _campaignSyncService;
   CharacterConflictBannerController? _conflictBannerController;
   VaultSyncController? _vaultSyncController;
@@ -123,10 +129,13 @@ class _MainShellState extends State<MainShell> {
   String? _activeCampaignId;
   String? _deviceId;
   late final Future<void> _contentBootstrap;
+  bool _hasReportedAuthUser = false;
+  String? _reportedAuthUserId;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.modeController.addListener(_onModeChanged);
     final profile = widget.session.profile;
     _authController = AuthController(
@@ -138,18 +147,38 @@ class _MainShellState extends State<MainShell> {
     _campaignSocketService =
         widget.campaignSocketService ?? SocketIoCampaignSocketService();
     // Spec §双向同步 切片 A: socket 收到 campaign:changed 信号时触发
-    // actorController 增量拉取。闭包延迟引用 _actorController，它在下方
+    // campaignCharacterController 增量拉取。闭包延迟引用控制器，它在下方
     // 才初始化，但闭包只在 connectCampaignChat 时调用，那时已就绪。
     _campaignController = CampaignController(
       apiBaseUrl: profile?.apiBaseUrl ?? '',
       authController: _authController,
       campaignClient: widget.campaignClient,
       campaignSocketService: _campaignSocketService,
-      onCampaignChanged: () => _actorController.pullUntilCurrent(),
+      onCampaignChanged: (signal) async {
+        final resource = switch (signal.entityType) {
+          'character' => CampaignRefreshResource.characters,
+          'content' => CampaignRefreshResource.archives,
+          'conversation' => CampaignRefreshResource.conversations,
+          _ => CampaignRefreshResource.messages,
+        };
+        _campaignRefreshCoordinator.invalidateResource(
+          resource,
+          cursor: signal.cursor,
+        );
+      },
     );
-    _characterRepository = widget.database != null
-        ? DriftCharacterRepository(widget.database!)
-        : EmptyCharacterRepository();
+    if (widget.database == null) {
+      _characterRepository = EmptyCharacterRepository();
+    } else {
+      final repository = DriftCharacterRepository(
+        widget.database!,
+        markdownMirrorStore: widget.workspaceStorageKey == null
+            ? null
+            : createCharacterMarkdownMirrorStore(widget.workspaceStorageKey!),
+      );
+      _characterRepository = repository;
+      unawaited(repository.repairMarkdownMirrors());
+    }
     _characterController = CharacterController(
       repository: _characterRepository,
       operationsClient: CharacterApiClient(),
@@ -172,10 +201,10 @@ class _MainShellState extends State<MainShell> {
       repository: _contentRepository,
     );
     _contentBootstrap = _installBundledContent();
-    // Spec §双向同步 切片 A: backlinkService 提前构造，供 _actorController
+    // Spec §双向同步 切片 A: backlinkService 提前构造，供 _characterController
     // 发布成功回写本地角色，也供 _campaignSyncService 拉取循环复用。
     _backlinkService = widget.database != null
-        ? CampaignActorBacklinkService(
+        ? CampaignCharacterBacklinkService(
             characterRepository: _characterRepository,
             database: widget.database!,
           )
@@ -187,7 +216,7 @@ class _MainShellState extends State<MainShell> {
             repository: DriftCharacterSyncConflictRepository(widget.database!),
           )
         : null;
-    _actorController = CampaignActorController(
+    _campaignCharacterController = CampaignCharacterController(
       cacheRepository: _campaignCacheRepository,
       apiClient: HttpCampaignSyncApiClient(),
       apiBaseUrl: profile?.apiBaseUrl ?? '',
@@ -195,7 +224,8 @@ class _MainShellState extends State<MainShell> {
       currentUserId: _authController.user?.id ?? '',
       accessTokenProvider: () => _authController.accessToken ?? '',
       currentUserIdProvider: () => _authController.user?.id ?? '',
-      onActorPublished: _backlinkService?.applyPublishedActorToCharacter,
+      onCharacterPublished:
+          _backlinkService?.applyPublishedCharacterToCharacter,
     );
     _campaignContentController = CampaignContentController(
       cacheRepository: _campaignCacheRepository,
@@ -206,19 +236,41 @@ class _MainShellState extends State<MainShell> {
       accessTokenProvider: () => _authController.accessToken ?? '',
       currentUserIdProvider: () => _authController.user?.id ?? '',
     );
-    // Spec §遭遇控场: 共享给战役中心的 DM 控场底部页, 让 DM 在战役进行中
-    // 快速管理遭遇 HP / 推进回合.
-    _encounterController = EncounterController(
-      apiBaseUrl: profile?.apiBaseUrl ?? '',
-      authController: _authController,
-      encounterClient: EncounterApiClient(),
-    );
     // Plan 2026-07-23 task 5.3: conversation list + active conversation state
     // for the campaign chat page (main / direct / group).
     _conversationController = ConversationController(
       apiBaseUrl: profile?.apiBaseUrl ?? '',
       authController: _authController,
       campaignClient: widget.campaignClient,
+    );
+    _campaignRefreshCoordinator = CampaignRefreshCoordinator.resources(
+      refreshers: {
+        CampaignRefreshResource.messages: (campaignId, _) async {
+          if (_activeCampaignId != campaignId) return;
+          await _campaignController.loadMessages(
+            campaignId,
+            conversationId: _conversationController.activeConversationId,
+          );
+        },
+        CampaignRefreshResource.characters: (campaignId, _) async {
+          if (_activeCampaignId != campaignId) return;
+          await Future.wait([
+            _campaignController.loadWorkspaceContext(campaignId),
+            _campaignCharacterController.pullUntilCurrent(),
+          ]);
+        },
+        CampaignRefreshResource.archives: (campaignId, _) async {
+          if (_activeCampaignId != campaignId) return;
+          await Future.wait([
+            _campaignController.loadArchives(campaignId),
+            _campaignCharacterController.pullUntilCurrent(),
+          ]);
+        },
+        CampaignRefreshResource.conversations: (campaignId, _) async {
+          if (_activeCampaignId != campaignId) return;
+          await _conversationController.refreshConversations(campaignId);
+        },
+      },
     );
     if (widget.database != null && widget.enableBackgroundSync) {
       _campaignSyncService = CampaignSyncService(
@@ -236,18 +288,20 @@ class _MainShellState extends State<MainShell> {
         ? DriftLocalDataArchiveService(widget.database!)
         : _NullLocalDataArchiveService();
     _authController.addListener(_onAuthChanged);
+    _reportAuthUser();
     _initializeDeviceIdentity();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.modeController.removeListener(_onModeChanged);
     _authController.removeListener(_onAuthChanged);
     _campaignSocketService.disconnect();
-    _actorController.dispose();
+    _campaignCharacterController.dispose();
     _campaignContentController.dispose();
-    _encounterController.dispose();
     _conversationController.dispose();
+    _campaignRefreshCoordinator.dispose();
     _libraryController.dispose();
     _characterController.dispose();
     _campaignController.dispose();
@@ -258,12 +312,30 @@ class _MainShellState extends State<MainShell> {
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_campaignRefreshCoordinator.onForegroundResumed());
+    }
+  }
+
   void _onModeChanged() {
     if (mounted) setState(() {});
   }
 
   void _onAuthChanged() {
     _configureVault();
+    _reportAuthUser();
+  }
+
+  void _reportAuthUser() {
+    final callback = widget.onAuthUserChanged;
+    if (callback == null || !_authController.initialized) return;
+    final user = _authController.user;
+    if (_hasReportedAuthUser && _reportedAuthUserId == user?.id) return;
+    _hasReportedAuthUser = true;
+    _reportedAuthUserId = user?.id;
+    unawaited(callback(user));
   }
 
   Future<void> _initializeDeviceIdentity() async {
@@ -317,9 +389,10 @@ class _MainShellState extends State<MainShell> {
 
   Future<void> _activateCampaign(String campaignId) async {
     _activeCampaignId = campaignId;
+    _campaignRefreshCoordinator.activate(campaignId);
     if (widget.enableBackgroundSync) {
       await Future.wait([
-        _actorController.selectCampaign(campaignId),
+        _campaignCharacterController.selectCampaign(campaignId),
         _campaignContentController.selectCampaign(campaignId),
       ]);
     }
@@ -344,7 +417,7 @@ class _MainShellState extends State<MainShell> {
         userId: user.id,
       );
     } else {
-      await _actorController.pullUntilCurrent();
+      await _campaignCharacterController.pullUntilCurrent();
     }
     if (mounted) setState(() {});
   }
@@ -382,8 +455,7 @@ class _MainShellState extends State<MainShell> {
         diceRoller: widget.diceRoller,
         onCampaignOpened: _activateCampaign,
         campaignContentController: _campaignContentController,
-        actorController: _actorController,
-        encounterController: _encounterController,
+        campaignCharacterController: _campaignCharacterController,
         conversationController: _conversationController,
       ),
       CharactersTabPage(
@@ -391,10 +463,9 @@ class _MainShellState extends State<MainShell> {
         campaignController: _campaignController,
         contentRepository: _contentRepository,
         localContentRepository: _localContentRepository,
-        onCampaignContentSelected: _activateCampaign,
         appPreferencesController: widget.appPreferencesController,
         modeController: widget.modeController,
-        actorController: _actorController,
+        campaignCharacterController: _campaignCharacterController,
         conflictBannerController: _conflictBannerController,
         onUseRemoteConflict: _backlinkService?.resolveConflictWithRemote,
       ),

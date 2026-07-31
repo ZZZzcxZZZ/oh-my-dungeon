@@ -59,10 +59,10 @@
 角色身份与角色运行状态分离：
 
 - `profile`：姓名、构筑、属性、熟练、人物资料等持久信息。
-- `local`：角色脱离战役时的默认运行状态。
-- `campaign:<id>`：某一战役中的 HP、资源、状态与物品实例。
+- `local`：角色脱离战役时的默认运行状态（`CharacterState`，scopeKey=`local`）。
+- `campaign:<id>`：**已废弃**。战役内的 HP、资源、状态与物品实例以 `CampaignCharacter` 快照（`sheetJson`）为唯一事实源，由战役同步接口读写；本地 `Character` 通过 backlink 双向同步（运行时字段单向覆盖、构建字段冲突检测）。不再使用 `CharacterState` 的 campaign scope。
 
-同一角色在多个战役中的运行状态不得互相污染。
+同一角色在多个战役中的运行状态不得互相污染：每个战役各自持有独立的 `CampaignCharacter` 快照。
 
 ### 3.4 扩展字段
 
@@ -222,26 +222,33 @@ interface CharacterItemInstance {
 
 ### 5.1 `character.get`
 
-**状态：已实现**
+**状态：已实现（本地）/ 战役内改走快照**
 
 ```text
-GET /api/characters/:characterId?campaignId=:campaignId
+GET /api/characters/:characterId
 ```
 
-用途：读取完整 resolved view。返回 profile 字段、作用域状态、`stateRevision` 和 `stateScope`。
+用途：读取本地角色完整 resolved view（profile + local 作用域状态）。返回 profile 字段、作用域状态、`stateRevision` 和 `stateScope`。
+
+战役内角色状态（HP、状态、物品实例）以 `CampaignCharacter` 快照为准：
+
+```text
+GET /api/campaigns/:campaignId/characters/:characterId
+GET /api/campaigns/:campaignId/characters
+```
 
 权限：
 
 - 角色所有者可以读取本地状态；
-- 战役成员可在给出 `campaignId` 后读取该战役允许访问的角色；
+- 战役成员可读取该战役允许访问的角色快照；
 - 无权限时不得泄露角色是否存在以外的私人数据。
 
 ### 5.2 `character.get_summary`
 
-**状态：已实现**
+**状态：已实现（本地）/ 战役内改走快照**
 
 ```text
-GET /api/characters/:characterId/summary?campaignId=:campaignId
+GET /api/characters/:characterId/summary
 ```
 
 返回字段限制为：
@@ -302,7 +309,7 @@ interface CharacterOperationResult {
 ### 6.2 HP
 
 **工具：** `character.adjust_hp`  
-**状态：服务端与 Flutter 已实现**
+**状态：本地已实现；战役内改走快照接口**
 
 ```text
 POST /api/characters/:characterId/actions/adjust-hp
@@ -311,7 +318,6 @@ POST /api/characters/:characterId/actions/adjust-hp
 ```json
 {
   "requestId": "request-1",
-  "campaignId": "campaign-1",
   "expectedRevision": 7,
   "delta": -8
 }
@@ -319,32 +325,67 @@ POST /api/characters/:characterId/actions/adjust-hp
 
 也可使用 `current` 设置当前 HP，或使用 `temporary` 设置临时 HP。三者不能全部缺省。
 
+**战役内**（角色已发布到战役）的 HP 修改必须走战役快照接口，保证与聊天事件、成员可见 HP、DM 控场看到同一份数据：
+
+```text
+POST /api/campaigns/:campaignId/characters/:characterId/hp
+```
+
+```json
+{
+  "requestId": "request-1",
+  "baseRevision": 7,
+  "delta": -8,
+  "reason": "长弓射击"
+}
+```
+
+两个接口都通过 `requestId` 幂等（相同 requestId 重试返回首次结果，不重复扣血），`revision` 冲突时返回 409。战役接口额外落 `GameEvent`（`character.hp.adjusted`）供事件查询审计。
+
 ### 6.3 状态效果
+
+**状态：本地已实现；战役内改走快照接口**
 
 | 工具 | HTTP | 状态 |
 | --- | --- | --- |
-| `character.add_condition` | `POST /api/characters/:id/actions/add-condition` | 已实现 |
-| `character.remove_condition` | `POST /api/characters/:id/actions/remove-condition` | 已实现 |
+| `character.add_condition` | `POST /api/characters/:id/actions/add-condition` | 已实现（本地） |
+| `character.remove_condition` | `POST /api/characters/:id/actions/remove-condition` | 已实现（本地） |
 
-添加状态时传完整 `CharacterCondition`。移除时传 `conditionId`。不可移除状态必须由服务端拒绝普通移除操作。
+战役内状态修改走：
+
+```text
+POST /api/campaigns/:campaignId/characters/:characterId/conditions
+```
+
+添加状态时传完整 `CharacterCondition`（`type`、`name`、可选 `durationRounds`）。移除时传 `conditionId`。不可移除状态必须由服务端拒绝普通移除操作。
 
 ### 6.4 资源
+
+**状态：本地已实现**
 
 | 工具 | HTTP | 状态 |
 | --- | --- | --- |
 | `character.consume_resource` | `POST /api/characters/:id/actions/consume-resource` | 已实现 |
 | `character.restore_resource` | `POST /api/characters/:id/actions/restore-resource` | 已实现 |
 
-输入包含 `resourceId` 和正整数 `amount`。调用方不得直接提交资源的新当前值。
+输入包含 `resourceId` 和正整数 `amount`。调用方不得直接提交资源的新当前值。资源变更目前仅作用于本地作用域；战役内资源实例以 `CampaignCharacter` 快照中的 `classResourcesUsed` / `spellSlotsUsed` 字段为准，尚未提供独立战役资源操作接口。
 
 ### 6.5 物品
 
+**状态：本地已实现；战役内改走快照接口**
+
 | 工具 | HTTP | 服务端 | Flutter 统一客户端 |
 | --- | --- | --- | --- |
-| `character.grant_item` | `POST /api/characters/:id/items` | 已实现 | 已实现 |
+| `character.grant_item` | `POST /api/characters/:id/items` | 已实现 | 已实现（本地） |
 | `character.consume_item` | `POST /api/characters/:id/items/:itemId/actions/consume` | 已实现 | 未接线 |
 | `character.equip_item` | `POST /api/characters/:id/items/:itemId/actions/equip` | 已实现 | 未接线 |
 | `character.transfer_item` | `POST /api/characters/:id/items/:itemId/actions/transfer` | 已实现 | 未接线 |
+
+战役内物品操作走：
+
+```text
+POST /api/campaigns/:campaignId/characters/:characterId/items
+```
 
 转移物品必须携带 `campaignId`、`targetCharacterId` 和正整数数量，并在同一事务内更新双方状态与事件。
 

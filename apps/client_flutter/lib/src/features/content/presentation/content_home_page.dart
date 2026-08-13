@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../domain/content_schema_registry.dart';
+import '../domain/content_type_definition.dart';
 import 'content_library_controller.dart';
 import 'content_type_registry.dart';
 
@@ -7,17 +9,6 @@ class ContentHomePage extends StatelessWidget {
   const ContentHomePage({required this.controller, super.key});
 
   final ContentLibraryController controller;
-
-  static const _categories = <String>[
-    'spell',
-    'item',
-    'species',
-    'class',
-    'background',
-    'feat',
-    'monster',
-    'condition',
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -83,7 +74,9 @@ class _CategoryGrid extends StatelessWidget {
       crossAxisSpacing: 8,
       childAspectRatio: 1.4,
       children: [
-        for (final type in ContentHomePage._categories)
+        for (final type in ContentSchemaRegistry.defaults.librarySchemas.map(
+          (schema) => schema.type,
+        ))
           _CategoryCard(
             definition: registry.definitionFor(type),
             colorScheme: colorScheme,
@@ -101,7 +94,7 @@ class _CategoryCard extends StatelessWidget {
     required this.theme,
   });
 
-  final dynamic definition;
+  final ContentTypeDefinition definition;
   final ColorScheme colorScheme;
   final ThemeData theme;
 

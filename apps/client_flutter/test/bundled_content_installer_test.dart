@@ -1,4 +1,5 @@
 import 'package:dnd_table_client/src/features/content/data/import/bundled_content_installer.dart';
+import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/content_test_support.dart';
@@ -71,4 +72,36 @@ void main() {
       );
     },
   );
+
+  test('core test package replaces legacy private rulebook packages', () async {
+    final repository = MemoryContentRepository(
+      initialEntries: [
+        for (final packageId in const [
+          'phb-2024',
+          'private-mm',
+          'private-dmg-2024',
+        ])
+          ContentEntry.fromJson({
+            'id': '$packageId:monster/legacy',
+            'type': 'monster',
+            'slug': 'legacy',
+            'name': packageId,
+            'body': <Object?>[],
+            'revision': 1,
+          }),
+      ],
+    );
+    final coreBundle = _bundle
+        .replaceAll('test.bundle', 'core-2024-private-test')
+        .replaceAll('Test bundle', '2024 核心测试包');
+    final installer = BundledContentInstaller(
+      repository: repository,
+      loadBundle: () async => coreBundle,
+    );
+
+    expect(await installer.installIfAvailable(), isTrue);
+
+    final packages = await repository.watchPackages().first;
+    expect(packages.map((package) => package.id), ['core-2024-private-test']);
+  });
 }

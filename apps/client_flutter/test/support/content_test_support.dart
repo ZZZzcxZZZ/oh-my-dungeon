@@ -166,6 +166,67 @@ class MemoryContentRepository implements ContentRepository {
   }
 
   @override
+  Future<void> upsertPackageEntry({
+    required ContentPackageManifest manifest,
+    required ContentEntry entry,
+  }) async {
+    _packages[manifest.id] = ContentPackageManifest(
+      formatVersion: manifest.formatVersion,
+      id: manifest.id,
+      name: manifest.name,
+      version: manifest.version,
+      locale: manifest.locale,
+      system: manifest.system,
+      entryCount: 0,
+      contentHash: manifest.contentHash,
+    );
+    _enabled[manifest.id] = true;
+    _entries[entry.id] = entry;
+    final count = _entries.keys
+        .where((key) => key.startsWith('${manifest.id}:'))
+        .length;
+    _packages[manifest.id] = ContentPackageManifest(
+      formatVersion: manifest.formatVersion,
+      id: manifest.id,
+      name: manifest.name,
+      version: manifest.version,
+      locale: manifest.locale,
+      system: manifest.system,
+      entryCount: count,
+      contentHash: 'local-$count',
+    );
+    _emit();
+  }
+
+  @override
+  Future<void> deletePackageEntry(String entryKey) async {
+    final packageId = entryKey.split(':').first;
+    _entries.remove(entryKey);
+    _favorites.remove(entryKey);
+    _notes.remove(entryKey);
+    _links.removeWhere(
+      (link) => link.sourceId == entryKey || link.targetId == entryKey,
+    );
+    final package = _packages[packageId];
+    if (package != null) {
+      final count = _entries.keys
+          .where((key) => key.startsWith('$packageId:'))
+          .length;
+      _packages[packageId] = ContentPackageManifest(
+        formatVersion: package.formatVersion,
+        id: package.id,
+        name: package.name,
+        version: package.version,
+        locale: package.locale,
+        system: package.system,
+        entryCount: count,
+        contentHash: 'local-$count',
+      );
+    }
+    _emit();
+  }
+
+  @override
   Future<void> setPackageEnabled(String packageId, bool enabled) async {
     _enabled[packageId] = enabled;
     _emit();

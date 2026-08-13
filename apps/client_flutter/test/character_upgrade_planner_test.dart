@@ -86,6 +86,10 @@ void main() {
         (upgraded.dataMap['contentRefs'] as Map)['features'],
         contains('feature:action-surge'),
       );
+      expect(
+        (upgraded.dataMap['ruleSnapshots'] as Map)['feature:action-surge'],
+        containsPair('name', 'Action Surge'),
+      );
     },
   );
 

@@ -76,6 +76,10 @@ void main() {
       expect((projected.dataMap['contentRefs'] as Map)['features'], [
         'test:class-feature/action-surge',
       ]);
+      expect(
+        (projected.dataMap['ruleSnapshots'] as Map)[feature.id],
+        containsPair('name', '动作如潮'),
+      );
     },
   );
 }

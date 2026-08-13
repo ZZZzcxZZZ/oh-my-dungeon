@@ -53,6 +53,10 @@ class CharacterRuleProjector {
       oldData['contentRefs'],
       derivedData['contentRefs'],
     );
+    mergedData['ruleSnapshots'] = _mergeMaps(
+      oldData['ruleSnapshots'],
+      derivedData['ruleSnapshots'],
+    );
 
     return character.copyWith(
       data: mergedData,
@@ -84,6 +88,11 @@ class CharacterRuleProjector {
         }.toList(growable: false),
     };
   }
+
+  Map<String, Object?> _mergeMaps(Object? current, Object? derived) => {
+    if (current is Map) ...Map<String, Object?>.from(current),
+    if (derived is Map) ...Map<String, Object?>.from(derived),
+  };
 
   List<CharacterContentReference> _mergeReferences(
     List<CharacterContentReference> current,

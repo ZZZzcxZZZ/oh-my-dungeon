@@ -2,98 +2,26 @@ import 'package:flutter/material.dart';
 
 import '../../../core/widgets/app_search_bar.dart';
 import '../domain/content_entry.dart';
+import '../domain/content_schema_registry.dart';
 import 'content_home_page.dart';
 import 'content_library_controller.dart';
 import 'content_type_registry.dart';
 
-class _FacetField {
-  const _FacetField({required this.key, required this.label});
-
-  final String key;
-  final String label;
-}
-
-const _typeFilters = <String?>[
+List<String?> get _typeFilters => <String?>[
   null,
-  'spell',
-  'item',
-  'species',
-  'class',
-  'subclass',
-  'classFeature',
-  'background',
-  'feat',
-  'monster',
-  'condition',
+  ...ContentSchemaRegistry.defaults.librarySchemas.map((schema) => schema.type),
 ];
 
-const _spellLevelLabels = <String, String>{
-  '0': '戏法',
-  '1': '1环',
-  '2': '2环',
-  '3': '3环',
-  '4': '4环',
-  '5': '5环',
-  '6': '6环',
-  '7': '7环',
-  '8': '8环',
-  '9': '9环',
-};
+List<ContentFieldSchema> _facetFieldsFor(String? type) => type == null
+    ? const []
+    : ContentSchemaRegistry.defaults.schemaFor(type).facetFields;
 
-List<_FacetField> _facetFieldsFor(String? type) {
-  switch (type) {
-    case 'spell':
-      return const [
-        _FacetField(key: 'level', label: '环位'),
-        _FacetField(key: 'school', label: '学派'),
-        _FacetField(key: 'classes', label: '可用职业'),
-      ];
-    case 'subclass':
-      return const [_FacetField(key: 'parentClass', label: '所属职业')];
-    case 'class':
-      return const [
-        _FacetField(key: 'hitDie', label: '生命骰'),
-        _FacetField(key: 'primaryAbility', label: '主属性'),
-      ];
-    case 'classFeature':
-      return const [
-        _FacetField(key: 'class', label: '职业'),
-        _FacetField(key: 'level', label: '等级'),
-      ];
-    case 'item':
-      return const [
-        _FacetField(key: 'category', label: '类别'),
-        _FacetField(key: 'rarity', label: '稀有度'),
-      ];
-    case 'feat':
-      return const [
-        _FacetField(key: 'category', label: '类别'),
-        _FacetField(key: 'prerequisite', label: '先决条件'),
-      ];
-    case 'monster':
-      return const [
-        _FacetField(key: 'challengeRating', label: 'CR'),
-        _FacetField(key: 'type', label: '类型'),
-      ];
-    // Task 2.3: 扩展 species/background/condition/rule 的 facet 字段,
-    // 覆盖之前缺失的检索维度 (size/speed/skillProficiencies/duration/category).
-    case 'species':
-      return const [
-        _FacetField(key: 'size', label: '体型'),
-        _FacetField(key: 'speed', label: '速度'),
-      ];
-    case 'background':
-      return const [_FacetField(key: 'skillProficiencies', label: '技能熟练')];
-    case 'condition':
-      return const [_FacetField(key: 'duration', label: '持续')];
-    default:
-      return const [];
-  }
-}
-
-String _facetValueLabel(String type, String field, String value) {
-  if (type == 'spell' && field == 'level') {
-    return _spellLevelLabels[value] ?? value;
+String contentFacetValueLabel(String type, String field, String value) {
+  final fields = ContentSchemaRegistry.defaults.schemaFor(type).fields;
+  for (final definition in fields) {
+    if (definition.key == field) {
+      return definition.valueLabels[value] ?? value;
+    }
   }
   return value;
 }
@@ -528,8 +456,11 @@ class _FilterSheetState extends State<_FilterSheet> {
                                 icon: _facetFieldIcon(field.key),
                                 options: _facetOptions[field.key]!,
                                 selectedValues: _facets[field.key] ?? const {},
-                                valueLabel: (value) =>
-                                    _facetValueLabel(_type!, field.key, value),
+                                valueLabel: (value) => contentFacetValueLabel(
+                                  _type!,
+                                  field.key,
+                                  value,
+                                ),
                                 onToggle: (value) =>
                                     _toggleFacet(field.key, value),
                               ),

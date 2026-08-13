@@ -690,4 +690,55 @@ void main() {
 
     expect(await database.select(database.syncOutbox).get(), isEmpty);
   });
+
+  test(
+    'upserts and deletes one package entry without touching sibling data',
+    () async {
+      const manifest = ContentPackageManifest(
+        formatVersion: 2,
+        id: 'local-homebrew',
+        name: '我的自制内容',
+        version: '1.0.0',
+        locale: 'zh-CN',
+        system: 'dnd5e-2024',
+        entryCount: 0,
+      );
+      final first = ContentEntry.fromJson({
+        'id': 'local-homebrew:spell/first',
+        'type': 'spell',
+        'slug': 'first',
+        'name': '第一个法术',
+        'body': <Object?>[],
+        'revision': 1,
+      });
+      final second = ContentEntry.fromJson({
+        'id': 'local-homebrew:spell/second',
+        'type': 'spell',
+        'slug': 'second',
+        'name': '第二个法术',
+        'body': <Object?>[],
+        'revision': 1,
+      });
+
+      await repository.upsertPackageEntry(manifest: manifest, entry: first);
+      await repository.upsertPackageEntry(manifest: manifest, entry: second);
+      await repository.setFavorite(first.id, true);
+      await repository.saveNote(first.id, '保留这条笔记');
+
+      await repository.upsertPackageEntry(
+        manifest: manifest,
+        entry: ContentEntry.fromJson({...second.toJson(), 'name': '第二版'}),
+      );
+      await repository.deletePackageEntry(second.id);
+
+      expect(await repository.getByKey(first.id), isNotNull);
+      expect(await repository.isFavorite(first.id), isTrue);
+      final impact = await repository.deletionImpact(manifest.id);
+      expect(impact.entryCount, 1);
+      expect(impact.favoriteCount, 1);
+      expect(impact.noteCount, 1);
+      final packages = await repository.watchPackages().first;
+      expect(packages.single.entryCount, 1);
+    },
+  );
 }

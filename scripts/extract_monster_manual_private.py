@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup, NavigableString, Tag
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SOURCE_ROOT = REPO_ROOT / "private-imports" / "chm-extract" / "怪物图鉴2025"
@@ -65,6 +65,7 @@ CREATURE_TYPE_KEYS = {
     "异怪": "aberration",
     "野兽": "beast",
     "天族": "celestial",
+    "构装": "construct",
     "构装体": "construct",
     "龙": "dragon",
     "元素": "elemental",
@@ -72,6 +73,7 @@ CREATURE_TYPE_KEYS = {
     "邪魔": "fiend",
     "巨人": "giant",
     "人形": "humanoid",
+    "类人": "humanoid",
     "怪兽": "monstrosity",
     "泥怪": "ooze",
     "植物": "plant",
@@ -132,6 +134,26 @@ def read_html(path: Path) -> str:
 
 def clean_text(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
+
+
+def extract_overview_description(html: str) -> str:
+    """Read prose from a family overview page, excluding labels and quotes."""
+    soup = BeautifulSoup(html, "html.parser")
+    paragraphs: list[str] = []
+    for paragraph in soup.find_all("p"):
+        classes = set(paragraph.get("class") or [])
+        if "sum" in classes:
+            continue
+        if any(
+            "little-paper" in set(parent.get("class") or [])
+            for parent in paragraph.parents
+            if isinstance(parent, Tag)
+        ):
+            continue
+        text = clean_text(paragraph.get_text(" ", strip=True))
+        if text:
+            paragraphs.append(text)
+    return "\n\n".join(paragraphs)
 
 
 def split_name(value: str) -> tuple[str, str]:
@@ -291,32 +313,16 @@ def _parse_sections(heading: Tag, record: MonsterRecord) -> dict[str, str]:
                 if sibling.find("strong") is None:
                     description.append(text)
                 continue
-            strongs = sibling.find_all("strong")
-            if len(strongs) > 1:
-                sections[current].append(text)
-                record.manual_review.append(
-                    {
-                        "reason": "multiple-titled-blocks",
-                        "section": current,
-                        "excerpt": text[:240],
-                    }
-                )
-                continue
-            strong = strongs[0] if strongs else None
-            if strong is not None:
-                title, _ = split_name(
-                    clean_text(strong.get_text(" ", strip=True)).rstrip("。")
-                )
-                entry_description = text[
-                    len(clean_text(strong.get_text(" ", strip=True))):
-                ].strip()
-                sections[current].append(
-                    (
-                        f"### {title}\n\n{entry_description}"
-                        if entry_description
-                        else f"### {title}"
+            titled_blocks = _parse_titled_blocks(sibling)
+            if titled_blocks:
+                for title, entry_description in titled_blocks:
+                    sections[current].append(
+                        (
+                            f"### {title}\n\n{entry_description}"
+                            if entry_description
+                            else f"### {title}"
+                        )
                     )
-                )
             else:
                 sections[current].append(text)
     record.description = "\n\n".join(description).strip()
@@ -335,6 +341,29 @@ def _parse_sections(heading: Tag, record: MonsterRecord) -> dict[str, str]:
                 }
             )
     return parsed
+
+
+def _parse_titled_blocks(paragraph: Tag) -> list[tuple[str, str]]:
+    """Split compact stat-block paragraphs that contain multiple bold entries."""
+    blocks: list[tuple[str, str]] = []
+    for strong in paragraph.find_all("strong"):
+        title, _ = split_name(
+            clean_text(strong.get_text(" ", strip=True)).rstrip("。")
+        )
+        if not title:
+            continue
+        description_parts: list[str] = []
+        for node in strong.next_elements:
+            if isinstance(node, Tag) and node.name == "strong":
+                break
+            if isinstance(node, NavigableString):
+                if paragraph not in node.parents:
+                    break
+                if strong in node.parents:
+                    continue
+                description_parts.append(str(node))
+        blocks.append((title, clean_text(" ".join(description_parts))))
+    return blocks
 
 
 def _section_name(value: str) -> str:
@@ -663,8 +692,20 @@ def _yaml(value: object) -> str:
 
 def extract_all() -> list[MonsterRecord]:
     records: list[MonsterRecord] = []
+    overview_by_directory: dict[Path, str] = {}
     for path in sorted(SOURCE_ROOT.rglob("*.htm")):
-        records.extend(parse_monsters(read_html(path), source_path=str(path)))
+        html = read_html(path)
+        parsed = parse_monsters(html, source_path=str(path))
+        records.extend(parsed)
+        if not parsed and path.stem.endswith("总"):
+            description = extract_overview_description(html)
+            if description:
+                overview_by_directory[path.parent.resolve()] = description
+    for record in records:
+        if record.description:
+            continue
+        source_directory = Path(record.source_path).parent.resolve()
+        record.description = overview_by_directory.get(source_directory, "")
     return records
 
 

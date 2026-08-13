@@ -75,6 +75,31 @@ void main() {
 
   tearDown(() => database.close());
 
+  test('unknown external entry types degrade to custom', () async {
+    const source = '''{
+      "formatVersion": 2,
+      "id": "homebrew",
+      "name": "Homebrew",
+      "version": "1.0.0",
+      "locale": "zh-CN",
+      "system": "dnd5e-2024",
+      "entryCount": 1,
+      "entries": [{
+        "id": "homebrew:mystery/example",
+        "type": "mystery",
+        "slug": "example",
+        "name": "未知条目",
+        "body": [],
+        "revision": 1
+      }]
+    }''';
+
+    final report = await ContentPackageImporter(repository).previewJson(source);
+
+    expect(report.valid, isTrue);
+    expect(report.entries.single.type, 'custom');
+  });
+
   test('validates links before replacing the installed package', () async {
     final report = await importer.previewJson('''{
       "formatVersion":1,

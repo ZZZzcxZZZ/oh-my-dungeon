@@ -5,6 +5,7 @@ import 'package:markdown/markdown.dart' as md;
 import 'package:yaml/yaml.dart';
 
 import '../domain/character.dart';
+import '../domain/character_content_reference.dart';
 import '../domain/character_document.dart';
 
 enum CharacterMarkdownMode { profile, campaignSnapshot }
@@ -39,6 +40,17 @@ class CharacterMarkdownCodec {
     int revision = 1,
   }) {
     final state = _stateFor(character);
+    final canonicalSnapshot = base64UrlEncode(
+      utf8.encode(
+        jsonEncode({
+          'schemaVersion': 1,
+          'data': character.dataMap,
+          'contentReferences': character.contentReferences
+              .map((reference) => reference.toJson())
+              .toList(growable: false),
+        }),
+      ),
+    );
     final contentHash = sha256
         .convert(utf8.encode(jsonEncode(character.toJson())))
         .toString();
@@ -89,6 +101,7 @@ class CharacterMarkdownCodec {
       ..writeln('initiativeBonus: ${character.initiativeBonus}')
       ..writeln('createdAt: ${_yamlScalar(character.createdAt)}')
       ..writeln('updatedAt: ${_yamlScalar(character.updatedAt)}');
+    buffer.writeln('snapshot: ${_yamlScalar(canonicalSnapshot)}');
     if (character.avatarUrl != null) {
       buffer.writeln('avatar: ${_yamlScalar(character.avatarUrl!)}');
     }
@@ -230,6 +243,26 @@ class CharacterMarkdownCodec {
         _writeMonsterEntry(buffer, entry);
       }
     }
+    final ruleSnapshots = _map(character.dataMap['ruleSnapshots']);
+    final contentRefs = _map(character.dataMap['contentRefs']);
+    _writeRuleSnapshotSection(
+      buffer,
+      title: '规则特性',
+      entryIds: _stringList(contentRefs['features']),
+      snapshots: ruleSnapshots,
+    );
+    _writeRuleSnapshotSection(
+      buffer,
+      title: '法术',
+      entryIds: _stringList(contentRefs['spells']),
+      snapshots: ruleSnapshots,
+    );
+    _writeRuleSnapshotSection(
+      buffer,
+      title: '角色动作',
+      entryIds: _actionEntryIds(character.dataMap['actions']),
+      snapshots: ruleSnapshots,
+    );
     if (character.notes.trim().isNotEmpty) {
       buffer
         ..writeln()
@@ -269,6 +302,7 @@ class CharacterMarkdownCodec {
   CharacterMarkdownImport decode(String source) {
     final envelope = _parseFrontMatter(source);
     final metadata = envelope.metadata;
+    final canonicalSnapshot = _readCanonicalSnapshot(metadata['snapshot']);
     final format = metadata['format'];
     final isCharacterFormat =
         format == 'dnd-table-character/v2' ||
@@ -393,13 +427,18 @@ class CharacterMarkdownCodec {
             'speed': characterSpeed,
           }
         : const <String, Object?>{};
+    final canonicalData = _map(canonicalSnapshot['data']);
     final data = <String, Object?>{
+      ...canonicalData,
       'characterState': state.toJson(),
       if (description.isNotEmpty) 'description': description,
       if (isCharacterFormat) 'character': characterData,
       if (monster.isNotEmpty) 'monster': monster,
       if (unknownSections.isNotEmpty) 'markdownSections': unknownSections,
     };
+    final contentReferences = _mapList(
+      canonicalSnapshot['contentReferences'],
+    ).map(CharacterContentReference.fromJson).toList(growable: false);
     final character = CharacterSheet(
       id: _metadataText(metadata, 'id', fallback: _localId()),
       ownerUserId: _metadataText(metadata, 'owner', fallback: 'local'),
@@ -443,6 +482,7 @@ class CharacterMarkdownCodec {
       data: data,
       createdAt: _metadataText(metadata, 'createdAt', fallback: now),
       updatedAt: _metadataText(metadata, 'updatedAt', fallback: now),
+      contentReferences: contentReferences,
     );
     return CharacterMarkdownImport(
       character: character,
@@ -509,6 +549,77 @@ void _writeMonsterEntry(StringBuffer buffer, Map<String, Object?> entry) {
     ..writeln()
     ..writeln('<!-- dnd:monster-entry=$metadata -->')
     ..writeln();
+}
+
+void _writeRuleSnapshotSection(
+  StringBuffer buffer, {
+  required String title,
+  required List<String> entryIds,
+  required Map<String, Object?> snapshots,
+}) {
+  final entries = entryIds
+      .map((id) => _map(snapshots[id]))
+      .where((entry) => entry.isNotEmpty)
+      .toList(growable: false);
+  if (entries.isEmpty) return;
+  buffer
+    ..writeln()
+    ..writeln('## $title')
+    ..writeln();
+  for (final entry in entries) {
+    final name = '${entry['name'] ?? entry['id'] ?? '未命名条目'}'.trim();
+    final summary = '${entry['summary'] ?? ''}'.trim();
+    buffer
+      ..writeln('### $name')
+      ..writeln();
+    if (summary.isNotEmpty) {
+      buffer
+        ..writeln(summary)
+        ..writeln();
+    }
+    for (final block in _mapList(entry['body'])) {
+      final text = '${block['text'] ?? ''}'.trim();
+      if (text.isNotEmpty && text != summary) {
+        buffer
+          ..writeln(text)
+          ..writeln();
+      }
+      final items = block['items'];
+      if (items is List) {
+        for (final item in items) {
+          buffer.writeln('- $item');
+        }
+        if (items.isNotEmpty) buffer.writeln();
+      }
+    }
+  }
+}
+
+List<String> _actionEntryIds(Object? value) => _mapList(value)
+    .map((entry) => '${entry['entryId'] ?? ''}'.trim())
+    .where((id) => id.isNotEmpty)
+    .toSet()
+    .toList(growable: false);
+
+List<String> _stringList(Object? value) => value is List
+    ? value
+          .map((item) => '$item'.trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false)
+    : const <String>[];
+
+Map<String, Object?> _readCanonicalSnapshot(Object? value) {
+  final raw = '$value'.trim();
+  if (raw.isEmpty || raw == 'null') return const <String, Object?>{};
+  try {
+    final encoded = base64Url.normalize(raw);
+    final decoded = jsonDecode(utf8.decode(base64Url.decode(encoded)));
+    return decoded is Map
+        ? Map<String, Object?>.from(decoded)
+        : const <String, Object?>{};
+  } catch (_) {
+    return const <String, Object?>{};
+  }
 }
 
 Map<String, Object?> _parseMonsterGroups(String body) {
@@ -1080,6 +1191,9 @@ const _knownSections = {
   '描述',
   '笔记',
   '怪物资料',
+  '规则特性',
+  '法术',
+  '角色动作',
 };
 
 const _monsterGroupSections = <String, String>{

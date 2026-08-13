@@ -71,7 +71,7 @@ void main() {
       );
     });
 
-    testWidgets('background type exposes skillProficiencies facet', (
+    testWidgets('background reads legacy skillProficiencies via skills facet', (
       tester,
     ) async {
       await tester.pumpWidget(

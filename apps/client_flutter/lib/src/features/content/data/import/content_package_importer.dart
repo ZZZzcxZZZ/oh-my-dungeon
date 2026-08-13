@@ -8,6 +8,7 @@ import '../../domain/content_block.dart';
 import '../../domain/content_entry.dart';
 import '../../domain/content_import_report.dart';
 import '../../domain/content_package_manifest.dart';
+import '../../domain/content_schema_registry.dart';
 import '../../../rules/domain/character_rule_definition.dart';
 import '../../../rules/domain/rule_choice_resolver.dart';
 import '../local/content_repository.dart';
@@ -368,7 +369,21 @@ class ContentPackageImporter {
 
         // Parse the entry
         try {
-          final entry = ContentEntry.fromJson(entryJson);
+          final normalizedJson = Map<String, Object?>.from(entryJson);
+          final sourceType = '${normalizedJson['type'] ?? ''}';
+          final normalizedType = ContentSchemaRegistry.defaults.normalizeType(
+            sourceType,
+          );
+          normalizedJson['type'] = normalizedType;
+          final structured = normalizedJson['structured'];
+          if (structured is Map) {
+            normalizedJson['structured'] = ContentSchemaRegistry.defaults
+                .normalizeStructured(
+                  normalizedType,
+                  Map<String, Object?>.from(structured),
+                );
+          }
+          final entry = ContentEntry.fromJson(normalizedJson);
           parsedEntries[i] = entry;
           entries.add(entry);
         } catch (e) {

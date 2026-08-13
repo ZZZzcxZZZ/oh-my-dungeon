@@ -1,11 +1,90 @@
 import unittest
+import json
+import tempfile
 from pathlib import Path
+
+from scripts.build_private_core_bundle import merge_private_bundles
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReleasePackagingTest(unittest.TestCase):
+    def test_private_core_bundle_rebases_ids_and_references(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = root / "first.json"
+            second = root / "second.json"
+            output = root / "core.json"
+            first.write_text(
+                json.dumps(
+                    {
+                        "formatVersion": 2,
+                        "id": "legacy-a",
+                        "name": "A",
+                        "version": "1",
+                        "locale": "zh-CN",
+                        "system": "dnd5e-2024",
+                        "entryCount": 1,
+                        "entries": [
+                            {
+                                "id": "legacy-a:class/example",
+                                "type": "class",
+                                "slug": "example",
+                                "name": "Example",
+                                "body": [
+                                    {
+                                        "type": "entryLink",
+                                        "targetId": "legacy-b:feat/example",
+                                    }
+                                ],
+                                "relations": [
+                                    {
+                                        "type": "grants",
+                                        "targetId": "legacy-b:feat/example",
+                                    }
+                                ],
+                                "revision": 1,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            second.write_text(
+                json.dumps(
+                    {
+                        "formatVersion": 2,
+                        "id": "legacy-b",
+                        "name": "B",
+                        "version": "1",
+                        "locale": "zh-CN",
+                        "system": "dnd5e-2024",
+                        "entryCount": 1,
+                        "entries": [
+                            {
+                                "id": "legacy-b:feat/example",
+                                "type": "feat",
+                                "slug": "example",
+                                "name": "Feat",
+                                "body": [],
+                                "revision": 1,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            merged = merge_private_bundles([first, second], output)
+
+            self.assertEqual(merged["id"], "core-2024-private-test")
+            self.assertEqual(merged["entryCount"], 2)
+            serialized = json.dumps(merged, ensure_ascii=False)
+            self.assertNotIn("legacy-a:", serialized)
+            self.assertNotIn("legacy-b:", serialized)
+            self.assertIn("core-2024-private-test:feat/example", serialized)
+
     def test_private_bundle_builder_reads_every_json_file_as_utf8(self):
         script = (ROOT / "scripts" / "build-private-content-bundle.ps1").read_text(
             encoding="utf-8"
@@ -28,25 +107,42 @@ class ReleasePackagingTest(unittest.TestCase):
         script = (ROOT / "scripts" / "build_private_client.ps1").read_text(
             encoding="utf-8"
         )
-        aggregation = script.split(
-            "& $bundleBuilderPath -SourceDirectory $privateImportDir"
-        )[1].split("$bundleJson =", 1)[0]
+        invocation = (
+            "& $bundleBuilderPath -SourceDirectory $package.Directory "
+            "-OutputPath $package.Bundle"
+        )
+        aggregation = script.split(invocation, 1)[1].split(
+            "$parsedPackage =", 1
+        )[0]
 
         self.assertIn("if (-not $?)", aggregation)
         self.assertNotIn("$LASTEXITCODE", aggregation)
+
+    def test_private_client_builder_exposes_one_core_test_package(self):
+        script = (ROOT / "scripts" / "build_private_client.ps1").read_text(
+            encoding="utf-8"
+        )
+        merger = (ROOT / "scripts" / "build_private_core_bundle.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("build_private_core_bundle.py", script)
+        self.assertIn("core-2024-private-test", merger)
+        self.assertIn('"2024 核心测试包"', merger)
+        self.assertNotIn("packages = $packageBundles", script)
 
     def test_private_apk_builder_stages_then_restores_the_placeholder(self):
         script = (ROOT / "scripts" / "build-private-test-apk.ps1").read_text(
             encoding="utf-8"
         )
 
-        self.assertIn("phb-2024-v2-bundle.json", script)
+        self.assertIn("private-test-all-bundle.json", script)
+        self.assertIn("ohmydungeon-0.1-private-test.apk", script)
         self.assertIn("flutter build apk --release", script)
         self.assertIn("gradle-repositories.init.gradle", script)
         self.assertIn("init.d", script)
         self.assertIn("finally", script)
         self.assertIn("WriteAllBytes", script)
-        self.assertIn("build-private-content-bundle.ps1", script)
 
         init_script = (ROOT / "scripts" / "gradle-repositories.init.gradle").read_text(
             encoding="utf-8"

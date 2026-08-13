@@ -11,6 +11,23 @@ import extract_monster_manual_private as mm
 
 
 class MonsterManualExtractorTest(unittest.TestCase):
+    def test_extracts_readable_overview_without_summary_or_quote_boxes(self) -> None:
+        html = """
+        <body>
+          <p class="sum">分类摘要</p>
+          <div class="HT">栖息地摘要</div>
+          <p>这是怪物族群的背景介绍。<br>第二段仍属于可阅读的介绍。</p>
+          <div class="little-paper"><p>不应混入资料卡的引文。</p></div>
+        </body>
+        """
+
+        description = mm.extract_overview_description(html)
+
+        self.assertEqual(
+            description,
+            "这是怪物族群的背景介绍。 第二段仍属于可阅读的介绍。",
+        )
+
     def test_parses_stat_block_and_character_markdown_from_fixture(self) -> None:
         html = """
         <div class="stat-block">
@@ -115,6 +132,8 @@ class MonsterManualExtractorTest(unittest.TestCase):
         self.assertEqual(monster.size, "medium")
         self.assertEqual(monster.creature_type, "怪兽")
         self.assertEqual(entry["summary"], "中型 怪兽，中立邪恶")
+        self.assertEqual(mm._canonical_creature_type("或小型类人（法师）"), "humanoid")
+        self.assertEqual(mm._canonical_creature_type("构装（泰坦）"), "construct")
 
         self.assertEqual(mm.split_name("矮种马Pony"), ("矮种马", "Pony"))
         self.assertEqual(mm.split_name("狼Wolf"), ("狼", "Wolf"))
@@ -133,7 +152,7 @@ class MonsterManualExtractorTest(unittest.TestCase):
           <h6>特质 Traits</h6>
           <p><strong>亡灵本质 Undead Nature。</strong>无需呼吸。</p>
           <h6>动作 Actions</h6>
-          <p><strong>枯萎之触 Withering Touch。</strong>命中：+5，造成 2d8+3 黯蚀伤害。</p>
+          <p><strong>枯萎之触 Withering Touch。</strong>命中：+5，造成 2d8+3 黯蚀伤害。<strong>暗影箭 Shadow Bolt。</strong>命中：+5，造成 1d8 黯蚀伤害。</p>
           <h6>附赠动作 Bonus Actions</h6>
           <p><strong>暗影步 Shadow Step。</strong>传送 30 尺。</p>
           <h6>反应 Reactions</h6>
@@ -156,6 +175,7 @@ class MonsterManualExtractorTest(unittest.TestCase):
         self.assertIn("亡灵法师", entry["structured"]["classification"]["tags"])
         self.assertEqual(template["traits"][0]["name"], "亡灵本质")
         self.assertEqual(template["actions"][0]["name"], "枯萎之触")
+        self.assertEqual(template["actions"][1]["name"], "暗影箭")
         self.assertEqual(template["bonusActions"][0]["name"], "暗影步")
         self.assertEqual(template["reactions"][0]["name"], "法术偏转")
         self.assertEqual(template["legendaryActions"][0]["name"], "侦测")
@@ -164,7 +184,7 @@ class MonsterManualExtractorTest(unittest.TestCase):
         self.assertIn("## 特性", markdown)
         self.assertIn("## 附赠动作", markdown)
         self.assertIn("## 施法", markdown)
-        self.assertTrue(
+        self.assertFalse(
             any(item["reason"] == "multiple-titled-blocks" for item in review)
         )
         self.assertTrue(

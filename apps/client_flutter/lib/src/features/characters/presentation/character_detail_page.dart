@@ -117,6 +117,10 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
     // 可赋值给 void Function). 本地角色卡 (sink == null) 退化为纯本地 SnackBar.
     final effectiveRoll =
         widget.onRoll ?? (widget.sink == null ? null : _dispatchCampaignRoll);
+    final effectiveContentEntries = _characterContentEntries(
+      _character,
+      widget.contentEntries,
+    );
     return CharacterSheetShell(
       title: _character.name,
       header: _CharacterHeader(character: _character),
@@ -143,7 +147,9 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
           child: _SheetTab(
             child: _RuntimePanel(
               character: _character,
-              onUpdateRuntime: _updateRuntime,
+              onUpdateRuntime: widget.onUpdateRuntime == null
+                  ? null
+                  : _updateRuntime,
             ),
           ),
         ),
@@ -177,7 +183,9 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
               character: _character,
               diceRoller: widget.diceRoller,
               onRoll: effectiveRoll,
-              onSaveCharacter: _saveCharacter,
+              onSaveCharacter: widget.onSaveCharacter == null
+                  ? null
+                  : _saveCharacter,
             ),
           ),
         ),
@@ -188,9 +196,13 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
           child: _SheetTab(
             child: _SpellsPanel(
               character: _character,
-              contentEntries: widget.contentEntries,
-              onUpdateRuntime: _updateRuntime,
-              onSaveCharacter: _saveCharacter,
+              contentEntries: effectiveContentEntries,
+              onUpdateRuntime: widget.onUpdateRuntime == null
+                  ? null
+                  : _updateRuntime,
+              onSaveCharacter: widget.onSaveCharacter == null
+                  ? null
+                  : _saveCharacter,
             ),
           ),
         ),
@@ -201,7 +213,7 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
           child: _SheetTab(
             child: _EquipmentPanel(
               character: _character,
-              contentEntries: widget.contentEntries,
+              contentEntries: effectiveContentEntries,
               onUpdateInventory: widget.onUpdateInventory,
             ),
           ),
@@ -213,8 +225,12 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
           child: _SheetTab(
             child: _ResourcesPanel(
               character: _character,
-              onUpdateRuntime: _updateRuntime,
-              onSaveCharacter: _saveCharacter,
+              onUpdateRuntime: widget.onUpdateRuntime == null
+                  ? null
+                  : _updateRuntime,
+              onSaveCharacter: widget.onSaveCharacter == null
+                  ? null
+                  : _saveCharacter,
             ),
           ),
         ),
@@ -225,8 +241,10 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
           child: _SheetTab(
             child: _FeaturesPanel(
               character: _character,
-              contentEntries: widget.contentEntries,
-              onSaveCharacter: _saveCharacter,
+              contentEntries: effectiveContentEntries,
+              onSaveCharacter: widget.onSaveCharacter == null
+                  ? null
+                  : _saveCharacter,
             ),
           ),
         ),
@@ -237,7 +255,9 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
           child: _SheetTab(
             child: _ProfilePanel(
               character: _character,
-              onSaveCharacter: _saveCharacter,
+              onSaveCharacter: widget.onSaveCharacter == null
+                  ? null
+                  : _saveCharacter,
             ),
           ),
         ),
@@ -406,6 +426,27 @@ class _CharacterHeader extends StatelessWidget {
 
   // 规范 §头像来源：本地角色头像以 data URL 离线保存，战役角色头像为网络 URL。
   // 这里同时支持两种格式，无头像时返回 null 让 CircleAvatar 退回首字母。
+}
+
+List<ContentEntry> _characterContentEntries(
+  CharacterSheet character,
+  List<ContentEntry> libraryEntries,
+) {
+  final byId = <String, ContentEntry>{
+    for (final entry in libraryEntries) entry.id: entry,
+  };
+  final snapshots = character.dataMap['ruleSnapshots'];
+  if (snapshots is! Map) return byId.values.toList(growable: false);
+  for (final value in snapshots.values) {
+    if (value is! Map) continue;
+    try {
+      final entry = ContentEntry.fromJson(Map<String, Object?>.from(value));
+      byId[entry.id] = entry;
+    } catch (_) {
+      // Older, partial snapshots remain readable through their stored labels.
+    }
+  }
+  return byId.values.toList(growable: false);
 }
 
 class _SheetTab extends StatelessWidget {

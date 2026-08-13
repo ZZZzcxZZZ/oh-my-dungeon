@@ -64,13 +64,13 @@ class ContentPackageManifest {
   }
 
   Map<String, Object?> toJson() => {
-        'formatVersion': formatVersion,
-        'id': id,
-        'name': name,
-        'version': version,
-        'locale': locale,
-        'system': system,
-        'entryCount': entryCount,
-        if (contentHash.isNotEmpty) 'contentHash': contentHash,
-      };
+    'formatVersion': formatVersion,
+    'id': id,
+    'name': name,
+    'version': version,
+    'locale': locale,
+    'system': system,
+    'entryCount': entryCount,
+    if (contentHash.isNotEmpty) 'contentHash': contentHash,
+  };
 }

@@ -17,6 +17,13 @@ class BundledContentInstaller {
   final ContentRepository _repository;
   final Future<String> Function() _loadBundle;
 
+  static const _privateCorePackageId = 'core-2024-private-test';
+  static const _legacyPrivatePackageIds = <String>{
+    'phb-2024',
+    'private-mm',
+    'private-dmg-2024',
+  };
+
   Future<bool> installIfAvailable() async {
     final bundle = (await _loadBundle()).trim();
     if (bundle == '{}' || bundle.isEmpty) {
@@ -38,6 +45,13 @@ class BundledContentInstaller {
       if (installedHashes[report.packageId] == report.contentHash) continue;
       await importer.importReport(report);
       changed = true;
+    }
+    if (reports.any((report) => report.packageId == _privateCorePackageId)) {
+      for (final packageId in _legacyPrivatePackageIds) {
+        if (!installedHashes.containsKey(packageId)) continue;
+        await _repository.deletePackage(packageId);
+        changed = true;
+      }
     }
     return changed;
   }

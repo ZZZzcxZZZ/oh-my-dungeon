@@ -105,6 +105,10 @@ class CharacterUpgradePlanner {
     ]) {
       if (derived.data.containsKey(key)) mergedData[key] = derived.data[key];
     }
+    mergedData['ruleSnapshots'] = _mergeMaps(
+      oldData['ruleSnapshots'],
+      derived.data['ruleSnapshots'],
+    );
     mergedData['runtime'] = oldData['runtime'] ?? derived.data['runtime'];
 
     final hpIncrease = derived.maxHp - character.maxHp;
@@ -156,6 +160,11 @@ class CharacterUpgradePlanner {
     return CharacterBuild.fromJson(Map<String, Object?>.from(raw));
   }
 }
+
+Map<String, Object?> _mergeMaps(Object? current, Object? derived) => {
+  if (current is Map) ...Map<String, Object?>.from(current),
+  if (derived is Map) ...Map<String, Object?>.from(derived),
+};
 
 int _int(Object? value, int fallback) {
   if (value is num) return value.toInt();

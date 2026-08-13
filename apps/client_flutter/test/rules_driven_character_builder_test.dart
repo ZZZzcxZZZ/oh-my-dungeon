@@ -74,6 +74,11 @@ void main() {
       id: 'test:class-feature/second-wind',
       type: 'classFeature',
       name: '回气',
+      summary: '以附赠动作恢复生命值。',
+      body: const [
+        {'type': 'paragraph', 'text': '你可以恢复 1d10 + 战士等级的生命值。'},
+      ],
+      structured: const {'activation': 'bonusAction'},
       rules: const {},
     );
     final entries = {
@@ -131,6 +136,16 @@ void main() {
         'test:species/human',
       ]),
     );
+    final featureSnapshot =
+        (draft.data['ruleSnapshots'] as Map<String, Object?>)[feature.id]
+            as Map<String, Object?>;
+    expect(featureSnapshot['name'], '回气');
+    expect(featureSnapshot['summary'], contains('恢复生命值'));
+    expect(
+      featureSnapshot['structured'],
+      containsPair('activation', 'bonusAction'),
+    );
+    expect(featureSnapshot['body'], isNotEmpty);
   });
 
   test('uses structured class saves and preserves guided skill choices', () {
@@ -434,6 +449,8 @@ ContentEntry _entry({
   required String type,
   required String name,
   Map<String, Object?> structured = const {},
+  List<Map<String, Object?>> body = const [],
+  String summary = '',
   List<String> tags = const [],
   required Map<String, Object?> rules,
 }) {
@@ -442,9 +459,10 @@ ContentEntry _entry({
     'type': type,
     'slug': id.split('/').last,
     'name': name,
-    'body': <Map<String, Object?>>[],
+    'body': body,
     'revision': 1,
     'structured': structured,
+    'summary': summary,
     'tags': tags,
     'rules': rules,
   });

@@ -64,6 +64,7 @@ $privatePackages = @(
 )
 $privateBundlePath = Join-Path $privateRoot 'private-test-all-bundle.json'
 $bundleBuilderPath = Join-Path $PSScriptRoot 'build-private-content-bundle.ps1'
+$coreBundleBuilderPath = Join-Path $PSScriptRoot 'build_private_core_bundle.py'
 
 $clientDir = Join-Path (Join-Path $repoRoot 'apps') 'client_flutter'
 $bundledContentPath = Join-Path (Join-Path $clientDir 'assets') 'bundled_content.json'
@@ -117,23 +118,21 @@ Write-Done "前置检查通过"
 # --------------------------------------------------------------------------- #
 Write-Step "生成 PHB、怪物与魔法物品多包聚合文件"
 
-$packageBundles = @()
 $totalEntries = 0
+$sourceBundles = @()
 foreach ($package in $privatePackages) {
     & $bundleBuilderPath -SourceDirectory $package.Directory -OutputPath $package.Bundle
     if (-not $?) {
         throw "私人资料包聚合失败: $($package.Directory)"
     }
     $parsedPackage = Get-Content -LiteralPath $package.Bundle -Raw -Encoding UTF8 | ConvertFrom-Json
-    $packageBundles += $parsedPackage
+    $sourceBundles += $package.Bundle
     $totalEntries += [int]$parsedPackage.entryCount
 }
-$bundleJson = [ordered]@{ packages = $packageBundles } | ConvertTo-Json -Depth 100 -Compress
-[System.IO.File]::WriteAllText(
-    $privateBundlePath,
-    $bundleJson,
-    [System.Text.UTF8Encoding]::new($false)
-)
+& python $coreBundleBuilderPath --output $privateBundlePath @sourceBundles
+if ($LASTEXITCODE -ne 0) {
+    throw "私人核心资料包 ID 与引用迁移失败"
+}
 $bundleJson = Get-Content -LiteralPath $privateBundlePath -Raw -Encoding UTF8
 Write-Done "聚合 $($privatePackages.Count) 个包，共 $totalEntries 条条目"
 

@@ -104,6 +104,52 @@ void main() {
     expect(decoded.state.extensions['homebrew.reputation'], {'harpers': 2});
   });
 
+  test('round trips embedded rule snapshots without a content library', () {
+    final withRules = character.copyWith(
+      data: {
+        ...character.dataMap,
+        'contentRefs': {
+          'features': ['core:feature/second-wind'],
+          'spells': ['core:spell/shield'],
+          'items': <String>[],
+        },
+        'ruleSnapshots': {
+          'core:feature/second-wind': {
+            'id': 'core:feature/second-wind',
+            'type': 'classFeature',
+            'name': '回气',
+            'summary': '恢复生命值。',
+            'body': [
+              {'type': 'paragraph', 'text': '以附赠动作恢复生命值。'},
+            ],
+            'revision': 1,
+          },
+          'core:spell/shield': {
+            'id': 'core:spell/shield',
+            'type': 'spell',
+            'name': '护盾术',
+            'summary': '反应施放，AC 暂时提高。',
+            'body': <Object?>[],
+            'revision': 1,
+          },
+        },
+      },
+    );
+
+    final markdown = codec.encode(withRules);
+    final decoded = codec.decode(markdown).character;
+
+    expect(markdown, contains('## 规则特性'));
+    expect(markdown, contains('### 回气'));
+    expect(markdown, contains('## 法术'));
+    expect(markdown, contains('### 护盾术'));
+    expect(
+      decoded.dataMap['ruleSnapshots'],
+      withRules.dataMap['ruleSnapshots'],
+    );
+    expect(decoded.dataMap['contentRefs'], withRules.dataMap['contentRefs']);
+  });
+
   test('exports the supplied local revision in Markdown v2', () {
     final markdown = codec.encode(character, revision: 42);
 

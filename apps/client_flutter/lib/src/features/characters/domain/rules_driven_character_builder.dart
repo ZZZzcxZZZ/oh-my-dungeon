@@ -88,6 +88,11 @@ class RulesDrivenCharacterBuilder {
       level: build.level,
       constitution: abilities['con'] ?? 10,
     );
+    final contentReferences = _contentReferences(
+      effectiveBuild,
+      ledger,
+      extraEntryIds: {...extraSpellRefs, ...extraItemRefs},
+    );
 
     return CharacterEditDraft(
       name: name.trim(),
@@ -115,17 +120,17 @@ class RulesDrivenCharacterBuilder {
           ? 'D&D 2024 引导创建：${backgroundEntry?.name ?? ''} / ${speciesEntry?.name ?? ''} / ${classEntry?.name ?? ''}。'
           : notes,
       avatarUrl: avatarUrl,
-      contentReferences: _contentReferences(
-        effectiveBuild,
-        ledger,
-        extraEntryIds: {...extraSpellRefs, ...extraItemRefs},
-      ),
+      contentReferences: contentReferences,
       data: {
         'build': effectiveBuild.toJson(),
         'contentRefs': {
           'features': featureRefs,
           'spells': spellRefs,
           'items': itemRefs,
+        },
+        'ruleSnapshots': {
+          for (final reference in contentReferences)
+            reference.entryKey: reference.snapshot,
         },
         'resolvedGrants': [
           for (final grant in ledger.grants)
@@ -162,10 +167,10 @@ class RulesDrivenCharacterBuilder {
             case final String ability)
           'spellcastingAbility': ability,
         if (StructuredClassRules.preparedSpellLimit(
-          classEntry,
-          abilities: abilities,
-          level: build.level,
-        )
+              classEntry,
+              abilities: abilities,
+              level: build.level,
+            )
             case final int preparedLimit)
           'preparedSpellLimit': preparedLimit,
         if (StructuredClassRules.startingEquipmentChoice(classEntry)
@@ -241,7 +246,7 @@ class RulesDrivenCharacterBuilder {
         slot: selection.key,
         entryKey: entry.id,
         sourceRevision: entry.revision,
-        snapshot: {'name': entry.name, 'type': entry.type},
+        snapshot: _snapshot(entry),
       );
     }
     for (final choice in build.choices.entries) {
@@ -252,7 +257,7 @@ class RulesDrivenCharacterBuilder {
           slot: 'choice:${choice.key}',
           entryKey: entry.id,
           sourceRevision: entry.revision,
-          snapshot: {'name': entry.name, 'type': entry.type},
+          snapshot: _snapshot(entry),
         );
       }
     }
@@ -264,7 +269,7 @@ class RulesDrivenCharacterBuilder {
         slot: grant.kind.name,
         entryKey: entry.id,
         sourceRevision: entry.revision,
-        snapshot: {'name': entry.name, 'type': entry.type},
+        snapshot: _snapshot(entry),
       );
     }
     for (final entryId in extraEntryIds) {
@@ -274,11 +279,16 @@ class RulesDrivenCharacterBuilder {
         slot: 'manual',
         entryKey: entry.id,
         sourceRevision: entry.revision,
-        snapshot: {'name': entry.name, 'type': entry.type},
+        snapshot: _snapshot(entry),
       );
     }
     return references.values.toList(growable: false);
   }
+
+  Map<String, Object?> _snapshot(ContentEntry entry) => <String, Object?>{
+    'snapshotVersion': 1,
+    ...entry.toJson(),
+  };
 
   int _averageHitPoints({
     required ContentEntry? classEntry,

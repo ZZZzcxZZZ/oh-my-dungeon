@@ -151,13 +151,8 @@ class ContentLibraryController extends ChangeNotifier {
           entryValues = {name};
         } else {
           final raw = entry.structured[field];
-          if (raw is Iterable) {
-            entryValues = raw.map((value) => '$value').toSet();
-          } else if (raw != null) {
-            entryValues = {'$raw'};
-          } else {
-            continue;
-          }
+          entryValues = normalizedContentFacetValues(entry, field, raw);
+          if (entryValues.isEmpty) continue;
         }
         final fieldCounts = counts[field]!;
         for (final value in entryValues) {

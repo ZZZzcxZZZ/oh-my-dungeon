@@ -133,6 +133,24 @@ class CampaignAwareContentRepository implements ContentRepository {
   );
 
   @override
+  Future<void> upsertPackageEntry({
+    required ContentPackageManifest manifest,
+    required ContentEntry entry,
+  }) {
+    final localEntry = entry.id.startsWith(_localPrefix)
+        ? _stripOrigin(entry, entry.id.substring(_localPrefix.length))
+        : entry;
+    return local.upsertPackageEntry(manifest: manifest, entry: localEntry);
+  }
+
+  @override
+  Future<void> deletePackageEntry(String entryKey) => local.deletePackageEntry(
+    entryKey.startsWith(_localPrefix)
+        ? entryKey.substring(_localPrefix.length)
+        : entryKey,
+  );
+
+  @override
   Future<void> setPackageEnabled(String packageId, bool enabled) =>
       local.setPackageEnabled(packageId, enabled);
 

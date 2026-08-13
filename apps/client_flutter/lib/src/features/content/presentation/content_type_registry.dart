@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../domain/content_entry.dart';
+import '../domain/content_schema_registry.dart';
 import '../domain/content_type_definition.dart';
 
 class ContentTypeRegistry {
@@ -28,8 +29,42 @@ class ContentTypeRegistry {
 
   final Map<String, ContentTypeDefinition> _definitions;
 
-  ContentTypeDefinition definitionFor(String type) =>
-      _definitions[type] ?? _definitions['custom']!;
+  ContentTypeDefinition definitionFor(String type) {
+    final base = _definitions[type] ?? _definitions['custom']!;
+    final schema = ContentSchemaRegistry.defaults.schemaFor(type);
+    return _SchemaBackedDefinition(base: base, schema: schema);
+  }
+}
+
+class _SchemaBackedDefinition implements ContentTypeDefinition {
+  const _SchemaBackedDefinition({required this.base, required this.schema});
+
+  final ContentTypeDefinition base;
+  final ContentTypeSchema schema;
+
+  @override
+  String get type => schema.type;
+
+  @override
+  String get label => schema.label;
+
+  @override
+  IconData get icon => base.icon;
+
+  @override
+  List<ContentFieldDefinition> get searchableFields => schema.fields
+      .map(
+        (field) => ContentFieldDefinition(key: field.key, label: field.label),
+      )
+      .toList(growable: false);
+
+  @override
+  Widget buildSummary(BuildContext context, ContentEntry entry) =>
+      base.buildSummary(context, entry);
+
+  @override
+  Widget buildMetadata(BuildContext context, ContentEntry entry) =>
+      _metadataRows(context, entry, searchableFields);
 }
 
 // --- Base ---
@@ -55,9 +90,13 @@ Widget _metadataRows(
 ) {
   final theme = Theme.of(context);
   final colorScheme = theme.colorScheme;
+  final structured = ContentSchemaRegistry.defaults.normalizeStructured(
+    entry.type,
+    entry.structured,
+  );
   final rows = <Widget>[];
   for (final field in fields) {
-    final value = _formatValue(entry.structured[field.key]);
+    final value = _formatValue(structured[field.key]);
     if (value == null) continue;
     rows.add(
       Padding(

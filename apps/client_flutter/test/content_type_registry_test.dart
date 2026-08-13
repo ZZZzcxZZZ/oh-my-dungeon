@@ -2,7 +2,7 @@ import 'package:dnd_table_client/src/features/content/presentation/content_type_
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('registers every v1 content type', () {
+  test('registers canonical types and normalizes legacy equipment', () {
     final registry = ContentTypeRegistry.defaults();
     for (final type in const [
       'class',
@@ -12,7 +12,6 @@ void main() {
       'background',
       'feat',
       'spell',
-      'equipment',
       'equipmentBundle',
       'item',
       'condition',
@@ -22,6 +21,7 @@ void main() {
     ]) {
       expect(registry.definitionFor(type).type, type);
     }
+    expect(registry.definitionFor('equipment').type, 'item');
   });
 
   test('falls back to custom definition for unknown type', () {
@@ -38,7 +38,7 @@ void main() {
     expect(registry.definitionFor('background').label, '背景');
     expect(registry.definitionFor('feat').label, '专长');
     expect(registry.definitionFor('spell').label, '法术');
-    expect(registry.definitionFor('equipment').label, '装备');
+    expect(registry.definitionFor('equipment').label, '物品与装备');
     expect(registry.definitionFor('equipmentBundle').label, '装备方案');
     expect(registry.definitionFor('item').label, '物品与装备');
     expect(registry.definitionFor('condition').label, '状态');

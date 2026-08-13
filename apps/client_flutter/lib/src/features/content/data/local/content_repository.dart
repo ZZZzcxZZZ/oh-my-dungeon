@@ -6,6 +6,7 @@ import '../../../../core/database/app_database.dart';
 import '../../domain/content_block.dart';
 import '../../domain/content_entry.dart';
 import '../../domain/content_package_manifest.dart';
+import '../../domain/content_schema_registry.dart';
 
 class ContentQuery {
   const ContentQuery({
@@ -30,12 +31,35 @@ bool contentEntryMatchesFacets(
   for (final facet in facets.entries) {
     if (facet.value.isEmpty) continue;
     final raw = entry.structured[facet.key];
-    final values = raw is Iterable
-        ? raw.map((value) => '$value').toSet()
-        : <String>{if (raw != null) '$raw'};
+    final values = normalizedContentFacetValues(entry, facet.key, raw);
     if (!values.any(facet.value.contains)) return false;
   }
   return true;
+}
+
+Set<String> normalizedContentFacetValues(
+  ContentEntry entry,
+  String field,
+  Object? raw,
+) {
+  if (raw == null) {
+    final schema = ContentSchemaRegistry.defaults.schemaFor(entry.type);
+    for (final definition in schema.fields) {
+      if (definition.key != field) continue;
+      for (final alias in definition.aliases) {
+        final legacyValue = entry.structured[alias];
+        if (legacyValue != null) {
+          raw = legacyValue;
+          break;
+        }
+      }
+    }
+  }
+  return ContentSchemaRegistry.defaults.normalizeFacetValues(
+    entry.type,
+    field,
+    raw,
+  );
 }
 
 class ContentLink {
@@ -73,6 +97,11 @@ abstract interface class ContentRepository {
     required String contentHash,
     Map<String, Uint8List> assets = const {},
   });
+  Future<void> upsertPackageEntry({
+    required ContentPackageManifest manifest,
+    required ContentEntry entry,
+  });
+  Future<void> deletePackageEntry(String entryKey);
   Future<void> setPackageEnabled(String packageId, bool enabled);
   Future<bool> isPackageEnabled(String packageId);
   Future<ContentDeletionImpact> deletionImpact(String packageId);
@@ -336,6 +365,134 @@ class DriftContentRepository implements ContentRepository {
         }),
       );
     });
+  }
+
+  @override
+  Future<void> upsertPackageEntry({
+    required ContentPackageManifest manifest,
+    required ContentEntry entry,
+  }) async {
+    final packageId = manifest.id;
+    if (!entry.id.startsWith('$packageId:')) {
+      throw ArgumentError('Entry ${entry.id} does not belong to $packageId');
+    }
+    final db = _database;
+    await db.transaction(() async {
+      final existingPackage = await (db.select(
+        db.localContentPackages,
+      )..where((row) => row.id.equals(packageId))).getSingleOrNull();
+      if (existingPackage == null) {
+        await db
+            .into(db.localContentPackages)
+            .insert(
+              LocalContentPackagesCompanion.insert(
+                id: packageId,
+                formatVersion: manifest.formatVersion,
+                name: manifest.name,
+                version: manifest.version,
+                locale: manifest.locale,
+                system: manifest.system,
+                entryCount: 0,
+                contentHash: manifest.contentHash,
+                installedAt: DateTime.now(),
+              ),
+            );
+      }
+
+      await (db.delete(
+        db.contentLinks,
+      )..where((link) => link.sourceId.equals(entry.id))).go();
+      await db
+          .into(db.localContentEntries)
+          .insertOnConflictUpdate(
+            LocalContentEntriesCompanion.insert(
+              entryKey: entry.id,
+              packageId: packageId,
+              type: entry.type,
+              slug: entry.slug,
+              name: entry.name,
+              aliasesJson: Value(jsonEncode(entry.aliases)),
+              summary: Value(entry.summary),
+              bodyJson: Value(
+                jsonEncode(entry.body.map((block) => block.toJson()).toList()),
+              ),
+              structuredJson: Value(jsonEncode(entry.structured)),
+              rulesJson: Value(jsonEncode(entry.rules?.toJson() ?? const {})),
+              relationsJson: Value(
+                jsonEncode(
+                  entry.relations.map((relation) => relation.toJson()).toList(),
+                ),
+              ),
+              tagsJson: Value(jsonEncode(entry.tags)),
+              sourceLabel: Value(entry.source.label),
+              revision: entry.revision,
+            ),
+          );
+
+      var linkIndex = 0;
+      for (final block in entry.body.whereType<EntryLinkBlock>()) {
+        await db
+            .into(db.contentLinks)
+            .insert(
+              ContentLinksCompanion.insert(
+                id: '${entry.id}#${linkIndex++}',
+                sourceId: entry.id,
+                targetId: block.targetId,
+                linkText: Value(block.text),
+              ),
+            );
+      }
+      await _refreshPackageEntryCount(packageId);
+    });
+  }
+
+  @override
+  Future<void> deletePackageEntry(String entryKey) async {
+    final db = _database;
+    await db.transaction(() async {
+      final row = await (db.select(
+        db.localContentEntries,
+      )..where((entry) => entry.entryKey.equals(entryKey))).getSingleOrNull();
+      if (row == null) return;
+      await (db.delete(db.contentLinks)..where(
+            (link) =>
+                link.sourceId.equals(entryKey) | link.targetId.equals(entryKey),
+          ))
+          .go();
+      await (db.delete(
+        db.contentFavorites,
+      )..where((item) => item.entryKey.equals(entryKey))).go();
+      await (db.delete(
+        db.contentNotes,
+      )..where((item) => item.entryKey.equals(entryKey))).go();
+      await (db.delete(
+        db.contentReadHistory,
+      )..where((item) => item.entryKey.equals(entryKey))).go();
+      await (db.delete(
+        db.localContentEntries,
+      )..where((entry) => entry.entryKey.equals(entryKey))).go();
+      await _refreshPackageEntryCount(row.packageId);
+    });
+  }
+
+  Future<void> _refreshPackageEntryCount(String packageId) async {
+    final countExpression = _database.localContentEntries.entryKey.count();
+    final count =
+        await (_database.selectOnly(_database.localContentEntries)
+              ..addColumns([countExpression])
+              ..where(
+                _database.localContentEntries.packageId.equals(packageId),
+              ))
+            .map((row) => row.read(countExpression) ?? 0)
+            .getSingle();
+    await (_database.update(
+      _database.localContentPackages,
+    )..where((row) => row.id.equals(packageId))).write(
+      LocalContentPackagesCompanion(
+        entryCount: Value(count),
+        contentHash: Value('local-${DateTime.now().microsecondsSinceEpoch}'),
+      ),
+    );
   }
 
   @override
@@ -787,6 +944,13 @@ class EmptyContentRepository implements ContentRepository {
     required String contentHash,
     Map<String, Uint8List> assets = const {},
   }) async {}
+  @override
+  Future<void> upsertPackageEntry({
+    required ContentPackageManifest manifest,
+    required ContentEntry entry,
+  }) async {}
+  @override
+  Future<void> deletePackageEntry(String entryKey) async {}
   @override
   Future<void> setPackageEnabled(String packageId, bool enabled) async {}
 

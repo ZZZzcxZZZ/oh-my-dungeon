@@ -57,6 +57,18 @@ Widget _buildApp(List<ContentEntry> entries) => MaterialApp(
   ),
 );
 
+ContentEntry _backgroundEntry() => ContentEntry.fromJson({
+  'id': 'example:background/urchin',
+  'type': 'background',
+  'slug': 'urchin',
+  'name': '流浪儿',
+  'body': <Map<String, Object?>>[],
+  'revision': 1,
+  'structured': {
+    'skills': ['隐匿', '巧手'],
+  },
+});
+
 void main() {
   group('filter panel M3 refactor (Task 2.2)', () {
     testWidgets('facet chips show counts next to value', (tester) async {
@@ -169,6 +181,24 @@ void main() {
 
       // DraggableScrollableSheet 提供 drag handle.
       expect(find.byType(DraggableScrollableSheet), findsOneWidget);
+    });
+
+    testWidgets('registry exposes custom type and canonical background facets', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_buildApp([_backgroundEntry()]));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('content-filter-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('自定义'), findsOneWidget);
+      await tester.tap(find.text('背景'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('技能熟练'), findsOneWidget);
+      expect(find.textContaining('隐匿'), findsOneWidget);
+      expect(find.textContaining('巧手'), findsOneWidget);
     });
   });
 }

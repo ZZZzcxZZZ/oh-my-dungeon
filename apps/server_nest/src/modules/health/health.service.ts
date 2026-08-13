@@ -19,7 +19,7 @@ export class HealthService {
 
     return {
       status: database.status === 'ok' ? 'ok' : 'degraded',
-      service: 'dnd-table-server',
+      service: 'ohmydungeon-server',
       timestamp: new Date().toISOString(),
       database
     };

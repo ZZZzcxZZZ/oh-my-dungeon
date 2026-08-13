@@ -70,11 +70,19 @@ class ReleasePackagingTest(unittest.TestCase):
         )
 
         self.assertIn("tar.exe", script)
-        self.assertIn("dnd-table-server-linux", script)
+        self.assertIn("ohmydungeon-server-linux", script)
         self.assertIn("$serverBuildInputs", script)
         self.assertIn('"src"', script)
         self.assertIn('"prisma"', script)
         self.assertIn('"*.spec.ts"', script)
+
+    def test_docker_compose_wrapper_preserves_detached_mode(self):
+        script = (ROOT / "scripts" / "docker-compose.ps1").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('[Alias("d")]', script)
+        self.assertIn('$ComposeArgs += "--detach"', script)
 
 
 if __name__ == "__main__":

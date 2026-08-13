@@ -47,3 +47,5 @@ web/drift_worker.dart.js.map
 /android/app/debug
 /android/app/profile
 /android/app/release
+/android/build/
+/android/.kotlin/

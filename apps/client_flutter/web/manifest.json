@@ -1,11 +1,11 @@
 {
-    "name": "dnd_table_client",
-    "short_name": "dnd_table_client",
+    "name": "Oh My Dungeon!",
+    "short_name": "OhMyDungeon",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FFFBFE",
+    "theme_color": "#6750A4",
+    "description": "Offline-first D&D character and campaign companion.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

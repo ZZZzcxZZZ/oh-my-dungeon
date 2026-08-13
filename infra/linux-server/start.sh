@@ -108,7 +108,7 @@ docker compose up -d --build
 attempt=1
 while [ "$attempt" -le 30 ]; do
   if curl --fail --silent --show-error http://127.0.0.1:3000/health >/dev/null; then
-    echo "D&D Table server is ready."
+    echo "OhMyDungeon server is ready."
     grep '^PUBLIC_BASE_URL=' .env
     exit 0
   fi

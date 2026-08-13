@@ -1,4 +1,4 @@
-package com.example.dnd_table_client
+package app.ohmydungeon.client
 
 import io.flutter.embedding.android.FlutterActivity
 

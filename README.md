@@ -1,6 +1,6 @@
-# D&D Table Tool
+# OhMyDungeon
 
-开源、自托管优先的 D&D 跑团辅助工具。客户端使用 Flutter 与 Material 3，服务端
+开源、离线优先、可自托管的 D&D 跑团辅助工具。客户端使用 Flutter 与 Material 3，服务端
 使用 NestJS、PostgreSQL 和 Prisma。
 
 ## 当前状态
@@ -106,8 +106,8 @@ pwsh -File scripts/build_private_client.ps1 -Target web -BuildArgs --release
 ## Linux 自托管
 
 ```bash
-git clone <repo-url> dnd-table-tool
-cd dnd-table-tool
+git clone <repo-url> ohmydungeon
+cd ohmydungeon
 ./infra/linux-server/start.sh
 ```
 

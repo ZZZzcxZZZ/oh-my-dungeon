@@ -8,7 +8,7 @@ $ErrorActionPreference = "Stop"
 
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $OutputDirectory = if ($OutputDirectory) { $OutputDirectory } else { Join-Path $root "dist" }
-$packageName = "dnd-table-server-linux-$Version"
+$packageName = "ohmydungeon-server-linux-$Version"
 $staging = Join-Path $OutputDirectory $packageName
 $archive = Join-Path $OutputDirectory "$packageName.tar.gz"
 

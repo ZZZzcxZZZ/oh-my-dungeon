@@ -2,7 +2,7 @@
     <!-- 私有自用工具，需要访问自建 HTTP 服务器 -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="dnd_table_client"
+        android:label="Oh My Dungeon!"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">

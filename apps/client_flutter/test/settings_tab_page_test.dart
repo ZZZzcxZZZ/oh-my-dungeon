@@ -291,7 +291,7 @@ void main() {
     await pumpSettings(tester);
 
     expect(find.text('关于'), findsWidgets);
-    expect(find.textContaining('D&D Table Tool'), findsWidgets);
+    expect(find.textContaining('Oh My Dungeon!'), findsWidgets);
     expect(find.textContaining('0.1.0'), findsWidgets);
   });
 

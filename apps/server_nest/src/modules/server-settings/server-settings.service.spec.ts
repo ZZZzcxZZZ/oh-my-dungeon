@@ -61,7 +61,7 @@ describe('ServerSettingsService', () => {
       const result = await service.getSettings();
 
       expect(result).toEqual({
-        serverName: 'D&D Table Tool',
+        serverName: 'OhMyDungeon',
         registrationEnabled: true,
         defaultLocale: 'zh-CN',
         maxUploadSizeMb: 20
@@ -113,7 +113,7 @@ describe('ServerSettingsService', () => {
       prismaService.serverSetting.upsert.mockResolvedValue({
         id: 'settings-1',
         instanceId: 'instance-1',
-        serverName: 'D&D Table Tool',
+        serverName: 'OhMyDungeon',
         registrationEnabled: true,
         defaultLocale: 'zh-CN',
         maxUploadSizeMb: 20
@@ -121,7 +121,7 @@ describe('ServerSettingsService', () => {
 
       await expect(service.getDiscoverySettings()).resolves.toEqual({
         instanceId: 'instance-1',
-        serverName: 'D&D Table Tool',
+        serverName: 'OhMyDungeon',
         registrationEnabled: true
       });
       expect(prismaService.serverSetting.upsert).toHaveBeenCalledWith({
@@ -218,7 +218,7 @@ describe('ServerSettingsService', () => {
       prismaService.serverSetting.findFirst.mockResolvedValue(null);
       prismaService.serverSetting.create.mockResolvedValue({
         id: 'settings-1',
-        serverName: 'D&D Table Tool',
+        serverName: 'OhMyDungeon',
         registrationEnabled: false,
         defaultLocale: 'zh-CN',
         maxUploadSizeMb: 20

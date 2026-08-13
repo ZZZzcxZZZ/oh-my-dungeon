@@ -47,7 +47,7 @@ describe('server metadata endpoints', () => {
       .expect(200)
       .expect(({ body }) => {
         expect(body.status).toBe('ok');
-        expect(body.service).toBe('dnd-table-server');
+        expect(body.service).toBe('ohmydungeon-server');
         expect(body.database.status).toBe('ok');
         expect(prismaService.$queryRaw).toHaveBeenCalled();
       });

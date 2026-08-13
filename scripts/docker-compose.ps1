@@ -1,6 +1,9 @@
 param(
   [Parameter(ValueFromRemainingArguments = $true)]
-  [string[]] $ComposeArgs
+  [string[]] $ComposeArgs,
+
+  [Alias("d")]
+  [switch] $Detach
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,6 +24,10 @@ function Get-DockerCommand {
 
 if (-not $ComposeArgs -or $ComposeArgs.Count -eq 0) {
   throw "Missing docker compose arguments."
+}
+
+if ($Detach) {
+  $ComposeArgs += "--detach"
 }
 
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")

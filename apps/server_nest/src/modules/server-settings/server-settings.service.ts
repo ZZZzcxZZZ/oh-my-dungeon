@@ -7,7 +7,7 @@ import type {
 } from './server-settings.types';
 
 const DEFAULT_SETTINGS: ServerSettingsView = {
-  serverName: 'D&D Table Tool',
+  serverName: 'OhMyDungeon',
   registrationEnabled: true,
   defaultLocale: 'zh-CN',
   maxUploadSizeMb: 20

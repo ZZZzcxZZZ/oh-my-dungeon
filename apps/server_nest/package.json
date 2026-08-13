@@ -1,8 +1,8 @@
 {
-  "name": "dnd-table-server",
+  "name": "ohmydungeon-server",
   "version": "0.1.0",
   "private": true,
-  "description": "NestJS server for D&D Table Tool.",
+  "description": "NestJS collaboration server for OhMyDungeon.",
   "scripts": {
     "build": "nest build",
     "prebuild": "prisma generate",

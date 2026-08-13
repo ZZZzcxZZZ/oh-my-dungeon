@@ -10,7 +10,7 @@ datasource db {
 model ServerSetting {
   id                           String   @id @default(uuid())
   instanceId                   String   @unique @default(uuid())
-  serverName                   String   @default("D&D Table Tool")
+  serverName                   String   @default("OhMyDungeon")
   registrationEnabled          Boolean  @default(true)
   defaultLocale                String   @default("zh-CN")
   allowPublicCampaignDiscovery Boolean  @default(false)

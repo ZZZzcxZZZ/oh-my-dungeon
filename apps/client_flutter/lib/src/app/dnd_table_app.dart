@@ -28,9 +28,10 @@ import '../features/server_profiles/data/server_profile_migrator.dart';
 import '../features/server_profiles/data/server_profile_store.dart';
 import '../features/server_profiles/presentation/server_profiles_page.dart';
 import '../features/server_home/presentation/main_shell.dart';
+import 'app_identity.dart';
 
-class DndTableApp extends StatefulWidget {
-  const DndTableApp({
+class OhMyDungeonApp extends StatefulWidget {
+  const OhMyDungeonApp({
     this.database,
     this.serverProfileStore,
     this.authTokenStore,
@@ -60,10 +61,10 @@ class DndTableApp extends StatefulWidget {
   final Future<String> Function()? bundledContentLoader;
 
   @override
-  State<DndTableApp> createState() => _DndTableAppState();
+  State<OhMyDungeonApp> createState() => _OhMyDungeonAppState();
 }
 
-class _DndTableAppState extends State<DndTableApp> {
+class _OhMyDungeonAppState extends State<OhMyDungeonApp> {
   late ClientModeController _modeController;
   late bool _ownsModeController;
   AppPreferencesController? _ownedPreferencesController;
@@ -336,7 +337,7 @@ class _DndTableAppState extends State<DndTableApp> {
     required Widget home,
   }) {
     return MaterialApp(
-      title: 'D&D Table Tool',
+      title: AppIdentity.productName,
       debugShowCheckedModeBanner: false,
       themeMode: preferences.themeMode,
       theme: AppTheme.light(preferences),
@@ -345,6 +346,9 @@ class _DndTableAppState extends State<DndTableApp> {
     );
   }
 }
+
+/// Source-compatible alias for existing tests and integrations.
+typedef DndTableApp = OhMyDungeonApp;
 
 class _StartupErrorPage extends StatelessWidget {
   const _StartupErrorPage({required this.error});

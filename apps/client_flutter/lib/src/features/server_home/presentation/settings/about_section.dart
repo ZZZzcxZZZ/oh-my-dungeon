@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/app_identity.dart';
 import 'settings_section.dart';
 
 /// 关于：产品名、版本号、简短说明。
@@ -18,14 +19,21 @@ class AboutSection extends StatelessWidget {
           child: Column(
             children: [
               ListTile(
-                leading: const Icon(Icons.castle_outlined),
-                title: const Text('D&D Table Tool'),
-                subtitle: const Text('离线优先的跑团桌面工具'),
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.asset(
+                    'assets/branding/ohmydungeon_icon.png',
+                    width: 40,
+                    height: 40,
+                  ),
+                ),
+                title: const Text(AppIdentity.displayName),
+                subtitle: const Text(AppIdentity.description),
               ),
               ListTile(
                 leading: const Icon(Icons.tag),
                 title: const Text('版本'),
-                subtitle: const Text('0.1.0'),
+                subtitle: const Text(AppIdentity.version),
                 dense: true,
               ),
               ListTile(

@@ -1,0 +1,4 @@
+storePassword=replace-me
+keyPassword=replace-me
+keyAlias=ohmydungeon
+storeFile=C:/absolute/path/to/ohmydungeon-upload-key.jks

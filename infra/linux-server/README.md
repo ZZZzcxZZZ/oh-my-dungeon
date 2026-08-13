@@ -1,4 +1,4 @@
-# D&D Table Server
+# OhMyDungeon Server
 
 ## 一键部署
 
@@ -34,7 +34,7 @@ docker compose down -v           # ⚠️ 停止并删除所有数据（数据�
 
 | 变量 | 说明 | 默认值 |
 |---|---|---|
-| `SERVER_NAME` | 服务器显示名称 | D&D Table Tool |
+| `SERVER_NAME` | 服务器显示名称 | OhMyDungeon |
 | `PUBLIC_BASE_URL` | 客户端连接地址 | 自动探测本机 IP |
 | `POSTGRES_PASSWORD` | 数据库密码 | 自动随机生成 |
 | `JWT_SECRET` | JWT 签名密钥 | 自动随机生成 |

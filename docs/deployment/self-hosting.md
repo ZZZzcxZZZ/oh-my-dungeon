@@ -76,8 +76,8 @@ MAX_UPLOAD_SIZE_MB=20
 推荐流程：
 
 ```bash
-git clone https://github.com/<your-org>/dnd-table-tool.git
-cd dnd-table-tool
+git clone https://github.com/<your-org>/ohmydungeon.git
+cd ohmydungeon
 cp .env.example .env
 docker compose up -d
 curl http://localhost:3000/health

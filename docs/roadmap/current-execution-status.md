@@ -1,8 +1,8 @@
 # 当前执行状态
 
 **版本：** 0.1
-**更新时间：** 2026-07-29
-**状态：** 私人工作区与战役体验收敛计划已完成并验收
+**更新时间：** 2026-08-03
+**状态：** OhMyDungeon 0.1 测试候选版已完成自动化验收
 
 ## 当前产品边界
 
@@ -14,6 +14,8 @@
 - 公开仓库和公开构建不包含商业规则正文。
 
 ## 已完成
+
+- 产品统一命名为 OhMyDungeon，并接入 Android、Web、Windows 与应用内图标；
 
 - 服务器实例身份、客户端备注和每账号私人工作区；
 - 账号切换数据隔离、离线账号恢复和旧数据迁移；
@@ -28,8 +30,8 @@
 
 ## 验收基线
 
-- 服务端：352 项测试、27 个套件通过；
-- Flutter：835 项通过，2 项私有路径测试按设计跳过；
+- 服务端：354 项通过、8 项跳过，26/27 个套件通过；
+- Flutter：832 项通过，2 项私有路径测试按设计跳过；
 - Flutter analyze、服务端 lint/build、Prisma validate 通过；
 - PHB 私有包 1106 条通过 schema、引用、规则和真实 Flutter 导入验证；
 - PHB、MM、DMG 私人测试构建共包含 1880 条内容；
@@ -43,6 +45,17 @@
 - 删除无消费者的客户端 encounters 页面、控制器、API 客户端及孤立测试；
 - 删除没有代码或消费者的 `packages/` 占位目录；
 - `private-imports/` 与私人 release Web 测试版已保留并重新验证。
+
+## 2026-08-03 OhMyDungeon 测试候选版
+
+- 客户端、服务端、Web/PWA、Android、Windows 与发布脚本统一使用 OhMyDungeon 品牌；
+- Android 应用 ID 固定为 `app.ohmydungeon.client`，支持独立 release 签名配置；
+- 新备份使用 `.ohmydungeon-backup`，旧 `.openquest-backup` 与 `.dndtable-backup` 仍可恢复；
+- 合并客户端 API 实例并删除无消费者的旧 Character HTTP CRUD；
+- 角色操作与战役事件补齐并发幂等保护、重放边界和查询索引；
+- 修复 Docker `-d` 参数被 PowerShell 吞掉导致启动命令附着日志的问题；
+- 公共 APK、私人资料 APK、Linux 服务端包与私人 Web 预览均已构建；
+- 服务端生产依赖审计为 0 漏洞，桌面与移动 Web 预览无溢出和控制台错误。
 
 完整实现和验收记录见
 [私人工作区与战役体验收敛规格](../superpowers/specs/2026-07-29-private-workspaces-and-campaign-convergence-design.md)。

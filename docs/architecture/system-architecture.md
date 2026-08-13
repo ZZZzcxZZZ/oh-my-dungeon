@@ -5,7 +5,7 @@
 项目采用 monorepo、Flutter 离线优先客户端和 NestJS 模块化单体服务端。
 
 ```text
-dnd-table-tool/
+ohmydungeon/
   apps/client_flutter/   Flutter 多端客户端
   apps/server_nest/      NestJS + Prisma 服务端
   docs/                  产品、架构、计划与部署文档
@@ -45,9 +45,10 @@ lib/src/
     auth/
     campaigns/
     characters/
+    check_requests/      占位目录（检定走战役消息 eventData，无独立功能）
     client_mode/
     content/
-    encounters/
+    rules/
     server_home/
     server_profiles/
     vault/
@@ -68,12 +69,16 @@ lib/src/
 
 - `auth`、`server-settings`、`server-info`、`health`
 - `campaigns`：战役、成员、邀请、聊天、日志和档案
-- `campaign-sync`：Character、战役资料和增量 change cursor
-- `encounters`：NPC、遭遇和参与者
+- `campaign-sync`：Character、战役资料、战役事件和增量 change cursor
+- `game-events`：不可变 GameEvent 审计事件与分页查询（`/events`）
 - `realtime`：campaign room、消息和变更通知
 - `vault`：个人实体跨设备同步
-- `media`：头像等媒体资源
-- `characters`：旧服务器角色兼容与导入边界，个人角色主路径已迁到本地
+- `characters`：旧服务器角色兼容与结构化状态操作；个人角色主路径已迁到本地
+
+未挂载（保留源码与测试作为后续工作流起点，当前访问一律 404）：
+
+- `encounters`：NPC、遭遇和参与者——战斗系统暂缓开发
+- `media`：头像等媒体资源——客户端头像走本地 data URL
 
 `RoomsModule`、`SessionsModule`、`SessionsGateway` 和独立 `CheckRequestsModule` 已删除。Prisma 中残留的 Session/CheckRequest 表仅用于预发布数据兼容和后续迁移，不代表可调用 API。
 

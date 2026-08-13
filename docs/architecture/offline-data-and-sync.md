@@ -15,7 +15,7 @@
 
 ## 2. 本地数据层（Drift）
 
-`AppDatabase` 的 `schemaVersion = 6`，跨平台（Native SQLite + Web WASM）。表分为三组：
+`AppDatabase` 的 `schemaVersion = 13`，跨平台（Native SQLite + Web WASM）。表分为三组：
 
 ### 2.1 个人数据（10 张表）
 
@@ -69,7 +69,7 @@
 - **只同步 DM 创建的独立 JSON 条目**：`CampaignContentEntry` 是独立条目，不存在 overlay / patch / 依赖选项 / 公共包市场。
 - **玩家发布角色形成完整 CampaignCharacter**：本地角色发布时把整张角色卡快照写入 `CampaignCharacter.sheetJson`，owner/DM 都有完整编辑权。
 - **owner/DM 编辑权**：所有修改记录在 `CampaignCharacterAudit`，revision 单调递增，客户端冲突可见、可回滚。
-- **资料正文不进入战役同步**：`CampaignContentEntry.entryJson` 是 DM 自己写的独立条目，不会引用本地资料包正文；客户端在 Wiki 检索时把本地包和战役缓存合并显示，同名不覆盖，来源 chip 标注「本地」/「战役」。
+- **资料包不整体进入战役同步**：`CampaignContentEntry.entryJson` 只同步战役成员创建的独立条目。角色创建、升级或手动添加时已经写入角色文档的规则快照属于角色自身数据，会随完整 `CampaignCharacter.sheetJson` 同步；客户端不得依赖接收方安装相同资料包。
 
 ### 4.3 客户端缓存流程
 
@@ -88,7 +88,7 @@
 
 ### 5.1 归档格式
 
-`.dndtable-backup` 是 ZIP 文件，包含：
+`.ohmydungeon-backup` 是 ZIP 文件，包含：
 
 - `manifest.json`：`formatVersion=1`、`createdAt`、`clientVersion`、计数（角色 / 资料包 / 条目 / 收藏 / 笔记 / assets）、`totalSize`、`sha256`（`database.json` 的 SHA-256）。
 - `database.json`：10 张个人数据表的序列化 JSON。
@@ -97,13 +97,13 @@
 ### 5.2 不进入备份的内容
 
 - 任何 token、密码或会话凭据。
-- 战役缓存（5 张表）—— 可单独清理，但不属于个人数据。
+- 战役离线状态（5 张表）—— 不属于个人备份，也不向用户提供整表清理；由战役同步自动校正。
 - Vault Outbox、Vault Cursors、Vault Devices、Vault Sync Conflicts —— 同步状态不属于数据备份。
-- `CharacterContentRefs` 的快照字段会随角色一起导出，但不导出资料包正文（用户需要自行保管 `.dndpack` 包）。
+- 角色已经获得的规则快照会随角色一起导出，保证角色卡独立可读；未授予角色的资料包正文不随角色备份，完整资料库仍需用户自行保管 `.dndpack` 包。
 
 ### 5.3 恢复流程
 
-1. 用户在「设置 → 数据管理」选择 `.dndtable-backup` 文件。
+1. 用户在「设置 → 数据管理」选择 `.ohmydungeon-backup` 文件。导入器继续兼容旧版 `.openquest-backup` 与 `.dndtable-backup`。
 2. `DriftLocalDataArchiveService.previewArchive` 解码 ZIP、读取 manifest、校验 `database.json` 的 SHA-256，返回 `ArchivePreview`。
 3. UI 显示预览（角色数、资料包数、总大小、版本、错误），仅在 `preview.valid` 时启用「确认恢复」。
 4. 用户二次确认 → `restoreArchive` 在单事务内清空 10 张个人表并按 JSON 重新插入，然后更新 assets 字节。
@@ -111,8 +111,9 @@
 
 ### 5.4 其他维护操作
 
-- **清理战役缓存**：单事务删除 5 张战役缓存表，用于「战役数据异常 / 切换战役 / 隐私清理」场景。
-- **重建资料索引**：当前实现是 no-op，因为资料检索使用 LIKE 查询而非外部 FTS 索引；保留入口以便未来切换到 FTS5 时复用 UI。
+- **战役状态不可由“清缓存”删除**：战役角色、资料、同步游标和冲突记录都属于离线连续性的一部分，不向用户暴露整表清理入口。需要修复时由同步层按服务端游标增量校正。
+- **资料检索自动维护**：当前检索直接查询本地资料条目，不存在需要用户手动重建的外部索引。未来若引入 FTS，迁移与一致性修复必须由启动和导入流程自动完成。
+- **聊天缓存释放边界**：只有在消息持久化层能够确认消息已上传且可从服务器重拉后，才允许后台按容量自动裁剪旧正文；未同步消息、置顶/线索/系统事件及任何角色或战役状态不得被清理。
 
 ## 6. 边界速查表
 

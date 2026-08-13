@@ -108,14 +108,9 @@ features/characters/
 
 ## 5. API 契约
 
-服务端暴露：
-
-```text
-/api/docs
-/openapi.json
-```
-
-REST 契约以 OpenAPI 为准。Flutter 端应尽量从 OpenAPI 生成 DTO 或 API client，至少保证 DTO 字段由契约驱动。
+当前 REST 契约以 `docs/architecture/api-realtime-boundary.md` 的端点清单为
+准（服务端尚未挂载 Swagger/OpenAPI，`/api/docs` 与 `/openapi.json` 属于
+后续规划，当前不存在）。Flutter 端 DTO 由契约驱动，字段与端点保持同步。
 
 WebSocket 事件在 `docs/architecture/api-realtime-boundary.md` 中维护。每个事件必须说明：
 
@@ -192,7 +187,7 @@ Flutter：
 服务端：
 
 - Prisma Client
-- Swagger/OpenAPI
+- Swagger/OpenAPI（规划中，尚未实现）
 
 内容包：
 

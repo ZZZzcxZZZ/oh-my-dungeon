@@ -36,7 +36,6 @@ GET  /api/campaigns/:id
 GET  /api/campaigns/:id/context
 GET  /api/campaigns/:id/messages
 POST /api/campaigns/:id/messages
-GET  /api/campaigns/:id/journal
 GET  /api/campaigns/:id/check-requests
 PUT  /api/campaigns/:id/members/:userId/binding
 PUT  /api/campaigns/:id/speaker
@@ -44,6 +43,16 @@ POST /api/campaigns/:id/read
 POST /api/campaigns/:id/invites
 GET  /api/campaigns/:id/invites
 POST /api/campaigns/join
+```
+
+私聊与小群（同一战役内）：
+
+```text
+GET    /api/campaigns/:campaignId/conversations
+POST   /api/campaigns/:campaignId/conversations/direct
+POST   /api/campaigns/:campaignId/conversations/group
+PATCH  /api/campaigns/:campaignId/conversations/:conversationId
+POST   /api/campaigns/:campaignId/conversations/:conversationId/read
 ```
 
 检定、响应和系统事件是带结构化 `eventData` 的战役消息。`check-requests` 只提供战役消息历史聚合，不是独立 Session 资源。
@@ -55,39 +64,50 @@ POST /api/campaigns/:campaignId/characters/publish
 POST /api/campaigns/:campaignId/characters
 GET  /api/campaigns/:campaignId/characters
 GET  /api/campaigns/:campaignId/characters/:characterId
+PUT  /api/campaigns/:campaignId/characters/:characterId
 POST /api/campaigns/:campaignId/characters/:characterId/runtime-commands
 POST /api/campaigns/:campaignId/characters/:characterId/assign
 POST /api/campaigns/:campaignId/characters/:characterId/archive
+POST /api/campaigns/:campaignId/characters/:characterId/restore
 GET  /api/campaigns/:campaignId/characters/:characterId/audits
 
 POST   /api/campaigns/:campaignId/content/entries/validate
 POST   /api/campaigns/:campaignId/content/entries
 GET    /api/campaigns/:campaignId/content/entries
+PUT    /api/campaigns/:campaignId/content/entries/:entryId
 DELETE /api/campaigns/:campaignId/content/entries/:entryId
 GET    /api/campaigns/:campaignId/changes
 ```
 
+战役角色状态修改（战役快照是 0.1 角色运行状态的单一事实源）：
+
+```text
+POST /api/campaigns/:campaignId/characters/:characterId/hp
+POST /api/campaigns/:campaignId/characters/:characterId/items
+POST /api/campaigns/:campaignId/characters/:characterId/conditions
+```
+
+三者与下述 `/api/characters/:characterId/actions/*` 语义一致：必须携带唯一
+`requestId`（相同 requestId 重试返回首次结果，不重复执行；跨操作复用报
+400），可携带 `baseRevision`（不匹配返回 409）。同事务写入角色、审计、
+变更游标与事件消息，事务提交后才广播。
+
 本地资料包正文不上传。这里只同步 DM 明确发布到战役的独立 JSON 条目。
 
-### 战役档案与遭遇
+### 战役档案
 
 ```text
 GET    /api/campaigns/:campaignId/archives
 POST   /api/campaigns/:campaignId/archives
 PUT    /api/campaigns/:campaignId/archives/:entryId
 DELETE /api/campaigns/:campaignId/archives/:entryId
-
-GET  /api/campaigns/:id/npcs
-POST /api/campaigns/:id/npcs
-GET  /api/campaigns/:id/encounters
-POST /api/campaigns/:id/encounters
-GET  /api/encounters/:id
-POST /api/encounters/:id/participants
-PATCH /api/encounters/:id/participants/:participantId
-POST /api/encounters/:id/start
-POST /api/encounters/:id/advance-turn
-POST /api/encounters/:id/end
 ```
+
+> 遭遇与 NPC 接口（`/api/campaigns/:id/npcs`、`/api/encounters/*` 等）随战斗
+> 系统暂缓开发：`EncountersModule` 保留源码但**未挂载**（见 `app.module.ts`），
+> 当前访问一律 404，客户端无任何消费者。对应 Prisma 模型
+> （`Npc`/`Encounter`/`EncounterParticipant`）与迁移表一并保留作为后续工作流
+> 起点。`MediaModule` 同样未挂载（头像走本地 data URL），`/api/media` 不可用。
 
 ### 可选 Personal Vault
 
@@ -95,6 +115,7 @@ POST /api/encounters/:id/end
 POST /api/vault/push
 GET  /api/vault/changes
 GET  /api/vault/devices
+DELETE /api/vault/devices/:deviceId
 ```
 
 Vault 同步个人角色、收藏、笔记、偏好和资料包 manifest。资料正文与 assets 禁止进入 payload。
@@ -120,6 +141,12 @@ POST /api/characters/:characterId/items/:itemId/actions/transfer
 
 所有修改操作必须携带唯一 `requestId`，可以携带 `expectedRevision` 和
 `campaignId`。服务端返回结构化 state、最新 revision 与不可变 GameEvent。
+相同 `requestId` 重试返回首次结果（按操作类型限定；跨类型复用报 400），
+并发重复请求通过 `GameEvent.requestId` 唯一约束回放首次结果。
+
+> 旧兼容接口 `POST /api/characters`、`GET /api/characters`、
+> `PATCH /api/characters/:id` 仍可调用，但 0.1 客户端角色 CRUD 已全部走
+> 本地 Drift，这些端点仅保留用于旧数据与外部工具兼容，不属于新开发入口。
 
 ## 3. WebSocket
 
@@ -147,5 +174,5 @@ server -> client: campaign:changed { campaignId, entityType, cursor }
 - 战役创建者是 owner，公开邀请码始终加入为 player。
 - 客户端 Player/DM 模式只控制界面，不授予战役权限。
 - owner 或服务端保留的 dm membership 可管理战役和任意 Character。
-- 玩家只能绑定、发言和编辑自己拥有的 active player Character。
+- 玩家只能绑定、发言和编辑自己拥有且未归档的 player Character；可以随时更换自己的绑定。DM 可修复任意成员的绑定。
 - 玩家响应检定时，当前发言 Character 必须与请求的 targetCharacterId 一致。

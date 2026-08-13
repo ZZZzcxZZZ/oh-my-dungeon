@@ -10,6 +10,8 @@
 - [API 与实时边界](architecture/api-realtime-boundary.md)
 - [离线数据与同步](architecture/offline-data-and-sync.md)
 - [AI Agent 数据与工具契约](architecture/ai-agent-data-and-tool-contract.md)
+- [角色文档、规则快照与权限](architecture/character-document-and-permissions.md)
+- [统一资料 Schema 与本地自制内容](architecture/content-schema-and-homebrew.md)
 - [内容包 v2 规范](content/content-package-format-v2.md)
 - [工程规范](engineering/engineering-standards.md)
 
@@ -18,6 +20,7 @@
 - [当前执行状态](roadmap/current-execution-status.md)
 - [私人工作区与战役体验收敛规格](superpowers/specs/2026-07-29-private-workspaces-and-campaign-convergence-design.md)
 - [AI Ready 验收清单](acceptance/ai-ready-foundation-acceptance.md)
+- [OhMyDungeon 0.1 测试候选版验收](acceptance/ohmydungeon-0.1-test-readiness.md)
 - [仓库归档清理规格](superpowers/specs/2026-07-29-repository-archive-cleanup-design.md)
 
 ## 开发与部署

@@ -2,11 +2,11 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../../app/app_identity.dart';
 import '../../../core/backup/local_backup_models.dart';
 import '../../../core/backup/local_data_archive_service.dart';
 
-/// Page exposing local data backup, restore, campaign cache clearing and
-/// content index rebuild actions.
+/// Page exposing local data backup and restore actions.
 ///
 /// The page is intentionally minimal: each action lives behind a [ListTile]
 /// and destructive operations require a confirmation dialog showing preview
@@ -53,31 +53,20 @@ class _DataManagementPageState extends State<DataManagementPage> {
           ListTile(
             leading: const Icon(Icons.upload_outlined),
             title: const Text('导出备份'),
-            subtitle: const Text('将本地角色、资料、收藏和笔记打包为 .dndtable-backup'),
+            subtitle: const Text(
+              '将本地角色、资料、收藏和笔记打包为 ${AppIdentity.backupExtension}',
+            ),
             enabled: !_busy,
             onTap: _exportBackup,
           ),
           ListTile(
             leading: const Icon(Icons.download_outlined),
             title: const Text('恢复备份'),
-            subtitle: const Text('从 .dndtable-backup 文件恢复本地数据'),
+            subtitle: const Text(
+              '从 OhMyDungeon 备份恢复（兼容旧版 OpenQuest 与 D&D Table 备份）',
+            ),
             enabled: !_busy,
             onTap: _restoreBackup,
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.cleaning_services_outlined),
-            title: const Text('清理战役缓存'),
-            subtitle: const Text('删除战役角色、内容缓存和同步游标，不影响本地角色或资料'),
-            enabled: !_busy,
-            onTap: _clearCampaignCache,
-          ),
-          ListTile(
-            leading: const Icon(Icons.search_outlined),
-            title: const Text('重建资料索引'),
-            subtitle: const Text('从本地资料条目重建搜索索引'),
-            enabled: !_busy,
-            onTap: _rebuildContentIndex,
           ),
         ],
       ),
@@ -94,7 +83,10 @@ class _DataManagementPageState extends State<DataManagementPage> {
       final saver = widget.fileSaver;
       if (saver != null) {
         final stamp = DateTime.now().toIso8601String();
-        final saved = await saver(bytes, 'dnd-table-$stamp.dndtable-backup');
+        final saved = await saver(
+          bytes,
+          'ohmydungeon-$stamp${AppIdentity.backupExtension}',
+        );
         if (!saved) {
           setState(() => _statusMessage = '备份已生成但未保存到文件。');
           return;
@@ -220,73 +212,4 @@ class _DataManagementPageState extends State<DataManagementPage> {
     );
   }
 
-  Future<void> _clearCampaignCache() async {
-    final confirmed = await _showSimpleConfirm(
-      title: '清理战役缓存',
-      message: '将删除战役角色、内容缓存和同步游标。本地角色与资料不受影响。',
-      confirmLabel: '确认清理',
-    );
-    if (confirmed != true) return;
-
-    setState(() {
-      _busy = true;
-      _statusMessage = null;
-    });
-    try {
-      await widget.archiveService.clearCampaignCache();
-      setState(() => _statusMessage = '战役缓存已清理。');
-    } catch (e) {
-      setState(() => _statusMessage = '清理失败：$e');
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _rebuildContentIndex() async {
-    final confirmed = await _showSimpleConfirm(
-      title: '重建资料索引',
-      message: '将根据本地资料条目重建搜索索引。该操作不会改变资料内容。',
-      confirmLabel: '确认重建',
-    );
-    if (confirmed != true) return;
-
-    setState(() {
-      _busy = true;
-      _statusMessage = null;
-    });
-    try {
-      await widget.archiveService.rebuildContentIndex();
-      setState(() => _statusMessage = '索引已重建。');
-    } catch (e) {
-      setState(() => _statusMessage = '重建失败：$e');
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<bool?> _showSimpleConfirm({
-    required String title,
-    required String message,
-    required String confirmLabel,
-  }) {
-    return showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(title),
-          content: Text(message),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: Text(confirmLabel),
-            ),
-          ],
-        );
-      },
-    );
-  }
 }

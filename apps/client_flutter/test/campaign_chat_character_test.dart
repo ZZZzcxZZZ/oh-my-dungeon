@@ -592,6 +592,10 @@ void main() {
       expect(sheet.onUpdateRuntime, isNull);
       expect(sheet.onSaveCharacter, isNull);
       expect(sheet.contentEntries, isNotEmpty);
+
+      await tester.tap(find.text('动作').last);
+      await tester.pumpAndSettle();
+      expect(find.text('添加自定义动作'), findsNothing);
     },
   );
 
@@ -1052,6 +1056,51 @@ void main() {
       );
       expect(campaignClient.bindingCalls, hasLength(1));
       expect(campaignClient.bindingCalls.single.characterId, isNotEmpty);
+    },
+  );
+
+  testWidgets(
+    'an already published local character is offered only as its campaign copy',
+    (tester) async {
+      campaignClient.canManageCampaign = false;
+      campaignClient.workspaceMembership = const CampaignMembership(
+        id: 'member-1',
+        campaignId: 'camp-1',
+        userId: 'user-1',
+        role: 'player',
+        displayName: 'Player One',
+        joinedAt: '2026-07-09T00:00:00.000Z',
+      );
+      campaignClient.workspaceCharacters = const [
+        CampaignWorkspaceCharacter(
+          id: 'published-char-1',
+          ownerUserId: 'user-1',
+          sourceCharacterId: 'char-1',
+          characterType: 'player',
+          status: 'active',
+          lifecycle: 'persistent',
+          displayName: 'Aria',
+          avatarAssetId: null,
+          publicHealthState: 'healthy',
+        ),
+      ];
+
+      await pumpChatPage(tester, isDm: false);
+      await tester.tap(find.byKey(const Key('campaign-chat-identity')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('tool-player-identity-switch')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('identity-bound-character-entry')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('binding-character-published-char-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('binding-local-character-char-1')),
+        findsNothing,
+      );
     },
   );
 

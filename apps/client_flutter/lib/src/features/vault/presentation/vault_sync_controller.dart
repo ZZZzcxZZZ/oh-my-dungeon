@@ -28,7 +28,11 @@ class VaultSyncController extends VaultSyncActions {
     required this.syncRepository,
     required this.apiClient,
     required this.changeApplier,
-  });
+  }) : _service = VaultSyncService(
+         syncRepository: syncRepository,
+         apiClient: apiClient,
+         changeApplier: changeApplier,
+       );
 
   final SyncRepository syncRepository;
   final VaultApiClient apiClient;
@@ -40,6 +44,8 @@ class VaultSyncController extends VaultSyncActions {
   bool _paused = false;
   List<VaultDeviceView> _devices = [];
   int _pendingCount = 0;
+  // VaultSyncService 无状态, 复用同一实例避免每次 syncNow 重复构造.
+  final VaultSyncService _service;
 
   @override
   int get pendingCount => _pendingCount;
@@ -84,12 +90,7 @@ class VaultSyncController extends VaultSyncActions {
     _phase = SyncPhase.syncing;
     notifyListeners();
 
-    final service = VaultSyncService(
-      syncRepository: syncRepository,
-      apiClient: apiClient,
-      changeApplier: changeApplier,
-    );
-    final result = await service.sync(_session!);
+    final result = await _service.sync(_session!);
     _phase = result.phase;
     _lastError = result.error;
     _pendingCount = (await syncRepository.pending(scope: 'vault')).length;

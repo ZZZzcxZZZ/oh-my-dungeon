@@ -233,50 +233,6 @@ void main() {
       },
     );
 
-    test('clearCampaignCache removes only campaign tables', () async {
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
-      final service = DriftLocalDataArchiveService(db);
-      await seedBackupFixture(db);
-
-      // Insert a campaign cache entry.
-      await db
-          .into(db.campaignContentCache)
-          .insert(
-            CampaignContentCacheCompanion.insert(
-              id: 'entry-1',
-              campaignId: 'camp-1',
-              type: 'location',
-              slug: 'moon-harbor',
-              name: '月港',
-              revision: 1,
-              createdBy: 'dm',
-              updatedBy: 'dm',
-              createdAt: DateTime.utc(2026, 7, 14),
-              updatedAt: DateTime.utc(2026, 7, 14),
-            ),
-          );
-      await db
-          .into(db.campaignSyncCursors)
-          .insert(
-            CampaignSyncCursorsCompanion.insert(
-              campaignId: 'camp-1',
-              updatedAt: DateTime.utc(2026, 7, 14),
-            ),
-          );
-
-      await service.clearCampaignCache();
-
-      // Campaign cache should be empty.
-      expect(await db.select(db.campaignContentCache).get(), isEmpty);
-      expect(await db.select(db.campaignSyncCursors).get(), isEmpty);
-
-      // Personal data should be untouched.
-      expect(await db.select(db.characters).get(), hasLength(1));
-      expect(await db.select(db.localContentEntries).get(), hasLength(1));
-
-      await db.close();
-    });
-
     test('manifest sha256 matches actual database.json content', () async {
       final source = AppDatabase.forTesting(NativeDatabase.memory());
       await seedBackupFixture(source);

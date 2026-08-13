@@ -129,6 +129,10 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   String? _activeCampaignId;
   String? _deviceId;
   late final Future<void> _contentBootstrap;
+  // 战役同步 API 客户端全局共享一个实例, 避免每个控制器/页面各自 new
+  // http.Client 连接池 (客户端无状态, 可安全复用).
+  final CampaignSyncApiClient _campaignSyncApiClient =
+      HttpCampaignSyncApiClient();
   bool _hasReportedAuthUser = false;
   String? _reportedAuthUserId;
 
@@ -218,7 +222,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         : null;
     _campaignCharacterController = CampaignCharacterController(
       cacheRepository: _campaignCacheRepository,
-      apiClient: HttpCampaignSyncApiClient(),
+      apiClient: _campaignSyncApiClient,
       apiBaseUrl: profile?.apiBaseUrl ?? '',
       accessToken: _authController.accessToken ?? '',
       currentUserId: _authController.user?.id ?? '',
@@ -229,7 +233,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     );
     _campaignContentController = CampaignContentController(
       cacheRepository: _campaignCacheRepository,
-      apiClient: HttpCampaignSyncApiClient(),
+      apiClient: _campaignSyncApiClient,
       apiBaseUrl: profile?.apiBaseUrl ?? '',
       accessToken: _authController.accessToken ?? '',
       currentUserId: _authController.user?.id ?? '',
@@ -247,7 +251,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       refreshers: {
         CampaignRefreshResource.messages: (campaignId, _) async {
           if (_activeCampaignId != campaignId) return;
-          await _campaignController.loadMessages(
+          await _campaignController.refreshMessages(
             campaignId,
             conversationId: _conversationController.activeConversationId,
           );
@@ -275,7 +279,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     if (widget.database != null && widget.enableBackgroundSync) {
       _campaignSyncService = CampaignSyncService(
         cacheRepository: _campaignCacheRepository,
-        apiClient: HttpCampaignSyncApiClient(),
+        apiClient: _campaignSyncApiClient,
         backlinkService: _backlinkService!,
       );
       _vaultSyncController = VaultSyncController(
@@ -457,6 +461,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         campaignContentController: _campaignContentController,
         campaignCharacterController: _campaignCharacterController,
         conversationController: _conversationController,
+        syncApiClient: _campaignSyncApiClient,
       ),
       CharactersTabPage(
         controller: _characterController,
@@ -588,11 +593,5 @@ class _NullLocalDataArchiveService implements LocalDataArchiveService {
       throw UnsupportedError('Local database unavailable');
   @override
   Future<void> restoreArchive(ArchivePreview preview) =>
-      throw UnsupportedError('Local database unavailable');
-  @override
-  Future<void> clearCampaignCache() =>
-      throw UnsupportedError('Local database unavailable');
-  @override
-  Future<void> rebuildContentIndex() =>
       throw UnsupportedError('Local database unavailable');
 }

@@ -51,6 +51,8 @@ class CampaignController extends ChangeNotifier {
   List<CampaignChatMessage> _messages = [];
   bool _messagesLoading = false;
   String? _messagesError;
+  String? _messagesContextKey;
+  int _messageRequestSequence = 0;
 
   List<Campaign> get campaigns => _campaigns;
   bool get isLoading => _loading;
@@ -240,28 +242,74 @@ class CampaignController extends ChangeNotifier {
   }
 
   Future<void> loadMessages(String campaignId, {String? conversationId}) async {
+    await _fetchMessages(
+      campaignId,
+      conversationId: conversationId,
+      showInitialLoading: true,
+    );
+  }
+
+  /// Refreshes the active timeline without replacing it with a loading screen.
+  /// Realtime invalidations and fallback polling must use this path.
+  Future<void> refreshMessages(
+    String campaignId, {
+    String? conversationId,
+  }) async {
+    final contextKey = _messageContextKey(campaignId, conversationId);
+    if (_messagesContextKey != contextKey) return;
+    await _fetchMessages(
+      campaignId,
+      conversationId: conversationId,
+      showInitialLoading: false,
+    );
+  }
+
+  Future<void> _fetchMessages(
+    String campaignId, {
+    String? conversationId,
+    required bool showInitialLoading,
+  }) async {
     final token = await authController.ensureValidAccessToken();
     if (token == null) return;
 
-    _messagesLoading = true;
+    final contextKey = _messageContextKey(campaignId, conversationId);
+    final requestSequence = ++_messageRequestSequence;
+    if (showInitialLoading) {
+      if (_messagesContextKey != contextKey) _messages = [];
+      _messagesContextKey = contextKey;
+      _messagesLoading = true;
+    }
     _messagesError = null;
-    notifyListeners();
+    if (showInitialLoading) notifyListeners();
 
     try {
-      _messages = await campaignClient.listMessages(
+      final fetched = await campaignClient.listMessages(
         apiBaseUrl: apiBaseUrl,
         accessToken: token,
         campaignId: campaignId,
         conversationId: conversationId,
       );
+      if (_messagesContextKey == contextKey &&
+          requestSequence == _messageRequestSequence) {
+        _messages = _mergeMessages(_messages, fetched);
+      }
     } on CampaignApiException catch (e) {
-      _messagesError = e.message;
+      if (_messagesContextKey == contextKey &&
+          requestSequence == _messageRequestSequence) {
+        _messagesError = e.message;
+      }
     } catch (_) {
-      _messagesError = 'Failed to load campaign messages';
+      if (_messagesContextKey == contextKey &&
+          requestSequence == _messageRequestSequence) {
+        _messagesError = 'Failed to load campaign messages';
+      }
     }
 
-    _messagesLoading = false;
-    notifyListeners();
+    if (_messagesContextKey == contextKey &&
+        requestSequence == _messageRequestSequence) {
+      _messagesLoading = false;
+      notifyListeners();
+    }
 
     // Marking read is intentionally best-effort; reading chat must still work
     // when a self-hosted server is temporarily unreachable. 走
@@ -287,6 +335,22 @@ class CampaignController extends ChangeNotifier {
         }
       }
     } catch (_) {}
+  }
+
+  String _messageContextKey(String campaignId, String? conversationId) =>
+      '$campaignId/${conversationId?.trim().isNotEmpty == true ? conversationId : 'main'}';
+
+  List<CampaignChatMessage> _mergeMessages(
+    List<CampaignChatMessage> current,
+    List<CampaignChatMessage> fetched,
+  ) {
+    final byId = <String, CampaignChatMessage>{
+      for (final message in current) message.id: message,
+      for (final message in fetched) message.id: message,
+    };
+    final merged = byId.values.toList(growable: false);
+    merged.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return merged;
   }
 
   /// Searches the durable campaign history without replacing the live chat

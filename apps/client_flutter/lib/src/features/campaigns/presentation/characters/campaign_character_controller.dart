@@ -72,6 +72,7 @@ class CampaignCharacterController extends ChangeNotifier {
   final Set<String> _activeFilters = {'player', 'npc', 'unclaimed'};
   bool _loading = false;
   String? _error;
+  String? _syncWarning;
   CampaignConflictException? _conflict;
   final Map<String, List<CampaignCharacterAudit>> _audits = {};
   final Set<String> _loadingAudits = {};
@@ -83,6 +84,7 @@ class CampaignCharacterController extends ChangeNotifier {
   Set<String> get activeFilters => Set.unmodifiable(_activeFilters);
   bool get isLoading => _loading;
   String? get error => _error;
+  String? get syncWarning => _syncWarning;
   CampaignConflictException? get conflict => _conflict;
   String get currentUserId => _currentUserId;
   List<CampaignCharacterAudit> auditsFor(String characterId) =>
@@ -235,6 +237,7 @@ class CampaignCharacterController extends ChangeNotifier {
       return false;
     }
     _error = null;
+    _syncWarning = null;
     _conflict = null;
     // Spec §双向同步 切片 A: 重发布必须用本地缓存的 character.revision 作
     // baseRevision，否则服务端必然 409。首次发布本地无 character，传 0。
@@ -264,7 +267,12 @@ class CampaignCharacterController extends ChangeNotifier {
       // 运行时字段。backlinkService 可能为 null（web build 无 database）。
       final callback = _onCharacterPublished;
       if (callback != null) {
-        await callback(campaignCharacter);
+        try {
+          await callback(campaignCharacter);
+        } catch (error) {
+          _syncWarning = '角色已发布，但本地角色卡同步失败：$error';
+          notifyListeners();
+        }
       }
       return true;
     } on CampaignConflictException catch (e) {
@@ -275,8 +283,8 @@ class CampaignCharacterController extends ChangeNotifier {
       _error = _describeSyncException(e);
       notifyListeners();
       return false;
-    } catch (_) {
-      _error = '发布角色失败：网络错误，请检查服务器连接';
+    } catch (error) {
+      _error = '发布角色失败：$error';
       notifyListeners();
       return false;
     }

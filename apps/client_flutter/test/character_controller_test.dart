@@ -292,8 +292,6 @@ void main() {
       expect(kept.level, 5);
     },
   );
-
-  // ignore: deprecated_member_use_from_same_package
 }
 
 const _character = CharacterSheet(

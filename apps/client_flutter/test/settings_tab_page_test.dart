@@ -124,7 +124,7 @@ void main() {
   testWidgets('compact segmented controls keep labels on one line', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(390, 844);
+    tester.view.physicalSize = const Size(320, 720);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -146,7 +146,7 @@ void main() {
       isTrue,
     );
 
-    for (final label in ['玩家', '主持人', '系统', '浅色', '深色']) {
+    for (final label in ['玩家', '主持人', '系统', '浅色', '深色', '普通', '优势', '劣势']) {
       final size = tester.getSize(find.text(label).first);
       expect(
         size.height,

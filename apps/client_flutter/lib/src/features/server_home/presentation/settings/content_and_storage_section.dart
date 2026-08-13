@@ -49,7 +49,7 @@ class ContentAndStorageSection extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.backup_outlined),
               title: const Text('数据管理'),
-              subtitle: const Text('备份、恢复、清理战役缓存或重建资料索引'),
+              subtitle: const Text('导出或恢复本地角色与资料'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _openDataManagementPage(context, archiveService!),
             ),

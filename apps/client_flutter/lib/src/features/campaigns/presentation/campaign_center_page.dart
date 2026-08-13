@@ -32,6 +32,7 @@ class CampaignCenterPage extends StatefulWidget {
     this.characterController,
     this.contentRepository,
     this.initialTab = 0,
+    this.syncApiClient,
     super.key,
   });
 
@@ -39,6 +40,8 @@ class CampaignCenterPage extends StatefulWidget {
   final CampaignController controller;
   final CampaignCharacterController? characterController;
   final ContentRepository? contentRepository;
+  /// 战役同步 API 客户端; 由上层注入共享实例, 未提供时页面自行创建.
+  final CampaignSyncApiClient? syncApiClient;
 
   /// 初始选中的面板下标。0=概览 1=角色 2=档案。
   final int initialTab;
@@ -536,7 +539,7 @@ class _CampaignCenterPageState extends State<CampaignCenterPage> {
     final characterController = widget.characterController;
     if (characterController == null) return;
     final dispatcher = CampaignEventDispatcher(
-      apiClient: HttpCampaignSyncApiClient(),
+      apiClient: widget.syncApiClient ?? HttpCampaignSyncApiClient(),
       apiBaseUrlProvider: () => widget.controller.apiBaseUrl,
       accessTokenProvider: () => widget.controller.accessToken ?? '',
       onCharacterChanged: (characterSummary) async {

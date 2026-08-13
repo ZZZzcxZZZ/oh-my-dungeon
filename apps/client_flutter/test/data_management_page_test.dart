@@ -18,8 +18,6 @@ class MemoryLocalDataArchiveService implements LocalDataArchiveService {
   int exportCalls = 0;
   int previewCalls = 0;
   int restoreCalls = 0;
-  int clearCacheCalls = 0;
-  int rebuildIndexCalls = 0;
 
   ArchivePreview? lastPreview;
 
@@ -66,15 +64,6 @@ class MemoryLocalDataArchiveService implements LocalDataArchiveService {
     restoreCalls++;
   }
 
-  @override
-  Future<void> clearCampaignCache() async {
-    clearCacheCalls++;
-  }
-
-  @override
-  Future<void> rebuildContentIndex() async {
-    rebuildIndexCalls++;
-  }
 }
 
 void main() {
@@ -113,39 +102,16 @@ void main() {
     expect(service.exportCalls, 1);
   });
 
-  testWidgets('clear campaign cache requires confirmation', (tester) async {
+  testWidgets('does not expose destructive cache or manual index tools', (
+    tester,
+  ) async {
     final service = MemoryLocalDataArchiveService(validPreview: true);
     await tester.pumpWidget(
       MaterialApp(home: DataManagementPage(archiveService: service)),
     );
 
-    await tester.tap(find.text('清理战役缓存'));
-    await tester.pumpAndSettle();
-
-    // The confirmation dialog must appear before clearing.
-    expect(service.clearCacheCalls, 0);
-
-    await tester.tap(find.text('确认清理'));
-    await tester.pumpAndSettle();
-
-    expect(service.clearCacheCalls, 1);
-  });
-
-  testWidgets('rebuild content index requires confirmation', (tester) async {
-    final service = MemoryLocalDataArchiveService(validPreview: true);
-    await tester.pumpWidget(
-      MaterialApp(home: DataManagementPage(archiveService: service)),
-    );
-
-    await tester.tap(find.text('重建资料索引'));
-    await tester.pumpAndSettle();
-
-    expect(service.rebuildIndexCalls, 0);
-
-    await tester.tap(find.text('确认重建'));
-    await tester.pumpAndSettle();
-
-    expect(service.rebuildIndexCalls, 1);
+    expect(find.text('清理战役缓存'), findsNothing);
+    expect(find.text('重建资料索引'), findsNothing);
   });
 
   testWidgets('restore shows preview details before confirmation', (

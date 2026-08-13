@@ -61,7 +61,7 @@ class CampaignChatBubble extends StatelessWidget {
             : const Key('rules-action-message'),
         displayName: displayName,
         child: Card(
-          margin: const EdgeInsets.only(top: 4),
+          margin: EdgeInsets.zero,
           color: Theme.of(context).colorScheme.surfaceContainerHighest,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -99,7 +99,7 @@ class CampaignChatBubble extends StatelessWidget {
       key: const Key('say-message'),
       displayName: displayName,
       child: Card(
-        margin: const EdgeInsets.only(top: 4),
+        margin: EdgeInsets.zero,
         color: Theme.of(context).colorScheme.primaryContainer,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -178,7 +178,7 @@ class _CampaignCharacterMessage extends StatelessWidget {
     );
 
     return Padding(
-      padding: EdgeInsets.only(top: showIdentity ? 6 : 1, bottom: 1),
+      padding: EdgeInsets.only(top: showIdentity ? 8 : 2),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: isOwn

@@ -100,19 +100,34 @@ class _GameplaySettingsSectionState extends State<GameplaySettingsSection> {
                 value: preferences.confirmBeforeRoll,
                 onChanged: controller.setConfirmBeforeRoll,
               ),
-              ListTile(
-                leading: const Icon(Icons.swap_horiz_outlined),
-                title: const Text('默认掷骰模式'),
-                subtitle: const Text('检定时默认采用的掷骰方式'),
-                trailing: SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'normal', label: Text('普通')),
-                    ButtonSegment(value: 'advantage', label: Text('优势')),
-                    ButtonSegment(value: 'disadvantage', label: Text('劣势')),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const ListTile(
+                      leading: Icon(Icons.swap_horiz_outlined),
+                      title: Text('默认掷骰模式'),
+                      subtitle: Text('检定时默认采用的掷骰方式'),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: SegmentedButton<String>(
+                        key: const Key('default-roll-mode-control'),
+                        segments: const [
+                          ButtonSegment(value: 'normal', label: Text('普通')),
+                          ButtonSegment(value: 'advantage', label: Text('优势')),
+                          ButtonSegment(
+                            value: 'disadvantage',
+                            label: Text('劣势'),
+                          ),
+                        ],
+                        selected: {preferences.defaultRollMode},
+                        onSelectionChanged: (selection) =>
+                            controller.setDefaultRollMode(selection.single),
+                      ),
+                    ),
                   ],
-                  selected: {preferences.defaultRollMode},
-                  onSelectionChanged: (selection) =>
-                      controller.setDefaultRollMode(selection.single),
                 ),
               ),
               ListTile(

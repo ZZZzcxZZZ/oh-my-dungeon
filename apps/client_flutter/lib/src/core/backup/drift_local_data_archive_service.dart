@@ -10,7 +10,7 @@ import 'local_data_archive_service.dart';
 
 /// Drift-backed implementation of [LocalDataArchiveService].
 ///
-/// The archive is a `.dndtable-backup` ZIP containing:
+/// The archive is an `.ohmydungeon-backup` ZIP containing:
 /// - `manifest.json` — format version, counts, total size, and SHA-256
 /// - `database.json` — personal data (no tokens, no campaign cache)
 /// - `assets/<packageId>/<relativePath>` — binary content assets
@@ -263,21 +263,4 @@ class DriftLocalDataArchiveService implements LocalDataArchiveService {
     }
   }
 
-  @override
-  Future<void> clearCampaignCache() async {
-    final db = _database;
-    await db.transaction(() async {
-      await db.delete(db.campaignCharactersCache).go();
-      await db.delete(db.campaignCharacterBacklinks).go();
-      await db.delete(db.campaignContentCache).go();
-      await db.delete(db.campaignSyncCursors).go();
-      await db.delete(db.characterSyncConflicts).go();
-    });
-  }
-
-  @override
-  Future<void> rebuildContentIndex() async {
-    // Search currently uses LIKE queries against localContentEntries; no
-    // external FTS index to rebuild. Reserved for future FTS5 migrations.
-  }
 }

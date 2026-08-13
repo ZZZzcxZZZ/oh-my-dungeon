@@ -50,6 +50,7 @@ class CampaignChatPage extends StatefulWidget {
     this.appPreferencesController,
     this.conversationController,
     this.conversationId,
+    this.syncApiClient,
     super.key,
   });
 
@@ -63,6 +64,9 @@ class CampaignChatPage extends StatefulWidget {
   final CampaignContentController? campaignContentController;
   final CampaignCharacterController? characterController;
   final AppPreferencesController? appPreferencesController;
+
+  /// 战役同步 API 客户端; 由上层注入共享实例, 未提供时页面自行创建.
+  final CampaignSyncApiClient? syncApiClient;
 
   /// Plan 2026-07-23 task 5.3: optional conversation scoping. When provided,
   /// messages are loaded/sent into this conversation (main/direct/group).
@@ -157,6 +161,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                       controller: widget.campaignController,
                       characterController: widget.characterController,
                       contentRepository: widget.contentRepository,
+                      syncApiClient: widget.syncApiClient,
                     ),
                   ),
                 ),
@@ -191,8 +196,10 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
             content: Text(widget.campaignController.messagesError!),
             actions: [
               TextButton(
-                onPressed: () =>
-                    widget.campaignController.loadMessages(widget.campaign.id),
+                onPressed: () => widget.campaignController.loadMessages(
+                  widget.campaign.id,
+                  conversationId: _conversationId,
+                ),
                 child: Text(chatText('retry')),
               ),
             ],
@@ -466,7 +473,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
       return null;
     }
     final dispatcher = CampaignEventDispatcher(
-      apiClient: HttpCampaignSyncApiClient(),
+      apiClient: widget.syncApiClient ?? HttpCampaignSyncApiClient(),
       apiBaseUrlProvider: () => widget.campaignController.apiBaseUrl,
       accessTokenProvider: () => widget.campaignController.accessToken ?? '',
       onCharacterChanged: (_) => characterController.pullUntilCurrent(),
@@ -549,19 +556,21 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
               character.lifecycle != 'temporary',
         )
         .toList(growable: false);
-    final publishedSourceIds =
-        widget.characterController?.characters
-            .where(
-              (character) =>
-                  character.campaignId == widget.campaign.id &&
-                  character.ownerUserId == membership.userId &&
-                  character.characterType == 'player' &&
-                  character.status == 'active',
-            )
-            .map((character) => character.sourceCharacterId)
-            .whereType<String>()
-            .toSet() ??
-        const <String>{};
+    final publishedSourceIds = <String>{
+      ...publishedCandidates
+          .map((character) => character.sourceCharacterId)
+          .whereType<String>(),
+      ...?widget.characterController?.characters
+          .where(
+            (character) =>
+                character.campaignId == widget.campaign.id &&
+                character.ownerUserId == membership.userId &&
+                character.characterType == 'player' &&
+                character.status == 'active',
+          )
+          .map((character) => character.sourceCharacterId)
+          .whereType<String>(),
+    };
     final localCandidates = widget.localCharacters
         .where((character) => !publishedSourceIds.contains(character.id))
         .toList(growable: false);

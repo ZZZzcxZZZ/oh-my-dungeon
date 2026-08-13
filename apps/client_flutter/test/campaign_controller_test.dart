@@ -152,6 +152,71 @@ void main() {
     },
   );
 
+  test(
+    'background message refresh keeps the current timeline mounted',
+    () async {
+      final authController = await buildLoggedInAuthController();
+      final refresh = Completer<List<CampaignChatMessage>>();
+      final client = _FakeCampaignClient(
+        messageResponses: [
+          Future.value(const [_remoteMessage]),
+          refresh.future,
+        ],
+      );
+      final controller = CampaignController(
+        apiBaseUrl: apiBaseUrl,
+        authController: authController,
+        campaignClient: client,
+      );
+
+      await controller.loadMessages('camp-1');
+      final refreshFuture = controller.refreshMessages('camp-1');
+
+      expect(controller.isMessagesLoading, isFalse);
+      expect(controller.messages, const [_remoteMessage]);
+
+      refresh.complete(const [_remoteMessage, _secondRemoteMessage]);
+      await refreshFuture;
+
+      expect(controller.messages, const [_remoteMessage, _secondRemoteMessage]);
+
+      controller.dispose();
+      authController.dispose();
+    },
+  );
+
+  test('stale background failure cannot overwrite a newer refresh', () async {
+    final authController = await buildLoggedInAuthController();
+    final stale = Completer<List<CampaignChatMessage>>();
+    final latest = Completer<List<CampaignChatMessage>>();
+    final client = _FakeCampaignClient(
+      messageResponses: [
+        Future.value(const [_remoteMessage]),
+        stale.future,
+        latest.future,
+      ],
+    );
+    final controller = CampaignController(
+      apiBaseUrl: apiBaseUrl,
+      authController: authController,
+      campaignClient: client,
+    );
+
+    await controller.loadMessages('camp-1');
+    final staleFuture = controller.refreshMessages('camp-1');
+    final latestFuture = controller.refreshMessages('camp-1');
+    latest.complete(const [_remoteMessage, _secondRemoteMessage]);
+    await latestFuture;
+    stale.completeError(Exception('old network failure'));
+    await staleFuture;
+
+    expect(controller.messagesError, isNull);
+    expect(controller.messages, const [_remoteMessage, _secondRemoteMessage]);
+
+    controller.dispose();
+    authController.dispose();
+  });
+
   // Spec §双向同步 切片 A: socket 收到 campaign:changed 信号后应触发
   // onCampaignChanged 回调，由调用方接入 characterController.pullUntilCurrent。
   test(
@@ -208,6 +273,18 @@ const _remoteMessage = CampaignChatMessage(
   createdAt: '2026-07-09T00:00:00.000Z',
 );
 
+const _secondRemoteMessage = CampaignChatMessage(
+  id: 'msg-second',
+  campaignId: 'camp-1',
+  senderId: 'user-2',
+  campaignCharacterId: 'character-2',
+  displayName: 'Mira',
+  avatarUrl: null,
+  kind: 'say',
+  content: '门后传来脚步声',
+  createdAt: '2026-07-09T00:00:01.000Z',
+);
+
 class _FakeCampaignSocketService implements CampaignSocketService {
   final _messageController = StreamController<CampaignChatMessage>.broadcast();
   final _changeController = StreamController<CampaignChangeSignal>.broadcast();
@@ -258,7 +335,12 @@ class _FakeCampaignSocketService implements CampaignSocketService {
 }
 
 class _FakeCampaignClient implements CampaignClient, CampaignBindingClient {
+  _FakeCampaignClient({
+    List<Future<List<CampaignChatMessage>>>? messageResponses,
+  }) : _messageResponses = messageResponses ?? [];
+
   String? lastMessageQuery;
+  final List<Future<List<CampaignChatMessage>>> _messageResponses;
   @override
   Future<void> markCampaignRead({
     required String apiBaseUrl,
@@ -460,6 +542,9 @@ class _FakeCampaignClient implements CampaignClient, CampaignBindingClient {
     String? conversationId,
   }) async {
     lastMessageQuery = query;
+    if (query == null && _messageResponses.isNotEmpty) {
+      return _messageResponses.removeAt(0);
+    }
     return query == null ? const [] : const [_remoteMessage];
   }
 

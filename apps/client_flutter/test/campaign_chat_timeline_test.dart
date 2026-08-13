@@ -234,6 +234,31 @@ void main() {
       expect(find.byType(CampaignAvatar), findsOneWidget);
     });
 
+    testWidgets('message content delegates spacing to the grouped row', (
+      tester,
+    ) async {
+      await _pumpTimeline(
+        tester,
+        messages: [
+          _message(
+            id: 'say',
+            characterId: 'character-1',
+            createdAt: '2026-07-22T10:00:00Z',
+          ),
+          _message(
+            id: 'action',
+            characterId: 'character-1',
+            kind: 'action',
+            createdAt: '2026-07-22T10:01:00Z',
+          ),
+        ],
+      );
+
+      final cards = tester.widgetList<Card>(find.byType(Card));
+      expect(cards, hasLength(2));
+      expect(cards.every((card) => card.margin == EdgeInsets.zero), isTrue);
+    });
+
     testWidgets('shows every repeated avatar when grouping is disabled', (
       tester,
     ) async {

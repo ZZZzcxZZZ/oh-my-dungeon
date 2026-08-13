@@ -10,6 +10,7 @@ import '../../../core/dice/dice_roller.dart';
 import '../../server_home/domain/active_server_session.dart';
 import '../domain/campaign.dart';
 import '../domain/campaign_conversation.dart';
+import '../data/sync/campaign_sync_api_client.dart';
 import 'characters/campaign_character_controller.dart';
 import 'campaign_chat_page.dart';
 import 'campaign_controller.dart';
@@ -36,6 +37,7 @@ class CampaignsTabPage extends StatefulWidget {
     this.campaignContentController,
     this.campaignCharacterController,
     this.conversationController,
+    this.syncApiClient,
     super.key,
   });
 
@@ -51,6 +53,8 @@ class CampaignsTabPage extends StatefulWidget {
   final CampaignContentController? campaignContentController;
   final CampaignCharacterController? campaignCharacterController;
   final ConversationController? conversationController;
+  /// 战役同步 API 客户端; 由上层注入共享实例, 未提供时页面自行创建.
+  final CampaignSyncApiClient? syncApiClient;
 
   @override
   State<CampaignsTabPage> createState() => _CampaignsTabPageState();
@@ -330,6 +334,7 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
           campaignCharacterId: null,
           diceRoller: widget.diceRoller,
           conversationController: widget.conversationController,
+          syncApiClient: widget.syncApiClient,
         ),
       ),
     );

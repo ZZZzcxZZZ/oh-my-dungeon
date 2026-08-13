@@ -2,12 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/campaign_archive_entry.dart';
 
-/// 编辑器提交时收集的草稿。包含全部七个字段：类型、标题、摘要、
-/// 正文 blocks、标签、关联条目 ID、附件引用（占位）。
-///
-/// Plan 2026-07-23 task 4.4: 合并原 `_showCreateArchiveDialog`（campaign
-/// center FAB）与 `CampaignArchiveCreateDialog`（chat 工具栏）两套表单，
-/// 统一通过 [CampaignArchiveEditorPage] 收集草稿后交给调用方的 `onSubmit`。
+/// 编辑器提交时收集的草稿。
 class CampaignArchiveDraft {
   const CampaignArchiveDraft({
     required this.kind,
@@ -26,7 +21,7 @@ class CampaignArchiveDraft {
   final List<String> linkedEntryIds;
 }
 
-/// 单一的战役档案创建/编辑页面。Plan 2026-07-23 task 4.4。
+/// 单一的战役档案创建/编辑页面。
 ///
 /// 字段顺序参考 D&D Beyond wiki entry 编辑器：
 /// 1. 类型（DropdownButtonFormField，4 选）
@@ -35,8 +30,6 @@ class CampaignArchiveDraft {
 /// 4. 正文（块编辑器：heading/paragraph/list，每块独立卡片）
 /// 5. 标签（Chip 输入：输入文本 + 回车添加，已加标签 FilterChip 可删除）
 /// 6. 关联条目（多选，从战役档案其他条目选取）
-/// 7. 附件引用（占位，未来对接文件上传）
-///
 /// 字段间距统一 `SizedBox(height: 16)`，提交按钮为全宽 `FilledButton`。
 /// 调用方通过 [onSubmit] 接收草稿，返回 `true` 时页面关闭。
 class CampaignArchiveEditorPage extends StatefulWidget {
@@ -128,8 +121,7 @@ class _CampaignArchiveEditorPageState extends State<CampaignArchiveEditorPage> {
           ),
         ),
       ),
-      // Submit button stays pinned at the bottom so it is always reachable
-      // regardless of form length. Plan 2026-07-23 task 4.4: 全宽 FilledButton.
+      // Keep the primary action reachable while editing long entries.
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),

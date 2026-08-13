@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AccessTokenPayload } from "../auth/auth.types";
 import {
@@ -27,6 +27,29 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+/**
+ * requestId 由客户端生成且全局唯一 (见 AI Agent 契约 §3.1).
+ * 校验非空并限制长度, 避免恶意/异常客户端写入超大键.
+ */
+function assertRequestId(requestId: unknown): asserts requestId is string {
+  if (!isNonEmptyString(requestId)) {
+    throw new BadRequestException("requestId is required");
+  }
+  if (requestId.length > 128) {
+    throw new BadRequestException(
+      "requestId must be at most 128 characters",
+    );
+  }
+}
+
+/** Prisma 唯一约束冲突 (如并发同 requestId 撞 GameEvent.requestId). */
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Task 3.1 — CampaignEvent 事件层
 //
@@ -39,6 +62,11 @@ function isNonEmptyString(value: unknown): value is string {
 const HP_EVENT_TYPE = "character.hp_changed";
 const ITEM_EVENT_TYPE = "character.item_granted";
 const CONDITION_EVENT_TYPE = "character.condition_added";
+
+// GameEvent 操作类型 (与 AI Agent 契约的事件类型一致, findReplay 按此限定).
+const HP_OPERATION_TYPE = "character.hp.adjusted";
+const ITEM_OPERATION_TYPE = "character.item.granted";
+const CONDITION_OPERATION_TYPE = "character.condition.added";
 
 interface InventoryEntry {
   id: string;
@@ -71,9 +99,7 @@ export class CampaignEventsService {
     characterId: string,
     input: ChangeCharacterHpInput,
   ): Promise<CampaignEventResult> {
-    if (!isNonEmptyString(input.requestId)) {
-      throw new BadRequestException("requestId is required");
-    }
+    assertRequestId(input.requestId);
     if (
       typeof input.delta !== "number" ||
       !Number.isFinite(input.delta) ||
@@ -130,9 +156,18 @@ export class CampaignEventsService {
       row: updatedRow,
       cursor,
       messageRow,
-    } = await this.prismaService.$transaction(async (tx) => {
+    } = await this.runIdempotentMutation(
+      input.requestId,
+      campaignId,
+      HP_OPERATION_TYPE,
+      async (tx) => {
       // 幂等锚: 相同 requestId 已执行过则直接重放首次结果, 不重复扣血.
-      const replay = await this.findReplay(tx, input.requestId, campaignId);
+      const replay = await this.findReplay(
+        tx,
+        input.requestId,
+        campaignId,
+        HP_OPERATION_TYPE,
+      );
       if (replay) return replay;
       const result = await tx.campaignCharacter.update({
         where: { id: characterId },
@@ -193,7 +228,7 @@ export class CampaignEventsService {
       });
       await this.recordOperationEvent(tx, {
         requestId: input.requestId,
-        type: "character.hp.adjusted",
+        type: HP_OPERATION_TYPE,
         campaignId,
         characterId,
         userId: user.userId,
@@ -204,21 +239,20 @@ export class CampaignEventsService {
       return { row: result, cursor: change.cursor, messageRow: message };
     });
 
-    // 幂等重放时 cursor 为 null, 不再重复广播.
+    // 幂等重放 (cursor 为 null) 时不重复广播: 首次执行已广播过消息与变更游标.
     if (cursor !== null) {
       this.gateway.broadcastChange({
         campaignId,
         entityType: "character",
         cursor,
       });
+      this.gateway.broadcastToCampaign(
+        campaignId,
+        "campaign:message:new",
+        toEventView(messageRow),
+      );
     }
     const eventView = toEventView(messageRow);
-    this.gateway.broadcastToCampaign(
-      campaignId,
-      "campaign:message:new",
-      eventView,
-    );
-
     return {
       character: toCharacterSummary(updatedRow),
       event: eventView,
@@ -235,9 +269,7 @@ export class CampaignEventsService {
     characterId: string,
     input: GrantItemInput,
   ): Promise<CampaignEventResult> {
-    if (!isNonEmptyString(input.requestId)) {
-      throw new BadRequestException("requestId is required");
-    }
+    assertRequestId(input.requestId);
     if (typeof input.itemId !== "string" || input.itemId.trim().length === 0) {
       throw new BadRequestException("itemId is required");
     }
@@ -309,9 +341,18 @@ export class CampaignEventsService {
       row: updatedRow,
       cursor,
       messageRow,
-    } = await this.prismaService.$transaction(async (tx) => {
+    } = await this.runIdempotentMutation(
+      input.requestId,
+      campaignId,
+      ITEM_OPERATION_TYPE,
+      async (tx) => {
       // 幂等锚: 相同 requestId 已执行过则直接重放首次结果, 不重复发物品.
-      const replay = await this.findReplay(tx, input.requestId, campaignId);
+      const replay = await this.findReplay(
+        tx,
+        input.requestId,
+        campaignId,
+        ITEM_OPERATION_TYPE,
+      );
       if (replay) return replay;
       const result = await tx.campaignCharacter.update({
         where: { id: characterId },
@@ -370,7 +411,7 @@ export class CampaignEventsService {
       });
       await this.recordOperationEvent(tx, {
         requestId: input.requestId,
-        type: "character.item.granted",
+        type: ITEM_OPERATION_TYPE,
         campaignId,
         characterId,
         userId: user.userId,
@@ -381,21 +422,20 @@ export class CampaignEventsService {
       return { row: result, cursor: change.cursor, messageRow: message };
     });
 
-    // 幂等重放时 cursor 为 null, 不再重复广播.
+    // 幂等重放 (cursor 为 null) 时不重复广播: 首次执行已广播过消息与变更游标.
     if (cursor !== null) {
       this.gateway.broadcastChange({
         campaignId,
         entityType: "character",
         cursor,
       });
+      this.gateway.broadcastToCampaign(
+        campaignId,
+        "campaign:message:new",
+        toEventView(messageRow),
+      );
     }
     const eventView = toEventView(messageRow);
-    this.gateway.broadcastToCampaign(
-      campaignId,
-      "campaign:message:new",
-      eventView,
-    );
-
     return {
       character: toCharacterSummary(updatedRow),
       event: eventView,
@@ -411,9 +451,7 @@ export class CampaignEventsService {
     characterId: string,
     input: AddConditionInput,
   ): Promise<CampaignEventResult> {
-    if (!isNonEmptyString(input.requestId)) {
-      throw new BadRequestException("requestId is required");
-    }
+    assertRequestId(input.requestId);
     const type = input.type.trim();
     const name = input.name.trim();
     if (!type) throw new BadRequestException("type is required");
@@ -473,9 +511,18 @@ export class CampaignEventsService {
       row: updatedRow,
       cursor,
       messageRow,
-    } = await this.prismaService.$transaction(async (tx) => {
+    } = await this.runIdempotentMutation(
+      input.requestId,
+      campaignId,
+      CONDITION_OPERATION_TYPE,
+      async (tx) => {
       // 幂等锚: 相同 requestId 已执行过则直接重放首次结果, 不重复加状态.
-      const replay = await this.findReplay(tx, input.requestId, campaignId);
+      const replay = await this.findReplay(
+        tx,
+        input.requestId,
+        campaignId,
+        CONDITION_OPERATION_TYPE,
+      );
       if (replay) return replay;
       const result = await tx.campaignCharacter.update({
         where: { id: characterId },
@@ -531,7 +578,7 @@ export class CampaignEventsService {
       });
       await this.recordOperationEvent(tx, {
         requestId: input.requestId,
-        type: "character.condition.added",
+        type: CONDITION_OPERATION_TYPE,
         campaignId,
         characterId,
         userId: user.userId,
@@ -542,21 +589,20 @@ export class CampaignEventsService {
       return { row: result, cursor: change.cursor, messageRow: message };
     });
 
-    // 幂等重放时 cursor 为 null, 不再重复广播.
+    // 幂等重放 (cursor 为 null) 时不重复广播: 首次执行已广播过消息与变更游标.
     if (cursor !== null) {
       this.gateway.broadcastChange({
         campaignId,
         entityType: "character",
         cursor,
       });
+      this.gateway.broadcastToCampaign(
+        campaignId,
+        "campaign:message:new",
+        toEventView(messageRow),
+      );
     }
     const eventView = toEventView(messageRow);
-    this.gateway.broadcastToCampaign(
-      campaignId,
-      "campaign:message:new",
-      eventView,
-    );
-
     return {
       character: toCharacterSummary(updatedRow),
       event: eventView,
@@ -564,19 +610,55 @@ export class CampaignEventsService {
   }
 
   /**
-   * 幂等重放: 相同 requestId 已在 GameEvent 表中执行过时, 返回首次执行的
-   * 结果快照 (当前 character + 首次事件消息), 调用方不再重复写状态.
+   * 在单一事务内执行角色状态变更, 并保证 requestId 幂等:
+   * - 事务内先查重放, 存在则直接返回首次结果, 不重复写状态;
+   * - 并发同 requestId 时, 后提交者撞 GameEvent.requestId 唯一约束 (P2002),
+   *   事务整体回滚; 这里在事务外重查一次并返回先提交者的首次结果,
+   *   客户端得到正常重放响应而不是 500.
    */
-  private async findReplay(
-    tx: Prisma.TransactionClient,
+  private async runIdempotentMutation(
     requestId: string,
     campaignId: string,
-  ): Promise<{ row: CharacterRow; cursor: string | null; messageRow: unknown } | null> {
-    const existing = await tx.gameEvent.findUnique({
+    expectedType: string,
+    execute: (tx: Prisma.TransactionClient) => Promise<MutationResult>,
+  ): Promise<MutationResult> {
+    try {
+      return await this.prismaService.$transaction((tx) => execute(tx));
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+      const replay = await this.findReplay(
+        this.prismaService,
+        requestId,
+        campaignId,
+        expectedType,
+      );
+      if (replay) return replay;
+      throw error;
+    }
+  }
+
+  /**
+   * 幂等重放: 相同 requestId 已在 GameEvent 表中执行过时, 返回首次执行的
+   * 结果快照 (当前 character + 首次事件消息), 调用方不再重复写状态.
+   * 只匹配与本次操作相同的 GameEvent 类型; requestId 被其他操作复用时报 400
+   * (requestId 全局唯一, 见 AI Agent 契约 §3.1).
+   */
+  private async findReplay(
+    client: Prisma.TransactionClient | PrismaService,
+    requestId: string,
+    campaignId: string,
+    expectedType: string,
+  ): Promise<MutationResult | null> {
+    const existing = await client.gameEvent.findUnique({
       where: { requestId },
     });
     if (!existing) return null;
-    const messageRow = await tx.campaignChatMessage.findFirst({
+    if (existing.type !== expectedType) {
+      throw new BadRequestException(
+        `requestId ${requestId} was already used by a different operation`,
+      );
+    }
+    const messageRow = await client.campaignChatMessage.findFirst({
       where: {
         campaignId,
         eventData: { path: ["requestId"], equals: requestId },
@@ -584,7 +666,7 @@ export class CampaignEventsService {
       orderBy: { createdAt: "desc" },
     });
     if (!messageRow) return null;
-    const row = await tx.campaignCharacter.findUnique({
+    const row = await client.campaignCharacter.findUnique({
       where: { id: existing.characterId ?? "" },
     });
     if (!row || row.campaignId !== campaignId) return null;
@@ -685,6 +767,13 @@ interface CharacterRow {
   updatedBy: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** 单次角色状态变更的结果: row 为最新角色行, cursor 为空表示幂等重放. */
+interface MutationResult {
+  row: CharacterRow;
+  cursor: string | null;
+  messageRow: unknown;
 }
 
 function toCharacterSummary(row: CharacterRow): CampaignCharacterSummary {

@@ -22,6 +22,30 @@ interface OperationBase {
   expectedRevision?: number;
 }
 
+/** requestId 全局唯一 (AI Agent 契约 §3.1); 校验非空并限制长度. */
+function assertRequestId(requestId: string): void {
+  if (!requestId.trim()) {
+    throw new BadRequestException('requestId is required');
+  }
+  if (requestId.length > 128) {
+    throw new BadRequestException('requestId must be at most 128 characters');
+  }
+}
+
+/** Prisma 唯一约束冲突 (如并发同 requestId 撞 GameEvent.requestId). */
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2002'
+  );
+}
+
+type GameEventRow = NonNullable<
+  Awaited<ReturnType<PrismaService['gameEvent']['findUnique']>>
+>;
+
+const ITEM_TRANSFER_OPERATION_TYPE = 'character.item.transferred';
+
 export interface CharacterOperationResult {
   state: CharacterState;
   revision: number;
@@ -250,6 +274,7 @@ export class CharacterOperationsService {
     },
   ) {
     const quantity = Math.max(1, input.quantity ?? 1);
+    assertRequestId(input.requestId);
     await this.assertCanEdit(user, characterId, input.campaignId);
     const target = await this.prisma.character.findUnique({
       where: { id: input.targetCharacterId },
@@ -265,10 +290,13 @@ export class CharacterOperationsService {
     ) {
       throw new ForbiddenException('Target character is not in the campaign');
     }
-    return this.prisma.$transaction(async (tx) => {
-      const existing = await tx.gameEvent.findUnique({
-        where: { requestId: input.requestId },
-      });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+      const existing = await this.findReplayEvent(
+        tx,
+        input.requestId,
+        ITEM_TRANSFER_OPERATION_TYPE,
+      );
       const source = await this.stateStore.getOrCreate(
         tx,
         characterId,
@@ -352,7 +380,7 @@ export class CharacterOperationsService {
         data: { inventory: targetItems as unknown as Prisma.InputJsonValue },
       });
       const event = await this.events.append(tx, {
-        type: 'character.item.transferred',
+        type: ITEM_TRANSFER_OPERATION_TYPE,
         campaignId: input.campaignId,
         characterId,
         initiatorType: 'user',
@@ -371,7 +399,34 @@ export class CharacterOperationsService {
         },
       });
       return { sourceState, targetState, event };
-    });
+      });
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+      // 并发同 requestId: 对方事务已提交, 重放其首次结果, 不重复转移.
+      const existing = await this.findReplayEvent(
+        this.prisma,
+        input.requestId,
+        ITEM_TRANSFER_OPERATION_TYPE,
+      );
+      if (existing) {
+        const source = await this.stateStore.getOrCreate(
+          this.prisma,
+          characterId,
+          input.campaignId,
+        );
+        const destination = await this.stateStore.getOrCreate(
+          this.prisma,
+          input.targetCharacterId,
+          input.campaignId,
+        );
+        return {
+          sourceState: source.state,
+          targetState: destination.state,
+          event: existing,
+        };
+      }
+      throw error;
+    }
   }
 
   private changeResource(
@@ -448,14 +503,15 @@ export class CharacterOperationsService {
       compatibility?: Record<string, unknown>;
     },
   ): Promise<CharacterOperationResult> {
-    if (!input.requestId?.trim()) {
-      throw new BadRequestException('requestId is required');
-    }
+    assertRequestId(input.requestId);
     await this.assertCanEdit(user, characterId, input.campaignId ?? null);
-    return this.prisma.$transaction(async (tx) => {
-      const existing = await tx.gameEvent.findUnique({
-        where: { requestId: input.requestId },
-      });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+      const existing = await this.findReplayEvent(
+        tx,
+        input.requestId,
+        type,
+      );
       const scoped = await this.stateStore.getOrCreate(
         tx,
         characterId,
@@ -507,7 +563,51 @@ export class CharacterOperationsService {
         revision: updated.revision,
         event,
       };
+      });
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+      // 并发同 requestId: 对方事务已提交, 重放其首次结果, 不重复执行.
+      const existing = await this.findReplayEvent(
+        this.prisma,
+        input.requestId,
+        type,
+      );
+      if (existing) {
+        const scoped = await this.stateStore.getOrCreate(
+          this.prisma,
+          characterId,
+          input.campaignId ?? null,
+        );
+        return {
+          state: scoped.state,
+          revision: scoped.revision,
+          event: existing,
+        };
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * 幂等锚: 相同 requestId 已在 GameEvent 中执行过时返回该事件.
+   * 只匹配相同操作类型; requestId 被其他操作复用时报 400
+   * (requestId 全局唯一, 见 AI Agent 契约 §3.1).
+   */
+  private async findReplayEvent(
+    client: PrismaService | Prisma.TransactionClient,
+    requestId: string,
+    expectedType: string,
+  ): Promise<GameEventRow | null> {
+    const existing = await client.gameEvent.findUnique({
+      where: { requestId },
     });
+    if (!existing) return null;
+    if (existing.type !== expectedType) {
+      throw new BadRequestException(
+        `requestId ${requestId} was already used by a different operation`,
+      );
+    }
+    return existing;
   }
 
   private async assertCanEdit(

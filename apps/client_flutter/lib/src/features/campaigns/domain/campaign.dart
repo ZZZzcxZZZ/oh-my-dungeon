@@ -462,6 +462,7 @@ class CampaignWorkspaceCharacter {
   const CampaignWorkspaceCharacter({
     required this.id,
     required this.ownerUserId,
+    this.sourceCharacterId,
     required this.characterType,
     required this.status,
     required this.lifecycle,
@@ -473,6 +474,7 @@ class CampaignWorkspaceCharacter {
 
   final String id;
   final String? ownerUserId;
+  final String? sourceCharacterId;
   final String characterType;
   final String status;
   final String lifecycle;
@@ -485,6 +487,7 @@ class CampaignWorkspaceCharacter {
     return CampaignWorkspaceCharacter(
       id: json['id']! as String,
       ownerUserId: json['ownerUserId'] as String?,
+      sourceCharacterId: json['sourceCharacterId'] as String?,
       characterType: json['characterType']! as String,
       status: json['status']! as String,
       lifecycle: json['lifecycle'] as String? ?? 'persistent',

@@ -454,6 +454,17 @@ describe('CampaignPolicy', () => {
       ).not.toThrow();
     });
 
+    it('allows a player to replace their own existing binding', () => {
+      expect(() =>
+        policy.canManageMembershipBinding(
+          { userId: 'user-2', username: 'bard' },
+          campaignCtx,
+          'user-2',
+          true
+        )
+      ).not.toThrow();
+    });
+
     it('rejects a player binding another member character', () => {
       expect(() =>
         policy.canBindCharacter(

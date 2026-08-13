@@ -2,6 +2,7 @@ import { Test } from "@nestjs/testing";
 import type { INestApplication } from "@nestjs/common";
 import request = require("supertest");
 import { AppModule } from "../src/app.module";
+import { Prisma } from "@prisma/client";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { PasswordHashService } from "../src/modules/auth/password-hash.service";
 import { CampaignsGateway } from "../src/modules/realtime/campaigns.gateway";
@@ -984,8 +985,132 @@ describe("campaign events endpoints (Task 3.1)", () => {
       expect(prismaService.campaignCharacter.update).toHaveBeenCalledTimes(1);
       expect(prismaService.campaignChatMessage.create).toHaveBeenCalledTimes(1);
       expect(prismaService.gameEvent.create).toHaveBeenCalledTimes(1);
-      // 重放不重复广播 change (cursor 为 null).
+      // 重放不重复广播 change 或消息 (cursor 为 null): 首次执行已广播.
       expect(campaignsGateway.broadcastChange).toHaveBeenCalledTimes(1);
+      expect(campaignsGateway.broadcastToCampaign).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects reusing a requestId for a different operation type", async () => {
+      const token = await loginAs(storedDm);
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        arannisCharacter,
+      );
+      // 同一 requestId 已用于物品操作 (GameEvent 类型不同), 不得重放为 HP 结果.
+      prismaService.gameEvent.findUnique.mockResolvedValueOnce({
+        id: "evt-item",
+        requestId: "req-type-mismatch",
+        characterId: "character-1",
+        campaignId: "camp-1",
+        type: "character.item.granted",
+      });
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/characters/character-1/hp")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ requestId: "req-type-mismatch", delta: -8 })
+        .expect(400);
+      // 类型不匹配时不执行任何状态写入.
+      expect(prismaService.campaignCharacter.update).not.toHaveBeenCalled();
+    });
+
+    it("replays the first result when a concurrent duplicate hits the requestId unique constraint", async () => {
+      const token = await loginAs(storedDm);
+      // 请求 1: 首次执行成功.
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        arannisCharacter,
+      );
+      prismaService.campaignCharacter.update.mockImplementationOnce(
+        async (args: any) => ({
+          ...arannisCharacter,
+          sheetJson: args.data.sheetJson,
+          revision: args.data.revision,
+          updatedBy: args.data.updatedBy,
+        }),
+      );
+      prismaService.campaignChatMessage.create.mockImplementationOnce(
+        async (args: any) => ({
+          id: "msg-race",
+          campaignId: "camp-1",
+          ...args.data,
+          createdAt: new Date("2026-07-14T01:00:00.000Z"),
+        }),
+      );
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/characters/character-1/hp")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ requestId: "req-race", delta: -8 })
+        .expect(201);
+
+      // 请求 2 (并发重试): 事务内查重放未命中 → 写入 GameEvent 撞唯一约束
+      // (P2002) → 事务回滚 → 事务外重查并重放首次结果, 客户端拿到 201 而非 500.
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        arannisCharacter,
+      );
+      prismaService.gameEvent.findUnique.mockResolvedValueOnce(null);
+      prismaService.campaignCharacter.update.mockResolvedValueOnce(
+        arannisCharacter,
+      );
+      prismaService.campaignChatMessage.create.mockResolvedValueOnce({});
+      prismaService.gameEvent.create.mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError(
+          "Unique constraint failed on the fields: (`requestId`)",
+          { code: "P2002", clientVersion: "6.19.3" },
+        ),
+      );
+      prismaService.gameEvent.findUnique.mockResolvedValueOnce({
+        id: "evt-race",
+        requestId: "req-race",
+        characterId: "character-1",
+        campaignId: "camp-1",
+        type: "character.hp.adjusted",
+      });
+      prismaService.campaignChatMessage.findFirst.mockResolvedValueOnce({
+        id: "msg-race",
+        campaignId: "camp-1",
+        senderId: "dm-1",
+        campaignCharacterId: null,
+        displayName: "旁白",
+        speakerMode: "narrator",
+        ooc: false,
+        kind: "system",
+        content: "Arannis -8 HP (20 → 12)",
+        eventData: {
+          eventType: "character.hp_changed",
+          characterId: "character-1",
+          characterName: "Arannis",
+          delta: -8,
+          from: 20,
+          to: 12,
+          reason: null,
+          requestId: "req-race",
+        },
+        createdAt: new Date("2026-07-14T01:00:00.000Z"),
+      });
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(
+        arannisCharacter,
+      );
+
+      const replay = await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/characters/character-1/hp")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ requestId: "req-race", delta: -8 })
+        .expect(201);
+
+      expect(replay.body.event.eventData.delta).toBe(-8);
+      // 唯一约束写入只有一次成功 + 一次失败尝试; 广播只在首次执行发生.
+      expect(prismaService.gameEvent.create).toHaveBeenCalledTimes(2);
+      expect(campaignsGateway.broadcastChange).toHaveBeenCalledTimes(1);
+      expect(campaignsGateway.broadcastToCampaign).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects an over-long requestId with 400", async () => {
+      const token = await loginAs(storedDm);
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/characters/character-1/hp")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ requestId: "x".repeat(200), delta: -8 })
+        .expect(400);
+      expect(prismaService.campaignCharacter.update).not.toHaveBeenCalled();
     });
 
     it("rejects a missing requestId with 400", async () => {

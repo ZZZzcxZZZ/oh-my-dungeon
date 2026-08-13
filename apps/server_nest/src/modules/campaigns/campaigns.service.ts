@@ -1066,6 +1066,7 @@ function toCampaignWorkspaceCharacterView(character: any) {
   return {
     id: character.id,
     ownerUserId: character.ownerUserId ?? null,
+    sourceCharacterId: character.sourceCharacterId ?? null,
     characterType: character.characterType,
     status: character.status,
     lifecycle: character.lifecycle ?? "persistent",

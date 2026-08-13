@@ -54,6 +54,7 @@ describe("campaign characters endpoints", () => {
     campaignSyncState: { upsert: jest.fn(), findUnique: jest.fn() },
     campaignCharacter: {
       create: jest.fn(),
+      findFirst: jest.fn(),
       findUnique: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
@@ -171,6 +172,7 @@ describe("campaign characters endpoints", () => {
       }),
     );
     prismaService.campaignCharacter.create.mockResolvedValue({});
+    prismaService.campaignCharacter.findFirst.mockResolvedValue(null);
     prismaService.campaignCharacter.findUnique.mockResolvedValue(null);
     prismaService.campaignCharacter.findMany.mockResolvedValue([]);
     prismaService.campaignCharacter.update.mockResolvedValue({});
@@ -225,7 +227,7 @@ describe("campaign characters endpoints", () => {
         createdAt: new Date("2026-07-14T00:00:00.000Z"),
         updatedAt: new Date("2026-07-14T00:00:00.000Z"),
       };
-      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(null);
+      prismaService.campaignCharacter.findFirst.mockResolvedValueOnce(null);
       prismaService.campaignCharacter.create.mockResolvedValueOnce(created);
 
       const res = await request(app.getHttpServer())
@@ -247,6 +249,44 @@ describe("campaign characters endpoints", () => {
       expect(prismaService.campaignChange.create).toHaveBeenCalled();
     });
 
+    it("scopes local character ids to the publishing member", async () => {
+      const token = await loginAs(storedPlayer);
+      const created = {
+        id: "character-player-1",
+        campaignId: "camp-1",
+        ownerUserId: "player-1",
+        sourceCharacterId: "character-1",
+        characterType: "player",
+        status: "active",
+        visibleToPlayers: true,
+        sheetJson: { name: "Tav" },
+        revision: 1,
+        updatedBy: "player-1",
+        createdAt: new Date("2026-07-14T00:00:00.000Z"),
+        updatedAt: new Date("2026-07-14T00:00:00.000Z"),
+      };
+      prismaService.campaignCharacter.create.mockResolvedValueOnce(created);
+
+      await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/characters/publish")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          sourceCharacterId: "character-1",
+          characterType: "player",
+          baseRevision: 0,
+          sheet: { name: "Tav" },
+        })
+        .expect(201);
+
+      expect(prismaService.campaignCharacter.findFirst).toHaveBeenCalledWith({
+        where: {
+          campaignId: "camp-1",
+          ownerUserId: "player-1",
+          sourceCharacterId: "character-1",
+        },
+      });
+    });
+
     it("reactivates an archived player character when it is re-published", async () => {
       const token = await loginAs(storedPlayer);
       const archived = {
@@ -264,7 +304,7 @@ describe("campaign characters endpoints", () => {
         createdAt: new Date("2026-07-14T00:00:00.000Z"),
         updatedAt: new Date("2026-07-14T01:00:00.000Z"),
       };
-      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(archived);
+      prismaService.campaignCharacter.findFirst.mockResolvedValueOnce(archived);
       prismaService.campaignCharacter.update.mockResolvedValueOnce({
         ...archived,
         status: "active",

@@ -77,12 +77,15 @@ export class CampaignCharactersService {
       throw new BadRequestException("sheet must be an object");
     }
 
-    const existing = await this.prismaService.campaignCharacter.findUnique({
+    // Local character ids are only stable inside one user's local vault. Two
+    // campaign members may legitimately publish the same local id (for example
+    // after importing the same Markdown template), so ownership is part of the
+    // identity boundary.
+    const existing = await this.prismaService.campaignCharacter.findFirst({
       where: {
-        campaignId_sourceCharacterId: {
-          campaignId,
-          sourceCharacterId: input.sourceCharacterId,
-        },
+        campaignId,
+        ownerUserId: user.userId,
+        sourceCharacterId: input.sourceCharacterId,
       },
     });
 
@@ -93,11 +96,6 @@ export class CampaignCharactersService {
       // Re-publishing is idempotent: update the sheet in place and bump
       // revision. An archived campaign copy is restored because selecting the
       // local character again is the player's explicit "rejoin" action.
-      if (existing.ownerUserId !== user.userId) {
-        throw new ConflictException(
-          "This local character is already published by another campaign member",
-        );
-      }
       return this.applyUpdate(user, campaignId, existing, {
         baseRevision: input.baseRevision,
         sheet: sheetJson,

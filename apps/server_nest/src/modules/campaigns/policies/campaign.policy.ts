@@ -193,8 +193,8 @@ export class CampaignPolicy {
 
   /**
    * A membership binding is the player-facing identity for a campaign. A
-   * player can only bind their own active player character; managers can repair
-   * bindings for any member.
+   * A player can bind or replace their own active player character; managers
+   * can repair bindings for any member.
    */
   canBindCharacter(
     user: AccessTokenPayload,
@@ -220,12 +220,12 @@ export class CampaignPolicy {
     user: AccessTokenPayload,
     campaign: CampaignContext,
     targetUserId: string,
-    hasExistingBinding: boolean,
+    _hasExistingBinding: boolean,
   ): void {
     if (this.isManager(user, campaign)) return;
-    if (user.userId !== targetUserId || hasExistingBinding) {
+    if (user.userId !== targetUserId) {
       throw new ForbiddenException(
-        "Only a DM can replace or clear a campaign character binding",
+        "Only a DM can change another member's character binding",
       );
     }
   }

@@ -205,7 +205,7 @@ model CampaignCharacter {
   audits            CampaignCharacterAudit[]
   chatMessages      CampaignChatMessage[]
 
-  @@unique([campaignId, sourceCharacterId])
+  @@unique([campaignId, ownerUserId, sourceCharacterId])
   @@index([campaignId, status])
   @@index([ownerUserId])
   @@map("CampaignActor")
@@ -289,6 +289,8 @@ model CampaignChatMessage {
   @@index([senderId])
   @@index([campaignCharacterId])
   @@index([conversationId, createdAt])
+  // 幂等重放按 eventData->>'requestId' 查询, GIN 索引避免全表扫描.
+  @@index([eventData], type: Gin)
 }
 
 model CampaignConversation {

@@ -341,6 +341,43 @@ canBindCharacter   canManageMembershipBinding  canSpeakAsCharacter
 
 > 不存在 `canEditCharacter`、`canViewCampaignContent`、`canSendDmOnlyMessage`、`canManageEncounter`。
 
+### 7.7 规则覆盖与已知限制
+
+**已实现并经独立规则核算**（核算见 `apps/client_flutter/test/dnd5e_rules_verification_test.dart`）：
+
+- 属性调整值、熟练加值（1–20 级）、豁免/技能加值、先攻、法术豁免 DC；
+- 法术位：全施法者 1–20 级完整表、半施法者（圣武士/游侠）进阶、非施法者无位、
+  **邪术师契约魔法**（单环阶、数量随等级、短休恢复）；
+- 职业资源：战士第二气息（2/3/4）与动作如潮（2 级 1 次、**17 级 2 次**）、野蛮人狂暴；
+- 生命值：1 级取满骰 + 体质、后续取平均（骰面/2+1）+ 体质、**每级至少 1 点**；
+- 购点（27 点预算与成本表）、标准数组、4d6 去最低；
+- 货币汇率（1pp=1000cp、1ep=50cp）与混合面额累加；
+- 休息：长休恢复生命值/清空法术位/重置死亡豁免/恢复非 `none` 资源；
+  邪术师短休恢复契约法术位；
+- 伤害结算：**先扣临时生命值，溢出才扣当前生命值**；治疗不改临时生命值且不超过上限；
+- 战役：邀请码过期/次数/幂等校验、公开邀请固定加入为 `player`、
+  检定请求只能由目标角色响应、角色发布与绑定权限、档案创建者权限。
+
+**已知限制（当前未实现，按设计取舍记录）**：
+
+| 项 | 说明 |
+|---|---|
+| 命中骰（Hit Dice） | 未建模骰池：短休不能消耗 HD 回血、长休不恢复 HD |
+| 力竭等级语义 | 力竭为普通条件计数，不自动施加 −2×等级（d20）与 −5×等级尺速度惩罚 |
+| 专注机制 | 仅有 `concentrating` 条件预设，不校验“同时只维持一个”、不自动做受伤检定 |
+| 护甲与 AC | AC = 10 + 敏捷 + 内容包扁平加值；未建模轻/中/重甲敏捷上限（中甲 +2、重甲不加敏） |
+| 武器细节 | 灵巧武器固定按敏捷；未建模双手/versatile 变化伤害骰与熟练武器精通（2024 Mastery） |
+| 专精（Expertise） | 技能加值只有熟练/非熟练两档，无 ×2 专精 |
+| 多职业 | 不支持多职业等级与法术位合并 |
+| XP 与升级 | 无经验值系统；等级由用户维护，升级按 +1 级规划（内容包驱动可选内容） |
+| 负重 | 存在 `showEncumbrance` 偏好但**无消费方与 UI**（未完成管线） |
+| 死亡豁免 | 3 次上限由 UI 限制；未自动处理 d20 天然 20（回 1 HP）与天然 1（2 次失败） |
+| 审批加入 | `CampaignInvite.requireApproval` 字段存在但创建时固定 false，无审批流程 |
+| 可见性列 | `CampaignCharacter.healthVisibility` 无读写代码（未启用） |
+
+> 上述限制均属**主动取舍或待做项**，不是回归缺陷；修改规则行为时必须同步更新本节与
+> `dnd5e_rules_verification_test.dart`。
+
 ---
 
 ## 8. 离线与同步
@@ -816,8 +853,8 @@ Material 3 设计系统契约（`DESIGN.md` 与契约测试/golden）；自托�
 | 项 | 结果 |
 |---|---|
 | `flutter analyze` | 0 问题 |
-| `flutter test` | 864 通过 / 5 跳过（3 golden 默认跳过 + 2 私有路径） |
-| 服务端 `npm run lint` + `npm test` | 24 套件 / 351 测试通过，0 跳过 |
+| `flutter test` | 886 通过 / 5 跳过（含 22 项 D&D 规则独立核算；3 golden 默认跳过 + 2 私有路径） |
+| 服务端 `npm run lint` + `npm test` | 24 套件 / 353 测试通过，0 跳过 |
 | `npm run test:scripts` | 27 通过（4 个脚本测试套件） |
 | `npm run lint:design` | 0 error / 0 warning（1 条 token 统计 info） |
 | 自托管部署 | Docker Compose 下 `/health` 与 `/.well-known/dnd-tool-server` 验证通过 |

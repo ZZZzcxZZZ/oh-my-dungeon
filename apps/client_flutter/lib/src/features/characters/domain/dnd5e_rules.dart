@@ -159,10 +159,43 @@ class Dnd5eRules {
     return 8 + proficiencyBonus(level) + abilityBonus(abilities, ability);
   }
 
+  /// 邪术师使用契约魔法：单一环阶、数量随等级、短休即恢复。
+  static bool usesPactMagic(String classSummary) {
+    final normalized = classSummary.toLowerCase();
+    return normalized.contains('邪术师') || normalized.contains('warlock');
+  }
+
+  /// 契约魔法法术位表（环阶 → 数量）。
+  static Map<String, int> pactSlotMaximums(int level) {
+    final clamped = level.clamp(1, 20);
+    if (clamped >= 17) return const {'5': 4};
+    if (clamped >= 11) return const {'5': 3};
+    if (clamped >= 9) return const {'5': 2};
+    if (clamped >= 7) return const {'4': 2};
+    if (clamped >= 5) return const {'3': 2};
+    if (clamped >= 3) return const {'2': 2};
+    if (clamped >= 2) return const {'1': 2};
+    return const {'1': 1};
+  }
+
+  /// 休息后仍处于消耗状态的法术位：长休清空；邪术师短休同样清空（契约魔法）。
+  static Map<String, int> spellSlotsAfterRest({
+    required String classSummary,
+    required Map<String, int> used,
+    required bool longRest,
+  }) {
+    if (longRest) return const {};
+    if (usesPactMagic(classSummary)) return const {};
+    return Map<String, int>.unmodifiable(used);
+  }
+
   static Map<String, int> spellSlotMaximums({
     required String classSummary,
     required int level,
   }) {
+    if (usesPactMagic(classSummary)) {
+      return pactSlotMaximums(level);
+    }
     final casterProgression = _casterProgression(classSummary);
     if (casterProgression == null) return {};
     final effectiveLevel = switch (casterProgression) {
@@ -201,10 +234,11 @@ class Dnd5eRules {
           recovery: 'shortRest',
         ),
         if (clampedLevel >= 2)
-          const Dnd5eClassResource(
+          Dnd5eClassResource(
             id: 'action_surge',
             name: '动作如潮',
-            maximum: 1,
+            // 2024：17 级起可用两次。
+            maximum: clampedLevel >= 17 ? 2 : 1,
             recovery: 'shortRest',
           ),
       ];
@@ -246,9 +280,9 @@ class Dnd5eRules {
     final conBonus = abilityBonus(abilities, 'con');
     final clampedLevel = level.clamp(1, 20);
     final laterLevelAverage = (hitDie ~/ 2) + 1;
-    return hitDie +
-        conBonus +
-        (clampedLevel - 1) * (laterLevelAverage + conBonus);
+    // 规则：升级时每级至少获得 1 点生命（负体质调整值不可使收益为 0 或负）。
+    final perLevelGain = (laterLevelAverage + conBonus).clamp(1, 1 << 30);
+    return hitDie + conBonus + (clampedLevel - 1) * perLevelGain;
   }
 
   static int _hitDie(String className) {
@@ -317,6 +351,8 @@ class Dnd5eRules {
         normalized.contains('rogue')) {
       return null;
     }
+    // 邪术师使用契约魔法，走独立进阶，不是全施法者。
+    if (usesPactMagic(classSummary)) return null;
     if (normalized.contains('圣武士') ||
         normalized.contains('游侠') ||
         normalized.contains('paladin') ||

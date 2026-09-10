@@ -795,8 +795,23 @@ function applyCommands(
         break;
       }
       case "adjustHp": {
-        const current = toInt(next["currentHp"]);
-        next["currentHp"] = current + (typeof cmd.delta === "number" ? cmd.delta : 0);
+        const delta = typeof cmd.delta === "number" ? cmd.delta : 0;
+        let current = toInt(next["currentHp"]);
+        if (delta < 0) {
+          // 规则：受到伤害时先扣临时生命值，溢出部分才扣当前生命值；
+          // 当前生命值不会低于 0（改为死亡豁免流程）。
+          const damage = -delta;
+          const temporary = toInt(next["temporaryHp"]);
+          const absorbed = Math.min(Math.max(temporary, 0), damage);
+          if (absorbed > 0) next["temporaryHp"] = temporary - absorbed;
+          current = Math.max(current - (damage - absorbed), 0);
+        } else {
+          // 治疗不改变临时生命值，且不超过最大生命值。
+          const maxHp = toInt(next["maxHp"]);
+          current = current + delta;
+          if (maxHp > 0) current = Math.min(current, maxHp);
+        }
+        next["currentHp"] = current;
         break;
       }
       case "setTemporaryHp": {

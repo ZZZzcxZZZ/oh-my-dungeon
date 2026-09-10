@@ -888,6 +888,86 @@ describe("campaign characters endpoints", () => {
       expect(res.body.sheet.currentHp).toBe(4);
     });
 
+    it("applies damage to temporary HP before current HP", async () => {
+      const token = await loginAs(storedDm);
+      const existing = {
+        id: "character-1",
+        campaignId: "camp-1",
+        ownerUserId: "player-1",
+        sourceCharacterId: "char-1",
+        characterType: "player",
+        status: "active",
+        sheetJson: { name: "Arannis", currentHp: 10, temporaryHp: 5, maxHp: 20 },
+        revision: 1,
+        updatedBy: "player-1",
+        createdAt: new Date("2026-07-14T00:00:00.000Z"),
+        updatedAt: new Date("2026-07-14T00:00:00.000Z"),
+      };
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(existing);
+      prismaService.campaignCharacter.update.mockImplementationOnce(
+        async ({ data }: { data: { sheetJson: Record<string, unknown> } }) => ({
+          ...existing,
+          sheetJson: data.sheetJson,
+          revision: 2,
+          updatedBy: "dm-1",
+        }),
+      );
+
+      const res = await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/characters/character-1/runtime-commands")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          baseRevision: 1,
+          commands: [
+            { type: "setTemporaryHp", value: 5 },
+            { type: "adjustHp", delta: -8 },
+          ],
+        })
+        .expect(200);
+
+      // 8 点伤害：5 点由临时生命值吸收，剩余 3 点扣当前生命值。
+      expect(res.body.sheet.temporaryHp).toBe(0);
+      expect(res.body.sheet.currentHp).toBe(7);
+    });
+
+    it("healing does not consume temporary HP and caps at max HP", async () => {
+      const token = await loginAs(storedDm);
+      const existing = {
+        id: "character-1",
+        campaignId: "camp-1",
+        ownerUserId: "player-1",
+        sourceCharacterId: "char-1",
+        characterType: "player",
+        status: "active",
+        sheetJson: { name: "Arannis", currentHp: 10, temporaryHp: 5, maxHp: 12 },
+        revision: 1,
+        updatedBy: "player-1",
+        createdAt: new Date("2026-07-14T00:00:00.000Z"),
+        updatedAt: new Date("2026-07-14T00:00:00.000Z"),
+      };
+      prismaService.campaignCharacter.findUnique.mockResolvedValueOnce(existing);
+      prismaService.campaignCharacter.update.mockImplementationOnce(
+        async ({ data }: { data: { sheetJson: Record<string, unknown> } }) => ({
+          ...existing,
+          sheetJson: data.sheetJson,
+          revision: 2,
+          updatedBy: "dm-1",
+        }),
+      );
+
+      const res = await request(app.getHttpServer())
+        .post("/api/campaigns/camp-1/characters/character-1/runtime-commands")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          baseRevision: 1,
+          commands: [{ type: "adjustHp", delta: 10 }],
+        })
+        .expect(200);
+
+      expect(res.body.sheet.temporaryHp).toBe(5);
+      expect(res.body.sheet.currentHp).toBe(12);
+    });
+
     it("rejects unknown command types with 400", async () => {
       const token = await loginAs(storedDm);
       prismaService.campaignCharacter.findUnique.mockResolvedValueOnce({

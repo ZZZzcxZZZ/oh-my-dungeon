@@ -2355,6 +2355,15 @@ class _RuntimePanelState extends State<_RuntimePanel> {
   }
 
   Future<void> _takeShortRest() {
+    // 邪术师契约魔法在短休恢复全部法术位；其他职业短休不回法术位。
+    final classSummary = widget.character.classSummary;
+    final Map<String, int>? spellSlotsUsed = Dnd5eRules.usesPactMagic(classSummary)
+        ? Dnd5eRules.spellSlotsAfterRest(
+            classSummary: classSummary,
+            used: widget.character.spellSlotsUsed,
+            longRest: false,
+          )
+        : null;
     final resources = widget.character.classResources;
     final next = {
       for (final resource in resources)
@@ -2373,6 +2382,7 @@ class _RuntimePanelState extends State<_RuntimePanel> {
           deathSaveSuccesses: 0,
           deathSaveFailures: 0,
           classResourcesUsed: next,
+          spellSlotsUsed: spellSlotsUsed,
         ) ??
         Future.value();
   }
@@ -2386,6 +2396,8 @@ class _RuntimePanelState extends State<_RuntimePanel> {
                   .toInt()
             : 0,
     };
+    // 长休恢复全部法术位（规则：完成长休后所有已消耗法术位恢复）。
+    const spellSlotsUsed = <String, int>{};
     setState(() {
       _currentHp = widget.character.maxHp;
       _temporaryHp = 0;
@@ -2398,6 +2410,7 @@ class _RuntimePanelState extends State<_RuntimePanel> {
       deathSaveSuccesses: 0,
       deathSaveFailures: 0,
       classResourcesUsed: classResourcesUsed,
+      spellSlotsUsed: spellSlotsUsed,
     );
   }
 }

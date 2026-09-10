@@ -360,7 +360,7 @@ void main() {
           },
         );
 
-    // 感知 16 → +3，等级 1 → 4
+    // 2024 官方表：牧师 1 级准备 4 个法术（与感知无关）
     expect(draft.data['preparedSpellLimit'], 4);
   });
 

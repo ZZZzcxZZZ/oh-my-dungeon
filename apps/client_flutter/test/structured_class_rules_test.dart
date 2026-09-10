@@ -48,7 +48,7 @@ void main() {
   });
 
   group('preparedSpellLimit', () {
-    test('returns modifier + level for prepared casters', () {
+    test('uses the official 2024 per-level prepared table', () {
       const entry = ContentEntry(
         id: 'test:class/cleric',
         type: 'class',
@@ -62,7 +62,7 @@ void main() {
         },
       );
 
-      // 感知 16 → 调整值 +3，等级 1 → 上限 4
+      // 2024 牧师 1 级固定准备 4 个，与感知无关
       expect(
         StructuredClassRules.preparedSpellLimit(
           entry,
@@ -71,16 +71,129 @@ void main() {
         ),
         4,
       );
-      // 等级 5、感知 18 → +4 + 5 = 9
       expect(
         StructuredClassRules.preparedSpellLimit(
           entry,
-          abilities: const {'wis': 18},
+          abilities: const {'wis': 3},
+          level: 1,
+        ),
+        4,
+        reason: '2024 已取消“属性调整值 + 等级”',
+      );
+      expect(
+        StructuredClassRules.preparedSpellLimit(
+          entry,
+          abilities: const {'wis': 20},
           level: 5,
         ),
         9,
       );
-      // 最低 1
+      expect(
+        StructuredClassRules.preparedSpellLimit(
+          entry,
+          abilities: const {'wis': 20},
+          level: 20,
+        ),
+        22,
+      );
+    });
+
+    test('reads the class table for bilingual class names', () {
+      const entry = ContentEntry(
+        id: 'test:class/wizard',
+        type: 'class',
+        slug: 'wizard',
+        name: 'Wizard',
+        body: [],
+        revision: 1,
+        structured: {
+          'spellcastingAbility': 'int',
+          'preparedSpellcasting': true,
+        },
+      );
+      expect(
+        StructuredClassRules.preparedSpellLimit(
+          entry,
+          abilities: const {'int': 10},
+          level: 1,
+        ),
+        4,
+      );
+      expect(
+        StructuredClassRules.preparedSpellLimit(
+          entry,
+          abilities: const {'int': 10},
+          level: 20,
+        ),
+        25,
+      );
+    });
+
+    test('prefers an explicit content table when provided', () {
+      const entry = ContentEntry(
+        id: 'test:class/homebrew',
+        type: 'class',
+        slug: 'homebrew',
+        name: '星界骑士',
+        body: [],
+        revision: 1,
+        structured: {
+          'spellcastingAbility': 'wis',
+          'preparedSpellcasting': true,
+          'preparedSpells': {'1': 6, '5': 12},
+        },
+      );
+
+      expect(
+        StructuredClassRules.preparedSpellLimit(
+          entry,
+          abilities: const {'wis': 16},
+          level: 1,
+        ),
+        6,
+      );
+      expect(
+        StructuredClassRules.preparedSpellLimit(
+          entry,
+          abilities: const {'wis': 16},
+          level: 4,
+        ),
+        6,
+      );
+      expect(
+        StructuredClassRules.preparedSpellLimit(
+          entry,
+          abilities: const {'wis': 16},
+          level: 5,
+        ),
+        12,
+        reason: '显式表按不超过当前等级的最大档位取值',
+      );
+    });
+
+    test('falls back to modifier + level for unknown homebrew classes', () {
+      const entry = ContentEntry(
+        id: 'test:class/homebrew-unknown',
+        type: 'class',
+        slug: 'homebrew-unknown',
+        name: '星界行者',
+        body: [],
+        revision: 1,
+        structured: {
+          'spellcastingAbility': 'wis',
+          'preparedSpellcasting': true,
+        },
+      );
+
+      // 未知职业保留旧公式：感知 16 → +3，1 级 → 4；最低 1
+      expect(
+        StructuredClassRules.preparedSpellLimit(
+          entry,
+          abilities: const {'wis': 16},
+          level: 1,
+        ),
+        4,
+      );
       expect(
         StructuredClassRules.preparedSpellLimit(
           entry,

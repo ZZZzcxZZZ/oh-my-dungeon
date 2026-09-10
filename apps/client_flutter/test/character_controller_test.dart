@@ -179,6 +179,75 @@ void main() {
     },
   );
 
+  test('offline damage is absorbed by temporary HP before current HP', () async {
+    final repository = MemoryCharacterRepository(
+      initial: [
+        _character.copyWith(
+          data: const {
+            'runtime': {'temporaryHp': 5},
+          },
+        ),
+      ],
+    );
+    final controller = CharacterController(repository: repository);
+    await drainStream();
+
+    final ok = await controller.adjustHitPoints(
+      characterId: 'char-1',
+      delta: -12,
+    );
+
+    expect(ok, isTrue);
+    final stored = await repository.getById('char-1');
+    // 2024：5 点临时 HP 先吸收，剩余 7 点扣当前 HP（24 → 17）。
+    expect(stored?.currentHp, 17);
+    expect(stored?.temporaryHp, 0);
+    controller.dispose();
+  });
+
+  test('offline damage fully absorbed leaves current HP untouched', () async {
+    final repository = MemoryCharacterRepository(
+      initial: [
+        _character.copyWith(
+          data: const {
+            'runtime': {'temporaryHp': 8},
+          },
+        ),
+      ],
+    );
+    final controller = CharacterController(repository: repository);
+    await drainStream();
+
+    await controller.adjustHitPoints(characterId: 'char-1', delta: -5);
+
+    final stored = await repository.getById('char-1');
+    expect(stored?.currentHp, 24);
+    expect(stored?.temporaryHp, 3);
+    controller.dispose();
+  });
+
+  test('offline healing caps at maximum HP and keeps temporary HP', () async {
+    final repository = MemoryCharacterRepository(
+      initial: [
+        _character.copyWith(
+          currentHp: 20,
+          data: const {
+            'runtime': {'temporaryHp': 4},
+          },
+        ),
+      ],
+    );
+    final controller = CharacterController(repository: repository);
+    await drainStream();
+
+    await controller.adjustHitPoints(characterId: 'char-1', delta: 10);
+
+    final stored = await repository.getById('char-1');
+    expect(stored?.currentHp, 24);
+    expect(stored?.temporaryHp, 4);
+    controller.dispose();
+  });
+
   test('campaign HP operation replaces cache with server state', () async {
     final repository = MemoryCharacterRepository(initial: [_character]);
     final operations = _FakeCharacterOperationsClient(

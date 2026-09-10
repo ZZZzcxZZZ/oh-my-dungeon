@@ -139,12 +139,12 @@ class CharacterSheet {
     };
   }
 
-  List<CharacterClassResource> get classResources {
+  List<Dnd5eClassResource> get classResources {
     final explicitResources = _asList(dataMap['classResources'])
         .map((item) => _asMap(item))
         .where((item) => item['id'] != null && item['name'] != null)
         .map(
-          (item) => CharacterClassResource(
+          (item) => Dnd5eClassResource(
             id: '${item['id']}',
             name: '${item['name']}',
             maximum: _intValue(item['maximum']),
@@ -154,16 +154,7 @@ class CharacterSheet {
         .where((item) => item.maximum > 0)
         .toList(growable: false);
     if (explicitResources.isNotEmpty) return explicitResources;
-    return Dnd5eRules.classResources(classSummary: classSummary, level: level)
-        .map(
-          (item) => CharacterClassResource(
-            id: item.id,
-            name: item.name,
-            maximum: item.maximum,
-            recovery: item.recovery,
-          ),
-        )
-        .toList(growable: false);
+    return Dnd5eRules.classResources(classSummary: classSummary, level: level);
   }
 
   List<String> get spellRefs {
@@ -328,23 +319,9 @@ class CharacterSheet {
   );
 }
 
-class CharacterClassResource {
-  const CharacterClassResource({
-    required this.id,
-    required this.name,
-    required this.maximum,
-    this.recovery = 'longRest',
-  });
-
-  final String id;
-  final String name;
-  final int maximum;
-  final String recovery;
-}
-
 String _resourceRecovery(Object? value) {
   return switch (value) {
-    'shortRest' || 'longRest' || 'none' => value as String,
+    'shortRest' || 'shortRestOne' || 'longRest' || 'none' => value as String,
     _ => 'longRest',
   };
 }

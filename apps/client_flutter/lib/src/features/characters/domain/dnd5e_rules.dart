@@ -125,6 +125,8 @@ class Dnd5eRules {
 
   static String? spellcastingAbility(String classSummary) {
     final normalized = classSummary.toLowerCase();
+    // 2024 战士/游荡者的施法子职业使用智力（奥法骑士 / 诡术师）。
+    if (_usesThirdCasterProgression(normalized)) return 'int';
     if (normalized.contains('法师') || normalized.contains('wizard')) {
       return 'int';
     }
@@ -198,6 +200,8 @@ class Dnd5eRules {
     }
     final casterProgression = _casterProgression(classSummary);
     if (casterProgression == null) return {};
+    // 2024：奥法骑士 / 诡术师 3 级才获得法术位。
+    if (casterProgression == _CasterProgression.third && level < 3) return {};
     final effectiveLevel = switch (casterProgression) {
       _CasterProgression.full => level,
       _CasterProgression.half => ((level + 1) ~/ 2),
@@ -219,6 +223,39 @@ class Dnd5eRules {
     };
   }
 
+  /// 休息后的职业资源"已用次数"。规则（2024）：
+  /// - 长休：除 `none` 外全部恢复；
+  /// - 短休：`shortRest` 全恢复，`shortRestOne` 只恢复 1 次（如野蛮人狂暴），
+  ///   `longRest` / `none` 不变。
+  static Map<String, int> classResourcesAfterRest({
+    required Iterable<Dnd5eClassResource> resources,
+    required Map<String, int> used,
+    required bool longRest,
+  }) {
+    return {
+      for (final resource in resources)
+        resource.id: _resourceUsedAfterRest(
+          resource,
+          used[resource.id] ?? 0,
+          longRest: longRest,
+        ),
+    };
+  }
+
+  static int _resourceUsedAfterRest(
+    Dnd5eClassResource resource,
+    int currentlyUsed, {
+    required bool longRest,
+  }) {
+    final used = currentlyUsed.clamp(0, resource.maximum).toInt();
+    if (longRest) return resource.recovery == 'none' ? used : 0;
+    return switch (resource.recovery) {
+      'shortRest' => 0,
+      'shortRestOne' => (used - 1).clamp(0, resource.maximum).toInt(),
+      _ => used,
+    };
+  }
+
   static List<Dnd5eClassResource> classResources({
     required String classSummary,
     required int level,
@@ -231,13 +268,14 @@ class Dnd5eRules {
           id: 'second_wind',
           name: '第二气息',
           maximum: _secondWindUses(clampedLevel),
-          recovery: 'shortRest',
+          // 2024：短休恢复 1 次，长休全部恢复。
+          recovery: 'shortRestOne',
         ),
         if (clampedLevel >= 2)
           Dnd5eClassResource(
             id: 'action_surge',
             name: '动作如潮',
-            // 2024：17 级起可用两次。
+            // 2024：17 级起可用两次；短休/长休后全部恢复。
             maximum: clampedLevel >= 17 ? 2 : 1,
             recovery: 'shortRest',
           ),
@@ -249,7 +287,8 @@ class Dnd5eRules {
           id: 'rage',
           name: '狂暴',
           maximum: _rageUses(clampedLevel),
-          recovery: 'longRest',
+          // 2024：短休恢复 1 次，长休全部恢复。
+          recovery: 'shortRestOne',
         ),
       ];
     }
@@ -271,43 +310,113 @@ class Dnd5eRules {
     };
   }
 
+  /// 2024 伤害/治疗结算结果。
+  ///
+  /// 规则：受到伤害时**先扣除临时生命值**，溢出部分才扣当前生命值，当前生命值
+  /// 最低为 0；治疗只提高当前生命值且不超过上限，**不改变临时生命值**。
+  static Dnd5eHitPoints applyHitPointDelta({
+    required int current,
+    required int maximum,
+    required int temporary,
+    required int delta,
+  }) {
+    final boundedMaximum = maximum < 0 ? 0 : maximum;
+    var hp = current.clamp(0, boundedMaximum);
+    var temp = temporary < 0 ? 0 : temporary;
+    if (delta >= 0) {
+      hp = (hp + delta).clamp(0, boundedMaximum);
+      return Dnd5eHitPoints(current: hp, temporary: temp);
+    }
+    final damage = -delta;
+    final absorbed = temp < damage ? temp : damage;
+    temp -= absorbed;
+    hp = (hp - (damage - absorbed)).clamp(0, boundedMaximum);
+    return Dnd5eHitPoints(current: hp, temporary: temp);
+  }
+
   static int averageHitPoints({
     required String className,
     required int level,
     required Map<String, Object?> abilities,
   }) {
-    final hitDie = _hitDie(className);
-    final conBonus = abilityBonus(abilities, 'con');
-    final clampedLevel = level.clamp(1, 20);
-    final laterLevelAverage = (hitDie ~/ 2) + 1;
-    // 规则：升级时每级至少获得 1 点生命（负体质调整值不可使收益为 0 或负）。
-    final perLevelGain = (laterLevelAverage + conBonus).clamp(1, 1 << 30);
-    return hitDie + conBonus + (clampedLevel - 1) * perLevelGain;
+    return averageHitPointsForHitDie(
+      hitDie: hitDie(className),
+      level: level,
+      constitution: abilityScore(abilities, 'con'),
+    );
   }
 
-  static int _hitDie(String className) {
+  /// 按生命骰面数计算平均生命值。规则（2024）：
+  /// 1 级取满骰 + 体质调整值；之后每级 `骰面/2 + 1 + 体质调整值`，
+  /// 且每级至少获得 1 点生命。
+  static int averageHitPointsForHitDie({
+    required int hitDie,
+    required int level,
+    required int constitution,
+  }) {
+    final safeHitDie = hitDie <= 0 ? 8 : hitDie;
+    final conBonus = abilityModifier(constitution);
+    final clampedLevel = level.clamp(1, 20);
+    final laterLevelAverage = (safeHitDie ~/ 2) + 1;
+    final perLevelGain = (laterLevelAverage + conBonus).clamp(1, 1 << 30);
+    final total = safeHitDie + conBonus + (clampedLevel - 1) * perLevelGain;
+    return total.clamp(1, 1 << 30);
+  }
+
+  /// 2024 官方核心表：各职业生命骰面数。
+  static int hitDie(String className) {
     final normalized = className.toLowerCase();
     for (final entry in _hitDice.entries) {
       if (normalized.contains(entry.key)) return entry.value;
     }
-    if (normalized.contains('barbarian')) return 12;
-    if (normalized.contains('fighter') || normalized.contains('paladin')) {
-      return 10;
-    }
-    if (normalized.contains('ranger')) return 10;
-    if (normalized.contains('bard') ||
-        normalized.contains('cleric') ||
-        normalized.contains('druid') ||
-        normalized.contains('monk') ||
-        normalized.contains('rogue')) {
-      return 8;
-    }
-    if (normalized.contains('wizard') ||
-        normalized.contains('sorcerer') ||
-        normalized.contains('warlock')) {
-      return 6;
-    }
     return 8;
+  }
+
+  /// 2024 官方核心表：各职业豁免熟练（无匹配时返回空集，不猜测）。
+  static Set<String> classSavingThrows(String classSummary) {
+    final normalized = classSummary.toLowerCase();
+    for (final entry in _classSavingThrows.entries) {
+      if (normalized.contains(entry.key)) return entry.value;
+    }
+    return const <String>{};
+  }
+
+  /// 2024 官方逐级"准备法术"上限（不含属性调整值）。
+  /// 返回 null 表示该职业不是准备施法者（或为非核心职业）。
+  static int? preparedSpellMaximums({
+    required String classSummary,
+    required int level,
+  }) {
+    final table = _preparedSpellTable(classSummary);
+    if (table == null) return null;
+    return table[level.clamp(1, 20) - 1];
+  }
+
+  static List<int>? _preparedSpellTable(String classSummary) {
+    // 契约魔法先判，避免与术士表混淆。
+    if (usesPactMagic(classSummary)) return _preparedWarlock;
+    final normalized = classSummary.toLowerCase();
+    if (normalized.contains('法师') || normalized.contains('wizard')) {
+      return _preparedWizard;
+    }
+    if (normalized.contains('术士') || normalized.contains('sorcerer')) {
+      return _preparedSorcerer;
+    }
+    if (normalized.contains('牧师') ||
+        normalized.contains('cleric') ||
+        normalized.contains('德鲁伊') ||
+        normalized.contains('druid') ||
+        normalized.contains('吟游诗人') ||
+        normalized.contains('bard')) {
+      return _preparedDivine;
+    }
+    if (normalized.contains('圣武士') ||
+        normalized.contains('paladin') ||
+        normalized.contains('游侠') ||
+        normalized.contains('ranger')) {
+      return _preparedHalfCaster;
+    }
+    return null;
   }
 
   static int _secondWindUses(int level) {
@@ -324,23 +433,97 @@ class Dnd5eRules {
     return 2;
   }
 
+  /// 2024 核心表：生命骰。邪术师为 d8。
   static const _hitDice = {
     '野蛮人': 12,
+    'barbarian': 12,
     '战士': 10,
+    'fighter': 10,
     '圣武士': 10,
+    'paladin': 10,
     '游侠': 10,
+    'ranger': 10,
     '吟游诗人': 8,
+    'bard': 8,
     '牧师': 8,
+    'cleric': 8,
     '德鲁伊': 8,
+    'druid': 8,
     '武僧': 8,
+    'monk': 8,
     '游荡者': 8,
-    '法师': 6,
+    'rogue': 8,
+    '邪术师': 8,
+    'warlock': 8,
     '术士': 6,
-    '邪术师': 6,
+    'sorcerer': 6,
+    '法师': 6,
+    'wizard': 6,
+    // 施法子职业单独出现时也能解析到母职业生命骰。
+    '奥法骑士': 10,
+    'eldritch knight': 10,
+    '诡术师': 8,
+    'arcane trickster': 8,
   };
+
+  /// 2024 核心表：豁免熟练。
+  static const _classSavingThrows = <String, Set<String>>{
+    '野蛮人': {'str', 'con'},
+    'barbarian': {'str', 'con'},
+    '吟游诗人': {'dex', 'cha'},
+    'bard': {'dex', 'cha'},
+    '牧师': {'wis', 'cha'},
+    'cleric': {'wis', 'cha'},
+    '德鲁伊': {'int', 'wis'},
+    'druid': {'int', 'wis'},
+    '战士': {'str', 'con'},
+    'fighter': {'str', 'con'},
+    '武僧': {'dex', 'wis'},
+    'monk': {'dex', 'wis'},
+    '圣武士': {'wis', 'cha'},
+    'paladin': {'wis', 'cha'},
+    '游侠': {'dex', 'str'},
+    'ranger': {'dex', 'str'},
+    '游荡者': {'dex', 'int'},
+    'rogue': {'dex', 'int'},
+    '术士': {'con', 'cha'},
+    'sorcerer': {'con', 'cha'},
+    '邪术师': {'wis', 'cha'},
+    'warlock': {'wis', 'cha'},
+    '法师': {'int', 'wis'},
+    'wizard': {'int', 'wis'},
+  };
+
+  // 2024 官方 "Prepared Spells" 逐级表（1..20 级）。
+  static const _preparedDivine = [
+    4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22,
+  ];
+  static const _preparedSorcerer = [
+    2, 4, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22,
+  ];
+  static const _preparedWizard = [
+    4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 18, 19, 21, 22, 23, 24, 25,
+  ];
+  static const _preparedHalfCaster = [
+    2, 3, 4, 5, 6, 6, 7, 7, 9, 9, 10, 10, 11, 11, 12, 12, 14, 14, 15, 15,
+  ];
+  static const _preparedWarlock = [
+    2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15,
+  ];
+
+  static bool _usesThirdCasterProgression(String normalized) {
+    return normalized.contains('奥法骑士') ||
+        normalized.contains('eldritch knight') ||
+        normalized.contains('诡术师') ||
+        normalized.contains('arcane trickster');
+  }
 
   static _CasterProgression? _casterProgression(String classSummary) {
     final normalized = classSummary.toLowerCase();
+    // 2024：奥法骑士（战士）/ 诡术师（游荡者）为 1/3 施法者。
+    if (_usesThirdCasterProgression(normalized)) {
+      return _CasterProgression.third;
+    }
     if (normalized.contains('野蛮人') ||
         normalized.contains('战士') ||
         normalized.contains('武僧') ||
@@ -496,6 +679,14 @@ class Dnd5eSkill {
 
   final String name;
   final String ability;
+}
+
+/// 生命值结算结果（当前生命值 / 临时生命值）。
+class Dnd5eHitPoints {
+  const Dnd5eHitPoints({required this.current, required this.temporary});
+
+  final int current;
+  final int temporary;
 }
 
 class Dnd5eClassResource {

@@ -80,6 +80,71 @@ describe('CharacterOperationsService', () => {
     );
   });
 
+  it('absorbs damage with temporary HP before reducing current HP', async () => {
+    stateStore.getOrCreate.mockResolvedValue({
+      id: 'state-1',
+      characterId: 'character-1',
+      campaignId: null,
+      scopeKey: 'local',
+      revision: 1,
+      state: parseCharacterState({
+        hitPoints: { current: 25, maximum: 40, temporary: 6 },
+      }),
+    });
+    const service = new CharacterOperationsService(
+      prisma as never,
+      stateStore as never,
+      events as never,
+    );
+
+    const result = await service.adjustHitPoints(character, 'character-1', {
+      requestId: 'request-temp',
+      delta: -10,
+    });
+
+    // 6 点临时生命值全部吸收，剩余 4 点扣当前生命值。
+    expect(result.state.hitPoints.current).toBe(21);
+    expect(result.state.hitPoints.temporary).toBe(0);
+    expect(prisma.character.update).toHaveBeenCalledWith({
+      where: { id: 'character-1' },
+      data: { currentHp: 21, maxHp: 40 },
+    });
+    expect(events.append).toHaveBeenCalledWith(
+      prisma,
+      expect.objectContaining({
+        type: 'character.hp.adjusted',
+        before: { current: 25, temporary: 6 },
+        after: { current: 21, temporary: 0 },
+      }),
+    );
+  });
+
+  it('leaves temporary HP untouched when healing and caps at maximum', async () => {
+    stateStore.getOrCreate.mockResolvedValue({
+      id: 'state-1',
+      characterId: 'character-1',
+      campaignId: null,
+      scopeKey: 'local',
+      revision: 1,
+      state: parseCharacterState({
+        hitPoints: { current: 35, maximum: 40, temporary: 6 },
+      }),
+    });
+    const service = new CharacterOperationsService(
+      prisma as never,
+      stateStore as never,
+      events as never,
+    );
+
+    const result = await service.adjustHitPoints(character, 'character-1', {
+      requestId: 'request-heal',
+      delta: 20,
+    });
+
+    expect(result.state.hitPoints.current).toBe(40);
+    expect(result.state.hitPoints.temporary).toBe(6);
+  });
+
   it('adds a structured condition', async () => {
     const service = new CharacterOperationsService(
       prisma as never,

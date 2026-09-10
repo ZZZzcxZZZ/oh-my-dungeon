@@ -124,11 +124,12 @@ void main() {
 
       await tester.enterText(
         find.byKey(const Key('hp-quick-value-field')),
-        '6',
+        '11',
       );
       await tester.tap(find.widgetWithText(FilledButton, '受到伤害'));
       await tester.pumpAndSettle();
 
+      // 2024：5 点临时 HP 先吸收，溢出 6 点扣当前 HP（24 → 18）。
       expect(find.text('当前 HP 18/24'), findsOneWidget);
       expect(updates.last['currentHp'], 18);
 

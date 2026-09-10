@@ -2269,12 +2269,6 @@ class _RuntimePanelState extends State<_RuntimePanel> {
     );
   }
 
-  Future<void> _setCurrentHp(int value) async {
-    final next = value.clamp(0, widget.character.maxHp);
-    setState(() => _currentHp = next);
-    await widget.onUpdateRuntime?.call(currentHp: next);
-  }
-
   Future<void> _showHpAdjustment() async {
     final delta = await showModalBottomSheet<int>(
       context: context,
@@ -2282,7 +2276,22 @@ class _RuntimePanelState extends State<_RuntimePanel> {
       isScrollControlled: true,
       builder: (context) => const _HpAdjustmentSheet(),
     );
-    if (delta != null) await _setCurrentHp(_currentHp + delta);
+    if (delta == null) return;
+    // 2024：伤害先扣临时生命值，溢出才扣当前生命值。
+    final next = Dnd5eRules.applyHitPointDelta(
+      current: _currentHp,
+      maximum: widget.character.maxHp,
+      temporary: _temporaryHp,
+      delta: delta,
+    );
+    setState(() {
+      _currentHp = next.current;
+      _temporaryHp = next.temporary;
+    });
+    await widget.onUpdateRuntime?.call(
+      currentHp: next.current,
+      temporaryHp: next.temporary,
+    );
   }
 
   Future<void> _setTemporaryHp(int value) async {
@@ -2364,16 +2373,11 @@ class _RuntimePanelState extends State<_RuntimePanel> {
             longRest: false,
           )
         : null;
-    final resources = widget.character.classResources;
-    final next = {
-      for (final resource in resources)
-        resource.id: (widget.character.classResourcesUsed[resource.id] ?? 0)
-            .clamp(0, resource.maximum)
-            .toInt(),
-    };
-    for (final resource in resources) {
-      if (resource.recovery == 'shortRest') next[resource.id] = 0;
-    }
+    final next = Dnd5eRules.classResourcesAfterRest(
+      resources: widget.character.classResources,
+      used: widget.character.classResourcesUsed,
+      longRest: false,
+    );
     setState(() {
       _deathSaveSuccesses = 0;
       _deathSaveFailures = 0;
@@ -2388,14 +2392,11 @@ class _RuntimePanelState extends State<_RuntimePanel> {
   }
 
   Future<void> _takeLongRest() async {
-    final classResourcesUsed = {
-      for (final resource in widget.character.classResources)
-        resource.id: resource.recovery == 'none'
-            ? (widget.character.classResourcesUsed[resource.id] ?? 0)
-                  .clamp(0, resource.maximum)
-                  .toInt()
-            : 0,
-    };
+    final classResourcesUsed = Dnd5eRules.classResourcesAfterRest(
+      resources: widget.character.classResources,
+      used: widget.character.classResourcesUsed,
+      longRest: true,
+    );
     // 长休恢复全部法术位（规则：完成长休后所有已消耗法术位恢复）。
     const spellSlotsUsed = <String, int>{};
     setState(() {
@@ -2652,7 +2653,7 @@ class _ResourcesPanel extends StatefulWidget {
 
 class _ResourcesPanelState extends State<_ResourcesPanel> {
   late Map<String, int> _classResourcesUsed;
-  late List<CharacterClassResource> _resources;
+  late List<Dnd5eClassResource> _resources;
 
   @override
   void initState() {
@@ -2763,7 +2764,7 @@ class _ResourcesPanelState extends State<_ResourcesPanel> {
   }
 
   Future<void> _setResourceCurrent(
-    CharacterClassResource resource,
+    Dnd5eClassResource resource,
     int current,
   ) async {
     final next = Map<String, int>.from(_classResourcesUsed);
@@ -2775,13 +2776,11 @@ class _ResourcesPanelState extends State<_ResourcesPanel> {
   }
 
   Future<void> _restoreResources({required bool longRest}) async {
-    final next = Map<String, int>.from(_classResourcesUsed);
-    for (final resource in _resources) {
-      final recovers = longRest
-          ? resource.recovery != 'none'
-          : resource.recovery == 'shortRest';
-      if (recovers) next[resource.id] = 0;
-    }
+    final next = Dnd5eRules.classResourcesAfterRest(
+      resources: _resources,
+      used: _classResourcesUsed,
+      longRest: longRest,
+    );
     setState(() => _classResourcesUsed = next);
     await widget.onUpdateRuntime?.call(classResourcesUsed: next);
   }
@@ -2792,7 +2791,7 @@ class _ResourcesPanelState extends State<_ResourcesPanel> {
     await _saveResourceDefinitions([..._resources, resource]);
   }
 
-  Future<void> _editResource(CharacterClassResource resource) async {
+  Future<void> _editResource(Dnd5eClassResource resource) async {
     final updated = await _showResourceDialog(context, initial: resource);
     if (updated == null) return;
     await _saveResourceDefinitions([
@@ -2801,7 +2800,7 @@ class _ResourcesPanelState extends State<_ResourcesPanel> {
     ]);
   }
 
-  Future<void> _deleteResource(CharacterClassResource resource) async {
+  Future<void> _deleteResource(Dnd5eClassResource resource) async {
     await _saveResourceDefinitions(
       _resources
           .where((item) => item.id != resource.id)
@@ -2810,7 +2809,7 @@ class _ResourcesPanelState extends State<_ResourcesPanel> {
   }
 
   Future<void> _saveResourceDefinitions(
-    List<CharacterClassResource> resources,
+    List<Dnd5eClassResource> resources,
   ) async {
     final used = Map<String, int>.from(_classResourcesUsed)
       ..removeWhere((id, _) => !resources.any((resource) => resource.id == id));
@@ -2848,7 +2847,7 @@ class _ClassResourceLine extends StatelessWidget {
     this.onDelete,
   });
 
-  final CharacterClassResource resource;
+  final Dnd5eClassResource resource;
   final int current;
   final ValueChanged<int> onSetCurrent;
   final VoidCallback? onEdit;
@@ -3222,16 +3221,16 @@ Future<(String, String)?> _showNameDescriptionDialog(
   return result;
 }
 
-Future<CharacterClassResource?> _showResourceDialog(
+Future<Dnd5eClassResource?> _showResourceDialog(
   BuildContext context, {
-  CharacterClassResource? initial,
+  Dnd5eClassResource? initial,
 }) async {
   final nameController = TextEditingController(text: initial?.name ?? '');
   final maximumController = TextEditingController(
     text: '${initial?.maximum ?? 1}',
   );
   var recovery = initial?.recovery ?? 'longRest';
-  final result = await showDialog<CharacterClassResource>(
+  final result = await showDialog<Dnd5eClassResource>(
     context: context,
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) => AlertDialog(
@@ -3267,6 +3266,10 @@ Future<CharacterClassResource?> _showResourceDialog(
                 ),
                 items: const [
                   DropdownMenuItem(value: 'shortRest', child: Text('短休恢复')),
+                  DropdownMenuItem(
+                    value: 'shortRestOne',
+                    child: Text('短休恢复 1 次'),
+                  ),
                   DropdownMenuItem(value: 'longRest', child: Text('长休恢复')),
                   DropdownMenuItem(value: 'none', child: Text('不自动恢复')),
                 ],
@@ -3291,7 +3294,7 @@ Future<CharacterClassResource?> _showResourceDialog(
                   initial?.id ??
                   'custom-resource-${name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-').replaceAll(RegExp(r'^-|-$'), '')}';
               Navigator.of(context).pop(
-                CharacterClassResource(
+                Dnd5eClassResource(
                   id: id.isEmpty
                       ? 'custom-resource-${DateTime.now().microsecondsSinceEpoch}'
                       : id,
@@ -3315,6 +3318,7 @@ Future<CharacterClassResource?> _showResourceDialog(
 String _resourceRecoveryLabel(String recovery) {
   return switch (recovery) {
     'shortRest' => '短休恢复',
+    'shortRestOne' => '短休恢复 1 次',
     'none' => '不自动恢复',
     _ => '长休恢复',
   };

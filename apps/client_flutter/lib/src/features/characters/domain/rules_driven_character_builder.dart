@@ -183,11 +183,7 @@ class RulesDrivenCharacterBuilder {
                 'id': resource.id,
                 'name': resource.label,
                 'maximum': resource.value?.toInt() ?? 1,
-                'recovery': resource.data['recovery'] == 'shortRest'
-                    ? 'shortRest'
-                    : resource.data['recovery'] == 'none'
-                    ? 'none'
-                    : 'longRest',
+                'recovery': _resourceRecovery(resource.data['recovery']),
               },
           ],
         if (actions.isNotEmpty)
@@ -302,14 +298,19 @@ class RulesDrivenCharacterBuilder {
         int.tryParse(value.replaceFirst(RegExp(r'^[dD]'), '')) ?? 8,
       _ => 8,
     };
-    final conModifier = Dnd5eRules.abilityModifier(constitution);
-    final safeLevel = level.clamp(1, 20);
-    final total =
-        hitDie +
-        conModifier +
-        (safeLevel - 1) * ((hitDie ~/ 2) + 1 + conModifier);
-    return total.clamp(1, 9999);
+    return Dnd5eRules.averageHitPointsForHitDie(
+      hitDie: hitDie,
+      level: level,
+      constitution: constitution,
+    );
   }
+}
+
+String _resourceRecovery(Object? value) {
+  return switch (value) {
+    'shortRest' || 'shortRestOne' || 'longRest' || 'none' => '$value',
+    _ => 'longRest',
+  };
 }
 
 extension<T> on Iterable<T> {

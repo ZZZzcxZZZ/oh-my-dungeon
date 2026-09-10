@@ -141,6 +141,7 @@ class QuickBuildService {
                 'id': resource.id,
                 'name': resource.name,
                 'maximum': resource.maximum,
+                'recovery': resource.recovery,
               },
           ],
           'runtime': {
@@ -153,35 +154,52 @@ class QuickBuildService {
     );
   }
 
+  /// 快速创建的属性预设：按 2024 核心表的主属性给出"施法属性/主战属性 16"的
+  /// 可用数组。未识别的职业回退到力量型默认值。
   static Map<String, Object?> _abilities(String className) {
     final normalized = className.toLowerCase();
-    if (normalized.contains('法师') || normalized.contains('wizard')) {
-      return {'str': 8, 'dex': 14, 'con': 14, 'int': 16, 'wis': 12, 'cha': 10};
+    for (final preset in _classAbilityPresets.entries) {
+      if (normalized.contains(preset.key)) return preset.value;
     }
-    if (normalized.contains('游荡者') || normalized.contains('rogue')) {
-      return {'str': 8, 'dex': 16, 'con': 14, 'int': 12, 'wis': 10, 'cha': 14};
-    }
-    if (normalized.contains('牧师') || normalized.contains('cleric')) {
-      return {'str': 10, 'dex': 12, 'con': 14, 'int': 8, 'wis': 16, 'cha': 14};
-    }
-    return {'str': 16, 'dex': 14, 'con': 14, 'int': 10, 'wis': 12, 'cha': 8};
+    return _defaultAbilities;
   }
+
+  static const _defaultAbilities = <String, Object?>{
+    'str': 16,
+    'dex': 14,
+    'con': 14,
+    'int': 10,
+    'wis': 12,
+    'cha': 8,
+  };
+
+  static const _classAbilityPresets = <String, Map<String, Object?>>{
+    '法师': {'str': 8, 'dex': 14, 'con': 14, 'int': 16, 'wis': 12, 'cha': 10},
+    'wizard': {'str': 8, 'dex': 14, 'con': 14, 'int': 16, 'wis': 12, 'cha': 10},
+    '游荡者': {'str': 8, 'dex': 16, 'con': 14, 'int': 12, 'wis': 10, 'cha': 14},
+    'rogue': {'str': 8, 'dex': 16, 'con': 14, 'int': 12, 'wis': 10, 'cha': 14},
+    '牧师': {'str': 10, 'dex': 12, 'con': 14, 'int': 8, 'wis': 16, 'cha': 14},
+    'cleric': {'str': 10, 'dex': 12, 'con': 14, 'int': 8, 'wis': 16, 'cha': 14},
+    '吟游诗人': {'str': 8, 'dex': 14, 'con': 14, 'int': 10, 'wis': 10, 'cha': 16},
+    'bard': {'str': 8, 'dex': 14, 'con': 14, 'int': 10, 'wis': 10, 'cha': 16},
+    '德鲁伊': {'str': 10, 'dex': 14, 'con': 14, 'int': 10, 'wis': 16, 'cha': 8},
+    'druid': {'str': 10, 'dex': 14, 'con': 14, 'int': 10, 'wis': 16, 'cha': 8},
+    '武僧': {'str': 10, 'dex': 16, 'con': 14, 'int': 8, 'wis': 16, 'cha': 8},
+    'monk': {'str': 10, 'dex': 16, 'con': 14, 'int': 8, 'wis': 16, 'cha': 8},
+    '圣武士': {'str': 16, 'dex': 8, 'con': 14, 'int': 10, 'wis': 10, 'cha': 16},
+    'paladin': {'str': 16, 'dex': 8, 'con': 14, 'int': 10, 'wis': 10, 'cha': 16},
+    '游侠': {'str': 12, 'dex': 16, 'con': 14, 'int': 10, 'wis': 14, 'cha': 8},
+    'ranger': {'str': 12, 'dex': 16, 'con': 14, 'int': 10, 'wis': 14, 'cha': 8},
+    '术士': {'str': 8, 'dex': 14, 'con': 14, 'int': 10, 'wis': 10, 'cha': 16},
+    'sorcerer': {'str': 8, 'dex': 14, 'con': 14, 'int': 10, 'wis': 10, 'cha': 16},
+    '邪术师': {'str': 8, 'dex': 14, 'con': 14, 'int': 10, 'wis': 10, 'cha': 16},
+    'warlock': {'str': 8, 'dex': 14, 'con': 14, 'int': 10, 'wis': 10, 'cha': 16},
+  };
 
   static Map<String, bool> _saves(String className) {
     final saves = {for (final key in Dnd5eRules.abilityLabels.keys) key: false};
-    final normalized = className.toLowerCase();
-    if (normalized.contains('法师') || normalized.contains('wizard')) {
-      saves['int'] = true;
-      saves['wis'] = true;
-    } else if (normalized.contains('游荡者') || normalized.contains('rogue')) {
-      saves['dex'] = true;
-      saves['int'] = true;
-    } else if (normalized.contains('牧师') || normalized.contains('cleric')) {
-      saves['wis'] = true;
-      saves['cha'] = true;
-    } else {
-      saves['str'] = true;
-      saves['con'] = true;
+    for (final ability in Dnd5eRules.classSavingThrows(className)) {
+      if (saves.containsKey(ability)) saves[ability] = true;
     }
     return saves;
   }
@@ -206,7 +224,8 @@ class QuickBuildService {
       skills['奥秘'] = true;
       skills['历史'] = true;
     } else if (normalized.contains('罪犯') || normalized.contains('criminal')) {
-      skills['欺瞒'] = true;
+      // 2024 罪犯背景：巧手 + 隐匿（2014 才是欺瞒 + 隐匿）。
+      skills['巧手'] = true;
       skills['隐匿'] = true;
     } else if (normalized.contains('侍祭') ||
         normalized.contains('侍僧') ||

@@ -104,8 +104,9 @@ void main() {
       });
     }
 
-    // 半施法者（圣武士/游侠）：等级 2 起，等效等级 = ceil(level/2)
+    // 半施法者（圣武士/游侠）：2024 起 1 级即有法术位，等效等级 = ceil(level/2)
     const halfCaster = {
+      1: {1: 2},
       2: {1: 2},
       3: {1: 3},
       4: {1: 3},
@@ -304,6 +305,382 @@ void main() {
       // 全 1 → 3
       final minimum = AbilityScoreGenerator.rollOne(nextInt: (_) => 0);
       expect(minimum, 3);
+    });
+  });
+
+  group('伤害与治疗结算（2024）', () {
+    Dnd5eHitPoints apply({
+      required int current,
+      required int temporary,
+      required int delta,
+      int maximum = 30,
+    }) {
+      return Dnd5eRules.applyHitPointDelta(
+        current: current,
+        maximum: maximum,
+        temporary: temporary,
+        delta: delta,
+      );
+    }
+
+    test('临时生命值足够时完全吸收伤害', () {
+      final result = apply(current: 20, temporary: 10, delta: -6);
+      expect(result.current, 20);
+      expect(result.temporary, 4);
+    });
+
+    test('溢出伤害扣除当前生命值', () {
+      final result = apply(current: 20, temporary: 4, delta: -10);
+      expect(result.current, 14);
+      expect(result.temporary, 0);
+    });
+
+    test('临时生命值恰好吸收全部伤害', () {
+      final result = apply(current: 20, temporary: 10, delta: -10);
+      expect(result.current, 20);
+      expect(result.temporary, 0);
+    });
+
+    test('当前生命值不会低于 0（转入死亡豁免）', () {
+      final result = apply(current: 3, temporary: 0, delta: -30);
+      expect(result.current, 0);
+      expect(result.temporary, 0);
+    });
+
+    test('治疗不超过上限且不改变临时生命值', () {
+      final result = apply(current: 25, temporary: 7, delta: 20);
+      expect(result.current, 30);
+      expect(result.temporary, 7);
+    });
+
+    test('负临时生命值按 0 处理', () {
+      final result = apply(current: 10, temporary: -5, delta: -3);
+      expect(result.current, 7);
+      expect(result.temporary, 0);
+    });
+  });
+
+  group('职业生命骰（2024 官方核心表）', () {
+    // SRD 5.2 各职业 Core Traits：Hit Point Die
+    const hitDice = {
+      '野蛮人': 12,
+      '战士': 10,
+      '圣武士': 10,
+      '游侠': 10,
+      '吟游诗人': 8,
+      '牧师': 8,
+      '德鲁伊': 8,
+      '武僧': 8,
+      '游荡者': 8,
+      '邪术师': 8,
+      '术士': 6,
+      '法师': 6,
+    };
+
+    test('中英文职业名解析出正确生命骰', () {
+      hitDice.forEach((name, die) {
+        expect(Dnd5eRules.hitDie(name), die, reason: '$name 生命骰');
+      });
+      expect(Dnd5eRules.hitDie('Warlock'), 8, reason: '邪术师是 d8，不是 d6');
+      expect(Dnd5eRules.hitDie('Sorcerer'), 6);
+      expect(Dnd5eRules.hitDie('Wizard'), 6);
+      expect(Dnd5eRules.hitDie('Barbarian'), 12);
+    });
+
+    test('1 级生命值 = 生命骰满骰 + 体质调整值', () {
+      const abilities = {'con': 14};
+      hitDice.forEach((name, die) {
+        expect(
+          Dnd5eRules.averageHitPoints(
+            className: name,
+            level: 1,
+            abilities: abilities,
+          ),
+          die + 2,
+          reason: name,
+        );
+      });
+    });
+
+    test('邪术师 5 级生命值（d8 平均 + CON）', () {
+      const abilities = {'con': 14};
+      // 1 级 8+2=10；后续每级 5+2=7 → 10 + 4*7 = 38
+      expect(
+        Dnd5eRules.averageHitPoints(
+          className: '邪术师',
+          level: 5,
+          abilities: abilities,
+        ),
+        38,
+      );
+    });
+
+    test('生命骰直算接口与职业接口一致', () {
+      expect(
+        Dnd5eRules.averageHitPointsForHitDie(
+          hitDie: 10,
+          level: 3,
+          constitution: 14,
+        ),
+        Dnd5eRules.averageHitPoints(
+          className: '战士',
+          level: 3,
+          abilities: const {'con': 14},
+        ),
+      );
+    });
+  });
+
+  group('准备法术上限（2024 逐级表，不再叠加属性调整值）', () {
+    // SRD 5.2 各类 "Prepared Spells" 列（1..20 级）
+    const clericLike = [
+      4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22,
+    ];
+    const sorcerer = [
+      2, 4, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22,
+    ];
+    const wizard = [
+      4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 18, 19, 21, 22, 23, 24, 25,
+    ];
+    const halfCaster = [
+      2, 3, 4, 5, 6, 6, 7, 7, 9, 9, 10, 10, 11, 11, 12, 12, 14, 14, 15, 15,
+    ];
+    const warlock = [
+      2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15,
+    ];
+
+    void expectTable(String className, List<int> table) {
+      for (var level = 1; level <= 20; level++) {
+        expect(
+          Dnd5eRules.preparedSpellMaximums(
+            classSummary: className,
+            level: level,
+          ),
+          table[level - 1],
+          reason: '$className $level 级准备法术上限',
+        );
+      }
+    }
+
+    test('牧师/德鲁伊/吟游诗人共用 4,5,6,7,9... 表', () {
+      for (final className in ['牧师', '德鲁伊', '吟游诗人']) {
+        expectTable(className, clericLike);
+      }
+    });
+
+    test('术士 1 级 2 个、法师 1 级 4 个', () {
+      expectTable('术士', sorcerer);
+      expectTable('法师', wizard);
+    });
+
+    test('圣武士/游侠 1 级 2 个', () {
+      for (final className in ['圣武士', '游侠']) {
+        expectTable(className, halfCaster);
+      }
+    });
+
+    test('邪术师 1 级 2 个、20 级 15 个', () {
+      expectTable('邪术师', warlock);
+    });
+
+    test('英文职业名同样解析', () {
+      expect(
+        Dnd5eRules.preparedSpellMaximums(classSummary: 'Wizard', level: 5),
+        9,
+      );
+      expect(
+        Dnd5eRules.preparedSpellMaximums(classSummary: 'Cleric', level: 1),
+        4,
+      );
+      expect(
+        Dnd5eRules.preparedSpellMaximums(classSummary: 'Warlock', level: 1),
+        2,
+      );
+    });
+
+    test('非施法者没有准备法术上限', () {
+      for (final className in ['战士', '野蛮人', '武僧', '游荡者']) {
+        expect(
+          Dnd5eRules.preparedSpellMaximums(classSummary: className, level: 10),
+          isNull,
+          reason: className,
+        );
+      }
+    });
+
+    test('上限与属性无关（2024 取消“调整值 + 等级”）', () {
+      // 旧公式：智力 20（+5）+ 5 级 = 10；2024 官方表为 9
+      expect(
+        Dnd5eRules.preparedSpellMaximums(classSummary: '法师', level: 5),
+        9,
+      );
+      expect(
+        Dnd5eRules.preparedSpellMaximums(classSummary: '法师', level: 20),
+        25,
+      );
+    });
+  });
+
+  group('1/3 施法者（奥法骑士 / 诡术师）', () {
+    test('3 级起获得法术位，等效等级 = ceil(level/3)', () {
+      expect(
+        Dnd5eRules.spellSlotMaximums(classSummary: '战士（奥法骑士）', level: 2),
+        isEmpty,
+        reason: '3 级前没有法术位',
+      );
+      const expected = {
+        3: {'1': 2},
+        4: {'1': 3},
+        6: {'1': 3},
+        7: {'1': 4, '2': 2},
+        10: {'1': 4, '2': 3},
+        13: {'1': 4, '2': 3, '3': 2},
+        16: {'1': 4, '2': 3, '3': 3},
+        19: {'1': 4, '2': 3, '3': 3, '4': 1},
+        20: {'1': 4, '2': 3, '3': 3, '4': 1},
+      };
+      expected.forEach((level, table) {
+        expect(
+          Dnd5eRules.spellSlotMaximums(
+            classSummary: '战士（奥法骑士）',
+            level: level,
+          ),
+          table,
+          reason: '奥法骑士 $level 级',
+        );
+        expect(
+          Dnd5eRules.spellSlotMaximums(
+            classSummary: '游荡者（诡术师）',
+            level: level,
+          ),
+          table,
+          reason: '诡术师 $level 级',
+        );
+      });
+    });
+
+    test('施法属性为智力', () {
+      expect(Dnd5eRules.spellcastingAbility('战士（奥法骑士）'), 'int');
+      expect(Dnd5eRules.spellcastingAbility('Eldritch Knight'), 'int');
+      expect(Dnd5eRules.spellcastingAbility('游荡者（诡术师）'), 'int');
+      expect(Dnd5eRules.spellcastingAbility('Arcane Trickster'), 'int');
+    });
+
+    test('纯战士 / 纯游荡者仍然没有法术位', () {
+      for (final className in ['战士', '游荡者', 'Fighter', 'Rogue']) {
+        expect(
+          Dnd5eRules.spellSlotMaximums(classSummary: className, level: 10),
+          isEmpty,
+          reason: className,
+        );
+      }
+    });
+  });
+
+  group('职业豁免熟练（2024 官方核心表）', () {
+    const savingThrows = {
+      '野蛮人': {'str', 'con'},
+      '吟游诗人': {'dex', 'cha'},
+      '牧师': {'wis', 'cha'},
+      '德鲁伊': {'int', 'wis'},
+      '战士': {'str', 'con'},
+      '武僧': {'dex', 'wis'},
+      '圣武士': {'wis', 'cha'},
+      '游侠': {'dex', 'str'},
+      '游荡者': {'dex', 'int'},
+      '术士': {'con', 'cha'},
+      '邪术师': {'wis', 'cha'},
+      '法师': {'int', 'wis'},
+    };
+
+    test('12 个职业的豁免熟练', () {
+      savingThrows.forEach((name, expected) {
+        expect(
+          Dnd5eRules.classSavingThrows(name),
+          expected,
+          reason: '$name 豁免熟练',
+        );
+      });
+    });
+
+    test('英文职业名同样解析', () {
+      expect(Dnd5eRules.classSavingThrows('Rogue'), {'dex', 'int'});
+      expect(Dnd5eRules.classSavingThrows('Warlock'), {'wis', 'cha'});
+      expect(Dnd5eRules.classSavingThrows('Sorcerer'), {'con', 'cha'});
+    });
+
+    test('未知职业返回空集合（不猜测）', () {
+      expect(Dnd5eRules.classSavingThrows('自定义职业'), isEmpty);
+    });
+  });
+
+  group('职业资源恢复（2024 休息语义）', () {
+    Dnd5eClassResource resource(String id, String recovery, {int maximum = 3}) =>
+        Dnd5eClassResource(
+          id: id,
+          name: id,
+          maximum: maximum,
+          recovery: recovery,
+        );
+
+    test('短休：shortRest 清空、shortRestOne 只回 1 次、longRest 不变', () {
+      final resources = [
+        resource('a', 'shortRest'),
+        resource('b', 'shortRestOne'),
+        resource('c', 'longRest'),
+      ];
+      expect(
+        Dnd5eRules.classResourcesAfterRest(
+          resources: resources,
+          used: const {'a': 2, 'b': 3, 'c': 2},
+          longRest: false,
+        ),
+        {'a': 0, 'b': 2, 'c': 2},
+      );
+    });
+
+    test('长休：除 none 外全部清空', () {
+      final resources = [
+        resource('a', 'shortRest'),
+        resource('b', 'shortRestOne'),
+        resource('c', 'longRest'),
+        resource('d', 'none', maximum: 2),
+      ];
+      expect(
+        Dnd5eRules.classResourcesAfterRest(
+          resources: resources,
+          used: const {'a': 2, 'b': 1, 'c': 3, 'd': 1},
+          longRest: true,
+        ),
+        {'a': 0, 'b': 0, 'c': 0, 'd': 1},
+      );
+    });
+
+    test('已用次数会被夹到 0..上限', () {
+      final resources = [resource('a', 'longRest', maximum: 2)];
+      expect(
+        Dnd5eRules.classResourcesAfterRest(
+          resources: resources,
+          used: const {'a': 9},
+          longRest: false,
+        ),
+        {'a': 2},
+      );
+    });
+
+    test('野蛮人狂暴 / 战士第二气息短休恢复 1 次；动作如潮短休全部恢复', () {
+      expect(
+        Dnd5eRules.classResources(classSummary: '野蛮人', level: 3).single.recovery,
+        'shortRestOne',
+      );
+      final fighter = Dnd5eRules.classResources(classSummary: '战士', level: 2);
+      expect(
+        {
+          for (final item in fighter) item.id: item.recovery,
+        },
+        {'second_wind': 'shortRestOne', 'action_surge': 'shortRest'},
+        reason: '2024：第二气息短休只回 1 次，动作如潮短休全恢复',
+      );
     });
   });
 }

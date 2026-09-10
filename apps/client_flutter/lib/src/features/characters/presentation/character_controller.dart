@@ -7,6 +7,7 @@ import '../data/character_repository.dart';
 import '../domain/character.dart';
 import '../domain/character_document.dart';
 import '../domain/character_edit_draft.dart';
+import '../domain/dnd5e_rules.dart';
 
 class CharacterController extends ChangeNotifier {
   CharacterController({
@@ -155,16 +156,27 @@ class CharacterController extends ChangeNotifier {
     }
 
     final document = _documentFor(character);
-    final nextCurrent = (current ?? document.hitPoints.current + (delta ?? 0))
-        .clamp(0, document.hitPoints.maximum);
+    final hitPoints = document.hitPoints;
+    var nextCurrent = hitPoints.current;
+    var nextTemporary = (temporary ?? hitPoints.temporary).clamp(0, 1 << 31);
+    if (current != null) {
+      nextCurrent = current.clamp(0, hitPoints.maximum);
+    } else if (delta != null) {
+      // 2024：伤害先扣临时生命值，溢出才扣当前生命值；治疗不改临时生命值。
+      final settled = Dnd5eRules.applyHitPointDelta(
+        current: hitPoints.current,
+        maximum: hitPoints.maximum,
+        temporary: nextTemporary,
+        delta: delta,
+      );
+      nextCurrent = settled.current;
+      nextTemporary = settled.temporary;
+    }
     final next = CharacterDocument(
       hitPoints: CharacterHitPoints(
         current: nextCurrent,
-        maximum: document.hitPoints.maximum,
-        temporary: (temporary ?? document.hitPoints.temporary).clamp(
-          0,
-          1 << 31,
-        ),
+        maximum: hitPoints.maximum,
+        temporary: nextTemporary.clamp(0, 1 << 31),
       ),
       deathSaves: document.deathSaves,
       resources: document.resources,

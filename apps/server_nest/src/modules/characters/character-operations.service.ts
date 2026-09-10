@@ -12,6 +12,7 @@ import { GameEventsService } from '../game-events/game-events.service';
 import { CharacterStateStore } from './character-state.store';
 import {
   CharacterState,
+  applyHitPointDelta,
   parseCharacterState,
   serializeCharacterState,
 } from './domain/character-state';
@@ -82,17 +83,25 @@ export class CharacterOperationsService {
           current: state.hitPoints.current,
           temporary: state.hitPoints.temporary,
         };
-        const current = Math.min(
-          state.hitPoints.maximum,
-          Math.max(
-            0,
-            input.current ?? state.hitPoints.current + (input.delta ?? 0),
-          ),
-        );
-        const temporary =
-          input.temporary === undefined
-            ? state.hitPoints.temporary
-            : Math.max(0, input.temporary);
+        // 2024：伤害先扣临时生命值，溢出才扣当前生命值；
+        // 治疗提高当前生命值但不超过上限，且不改变临时生命值。
+        const base = {
+          current: state.hitPoints.current,
+          maximum: state.hitPoints.maximum,
+          temporary:
+            input.temporary === undefined
+              ? state.hitPoints.temporary
+              : Math.max(0, input.temporary),
+        };
+        const settled =
+          input.current === undefined
+            ? applyHitPointDelta(base, input.delta ?? 0)
+            : {
+                ...base,
+                current: Math.min(base.maximum, Math.max(0, input.current)),
+              };
+        const current = settled.current;
+        const temporary = settled.temporary;
         const next = parseCharacterState({
           ...serializeCharacterState(state),
           hitPoints: {

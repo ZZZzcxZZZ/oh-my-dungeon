@@ -637,11 +637,13 @@ void main() {
 
     await tester.tap(find.byKey(const Key('runtime-hp-panel')));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const Key('hp-quick-value-field')), '1');
+    await tester.enterText(find.byKey(const Key('hp-quick-value-field')), '6');
     await tester.tap(find.widgetWithText(FilledButton, '受到伤害'));
     await tester.pumpAndSettle();
+    // 2024：5 点临时 HP 先吸收，溢出的 1 点才扣当前 HP。
     expect(find.text('当前 HP 23/24'), findsOneWidget);
     expect(updates.last['currentHp'], 23);
+    expect(updates.last['temporaryHp'], 0);
 
     await tester.tap(find.byKey(const Key('runtime-hp-panel')));
     await tester.pumpAndSettle();
@@ -701,12 +703,14 @@ void main() {
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const Key('hp-quick-value-field')),
-        '7',
+        '12',
       );
       await tester.tap(find.widgetWithText(FilledButton, '受到伤害'));
       await tester.pumpAndSettle();
+      // 2024：临时 HP 5 先吸收，剩余 7 点扣当前 HP（24 → 17）。
       expect(find.text('当前 HP 17/24'), findsOneWidget);
       expect(updates.last['currentHp'], 17);
+      expect(updates.last['temporaryHp'], 0);
 
       await tester.tap(find.byKey(const Key('runtime-hp-panel')));
       await tester.pumpAndSettle();

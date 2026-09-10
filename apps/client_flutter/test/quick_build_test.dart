@@ -124,12 +124,112 @@ void main() {
       final draft = QuickBuildService.build(selection);
 
       expect(draft.data['classResources'], [
-        {'id': 'second_wind', 'name': '第二气息', 'maximum': 2},
-        {'id': 'action_surge', 'name': '动作如潮', 'maximum': 1},
+        {
+          'id': 'second_wind',
+          'name': '第二气息',
+          'maximum': 2,
+          'recovery': 'shortRestOne',
+        },
+        {
+          'id': 'action_surge',
+          'name': '动作如潮',
+          'maximum': 1,
+          'recovery': 'shortRest',
+        },
       ]);
       expect(draft.data['runtime'], {
         'classResourcesUsed': {'second_wind': 0, 'action_surge': 0},
       });
+    });
+
+    test('preserves rest recovery semantics for every class resource', () {
+      const barbarian = QuickBuildSelection(
+        name: 'Brun',
+        className: '野蛮人',
+        species: '半兽人',
+        background: '士兵',
+        level: 3,
+      );
+
+      final draft = QuickBuildService.build(barbarian);
+
+      // 2024：狂暴短休恢复 1 次
+      expect(draft.data['classResources'], [
+        {
+          'id': 'rage',
+          'name': '狂暴',
+          'maximum': 3,
+          'recovery': 'shortRestOne',
+        },
+      ]);
+    });
+
+    test('uses the official 2024 saving throw proficiencies', () {
+      const expectations = {
+        '野蛮人': ['str', 'con'],
+        '吟游诗人': ['dex', 'cha'],
+        '牧师': ['wis', 'cha'],
+        '德鲁伊': ['int', 'wis'],
+        '战士': ['str', 'con'],
+        '武僧': ['dex', 'wis'],
+        '圣武士': ['wis', 'cha'],
+        '游侠': ['dex', 'str'],
+        '游荡者': ['dex', 'int'],
+        '术士': ['con', 'cha'],
+        '邪术师': ['wis', 'cha'],
+        '法师': ['int', 'wis'],
+      };
+
+      expectations.forEach((className, expected) {
+        final draft = QuickBuildService.build(
+          QuickBuildSelection(
+            name: 'Test',
+            className: className,
+            species: '人类',
+            background: '士兵',
+            level: 1,
+          ),
+        );
+        for (final ability in const ['str', 'dex', 'con', 'int', 'wis', 'cha']) {
+          expect(
+            draft.saves[ability],
+            expected.contains(ability),
+            reason: '$className 的 $ability 豁免',
+          );
+        }
+      });
+    });
+
+    test('uses 2024 background skill proficiencies', () {
+      final draft = QuickBuildService.build(
+        const QuickBuildSelection(
+          name: 'Vex',
+          className: '游荡者',
+          species: '人类',
+          background: '罪犯',
+          level: 1,
+        ),
+      );
+
+      // 2024 罪犯背景：巧手 + 隐匿（2014 为欺瞒 + 隐匿）
+      expect(draft.skills['巧手'], isTrue);
+      expect(draft.skills['隐匿'], isTrue);
+      expect(draft.skills['欺瞒'], isFalse);
+    });
+
+    test('barbarian hit points use the d12 hit die', () {
+      final draft = QuickBuildService.build(
+        const QuickBuildSelection(
+          name: 'Brun',
+          className: '野蛮人',
+          species: '半兽人',
+          background: '士兵',
+          level: 1,
+        ),
+      );
+
+      // 预设力量型属性 CON 14 → 12 + 2
+      expect(draft.maxHp, 14);
     });
 
     test(

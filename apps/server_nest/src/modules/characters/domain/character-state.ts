@@ -68,6 +68,29 @@ export function parseCharacterState(value: unknown): CharacterState {
   };
 }
 
+/**
+ * D&D 2024 生命值结算：伤害先扣临时生命值，溢出部分才扣当前生命值（最低 0）；
+ * 治疗只提高当前生命值且不超过上限，不改变临时生命值。
+ */
+export function applyHitPointDelta(
+  hitPoints: HitPoints,
+  delta: number,
+): HitPoints {
+  const maximum = Math.max(0, hitPoints.maximum);
+  const temporary = Math.max(0, hitPoints.temporary);
+  const current = clamp(hitPoints.current, 0, maximum);
+  if (delta >= 0) {
+    return { current: clamp(current + delta, 0, maximum), maximum, temporary };
+  }
+  const damage = -delta;
+  const absorbed = Math.min(temporary, damage);
+  return {
+    current: clamp(current - (damage - absorbed), 0, maximum),
+    maximum,
+    temporary: temporary - absorbed,
+  };
+}
+
 export function serializeCharacterState(
   state: CharacterState,
 ): Record<string, unknown> {

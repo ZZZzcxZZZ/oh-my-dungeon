@@ -80,13 +80,15 @@ abstract final class StructuredClassRules {
     );
   }
 
-  /// 准备法术数量上限。D&D 2024 prepared 模型（牧师/德鲁伊/法师/圣武士/
-  /// 游侠）= 施法属性调整值 + 职业等级，最低 1。返回 null 表示该职业不使用
-  /// prepared 模型（如术士/邪术师使用 spellsKnown，由其它路径处理）。
+  /// 准备法术数量上限。D&D 2024 prepared 模型：
+  /// 1. 内容包若显式提供 `structured.preparedSpells`（等级 → 数量），以它为准；
+  /// 2. 否则使用 [Dnd5eRules.preparedSpellMaximums] 的官方逐级表（按职业）；
+  /// 3. 非核心/自制职业回退到"施法属性调整值 + 职业等级"（最低 1）。
+  ///
+  /// 返回 null 表示该职业不使用 prepared 模型（如内容包未声明
+  /// `structured.preparedSpellcasting: true`）。
   ///
   /// 输入 [abilities] 是角色六维属性值，[level] 是职业等级。
-  /// 决策依据：class entry 的 `structured.spellcastingAbility` 与
-  /// `structured.preparedSpellcasting` 两个字段同时存在且后者为 true。
   static int? preparedSpellLimit(
     ContentEntry? entry, {
     required Map<String, int> abilities,
@@ -96,13 +98,58 @@ abstract final class StructuredClassRules {
     if (structured == null) return null;
     final isPrepared = structured['preparedSpellcasting'];
     if (isPrepared is! bool || !isPrepared) return null;
-    final ability = structured['spellcastingAbility'];
-    final abilityKey = _abilityKey('$ability');
+
+    final explicit = _explicitPreparedTable(structured['preparedSpells']);
+    if (explicit != null) {
+      return explicit[level.clamp(1, 20) - 1];
+    }
+
+    final official = Dnd5eRules.preparedSpellMaximums(
+      classSummary: entry?.name ?? '',
+      level: level,
+    );
+    if (official != null) return official;
+
+    final abilityKey = _abilityKey('${structured['spellcastingAbility']}');
     if (abilityKey == null) return null;
     final score = abilities[abilityKey] ?? 10;
     final modifier = Dnd5eRules.abilityModifier(score);
     final total = modifier + level;
     return total < 1 ? 1 : total;
+  }
+
+  /// 解析内容包显式给出的逐级准备法术表，支持两种写法：
+  /// - `{'1': 6, '5': 12}`：按"不超过当前等级的最大档位"取值；
+  /// - `[4, 5, 6, ...]`：按等级顺序取值（长度不足 20 时沿用最后一档）。
+  static List<int>? _explicitPreparedTable(Object? raw) {
+    final byLevel = <int, int>{};
+    if (raw is Map) {
+      for (final entry in raw.entries) {
+        final level = int.tryParse('${entry.key}');
+        final value = entry.value is num
+            ? (entry.value as num).toInt()
+            : int.tryParse('${entry.value}');
+        if (level != null && level >= 1 && value != null && value >= 0) {
+          byLevel[level] = value;
+        }
+      }
+    } else if (raw is List) {
+      for (var index = 0; index < raw.length; index++) {
+        final item = raw[index];
+        final value = item is num ? item.toInt() : int.tryParse('$item');
+        if (value != null && value >= 0) byLevel[index + 1] = value;
+      }
+    }
+    if (byLevel.isEmpty) return null;
+
+    final levels = byLevel.keys.toList()..sort();
+    var current = byLevel[levels.first]!;
+    final table = <int>[];
+    for (var level = 1; level <= 20; level++) {
+      current = byLevel[level] ?? current;
+      table.add(current);
+    }
+    return table;
   }
 
   /// 职业初始装备自由挑选上限。null 表示该职业未声明自由挑选模式。

@@ -449,6 +449,29 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 
 ---
 
+### 3.11 作者试写发现（2026-09-10，用 `samples/homebrew-astral-knight/` 试写一个 26 条的职业包）
+
+试写暴露了 6 处契约缺口与 1 处方便性改进点。**A 类已按本节定稿，B 类需用户拍板。**
+
+**A 类：只是"形状没写清"，直接补进契约（无需决策）**
+
+| # | 缺口 | 补法 |
+|---|---|---|
+| A1 | 内联特性/内联选项的**描述文字**没有字段 | 约定 `data.description`（字符串），界面在特性/选项行下方以小字展示；`RuleGrantDefinition.data` 保持自由字典 |
+| A2 | **装备方案 A/B 的条目结构未定义** | `equipmentBundle` 条目的 `structured.items` = `[{name, quantity}]`，`structured.currency` = `{cp,sp,ep,gp,pp}`；选中后按此写入 `inventory` 与 `currency`，并忽略 `structured.itemTemplate` |
+| A3 | **`countsToward: null`（不占上限）与现有"已准备"存储的关系未定义** | `countsToward` 只决定**是否计入数量上限**；无论取值如何，选中的法术都写入 `manualOverrides.spells.preparedEntryIds`（`null` 时额外记 `alwaysPreparedEntryIds`，仅用于展示"始终准备"标记） |
+| A4 | **`requires` 的 `choice` 引用作用域未定义** | 可引用"同一 `sourceEntryId`"，或沿 `relations` 的 `featureOf` / `subclassOf` 链向上找到的祖先条目；导入期按该链校验引用存在性 |
+
+**B 类：需要用户拍板的三处**
+
+| # | 缺口 | 现状 | 影响 |
+|---|---|---|---|
+| B1 | **包格式版本无法区分新旧契约** | 导入器只接受 `formatVersion` 1 或 2（`formatVersion must be 1 or 2`），所以新契约包必须写 2，与旧包同版；旧包会得到一堆 entry 级 `unknownField` error，作者很难判断"我该重新提取" | 建议新契约用 **3**，并把 `2` 直接判为"旧契约，请用新版提取器重新提取"；`1` 保持只读兼容 |
+| B2 | **自制职业的 slug 会静默继承内置数值**（危险） | 若把 slug 误写成 `fighter`，该职业会**静默拿到战士的生命骰/豁免/资源**，作者完全看不出 | 建议：slug 命中 12 个内置 slug 且**未声明** `classRules` 时给 warning（"你在继承内置职业 X 的数值"）；显式声明 `classRules` 时视为有意覆盖，不提示 |
+| B3 | **重复声明的书写量** | 4/8/12/16 级的"属性提升"要写 4 遍 `grants`（试写时确实写了 4 份） | 建议加语法糖 `{"levels": [4, 8, 12, 16], "grants": [...]}`，等价于为每个等级生成一份；与现有 `level` 二选一 |
+
+---
+
 ## 4. 组件设计
 
 ### 4.1 新增

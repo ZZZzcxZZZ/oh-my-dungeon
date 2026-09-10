@@ -148,7 +148,7 @@ class _AuthPageState extends State<AuthPage> {
                 if (controller.error != null) ...[
                   Text(
                     controller.error!,
-                    style: TextStyle(
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(context).colorScheme.error,
                     ),
                   ),

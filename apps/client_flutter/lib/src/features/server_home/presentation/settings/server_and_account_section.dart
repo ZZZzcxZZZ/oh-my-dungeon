@@ -153,8 +153,12 @@ class _ServerAndAccountSectionState extends State<ServerAndAccountSection> {
                       ),
                       title: Text(p.name),
                       subtitle: Text(p.baseUrl),
-                      enabled: p.id != profile.id,
-                      onTap: () => widget.onSwitchToProfile?.call(p),
+                      // 选中项高亮而非禁用置灰，点击选中项不产生操作。
+                      selected: p.id == profile.id,
+                      enabled: true,
+                      onTap: p.id == profile.id
+                          ? null
+                          : () => widget.onSwitchToProfile?.call(p),
                     ),
                 ],
                 if (widget.serverProfilesPageBuilder != null)

@@ -1,0 +1,7 @@
+# golden 用例通过 `--tags golden` 选择运行；默认跳过由测试内的
+# GOLDEN_TESTS dart-define 门控（见 test/golden/ui_golden_test.dart）。
+#
+# 生成/更新基线（需在 CI 平台 Linux 上执行一次）：
+#   flutter test --tags golden --dart-define=GOLDEN_TESTS=true --update-goldens
+tags:
+  golden:

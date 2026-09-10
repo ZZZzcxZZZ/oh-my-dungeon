@@ -7,6 +7,7 @@ import 'content_type_registry.dart';
 import 'widgets/content_class_feature_list.dart';
 import 'widgets/content_character_rules_view.dart';
 import 'widgets/content_entry_reader.dart';
+import '../../../core/widgets/empty_state.dart';
 
 class ContentDetailPage extends StatefulWidget {
   const ContentDetailPage({
@@ -149,31 +150,15 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final entryKey = widget.entryKey;
 
     if (entryKey == null) {
       return Scaffold(
         appBar: AppBar(leading: _appBarLeading(), title: const Text('资料库')),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.menu_book_outlined,
-                  size: 48,
-                  color: colorScheme.outline,
-                ),
-                const SizedBox(height: 12),
-                Text('选择一个条目', style: theme.textTheme.titleMedium),
-                const SizedBox(height: 4),
-                Text('在此查看规则、关联条目与职业特性。', style: theme.textTheme.bodySmall),
-              ],
-            ),
-          ),
+        body: EmptyState(
+          icon: Icons.menu_book_outlined,
+          title: '选择一个条目',
+          message: '在此查看规则、关联条目与职业特性。',
         ),
       );
     }
@@ -189,18 +174,9 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     if (entry == null) {
       return Scaffold(
         appBar: AppBar(leading: _appBarLeading(), title: const Text('资料库')),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.error_outline, size: 48, color: colorScheme.outline),
-                const SizedBox(height: 12),
-                Text('条目不存在', style: theme.textTheme.titleMedium),
-              ],
-            ),
-          ),
+        body: const EmptyState(
+          icon: Icons.error_outline,
+          title: '条目不存在',
         ),
       );
     }
@@ -222,13 +198,13 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
       ),
       body: SingleChildScrollView(
         key: PageStorageKey<String>('content-detail-${entry.id}'),
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Wrap(
               spacing: 8,
-              runSpacing: 6,
+              runSpacing: 8,
               children: [
                 Chip(
                   avatar: Icon(definition.icon, size: 16),
@@ -300,7 +276,7 @@ class _ContentSubclassList extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         Text('子职业', style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
         for (final subclass in subclasses)

@@ -98,7 +98,7 @@ class CampaignChatToolSheet extends StatelessWidget {
           maxHeight: MediaQuery.sizeOf(context).height * 0.78,
         ),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -244,7 +244,7 @@ class _ToolButton extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(definition.icon, size: 24, color: colors.primary),
-              const SizedBox(height: 5),
+              const SizedBox(height: 4),
               Text(
                 definition.label,
                 maxLines: 1,

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../domain/content_block.dart';
+import '../../../../app/theme/app_text_styles.dart';
 
 class ContentBlockView extends StatelessWidget {
   const ContentBlockView({
@@ -93,7 +94,7 @@ class _ListView extends StatelessWidget {
       children: [
         for (var i = 0; i < items.length; i++)
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
+            padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -137,14 +138,15 @@ class _QuoteView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
       padding: const EdgeInsets.only(left: 12),
       decoration: BoxDecoration(
         border: Border(left: BorderSide(color: colorScheme.outline, width: 3)),
       ),
-      child: Text(text, style: const TextStyle(fontStyle: FontStyle.italic)),
+      child: Text(text, style: AppTextStyles.quote(theme.textTheme)),
     );
   }
 }
@@ -178,7 +180,7 @@ class _CalloutView extends StatelessWidget {
         color: backgroundColor,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(text, style: TextStyle(color: foregroundColor)),
+      child: Text(text, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: foregroundColor)),
     );
   }
 }
@@ -274,7 +276,7 @@ class _StatBlockView extends StatelessWidget {
         children: [
           for (final entry in fields.entries)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
+              padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -314,7 +316,7 @@ class _DiceExpressionView extends StatelessWidget {
             final expressionText = Text(
               expression,
               style: theme.textTheme.titleMedium?.copyWith(
-                fontFamily: 'monospace',
+                fontFamily: AppTextStyles.monoFamily,
               ),
             );
             final rollButton = FilledButton.tonal(

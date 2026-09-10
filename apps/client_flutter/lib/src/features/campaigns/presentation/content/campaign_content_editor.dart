@@ -89,7 +89,6 @@ class _CampaignContentEditorState extends State<CampaignContentEditor> {
               controller: _nameController,
               decoration: const InputDecoration(
                 labelText: '名称',
-                border: OutlineInputBorder(),
                 isDense: true,
               ),
             ),
@@ -98,7 +97,6 @@ class _CampaignContentEditorState extends State<CampaignContentEditor> {
               controller: _summaryController,
               decoration: const InputDecoration(
                 labelText: '摘要',
-                border: OutlineInputBorder(),
                 isDense: true,
               ),
               maxLines: 3,

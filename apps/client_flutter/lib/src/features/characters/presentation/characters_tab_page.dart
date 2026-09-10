@@ -29,6 +29,7 @@ import 'character_controller.dart';
 import 'character_editor_page.dart';
 import 'character_import_preview_sheet.dart';
 import 'character_upgrade_page.dart';
+import '../../../core/widgets/empty_state.dart';
 
 class CharactersTabPage extends StatefulWidget {
   const CharactersTabPage({
@@ -480,7 +481,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
           padding: const EdgeInsets.all(24),
           child: Text(
             widget.controller.error!,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.error),
             textAlign: TextAlign.center,
           ),
         ),
@@ -647,8 +648,8 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
                       ChoiceChip(
                         label: const Text('NPC'),
@@ -1105,7 +1106,7 @@ Future<ContentEntry?> _pickMonsterTemplate(
                 const SizedBox(height: 8),
                 Expanded(
                   child: filtered.isEmpty
-                      ? const Center(child: Text('没有匹配的怪物'))
+                      ? const EmptyState(icon: Icons.psychology_outlined, title: '没有匹配的怪物')
                       : ListView.builder(
                           itemCount: filtered.length,
                           itemBuilder: (context, index) {
@@ -1142,24 +1143,14 @@ class _CharacterDirectoryMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 40, color: colors.onSurfaceVariant),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
-            ),
-          ],
-        ),
+    final theme = Theme.of(context);
+    return EmptyState(
+      icon: icon,
+      iconSize: 40,
+      iconColor: theme.colorScheme.onSurfaceVariant,
+      title: message,
+      titleStyle: theme.textTheme.bodyLarge?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
       ),
     );
   }
@@ -1301,15 +1292,15 @@ class _CharacterCardState extends State<_CharacterCard> {
                           ),
                         ),
                         if (widget.character.conditions.isNotEmpty) ...[
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           Text(
                             '状态',
                             style: Theme.of(context).textTheme.labelLarge,
                           ),
                           const SizedBox(height: 4),
                           Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
+                            spacing: 8,
+                            runSpacing: 8,
                             children: [
                               for (final condition
                                   in widget.character.conditions)
@@ -1481,13 +1472,27 @@ class _CharacterSummaryTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(label, style: Theme.of(context).textTheme.labelSmall),
-            Text(value, style: Theme.of(context).textTheme.titleSmall),
+            // Labels and values sit on a secondaryContainer tile, so they
+            // must use the matching on-* role (E2).
+            Text(
+              label,
+              style: Theme.of(context)
+                  .textTheme
+                  .labelSmall
+                  ?.copyWith(color: colors.onSecondaryContainer),
+            ),
+            Text(
+              value,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(color: colors.onSecondaryContainer),
+            ),
             if (progress != null) ...[
               const SizedBox(height: 4),
               LinearProgressIndicator(value: progress),

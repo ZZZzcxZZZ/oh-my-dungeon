@@ -97,7 +97,7 @@ class _VaultSettingsSectionState extends State<VaultSettingsSection> {
                 ),
                 child: SelectableText(
                   actions.lastError!,
-                  style: TextStyle(color: theme.colorScheme.onErrorContainer),
+                  style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onErrorContainer),
                 ),
               ),
             ],

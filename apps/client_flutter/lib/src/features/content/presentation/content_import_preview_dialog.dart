@@ -58,7 +58,7 @@ class ContentImportPreviewDialog extends StatelessWidget {
           children: [
             for (final error in report.errors)
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
+                padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Text('${error.path}: ${error.message}'),
               ),
           ],
@@ -87,7 +87,7 @@ class _LegacyFormatBanner extends StatelessWidget {
     final theme = Theme.of(context);
     return Container(
       key: const Key('legacy-format-banner'),
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: theme.colorScheme.secondaryContainer,
         borderRadius: BorderRadius.circular(8),

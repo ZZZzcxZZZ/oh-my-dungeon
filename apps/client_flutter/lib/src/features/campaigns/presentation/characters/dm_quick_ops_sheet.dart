@@ -6,6 +6,8 @@ import '../../domain/campaign_character.dart';
 import '../campaign_event_dispatcher.dart';
 import 'campaign_character_controller.dart';
 import 'campaign_character_picker_sheet.dart';
+import '../../../../core/presentation/dialog_sizes.dart';
+import '../../../../core/widgets/empty_state.dart';
 
 /// Task 3.4 — DM 快捷操作面板.
 ///
@@ -413,7 +415,7 @@ class _ConditionPickerDialogState extends State<_ConditionPickerDialog> {
     return AlertDialog(
       title: const Text('给予状态'),
       content: SizedBox(
-        width: 440,
+        width: DialogSizes.narrow,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -524,8 +526,8 @@ class _ItemPickerDialogState extends State<_ItemPickerDialog> {
     return AlertDialog(
       title: const Text('选择物品'),
       content: SizedBox(
-        width: 480,
-        height: 420,
+        width: DialogSizes.compact,
+        height: DialogSizes.pickerHeight,
         child: Column(
           children: [
             SearchBar(
@@ -557,7 +559,7 @@ class _ItemPickerDialogState extends State<_ItemPickerDialog> {
             const Divider(height: 1),
             Expanded(
               child: visible.isEmpty
-                  ? const Center(child: Text('没有匹配的物品'))
+                  ? const EmptyState(icon: Icons.search_off, title: '没有匹配的物品')
                   : ListView.builder(
                       itemCount: visible.length,
                       itemBuilder: (context, index) {

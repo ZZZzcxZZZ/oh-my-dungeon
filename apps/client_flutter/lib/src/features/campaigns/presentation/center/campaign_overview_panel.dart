@@ -76,7 +76,7 @@ class CampaignOverviewPanel extends StatelessWidget {
           Container(
             key: const Key('campaign-overview-header'),
             color: colors.surfaceContainerLow,
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -86,7 +86,7 @@ class CampaignOverviewPanel extends StatelessWidget {
                       : campaign.description,
                   style: theme.textTheme.bodyLarge,
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -187,17 +187,17 @@ class _DmControlEntry extends StatelessWidget {
       key: const Key('campaign-overview-dm-control-entry'),
       decoration: BoxDecoration(
         color: colors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: colors.outlineVariant),
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
                 const Icon(Icons.admin_panel_settings_outlined),
@@ -248,7 +248,7 @@ class _CampaignSummary extends StatelessWidget {
         border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(8),
       ),
-      padding: const EdgeInsets.symmetric(vertical: 14),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
           _CampaignMetric(value: members.length, label: '成员'),
@@ -275,7 +275,7 @@ class _CampaignMetric extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text('$value', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 2),
+          const SizedBox(height: 4),
           Text(label, style: Theme.of(context).textTheme.labelMedium),
         ],
       ),
@@ -377,44 +377,52 @@ class _CampaignInviteShare extends StatelessWidget {
     final current = invites
         .where((invite) => invite.usedCount < invite.maxUses)
         .firstOrNull;
+    final colors = Theme.of(context).colorScheme;
     return Material(
       key: const Key('campaign-invite-share'),
-      color: Theme.of(context).colorScheme.secondaryContainer,
-      borderRadius: BorderRadius.circular(12),
+      color: colors.secondaryContainer,
+      borderRadius: BorderRadius.circular(8),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         onTap: () => _share(context, current),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              const Icon(Icons.person_add_alt_1_outlined),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('邀请玩家'),
-                    Text(
-                      current == null
-                          ? '创建邀请码并分享服务器信息'
-                          : '邀请码  ${current.code}',
-                      style: current == null
-                          ? const TextStyle(fontSize: 12)
-                          : const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          // Icons and text sit on a secondaryContainer surface, so they must
+          // use the matching on-* role (E2).
+          child: IconTheme.merge(
+            data: IconThemeData(color: colors.onSecondaryContainer),
+            child: DefaultTextStyle(
+              style: TextStyle(color: colors.onSecondaryContainer),
+              child: Row(
+                children: [
+                  const Icon(Icons.person_add_alt_1_outlined),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('邀请玩家'),
+                        Text(
+                          current == null
+                              ? '创建邀请码并分享服务器信息'
+                              : '邀请码  ${current.code}',
+                          style: current == null
+                              ? Theme.of(context).textTheme.bodySmall
+                              : Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  Icon(
+                    current == null
+                        ? Icons.add_link_outlined
+                        : Icons.ios_share_outlined,
+                  ),
+                ],
               ),
-              Icon(
-                current == null
-                    ? Icons.add_link_outlined
-                    : Icons.ios_share_outlined,
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -519,7 +527,7 @@ class _CampaignSettingsSection extends StatelessWidget {
             ),
             title: Text(
               '离开战役',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.error),
             ),
             onTap: onLeaveCampaign,
           ),

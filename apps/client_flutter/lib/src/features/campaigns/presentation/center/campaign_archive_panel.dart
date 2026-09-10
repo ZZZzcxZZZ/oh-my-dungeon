@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../domain/campaign_archive_entry.dart';
 import '../../../content/domain/content_block.dart';
 import '../../../content/presentation/widgets/content_block_view.dart';
+import '../../../../core/presentation/dialog_sizes.dart';
 
 /// Plan 2026-07-23 task 4.3: 将服务端 ISO 时间戳格式化为 `yyyy-MM-dd`，
 /// 去除时分秒。使用显式 pattern 而非 `DateFormat.yMd()`，避免 locale
@@ -337,7 +338,7 @@ class _ArchiveListRow extends StatelessWidget {
                       ],
                     ),
                     if (entry.summary.isNotEmpty) ...[
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 4),
                       Text(
                         entry.summary,
                         style: theme.textTheme.bodySmall?.copyWith(
@@ -348,7 +349,7 @@ class _ArchiveListRow extends StatelessWidget {
                       ),
                     ],
                     if (tags.isNotEmpty) ...[
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       Wrap(
                         spacing: 4,
                         runSpacing: 4,
@@ -358,7 +359,7 @@ class _ArchiveListRow extends StatelessWidget {
                       ),
                     ],
                     // Plan 2026-07-23 task 4.3: 行底部元数据「由 编辑者 · yyyy-MM-dd」。
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     Text(
                       _archiveRowMetadata(entry),
                       key: const Key('archive-row-metadata'),
@@ -397,10 +398,10 @@ class _TagChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         label,
@@ -441,8 +442,8 @@ Future<void> _showArchiveDetail(
           ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(
-              maxWidth: CampaignArchivePanel._wideDialogMaxWidth,
-              maxHeight: 720,
+              maxWidth: DialogSizes.wide,
+              maxHeight: DialogSizes.detailHeight,
             ),
             child: content,
           ),
@@ -490,7 +491,7 @@ class _ArchiveDetailContent extends StatelessWidget {
         relatedEntryIds != null;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -508,7 +509,7 @@ class _ArchiveDetailContent extends StatelessWidget {
               child: Row(
                 children: [
                   Icon(_archiveIcon(entry.kind), size: 18),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   Text(
                     _archiveKindLabel(entry.kind),
                     style: theme.textTheme.labelLarge?.copyWith(
@@ -544,7 +545,7 @@ class _ArchiveDetailContent extends StatelessWidget {
             if (bodyBlocks.isNotEmpty) ...[
               const SizedBox(height: 16),
               Text('正文', style: theme.textTheme.labelLarge),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Container(
                 key: const Key('archive-detail-body-blocks'),
                 width: double.infinity,
@@ -573,20 +574,20 @@ class _ArchiveDetailContent extends StatelessWidget {
             if (tags.isNotEmpty) ...[
               const SizedBox(height: 16),
               Text('标签', style: theme.textTheme.labelLarge),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Wrap(
-                spacing: 6,
-                runSpacing: 6,
+                spacing: 8,
+                runSpacing: 8,
                 children: [for (final tag in tags) _TagChip(label: tag)],
               ),
             ],
             if (links.isNotEmpty) ...[
               const SizedBox(height: 16),
               Text('关联条目', style: theme.textTheme.labelLarge),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Wrap(
-                spacing: 6,
-                runSpacing: 6,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   for (final link in links)
                     _ArchiveMetaChip(
@@ -599,7 +600,7 @@ class _ArchiveDetailContent extends StatelessWidget {
             if (attachments.isNotEmpty) ...[
               const SizedBox(height: 16),
               Text('附件', style: theme.textTheme.labelLarge),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -610,10 +611,10 @@ class _ArchiveDetailContent extends StatelessWidget {
             if (hasLegacyMetadata) ...[
               const SizedBox(height: 16),
               Text('关联', style: theme.textTheme.labelLarge),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Wrap(
-                spacing: 6,
-                runSpacing: 6,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   if (sourceMessageId != null)
                     _ArchiveMetaChip(
@@ -711,7 +712,7 @@ class _AttachmentRow extends StatelessWidget {
     final label = ref['label'] as String? ?? ref['url'] as String? ?? '';
     final url = ref['url'] as String?;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -720,7 +721,7 @@ class _AttachmentRow extends StatelessWidget {
             size: 16,
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               label.isEmpty ? (url ?? '') : label,
@@ -955,7 +956,7 @@ class _ArchiveEditFormState extends State<_ArchiveEditForm> {
               helperText: '用英文逗号分隔，例如：lore, map',
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [

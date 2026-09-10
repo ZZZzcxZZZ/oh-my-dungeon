@@ -88,7 +88,7 @@ class _SeedColorDialogState extends State<SeedColorDialog> {
                 for (final preset in _presets)
                   InkWell(
                     key: Key('seed-color-preset-${_hexFor(preset.color)}'),
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(48),
                     onTap: () {
                       setState(() {
                         _selected = preset.color;

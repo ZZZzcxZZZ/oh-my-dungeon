@@ -177,7 +177,7 @@ class _ContentSearchPageState extends State<ContentSearchPage> {
                   return Center(
                     child: Text(
                       widget.controller.error!,
-                      style: TextStyle(color: colorScheme.error),
+                      style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.error),
                     ),
                   );
                 }
@@ -369,7 +369,7 @@ class _FilterSheetState extends State<_FilterSheet> {
         return Container(
           decoration: BoxDecoration(
             color: colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
           ),
           child: Column(
             children: [
@@ -381,7 +381,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                     height: 4,
                     decoration: BoxDecoration(
                       color: colorScheme.outlineVariant,
-                      borderRadius: BorderRadius.circular(2),
+                      borderRadius: BorderRadius.circular(4),
                     ),
                   ),
                 ),

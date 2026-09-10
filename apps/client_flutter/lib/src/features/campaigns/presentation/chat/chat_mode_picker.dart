@@ -29,26 +29,36 @@ class ChatModePicker extends StatelessWidget {
       child: Tooltip(
         message: semanticsLabel,
         excludeFromSemantics: true,
-        child: Material(
-          color: colors.secondaryContainer,
-          shape: const CircleBorder(),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            key: const Key('chat-mode-toggle'),
-            customBorder: const CircleBorder(),
-            onTap: enabled
-                ? () => onChanged(isSay ? ChatMode.act : ChatMode.say)
-                : null,
+        // 48dp touch target with a 40dp visual circle (Material minimum).
+        child: InkResponse(
+          key: const Key('chat-mode-toggle'),
+          radius: 24,
+          containedInkWell: false,
+          onTap: enabled
+              ? () => onChanged(isSay ? ChatMode.act : ChatMode.say)
+              : null,
+          child: SizedBox.square(
+            dimension: 48,
             child: Center(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 160),
-                child: Icon(
-                  isSay
-                      ? Icons.chat_bubble_outline
-                      : Icons.directions_run_outlined,
-                  key: ValueKey(mode),
-                  size: 19,
-                  color: colors.onSecondaryContainer,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: colors.secondaryContainer,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 160),
+                    child: Icon(
+                      isSay
+                          ? Icons.chat_bubble_outline
+                          : Icons.directions_run_outlined,
+                      key: ValueKey(mode),
+                      size: 19,
+                      color: colors.onSecondaryContainer,
+                    ),
+                  ),
                 ),
               ),
             ),

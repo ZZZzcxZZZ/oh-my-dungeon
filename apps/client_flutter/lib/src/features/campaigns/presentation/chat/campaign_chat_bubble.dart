@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../domain/campaign.dart';
 import '../widgets/campaign_avatar.dart';
 import 'chat_helpers.dart';
+import '../../../../app/theme/app_text_styles.dart';
 
 class CampaignChatBubble extends StatelessWidget {
   const CampaignChatBubble({
@@ -103,7 +104,13 @@ class CampaignChatBubble extends StatelessWidget {
         color: Theme.of(context).colorScheme.primaryContainer,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Text(message.content),
+          child: Text(
+            message.content,
+            // Text on primaryContainer must use the matching on-* role (E2).
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onPrimaryContainer,
+            ),
+          ),
         ),
       ),
     );
@@ -178,7 +185,7 @@ class _CampaignCharacterMessage extends StatelessWidget {
     );
 
     return Padding(
-      padding: EdgeInsets.only(top: showIdentity ? 8 : 2),
+      padding: EdgeInsets.only(top: showIdentity ? 8 : 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: isOwn
@@ -202,7 +209,7 @@ class _NarratorMessage extends StatelessWidget {
     final theme = Theme.of(context);
     return Padding(
       key: const Key('narrator-message'),
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       child: Row(
         children: [
           SizedBox(
@@ -215,10 +222,8 @@ class _NarratorMessage extends StatelessWidget {
             child: Text(
               content,
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
+              style: AppTextStyles.narrator(theme.textTheme).copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
-                fontStyle: FontStyle.italic,
-                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -248,9 +253,9 @@ class _SystemMessage extends StatelessWidget {
         child: Text(
           content,
           textAlign: TextAlign.center,
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+          style: AppTextStyles.systemMessage(
+            Theme.of(context).textTheme,
+          ),
         ),
       ),
     );
@@ -273,12 +278,14 @@ class _CheckRequestMessage extends StatelessWidget {
     final dc = message.eventData?['dc'];
     return Card.filled(
       key: const Key('check-request-message'),
-      margin: const EdgeInsets.symmetric(vertical: 6),
+      margin: const EdgeInsets.symmetric(vertical: 8),
       child: ListTile(
         leading: const Icon(Icons.fact_check_outlined),
         title: Text(
           message.content,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
         ),
         subtitle: dc == null ? null : Text('DC $dc'),
         trailing: onRespond == null

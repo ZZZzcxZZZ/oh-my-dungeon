@@ -35,6 +35,8 @@ import 'chat/check_request_sheet.dart';
 import 'content/campaign_content_controller.dart';
 import 'conversation_controller.dart';
 import 'widgets/campaign_avatar.dart';
+import '../../../core/presentation/dialog_sizes.dart';
+import '../../../core/widgets/empty_state.dart';
 
 class CampaignChatPage extends StatefulWidget {
   const CampaignChatPage({
@@ -213,7 +215,10 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                     chatText('emptyChat'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Theme.of(context).colorScheme.outline,
+                      // Hint/empty text must stay readable (>= AA 4.5:1);
+                      // outline is a border role, onSurfaceVariant is the
+                      // secondary-text role (E3).
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 )
@@ -996,7 +1001,6 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                             onPressed: refreshItems,
                             icon: const Icon(Icons.arrow_forward),
                           ),
-                          border: const OutlineInputBorder(),
                         ),
                         onSubmitted: (_) => refreshItems(),
                       ),
@@ -1029,7 +1033,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
                             : error != null
                             ? Center(child: Text(error!))
                             : items.isEmpty
-                            ? Center(child: Text(chatText('emptyContent')))
+                            ? const EmptyState(icon: Icons.forum_outlined, title: '还没有消息')
                             : ListView.separated(
                                 itemCount: items.length,
                                 separatorBuilder: (context, index) =>
@@ -1083,7 +1087,7 @@ class _CampaignChatPageState extends State<CampaignChatPage> {
         insetPadding: const EdgeInsets.all(16),
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxWidth: 960,
+            maxWidth: DialogSizes.full,
             maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.9,
           ),
           child: ContentDetailPage(
@@ -1414,7 +1418,6 @@ class _DraftIdentityFormSheetState extends State<_DraftIdentityFormSheet> {
               textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
                 labelText: '显示名称',
-                border: OutlineInputBorder(),
               ),
               onSubmitted: (_) => _submit(),
             ),

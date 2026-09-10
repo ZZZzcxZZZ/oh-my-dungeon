@@ -18,6 +18,8 @@ import 'campaign_mode_guard.dart';
 import 'content/campaign_content_controller.dart';
 import 'conversation_controller.dart';
 import 'widgets/campaign_list_tile.dart';
+import '../../../core/presentation/dialog_sizes.dart';
+import '../../../core/widgets/empty_state.dart';
 
 /// Top-level "战役" tab.
 ///
@@ -137,25 +139,12 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 360),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.cloud_off,
-                  size: 56,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(height: 16),
-                Text('未连接服务器', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                const Text(
-                  '在设置中添加跑团服务器后，可以创建和加入在线战役。',
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
+          child: EmptyState(
+            icon: Icons.cloud_off,
+            iconSize: 56,
+            iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
+            title: '未连接服务器',
+            message: '在设置中添加跑团服务器后，可以创建和加入在线战役。',
           ),
         ),
       ),
@@ -168,25 +157,12 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 360),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.lock_outline,
-                  size: 56,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(height: 16),
-                Text('登录后管理战役', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                const Text(
-                  '创建属于你的战役，或使用邀请码加入朋友的团。',
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
+          child: EmptyState(
+            icon: Icons.lock_outline,
+            iconSize: 56,
+            iconColor: Theme.of(context).colorScheme.primary,
+            title: '登录后管理战役',
+            message: '创建属于你的战役，或使用邀请码加入朋友的团。',
           ),
         ),
       ),
@@ -204,7 +180,7 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
           padding: const EdgeInsets.all(24),
           child: Text(
             widget.campaignController.error!,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.error),
             textAlign: TextAlign.center,
           ),
         ),
@@ -229,11 +205,11 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
     final currentUserId = widget.authController.user?.id;
     return ListView.separated(
       padding: compact
-          ? const EdgeInsets.fromLTRB(8, 4, 8, 80)
+          ? const EdgeInsets.fromLTRB(8, 4, 8, 96)
           : const EdgeInsets.fromLTRB(12, 8, 12, 96),
       itemCount: campaigns.length,
       separatorBuilder: (context, index) =>
-          Divider(height: compact ? 1 : 6, indent: 72),
+          Divider(height: compact ? 1 : 8, indent: 72),
       itemBuilder: (context, index) {
         final campaign = campaigns[index];
         final character = _primaryCharacter();
@@ -601,7 +577,6 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
                       controller: titleController,
                       decoration: const InputDecoration(
                         labelText: '小群名称',
-                        border: OutlineInputBorder(),
                       ),
                       autofocus: true,
                       onChanged: (_) => setState(() {}),
@@ -617,7 +592,7 @@ class _CampaignsTabPageState extends State<CampaignsTabPage> {
                     const SizedBox(height: 4),
                     Expanded(
                       child: candidates.isEmpty
-                          ? const Center(child: Text('暂无其他成员'))
+                          ? const EmptyState(icon: Icons.group_off_outlined, title: '暂无其他成员')
                           : ListView.builder(
                               shrinkWrap: true,
                               itemCount: candidates.length,
@@ -729,9 +704,12 @@ class _CampaignCreationGuideState extends State<_CampaignCreationGuide> {
     return Dialog(
       key: const Key('campaign-creation-guide'),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 620),
+        constraints: const BoxConstraints(
+          maxWidth: DialogSizes.standard,
+          maxHeight: DialogSizes.guideHeight,
+        ),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -765,7 +743,7 @@ class _CampaignCreationGuideState extends State<_CampaignCreationGuide> {
                 titles[_step],
                 style: Theme.of(context).textTheme.titleLarge,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               Flexible(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 180),
@@ -779,7 +757,7 @@ class _CampaignCreationGuideState extends State<_CampaignCreationGuide> {
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               Row(
                 children: [
                   TextButton(
@@ -817,7 +795,6 @@ class _CampaignCreationGuideState extends State<_CampaignCreationGuide> {
             decoration: const InputDecoration(
               labelText: '战役名称',
               hintText: '例如：失落矿坑周末团',
-              border: OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 16),
@@ -826,7 +803,6 @@ class _CampaignCreationGuideState extends State<_CampaignCreationGuide> {
             decoration: const InputDecoration(
               labelText: '战役简介（可选）',
               hintText: '团期、风格和玩家需要提前知道的内容',
-              border: OutlineInputBorder(),
             ),
             minLines: 3,
             maxLines: 5,

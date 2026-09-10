@@ -48,8 +48,8 @@ class _PublishCharacterSheetState extends State<PublishCharacterSheet> {
             Text('角色概要', style: Theme.of(context).textTheme.labelLarge),
             const SizedBox(height: 4),
             Wrap(
-              spacing: 6,
-              runSpacing: 6,
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 Chip(label: Text('Lv.${widget.character.level}')),
                 if (widget.character.classSummary.isNotEmpty)
@@ -69,8 +69,8 @@ class _PublishCharacterSheetState extends State<PublishCharacterSheet> {
               Text('角色类型', style: Theme.of(context).textTheme.labelLarge),
               const SizedBox(height: 4),
               Wrap(
-                spacing: 6,
-                runSpacing: 6,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   ChoiceChip(
                     label: const Text('玩家角色'),
@@ -102,7 +102,7 @@ class _PublishCharacterSheetState extends State<PublishCharacterSheet> {
               const SizedBox(height: 12),
               Text(
                 '尚未选择战役。请先在战役页加入或创建战役。',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.error),
               ),
             ],
           ],

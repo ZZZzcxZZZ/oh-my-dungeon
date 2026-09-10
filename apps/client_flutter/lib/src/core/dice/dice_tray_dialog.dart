@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../widgets/numeric_input_field.dart';
 import 'dice_roller.dart';
+import '../../app/theme/app_text_styles.dart';
 
 class DiceTrayCharacterTarget {
   const DiceTrayCharacterTarget({required this.id, required this.name});
@@ -142,8 +143,8 @@ class _DiceTrayDialogState extends State<DiceTrayDialog> {
           ),
           const SizedBox(height: 8),
           Wrap(
-            spacing: 6,
-            runSpacing: 6,
+            spacing: 8,
+            runSpacing: 8,
             children: [
               for (final sides in const [4, 6, 8, 10, 12, 20, 100])
                 ChoiceChip(
@@ -208,7 +209,6 @@ class _DiceTrayDialogState extends State<DiceTrayDialog> {
       decoration: const InputDecoration(
         labelText: '代骰角色（可选）',
         prefixIcon: Icon(Icons.person_outline),
-        border: OutlineInputBorder(),
       ),
       items: [
         const DropdownMenuItem<String?>(value: null, child: Text('不指定角色')),
@@ -266,9 +266,7 @@ class _DiceTrayDialogState extends State<DiceTrayDialog> {
           const SizedBox(height: 4),
           Text(
             notation,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+            style: AppTextStyles.diceNotation(theme.textTheme),
           ),
           if (_errorMessage != null) ...[
             const SizedBox(height: 4),

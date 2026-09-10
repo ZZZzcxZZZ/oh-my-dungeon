@@ -204,10 +204,15 @@ class _PreviewCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Checkbox(
-              key: Key('batch-import-checkbox-${report.packageId}'),
-              value: selected,
-              onChanged: onToggle,
+            // Screen readers must associate the checkbox with the package
+            // name in the same row.
+            Semantics(
+              label: report.packageName,
+              child: Checkbox(
+                key: Key('batch-import-checkbox-${report.packageId}'),
+                value: selected,
+                onChanged: onToggle,
+              ),
             ),
             const SizedBox(width: 4),
             Expanded(

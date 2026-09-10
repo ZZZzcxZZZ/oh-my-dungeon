@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/presentation/avatar_image_provider.dart';
 import '../../domain/campaign_health.dart';
+import '../../../../app/theme/app_text_styles.dart';
 
 /// 战役角色头像的健康分级，对应生命环颜色。
 ///
@@ -70,8 +71,10 @@ class CampaignAvatar extends StatelessWidget {
     final ringFraction =
         healthFraction?.clamp(0, 1).toDouble() ??
         (useHealthGradeFallback ? _fallbackFraction(health) : 0);
+    // Default touch target is at least 48dp (Material minimum); callers can
+    // override with tapTargetSize while the visual stays at [size].
     final targetSize = tapTargetSize == null
-        ? size
+        ? (size < 48 ? 48.0 : size)
         : tapTargetSize!.clamp(size, double.infinity).toDouble();
 
     return Semantics(
@@ -111,11 +114,11 @@ class CampaignAvatar extends StatelessWidget {
                         backgroundImage: image,
                         child: image != null
                             ? null
-                            : Text(
-                                label,
-                                style: TextStyle(
-                                  fontSize: size * 0.32,
-                                  fontWeight: FontWeight.w600,
+                            : FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  label,
+                                  style: AppTextStyles.avatarInitials(theme.textTheme),
                                 ),
                               ),
                       ),
@@ -128,7 +131,7 @@ class CampaignAvatar extends StatelessWidget {
                       child: Tooltip(
                         message: '倒地',
                         child: Container(
-                          padding: const EdgeInsets.all(2),
+                          padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
                             color: theme.colorScheme.error,
                             shape: BoxShape.circle,

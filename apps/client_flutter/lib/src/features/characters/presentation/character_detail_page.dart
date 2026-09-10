@@ -12,6 +12,8 @@ import '../domain/character_profile.dart';
 import '../domain/character_quick_edit_service.dart';
 import '../domain/dnd5e_rules.dart';
 import 'widgets/character_sheet_shell.dart';
+import '../../../core/presentation/dialog_sizes.dart';
+import '../../../core/widgets/empty_state.dart';
 
 typedef CharacterRuntimeUpdate =
     Future<void> Function({
@@ -368,7 +370,7 @@ class _CharacterHeader extends StatelessWidget {
     ].join(' / ');
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: Row(
         children: [
           CircleAvatar(
@@ -379,7 +381,7 @@ class _CharacterHeader extends StatelessWidget {
                 ? Text(character.name.characters.first.toUpperCase())
                 : null,
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -400,8 +402,8 @@ class _CharacterHeader extends StatelessWidget {
               alignment: Alignment.centerRight,
               child: Wrap(
                 alignment: WrapAlignment.end,
-                spacing: 10,
-                runSpacing: 2,
+                spacing: 8,
+                runSpacing: 4,
                 children: [
                   Text(
                     'HP ${character.currentHp}/${character.maxHp}',
@@ -1376,7 +1378,11 @@ class _EquipmentPanelState extends State<_EquipmentPanel> {
                   if (_currency.isEmpty)
                     Text(
                       '暂无货币记录',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        // Text on secondaryContainer must use the matching
+                        // on-* role (E2).
+                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                      ),
                     )
                   else
                     for (final entry in _currency.entries)
@@ -2014,7 +2020,6 @@ class _ProfilePanelState extends State<_ProfilePanel> {
         maxLines: lines,
         decoration: InputDecoration(
           labelText: label,
-          border: const OutlineInputBorder(),
           alignLabelWithHint: lines > 1,
         ),
         onChanged: (_) => _scheduleSave(),
@@ -2234,7 +2239,6 @@ class _RuntimePanelState extends State<_RuntimePanel> {
                               },
                               icon: const Icon(Icons.close_outlined),
                             ),
-                      border: const OutlineInputBorder(),
                     ),
                   ),
                 ),
@@ -2431,7 +2435,7 @@ class _RuntimeStatusGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        const gap = 10.0;
+        const gap = 8.0;
         final columns = constraints.maxWidth >= 720
             ? 4
             : constraints.maxWidth >= 360
@@ -2885,21 +2889,20 @@ class _ClassResourceLine extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(_resourceRecoveryLabel(resource.recovery)),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             LinearProgressIndicator(
               value: resource.maximum == 0 ? 0 : current / resource.maximum,
             ),
             const SizedBox(height: 8),
             if (resource.maximum <= 8)
               Wrap(
-                spacing: 6,
-                runSpacing: 6,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   for (var index = 0; index < resource.maximum; index++)
                     IconButton.filledTonal(
                       key: Key('resource-pip-${resource.id}-$index'),
                       tooltip: '设置${resource.name}为${index + 1}',
-                      visualDensity: VisualDensity.compact,
                       onPressed: () =>
                           onSetCurrent(index < current ? index : index + 1),
                       icon: Icon(
@@ -2978,7 +2981,6 @@ class _HpAdjustmentSheetState extends State<_HpAdjustmentSheet> {
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
                 labelText: '数值',
-                border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.monitor_heart_outlined),
               ),
             ),
@@ -3061,7 +3063,6 @@ class _ResourceCurrentSheetState extends State<_ResourceCurrentSheet> {
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 labelText: '当前值（0-${widget.maximum}）',
-                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 12),
@@ -3125,7 +3126,7 @@ Future<ContentEntry?> _pickContentEntry(
                 const SizedBox(height: 8),
                 Expanded(
                   child: filtered.isEmpty
-                      ? const Center(child: Text('没有可添加的条目'))
+                      ? const EmptyState(icon: Icons.library_add_outlined, title: '没有可添加的条目')
                       : ListView.builder(
                           itemCount: filtered.length,
                           itemBuilder: (context, index) {
@@ -3164,7 +3165,7 @@ Future<(String, String)?> _showNameDescriptionDialog(
     builder: (context) => AlertDialog(
       title: Text(title),
       content: SizedBox(
-        width: 420,
+        width: DialogSizes.form,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -3173,7 +3174,6 @@ Future<(String, String)?> _showNameDescriptionDialog(
               autofocus: true,
               decoration: const InputDecoration(
                 labelText: '名称',
-                border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 12),
@@ -3183,7 +3183,6 @@ Future<(String, String)?> _showNameDescriptionDialog(
               maxLines: 5,
               decoration: const InputDecoration(
                 labelText: '说明（可选）',
-                border: OutlineInputBorder(),
               ),
             ),
           ],
@@ -3225,7 +3224,7 @@ Future<CharacterClassResource?> _showResourceDialog(
       builder: (context, setDialogState) => AlertDialog(
         title: Text(initial == null ? '添加资源' : '编辑资源'),
         content: SizedBox(
-          width: 420,
+          width: DialogSizes.form,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -3235,7 +3234,6 @@ Future<CharacterClassResource?> _showResourceDialog(
                 autofocus: true,
                 decoration: const InputDecoration(
                   labelText: '资源名称',
-                  border: OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 12),
@@ -3245,7 +3243,6 @@ Future<CharacterClassResource?> _showResourceDialog(
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
                   labelText: '最大次数',
-                  border: OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 12),
@@ -3254,7 +3251,6 @@ Future<CharacterClassResource?> _showResourceDialog(
                 initialValue: recovery,
                 decoration: const InputDecoration(
                   labelText: '恢复规则',
-                  border: OutlineInputBorder(),
                 ),
                 items: const [
                   DropdownMenuItem(value: 'shortRest', child: Text('短休恢复')),
@@ -3342,7 +3338,7 @@ class _Section extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -3353,7 +3349,7 @@ class _Section extends StatelessWidget {
               Text(title, style: theme.textTheme.titleMedium),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           child,
         ],
       ),
@@ -3426,7 +3422,7 @@ class _AbilityTile extends StatelessWidget {
       child: Card.outlined(
         margin: EdgeInsets.zero,
         child: Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(12),
           child: Column(
             children: [
               Text(label, style: Theme.of(context).textTheme.labelMedium),
@@ -3493,13 +3489,11 @@ class _InventoryLine extends StatelessWidget {
               children: [
                 IconButton(
                   tooltip: '$name -1',
-                  visualDensity: VisualDensity.compact,
                   onPressed: onDecrement,
                   icon: const Icon(Icons.remove_circle_outline),
                 ),
                 IconButton(
                   tooltip: '$name +1',
-                  visualDensity: VisualDensity.compact,
                   onPressed: onIncrement,
                   icon: const Icon(Icons.add_circle_outline),
                 ),
@@ -3564,28 +3558,32 @@ class _CurrencyControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        border: Border.all(color: colors.outlineVariant),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
               tooltip: '$code -1',
-              visualDensity: VisualDensity.compact,
               onPressed: onDecrement,
-              icon: const Icon(Icons.remove),
+              // Icons and text sit on the currency box's secondaryContainer
+              // background, so they must use the matching on-* role (E2).
+              icon: Icon(Icons.remove, color: colors.onSecondaryContainer),
             ),
-            Text('$code $value'),
+            Text(
+              '$code $value',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: colors.onSecondaryContainer),
+            ),
             IconButton(
               tooltip: '$code +1',
-              visualDensity: VisualDensity.compact,
               onPressed: onIncrement,
-              icon: const Icon(Icons.add),
+              icon: Icon(Icons.add, color: colors.onSecondaryContainer),
             ),
           ],
         ),

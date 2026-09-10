@@ -104,7 +104,6 @@ class _CheckRequestSheetState extends State<CheckRequestSheet> {
               initialValue: _key,
               decoration: const InputDecoration(
                 labelText: '检定项目',
-                border: OutlineInputBorder(),
               ),
               items: [
                 for (final option in _options)
@@ -123,7 +122,6 @@ class _CheckRequestSheetState extends State<CheckRequestSheet> {
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
                 labelText: '难度等级 DC（可选）',
-                border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 16),
@@ -138,7 +136,7 @@ class _CheckRequestSheetState extends State<CheckRequestSheet> {
                 setState(() => _rollMode = selection.single);
               },
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(

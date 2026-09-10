@@ -53,7 +53,7 @@ class CharacterBuilderShell extends StatelessWidget {
         Material(
           color: Theme.of(context).colorScheme.surfaceContainerLow,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [

@@ -4,6 +4,7 @@ import '../domain/content_schema_registry.dart';
 import '../domain/content_type_definition.dart';
 import 'content_library_controller.dart';
 import 'content_type_registry.dart';
+import '../../../core/widgets/empty_state.dart';
 
 class ContentHomePage extends StatelessWidget {
   const ContentHomePage({required this.controller, super.key});
@@ -31,31 +32,12 @@ class _EmptyLibraryState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.menu_book_outlined,
-              size: 56,
-              color: colorScheme.outline,
-            ),
-            const SizedBox(height: 16),
-            Text('资料库还是空的', style: theme.textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Text(
-              '前往「设置 → 资料包」导入资料包后即可离线查阅规则、法术与怪物。',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
+    return EmptyState(
+      icon: Icons.menu_book_outlined,
+      iconSize: 56,
+      title: '资料库还是空的',
+      titleStyle: theme.textTheme.titleLarge,
+      message: '前往「设置 → 资料包」导入资料包后即可离线查阅规则、法术与怪物。',
     );
   }
 }
@@ -100,12 +82,13 @@ class _CategoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Static category overview card: no navigation target exists yet, so it
+    // must not fake a tappable affordance (no InkWell/onTap).
     return Material(
       color: colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () {},
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/campaign_character.dart';
 import '../widgets/campaign_avatar.dart';
+import '../../../../core/widgets/empty_state.dart';
 
 typedef CreateCampaignCharacter =
     Future<String?> Function({
@@ -89,9 +90,9 @@ class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
         children: [
           if (widget.isManager) _buildToolbar(context),
           if (sections.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 48),
-              child: Center(child: Text('战役中还没有角色')),
+            const EmptyState(
+              icon: Icons.group_outlined,
+              title: '战役中还没有角色',
             ),
           for (final section in sections) ...[
             _SectionHeader(
@@ -186,7 +187,11 @@ class _CampaignCharactersPanelState extends State<CampaignCharactersPanel> {
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (active) const Icon(Icons.record_voice_over, size: 18),
+                if (active)
+                  Tooltip(
+                    message: '正在发言',
+                    child: const Icon(Icons.record_voice_over, size: 18),
+                  ),
                 if (widget.isManager)
                   _CharacterMenu(
                     character: character,

@@ -7,6 +7,7 @@ import '../../../content/domain/content_entry.dart';
 import '../../data/sync/campaign_sync_api_client.dart';
 import '../../domain/campaign_character.dart';
 import 'campaign_character_controller.dart';
+import '../../../../core/widgets/empty_state.dart';
 
 bool canEditCampaignCharacter({
   required CampaignCharacter character,
@@ -175,7 +176,9 @@ class _CampaignCharacterFullSheetPageState
       widget.characterId,
     );
     if (campaignCharacter == null) {
-      return const Scaffold(body: Center(child: Text('角色已不存在')));
+      return const Scaffold(
+        body: EmptyState(icon: Icons.person_off_outlined, title: '角色已不存在'),
+      );
     }
     final character = campaignCharacterToCharacterSheet(campaignCharacter);
     return CharacterDetailPage(

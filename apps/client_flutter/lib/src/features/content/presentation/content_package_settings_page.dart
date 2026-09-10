@@ -114,6 +114,10 @@ class _ContentPackageSettingsPageState
             child: const Text('取消'),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
             onPressed: () {
               widget.repository.deletePackage(package.id);
               Navigator.of(context).pop();
@@ -146,6 +150,10 @@ class _ContentPackageSettingsPageState
             child: const Text('取消'),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+              foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+            ),
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text('清除'),
           ),
@@ -205,6 +213,7 @@ class _ContentPackageSettingsPageState
                             .setPackageEnabled(package.id, value),
                       ),
                       IconButton(
+                        tooltip: '删除资料包',
                         icon: const Icon(Icons.delete_outline),
                         onPressed: () => _confirmDelete(package),
                       ),

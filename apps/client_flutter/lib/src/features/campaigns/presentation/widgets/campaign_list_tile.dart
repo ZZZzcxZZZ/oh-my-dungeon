@@ -219,8 +219,8 @@ class _CampaignSummary extends StatelessWidget {
       children: [
         CircleAvatar(
           key: const Key('campaign-card-leading-icon'),
-          backgroundColor: colorScheme.primaryContainer,
-          foregroundColor: colorScheme.onPrimaryContainer,
+          backgroundColor: colorScheme.surfaceContainerHighest,
+          foregroundColor: colorScheme.onSurfaceVariant,
           child: Text(
             campaign.name.isEmpty
                 ? '?'
@@ -253,7 +253,7 @@ class _CampaignSummary extends StatelessWidget {
                   ],
                 ],
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 4),
               Row(
                 children: [
                   Expanded(
@@ -299,12 +299,12 @@ class _CampaignMetadata extends StatelessWidget {
     final theme = Theme.of(context);
     final color = theme.colorScheme.onSurfaceVariant;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: Align(
         alignment: Alignment.centerLeft,
         child: Wrap(
           spacing: 16,
-          runSpacing: 6,
+          runSpacing: 8,
           children: [
             _MetadataItem(
               icon: Icons.group_outlined,
@@ -340,7 +340,7 @@ class _MetadataItem extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, size: 16, color: color),
-        const SizedBox(width: 6),
+        const SizedBox(width: 8),
         Text(
           label,
           style: Theme.of(
@@ -381,7 +381,7 @@ class _ConversationSection extends StatelessWidget {
           key: toggleKey,
           onTap: onToggle,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
                 Icon(icon, size: 20, color: colorScheme.onSurfaceVariant),
@@ -389,7 +389,7 @@ class _ConversationSection extends StatelessWidget {
                 Expanded(child: Text(title)),
                 Text(
                   '${conversations.length}',
-                  style: TextStyle(color: colorScheme.onSurfaceVariant),
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(color: colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(width: 4),
                 Icon(expanded ? Icons.expand_less : Icons.expand_more),

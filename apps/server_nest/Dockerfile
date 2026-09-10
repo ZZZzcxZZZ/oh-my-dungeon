@@ -6,6 +6,8 @@ COPY apps/server_nest/package.json apps/server_nest/package-lock.json ./
 RUN npm ci --ignore-scripts
 
 COPY apps/server_nest ./
+# 离线引擎: Windows 上打包会丢失执行位, 必须显式恢复.
+RUN chmod +x engines/*
 # 离线引擎: 不依赖 binaries.prisma.sh 下载, 构建期直接使用仓库内引擎.
 ENV PRISMA_SCHEMA_ENGINE_BINARY=/app/apps/server_nest/engines/schema-engine-linux-musl-openssl-3.0.x
 ENV PRISMA_QUERY_ENGINE_LIBRARY=/app/apps/server_nest/engines/libquery_engine-linux-musl-openssl-3.0.x.so.node
@@ -29,6 +31,7 @@ COPY --from=build /app/apps/server_nest/dist ./dist
 COPY --from=build /app/apps/server_nest/node_modules/.prisma ./node_modules/.prisma
 # 离线引擎: runtime migrate/seed 不再联网下载.
 COPY --from=build /app/apps/server_nest/engines ./engines
+RUN chmod +x engines/*
 ENV PRISMA_SCHEMA_ENGINE_BINARY=/app/apps/server_nest/engines/schema-engine-linux-musl-openssl-3.0.x
 ENV PRISMA_QUERY_ENGINE_LIBRARY=/app/apps/server_nest/engines/libquery_engine-linux-musl-openssl-3.0.x.so.node
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/server_discovery_client.dart';
 import '../data/server_profile_store.dart';
 import '../domain/server_profile.dart';
+import '../../../core/widgets/empty_state.dart';
 
 enum _ServerProfileAction { setDefault, editName, delete }
 
@@ -199,35 +200,17 @@ class _ServerProfilesPageState extends State<ServerProfilesPage> {
             return Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 420),
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.dns_outlined,
-                        size: 64,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        '连接你的跑团服务器',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '添加自托管服务器后，可以登录并进入联机战役。',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 24),
-                      FilledButton.icon(
-                        onPressed: _showAddServerDialog,
-                        icon: const Icon(Icons.add),
-                        label: const Text('添加服务器'),
-                      ),
-                    ],
+                child: EmptyState(
+                  icon: Icons.dns_outlined,
+                  iconSize: 64,
+                  iconColor: Theme.of(context).colorScheme.primary,
+                  title: '连接你的跑团服务器',
+                  titleStyle: Theme.of(context).textTheme.headlineSmall,
+                  message: '添加自托管服务器后，可以登录并进入联机战役。',
+                  action: FilledButton.icon(
+                    onPressed: _showAddServerDialog,
+                    icon: const Icon(Icons.add),
+                    label: const Text('添加服务器'),
                   ),
                 ),
               ),

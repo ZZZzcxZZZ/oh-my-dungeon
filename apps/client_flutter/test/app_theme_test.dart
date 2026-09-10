@@ -57,6 +57,178 @@ void main() {
       expect(resolved.topLeft.y, lessThanOrEqualTo(8));
       expect(resolved.bottomRight.x, lessThanOrEqualTo(8));
     });
+
+    test('chip label uses onSecondaryContainer when selected (E1)', () {
+      final theme = AppTheme.light(AppPreferences.defaults);
+
+      // Unselected chips: label on surfaceContainerHigh.
+      expect(theme.chipTheme.labelStyle?.color, theme.colorScheme.onSurface);
+      // Selected chips (ChoiceChip/FilterChip/InputChip): the background
+      // switches to secondaryContainer, so the label must follow the on-*
+      // contract instead of staying onSurface.
+      expect(
+        theme.chipTheme.secondaryLabelStyle?.color,
+        theme.colorScheme.onSecondaryContainer,
+      );
+    });
+
+    test('dialog theme stays flat with elevation 0 (E4)', () {
+      final theme = AppTheme.light(AppPreferences.defaults);
+
+      expect(theme.dialogTheme.elevation, 0);
+      expect(theme.bottomSheetTheme.modalElevation, 0);
+    });
+
+    test('search bar is themed flat with 8dp radius (E5)', () {
+      final theme = AppTheme.light(AppPreferences.defaults);
+
+      final searchBar = theme.searchBarTheme;
+      expect(searchBar.elevation!.resolve({}), 0);
+      expect(searchBar.surfaceTintColor!.resolve({}), Colors.transparent);
+      final shape = searchBar.shape!.resolve({});
+      expect(shape, isA<RoundedRectangleBorder>());
+      final radius =
+          (shape as RoundedRectangleBorder).borderRadius as BorderRadius;
+      final resolved = radius.resolve(TextDirection.ltr);
+      expect(resolved.topLeft.x, 8);
+    });
+  });
+
+  group('AppTheme.light theme contract (DESIGN.md)', () {
+    // 每个组件主题都必须落在 DESIGN.md 声明的契约上，防止 E1-E5 类
+    // 回归（颜色角色 / 圆角 / 扁平化）。
+
+    BorderRadius radiusOf(ShapeBorder? shape) {
+      expect(shape, isA<RoundedRectangleBorder>());
+      return ((shape as RoundedRectangleBorder).borderRadius as BorderRadius)
+          .resolve(TextDirection.ltr);
+    }
+
+    test('card: surfaceContainerLow + outlineVariant border, flat, 8dp', () {
+      final theme = AppTheme.light(AppPreferences.defaults);
+
+      expect(theme.cardTheme.color, theme.colorScheme.surfaceContainerLow);
+      expect(theme.cardTheme.surfaceTintColor, Colors.transparent);
+      expect(theme.cardTheme.elevation, 0);
+      final border = theme.cardTheme.shape as RoundedRectangleBorder;
+      expect(border.side.color, theme.colorScheme.outlineVariant);
+      expect(radiusOf(theme.cardTheme.shape).topLeft.x, 8);
+    });
+
+    test('dialog: surfaceContainerHigh, flat, 16dp', () {
+      final theme = AppTheme.light(AppPreferences.defaults);
+
+      expect(theme.dialogTheme.backgroundColor, theme.colorScheme.surfaceContainerHigh);
+      expect(theme.dialogTheme.elevation, 0);
+      expect(radiusOf(theme.dialogTheme.shape).topLeft.x, 16);
+    });
+
+    test('bottom sheet: surfaceContainerHigh, top radius 16, no elevation', () {
+      final theme = AppTheme.light(AppPreferences.defaults);
+
+      expect(theme.bottomSheetTheme.backgroundColor, theme.colorScheme.surfaceContainerHigh);
+      expect(theme.bottomSheetTheme.modalElevation, 0);
+      expect(theme.bottomSheetTheme.surfaceTintColor, Colors.transparent);
+      final shape = theme.bottomSheetTheme.shape as RoundedRectangleBorder;
+      final radius = (shape.borderRadius as BorderRadius).resolve(TextDirection.ltr);
+      expect(radius.topLeft.x, 16);
+      expect(radius.bottomLeft.x, 0);
+    });
+
+    test('snackbar: floating inverseSurface with 8dp radius', () {
+      final theme = AppTheme.light(AppPreferences.defaults);
+
+      expect(theme.snackBarTheme.behavior, SnackBarBehavior.floating);
+      expect(theme.snackBarTheme.backgroundColor, theme.colorScheme.inverseSurface);
+      expect(
+        theme.snackBarTheme.contentTextStyle?.color,
+        theme.colorScheme.onInverseSurface,
+      );
+      expect(radiusOf(theme.snackBarTheme.shape).topLeft.x, 8);
+    });
+
+    test('navigation: surfaceContainer bars with secondaryContainer indicator', () {
+      final theme = AppTheme.light(AppPreferences.defaults);
+
+      expect(theme.navigationBarTheme.backgroundColor, theme.colorScheme.surfaceContainer);
+      expect(theme.navigationBarTheme.indicatorColor, theme.colorScheme.secondaryContainer);
+      expect(theme.navigationRailTheme.backgroundColor, theme.colorScheme.surfaceContainer);
+      expect(theme.navigationRailTheme.indicatorColor, theme.colorScheme.secondaryContainer);
+    });
+
+    test('inputs: filled surfaceContainerHigh with 8dp radius', () {
+      final theme = AppTheme.light(AppPreferences.defaults);
+
+      expect(theme.inputDecorationTheme.filled, isTrue);
+      expect(theme.inputDecorationTheme.fillColor, theme.colorScheme.surfaceContainerHigh);
+      final border = theme.inputDecorationTheme.border as OutlineInputBorder;
+      expect(
+        border.borderRadius.resolve(TextDirection.ltr).topLeft.x,
+        8,
+      );
+    });
+
+    test('divider: outlineVariant 1px', () {
+      final theme = AppTheme.light(AppPreferences.defaults);
+
+      expect(theme.dividerTheme.color, theme.colorScheme.outlineVariant);
+      expect(theme.dividerTheme.thickness, 1);
+    });
+
+    test('button families: filled/elevated/text/outlined roles with 8dp radius', () {
+      final theme = AppTheme.light(AppPreferences.defaults);
+
+      final filled = theme.filledButtonTheme.style!;
+      expect(filled.backgroundColor!.resolve({}), theme.colorScheme.primary);
+      expect(filled.foregroundColor!.resolve({}), theme.colorScheme.onPrimary);
+      expect(
+        (filled.shape!.resolve({}) as RoundedRectangleBorder)
+            .borderRadius
+            .resolve(TextDirection.ltr)
+            .topLeft
+            .x,
+        8,
+      );
+
+      final elevated = theme.elevatedButtonTheme.style!;
+      expect(elevated.backgroundColor!.resolve({}), theme.colorScheme.surfaceContainerHigh);
+      expect(elevated.foregroundColor!.resolve({}), theme.colorScheme.onSurface);
+      expect(elevated.surfaceTintColor!.resolve({}), Colors.transparent);
+
+      final text = theme.textButtonTheme.style!;
+      expect(text.foregroundColor!.resolve({}), theme.colorScheme.primary);
+
+      final outlined = theme.outlinedButtonTheme.style!;
+      expect(outlined.foregroundColor!.resolve({}), theme.colorScheme.primary);
+      expect(outlined.side!.resolve({})!.color, theme.colorScheme.outline);
+    });
+
+    test('switch: primary track when selected', () {
+      final theme = AppTheme.light(AppPreferences.defaults);
+
+      expect(
+        theme.switchTheme.trackColor!.resolve({WidgetState.selected}),
+        theme.colorScheme.primary,
+      );
+      expect(
+        theme.switchTheme.thumbColor!.resolve({WidgetState.selected}),
+        theme.colorScheme.onPrimary,
+      );
+    });
+
+    test('segmented button: selected secondaryContainer roles', () {
+      final theme = AppTheme.light(AppPreferences.defaults);
+
+      final style = theme.segmentedButtonTheme.style;
+      expect(
+        style!.backgroundColor!.resolve({WidgetState.selected}),
+        theme.colorScheme.secondaryContainer,
+      );
+      expect(
+        style.foregroundColor!.resolve({WidgetState.selected}),
+        theme.colorScheme.onSecondaryContainer,
+      );
+    });
   });
 
   group('AppTheme.dark', () {

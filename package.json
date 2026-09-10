@@ -23,10 +23,14 @@
     "docker:config": "pwsh -NoLogo -NoProfile -File scripts/docker-compose.ps1 config",
     "docker:up": "pwsh -NoLogo -NoProfile -File scripts/docker-compose.ps1 up -d",
     "docker:down": "pwsh -NoLogo -NoProfile -File scripts/docker-compose.ps1 down",
-    "docker:logs": "pwsh -NoLogo -NoProfile -File scripts/docker-compose.ps1 logs -f"
+    "docker:logs": "pwsh -NoLogo -NoProfile -File scripts/docker-compose.ps1 logs -f",
+    "lint:design": "designmd lint DESIGN.md"
   },
   "engines": {
     "node": ">=22 <25",
     "npm": ">=10"
+  },
+  "devDependencies": {
+    "@google/design.md": "^0.4.0"
   }
 }

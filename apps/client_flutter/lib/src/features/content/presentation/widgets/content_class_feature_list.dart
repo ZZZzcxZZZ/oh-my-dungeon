@@ -31,7 +31,7 @@ class ContentClassFeatureList extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         Text('等级特性', style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
         for (final level in levels) ...[

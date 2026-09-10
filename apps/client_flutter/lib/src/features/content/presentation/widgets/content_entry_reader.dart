@@ -69,7 +69,7 @@ class ContentEntryReader extends StatelessWidget {
         ],
         if (shouldShowMetadataView(entry)) ContentMetadataView(entry: entry),
         if (body.isNotEmpty) ...[
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           ContentBlockView(
             blocks: body,
             packageId: packageId,

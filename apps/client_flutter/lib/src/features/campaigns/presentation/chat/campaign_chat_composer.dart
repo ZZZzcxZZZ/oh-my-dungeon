@@ -65,7 +65,7 @@ class CampaignChatComposer extends StatelessWidget {
                       onTap: sending ? null : onIdentityTap,
                     ),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Container(
                       key: const Key('campaign-composer-input-surface'),
@@ -78,18 +78,15 @@ class CampaignChatComposer extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           if (identity.supportsSayAction) ...[
-                            Padding(
-                              padding: const EdgeInsets.all(4),
-                              child: SizedBox.square(
-                                dimension: 40,
-                                child: ChatModePicker(
-                                  mode: mode,
-                                  enabled: !sending,
-                                  onChanged: onModeChanged,
-                                ),
+                            SizedBox.square(
+                              dimension: 48,
+                              child: ChatModePicker(
+                                mode: mode,
+                                enabled: !sending,
+                                onChanged: onModeChanged,
                               ),
                             ),
-                            const SizedBox(width: 2),
+                            const SizedBox(width: 4),
                           ],
                           Expanded(
                             child: TextField(
@@ -119,7 +116,7 @@ class CampaignChatComposer extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   SizedBox.square(
                     key: const Key('campaign-chat-send-target'),
                     dimension: 48,
@@ -198,7 +195,7 @@ class _DraftIdentityBanner extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Container(
       key: const Key('draft-identity-banner'),
-      margin: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+      margin: const EdgeInsets.fromLTRB(8, 8, 8, 0),
       padding: const EdgeInsets.only(left: 12),
       decoration: BoxDecoration(
         color: colors.secondaryContainer,

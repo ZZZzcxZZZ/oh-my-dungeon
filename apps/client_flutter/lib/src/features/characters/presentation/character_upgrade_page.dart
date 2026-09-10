@@ -73,7 +73,7 @@ class _CharacterUpgradePageState extends State<CharacterUpgradePage> {
                         widget.character.classSummary,
                         style: Theme.of(context).textTheme.bodyLarge,
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
                       _UpgradeSection(
                         title: '自动获得',
                         icon: Icons.auto_awesome_outlined,
@@ -228,7 +228,6 @@ class _ChoiceOptions extends StatelessWidget {
                   IconButton(
                     key: Key('builder-open-entry-${option.id}'),
                     tooltip: '查看 ${option.name}',
-                    visualDensity: VisualDensity.compact,
                     onPressed: () => showContentEntryPreviewDialog(
                       context,
                       entry: option,
@@ -270,7 +269,7 @@ class _UpgradeSection extends StatelessWidget {
               Text(title, style: Theme.of(context).textTheme.titleMedium),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           child,
         ],
       ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/campaign_character.dart';
 import '../widgets/campaign_avatar.dart';
+import '../../../../core/widgets/empty_state.dart';
 
 Future<CampaignCharacter?> showCampaignCharacterPickerSheet({
   required BuildContext context,
@@ -74,11 +75,9 @@ class _CampaignCharacterPickerSheetState
               const SizedBox(height: 8),
               Flexible(
                 child: characters.isEmpty
-                    ? const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(24),
-                          child: Text('没有匹配的角色'),
-                        ),
+                    ? const EmptyState(
+                        icon: Icons.person_search_outlined,
+                        title: '没有匹配的角色',
                       )
                     : ListView.builder(
                         shrinkWrap: true,

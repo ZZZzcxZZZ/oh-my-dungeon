@@ -158,9 +158,12 @@ class _DataManagementPageState extends State<DataManagementPage> {
                 if (!preview.valid) ...[
                   Text(
                     '无效存档：${preview.error ?? '未知错误'}',
-                    style: TextStyle(
-                      color: Theme.of(dialogContext).colorScheme.error,
-                    ),
+                    style: Theme.of(dialogContext)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(
+                          color: Theme.of(dialogContext).colorScheme.error,
+                        ),
                   ),
                 ] else ...[
                   _previewRow(dialogContext, '资料包', preview.packageCount),
@@ -196,7 +199,7 @@ class _DataManagementPageState extends State<DataManagementPage> {
 
   Widget _previewRow(BuildContext context, String label, Object value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [

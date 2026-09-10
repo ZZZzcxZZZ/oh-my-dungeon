@@ -267,7 +267,9 @@ class _GameplaySettingsSectionState extends State<GameplaySettingsSection> {
               Text(
                 '还没有自定义预设',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.outline,
+                  // outline is a border role (~4.1:1 on the card, below AA);
+                  // secondary text belongs to onSurfaceVariant (E3).
+                  color: colorScheme.onSurfaceVariant,
                 ),
               )
             else

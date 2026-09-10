@@ -6,6 +6,8 @@ import '../domain/campaign.dart';
 import 'campaign_controller.dart';
 import 'widgets/campaign_invite_tile.dart';
 import 'widgets/invite_share.dart';
+import '../../../app/theme/app_text_styles.dart';
+import '../../../core/widgets/empty_state.dart';
 
 class CampaignDetailPage extends StatefulWidget {
   const CampaignDetailPage({
@@ -64,11 +66,7 @@ class _CampaignDetailPageState extends State<CampaignDetailPage> {
               const SizedBox(height: 16),
               SelectableText(
                 invite.code,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 2,
-                ),
+                style: AppTextStyles.inviteCode(Theme.of(context).textTheme),
               ),
               const SizedBox(height: 8),
               Align(
@@ -133,14 +131,14 @@ class _CampaignDetailPageState extends State<CampaignDetailPage> {
             return Center(
               child: Text(
                 widget.controller.detailError!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.error),
               ),
             );
           }
 
           final campaign = widget.controller.selectedCampaign;
           if (campaign == null) {
-            return const Center(child: Text('未找到战役'));
+            return const EmptyState(icon: Icons.search_off, title: '未找到战役');
           }
 
           final isOwner = _isOwner(campaign, widget.controller.authController);
@@ -159,7 +157,9 @@ class _CampaignDetailPageState extends State<CampaignDetailPage> {
                 Text(
                   '暂无描述',
                   style: TextStyle(
-                    color: Theme.of(context).colorScheme.outline,
+                    // outline is a border role (~4.3:1 on surface, below AA);
+                    // secondary text belongs to onSurfaceVariant (E3).
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               const SizedBox(height: 16),

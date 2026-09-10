@@ -104,6 +104,11 @@ class AppTheme {
         selectedColor: colorScheme.secondaryContainer,
         checkmarkColor: colorScheme.onSecondaryContainer,
         labelStyle: TextStyle(color: colorScheme.onSurface),
+        // Selected chips switch their background to secondaryContainer, so
+        // the label must follow the on-* contract (E1).
+        secondaryLabelStyle: TextStyle(
+          color: colorScheme.onSecondaryContainer,
+        ),
         side: BorderSide(color: colorScheme.outlineVariant),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
@@ -134,6 +139,9 @@ class AppTheme {
       dialogTheme: DialogThemeData(
         backgroundColor: colorScheme.surfaceContainerHigh,
         surfaceTintColor: Colors.transparent,
+        // Keep the flat contract: without this, AlertDialog falls back to
+        // the M3 default elevation 3.0 (E4).
+        elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       bottomSheetTheme: BottomSheetThemeData(
@@ -149,6 +157,22 @@ class AppTheme {
         color: colorScheme.outlineVariant,
         thickness: 1,
         space: 1,
+      ),
+      // Themed search bar: without this, SearchBar falls back to the M3
+      // defaults (StadiumBorder pill + elevation 6), breaking both the 8dp
+      // radius and the flat elevation contract (E5).
+      searchBarTheme: SearchBarThemeData(
+        elevation: const WidgetStatePropertyAll(0),
+        surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+        backgroundColor: WidgetStatePropertyAll(
+          colorScheme.surfaceContainerHigh,
+        ),
+        side: WidgetStatePropertyAll(
+          BorderSide(color: colorScheme.outlineVariant),
+        ),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(

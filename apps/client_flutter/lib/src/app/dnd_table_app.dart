@@ -24,6 +24,7 @@ import '../core/dice/dice_roller.dart';
 import '../features/server_home/domain/active_server_session.dart';
 import '../features/server_profiles/data/drift_server_profile_store.dart';
 import '../features/server_profiles/data/server_discovery_client.dart';
+import '../features/server_profiles/data/bundled_default_server_seeder.dart';
 import '../features/server_profiles/data/server_profile_migrator.dart';
 import '../features/server_profiles/data/server_profile_store.dart';
 import '../features/server_profiles/presentation/server_profiles_page.dart';
@@ -196,6 +197,11 @@ class _OhMyDungeonAppState extends State<OhMyDungeonApp> {
       serverProfileStore = DriftServerProfileStore(profileDatabase);
       final prefs = preferences ?? await SharedPreferences.getInstance();
       await ServerProfileMigrator(profileDatabase, prefs).run();
+      // 全新安装首次启动自动加入内嵌默认服务器（仅当没有 profile 时）。
+      await const BundledDefaultServerSeeder().seedIfEmpty(
+        serverProfileStore,
+        prefs,
+      );
     }
 
     return _AppDeps(

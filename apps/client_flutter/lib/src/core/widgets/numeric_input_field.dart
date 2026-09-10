@@ -69,7 +69,6 @@ class _NumericInputFieldState extends State<NumericInputField> {
         decoration: InputDecoration(
           labelText: widget.label,
           isDense: true,
-          border: const OutlineInputBorder(),
         ),
         onChanged: (text) {
           if (text.isEmpty) {

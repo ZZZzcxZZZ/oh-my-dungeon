@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'campaign_content_controller.dart';
+import '../../../../app/theme/app_text_styles.dart';
 
 /// JSON 导入对话框。允许粘贴单对象或数组，先本地解析预览，再逐条调用
 /// [CampaignContentController.createEntry] 发布到服务器。
@@ -98,12 +99,11 @@ class _CampaignJsonImportDialogState extends State<CampaignJsonImportDialog> {
                 key: const Key('json-import-text-field'),
                 controller: _textController,
                 decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
                   hintText: '粘贴单个对象或数组 JSON',
                   isDense: true,
                 ),
                 maxLines: 8,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                style: AppTextStyles.monoCode(Theme.of(context).textTheme),
               ),
               const SizedBox(height: 8),
               Align(
@@ -116,7 +116,7 @@ class _CampaignJsonImportDialogState extends State<CampaignJsonImportDialog> {
                 ),
               ),
               if (_parseError != null) ...[
-                Text(_parseError!, style: TextStyle(color: colorScheme.error)),
+                Text(_parseError!, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: colorScheme.error)),
               ],
               if (_preview != null) ...[
                 const SizedBox(height: 8),
@@ -127,7 +127,7 @@ class _CampaignJsonImportDialogState extends State<CampaignJsonImportDialog> {
                 const SizedBox(height: 4),
                 ...(_preview!.map(
                   (entry) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Row(
                       children: [
                         Icon(

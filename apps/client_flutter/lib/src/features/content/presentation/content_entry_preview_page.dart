@@ -19,7 +19,7 @@ class ContentEntryPreviewPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(entry.name)),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
         children: [
           Center(
             child: ConstrainedBox(
@@ -131,7 +131,7 @@ class _ContentEntryPreviewDialogState
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 8, 8),
+                padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
                 child: Row(
                   children: [
                     Expanded(
@@ -154,7 +154,7 @@ class _ContentEntryPreviewDialogState
               const Divider(height: 1),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                   children: [
                     ContentEntryReader(
                       entry: _entry,

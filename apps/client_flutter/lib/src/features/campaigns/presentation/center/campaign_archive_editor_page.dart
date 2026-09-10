@@ -228,8 +228,8 @@ class _CampaignArchiveEditorPageState extends State<CampaignArchiveEditorPage> {
         const SizedBox(height: 8),
         if (_tags.isNotEmpty) ...[
           Wrap(
-            spacing: 6,
-            runSpacing: 6,
+            spacing: 8,
+            runSpacing: 8,
             children: [
               for (final tag in _tags)
                 Chip(
@@ -247,6 +247,7 @@ class _CampaignArchiveEditorPageState extends State<CampaignArchiveEditorPage> {
             labelText: '添加标签',
             hintText: '输入后回车添加',
             suffixIcon: IconButton(
+              tooltip: '添加标签',
               icon: const Icon(Icons.add),
               onPressed: _addTag,
             ),
@@ -432,7 +433,7 @@ class _BodyBlockCard extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     _typeLabels[block.type] ?? block.type,

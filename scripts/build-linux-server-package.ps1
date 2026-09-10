@@ -39,7 +39,9 @@ $serverBuildInputs = @(
   "prisma",
   "src",
   "tsconfig.build.json",
-  "tsconfig.json"
+  "tsconfig.json",
+  # 离线 Prisma 引擎: Dockerfile 构建期依赖, 必须随包分发.
+  "engines"
 )
 foreach ($input in $serverBuildInputs) {
   Copy-Item -LiteralPath (Join-Path $serverSource $input) -Destination $serverDestination -Recurse -Force

@@ -266,7 +266,6 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                     controller: _nameController,
                     decoration: const InputDecoration(
                       labelText: '名称',
-                      border: OutlineInputBorder(),
                     ),
                     textInputAction: TextInputAction.next,
                   ),
@@ -279,7 +278,6 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                           controller: _classController,
                           decoration: const InputDecoration(
                             labelText: '职业',
-                            border: OutlineInputBorder(),
                           ),
                         ),
                       ),
@@ -290,7 +288,6 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                           controller: _raceController,
                           decoration: const InputDecoration(
                             labelText: '种族',
-                            border: OutlineInputBorder(),
                           ),
                         ),
                       ),
@@ -345,7 +342,6 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                         controller: _abilityControllers[entry.key],
                         decoration: InputDecoration(
                           labelText: entry.value,
-                          border: const OutlineInputBorder(),
                         ),
                         keyboardType: TextInputType.number,
                       ),
@@ -413,7 +409,6 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                     controller: _inventoryController,
                     decoration: const InputDecoration(
                       labelText: '装备，每行一个，例如：治疗药水 x2',
-                      border: OutlineInputBorder(),
                     ),
                     minLines: 3,
                     maxLines: 5,
@@ -428,7 +423,6 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                             controller: _currencyControllers[key],
                             decoration: InputDecoration(
                               labelText: key,
-                              border: const OutlineInputBorder(),
                             ),
                             keyboardType: TextInputType.number,
                           ),
@@ -447,7 +441,6 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                 controller: _notesController,
                 decoration: const InputDecoration(
                   labelText: '背景、个性、临时说明',
-                  border: OutlineInputBorder(),
                 ),
                 minLines: 3,
                 maxLines: 6,
@@ -485,7 +478,6 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
       controller: controller,
       decoration: InputDecoration(
         labelText: label,
-        border: const OutlineInputBorder(),
       ),
       keyboardType: TextInputType.number,
       onChanged: onChanged,
@@ -503,7 +495,6 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
             initialValue: _characterKind,
             decoration: const InputDecoration(
               labelText: '类型',
-              border: OutlineInputBorder(),
             ),
             items: const [
               DropdownMenuItem(value: 'monster', child: Text('怪物')),
@@ -539,7 +530,6 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                         controller: _characterControllers[field.$1],
                         decoration: InputDecoration(
                           labelText: field.$2,
-                          border: const OutlineInputBorder(),
                         ),
                       ),
                     ),
@@ -557,7 +547,6 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
               labelText: '描述',
               hintText: '外观、习性、背景或主持人说明',
               alignLabelWithHint: true,
-              border: OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 16),
@@ -577,7 +566,6 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                   labelText: entry.key,
                   hintText: '支持标题、列表和骰式等可读 Markdown',
                   alignLabelWithHint: true,
-                  border: const OutlineInputBorder(),
                 ),
               ),
             ),
@@ -1055,7 +1043,7 @@ class _CharacterUpgradeSection extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
                     '请完成本级新增选择，或恢复缺失的资料条目。',
-                    style: TextStyle(
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(context).colorScheme.error,
                     ),
                   ),
@@ -1119,7 +1107,7 @@ class _UpgradeRuleChoiceSection extends StatelessWidget {
             if (options.isEmpty)
               Text(
                 '没有符合当前等级与资格的选项。',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.error),
               )
             else
               Wrap(
@@ -2116,7 +2104,7 @@ class _BuilderStepEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 760),
@@ -2136,7 +2124,7 @@ class _BuilderStepEditor extends StatelessWidget {
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               TextField(
                 key: const Key('standard-character-name-field'),
                 controller: nameController,
@@ -2144,11 +2132,10 @@ class _BuilderStepEditor extends StatelessWidget {
                   labelText: '角色名',
                   hintText: '可以稍后修改',
                   prefixIcon: Icon(Icons.badge_outlined),
-                  border: OutlineInputBorder(),
                 ),
                 onChanged: onNameChanged,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 180),
                 child: KeyedSubtree(key: ValueKey(step), child: child),
@@ -2269,14 +2256,14 @@ class _BuilderSummaryPanel extends StatelessWidget {
     );
     final armorClass = Dnd5eRules.baseArmorClass(abilities);
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text('角色摘要', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 8),
           Text(summary, style: Theme.of(context).textTheme.bodyMedium),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
@@ -2295,13 +2282,13 @@ class _BuilderSummaryPanel extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           Text('完成度', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
           LinearProgressIndicator(value: review.progress),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text('${review.completed}/${review.total} 已完成'),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.backpack_outlined),
@@ -2497,7 +2484,7 @@ class _StructuredRuleSummary extends StatelessWidget {
       child: Card.filled(
         key: Key('structured-rule-summary-$title'),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2513,7 +2500,7 @@ class _StructuredRuleSummary extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               for (final item in items)
                 ListTile(
                   dense: true,
@@ -2822,7 +2809,7 @@ class _RuleChoiceSection extends StatelessWidget {
               if (options.isEmpty)
                 Text(
                   '资料库中缺少 ${definition.optionType} 选项。',
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.error),
                 )
               else
                 Wrap(
@@ -2852,7 +2839,6 @@ class _RuleChoiceSection extends StatelessWidget {
                           IconButton(
                             key: Key('builder-open-entry-${option.id}'),
                             tooltip: '查看 ${option.name}',
-                            visualDensity: VisualDensity.compact,
                             onPressed: () => showContentEntryPreviewDialog(
                               context,
                               entry: option,
@@ -2984,7 +2970,6 @@ class _ChoiceSection extends StatelessWidget {
                     if (onOpenOption != null)
                       IconButton(
                         tooltip: '查看 $option',
-                        visualDensity: VisualDensity.compact,
                         onPressed: () => onOpenOption!(option),
                         icon: const Icon(Icons.open_in_new, size: 18),
                       ),
@@ -3253,7 +3238,6 @@ class _AbilityScoreSection extends StatelessWidget {
                               labelText: entry.value,
                               helperText:
                                   '调整值 ${Dnd5eRules.formatModifier(Dnd5eRules.abilityModifier(scores[entry.key] ?? 10))}',
-                              border: const OutlineInputBorder(),
                             ),
                             onChanged: (value) =>
                                 onChanged(entry.key, int.tryParse(value) ?? 0),
@@ -3293,7 +3277,7 @@ class _PointBuyAbilityTile extends StatelessWidget {
       color: Theme.of(context).colorScheme.surfaceContainerLow,
       borderRadius: BorderRadius.circular(8),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         child: Row(
           children: [
             Expanded(
@@ -3839,17 +3823,26 @@ class _EquipmentBudgetSummary extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '已选总价 ${total.format()}',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    if (budget != null) Text('建议金币上限 ${budget.format()}'),
-                    if (unpriced > 0) Text('$unpriced 件自定义或资料物品未标价'),
-                    if (overBudget) const Text('已超出建议上限，仍可继续创建和购买。'),
-                  ],
+                // Text rows sit on a secondaryContainer/errorContainer
+                // surface, so they must use the matching on-* role (E2).
+                child: DefaultTextStyle(
+                  style: TextStyle(
+                    color: overBudget
+                        ? colors.onErrorContainer
+                        : colors.onSecondaryContainer,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '已选总价 ${total.format()}',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      if (budget != null) Text('建议金币上限 ${budget.format()}'),
+                      if (unpriced > 0) Text('$unpriced 件自定义或资料物品未标价'),
+                      if (overBudget) const Text('已超出建议上限，仍可继续创建和购买。'),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -3948,7 +3941,6 @@ class _MultiChoiceSection extends StatelessWidget {
                       if (onOpenOption != null)
                         IconButton(
                           tooltip: '查看 $option',
-                          visualDensity: VisualDensity.compact,
                           onPressed: () => onOpenOption!(option),
                           icon: const Icon(Icons.open_in_new, size: 18),
                         ),
@@ -3976,7 +3968,7 @@ class _Section extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           child,
         ],
       ),

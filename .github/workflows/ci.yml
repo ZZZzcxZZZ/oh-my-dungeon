@@ -38,6 +38,38 @@ jobs:
       - run: flutter analyze
       - run: flutter test
 
+  design:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      # DESIGN.md 契约 lint：token 引用、章节顺序、组件对比度（WCAG AA）。
+      - run: npm run lint:design
+
+  golden:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/client_flutter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          # 与生成基线时的本地 SDK 版本保持一致（golden 对 Flutter 版本敏感）。
+          flutter-version: 3.41.4
+          cache: true
+      - run: flutter pub get
+      # Linux 上验证 golden 基线（flutter_tester 软件渲染 + 资产字体，
+      # 与生成平台确定性一致）。如 CI 出现像素差异，用
+      # `--update-goldens` 重新生成并提交。
+      - run: flutter test --tags golden --dart-define=GOLDEN_TESTS=true test/golden
+
   docker:
     runs-on: ubuntu-latest
     steps:

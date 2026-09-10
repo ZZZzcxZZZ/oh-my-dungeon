@@ -76,7 +76,7 @@ class AvatarPicker extends StatelessWidget {
         ],
         if (error != null && error!.isNotEmpty) ...[
           const SizedBox(height: 12),
-          Text(error!, style: TextStyle(color: theme.colorScheme.error)),
+          Text(error!, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.error)),
         ],
       ],
     );

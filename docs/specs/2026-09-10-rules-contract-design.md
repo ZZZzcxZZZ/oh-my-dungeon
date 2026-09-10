@@ -10,19 +10,36 @@
 
 ## 0. 用户补充的关键需求（2026-09-10，优先级最高）
 
+**需求一（选择系统）**：
+
 > "我希望自己写职业时有很大的自定义空间。比如几级获得几个法术位，获得什么资源，
 > 获得什么特性，做出什么选择这些都可以自定义。**尤其是做选择这一部分非常关键。
 > 比如法术的选择。**"
 
-这条需求把"选择"从 S2 的附带项提升为**核心交付**。§3.10 是对应的现状盘点、
-目标模型与缺口清单；其范围归属（并入 S1+S2 还是独立成子项目）**待用户确认**，
-未确认前不进入实现计划。
+**需求二（不背兼容包袱 + 双高要求）**：
+
+> "兼容层不用管，到时候重新转换或者重新提取就好了。**自定义程度和方便程度都必须高**。"
+
+这两条一起改变了设计基线：
+
+1. **不保留兼容层**。旧契约形状（中文散文 `savingThrows`/`skills`、`preparedSpellcasting` 开关、
+   `spellSlot:`/`classResource:` 逐级 grant）**不再解析**；`scripts/extract_phb_2024_v2.py`
+   与私有包一起**按新契约重写/重提取**。因此契约可以按"最好写、最强表达"来设计，
+   不必迁就历史形状。
+2. **"自定义程度"与"方便程度"是并列的硬指标**，不是取舍关系：既要能表达任意职业进阶、
+   任意选择结构，又要让作者用尽量少的字段写出来。为此引入两层：
+   **简写层（`classRules` / 内联选项 / 自动授予）** 与 **规范层（canonical：choices / grants / tables）**，
+   解析器负责把简写规范化为规范层，诊断信息指向作者写的那一行。
+3. 唯一保留的迁移是**用户数据**：老角色卡一次性回填 `data.classIdentity`（内容可以重提取，
+   玩家的角色卡不能重来）。除此之外不做任何旧格式读取。
+
+`§3.10` 是选择系统的完整契约（已按需求一并入本轮范围，不再有 S2.5 尾巴）。
 
 ---
 
 ## 1. 背景与现状（实测）
 
-### 1.1 真实内容源已经在按一套契约书写
+### 1.1 真实内容源的实测形状（**将被重提取替换**）
 
 `private-imports/phb-2024-v2-bundle.json`（formatVersion 2，id `phb-2024`，1106 条）：
 
@@ -35,7 +52,11 @@
 
 真实包**没有**声明：职业豁免数值表、准备法术上限标志、战士/野蛮人的任何职业资源。
 
-### 1.2 代码是它的补丁，因此存在 7 个具体缺口
+按 §0 需求二，**这份形状不构成契约**：它是旧提取器的产物，将被 P0 的重写版替换。
+保留本节实测的意义是——它精确告诉我们"旧提取器丢了什么、写得多难用"（散文、双重表示、
+660 个逐级 grant），从而定出新契约必须补上的能力。
+
+### 1.2 代码是它的补丁，因此存在 8 个具体缺口
 
 | # | 缺口 | 现状证据 | 后果 |
 |---|---|---|---|
@@ -45,17 +66,22 @@
 | G4 | `structured` 规则字段零校验 | 导入器只校验 entry 必填字段与 grant 引用存在性 | 写错不报错，静默降级为错误角色卡；`_validSkills` 还**静默丢弃**未知技能 |
 | G5 | 准备法术上限依赖一个真实包没有的开关 | `StructuredClassRules.preparedSpellLimit` 要求 `structured.preparedSpellcasting == true` | 真实包角色**根本没有**准备法术上限，尽管包里已有 `maximumLeveledSpells` |
 | G6 | 邪术师契约魔法双重表示 | 包里是 `classResource:pactMagicSlots` grant，代码里又有 `pactSlotMaximums` 硬编码表 | 同一事实两处维护，短休恢复语义两套 |
-| G7 | 作者侧无 GUI、无导出 | `LocalHomebrewContentService` 无 UI 调用者（仅测试）；资料包页只有导入/删除 | 属于 S4，本次不做 |
+| G7 | 作者侧无 GUI、无导出 | `LocalHomebrewContentService` 无 UI 调用者（仅测试）；资料包页只有导入/删除 | 属于 S4，本次只保证契约与引擎支持全部能力 |
+| G8 | 提取器产出的是"难写的形状" | `scripts/extract_phb_2024_v2.py` 输出中文散文豁免/技能、逐级 `spellSlot:` grant（660 个）、契约外字段 | 作者无法照抄；新契约必须让提取器与第三方作者用同一种简洁写法（P0 重写） |
 
 ### 1.3 本次目标
 
-把这套事实契约**正式化、补全、可校验、可覆盖**，并把代码里的补丁表搬进随包发布的规则档案：
+**重新定义一套干净、好写、表达力强的规则契约**，把代码里的补丁表搬进随包发布的规则档案，
+并让提取器与第三方作者使用同一种写法：
 
 1. 删除全部中文子串职业匹配，改为「条目声明 → 档案按 slug 补齐 → 未声明就不猜」。
-2. 让一个完全自制的职业条目仅靠 `structured.classRules` 的 6 个字段即可产出正确的 HP / 豁免 / 技能选择 / 法术位 / 职业资源 / 准备法术上限。
-3. 导入时对规则字段做精确路径校验（error 阻断、warning 提示），消除静默降级。
-4. 处置 4 个空转 kind；消除邪术师双重表示。
-5. 为 S3 铺好地基：字段级合并 + **来源可追溯**，使"被哪个包覆盖"可显示、可回退。
+2. 让一个完全自制的职业条目仅靠 `structured.classRules` 的 5–6 个字段即可产出正确的
+   HP / 豁免 / 技能选择 / 法术位 / 职业资源 / 准备法术上限。
+3. **选择系统收敛为唯一模型**（§3.10）：值选项、法术选择、技能选择、装备选择、可重复、
+   前置依赖全部可声明且真正生效——这是用户点名的重点。
+4. 导入时对规则字段做精确路径校验（error 阻断、warning 提示），消除静默降级。
+5. 处置 4 个空转 kind；消除邪术师双重表示；旧契约形状不读取（§3.9）。
+6. 为 S3 铺好地基：字段级合并 + **来源可追溯**，使"被哪个包覆盖"可显示、可回退。
 
 ---
 
@@ -65,6 +91,8 @@
 |---|---|
 | **规则档案（rule profile）** | 一份只含规则数值、不含任何规则书正文的配置。内置档案随客户端发布；外部包可通过条目声明参与合并 |
 | **职业规则块（class rules fragment）** | 描述一个职业规则数值的对象。内置档案的 `classes.<slug>` 与条目 `structured.classRules` 是**同一形状** |
+| **简写层 / 规范层** | 简写层是 `classRules` 与字符串选项（好写）；规范层是 choices / grants / tables（唯一被运行时消费的形状）。解析期把简写规范化为规范层 |
+| **表（`Table<T>`）** | 统一的"随等级变化"表示：完整 20 项数组或稀疏 `{"等级": 值}` |
 | **原型（progression archetype）** | 具名的进阶模板（`full-caster` / `half-caster` / `third-caster` / `pact` / `none`），用于简写 |
 | **解析链（resolution chain）** | 从"角色所选职业条目"到"该职业规则数值"的确定过程，见 §3.6 |
 | **来源（provenance）** | 每个解析出的字段记录它来自内置档案 / 哪个包条目，供显示与后续回退 |
@@ -110,8 +138,20 @@
       "spellcasting": { "mode": "none" },
       "resources": [
         { "id": "rage", "name": "狂暴",
-          "maximum": { "byLevel": [2,2,3,3,3,4,4,4,4,4,4,5,5,5,5,5,6,6,6,6] },
+          "maximum": { "table": {"1":2, "3":3, "6":4, "12":5, "17":6} },
           "recovery": "shortRestOne" }
+      ]
+    },
+    "fighter": {
+      "hitDie": 10,
+      "savingThrowAbilities": ["str", "con"],
+      "skillChoice": { "count": 2, "options": ["特技","驯兽","运动","历史","洞悉","威吓","说服","察觉","求生"] },
+      "spellcasting": { "mode": "none" },
+      "resources": [
+        { "id": "second_wind", "name": "第二气息",
+          "maximum": { "table": {"1":2, "4":3, "10":4} }, "recovery": "shortRestOne" },
+        { "id": "action_surge", "name": "动作如潮", "startsAtLevel": 2,
+          "maximum": { "table": {"2":1, "17":2} }, "recovery": "shortRest" }
       ]
     }
     // …共 12 个核心职业
@@ -125,7 +165,18 @@
 
 **档案键即职业对齐键**：`classes` 的键是 12 个核心职业的规范英文 slug（`barbarian`、`bard`…）。条目要继承内置数值，其 `slug` 必须等于其中之一；用中文名或其它 slug 的自制职业不会命中内置数值（这是刻意的：不猜）。
 
-**行为等价要求**：内置档案的数值必须与改造前的代码表**逐项相等**（含战士/野蛮人资源次数与恢复语义），即本次改造对"只装内置档案"的使用者是行为保持的。
+**数值权威**：档案数值来自 SRD 5.2 / PHB 2024 官方表，由 §6.1 的资产测试逐项核算。原代码中的职业表在本次改造中被删除，其数值整体搬入本档案。
+
+**表类型 `Table<T>`**（本契约的统一约定，用于所有"随等级变化"的字段）：
+
+```jsonc
+[20 个值]                       // 完整表
+{"1": 值, "5": 值, "17": 值}    // 稀疏表：只写变化的等级，键 1..20
+```
+
+解析规则：取值时按"不超过当前等级的最大已声明档位"向前取值；低于最小已声明等级时取该最小档位的值。**原型内部**（`progressions`）使用完整 20 项数组，因为它是模板而不是覆盖。
+
+**行为等价要求**：改造后"只装内置档案"的角色数值必须与改造前逐项相等（含战士/野蛮人资源次数与恢复语义），由 §6.1 + §6.2 保证。
 
 ### 3.2 职业规则块（两个载体同一形状）
 
@@ -143,15 +194,14 @@
       "ability": "cha",
       "listTags": ["spell-list:astral"],
       "archetype": "half-caster",
-      "progression": [ { "level": 5, "maximumSpellLevel": 2,
-                         "maximumCantrips": 0, "maximumLeveledSpells": 6 } ],
-      "slotOverrides": { "5": { "1": 4, "2": 2 } }
+      "slots": { "5": { "1": 4, "2": 2 } },
+      "prepared": { "5": 6 }
     },
     "resources": [
       { "id": "astral-surge", "name": "星界涌动",
         "maximum": { "formula": "level" }, "recovery": "shortRestOne" },
       { "id": "astral-ward", "name": "星界守护", "startsAtLevel": 3,
-        "maximum": { "byLevel": [0,0,1,1,2,2,2,3,3,3,4,4,4,5,5,5,6,6,6,7] },
+        "maximum": { "table": {"3":1, "5":2, "8":3, "11":4, "15":5, "18":6} },
         "recovery": "longRest" }
     ]
   }
@@ -162,13 +212,15 @@
 
 | 字段 | 类型 | 必填 | 语义 |
 |---|---|---|---|
-| `hitDie` | int 或 `"dN"` 字符串 | 否* | 生命骰面数，必须 ∈ 4..20。缺省时 HP 只按体质调整值计，见 §3.6 第 3 步 |
+| `hitDie` | int 或 `"dN"` 字符串 | 否* | 生命骰面数，必须 ∈ 4..20（`"d10"` 与 `10` 等价，两种写法都接受）。缺省时 HP 只按体质调整值计，见 §3.6 第 3 步 |
 | `savingThrowAbilities` | string[]（属性键） | 否* | 豁免熟练，元素必须 ∈ `abilities` |
-| `skillChoice` | `{count:int, options:string[] 或 "any"}` | 否 | `count` ∈ 0..options.length（`"any"` 时上界为技能总数）；`options` 元素必须 ∈ `skills` |
+| `skillChoice` | `{count:int, options:string[] 或 "any"}` | 否 | **简写**：等价于一条 `optionType: "skill"` 的规范选择（§3.10）。`count` ∈ 0..选项数（`"any"` 时上界为技能总数） |
 | `spellcasting` | object | 否 | 见 §3.3 |
 | `resources` | object[] | 否 | 见 §3.4 |
 
 \* 标 `否` 是契约层面的可缺省；但缺 `hitDie` 会导致 HP 无法计算，导入时给 **warning**（§5.2）。
+
+**简写层与规范层**：`classRules` 是**方便层**——`skillChoice` 规范化成一条技能选择，`spellcasting` 的计数规范化成法术选择，两者最终都进入同一个选择模型（§3.10）。想直接控制选择结构的高级作者可以跳过简写，直接把 `choices` 写在 `rules` 里；两种写法可以混用，规范层的定义优先。
 
 **HP 加值与属性加值不作为 `classRules` 字段**：它们天然是"按等级生效的效果"，统一用 `rules.progression[].grants` 的 `kind: "hitPoints"` / `kind: "ability"` 表达（§3.5），避免同一件事有两种写法。
 
@@ -176,29 +228,32 @@
 
 | 字段 | 类型 | 语义 |
 |---|---|---|
-| `mode` | `"prepared" \| "known" \| "pact" \| "none"` | 施法模型；`none` 表示非施法者 |
-| `ability` | 属性键 | 施法属性，必须 ∈ `abilities` |
-| `listTags` | string[] | 法术列表过滤标签，透传给 `SpellSelectionPolicy` |
-| `archetype` | 原型名 | 简写：从档案 `progressions` 取表 |
-| `progression` | object[] | 显式逐级表，行字段 `level`(1..20)、`maximumSpellLevel`(0..9)、`maximumCantrips`(int≥0)、`maximumLeveledSpells`(int≥0)。**逐级优先于 `archetype`**（逐字段） |
-| `slotOverrides` | `{ "<charLevel>": { "<slotLevel>": count } }` | 稀疏覆盖法术位；键 1..20 / 1..9，值 int≥0。**按角色等级整级替换**（不与原型逐环合并） |
+| `mode` | `"prepared" \| "known" \| "pact" \| "none"` | 施法模型；`none` 表示非施法者。默认 `none` |
+| `ability` | 属性键 | 施法属性，必须 ∈ `abilities`；`mode != "none"` 时必填 |
+| `listTags` | string[] | 法术列表过滤标签，透传给法术选择 |
+| `archetype` | 原型名 | 简写：从档案 `progressions` 取整套表 |
+| `slots` | `Table<{环阶: 数量}>` | 法术位表（稀疏即可，如 `{"5": {"1":4,"2":2}}`）。**优先于 `archetype`，按角色等级整级替换** |
+| `slotLevel` | `Table<int>` | 仅 `pact` 有意义：每级契约法术位的环阶 |
+| `prepared` | `Table<int>` | 每级"已准备/已知"法术数量上限 |
+| `cantrips` | `Table<int>` | 每级戏法数量上限 |
+| `maximumSpellLevel` | `Table<int>` | 每级可学/可准备的最高环阶（0..9） |
 
-法术位只有两个来源：`slotOverrides`（显式，最高优先）与 `archetype`（其次）。没有第三个来源。
+全部为可缺省字段；缺省即"未声明"（不猜测）。四个 `Table` 字段各自独立覆盖 `archetype` 的对应表。
 
-逐级解析（角色等级 L）：
+解析（角色等级 L）：
 
 ```
-slots         = slotOverrides[L] ?? expand(archetype).slots[L] ?? {}
-prepared      = progression(L).maximumLeveledSpells ?? expand(archetype).prepared[L]   // 可能为 null
-cantrips      = progression(L).maximumCantrips      ?? expand(archetype).cantrips[L]
-maxSpellLevel = progression(L).maximumSpellLevel    ?? expand(archetype).maximumSpellLevel[L]
+slots         = slots[L] ?? expand(archetype).slots[L] ?? {}          // pact 结果形如 {"3": 2}
+prepared      = prepared[L] ?? expand(archetype).prepared[L]          // 可能为 null
+cantrips      = cantrips[L] ?? expand(archetype).cantrips[L]
+maxSpellLevel = maximumSpellLevel[L] ?? expand(archetype).maximumSpellLevel[L]
 ```
 
 `prepared` 为 `null` 表示**该职业未声明准备/已知上限**：编辑器不施加数量限制，导入时给 warning（§5.2 `missingPreparedColumn`），角色页显示"未声明"。
 
-`pact` 原型的 `slots` 是**单一环阶**：结果形如 `{ "<slotLevel>": count }`（如 5 级邪术师 → `{"3": 2}`），与现有 `spellSlotMaximums` 的返回形状一致；`slotLevel` 数组提供每级环阶。
+原型对象的 `minimumLevel`：该原型在低于此等级时无法术位（`third-caster` = 3，其余 = 1）。低于该等级时法术位为空。
 
-`mode == "none"` 且未声明 `archetype`/`progression`/`slotOverrides` 时，法术位为空、准备上限为 null。
+`pact` 原型的 `slots` 是**单一环阶**：结果形如 `{ "<slotLevel>": count }`（如 5 级邪术师 → `{"3": 2}`），与现有 `spellSlotMaximums` 的返回形状一致。
 
 ### 3.4 `resources` 与 `maximum`
 
@@ -206,42 +261,37 @@ maxSpellLevel = progression(L).maximumSpellLevel    ?? expand(archetype).maximum
 { "id": "string（非空，职业内唯一）",
   "name": "string（非空）",
   "maximum": <MaxSpec>,
-  "recovery": "shortRest" | "shortRestOne" | "longRest" | "none",
-  "startsAtLevel": 2 }        // 可选，默认 1：该职业等级之前该资源不存在
+  "recovery": "shortRest" | "shortRestOne" | "longRest" | "none",   // 默认 longRest
+  "startsAtLevel": 2,     // 可选，默认 1：该职业等级之前该资源不存在
+  "description": "可选，一句话说明（不得放规则书正文）" }
 ```
 
-`startsAtLevel` 与 `byLevel` 的关系必须明确：**低于 `startsAtLevel` 的等级一律视为不存在该资源**（`byLevel` 对应项被忽略，即使写了非 0）；`startsAtLevel` 及以上的等级取 `byLevel` 对应项。内置档案里"战士 2 级才有动作如潮"就用 `startsAtLevel: 2` 表达，而不是写一串 0。
+`startsAtLevel` 与表的取值关系必须明确：**低于 `startsAtLevel` 的等级一律视为不存在该资源**（表中对应项被忽略，即使写了非 0）；`startsAtLevel` 及以上按表取值。内置档案里"战士 2 级才有动作如潮"用 `startsAtLevel: 2` 表达，而不是写一串 0。
 
-`byLevel` 允许出现 0（表示该级上限为 0），但与 `startsAtLevel` 二选一即可，推荐 `startsAtLevel`。
-
-`<MaxSpec>` 只有 5 种写法（**封闭词汇表**，互斥）：
+`<MaxSpec>` 有 **3 种**写法（互斥；`minimum` 可选、对所有写法生效：最终取 `max(结算结果, minimum)`）：
 
 | 写法 | 例 | 语义 |
 |---|---|---|
-| 固定值 | `{"value": 1}` | 与等级无关 |
-| 等级 | `{"formula": "level"}` | 等于职业等级 |
-| 属性调整值 | `{"formula": "ability:cha", "minimum": 1}` | 调整值，可带 `minimum` 下限 |
-| 系数 × 等级 | `{"formula": "5*level"}` | 系数为非负整数 |
-| 逐级表 | `{"byLevel": [20 个数]}` | 必须正好 20 个非负整数 |
-
-`minimum` 可选，对所有写法生效：最终取 `max(结算结果, minimum)`（如诗人激励"魅力调整值，最低 1"）。
+| 固定值 | `{"value": 3}` | 与等级无关，可省略为 `"maximum": 3` |
+| 封闭公式 | `{"formula": "ability:cha", "minimum": 1}` | 见下方语法 |
+| 等级表 | `{"table": {"1":2, "3":3}}` 或 `{"table": [20 个数]}` | `Table<int>`，稀疏即可 |
 
 `formula` 的封闭语法（正则级）：`level` | `ability:<abilities 中的键>` | `<非负整数>*level` | `<非负整数>`。**不实现通用表达式求值**。
 
-原型对象的 `minimumLevel`：该原型在**低于此等级**时无法术位（`third-caster` = 3、`pact` = 1、`full-caster` / `half-caster` = 1、`none` 无意义）。低于该等级时法术位为空。
-
 ### 3.5 合法 grant kind（本次收紧）
 
-`RuleGrantKind` 收敛为 **10 项**：`feature`、`proficiency`、`spell`、`equipment`、`resource`、`action`、`speed`、`armorClass`、`hitPoints`、`ability`。
+`RuleGrantKind` 收敛为 **9 项**：`feature`、`proficiency`、`spell`、`equipment`、`action`、`speed`、`armorClass`、`hitPoints`、`ability`。
 
 | 处置 | kind | 说明 |
 |---|---|---|
 | **实现** | `hitPoints` | 累加进 HP 上限；`value`（固定）或 `formula`（同一封闭语法，按职业等级结算）二选一 |
 | **实现** | `ability` | 属性加值，**在派生之前**施加（影响 HP/AC/豁免/技能/法术 DC）；`target` 为属性键，`value` 为加值 |
+| **移除** | `resource` | 资源是**职业级静态事实**，改由 `classRules.resources`（§3.4）统一声明；旧包里的 `resource` grant 按未知 kind 报错 |
 | **移除** | `conditionResistance` | 无消费方、真实包未使用。移除后误用会在导入时报错，而不是静默无效；抗性/免疫结算记入 §11 待办 |
 | **移除** | `note` | 同上；角色卡备注由 `notes` 字段承担 |
 
-`rules.progression[].grants` 的现有语义不变；`kind: "resource"` 继续等价于"往类级资源表按等级写入"（兼容写法，导入时给 warning，§5.2）。`hitPoints` / `ability` 的 `formula` 与 `resource.maximum` 共用同一封闭语法与同一求值器。
+`rules.progression[].grants` 用于"某等级解锁什么"（特性、选择、熟练、法术、装备）。
+`hitPoints` / `ability` 的 `formula` 与 `resource.maximum` 共用同一封闭语法与同一求值器。
 
 ### 3.6 解析链（字段级）
 
@@ -282,126 +332,120 @@ class RuleFieldSource {
 | 中 | 已装内容包（含私有 PHB） | 100 | `LocalContentPackages.installedAt` 较晚者胜（同 slug 字段级） |
 | 高 | `local-homebrew` 包（本地自制） | 1000 | — |
 
-### 3.9 兼容与迁移映射
+### 3.9 无兼容层：旧契约不读取，提取器同步重写
 
-| legacy 写法 | 现状 | 处理 |
-|---|---|---|
-| `structured.hitDie: "d12"` | 已支持 | 继续支持；规范化为 int |
-| `structured.savingThrows: "力量与体质"`（中文散文） | 按属性标签包含关系解析 | 继续解析，导入时 **warning**"建议改用 `savingThrowAbilities`" |
-| `structured.skills: "选择2项：…"`（中文散文） | 正则解析，未知技能静默丢弃 | 继续解析，**未知技能改为 warning 并列出被丢弃项** |
-| `structured.spellcastingAbility: "cha"` | 独立字段 | 等价于 `classRules.spellcasting.ability`；两者都存在时以 `classRules` 为准 |
-| `structured.preparedSpellcasting: true` | `preparedSpellLimit` 的开关 | **废弃**：准备上限改为由 `spellcasting.mode ∈ {prepared, known}` 推导（修 G5） |
-| `structured.spellcasting.progression[].maximumLeveledSpells` | 已支持 | 正式成为准备上限来源 |
-| `structured.startingEquipmentChoice.maximum` | 已支持 | 不变 |
-| `rules.progression[].grants` 的 `spellSlot:<n>`（`kind: "resource"`） | 已支持，进 `spellSlots` | 不变；等价于 `spellcasting.slotOverrides` |
-| `rules.progression[].grants` 的 `classResource:<id>` 带 `data.spellLevel` | 进 `classResources`，而法术位另由硬编码表给出（G6 双重表示） | **改为**：翻译为该职业 `spellcasting.slotOverrides`（数量取 `value`，环阶取 `data.spellLevel`），**不再**出现在 `classResources` 中 |
-| `rules.progression[].grants` 的 `classResource:<id>` 不带 `data.spellLevel` | 进 `classResources` | 不变 |
-| grant `formula` 字段 | 只存储 | 对 `hitPoints` / `ability` / `resource.maximum` 生效（封闭语法）；其他 kind 仍只存储 |
+按用户决定（§0 需求二），**不实现任何旧契约的读取路径**。以下形状在导入时按"未知字段 / 未知取值"处理：
+
+| 不再支持 | 替代写法 |
+|---|---|
+| `structured.savingThrows`（中文散文） | `classRules.savingThrowAbilities` |
+| `structured.skills`（中文散文，含"任选3项"） | `classRules.skillChoice` |
+| `structured.preparedSpellcasting` 开关 | `classRules.spellcasting.mode` + `prepared` 表 |
+| `structured.spellcasting.progression[]` 四列行数组 | `archetype` + `slots` / `prepared` / `cantrips` / `maximumSpellLevel` 表 |
+| `rules.progression[].grants` 的 `spellSlot:<n>` | `classRules.spellcasting.slots` |
+| `rules.progression[].grants` 的 `classResource:<id>`（含 `data.spellLevel`） | `classRules.resources`（配 `startsAtLevel` + `table`），这类资源**不再**与法术位双重表示 |
+| grant `formula` 只存储不求值 | `hitPoints` / `ability` / `resource.maximum` 求值（封闭语法）；其他 kind 不接受 `formula` |
+
+配套动作：
+
+1. `scripts/extract_phb_2024_v2.py` **按新契约重写输出**（不再产出散文与逐级 grant），并把
+   `skills` 的选项、豁免、法术位、准备数、资源全部结构化；`scripts/test_phb_2024_v2_tools.py` 同步。
+   这一步是 P0，必须与契约定稿一起落地。
+2. 私有包**重新提取**后导入；重提取产物需通过 §6.1 官方表核算与 §6.2 的"无旧形状残留"断言。
+3. `CharacterRulesEngine` 不再需要"逐级 resource grant → 资源表"的运行时翻译逻辑，代码量随之减少。
 
 ---
 
-## 3.10 选择系统（choices）：现状、目标模型与缺口
+### 3.10 选择系统（choices）：唯一模型
 
-> 本节对应用户补充的关键需求（§0）。范围归属**待确认**。
+> 本节对应用户补充的关键需求（§0 需求一）。**全部能力并入本轮范围**（不再有 S2.5 尾巴）。
 
-### 3.10.1 现状：三套并行的选择机制
+#### 3.10.1 现状：四套并行的选择机制
 
 | 机制 | 代码位置 | 能表达什么 | 真实包实际用了什么 |
 |---|---|---|---|
-| **A. `rules.choices`** | `RuleChoiceDefinition` + `RuleChoiceResolver` + `CharacterRulesEngine._resolveChoices` | 从**条目**里选：`optionType`（条目类型）+ `optionTags`（全含）+ `optionEntryIds`（白名单）+ `maximumOptionLevel`（0–9）+ `minimum`/`maximum` + `recommendedEntryIds`；选中的条目会进入规则队列，从而带出它自己的 grants/choices | 仅 12 个"3 级选子职"（`optionType: subclass`, min=max=1） |
-| **B. 法术选择** | `SpellSelectionPolicy` + `structured.spellcasting.progression[].maximumCantrips / maximumLeveledSpells / maximumSpellLevel` + `listTags` | 按等级给出**戏法数**与**有环法术数**上限，并限定法术列表标签与最高环阶 | 8 个施法职业全部靠它 |
-| **C. 技能选择** | `StructuredClassRules.skillChoice`（解析 `structured.skillChoice`，或中文散文 `structured.skills`） | `count` + `options` 列表 | 12 个职业靠中文散文正则解析 |
+| **A. `rules.choices`** | `RuleChoiceDefinition` + `RuleChoiceResolver` + `CharacterRulesEngine._resolveChoices` | 从**条目**里选：`optionType`（条目类型）+ `optionTags`（全含）+ `optionEntryIds`（白名单）+ `maximumOptionLevel`（0–9）+ `minimum`/`maximum` + `recommendedEntryIds`；选中的条目进入规则队列，带出它自己的 grants/choices | 仅 12 个"3 级选子职"（min=max=1） |
+| **B. 法术选择** | `SpellSelectionPolicy` + `structured.spellcasting.progression[].maximumCantrips / maximumLeveledSpells / maximumSpellLevel` + `listTags` | 按等级给戏法数与有环法术数上限，限定列表标签与最高环阶 | 8 个施法职业全部靠它 |
+| **C. 技能选择** | `StructuredClassRules.skillChoice`（解析 `structured.skillChoice`，或中文散文） | `count` + `options` 列表 | 12 个职业靠中文散文正则解析 |
 | **D. 装备选择** | `StructuredClassRules.startingEquipmentChoice` | 只有 `maximum`（自由挑选数量），**没有选项列表** | 真实包用散文 `startingEquipment`，未用该字段 |
 
-### 3.10.2 目标模型：一个选择模型，两种选项载体
+#### 3.10.2 目标：一个模型，两种选项载体
 
-把 A–D 统一为**同一套声明**，写在 `rules.choices` / `rules.progression[].choices`（层级与作用域沿用现有 `{sourceEntryId}#{choiceId}` 键与 `builderStep`）：
+A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progression[].choices`（作用域键沿用
+`{sourceEntryId}#{choiceId}`，步骤沿用 `builderStep`）。**选项有两种载体**：
+
+- **条目选项**：`optionEntryIds`（白名单）/ `optionTags`（全含）/ `optionType`（条目类型）/
+  `maximumOptionLevel`；选中后该条目进入规则队列，带出它自己的 grants 与 choices。
+- **内联选项**：`options` 里的对象，**自带 `grants`**，不建条目也能选、并且选中即生效。
 
 ```jsonc
-{ "id": "skill-proficiency", "label": "选择两项技能熟练",
-  "optionType": "skill",              // 新增：值类型选项，不再是条目类型
-  "minimum": 2, "maximum": 2,
-  "options": [                        // 内联选项：携带自己的 grants
-    { "id": "athletics", "label": "运动", "grants": [
-        { "id": "prof", "kind": "proficiency", "label": "运动熟练", "target": "skill:运动" } ] },
-    { "id": "perception", "label": "察觉", "grants": [
-        { "id": "prof", "kind": "proficiency", "label": "察觉熟练", "target": "skill:察觉" } ] }
-  ] }
+// 1) 简写：技能选择（作者最少只写这一行）
+{ "id": "class-skills", "label": "选择两项技能熟练",
+  "optionType": "skill", "minimum": 2, "maximum": 2,
+  "options": ["洞悉", "医药", "说服", "宗教"] }        // 字符串简写 → 自动授予对应熟练
 
+// 2) 内联选项 + 属性提升（不建条目）
 { "id": "asi-or-feat", "label": "属性提升或专长",
-  "optionType": "feat", "minimum": 1, "maximum": 1, "repeatable": false,
-  "optionTags": ["origin"], "optionEntryIds": [], "maximumOptionLevel": null,
-  "inlineOptions": [                  // 与条目选项可共存
+  "optionType": "feat", "minimum": 1, "maximum": 1,
+  "optionTags": ["origin"],
+  "inlineOptions": [
     { "id": "asi", "label": "属性提升 +1/+1", "grants": [
-        { "id": "asi-str", "kind": "ability", "label": "力量 +1", "target": "str", "value": 1 } ] }
-  ] }
+        { "id": "asi-str", "kind": "ability", "target": "str", "value": 1 } ] } ] }
 
-{ "id": "spellbook", "label": "法术书（选择法师法术）",
-  "optionType": "spell", "minimum": 6, "maximum": 6, "repeatable": false,
+// 3) 法术选择（纳入同一模型）
+{ "id": "spellbook", "label": "法术书",
+  "optionType": "spell", "minimum": 6, "maximum": 6,
   "optionTags": ["spell-list:wizard"], "maximumOptionLevel": 1,
-  "countsToward": "spellbook" }       // 与"已准备"区分
+  "countsToward": "spellbook" }
+
+// 4) 可重复 + 前置依赖
+{ "id": "invocations", "label": "祈唤",
+  "optionType": "classFeature", "optionTags": ["eldritch-invocation"],
+  "minimum": 1, "maximum": 3, "repeatable": true,
+  "requires": [ { "ability": "cha", "minimum": 13 } ] }
+
+// 5) 装备 A/B 方案
+{ "id": "starting-equipment", "label": "初始装备",
+  "optionType": "equipmentBundle", "minimum": 1, "maximum": 1 }
 ```
 
-新增/扩展的字段语义：
+字段全集：
 
 | 字段 | 类型 | 语义 |
 |---|---|---|
-| `options` | object[] | **内联选项**：`{id, label, description?, data?, grants?}`。`grants` 复用 `RuleGrantDefinition`（含 `hitPoints` / `ability`），选中即在派生时生效 |
-| `inlineOptions` | object[] | `options` 的等价别名（与 `optionEntryIds`/`optionTags` 共存时两者取并集），便于与"条目选项"并列书写 |
-| `optionType` | string | 新增值类型：`value`、`skill`、`ability`、`language`、`damageType`、`weaponMastery`。值类型只允许内联选项；条目类型允许两者共存 |
-| `repeatable` | bool，默认 `false` | `true` 时同一 option id 可被选多次（上限仍由 `maximum` 约束） |
-| `countsToward` | string 或 `null` | 法术选择计入哪个数量池（`spellbook` / `known` / `prepared`）；`null` = 不占上限（固定授予、专长给的法术） |
-| `requires` | object[] | 前置依赖：`{choice, option}` 或 `{ability, minimum}`。**若本轮不实现运行时支持，则导入报 error（原则 6）** |
+| `id` / `label` | string | 必填；选择键 = `{sourceEntryId}#{id}` |
+| `optionType` | string | **条目类型**（`subclass`/`feat`/`spell`/`item`/`classFeature`/`equipmentBundle`/`custom`…）或**值类型**（`value`/`skill`/`ability`/`language`/`damageType`/`weaponMastery`） |
+| `minimum` / `maximum` | int | 默认 `1` / 等于 `minimum`；`maximum` 为可选数量上限 |
+| `options` / `inlineOptions` | array | 内联选项。**字符串简写**：`"察觉"` 等价于 `{id: "察觉", label: "察觉"}`，并按 `optionType` 自动补 `grants`（见下） |
+| `optionEntryIds` / `optionTags` | string[] | 条目选项的白名单 / 标签过滤（跨字段 AND、同字段 OR，沿用现有语义） |
+| `maximumOptionLevel` | int? | 条目选项的等级上限（0–9） |
+| `recommendedEntryIds` | string[] | 推荐项，UI 预选 |
+| `repeatable` | bool，默认 `false` | 同一 option id 可被选多次（上限仍由 `maximum` 约束） |
+| `countsToward` | string? 或 `null` | 法术选择计入哪个数量池（`spellbook`/`known`/`prepared`）；`null` = 不占上限 |
+| `requires` | object[] | 前置依赖：`{choice, option}` 或 `{ability, minimum}`；不满足时**隐藏**该选择或选项 |
+| `group` / `help` | string? | 分组标题与帮助文案（呈现用，无规则语义） |
+| `builderStep` | string | 归属创建向导步骤（沿用 `allowedBuilderSteps`） |
 
-必须能表达（本轮需求清单）：
+**自动授予（方便程度的关键）**：当 `optionType` 是值类型时，字符串简写会自动生成 grants：
 
-| 能力 | 说明 | 现状 |
-|---|---|---|
-| 逐级法术位 | 几级获得几个法术位，完全自定义 | 已有：`slotOverrides` / `archetype`（§3.3） |
-| 逐级资源 | 几级获得几个资源、恢复语义 | 已有：`resources` + `startsAtLevel`（§3.4） |
-| 逐级特性 | 几级获得什么特性 | 已有：`rules.progression[].grants`（`kind: feature`，可带内联 label） |
-| 子职/条目选择 | 从条目里选（带标签/等级/白名单过滤） | 已有（机制 A） |
-| **值选项** | 属性 +1、技能熟练、伤害类型、语言、武器精通等**不建条目**也能选，且**选中后真的生效** | **缺**：选项必须是条目；`optionEntryIds` 里的 id 必须存在于包内 |
-| **法术选择纳入同一模型** | 按等级/环阶/标签选 N 个法术，区分"已知 / 准备 / 法术书"，固定授予的法术不占上限 | **半缺**：机制 B 独立于 A，无法表达"某级再选 2 个""替换一个""不占上限" |
-| **可重复选取** | 同一选项可被选多次（如可重复的祈唤） | **缺**：UI 用 `Set` 存选择，引擎按 id 去重 |
-| **前置依赖** | 选项/选择依赖其他选择结果或属性门槛（如"力量 13 以上才能选"） | **缺** |
-| **分组与呈现** | 分组标题、帮助文案、互斥提示、每步的完成度 | **半缺**：只有 `builderStep` 与 `recommendedEntryIds` |
-| 装备选择 | 从装备列表里选（A/B 方案） | **缺**：机制 D 只有数量上限 |
+| `optionType` | 自动 grants |
+|---|---|
+| `skill` | `{kind: "proficiency", target: "skill:<名>"}` |
+| `ability` | `{kind: "ability", target: "<属性键>", value: <choice.value ?? 1>}` |
+| `language` | `{kind: "note", ...}` 不适用 → 记录到角色卡的"语言"列表（`data.languages`），不做数值派生 |
+| `damageType` / `weaponMastery` / `value` | 只记录选择（`data.choices`），供内容显示与后续特性引用 |
 
-### 3.10.3 设计要点
+写成完整对象时，作者可覆盖自动 grants（显式 `grants` 优先），也可给选项加 `description` / `data`。
 
-1. **选项要么指向条目，要么内联携带 grants**——内联选项复用现有 `RuleGrantDefinition`（含本轮实现的
-   `hitPoints` / `ability`），因此"选属性 +1""选技能熟练"天然生效，不需要为每种值类型写新代码。
-2. **`optionType` 语义扩展**：现有取值是条目类型（`subclass`/`feat`/`spell`/`item`/`classFeature`/…），
-   本轮新增**值类型**：`value`（自由值，仅记录）、`skill`、`ability`、`language`、`damageType`、`weaponMastery`。
-   值类型只允许使用 `options` 内联选项；条目类型允许 `optionEntryIds`/`optionTags` 与 `inlineOptions` 共存。
-3. **法术选择统一**：机制 B 的 `structured.spellcasting.progression` 保留为**兼容输入**，解析器把它
-   展开成等价的法术选择定义（戏法一个、有环法术一个，计数来自 `maximumCantrips` / `maximumLeveledSpells`，
-   环阶上限来自 `maximumSpellLevel`，列表来自 `listTags`）。新包可直接写 `optionType: "spell"` 的选择，
-   获得"某级再选 N 个""可重复""不占上限（`countsToward: null`）"等能力。
-4. **可重复选取**：选择存储从 `Set` 改为有序 `List`（`CharacterBuild.choices` 已是 `Map<String, List<String>>`，
-   引擎天然支持重复；需要改的是编辑器状态与去重校验）。`repeatable: false` 时同一 option id 只允许出现一次。
-5. **前置依赖**：新增 `requires` 数组，元素形如
-   `{ "choice": "<choiceId>", "option": "<optionId>" }` 或 `{ "ability": "str", "minimum": 13 }`；
-   不满足时该选择/选项**隐藏**（而不是报错），并在导入时静态校验引用存在性。
-   按 §3.10.4 该能力建议归入 S2.5，故本轮若未实现运行时支持，出现 `requires` 必须**报 error 拒绝**（原则 6）。
-6. **不接受"声明了但用不了"**：值类型选项、`repeatable`、`requires` 若在本轮不实现运行时支持，
-   导入时必须**报 error 拒绝**，不得静默接受。这是本轮反复强调的原则。
+#### 3.10.3 设计要点
 
-### 3.10.4 缺口 → 归属建议（**待用户确认**）
-
-| 缺口 | 建议归属 | 理由 |
-|---|---|---|
-| 值选项（内联 grants）+ 值类型 `optionType` | **并入 S1+S2** | 复用既有 grant 机制，是"选择自定义"的核心；契约与运行时都小 |
-| 法术选择统一（兼容展开 + `optionType: "spell"` 选择） | **并入 S1+S2** | 用户点名的重点；且能顺带修掉"准备上限由独立开关控制"的缺陷 |
-| `repeatable` | **并入 S1+S2** | 改动集中在选择存储（Set→List）与校验 |
-| `requires` 前置依赖 | 独立子项目 S2.5 | 涉及解析顺序、隐藏语义与 UI 交互，风险独立 |
-| 分组/帮助文案/完成度呈现 | 独立子项目 S2.5 | 纯 UI 体验，不阻塞契约 |
-| 装备选择（选项列表 + A/B 方案） | 独立子项目 S2.5 | 与角色卡装备/负重联动，独立 |
-| 机制 C（技能散文）与 D 的迁移 | **并入 S1+S2** | 属于 legacy 兼容层，随 §3.9 一起做 |
-
-若全部并入，S1+S2 的规模会显著变大（新增选择契约 + 引擎 + 编辑器改造 + 校验 + 测试）。**建议**：
-按上表把"值选项 / 法术选择统一 / `repeatable` / C·D 迁移"并入 S1+S2，其余留给 S2.5。
+1. **内联选项复用 `RuleGrantDefinition`**（含本轮实现的 `hitPoints` / `ability`），因此"选属性 +1""选技能熟练""选 HP +2"天然生效，不需要为每种值类型写新代码。
+2. **值类型与条目类型**：值类型只允许内联选项（`options`/`inlineOptions`）；条目类型允许两者共存，UI 合并展示并分组。
+3. **法术选择统一**：`classRules.spellcasting` 的计数（`cantrips`/`prepared`/`maximumSpellLevel`/`listTags`）在解析期**展开成规范法术选择**（戏法一条、有环法术一条），于是法术选择与其它选择走同一套引擎、同一套校验、同一个 UI 面板；高级作者可直接写 `optionType: "spell"` 的选择表达"某级再选 N 个""可重复""不占上限"。
+4. **可重复选取**：`CharacterBuild.choices` 已是 `Map<String, List<String>>`，引擎天然支持重复；需要改的是编辑器状态（`Set` → 有序 `List`）与校验（`repeatable: false` 时同一 id 只允许出现一次）。
+5. **前置依赖**：`requires` 不满足时隐藏；隐藏项若已被选择则进入 pending 并在 UI 提示。导入期静态校验引用存在性（`choice` 必须存在于同一条目或祖先条目，`ability` 必须合法）。
+6. **装备选择**：`optionType: "equipmentBundle"` 让"选择 A 或 B"成为普通选择；选中结果写入 `inventory`，与现有 `equipmentBundle` 类型、`startingEquipmentChoice` 简写打通。
+7. **不接受"声明了但用不了"**：任何进入契约的字段都必须有运行时支持；若某能力在实现阶段被砍，导入必须**报 error 拒绝**，不得静默接受。
 
 ---
 
@@ -422,7 +466,11 @@ class RuleFieldSource {
 | 位置 | 变化 |
 |---|---|
 | `Dnd5eRules` | 保留纯运算（`abilityModifier`、`proficiencyBonus`、`saveBonus`、`skillBonus`、`baseArmorClass`、`initiativeBonus`、`attackBonus`、`damageFormula`、`averageHitPointsForHitDie`、`applyHitPointDelta`、`classResourcesAfterRest`、`spellSlotsAfterRest`）；**删除全部职业表与中文匹配**，改为读 `Dnd5eRules.profile`；新增 `configure(profile)` / `profile` 访问器（一次性装配，之后不可变） |
-| `structured_class_rules.dart` | 退化为适配器：`structured.classRules` + legacy 字段 → `ClassRuleSet`；`savingThrowAbilities` / `skillChoice` / `startingEquipmentChoice` 保留签名，`preparedSpellLimit` 改由 `spellcasting.mode` 推导 |
+| `structured_class_rules.dart` | 退化为适配器：`structured.classRules` → `ClassRuleSet` + 规范选择（**只认新契约**）；`savingThrowAbilities` / `skillChoice` 保留签名，`preparedSpellLimit` 改由 `spellcasting` 表推导 |
+| `character_rule_definition.dart` | `RuleChoiceDefinition` 扩展 `options`/`inlineOptions`/`repeatable`/`countsToward`/`requires`/`group`/`help`；`RuleGrantKind` 收敛为 9 项 |
+| `rule_choice_resolver.dart` | 选项解析支持值类型与内联选项合并；`requires` 过滤；简写自动授予生成 |
+| `character_rules_engine.dart` | 选中内联选项时合并其 `grants`；`repeatable` 的去重规则；选择结果的存储（`Map<String, List<String>>` 支持重复） |
+| `character_editor_page.dart`（选择面板） | 选择状态 `Set` → 有序 `List`；值类型与条目选项分组展示；`group`/`help`；`requires` 隐藏；选择计数校验走统一模型 |
 | `rules_driven_character_builder.dart` | 职业规则统一从条目声明 + profile 合并读取；新增输出 `data.classIdentity = {entryId, slug, name}`；`hitPoints` / `ability` grant 参与派生（属性加值先于 HP/AC/豁免/技能/DC 计算） |
 | `character.dart` | `classResources` getter 改按 `classIdentity.slug` 查 profile（保留 `dataMap['classResources']` 优先） |
 | `character_rule_projector.dart` | 为老角色按"精确匹配"补写 `classIdentity`；补写缺失的 `classResources` |
@@ -442,7 +490,7 @@ class RuleFieldSource {
 ```
 启动：RuleProfileStore.initialize()
    ├─ AssetBundle 读 assets/rules/dnd5e-2024.rules.json   → tier 0
-   ├─ ContentRepository 取所有 class 条目（含 legacy 字段与 grants → 规范化） → tier 100/1000
+   ├─ ContentRepository 取所有 class 条目（classRules + rules.choices → 规范化） → tier 100/1000
    ├─ RuleProfileResolver.resolve(...) → RuleProfile + diagnostics
    └─ Dnd5eRules.configure(profile)     // 失败则 fail-fast 并给出明确错误
 
@@ -464,33 +512,38 @@ class RuleFieldSource {
 
 | code | 条件 | 示例消息 |
 |---|---|---|
-| `unknownField` | `classRules` 内出现未定义字段 | `未知字段 classRules.hitDices，是否想写 hitDie？` |
+| `unknownField` | `classRules` / 选择 / 资源对象内出现未定义字段 | `未知字段 classRules.hitDices，是否想写 hitDie？` |
 | `invalidHitDie` | `hitDie` 非 `d4..d20` / int 不在 4..20 | `生命骰必须是 d4–d20 或 4–20 的整数` |
-| `unknownAbility` | 豁免/施法属性/`formula ability:x`/`kind: "ability"` 的 `target` 不在 `abilities` | `未知属性键 "力量"，可用：str, dex, con, int, wis, cha` |
-| `unknownSkill` | `skillChoice.options` 元素不在 `skills` | `未知技能 "特技"（可用别名：杂技）` |
-| `invalidSkillCount` | `count` 不在 0..上界 | `skillChoice.count 必须为 0..6` |
+| `unknownAbility` | 豁免 / 施法属性 / `formula ability:x` / `kind:"ability"` 的 `target` 不在 `abilities` | `未知属性键 "力量"，可用：str, dex, con, int, wis, cha` |
+| `unknownSkill` | 技能选择的选项不在 `skills` | `未知技能 "特技"（可用别名：杂技）` |
+| `invalidSkillCount` | `skillChoice.count` 不在 0..选项数 | `skillChoice.count 必须为 0..6` |
 | `invalidSpellcastingMode` | `mode` 不在枚举 | `spellcasting.mode 必须是 prepared / known / pact / none` |
 | `unknownArchetype` | `archetype` 不在 `progressions` | `未知原型 "three-quarter-caster"` |
-| `invalidProgressionRow` | `level` 不在 1..20 / `maximumSpellLevel` 不在 0..9 / 计数为负 | `progression[2].level 必须为 1..20` |
-| `invalidSlotOverride` | 键不在 1..20 / 1..9，值非 int≥0 | `slotOverrides["21"] 的键必须为 1..20` |
-| `invalidMaxSpec` | 五种写法全缺、同时出现多种、`byLevel` 长度≠20、含负值、`formula` 不在封闭语法 | `maximum 必须且只能使用 value / formula / byLevel 之一` |
+| `invalidTable` | `Table<T>` 键不在 1..20、数组长度≠20、值类型不符或为负 | `prepared["21"] 的键必须为 1..20` |
+| `invalidMaxSpec` | 三种写法全缺或同时出现多种、`minimum` 为负、`formula` 不在封闭语法 | `maximum 必须且只能使用 value / formula / table 之一` |
 | `duplicateResourceId` | 同职业内 `resources[].id` 重复 | `资源 id "rage" 重复` |
 | `invalidRecovery` | `recovery` 不在枚举 | `recovery 必须是 shortRest / shortRestOne / longRest / none` |
-| `unknownGrantKind` | `kind` 不在 10 项枚举（含被移除的 `conditionResistance` / `note`） | `未知 grant kind "note"，该字段已移除` |
+| `unknownGrantKind` | `kind` 不在 9 项枚举（含被移除的 `resource` / `conditionResistance` / `note`） | `未知 grant kind "resource"，职业资源请改用 classRules.resources` |
+| `unknownOptionType` | `optionType` 既不是已知条目类型也不是已知值类型 | `未知选项类型 "savingThrow"` |
+| `invalidChoiceRange` | `minimum`/`maximum` 为负或 `maximum < minimum` | `maximum 不能小于 minimum` |
+| `invalidOptionRef` | 条目选项引用不存在、或未通过 `optionType`/`optionTags`/`maximumOptionLevel` 过滤、或 `recommendedEntryIds` 不合法 | `选项 "x:feat/a" 不满足本选择的类型/标签/等级过滤` |
+| `duplicateOptionId` | 同一选择内 inline 选项 id 重复，或 id 与条目选项冲突 | `选项 id "asi" 重复` |
+| `invalidValueOption` | 值类型选择里出现条目选项字段（`optionEntryIds`/`optionTags`），或条目类型选择里 `options` 与 `optionEntryIds` 同时为空 | `值类型选择不允许 optionEntryIds` |
+| `invalidRequires` | `requires` 引用了不存在的 `choice`/`option`，或 `ability` 非法、`minimum` 非正 | `requires 引用的选择 "spellbook-x" 不存在` |
+| `invalidCountsToward` | `countsToward` 不在 `spellbook`/`known`/`prepared`/`null` | `countsToward 必须是 spellbook / known / prepared 或省略` |
+| `invalidAutoGrant` | 字符串简写无法为该 `optionType` 推断 grants，且未显式写 `grants` | `optionType "value" 的选项 "x" 缺少 grants，且无法自动推断` |
 
 ### 5.2 Warning（可导入，导入预览中列出）
 
 | code | 条件 |
 |---|---|
-| `legacySavingThrows` | 使用中文散文 `structured.savingThrows` 而非 `savingThrowAbilities` |
-| `legacySkills` | 使用中文散文 `structured.skills` 而非 `skillChoice` |
-| `legacyPreparedFlag` | 使用 `preparedSpellcasting`（已废弃，改用 `spellcasting.mode`） |
-| `legacyResourceGrants` | 用逐级 `resource` / `spellSlot:` grant 而非类级资源表 / `slotOverrides` |
-| `droppedSkillOption` | 中文散文技能里出现无法识别的技能名（列出被丢弃项） |
 | `missingCoreField` | 职业条目缺 `hitDie`（或施法职业缺 `spellcasting`），角色卡对应数值将缺省 |
-| `missingPreparedColumn` | 施法职业未声明 `progression[].maximumLeveledSpells` 且原型无 `prepared`（编辑器不限制数量） |
+| `missingPreparedColumn` | 施法职业未声明 `prepared` 且原型无该表（编辑器不限制数量） |
 | `ignoredGlobalList` | 包自带了 `abilities` / `skills` 清单（内置档案为唯一权威，该清单被忽略） |
 | `unresolvedClassRule` | 条目没有任何可用规则来源（既无 `classRules` 也无档案匹配） |
+| `zeroLevelResource` | 资源的表在 `startsAtLevel` 及以上出现 0（该级上限为 0，UI 不显示） |
+
+> 不再存在任何"legacy 写法"warning：旧形状一律按未知字段/未知取值报 error（§3.9）。
 
 ### 5.3 诊断的路由
 
@@ -503,43 +556,52 @@ class RuleFieldSource {
 
 ### 6.1 资产测试（替代现有的硬编码核算）
 - `dnd5e_rules_verification_test.dart`（现有 49 项）改为加载内置档案并对官方表断言数值（生命骰、豁免、法术位 1–20、准备法术 1–20、契约魔法、资源次数与恢复语义）。加载方式：`File('assets/rules/dnd5e-2024.rules.json')`（`flutter test` 的工作目录是包根，无需 `rootBundle` 与 binding），失败时测试报出资产路径。
-- 新增档案 schema 自检：`rulebookVersion == 1`、6 项属性与全部技能、12 个核心 slug 全部存在、每个职业字段可解析、每张 `slots` 表长度 20、每个 `byLevel` 长度 20、无未知原型引用。
+- 新增档案 schema 自检：`rulebookVersion == 1`、6 项属性与全部技能、12 个核心 slug 全部存在、每个职业字段可解析、每个 `Table` 合法（数组长度 20 或稀疏键 1..20）、无未知原型引用。
 
-### 6.2 兼容金标（私有包存在时运行，否则 skip）
-- 载入 `private-imports/phb-2024-v2-bundle.json`，对 12 职业断言解析结果与**改造前**逐个数值相等：`hitDie`、豁免集合、每级法术位、每级准备上限、职业资源（战士/野蛮人来自档案）、邪术师契约位。
+### 6.2 重提取金标（私有包存在时运行，否则 skip）
+- 用**重写后的提取器**重新产出 bundle，断言产物：无散文 `savingThrows`/`skills`、无 `preparedSpellcasting`、无 `spellSlot:`/`classResource:` grant、所有职业都有结构化 `classRules`。
+- 对 12 职业 × {1,5,11,20} 级断言派生数值与改造前逐项相等：`hitDie`、豁免集合、每级法术位、每级准备上限、职业资源（战士/野蛮人）、邪术师契约位（形状 `{"<环阶>": n}`）。
 - 断言邪术师**不再**出现 `classResources['pact-magic-slots']` 双重表示（行为变化，需在文档标注）。
 - 与现有私有路径测试一致：缺少私有包时跳过，不使 CI 变红。
 
 ### 6.3 端到端自制职业（核心验收）
 构造一个合成包（条目 id/slug/name 均不含任何核心职业名）：
-- `classRules` 声明 `hitDie: 10`、豁免、`skillChoice`、`spellcasting{ mode: prepared, ability: cha, archetype: half-caster }`、两个资源（一个 `formula: "level"`、一个 `byLevel` + `startsAtLevel: 3`）；另在 `rules.progression` 里用 `kind: "hitPoints"`（`formula: "level"`）与 `kind: "ability"`（`target: "cha"`, `value: 1`）声明两个按等级生效的效果。
+- `classRules` 声明 `hitDie: 10`、豁免、`skillChoice`、`spellcasting{ mode: prepared, ability: cha, archetype: half-caster, slots: {"5": {"1":4,"2":2}} }`、两个资源（一个 `formula: "level"`、一个 `table` + `startsAtLevel: 3`）；另在 `rules.progression` 里用 `kind: "hitPoints"`（`formula: "level"`）与 `kind: "ability"`（`target: "cha"`, `value: 1`）声明按等级生效的效果。
 - 流程：导入 → 断言无 error → 建角色（第 1、5、20 级）→ 断言 HP（含 `hitPoints` grant）、属性（含 `ability` grant 及其对 DC/技能的连带影响）、豁免、技能选择上限、法术位、资源次数与恢复语义、准备上限、施法 DC；→ 升级 +1 级后断言增量。
-- 变体：只声明 `hitDie` + 豁免 + `skillChoice` 的最小职业（断言其余数值为"未声明"而非猜测）；只声明 `archetype: pact` 的契约施法者（断言 `{"<环阶>": n}` 形状与短休恢复）；用 `slotOverrides` 写满 20 级的自定义施法者。
+- 选择系统专项（§3.10）：字符串简写技能选项自动授予熟练；内联 `options` 的 `ability +1` 真的改变派生；`optionType: "spell"` + `countsToward` 的法术选择受 `prepared` 上限约束；`repeatable: true` 允许同一选项选两次而 `repeatable: false` 被拒；`requires` 不满足时选项隐藏；`group`/`help` 出现在编辑器；装备 A/B 方案写入 `inventory`。
+- 变体：只声明 `hitDie` + 豁免 + `skillChoice` 的最小职业（断言其余数值为"未声明"而非猜测）；只声明 `archetype: pact` 的契约施法者（断言 `{"<环阶>": n}` 形状与短休恢复）；用 `slots` 表写满 20 级的自定义施法者。
 
 ### 6.4 校验与解析链
 - §5.1 每条 error、§5.2 每条 warning 各一个最小反例包，断言 `path` 与消息。
-- 解析链：条目声明优先于档案；`slotOverrides` 整级替换；`progression` 逐级优先于 `archetype`；slug 冲突按 tier 与 `installedAt`；未声明字段返回空且产出提示而非猜测。
+- 解析链：条目声明优先于档案；`slots`/`prepared`/`cantrips`/`maximumSpellLevel` 各自整表优先于 `archetype`；稀疏 `Table` 按"不超过当前等级的最大已声明档位"取值；slug 冲突按 tier 与 `installedAt`；未声明字段返回空且产出提示而非猜测。
 - 回归：`RuleProfileStore` 加载失败时 fail-fast。
 
-### 6.5 生成侧
-- 更新 `scripts/extract_phb_2024_v2.py` 输出 `savingThrowAbilities` / `skillChoice` 结构化字段（消除 `legacySavingThrows` / `legacySkills` warning）。
-- `scripts/test_phb_2024_v2_tools.py` 同步断言；`npm run test:scripts` 保持全绿。
+### 6.5 生成侧（P0，与契约定稿同步）
+- 重写 `scripts/extract_phb_2024_v2.py`：输出 `classRules`（`hitDie` / `savingThrowAbilities` /
+  `skillChoice` / `spellcasting` 表 / `resources`），不再输出散文与逐级 `spellSlot:`/`classResource:` grant。
+- `scripts/test_phb_2024_v2_tools.py` 同步断言"产物只含新契约形状"；`npm run test:scripts` 保持全绿。
 
 ### 6.6 门禁
 `npm run check`（服务端 lint + 客户端 analyze + 服务端/客户端测试）、`npm run test:scripts`、`npm run lint:design` 全绿；客户端测试数量只增不减。
 
 ---
 
-## 7. 迁移与兼容
+## 7. 迁移（内容重提取 + 用户数据回填）
 
-- **现有私有包无需修改**即可继续工作（legacy 映射 + warning）；更新生成脚本后 warning 消失。
-- **老角色**：首次打开时由 `CharacterRuleProjector` 精确匹配补写 `classIdentity`；匹配不到则提示"该职业未声明规则"，数值按未声明处理。
-- **行为变化清单**（必须写入 `docs/README.md` §7.7 与 CHANGELOG 式提交说明）：
-  1. 邪术师契约位不再作为 `classResources` 条目出现（改由法术位承担）。
-  2. 准备法术上限不再要求 `preparedSpellcasting: true`（真实包角色从此有上限）。
-  3. 未知技能名不再静默丢弃，改为 warning。
-  4. `conditionResistance` / `note` grant 会被拒绝（导入报错）。
-  5. 职业数值改为可被本地自制包覆盖（tier 1000）。
+- **内容**：全部**重新提取**（P0 重写提取器）。旧形状的包在导入时报 error 并提示重新提取，
+  **不提供**读取旧格式的回退路径（§0 需求二）。
+- **用户数据**：唯一保留的迁移是老角色卡的 `data.classIdentity` 一次性回填——
+  由 `CharacterRuleProjector` 按条目 `slug`/`name`/`aliases` **精确匹配**（不做子串猜测）写入；
+  匹配不到则标记"该职业未声明规则"，数值按未声明处理。理由：内容可以重提取，玩家的角色卡不能重来。
+- **行为变化清单**（必须写入 `docs/README.md` §7.7 与提交说明）：
+  1. 旧契约形状（散文 `savingThrows`/`skills`、`preparedSpellcasting`、`spellSlot:`/`classResource:` grant）不再被解析，导入报 error。
+  2. 邪术师契约位不再作为 `classResources` 条目出现（改由法术位承担，消除双重表示）。
+  3. 准备法术上限不再需要独立开关（由 `spellcasting.mode` + `prepared` 表决定）。
+  4. 未知技能名不再静默丢弃（现在会在导入期被拒绝并指出位置）。
+  5. `conditionResistance` / `note` grant 会被拒绝（导入报错）。
+  6. 职业数值改为可被 `local-homebrew` 覆盖（tier 1000）。
+  7. 自制职业可以只靠 `classRules` 声明规则；未声明字段显示"未声明"而非猜测。
+  8. 法术选择与技能选择改为走统一的选择模型与同一套 UI。
 
 ---
 
@@ -547,7 +609,7 @@ class RuleFieldSource {
 
 | 文件 | 更新 |
 |---|---|
-| `docs/README.md` §9.1 | 重写为现行契约：档案格式、`classRules` 字段全集、5 种 `maximum`、解析链与优先级、error/warning 全清单、完整自制职业示例、legacy 迁移表 |
+| `docs/README.md` §9.1 | 重写为现行契约：档案格式、`classRules` 字段全集、`Table` 与 3 种 `maximum`、**选择系统全字段**、解析链与优先级、error/warning 全清单、完整自制职业示例（含选择与法术选择）、"旧契约不读取"说明 |
 | `docs/README.md` §7.7 | 删除"代码内置职业表"表述；记录来源可追溯语义、行为变化清单、抗性/备注仍未实现 |
 | `docs/README.md` §2 / §16 | 快速事实与验收基线更新（测试数量、档案路径） |
 | `docs/README.md` §13.6 | 合规清单新增一项：内置规则档案只含数值，不含规则书正文 |
@@ -561,13 +623,14 @@ class RuleFieldSource {
 
 | 风险 | 缓解 |
 |---|---|
-| 搬迁数值出错（最严重） | §6.2 私有包金标逐个数值对照；§6.1 官方表核算指向资产 |
+| 搬迁数值出错（最严重） | §6.2 重提取金标逐个数值对照（12 职业 × 4 等级）；§6.1 官方表核算指向资产 |
 | 全局可变 profile | 只允许启动时 `configure` 一次，之后只读；测试提供显式重置钩子；`configure` 在已装配后再次调用抛错 |
 | 资产加载失败致应用不可用 | fail-fast + 明确错误；CI 资产测试保证不会发布坏档案 |
-| `structured.classRules` 与 legacy 字段并存导致歧义 | §3.9 明确优先级（`classRules` 优先）并给 warning |
+| 不背兼容层导致旧包直接不可用 | 这是用户明确选择的取舍（§0 需求二）：旧包按未知字段报 error，并提示"请用新版提取器重提取"；不提供静默降级 |
+| 简写层与规范层语义分歧 | 规范化在解析期一次完成，运行时只认规范层；两者同时存在时规范层优先，并对简写产出的规范项标注来源 |
 | 解析链让"未声明"变成用户可见的空值 | 只在角色页提示、不阻断；导入时 warning 提前暴露 |
 | 老角色 `classSummary` 无法精确匹配（如"战士（奥法骑士）"） | 项目器可拆分子职名与母职业名做精确匹配；仍失败则提示，不做子串猜测 |
-| 移除两个 grant kind 破坏未知第三方包 | 真实包未使用；导入期报错信息明确指向替代方案（`notes` 字段） |
+| 移除三个 grant kind 破坏未知第三方包 | 不背兼容层是用户明确取舍；导入期报错信息明确指向替代写法（`classRules.resources`、`notes` 字段） |
 
 ---
 
@@ -575,20 +638,20 @@ class RuleFieldSource {
 
 1. 客户端**代码**中**不存在**任何以职业名（中文或英文）为键的规则表或 `contains` 职业匹配（`grep` 可验证；内置档案里的 `classes.<slug>` 键属于数据，不计入）。
 2. 内置档案通过 §6.1 的官方表核算与 schema 自检。
-3. §6.2 私有包金标全部数值与改造前相等；邪术师双重表示消失。
-4. §6.3 合成自制职业包端到端通过（含升级）。
+3. §6.2 重提取金的标数值与改造前相等；产物不含任何旧契约形状；邪术师双重表示消失。
+4. §6.3 合成自制职业包端到端通过（含升级与选择系统专项）。
 5. §5.1 / §5.2 每条诊断都有对应测试，`path` 精确。
 6. `npm run check`、`npm run test:scripts`、`npm run lint:design` 全绿。
-7. `docs/README.md` §9.1 含完整自制职业示例，且示例可被测试中的合成包复用（文档与实现不脱节）。
-8. **选择系统（§3.10，范围待确认）**：值类型选项（内联 grants）选中后数值真的生效；法术选择可由 `optionType: "spell"` 完全声明（含计数、环阶上限、列表标签、重复）；`repeatable` 可重复选取且校验正确；legacy 机制 B/C/D 能展开为等价选择且行为不变；本轮不支持的选项能力在导入时报 error 而非静默接受。
+7. `docs/README.md` §9.1 含完整自制职业示例（含选择与法术选择），且示例可被测试中的合成包复用（文档与实现不脱节）。
+8. **选择系统（§3.10）**：字符串简写自动授予且选中生效；内联选项的 `ability`/`hitPoints` 改变派生结果；`optionType: "spell"` + `countsToward` 受 `prepared` 约束；`repeatable` 行为正确；`requires` 隐藏语义正确；`group`/`help` 呈现；装备 A/B 方案写入 `inventory`；`classRules` 的 `skillChoice` 与 `spellcasting` 计数展开为等价规范选择。
 
 ---
 
 ## 11. 明确不在本次范围
 
 - **S3**：`mode: "patch" | "replace"` 声明、可配置 `priority` 字段（含 Drift 迁移）、覆盖冲突 UI、关闭覆盖回退内置。
-- **S4**：作者 GUI（规则表单）、基于已有条目创建覆盖、`.dndpack` 导出。
-- **S2.5（§3.10.4 建议）**：`requires` 前置依赖、选择的分组与呈现、装备选择（A/B 方案）。
+- **S4**：作者 GUI 的**完整形态**（可视化规则表单、基于已有条目创建覆盖、`.dndpack` 导出）。本轮只保证
+  契约与引擎支持全部能力、编辑器能渲染并应用选择结果；把它做成"填表即得"的完整体验属于 S4。
 - **C 场景**：自定义技能/属性清单、自定义 AC 公式（护甲敏捷上限、无甲防御）、自定义休息与恢复语义。
 - **仍不建模的规则能力**（继续留在 §7.7 已知限制）：其他职业资源池（引导神力/野性形态/专注点/术法点/诗人激励/宿敌/圣疗/魔法诡计/先天术法）、伤害抗性与免疫结算、**奥法骑士/诡术师的准备或已知法术上限与戏法上限**（2024 职业表未给出，不臆造）、命中骰池、力竭等级惩罚、专注校验、专精、多职业、XP、负重。
 
@@ -598,11 +661,13 @@ class RuleFieldSource {
 
 | 阶段 | 内容 | 完成标志 |
 |---|---|---|
-| P1 | 内置档案 + `RuleProfile` / `ClassRuleSet` / `MaxSpec` + `RuleProfileResolver` + 资产测试与解析链测试 | 档案通过官方表核算；解析链测试全绿；`Dnd5eRules` 尚未接入 |
-| P2 | `Dnd5eRules` 改为读 profile（删除职业表与中文匹配）+ `RuleProfileStore` 启动装配 + 消费者改造 + 私有包金标 | `npm run check` 全绿且客户端测试数量不减；金标数值全等 |
+| **P0** | **契约定稿 + 提取器重写**：`scripts/extract_phb_2024_v2.py` 输出新契约形状，`test_phb_2024_v2_tools.py` 同步；生成一份重提取样本用于后续金标 | 产物无旧形状；`npm run test:scripts` 全绿 |
+| P1 | 内置档案 + `RuleProfile` / `ClassRuleSet` / `Table` / `MaxSpec` / 选择值对象 + `RuleProfileResolver`（含简写规范化）+ 资产测试与解析链测试 | 档案通过官方表核算；解析链与规范化测试全绿；`Dnd5eRules` 尚未接入 |
+| P2 | `Dnd5eRules` 改为读 profile（删除职业表与中文匹配）+ `RuleProfileStore` 启动装配 + 消费者改造 + 重提取金标 | `npm run check` 全绿且客户端测试数量不减；金标数值全等 |
 | P3 | 导入校验与 warnings（含 `ContentImportReport.warnings` + 预览 UI）+ `classIdentity` 与老角色回填 | §5 每条诊断都有测试；老角色提示正确 |
-| P4 | grant kind 收紧：实现 `hitPoints`/`ability`、移除 `conditionResistance`/`note`、修邪术师双重表示 | 行为变化清单逐条有测试 |
-| P4.5 | **选择系统（§3.10，范围待确认）**：值类型选项 + 内联 grants、`optionType: "spell"`、`repeatable`、legacy B/C/D 展开 | §10.8 逐条有测试；编辑器可选择并生效 |
-| P5 | 生成脚本升级 + 文档（§9.1 重写、§7.7、§2/§16、README、AGENTS.md） | 文档示例与合成包一致；warning 消失 |
+| P4 | grant kind 收紧：实现 `hitPoints`/`ability`、移除 `resource`/`conditionResistance`/`note`、修邪术师双重表示 | 行为变化清单逐条有测试 |
+| **P5** | **选择系统落地**（§3.10）：值类型选项 + 内联 grants + 自动授予、`optionType: "spell"` + `countsToward`、`repeatable`、`requires`、`group`/`help`、装备 A/B、`skillChoice`/`spellcasting` 计数展开 | §10.8 逐条有测试；编辑器可选择且生效 |
+| P6 | 文档（§9.1 重写、§7.7、§2/§16、README、AGENTS.md、§13.6） | 文档示例与合成包一致 |
 
 P1→P2 之间必须有一次全量回归（这是数值搬迁的安全网，不可跳过）。
+P0 必须在 P1 之前完成：契约形状一旦定稿，提取器与档案必须同步，否则无法产生金标。

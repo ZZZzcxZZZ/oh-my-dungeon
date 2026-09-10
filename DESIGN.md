@@ -52,7 +52,9 @@ typography:
 rounded:
   sm: 8px      # 组件（卡片/按钮/输入框/chip）
   md: 16px     # 对话框 / 底部弹层
-  pill: 24px   # 聊天气泡（唯一有意例外）
+  pill: 24px   # 聊天气泡胶囊
+  handle: 4px  # 底部弹层拖拽把手
+  full: 48px   # 圆形控件（颜色色板、头像涟漪等）
 spacing:
   xs: 4px
   sm: 8px
@@ -117,14 +119,33 @@ OhMyDungeon 是离线优先的 D&D 跑团辅助工具，界面语言是"安静�
 
 ## Shapes
 
-组件统一 8dp（卡片/按钮/输入框/chip）；对话框与底部弹层 16dp；聊天气泡胶囊 24dp 为唯一例外。
-不得混用其他圆角值。
+组件统一 8dp（卡片/按钮/输入框/chip）；对话框与底部弹层 16dp；聊天气泡胶囊 24dp；
+弹层拖拽把手 4px；圆形控件（色板/涟漪）48px 等效于整圆。
+
+以上是**全部**允许的圆角取值（见 front matter `rounded`）。新增圆角必须先在 `rounded`
+中登记，不得在组件里直接写其他数值。
 
 ## Components
 
 按钮五态（filled/elevated/text/outlined/tonal）如 token 定义，破坏性操作统一 error 角色。
-Chip 选中态必须使用 onSecondaryContainer。输入框一律走 `inputDecorationTheme`（8dp 填充式），
-不覆写 border。对话框内容宽度取 token（440/560/760）。所有纯图标控件必须带 Tooltip。
+Chip 选中态必须使用 onSecondaryContainer（`secondaryLabelStyle`）。输入框一律走
+`inputDecorationTheme`（8dp 填充式），不覆写 border。所有纯图标控件必须带 Tooltip，
+触达尺寸 ≥ 48dp。
+
+对话框内容尺寸统一取 `core/presentation/dialog_sizes.dart`：
+
+| token | 值 | 用途 |
+|---|---|---|
+| `form` | 420 | 轻量表单（自定义动作/资源） |
+| `narrow` | 440 | 带选项列表的窄对话框 |
+| `compact` | 480 | 搜索拾取器 |
+| `standard` | 560 | 多步向导 |
+| `wide` | 760 | 详情阅读 |
+| `full` | 960 | 全宽内容阅读 |
+| `pickerHeight` / `guideHeight` / `detailHeight` | 416 / 620 / 720 | 对应高度上限 |
+
+语义排版 token（旁白/系统消息/骰式/邀请码/头像首字母等）统一取
+`app/theme/app_text_styles.dart`，不要在各处复制样式。
 
 ## Do's and Don'ts
 

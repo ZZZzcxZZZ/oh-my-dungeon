@@ -15,14 +15,17 @@ reset, revert, delete, or commit unrelated changes.
 
 ## Required Reading
 
-1. `README.md`
-2. `docs/README.md`
-3. `docs/roadmap/current-execution-status.md`
-4. `docs/superpowers/specs/2026-07-29-private-workspaces-and-campaign-convergence-design.md`
-5. `docs/agents/agent-execution-guide.md`
-6. Documents directly related to the task
+1. `README.md` — 面向使用者的安装与使用教程
+2. `docs/README.md` — **项目唯一事实来源**：架构、数据模型、接口边界、领域行为、
+   离线与同步、内容体系、部署运维、工程规范、当前状态与验收基线
+3. `AGENTS.md`（本文件）— Agent 协作硬约束
+4. `DESIGN.md` — 涉及 UI 时必读的设计 token 与组件契约
+5. 仅当需要追溯历史决策时，才查阅 `docs/archive/`（历史证据，不是待办）
 
-`docs/archive/` is historical evidence, not an active backlog.
+设计系统回归保护：`apps/client_flutter/test/app_theme_test.dart`（契约断言）、
+`apps/client_flutter/test/golden/`（golden 基线）、`npm run lint:design`（DESIGN.md 契约 lint）。
+
+`docs/archive/` 中的文档可能描述已被取代的流程与接口，不得直接作为实现依据。
 
 ## Current Boundaries
 

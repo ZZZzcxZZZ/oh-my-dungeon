@@ -26,7 +26,7 @@ import { PrismaModule } from './prisma/prisma.module';
     }),
     PrismaModule,
     HealthModule,
-    // MediaModule 已摘除: 客户端无消费者.
+    // 媒体与战斗模块已随产品范围收敛删除 (客户端无消费者).
     ServerInfoModule,
     AuthModule,
     ServerSettingsModule,
@@ -34,7 +34,6 @@ import { PrismaModule } from './prisma/prisma.module';
     CampaignSyncModule,
     CharactersModule,
     GameEventsModule,
-    // EncountersModule 已摘除: 战斗系统不开发, 客户端无消费者.
     RealtimeModule,
     VaultModule
   ]

@@ -1,0 +1,2293 @@
+# 规则契约核心（P0–P2）实现计划
+
+> **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
+
+**目标：** 把 D&D 2024 规则数值从 Dart 代码搬进随包发布的内置规则档案，删除全部中文职业名子串匹配，并让"完全自制的职业条目"只靠 `structured.classRules` 就能产出正确的 HP / 豁免 / 技能选择 / 法术位 / 职业资源 / 准备法术上限。
+
+**架构：** 新增只含数值的内置档案 `assets/rules/dnd5e-2024.rules.json`（tier 0）。`Dnd5eRules` 退化为"纯运算 + 读档案"的查询层，启动时一次性 `configure` 一个不可变 `RuleProfile`。第三方/私有包的职业声明写在条目 `structured.classRules`（tier 100），在用到该条目时与档案做**字段级合并**（条目优先）——不做全局条目扫描，不引入优先级字段。规则字段的解析与校验集中在一个纯函数式解析器 `RuleProfileResolver`，导入器把它的诊断翻译成整包阻断 error 或导入 warning。
+
+**技术栈：** Flutter 3.41 / Dart 3.11、`flutter_test`、Drift（本次不改 schema）、Python 3（私有提取脚本 `scripts/extract_phb_2024_v2.py`）、`npm run check` 门禁。
+
+**规格：** `docs/specs/2026-09-10-rules-contract-design.md`（§3.1–§3.9、§5、§6.1、§6.2、§6.5）。本计划只覆盖 P0–P2；选择系统（§3.10）与文档收尾是后续计划。
+
+**先决条件：** 工作区干净、`git log -1` 为 `ea92326` 或其后；已跑过一次 `cd apps/client_flutter && flutter test` 全绿（基线 923 通过 / 5 跳过）。
+
+---
+
+## 文件结构
+
+**新增**
+
+| 文件 | 职责 |
+|---|---|
+| `apps/client_flutter/assets/rules/dnd5e-2024.rules.json` | 内置档案：abilities / skills / progressions / classes。**只含数值**，无任何规则书正文 |
+| `apps/client_flutter/lib/src/features/rules/domain/rule_math.dart` | 纯运算：`abilityModifier`、`proficiencyBonus`、`formatModifier`。唯一的公式来源 |
+| `apps/client_flutter/lib/src/features/rules/domain/rule_values.dart` | `IntTable`（`Table<int>`）、`SlotTable`（`Table<{环阶:数量}>`）、`MaxSpec`（value/formula/table） |
+| `apps/client_flutter/lib/src/features/rules/domain/rule_diagnostic.dart` | `RuleDiagnostic` / `RuleSeverity`：`{path, severity, code, message}` |
+| `apps/client_flutter/lib/src/features/rules/domain/class_rule_set.dart` | `ClassRuleSet`、`ClassSpellcasting`、`ClassResourceRule`、`ClassSkillChoice`：一个职业的规则数值 |
+| `apps/client_flutter/lib/src/features/rules/domain/rule_profile.dart` | `RuleProfile`（abilities/skills/progressions/classes + `fieldSources`）、`RuleFieldSource`、按 slug/aliases 查询 |
+| `apps/client_flutter/lib/src/features/rules/domain/rule_profile_resolver.dart` | 解析 + 校验 + 字段级合并（条目优先）+ 简写规范化（`skillChoice` → 规范选择） |
+| `apps/client_flutter/lib/src/features/rules/data/rule_profile_store.dart` | 读内置档案资产 → `RuleProfileResolver` → `Dnd5eRules.configure` |
+| `apps/client_flutter/test/rules/rule_values_test.dart` | `IntTable` / `SlotTable` / `MaxSpec` 单元测试 |
+| `apps/client_flutter/test/rules/rule_profile_resolver_test.dart` | 解析、校验、字段级合并测试 |
+| `apps/client_flutter/test/rules/builtin_rule_profile_test.dart` | 内置档案对照 SRD 5.2 官方表的核算测试（替代现有硬编码核算） |
+| `apps/client_flutter/test/rules/rule_profile_test_support.dart` | 从仓库路径读档案构造 profile 的测试辅助 |
+
+**修改**
+
+| 文件 | 变化 |
+|---|---|
+| `apps/client_flutter/pubspec.yaml` | assets 增加 `assets/rules/dnd5e-2024.rules.json` |
+| `apps/client_flutter/lib/main.dart` | `main()` 改 async，先 `await RuleProfileStore.initialize()` 再 `runApp` |
+| `apps/client_flutter/lib/src/features/characters/domain/dnd5e_rules.dart` | **删除** `_hitDice` / `_classSavingThrows` / `_fullCasterSlots` / `_prepared*` / `_secondWindUses` / `_rageUses` / 全部 `contains` 职业匹配；表查询改读 `profile`；纯运算委托 `rule_math.dart` |
+| `apps/client_flutter/lib/src/features/characters/domain/structured_class_rules.dart` | 只认 `structured.classRules`；`savingThrowAbilities` / `skillChoice` 经 `RuleProfileResolver` 规范化；删除散文解析正则与 `_validSkills` 静默丢弃 |
+| `apps/client_flutter/lib/src/features/characters/domain/rules_driven_character_builder.dart` | 合并 `条目 classRules ∪ 档案(profile)`；写 `data.classIdentity`；`hitPoints` / `ability` grant 参与派生 |
+| `apps/client_flutter/lib/src/features/characters/domain/quick_build.dart` | 用档案 + 条目；写 `classIdentity`；删除 `_saves` 硬编码表 |
+| `apps/client_flutter/lib/src/features/characters/domain/character.dart` | `classResources` 按 `classIdentity.slug` 读档案 |
+| `apps/client_flutter/lib/src/features/characters/domain/character_rule_projector.dart` | 老角色按 slug/name/aliases **精确匹配**回填 `classIdentity` |
+| `apps/client_flutter/lib/src/features/characters/domain/spell_selection_policy.dart` | 从 `ClassSpellcasting` 的表读取，不再读四列行数组 |
+| `apps/client_flutter/lib/src/features/characters/presentation/character_detail_page.dart` | `_slotMaximums()` 兜底读档案 |
+| `apps/client_flutter/lib/src/features/characters/presentation/character_editor_page.dart` | 法术/资源摘要读档案 |
+| `apps/client_flutter/lib/src/features/rules/domain/character_rule_definition.dart` | `RuleGrantKind` 收敛为 9 项（移除 `resource` / `conditionResistance` / `note`） |
+| `apps/client_flutter/lib/src/features/content/data/import/content_package_importer.dart` | 接入 `RuleProfileResolver.validateEntry` |
+| `apps/client_flutter/lib/src/features/content/domain/content_import_report.dart` | 新增 `warnings` |
+| `apps/client_flutter/lib/src/features/content/presentation/content_import_preview_dialog.dart` | 次级样式展示 warnings |
+| `scripts/extract_phb_2024_v2.py` | 输出新契约形状；删除脚本内重复的法术位表 |
+| `scripts/test_phb_2024_v2_tools.py` | 断言新形状 |
+| `apps/client_flutter/test/dnd5e_rules_verification_test.dart` | 改为对内置档案断言（保留全部官方表期望值） |
+
+**不修改**：Drift schema（`schemaVersion` 保持 13）、服务端任何代码、`DESIGN.md`。
+
+---
+
+## 任务 1：内置档案与资产测试
+
+**文件：**
+- 创建：`apps/client_flutter/assets/rules/dnd5e-2024.rules.json`
+- 修改：`apps/client_flutter/pubspec.yaml:76-78`
+- 测试：`apps/client_flutter/test/rules/builtin_rule_profile_test.dart`
+
+- [ ] **步骤 1：写档案文件（先写 6 个属性 + 18 技能 + 5 个原型 + 12 个职业）**
+
+```jsonc
+{
+  "rulebookVersion": 1,
+  "system": "dnd5e-2024",
+  "abilities": ["str", "dex", "con", "int", "wis", "cha"],
+  "skills": [
+    {"name": "杂技", "ability": "dex"}, {"name": "驯兽", "ability": "wis"},
+    {"name": "奥秘", "ability": "int"}, {"name": "运动", "ability": "str"},
+    {"name": "欺瞒", "ability": "cha"}, {"name": "历史", "ability": "int"},
+    {"name": "洞悉", "ability": "wis"}, {"name": "威吓", "ability": "cha"},
+    {"name": "调查", "ability": "int"}, {"name": "医药", "ability": "wis"},
+    {"name": "自然", "ability": "int"}, {"name": "察觉", "ability": "wis"},
+    {"name": "表演", "ability": "cha"}, {"name": "说服", "ability": "cha"},
+    {"name": "宗教", "ability": "int"}, {"name": "巧手", "ability": "dex"},
+    {"name": "隐匿", "ability": "dex"}, {"name": "求生", "ability": "wis"}
+  ],
+  "progressions": {
+    "none": {"slots": []},
+    "full-caster": {
+      "slots": [[2],[3],[4,2],[4,3],[4,3,2],[4,3,3],[4,3,3,1],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,2],
+                [4,3,3,3,2,1],[4,3,3,3,2,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1,1],
+                [4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1,1],[4,3,3,3,3,1,1,1,1],[4,3,3,3,3,2,1,1,1],
+                [4,3,3,3,3,2,2,1,1]],
+      "prepared":  [4,5,6,7,9,10,11,12,14,15,16,16,17,17,18,18,19,20,21,22],
+      "cantrips":  [3,3,3,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5],
+      "maximumSpellLevel": [1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,9,9]
+    },
+    "half-caster": {
+      "minimumLevel": 1,
+      "slots": [[2],[2],[3],[3],[4,2],[4,2],[4,3],[4,3],[4,3,2],[4,3,2],[4,3,3],[4,3,3],
+                [4,3,3,1],[4,3,3,1],[4,3,3,2],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2]],
+      "prepared":  [2,3,4,5,6,6,7,7,9,9,10,10,11,11,12,12,14,14,15,15],
+      "cantrips":  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+      "maximumSpellLevel": [1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5]
+    },
+    "third-caster": {
+      "minimumLevel": 3,
+      "slots": [[],[],[2],[3],[3],[3],[4,2],[4,2],[4,2],[4,3],[4,3],[4,3],[4,3,2],[4,3,2],[4,3,2],
+                [4,3,3],[4,3,3],[4,3,3],[4,3,3,1],[4,3,3,1]]
+    },
+    "pact": {
+      "minimumLevel": 1,
+      "slots": [[1],[2],[2],[2],[2],[2],[2],[2],[2],[2],[3],[3],[3],[3],[3],[3],[4],[4],[4],[4]],
+      "slotLevel": [1,1,2,2,3,3,4,4,5,5,5,5,5,5,5,5,5,5,5,5],
+      "prepared":  [2,3,4,5,6,7,8,9,10,10,11,11,12,12,13,13,14,14,15,15],
+      "cantrips":  [2,2,2,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4],
+      "maximumSpellLevel": [1,1,2,2,3,3,4,4,5,5,5,5,5,5,5,5,5,5,5,5]
+    }
+  },
+  "classes": { "…任务 1 步骤 2…": {} }
+}
+```
+
+> 原型内部的 `slots` 必须是**完整 20 项数组**（模板）；`prepared` / `cantrips` / `maximumSpellLevel` 同理。
+> 数值来源：SRD 5.2 各职业 Features 表（本轮审计已逐项核对，见 `dnd5e_rules_verification_test.dart` 现有期望值）。
+
+- [ ] **步骤 2：补全 `classes`（12 个核心 slug）**
+
+按下面事实填 12 项（`hitDie` / `savingThrowAbilities` / `skillChoice` 来自各职业 Core Traits 表；
+`progression` 按职业：野蛮人/战士/武僧/游荡者 `none`，吟游诗人/牧师/德鲁伊/术士/法师 `full-caster`，
+圣武士/游侠 `half-caster`，邪术师 `pact`；**只有战士与野蛮人有 `resources`**）：
+
+```jsonc
+"barbarian": { "hitDie": 12, "savingThrowAbilities": ["str","con"],
+  "skillChoice": {"count": 2, "options": ["驯兽","运动","威吓","自然","察觉","求生"]},
+  "spellcasting": {"mode": "none"},
+  "resources": [{"id":"rage","name":"狂暴","recovery":"shortRestOne",
+    "maximum":{"table":{"1":2,"3":3,"6":4,"12":5,"17":6}}}] },
+"fighter": { "hitDie": 10, "savingThrowAbilities": ["str","con"],
+  "skillChoice": {"count": 2, "options": ["特技","驯兽","运动","历史","洞悉","威吓","说服","察觉","求生"]},
+  "spellcasting": {"mode": "none"},
+  "resources": [
+    {"id":"second_wind","name":"第二气息","recovery":"shortRestOne",
+     "maximum":{"table":{"1":2,"4":3,"10":4}}},
+    {"id":"action_surge","name":"动作如潮","startsAtLevel":2,"recovery":"shortRest",
+     "maximum":{"table":{"2":1,"17":2}}}] }
+// 其余 11 个职业的完整数据（hitDie / savingThrowAbilities 见任务 1 步骤 4 的 expected 表）：
+
+"bard":      skillChoice {"count":3,"options":"any"}
+"cleric":    skillChoice {"count":2,"options":["历史","洞悉","医药","说服","宗教"]}
+"druid":     skillChoice {"count":2,"options":["奥秘","驯兽","洞悉","医药","自然","察觉","宗教","求生"]}
+"monk":      skillChoice {"count":2,"options":["特技","运动","历史","洞悉","宗教","隐匿"]}
+"paladin":   skillChoice {"count":2,"options":["运动","洞悉","威吓","医药","说服","宗教"]}
+"ranger":    skillChoice {"count":3,"options":["驯兽","运动","洞悉","调查","自然","察觉","隐匿","求生"]}
+"rogue":     skillChoice {"count":4,"options":["特技","运动","欺瞒","洞悉","威吓","调查","察觉","表演","说服","巧手","隐匿"]}
+"sorcerer":  skillChoice {"count":2,"options":["奥秘","欺瞒","洞悉","威吓","说服","宗教"]}
+"warlock":   skillChoice {"count":2,"options":["奥秘","欺瞒","历史","威吓","调查","自然","宗教"]}
+"wizard":    skillChoice {"count":2,"options":["奥秘","历史","洞悉","调查","医药","自然","宗教"]}
+
+// progression：吟游诗人/牧师/德鲁伊/术士/法师 = full-caster；圣武士/游侠 = half-caster；
+//             邪术师 = pact；野蛮人/战士/武僧/游荡者 = none
+// resources：只有野蛮人（rage）与战士（second_wind / action_surge）有，见本节上方示例
+```
+
+- [ ] **步骤 2b：用真实私有包交叉核对技能列表（必做，防止手抄出错）**
+
+运行（把下面整段粘进终端，`PYEOF` 是 heredoc 结束标记）：
+
+```bash
+python3 - <<'PYEOF'
+import json
+d = json.load(open('private-imports/phb-2024-v2-bundle.json'))
+for e in d['entries']:
+    if e.get('type') == 'class':
+        print(e['slug'], '|', e['structured'].get('skills'))
+PYEOF
+```
+
+预期输出形如 `barbarian | 选择2项：驯兽、运动、威吓、自然、察觉、求生`。
+把每行与步骤 2 写的 `skillChoice.options` **逐项对齐**，不一致时以私有包为准
+（它是从规则书正文提取的），并同步修改步骤 2 的数据。
+
+- [ ] **步骤 3：登记资产**
+
+```yaml
+  assets:
+    - assets/bundled_content.json
+    - assets/branding/ohmydungeon_icon.png
+    - assets/rules/dnd5e-2024.rules.json
+```
+
+- [ ] **步骤 4：写资产测试（先失败）**
+
+```dart
+// test/rules/builtin_rule_profile_test.dart
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter_test/flutter_test.dart';
+
+Map<String, Object?> readArchive() => jsonDecode(
+      File('assets/rules/dnd5e-2024.rules.json').readAsStringSync(),
+    ) as Map<String, Object?>;
+
+void main() {
+  final archive = readArchive();
+  final classes = archive['classes']! as Map<String, Object?>;
+
+  test('档案版本与参照清单完整', () {
+    expect(archive['rulebookVersion'], 1);
+    expect(archive['abilities'], hasLength(6));
+    expect(archive['skills'], hasLength(18));
+  });
+
+  test('12 个核心职业全部存在且字段合法', () {
+    const slugs = ['barbarian','bard','cleric','druid','fighter','monk',
+                   'paladin','ranger','rogue','sorcerer','warlock','wizard'];
+    for (final slug in slugs) {
+      expect(classes.containsKey(slug), isTrue, reason: slug);
+      final rules = classes[slug]! as Map<String, Object?>;
+      expect(rules['hitDie'], isA<int>(), reason: slug);
+      expect(rules['savingThrowAbilities'], hasLength(2), reason: slug);
+    }
+  });
+
+  test('生命骰与豁免对照 SRD 5.2', () {
+    const expected = {
+      'barbarian': [12, ['str','con']], 'bard': [8, ['dex','cha']],
+      'cleric': [8, ['wis','cha']], 'druid': [8, ['int','wis']],
+      'fighter': [10, ['str','con']], 'monk': [8, ['dex','wis']],
+      'paladin': [10, ['wis','cha']], 'ranger': [10, ['dex','str']],
+      'rogue': [8, ['dex','int']], 'sorcerer': [6, ['con','cha']],
+      'warlock': [8, ['wis','cha']], 'wizard': [6, ['int','wis']],
+    };
+    expected.forEach((slug, value) {
+      final rules = classes[slug]! as Map<String, Object?>;
+      expect(rules['hitDie'], value[0], reason: slug);
+      expect(rules['savingThrowAbilities'], value[1], reason: slug);
+    });
+  });
+
+  test('战士与野蛮人的资源恢复语义', () {
+    final fighter = (classes['fighter']! as Map)['resources']! as List;
+    expect((fighter[0] as Map)['recovery'], 'shortRestOne');
+    expect((fighter[1] as Map)['recovery'], 'shortRest');
+    expect((fighter[1] as Map)['startsAtLevel'], 2);
+    final barbarian = (classes['barbarian']! as Map)['resources']! as List;
+    expect((barbarian.single as Map)['recovery'], 'shortRestOne');
+  });
+
+  test('每个原型的关键表长度都是 20 或为空', () {
+    final progressions = archive['progressions']! as Map<String, Object?>;
+    progressions.forEach((name, raw) {
+      final p = raw! as Map<String, Object?>;
+      for (final key in ['slots','prepared','cantrips','maximumSpellLevel','slotLevel']) {
+        final value = p[key];
+        if (value == null) continue;
+        expect((value as List), hasLength(20), reason: '$name.$key');
+      }
+    });
+  });
+}
+```
+
+- [ ] **步骤 5：运行测试**
+
+运行：`cd apps/client_flutter && flutter test test/rules/builtin_rule_profile_test.dart`
+预期：PASS（步骤 1–3 已写完档案）。若某职业字段缺失则 FAIL 并指出 slug。
+
+- [ ] **步骤 6：Commit**
+
+```bash
+git add apps/client_flutter/assets/rules/dnd5e-2024.rules.json apps/client_flutter/pubspec.yaml apps/client_flutter/test/rules/builtin_rule_profile_test.dart
+git commit -m "feat(rules): 新增内置规则档案与官方表核算测试"
+```
+
+---
+
+## 任务 2：`Table` 与 `MaxSpec` 值对象
+
+**文件：**
+- 创建：`apps/client_flutter/lib/src/features/rules/domain/rule_math.dart`
+- 创建：`apps/client_flutter/lib/src/features/rules/domain/rule_values.dart`
+- 创建：`apps/client_flutter/lib/src/features/rules/domain/rule_diagnostic.dart`
+- 测试：`apps/client_flutter/test/rules/rule_values_test.dart`
+
+- [ ] **步骤 1：写 `rule_math.dart`（纯运算，唯一公式来源）**
+
+```dart
+/// D&D 2024 纯运算。`Dnd5eRules` 的同名方法委托到这里，保证只有一份公式。
+int abilityModifier(int score) => ((score - 10) / 2).floor();
+
+int proficiencyBonus(int level) {
+  final clamped = level.clamp(1, 20);
+  return ((clamped - 1) ~/ 4) + 2;
+}
+
+String formatModifier(int modifier) => modifier >= 0 ? '+$modifier' : '$modifier';
+```
+
+- [ ] **步骤 2：写 `rule_diagnostic.dart`**
+
+```dart
+enum RuleSeverity { error, warning }
+
+class RuleDiagnostic {
+  const RuleDiagnostic({
+    required this.path,
+    required this.severity,
+    required this.code,
+    required this.message,
+  });
+
+  final String path;
+  final RuleSeverity severity;
+  final String code;
+  final String message;
+
+  @override
+  String toString() => '[$severity/$code] $path: $message';
+}
+```
+
+- [ ] **步骤 3：写失败测试**
+
+```dart
+// test/rules/rule_values_test.dart
+import 'package:dnd_table_client/src/features/rules/domain/rule_values.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  group('IntTable', () {
+    test('完整 20 项数组', () {
+      final table = IntTable.tryParse(List.generate(20, (i) => i + 1));
+      expect(table, isNotNull);
+      expect(table!.at(1), 1);
+      expect(table.at(20), 20);
+    });
+
+    test('稀疏表向前取值，低于最小档位取最小档位', () {
+      final table = IntTable.tryParse({'3': 5, '10': 9});
+      expect(table!.at(1), 5);
+      expect(table.at(3), 5);
+      expect(table.at(9), 5);
+      expect(table.at(10), 9);
+      expect(table.at(20), 9);
+    });
+
+    test('非法输入返回 null', () {
+      expect(IntTable.tryParse([1, 2, 3]), isNull);          // 长度不是 20
+      expect(IntTable.tryParse({'0': 1}), isNull);           // 等级越界
+      expect(IntTable.tryParse({'1': -1}), isNull);          // 负值
+      expect(IntTable.tryParse('nope'), isNull);
+    });
+
+    test('等级越界时夹取', () {
+      final table = IntTable.tryParse({'1': 2})!;
+      expect(table.at(0), 2);
+      expect(table.at(99), 2);
+    });
+  });
+
+  group('SlotTable', () {
+    test('稀疏覆盖整级替换，未声明等级返回空', () {
+      final table = SlotTable.tryParse({'5': {'1': 4, '2': 2}})!;
+      expect(table.at(5), {'1': 4, '2': 2});
+      expect(table.at(4), isEmpty);
+      expect(table.at(6), isEmpty);
+    });
+
+    test('完整 20 项数组', () {
+      final raw = List.generate(20, (i) => i.isEven ? <String, Object?>{} : {'1': 1});
+      final table = SlotTable.tryParse(raw)!;
+      expect(table.at(1), isEmpty);
+      expect(table.at(2), {'1': 1});
+    });
+
+    test('非法环阶与负值返回 null', () {
+      expect(SlotTable.tryParse({'1': {'0': 1}}), isNull);
+      expect(SlotTable.tryParse({'1': {'10': 1}}), isNull);
+      expect(SlotTable.tryParse({'1': {'1': -1}}), isNull);
+      expect(SlotTable.tryParse({'21': {'1': 1}}), isNull);
+    });
+  });
+
+  group('MaxSpec', () {
+    const abilities = {'str': 8, 'dex': 10, 'con': 14, 'int': 12, 'wis': 16, 'cha': 20};
+
+    test('固定值', () {
+      final spec = MaxSpec.tryParse(3)!;
+      expect(spec.resolve(level: 5, abilities: abilities), 3);
+    });
+
+    test('等级与系数×等级', () {
+      expect(MaxSpec.tryParse({'formula': 'level'})!.resolve(level: 7, abilities: abilities), 7);
+      expect(MaxSpec.tryParse({'formula': '5*level'})!.resolve(level: 4, abilities: abilities), 20);
+    });
+
+    test('属性调整值与 minimum 下限', () {
+      final cha = MaxSpec.tryParse({'formula': 'ability:cha'})!;
+      expect(cha.resolve(level: 1, abilities: abilities), 5);
+      final wis = MaxSpec.tryParse({'formula': 'ability:wis', 'minimum': 1})!;
+      expect(wis.resolve(level: 1, abilities: abilities), 3);
+      final str = MaxSpec.tryParse({'formula': 'ability:str', 'minimum': 1})!;
+      expect(str.resolve(level: 1, abilities: abilities), 1);
+    });
+
+    test('等级表与稀疏等级表', () {
+      final spec = MaxSpec.tryParse({'table': {'1': 2, '17': 6}})!;
+      expect(spec.resolve(level: 10, abilities: abilities), 2);
+      expect(spec.resolve(level: 17, abilities: abilities), 6);
+    });
+
+    test('封闭语法之外一律拒绝', () {
+      for (final bad in ['prof', 'level*2', 'ability', 'ability:luck', '1+1', '']) {
+        expect(MaxSpec.tryParse({'formula': bad}), isNull, reason: bad);
+      }
+      expect(MaxSpec.tryParse({'value': 1, 'table': {'1': 1}}), isNull); // 同时给两种
+      expect(MaxSpec.tryParse({'formula': 'level', 'minimum': -1}), isNull);
+      expect(MaxSpec.tryParse(null), isNull);
+    });
+  });
+}
+```
+
+- [ ] **步骤 4：运行测试确认失败**
+
+运行：`cd apps/client_flutter && flutter test test/rules/rule_values_test.dart`
+预期：FAIL，`Error: Not found: 'package:dnd_table_client/src/features/rules/domain/rule_values.dart'`
+
+- [ ] **步骤 5：实现 `rule_values.dart`**
+
+```dart
+import 'rule_math.dart';
+
+/// `Table<int>`：完整 20 项数组，或稀疏 `{"<等级>": 值}`（键 1..20）。
+class IntTable {
+  const IntTable._(this.values);
+
+  final List<int> values; // 恒为 20 项
+
+  static IntTable? tryParse(Object? raw) {
+    final byLevel = _expand(raw, (value) => value is num ? value.toInt() : null);
+    if (byLevel == null) return null;
+    if (byLevel.any((value) => value < 0)) return null;
+    return IntTable._(byLevel);
+  }
+
+  int at(int level) => values[level.clamp(1, 20) - 1];
+}
+
+/// `Table<{环阶: 数量}>`：法术位。整级替换语义——未声明的等级为空表。
+class SlotTable {
+  const SlotTable._(this.perLevel);
+
+  final List<Map<String, int>> perLevel; // 恒为 20 项
+
+  static SlotTable? tryParse(Object? raw) {
+    final source = <Object?>[];
+    if (raw is List) {
+      if (raw.length != 20) return null;
+      source.addAll(raw);
+    } else if (raw is Map) {
+      for (final key in raw.keys) {
+        final level = int.tryParse('$key');
+        if (level == null || level < 1 || level > 20) return null; // 未知键一律拒绝
+      }
+      for (var level = 1; level <= 20; level++) {
+        source.add(raw['$level']);
+      }
+    } else {
+      return null;
+    }
+    final perLevel = <Map<String, int>>[];
+    for (final entry in source) {
+      if (entry == null) {
+        perLevel.add(const <String, int>{});
+        continue;
+      }
+      if (entry is! Map) return null;
+      final slots = <String, int>{};
+      for (final slot in entry.entries) {
+        final slotLevel = int.tryParse('${slot.key}');
+        final count = slot.value is num ? (slot.value! as num).toInt() : null;
+        if (slotLevel == null || slotLevel < 1 || slotLevel > 9) return null;
+        if (count == null || count < 0) return null;
+        if (count > 0) slots['$slotLevel'] = count;
+      }
+      perLevel.add(slots);
+    }
+    return SlotTable._(perLevel);
+  }
+
+  Map<String, int> at(int level) => perLevel[level.clamp(1, 20) - 1];
+}
+
+/// 资源上限：`{"value": n}` / `{"formula": "…"}` / `{"table": <Table<int>>}`，可带 `minimum`。
+class MaxSpec {
+  const MaxSpec._({this.value, this.formula, this.table, this.minimum});
+
+  final int? value;
+  final String? formula;
+  final IntTable? table;
+  final int? minimum;
+
+  static MaxSpec? tryParse(Object? raw) {
+    if (raw is num) {
+      final value = raw.toInt();
+      return value < 0 ? null : MaxSpec._(value: value);
+    }
+    if (raw is! Map) return null;
+    final minimum = raw['minimum'] is num ? (raw['minimum']! as num).toInt() : null;
+    if (minimum != null && minimum < 0) return null;
+    final hasValue = raw.containsKey('value');
+    final hasFormula = raw.containsKey('formula');
+    final hasTable = raw.containsKey('table');
+    final kinds = [hasValue, hasFormula, hasTable].where((flag) => flag).length;
+    if (kinds != 1) return null;
+    if (hasValue) {
+      final value = raw['value'];
+      if (value is! num || value.toInt() < 0) return null;
+      return MaxSpec._(value: value.toInt(), minimum: minimum);
+    }
+    if (hasFormula) {
+      final formula = raw['formula'];
+      if (formula is! String || !isSupportedFormula(formula)) return null;
+      return MaxSpec._(formula: formula, minimum: minimum);
+    }
+    final table = IntTable.tryParse(raw['table']);
+    if (table == null) return null;
+    return MaxSpec._(table: table, minimum: minimum);
+  }
+
+  int resolve({required int level, required Map<String, int> abilities}) {
+    final raw = switch (this) {
+      MaxSpec(value: final v?) => v,
+      MaxSpec(formula: final f?) => _evaluate(f, level, abilities),
+      _ => table!.at(level),
+    };
+    return minimum == null || raw >= minimum! ? raw : minimum!;
+  }
+}
+
+const _formulaPattern = r'^(level|ability:[a-z]{3}|(\d+)\*level|(\d+))$';
+
+bool isSupportedFormula(String formula) =>
+    RegExp(_formulaPattern).hasMatch(formula);
+
+int _evaluate(String formula, int level, Map<String, int> abilities) {
+  if (formula == 'level') return level;
+  if (formula.startsWith('ability:')) {
+    return abilityModifier(abilities[formula.substring(8)] ?? 10);
+  }
+  if (formula.endsWith('*level')) {
+    return int.parse(formula.substring(0, formula.length - 6)) * level;
+  }
+  return int.parse(formula);
+}
+
+/// 把"完整数组"或"稀疏 map"展开成 20 项；非法输入返回 null。
+List<T>? _expand<T>(Object? raw, T? Function(Object? value) convert) {
+  final result = <T>[];
+  if (raw is List) {
+    if (raw.length != 20) return null;
+    for (final item in raw) {
+      final value = convert(item);
+      if (value == null) return null;
+      result.add(value);
+    }
+    return result;
+  }
+  if (raw is Map) {
+    for (final key in raw.keys) {
+      final level = int.tryParse('$key');
+      if (level == null || level < 1 || level > 20) return null; // 未知键一律拒绝
+    }
+    final byLevel = <int, T>{};
+    for (var level = 1; level <= 20; level++) {
+      final item = raw['$level'];
+      if (item == null) continue;
+      final value = convert(item);
+      if (value == null) return null;
+      byLevel[level] = value;
+    }
+    if (byLevel.isEmpty) return null;
+    final firstLevel = byLevel.keys.reduce((a, b) => a < b ? a : b);
+    var current = byLevel[firstLevel]!;
+    for (var level = 1; level <= 20; level++) {
+      current = byLevel[level] ?? current;
+      result.add(current);
+    }
+    return result;
+  }
+  return null;
+}
+```
+
+- [ ] **步骤 6：运行测试确认通过**
+
+运行：`cd apps/client_flutter && flutter test test/rules/rule_values_test.dart`
+预期：PASS（全部用例）
+
+- [ ] **步骤 7：Commit**
+
+```bash
+git add apps/client_flutter/lib/src/features/rules/domain/rule_math.dart \
+        apps/client_flutter/lib/src/features/rules/domain/rule_values.dart \
+        apps/client_flutter/lib/src/features/rules/domain/rule_diagnostic.dart \
+        apps/client_flutter/test/rules/rule_values_test.dart
+git commit -m "feat(rules): 新增 Table/MaxSpec 值对象与纯运算模块"
+```
+
+---
+
+## 任务 3：`ClassRuleSet` 与职业规则解析
+
+**文件：**
+- 创建：`apps/client_flutter/lib/src/features/rules/domain/class_rule_set.dart`
+- 测试：`apps/client_flutter/test/rules/rule_profile_resolver_test.dart`（本任务先写其中的 `ClassRuleSet` 部分）
+
+- [ ] **步骤 1：写失败测试**
+
+```dart
+// test/rules/rule_profile_resolver_test.dart
+import 'package:dnd_table_client/src/features/rules/domain/class_rule_set.dart';
+import 'package:dnd_table_client/src/features/rules/domain/rule_diagnostic.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  group('ClassRuleSet.parse', () {
+    test('解析完整职业规则块', () {
+      final diagnostics = <RuleDiagnostic>[];
+      final rules = ClassRuleSet.parse(
+        {
+          'hitDie': 10,
+          'savingThrowAbilities': ['wis', 'cha'],
+          'skillChoice': {'count': 2, 'options': ['洞悉', '医药']},
+          'spellcasting': {
+            'mode': 'prepared',
+            'ability': 'cha',
+            'listTags': ['spell-list:astral'],
+            'archetype': 'half-caster',
+            'slots': {'5': {'1': 4, '2': 2}},
+          },
+          'resources': [
+            {'id': 'surge', 'name': '星界涌动', 'recovery': 'shortRestOne',
+             'maximum': {'formula': 'level'}},
+          ],
+        },
+        path: r'$.structured.classRules',
+        diagnostics: diagnostics,
+      );
+
+      expect(diagnostics, isEmpty);
+      expect(rules.hitDie, 10);
+      expect(rules.savingThrowAbilities, {'wis', 'cha'});
+      expect(rules.skillChoice!.count, 2);
+      expect(rules.skillChoice!.options, ['洞悉', '医药']);
+      expect(rules.spellcasting!.mode, 'prepared');
+      expect(rules.spellcasting!.ability, 'cha');
+      expect(rules.spellcasting!.archetype, 'half-caster');
+      expect(rules.spellcasting!.slots!.at(5), {'1': 4, '2': 2});
+      expect(rules.resources.single.recovery, 'shortRestOne');
+      expect(rules.resources.single.maximum.resolve(level: 7, abilities: const {'cha': 16}), 7);
+    });
+
+    test('hitDie 接受 dN 字符串', () {
+      final diagnostics = <RuleDiagnostic>[];
+      final rules = ClassRuleSet.parse(
+        {'hitDie': 'd12'},
+        path: r'$.structured.classRules',
+        diagnostics: diagnostics,
+      );
+      expect(rules.hitDie, 12);
+      expect(diagnostics, isEmpty);
+    });
+
+    test('未知字段报 error 并给出候选', () {
+      final diagnostics = <RuleDiagnostic>[];
+      ClassRuleSet.parse(
+        {'hitDices': 10},
+        path: r'$.structured.classRules',
+        diagnostics: diagnostics,
+      );
+      final errors =
+          diagnostics.where((d) => d.severity == RuleSeverity.error).toList();
+      expect(errors.single.code, 'unknownField');
+      expect(errors.single.message, contains('hitDie'));
+    });
+
+    test('非法生命骰、未知属性、未知技能都报 error', () {
+      final diagnostics = <RuleDiagnostic>[];
+      ClassRuleSet.parse(
+        {'hitDie': 7, 'savingThrowAbilities': ['luck'],
+         'skillChoice': {'count': 9, 'options': ['飞行']}},
+        path: r'$.structured.classRules',
+        diagnostics: diagnostics,
+        abilities: const {'str', 'dex', 'con', 'int', 'wis', 'cha'},
+        skills: const {'洞悉', '医药'},
+      );
+      final codes = diagnostics.map((d) => d.code).toSet();
+      expect(codes, containsAll(['invalidHitDie', 'unknownAbility', 'unknownSkill', 'invalidSkillCount']));
+    });
+
+    test('缺 hitDie 给 warning 而不是 error', () {
+      final diagnostics = <RuleDiagnostic>[];
+      ClassRuleSet.parse(
+        {'savingThrowAbilities': ['str']},
+        path: r'$.structured.classRules',
+        diagnostics: diagnostics,
+      );
+      expect(diagnostics.single.severity, RuleSeverity.warning);
+      expect(diagnostics.single.code, 'missingCoreField');
+    });
+  });
+}
+```
+
+- [ ] **步骤 2：运行测试确认失败**
+
+运行：`cd apps/client_flutter && flutter test test/rules/rule_profile_resolver_test.dart`
+预期：FAIL，`Not found: '.../class_rule_set.dart'`
+
+- [ ] **步骤 3：实现 `class_rule_set.dart`**
+
+```dart
+import 'rule_diagnostic.dart';
+import 'rule_values.dart';
+
+const kDefaultAbilities = {'str', 'dex', 'con', 'int', 'wis', 'cha'};
+const kDefaultSkills = {
+  '杂技','驯兽','奥秘','运动','欺瞒','历史','洞悉','威吓','调查','医药',
+  '自然','察觉','表演','说服','宗教','巧手','隐匿','求生',
+};
+
+class ClassSkillChoice {
+  const ClassSkillChoice({required this.count, required this.options, this.any = false});
+  final int count;
+  final List<String> options;
+  final bool any; // options == "any"
+}
+
+class ClassResourceRule {
+  const ClassResourceRule({
+    required this.id, required this.name, required this.maximum,
+    required this.recovery, this.startsAtLevel = 1,
+  });
+  final String id;
+  final String name;
+  final MaxSpec maximum;
+  final String recovery;
+  final int startsAtLevel;
+}
+
+class ClassSpellcasting {
+  const ClassSpellcasting({
+    required this.mode, this.ability, this.listTags = const [],
+    this.archetype, this.slots, this.slotLevel, this.prepared,
+    this.cantrips, this.maximumSpellLevel, this.rawLevels = const {},
+  });
+  final String mode;
+  final String? ability;
+  final List<String> listTags;
+  final String? archetype;
+  final SlotTable? slots;
+  final IntTable? slotLevel;
+  final IntTable? prepared;
+  final IntTable? cantrips;
+  final IntTable? maximumSpellLevel;
+  /// 声明过哪些等级（合并时判断"条目是否覆盖了该级"）。
+  final Set<String> rawLevels;
+}
+
+class ClassRuleSet {
+  const ClassRuleSet({
+    this.hitDie, this.savingThrowAbilities = const {}, this.skillChoice,
+    this.spellcasting, this.resources = const [], this.fields = const {},
+  });
+  final int? hitDie;
+  final Set<String> savingThrowAbilities;
+  final ClassSkillChoice? skillChoice;
+  final ClassSpellcasting? spellcasting;
+  final List<ClassResourceRule> resources;
+  /// 条目显式声明过的字段名，用于字段级合并。
+  final Set<String> fields;
+
+  bool declares(String field) => fields.contains(field);
+
+  static const _knownFields = {
+    'hitDie', 'savingThrowAbilities', 'skillChoice', 'spellcasting', 'resources',
+  };
+  static const _modes = {'prepared', 'known', 'pact', 'none'};
+  static const _recoveries = {'shortRest', 'shortRestOne', 'longRest', 'none'};
+
+  static ClassRuleSet parse(
+    Map<String, Object?> raw, {
+    required String path,
+    required List<RuleDiagnostic> diagnostics,
+    Set<String> abilities = kDefaultAbilities,
+    Set<String> skills = kDefaultSkills,
+  }) {
+    void error(String code, String field, String message) => diagnostics.add(
+        RuleDiagnostic(path: '$path.$field', severity: RuleSeverity.error,
+            code: code, message: message));
+    void warn(String code, String field, String message) => diagnostics.add(
+        RuleDiagnostic(path: '$path.$field', severity: RuleSeverity.warning,
+            code: code, message: message));
+
+    final fields = <String>{};
+    int? hitDie;
+    if (raw.containsKey('hitDie')) {
+      fields.add('hitDie');
+      final value = raw['hitDie'];
+      final parsed = value is num
+          ? value.toInt()
+          : int.tryParse('${value}'.replaceFirst(RegExp(r'^[dD]'), ''));
+      if (parsed == null || parsed < 4 || parsed > 20) {
+        error('invalidHitDie', 'hitDie', '生命骰必须是 d4–d20 或 4–20 的整数');
+      } else {
+        hitDie = parsed;
+      }
+    } else {
+      warn('missingCoreField', 'hitDie', '未声明生命骰，角色卡 HP 将按未声明处理');
+    }
+
+    final savingThrows = <String>{};
+    if (raw.containsKey('savingThrowAbilities')) {
+      fields.add('savingThrowAbilities');
+      final value = raw['savingThrowAbilities'];
+      if (value is! List) {
+        error('unknownAbility', 'savingThrowAbilities', '必须是属性键数组');
+      } else {
+        for (final item in value) {
+          final key = '$item'.trim().toLowerCase();
+          if (!abilities.contains(key)) {
+            error('unknownAbility', 'savingThrowAbilities',
+                '未知属性键 "$item"，可用：${abilities.join(', ')}');
+          } else {
+            savingThrows.add(key);
+          }
+        }
+      }
+    }
+
+    ClassSkillChoice? skillChoice;
+    if (raw.containsKey('skillChoice')) {
+      fields.add('skillChoice');
+      final value = raw['skillChoice'];
+      if (value is! Map) {
+        error('unknownSkill', 'skillChoice', '必须是 {count, options} 对象');
+      } else {
+        final count = value['count'] is num ? (value['count']! as num).toInt() : 0;
+        final options = value['options'];
+        final any = options == 'any';
+        final names = options is List
+            ? options.map((item) => '$item'.trim()).toList(growable: false)
+            : <String>[];
+        for (final name in names) {
+          if (!skills.contains(name)) {
+            error('unknownSkill', 'skillChoice.options', '未知技能 "$name"');
+          }
+        }
+        final upper = any ? skills.length : names.length;
+        if (count < 0 || count > upper) {
+          error('invalidSkillCount', 'skillChoice.count', 'skillChoice.count 必须为 0..$upper');
+        } else {
+          skillChoice = ClassSkillChoice(count: count, options: names, any: any);
+        }
+      }
+    }
+
+    ClassSpellcasting? spellcasting;
+    if (raw.containsKey('spellcasting')) {
+      fields.add('spellcasting');
+      final value = raw['spellcasting'];
+      if (value is! Map) {
+        error('invalidSpellcastingMode', 'spellcasting', '必须是对象');
+      } else {
+        final mode = '${value['mode'] ?? 'none'}'.trim();
+        if (!_modes.contains(mode)) {
+          error('invalidSpellcastingMode', 'spellcasting.mode',
+              'spellcasting.mode 必须是 prepared / known / pact / none');
+        }
+        final abilityRaw = value['ability'];
+        final ability = abilityRaw == null ? null : '$abilityRaw'.trim().toLowerCase();
+        if (mode != 'none' && (ability == null || !abilities.contains(ability))) {
+          error('unknownAbility', 'spellcasting.ability', '施法属性非法或缺失');
+        }
+        final listTags = value['listTags'] is List
+            ? (value['listTags']! as List).map((item) => '$item').toList(growable: false)
+            : const <String>[];
+        final archetype = value['archetype'] == null ? null : '${value['archetype']}';
+
+        SlotTable? slots;
+        IntTable? slotLevel, prepared, cantrips, maximumSpellLevel;
+        for (final entry in {
+          'slots': () => slots = SlotTable.tryParse(value['slots']),
+          'slotLevel': () => slotLevel = IntTable.tryParse(value['slotLevel']),
+          'prepared': () => prepared = IntTable.tryParse(value['prepared']),
+          'cantrips': () => cantrips = IntTable.tryParse(value['cantrips']),
+          'maximumSpellLevel': () =>
+              maximumSpellLevel = IntTable.tryParse(value['maximumSpellLevel']),
+        }.entries) {
+          if (!value.containsKey(entry.key)) continue;
+          entry.value();
+          final parsed = switch (entry.key) {
+            'slots' => slots, 'slotLevel' => slotLevel, 'prepared' => prepared,
+            'cantrips' => cantrips, _ => maximumSpellLevel,
+          };
+          if (parsed == null) {
+            error('invalidTable', 'spellcasting.${entry.key}',
+                '${entry.key} 必须是 20 项数组或稀疏 {"等级": 值}');
+          }
+        }
+        spellcasting = ClassSpellcasting(
+          mode: mode, ability: ability, listTags: listTags, archetype: archetype,
+          slots: slots, slotLevel: slotLevel, prepared: prepared,
+          cantrips: cantrips, maximumSpellLevel: maximumSpellLevel,
+        );
+      }
+    }
+
+    final resources = <ClassResourceRule>[];
+    if (raw.containsKey('resources')) {
+      fields.add('resources');
+      final value = raw['resources'];
+      if (value is! List) {
+        error('invalidMaxSpec', 'resources', '必须是数组');
+      } else {
+        final seen = <String>{};
+        for (var index = 0; index < value.length; index++) {
+          final item = value[index];
+          final itemPath = '$path.resources[$index]';
+          if (item is! Map) {
+            diagnostics.add(RuleDiagnostic(path: itemPath,
+                severity: RuleSeverity.error, code: 'invalidMaxSpec',
+                message: '资源必须是对象'));
+            continue;
+          }
+          final id = '${item['id'] ?? ''}'.trim();
+          final name = '${item['name'] ?? ''}'.trim();
+          if (id.isEmpty || name.isEmpty) {
+            diagnostics.add(RuleDiagnostic(path: itemPath,
+                severity: RuleSeverity.error, code: 'invalidMaxSpec',
+                message: '资源缺少 id 或 name'));
+            continue;
+          }
+          if (!seen.add(id)) {
+            diagnostics.add(RuleDiagnostic(path: '$itemPath.id',
+                severity: RuleSeverity.error, code: 'duplicateResourceId',
+                message: '资源 id "$id" 重复'));
+            continue;
+          }
+          final recovery = '${item['recovery'] ?? 'longRest'}'.trim();
+          if (!_recoveries.contains(recovery)) {
+            diagnostics.add(RuleDiagnostic(path: '$itemPath.recovery',
+                severity: RuleSeverity.error, code: 'invalidRecovery',
+                message: 'recovery 必须是 shortRest / shortRestOne / longRest / none'));
+            continue;
+          }
+          final maximum = MaxSpec.tryParse(item['maximum']);
+          if (maximum == null) {
+            diagnostics.add(RuleDiagnostic(path: '$itemPath.maximum',
+                severity: RuleSeverity.error, code: 'invalidMaxSpec',
+                message: 'maximum 必须且只能使用 value / formula / table 之一'));
+            continue;
+          }
+          final startsAt = item['startsAtLevel'] is num
+              ? (item['startsAtLevel']! as num).toInt() : 1;
+          if (startsAt < 1 || startsAt > 20) {
+            diagnostics.add(RuleDiagnostic(path: '$itemPath.startsAtLevel',
+                severity: RuleSeverity.error, code: 'invalidTable',
+                message: 'startsAtLevel 必须为 1..20'));
+            continue;
+          }
+          resources.add(ClassResourceRule(id: id, name: name, maximum: maximum,
+              recovery: recovery, startsAtLevel: startsAt));
+        }
+      }
+    }
+
+    for (final key in raw.keys) {
+      if (_knownFields.contains(key)) continue;
+      diagnostics.add(RuleDiagnostic(path: '$path.$key',
+          severity: RuleSeverity.error, code: 'unknownField',
+          message: '未知字段 $key${_suggestion(key)}'));
+    }
+
+    return ClassRuleSet(hitDie: hitDie, savingThrowAbilities: savingThrows,
+        skillChoice: skillChoice, spellcasting: spellcasting,
+        resources: resources, fields: fields);
+  }
+
+  static String _suggestion(String key) {
+    const candidates = ['hitDie', 'savingThrowAbilities', 'skillChoice',
+                        'spellcasting', 'resources'];
+    for (final candidate in candidates) {
+      if (candidate.toLowerCase().startsWith(key.toLowerCase().substring(0, 3))) {
+        return '，是否想写 $candidate？';
+      }
+    }
+    return '';
+  }
+}
+```
+
+- [ ] **步骤 4：运行测试确认通过**
+
+运行：`cd apps/client_flutter && flutter test test/rules/rule_profile_resolver_test.dart`
+预期：PASS
+
+- [ ] **步骤 5：Commit**
+
+```bash
+git add apps/client_flutter/lib/src/features/rules/domain/class_rule_set.dart apps/client_flutter/test/rules/rule_profile_resolver_test.dart
+git commit -m "feat(rules): 职业规则块 ClassRuleSet 与字段级诊断"
+```
+
+---
+
+## 任务 4：`RuleProfile` 与 `RuleProfileResolver`
+
+**文件：**
+- 创建：`apps/client_flutter/lib/src/features/rules/domain/rule_profile.dart`
+- 创建：`apps/client_flutter/lib/src/features/rules/domain/rule_profile_resolver.dart`
+- 修改：`apps/client_flutter/test/rules/rule_profile_resolver_test.dart`（追加 group）
+
+- [ ] **步骤 1：追加失败测试**
+
+```dart
+  group('RuleProfileResolver', () {
+    Map<String, Object?> archive() => {
+      'rulebookVersion': 1,
+      'system': 'dnd5e-2024',
+      'abilities': ['str', 'dex', 'con', 'int', 'wis', 'cha'],
+      'skills': [{'name': '察觉', 'ability': 'wis'}],
+      'progressions': {
+        'none': {'slots': []},
+        'half-caster': {
+          'minimumLevel': 1,
+          'slots': List.generate(20, (i) => i < 1 ? <String, Object?>{} : {'1': 2}),
+          'prepared': [2,3,4,5,6,6,7,7,9,9,10,10,11,11,12,12,14,14,15,15],
+          'cantrips': List.filled(20, 0),
+          'maximumSpellLevel': List.filled(20, 1),
+        },
+      },
+      'classes': {
+        'barbarian': {'hitDie': 12, 'savingThrowAbilities': ['str', 'con']},
+      },
+    };
+
+    test('解析内置档案并可查询', () {
+      final result = RuleProfileResolver.resolveBuiltin(archive());
+      expect(result.errors, isEmpty);
+      final profile = result.profile!;
+      expect(profile.abilities, hasLength(6));
+      expect(profile.classRules('barbarian')!.hitDie, 12);
+      expect(profile.classRules('BARBARIAN')!.hitDie, 12); // 大小写归一
+      expect(profile.classRules('nope'), isNull);
+    });
+
+    test('未知原型报 error', () {
+      final raw = archive();
+      (raw['classes']! as Map)['barbarian'] = {
+        'hitDie': 12,
+        'spellcasting': {'mode': 'prepared', 'ability': 'wis', 'archetype': 'three-quarter'},
+      };
+      final result = RuleProfileResolver.resolveBuiltin(raw);
+      expect(result.errors.single.code, 'unknownArchetype');
+    });
+
+    test('字段级合并：条目优先，档案补齐，并记录来源', () {
+      final profile = RuleProfileResolver.resolveBuiltin(archive()).profile!;
+      final diagnostics = <RuleDiagnostic>[];
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'barbarian',
+        entryRules: ClassRuleSet.parse(
+          {'savingThrowAbilities': ['dex']},
+          path: r'$.structured.classRules',
+          diagnostics: diagnostics,
+        ),
+      );
+      expect(merged.hitDie, 12, reason: '档案补齐');
+      expect(merged.savingThrowAbilities, {'dex'}, reason: '条目优先，整字段替换');
+      expect(merged.fieldSources['hitDie']!.originId, 'builtin:dnd5e-2024');
+      expect(merged.fieldSources['savingThrowAbilities']!.originId, '<entry>');
+    });
+
+    test('条目完全没有规则时用档案，完全未声明时为空', () {
+      final profile = RuleProfileResolver.resolveBuiltin(archive()).profile!;
+      final fromArchive = RuleProfileResolver.resolveClassRules(
+        profile: profile, slug: 'barbarian', entryRules: null);
+      expect(fromArchive.hitDie, 12);
+      final unknown = RuleProfileResolver.resolveClassRules(
+        profile: profile, slug: 'astral-knight', entryRules: null);
+      expect(unknown.hitDie, isNull);
+      expect(unknown.savingThrowAbilities, isEmpty);
+    });
+
+    test('法术位解析：原型展开 + 整级替换 + minimumLevel', () {
+      final profile = RuleProfileResolver.resolveBuiltin(archive()).profile!;
+      final half = RuleProfileResolver.resolveClassRules(
+          profile: profile, slug: 'barbarian', entryRules: null);
+      expect(half.spellcasting, isNull);
+      final caster = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'astral',
+        entryRules: ClassRuleSet.parse(
+          {'spellcasting': {'mode': 'prepared', 'ability': 'wis',
+                            'archetype': 'half-caster', 'slots': {'5': {'1': 9}}}},
+          path: r'$.structured.classRules',
+          diagnostics: <RuleDiagnostic>[],
+        ),
+      );
+      expect(caster.spellSlots(1), {'1': 2}, reason: '原型展开');
+      expect(caster.spellSlots(5), {'1': 9}, reason: '整级替换');
+      expect(caster.preparedLimit(5), 6, reason: '原型 prepared 表');
+    });
+  });
+```
+
+- [ ] **步骤 2：运行确认失败**
+
+运行：`cd apps/client_flutter && flutter test test/rules/rule_profile_resolver_test.dart`
+预期：FAIL，`Not found: '.../rule_profile.dart'`
+
+- [ ] **步骤 3：实现 `rule_profile.dart`**
+
+```dart
+import 'class_rule_set.dart';
+import 'rule_values.dart';
+
+const kBuiltinOriginId = 'builtin:dnd5e-2024';
+
+class RuleFieldSource {
+  const RuleFieldSource({required this.field, required this.originId, required this.tier});
+  final String field;
+  final String originId; // 'builtin:dnd5e-2024' 或条目 id
+  final int tier;        // 0 内置档案 / 100 条目声明
+}
+
+class ClassProgression {
+  const ClassProgression({
+    required this.name, this.minimumLevel = 1, this.slots, this.slotLevel,
+    this.prepared, this.cantrips, this.maximumSpellLevel,
+  });
+  final String name;
+  final int minimumLevel;
+  final SlotTable? slots;
+  final IntTable? slotLevel;
+  final IntTable? prepared;
+  final IntTable? cantrips;
+  final IntTable? maximumSpellLevel;
+}
+
+class RuleProfile {
+  const RuleProfile({
+    required this.abilities, required this.skills,
+    required this.progressions, required this.classes, this.aliases = const {},
+  });
+  final Set<String> abilities;
+  final Map<String, String> skills; // 技能名 → 属性键
+  final Map<String, ClassProgression> progressions;
+  final Map<String, ClassRuleSet> classes; // slug（小写）→ 规则
+  final Map<String, String> aliases;       // 别名（小写）→ slug
+
+  /// 大小写归一 + 别名回退；未命中返回 null。
+  ClassRuleSet? classRules(String key) {
+    final normalized = key.trim().toLowerCase();
+    return classes[normalized] ?? classes[aliases[normalized]];
+  }
+
+  ClassProgression? progression(String? name) =>
+      name == null ? null : progressions[name];
+}
+
+class ResolvedResource {
+  const ResolvedResource({
+    required this.id, required this.name, required this.maximum, required this.recovery,
+  });
+  final String id;
+  final String name;
+  final int maximum;
+  final String recovery;
+}
+
+/// 条目声明 ∪ 内置档案（条目优先）后的职业规则。
+class ResolvedClassRules {
+  const ResolvedClassRules({
+    this.hitDie, this.savingThrowAbilities = const {}, this.skillChoice,
+    this.spellcasting, this.resources = const [], this.fieldSources = const {},
+    this.archetype,
+  });
+
+  final int? hitDie;
+  final Set<String> savingThrowAbilities;
+  final ClassSkillChoice? skillChoice;
+  final ClassSpellcasting? spellcasting;
+  final List<ClassResourceRule> resources;
+  final ClassProgression? archetype;
+  final Map<String, RuleFieldSource> fieldSources;
+
+  String? get spellcastingAbility => spellcasting?.ability;
+  String get spellcastingMode => spellcasting?.mode ?? 'none';
+
+  /// 法术位：自身 slots 表优先（整级替换），否则原型表；低于 minimumLevel 一律为空。
+  Map<String, int> spellSlots(int level) {
+    if (spellcastingMode == 'none') return const {};
+    final progression = archetype;
+    if (progression != null && level < progression.minimumLevel) return const {};
+    final own = spellcasting?.slots?.at(level);
+    if (own != null && own.isNotEmpty) return own;
+    return progression?.slots?.at(level) ?? const {};
+  }
+
+  int? pactSlotLevel(int level) =>
+      spellcasting?.slotLevel?.at(level) ?? archetype?.slotLevel?.at(level);
+
+  int? preparedLimit(int level) =>
+      _pick(level, (c) => c.prepared, (p) => p.prepared);
+
+  int? cantripLimit(int level) =>
+      _pick(level, (c) => c.cantrips, (p) => p.cantrips);
+
+  int? maxSpellLevel(int level) =>
+      _pick(level, (c) => c.maximumSpellLevel, (p) => p.maximumSpellLevel);
+
+  int? _pick(int level, IntTable? Function(ClassSpellcasting) own,
+             IntTable? Function(ClassProgression) fromArchetype) {
+    if (spellcastingMode == 'none') return null;
+    final progression = archetype;
+    if (spellcasting != null) {
+      final table = own(spellcasting!);
+      if (table != null) return table.at(level);
+    }
+    if (progression != null && level >= progression.minimumLevel) {
+      return fromArchetype(progression)?.at(level);
+    }
+    return null;
+  }
+
+  List<ResolvedResource> resourcesAt(int level, Map<String, int> abilities) => [
+        for (final rule in resources)
+          if (level >= rule.startsAtLevel)
+            ResolvedResource(
+              id: rule.id, name: rule.name, recovery: rule.recovery,
+              maximum: rule.maximum.resolve(level: level, abilities: abilities),
+            ),
+      ];
+}
+```
+
+- [ ] **步骤 4：实现 `rule_profile_resolver.dart`**
+
+```dart
+import 'class_rule_set.dart';
+import 'rule_diagnostic.dart';
+import 'rule_profile.dart';
+import 'rule_values.dart';
+
+class RuleProfileResolution {
+  const RuleProfileResolution({required this.profile, required this.diagnostics});
+  final RuleProfile? profile;
+  final List<RuleDiagnostic> diagnostics;
+  List<RuleDiagnostic> get errors => diagnostics
+      .where((d) => d.severity == RuleSeverity.error).toList(growable: false);
+  List<RuleDiagnostic> get warnings => diagnostics
+      .where((d) => d.severity == RuleSeverity.warning).toList(growable: false);
+}
+
+abstract final class RuleProfileResolver {
+  static RuleProfileResolution resolveBuiltin(Map<String, Object?> raw) {
+    final diagnostics = <RuleDiagnostic>[];
+    final abilities = _stringSet(raw['abilities'], 'str');
+    final skills = <String, String>{};
+    if (raw['skills'] is List) {
+      for (final item in raw['skills']! as List) {
+        if (item is Map) skills['${item['name']}'] = '${item['ability']}';
+      }
+    }
+    final progressions = <String, ClassProgression>{};
+    if (raw['progressions'] is Map) {
+      (raw['progressions']! as Map).forEach((key, value) {
+        if (value is! Map) return;
+        final map = Map<String, Object?>.from(value);
+        final name = '$key';
+        final slots = SlotTable.tryParse(map['slots']);
+        if (map['slots'] != null && slots == null) {
+          diagnostics.add(RuleDiagnostic(path: r'$.progressions.' + name + '.slots',
+              severity: RuleSeverity.error, code: 'invalidTable',
+              message: 'slots 必须是 20 项数组'));
+        }
+        progressions[name] = ClassProgression(
+          name: name,
+          minimumLevel: map['minimumLevel'] is num
+              ? (map['minimumLevel']! as num).toInt() : 1,
+          slots: slots,
+          slotLevel: IntTable.tryParse(map['slotLevel']),
+          prepared: IntTable.tryParse(map['prepared']),
+          cantrips: IntTable.tryParse(map['cantrips']),
+          maximumSpellLevel: IntTable.tryParse(map['maximumSpellLevel']),
+        );
+      });
+    }
+    final classes = <String, ClassRuleSet>{};
+    final aliases = <String, String>{};
+    if (raw['classes'] is Map) {
+      (raw['classes']! as Map).forEach((key, value) {
+        if (value is! Map) return;
+        final slug = '$key'.trim().toLowerCase();
+        classes[slug] = ClassRuleSet.parse(
+          Map<String, Object?>.from(value),
+          path: r'$.classes.' + slug,
+          diagnostics: diagnostics,
+          abilities: abilities.isEmpty ? kDefaultAbilities : abilities,
+          skills: skills.isEmpty ? kDefaultSkills : skills.keys.toSet(),
+        );
+      });
+    }
+    // 原型存在性校验
+    for (final entry in classes.entries) {
+      final archetype = entry.value.spellcasting?.archetype;
+      if (archetype != null && !progressions.containsKey(archetype)) {
+        diagnostics.add(RuleDiagnostic(path: r'$.classes.' + entry.key + '.spellcasting.archetype',
+            severity: RuleSeverity.error, code: 'unknownArchetype',
+            message: '未知原型 "$archetype"'));
+      }
+    }
+    final failed = diagnostics.any((d) => d.severity == RuleSeverity.error);
+    return RuleProfileResolution(
+      profile: failed ? null : RuleProfile(
+        abilities: abilities.isEmpty ? kDefaultAbilities : abilities,
+        skills: skills.isEmpty
+            ? {for (final name in kDefaultSkills) name: ''} : skills,
+        progressions: progressions, classes: classes, aliases: aliases),
+      diagnostics: diagnostics,
+    );
+  }
+
+  /// 条目声明 ∪ 档案（条目优先，字段级）。
+  static ResolvedClassRules resolveClassRules({
+    required RuleProfile profile,
+    required String slug,
+    required ClassRuleSet? entryRules,
+    String? entryId,
+  }) {
+    final fromArchive = profile.classRules(slug);
+    final entryOrigin = entryId ?? '<entry>';
+    final sources = <String, RuleFieldSource>{};
+
+    T? pick<T>(String field, T? Function(ClassRuleSet) read) {
+      final declared = entryRules != null && entryRules.declares(field);
+      final value = declared ? read(entryRules) : null;
+      if (value != null) {
+        sources[field] = RuleFieldSource(field: field, originId: entryOrigin, tier: 100);
+        return value;
+      }
+      final fallback = fromArchive == null ? null : read(fromArchive);
+      if (fallback != null) {
+        sources[field] = RuleFieldSource(
+            field: field, originId: kBuiltinOriginId, tier: 0);
+      }
+      return fallback;
+    }
+
+    final spellcasting = pick('spellcasting', (r) => r.spellcasting);
+    return ResolvedClassRules(
+      hitDie: pick('hitDie', (r) => r.hitDie),
+      savingThrowAbilities: pick('savingThrowAbilities', (r) => r.savingThrowAbilities) ?? const {},
+      skillChoice: pick('skillChoice', (r) => r.skillChoice),
+      spellcasting: spellcasting,
+      resources: pick('resources', (r) => r.resources) ?? const [],
+      archetype: profile.progression(spellcasting?.archetype),
+      fieldSources: sources,
+    );
+  }
+
+  static Set<String> _stringSet(Object? raw, String kind) {
+    if (raw is! Iterable) return const {};
+    return raw.map((item) => '$item'.trim().toLowerCase()).toSet();
+  }
+}
+```
+
+- [ ] **步骤 5：运行确认通过**
+
+运行：`cd apps/client_flutter && flutter test test/rules/rule_profile_resolver_test.dart`
+预期：PASS
+
+- [ ] **步骤 6：Commit**
+
+```bash
+git add apps/client_flutter/lib/src/features/rules/domain/rule_profile.dart \
+        apps/client_flutter/lib/src/features/rules/domain/rule_profile_resolver.dart \
+        apps/client_flutter/test/rules/rule_profile_resolver_test.dart
+git commit -m "feat(rules): RuleProfile 与字段级合并解析器"
+```
+
+---
+
+## 任务 5：`RuleProfileStore` 与 `Dnd5eRules.configure`
+
+**文件：**
+- 创建：`apps/client_flutter/lib/src/features/rules/data/rule_profile_store.dart`
+- 修改：`apps/client_flutter/lib/main.dart`
+- 创建：`apps/client_flutter/test/rules/rule_profile_test_support.dart`
+- 测试：`apps/client_flutter/test/rules/rule_profile_store_test.dart`
+
+- [ ] **步骤 1：写测试辅助与失败测试**
+
+```dart
+// test/rules/rule_profile_test_support.dart
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:dnd_table_client/src/features/rules/domain/rule_profile.dart';
+import 'package:dnd_table_client/src/features/rules/domain/rule_profile_resolver.dart';
+
+/// 从仓库路径读取内置档案（flutter test 的工作目录是包根）。
+RuleProfile loadBuiltinProfileForTest() {
+  final raw = jsonDecode(
+    File('assets/rules/dnd5e-2024.rules.json').readAsStringSync(),
+  ) as Map<String, Object?>;
+  final result = RuleProfileResolver.resolveBuiltin(raw);
+  if (result.profile == null) {
+    fail('内置档案解析失败：${result.errors.join('\n')}');
+  }
+  return result.profile!;
+}
+```
+
+```dart
+// test/rules/rule_profile_store_test.dart
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:dnd_table_client/src/features/rules/data/rule_profile_store.dart';
+import 'package:dnd_table_client/src/features/characters/domain/dnd5e_rules.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'rule_profile_test_support.dart';
+
+void main() {
+  test('内置档案可加载并装配到 Dnd5eRules（不走 rootBundle）', () async {
+    final raw = jsonDecode(
+      File('assets/rules/dnd5e-2024.rules.json').readAsStringSync(),
+    ) as Map<String, Object?>;
+    final profile = await RuleProfileStore.loadBuiltin(
+      readAsset: (path) async {
+        expect(path, RuleProfileStore.assetPath);
+        return raw;
+      },
+    );
+    await Dnd5eRules.configure(profile);
+    expect(Dnd5eRules.profile.classRules('barbarian')!.hitDie, 12);
+  });
+
+  test('未装配或已装配后再次 configure 都抛错', () async {
+    Dnd5eRules.resetForTests();
+    expect(() => Dnd5eRules.profile, throwsStateError);
+    await Dnd5eRules.configure(loadBuiltinProfileForTest());
+    expect(() => Dnd5eRules.configure(loadBuiltinProfileForTest()), throwsStateError);
+    Dnd5eRules.resetForTests(); // 不影响其它测试文件（每个文件独立进程）
+  });
+}
+```
+
+- [ ] **步骤 2：运行确认失败**
+
+运行：`cd apps/client_flutter && flutter test test/rules/rule_profile_store_test.dart`
+预期：FAIL，`Not found: '.../rule_profile_store.dart'`
+
+- [ ] **步骤 3：实现 `rule_profile_store.dart`**
+
+```dart
+import 'dart:convert';
+
+import 'package:flutter/services.dart' show rootBundle;
+
+import '../domain/rule_profile.dart';
+import '../domain/rule_profile_resolver.dart';
+
+class RuleProfileStore {
+  static const assetPath = 'assets/rules/dnd5e-2024.rules.json';
+
+  /// 读内置档案并解析。`readAsset` 可注入（测试用它读仓库文件，避免 rootBundle）。
+  static Future<RuleProfile> loadBuiltin({
+    Future<Map<String, Object?>> Function(String path)? readAsset,
+  }) async {
+    final reader = readAsset ?? _readRootBundle;
+    final raw = await reader(assetPath);
+    final result = RuleProfileResolver.resolveBuiltin(raw);
+    if (result.profile == null) {
+      throw StateError(
+        '内置规则档案非法（$assetPath）：\n${result.errors.join('\n')}',
+      );
+    }
+    return result.profile!;
+  }
+
+  static Future<Map<String, Object?>> _readRootBundle(String path) async {
+    final text = await rootBundle.loadString(path);
+    return Map<String, Object?>.from(jsonDecode(text) as Map);
+  }
+}
+```
+
+- [ ] **步骤 4：改 `main.dart`**
+
+```dart
+import 'package:flutter/material.dart';
+
+import 'src/app/dnd_table_app.dart';
+import 'src/features/characters/domain/dnd5e_rules.dart';
+import 'src/features/rules/data/rule_profile_store.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Dnd5eRules.configure(await RuleProfileStore.loadBuiltin());
+  runApp(const OhMyDungeonApp());
+}
+```
+
+- [ ] **步骤 5：在 `Dnd5eRules` 加装配入口（本步骤只加，不改表查询）**
+
+文件顶部补 `import 'package:flutter/foundation.dart' show visibleForTesting;` 与
+`import '../../rules/domain/rule_profile.dart';`，然后加：
+
+```dart
+  static RuleProfile? _profile;
+
+  static RuleProfile get profile {
+    final profile = _profile;
+    if (profile == null) {
+      throw StateError(
+        'Dnd5eRules 尚未配置规则档案：请在启动时 await Dnd5eRules.configure(...)',
+      );
+    }
+    return profile;
+  }
+
+  static Future<void> configure(RuleProfile profile) async {
+    if (_profile != null) {
+      throw StateError('规则档案已配置，重复 configure 被拒绝');
+    }
+    _profile = profile;
+  }
+
+  @visibleForTesting
+  static void resetForTests() => _profile = null;
+```
+
+- [ ] **步骤 6：运行测试与全量回归**
+
+运行：`cd apps/client_flutter && flutter test test/rules/rule_profile_store_test.dart`
+预期：PASS
+运行：`cd apps/client_flutter && flutter test`
+预期：**仍然全绿**（本任务不改变任何行为；现有测试不调用 `Dnd5eRules.profile`）
+
+- [ ] **步骤 7：Commit**
+
+```bash
+git add apps/client_flutter/lib/src/features/rules/data/rule_profile_store.dart \
+        apps/client_flutter/lib/main.dart \
+        apps/client_flutter/lib/src/features/characters/domain/dnd5e_rules.dart \
+        apps/client_flutter/test/rules/rule_profile_store_test.dart \
+        apps/client_flutter/test/rules/rule_profile_test_support.dart
+git commit -m "feat(rules): 内置档案启动装配与 Dnd5eRules.configure"
+```
+
+---
+
+## 任务 6：`Dnd5eRules` 表查询改读档案（删除职业表与中文匹配）
+
+**文件：**
+- 修改：`apps/client_flutter/lib/src/features/characters/domain/dnd5e_rules.dart`
+- 修改：`apps/client_flutter/test/dnd5e_rules_verification_test.dart`（改为对档案断言）
+- 修改：`apps/client_flutter/test/dnd5e_rules_test.dart`（补 `setUpAll` 装配）
+
+- [ ] **步骤 1：加全局测试装配（先失败）**
+
+一旦 `Dnd5eRules` 的表查询改读 `profile`，**所有**间接调用它的测试（quick_build、character_pages…）
+都会抛 `StateError`。用 Flutter 的全局测试入口一次性装配，避免每个文件写 `setUpAll`：
+
+```dart
+// test/flutter_test_config.dart —— flutter test 会自动加载本文件
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:dnd_table_client/src/features/characters/domain/dnd5e_rules.dart';
+import 'package:dnd_table_client/src/features/rules/domain/rule_profile_resolver.dart';
+
+Future<void> testExecutable(FutureOr<void> Function() testMain) async {
+  final raw = jsonDecode(
+    File('assets/rules/dnd5e-2024.rules.json').readAsStringSync(),
+  ) as Map<String, Object?>;
+  final result = RuleProfileResolver.resolveBuiltin(raw);
+  if (result.profile == null) {
+    throw StateError('内置档案非法（测试装配失败）：\n${result.errors.join('\n')}');
+  }
+  await Dnd5eRules.configure(result.profile!);
+  await testMain();
+}
+```
+
+运行：`cd apps/client_flutter && flutter test test/dnd5e_rules_test.dart`
+预期：PASS（装配生效）
+
+- [ ] **步骤 2：改写表查询 API（签名从"职业名字符串"改为"条目身份"）**
+
+删除 `_hitDice`、`_classSavingThrows`、`_fullCasterSlots`、`_preparedDivine/Sorcerer/Wizard/HalfCaster/Warlock`、
+`_secondWindUses`、`_rageUses`、`_casterProgression`、`_preparedSpellTable`、`usesThirdCasterProgression`
+以及所有 `classSummary.contains(...)`。新 API：
+
+```dart
+  /// 由一个职业条目解析出的规则形态。`classSummary` 只用于展示，不参与规则判断。
+  static ResolvedClassRules resolveClassRules({
+    required String? entryId,
+    required String classSummary,
+    Map<String, Object?> structured = const <String, Object?>{},
+    List<RuleDiagnostic>? diagnostics,
+  }) {
+    final slug = _slugFor(entryId: entryId, classSummary: classSummary);
+    final entryRules = structured['classRules'] is Map
+        ? ClassRuleSet.parse(
+            Map<String, Object?>.from(structured['classRules']! as Map),
+            path: r'$.structured.classRules',
+            diagnostics: diagnostics ?? <RuleDiagnostic>[],
+          )
+        : null;
+    return RuleProfileResolver.resolveClassRules(
+      profile: profile, slug: slug, entryRules: entryRules);
+  }
+
+  /// slug：条目 id 的最后一段，或展示名经档案 aliases 精确匹配。
+  static String _slugFor({required String? entryId, required String classSummary}) {
+    if (entryId != null && entryId.contains('/')) {
+      return entryId.split('/').last.trim().toLowerCase();
+    }
+    final normalized = classSummary.trim().toLowerCase();
+    if (profile.classRules(normalized) != null) return normalized;
+    return normalized; // 未知则查不到，按"未声明"处理
+  }
+```
+
+保留并改为委托的 API（**其余调用方无需改动**）：
+
+```dart
+  static int abilityModifier(int score) => ruleAbilityModifier(score);
+  static int proficiencyBonus(int level) => ruleProficiencyBonus(level);
+  static String formatModifier(int modifier) => formatRuleModifier(modifier);
+
+  static int averageHitPoints({
+    required String className,
+    required int level,
+    required Map<String, Object?> abilities,
+  }) {
+    final constitution = abilityScore(abilities, 'con');
+    final die = resolveClassRules(entryId: null, classSummary: className).hitDie;
+    if (die == null) {
+      // 未声明生命骰：不猜，只按体质调整值计，且总生命至少 1。
+      return (abilityModifier(constitution) * level.clamp(1, 20)).clamp(1, 1 << 30);
+    }
+    return averageHitPointsForHitDie(
+      hitDie: die, level: level, constitution: constitution);
+  }
+
+  static int? hitDieFor({String? entryId, required String classSummary}) =>
+      resolveClassRules(entryId: entryId, classSummary: classSummary).hitDie;
+
+  static Set<String> classSavingThrows(String classSummary) =>
+      resolveClassRules(entryId: null, classSummary: classSummary).savingThrowAbilities;
+```
+
+**签名变更（需要改调用方，任务 8 统一处理）：**
+- `spellSlotMaximums({required String classSummary, required int level})` →
+  `spellSlotMaximumsFromRules(ResolvedClassRules rules, int level)`
+- `classResources({required String classSummary, required int level})` →
+  `classResourcesFromRules(ResolvedClassRules rules, int level, Map<String,int> abilities)`
+- `usesPactMagic` / `pactSlotMaximums` / `preparedSpellMaximums` / `spellcastingAbility` →
+  由 `ResolvedClassRules` 的 `spellcastingMode` / `spellSlots` / `preparedLimit` / `spellcastingAbility` 取代
+
+- [ ] **步骤 3：把 `dnd5e_rules_verification_test.dart` 改为对档案断言**
+
+保留全部期望值，只把数据来源换成档案解析结果：
+
+```dart
+  group('职业生命骰（2024 官方核心表）', () {
+    test('12 职业生命骰与豁免对照 SRD 5.2', () {
+      const expected = {
+        'barbarian': [12, ['str','con']], 'bard': [8, ['dex','cha']],
+        'cleric': [8, ['wis','cha']],     'druid': [8, ['int','wis']],
+        'fighter': [10, ['str','con']],   'monk': [8, ['dex','wis']],
+        'paladin': [10, ['wis','cha']],   'ranger': [10, ['dex','str']],
+        'rogue': [8, ['dex','int']],      'sorcerer': [6, ['con','cha']],
+        'warlock': [8, ['wis','cha']],    'wizard': [6, ['int','wis']],
+      };
+      expected.forEach((slug, value) {
+        final rules = Dnd5eRules.profile.classRules(slug)!;
+        expect(rules.hitDie, value[0], reason: slug);
+        expect(rules.savingThrowAbilities, value[1], reason: slug);
+      });
+    });
+  });
+```
+
+法术位用例改为经 `resolveClassRules(...).spellSlots(level)` 断言（期望值一个字都不改）。
+
+- [ ] **步骤 4：运行规则测试**
+
+运行：`cd apps/client_flutter && flutter test test/dnd5e_rules_test.dart test/dnd5e_rules_verification_test.dart`
+预期：PASS
+
+- [ ] **步骤 5：验证"代码里再无职业名表"**
+
+运行：`cd apps/client_flutter && grep -rn "contains('战士')\|contains('法师')\|_fullCasterSlots\|_preparedDivine" lib/ || echo CLEAN`
+预期：`CLEAN`
+
+- [ ] **步骤 6：Commit**
+
+```bash
+git add apps/client_flutter/lib/src/features/characters/domain/dnd5e_rules.dart \
+        apps/client_flutter/test/dnd5e_rules_test.dart \
+        apps/client_flutter/test/dnd5e_rules_verification_test.dart
+git commit -m "refactor(rules): Dnd5eRules 表查询改读内置档案，删除职业名匹配与硬编码表"
+```
+
+---
+
+## 任务 7：`structured_class_rules.dart` 只认新契约
+
+**文件：**
+- 修改：`apps/client_flutter/lib/src/features/characters/domain/structured_class_rules.dart`
+- 修改：`apps/client_flutter/test/structured_class_rules_test.dart`
+
+- [ ] **步骤 1：改测试为"新契约形状"**
+
+删除"returns modifier + level for prepared casters"与散文技能用例；改为：
+
+```dart
+  test('skillChoice 直接读取结构化字段', () {
+    const entry = ContentEntry(
+      id: 'test:class/astral', type: 'class', slug: 'astral', name: '星界骑士',
+      body: [], revision: 1,
+      structured: {
+        'classRules': {
+          'skillChoice': {'count': 2, 'options': ['洞悉', '医药']},
+        },
+      },
+    );
+    final choice = StructuredClassRules.skillChoice(entry);
+    expect(choice.count, 2);
+    expect(choice.options, ['洞悉', '医药']);
+  });
+
+  test('savingThrowAbilities 直接读取结构化字段', () {
+    const entry = ContentEntry(
+      id: 'test:class/astral', type: 'class', slug: 'astral', name: '星界骑士',
+      body: [], revision: 1,
+      structured: {
+        'classRules': {'savingThrowAbilities': ['wis', 'cha']},
+      },
+    );
+    expect(StructuredClassRules.savingThrowAbilities(entry), {'wis', 'cha'});
+  });
+
+  test('中文散文 savingThrows 不再被解析', () {
+    const entry = ContentEntry(
+      id: 'test:class/legacy', type: 'class', slug: 'legacy', name: '旧写法',
+      body: [], revision: 1,
+      structured: {'savingThrows': '力量与体质'},
+    );
+    expect(StructuredClassRules.savingThrowAbilities(entry), isEmpty);
+  });
+```
+
+- [ ] **步骤 2：运行确认失败**
+
+运行：`cd apps/client_flutter && flutter test test/structured_class_rules_test.dart`
+预期：FAIL（散文仍被解析）
+
+- [ ] **步骤 3：实现**
+
+`structured_class_rules.dart` 改为薄适配器：
+
+```dart
+  static Set<String> savingThrowAbilities(ContentEntry? entry) =>
+      _classRules(entry)?.savingThrowAbilities ??
+      ClassRuleSet.parse(_raw(entry), path: r'$.structured.classRules',
+          diagnostics: <RuleDiagnostic>[]).savingThrowAbilities;
+
+  static StructuredSkillChoice skillChoice(ContentEntry? entry) {
+    final choice = _parse(entry).skillChoice;
+    if (choice == null) return StructuredSkillChoice.empty;
+    return StructuredSkillChoice(count: choice.count, options: choice.options);
+  }
+```
+
+删除 `_validSkills` 的静默过滤与两个中文正则（`任选 N 项`、`选择 N 项：`）。
+
+- [ ] **步骤 4：运行确认通过并回归**
+
+运行：`cd apps/client_flutter && flutter test test/structured_class_rules_test.dart`
+预期：PASS
+运行：`cd apps/client_flutter && flutter test test/rules_driven_character_builder_test.dart test/character_builder_choices_test.dart`
+预期：可能出现失败（仍用旧字段）→ 在任务 8 一并修复；先记录失败用例名到提交信息
+
+- [ ] **步骤 5：Commit**
+
+```bash
+git add apps/client_flutter/lib/src/features/characters/domain/structured_class_rules.dart \
+        apps/client_flutter/test/structured_class_rules_test.dart
+git commit -m "refactor(rules): StructuredClassRules 只认 classRules 新契约"
+```
+
+---
+
+## 任务 8：切换全部消费方（构建器 / 快速创建 / 角色卡 / 项目器 / 编辑器）
+
+**文件：**
+- 修改：`apps/client_flutter/lib/src/features/characters/domain/rules_driven_character_builder.dart`
+- 修改：`apps/client_flutter/lib/src/features/characters/domain/quick_build.dart`
+- 修改：`apps/client_flutter/lib/src/features/characters/domain/character.dart`
+- 修改：`apps/client_flutter/lib/src/features/characters/domain/character_rule_projector.dart`
+- 修改：`apps/client_flutter/lib/src/features/characters/domain/spell_selection_policy.dart`
+- 修改：`apps/client_flutter/lib/src/features/characters/presentation/character_detail_page.dart`
+- 修改：`apps/client_flutter/lib/src/features/characters/presentation/character_editor_page.dart`
+
+- [ ] **步骤 1：写失败测试（新契约端到端）**
+
+```dart
+// test/rules/homebrew_class_end_to_end_test.dart
+test('自制职业：只靠 classRules 就能算出 HP/豁免/技能/法术位/资源', () {
+  final rules = Dnd5eRules.resolveClassRules(
+    entryId: 'my-pack:class/astral-knight',
+    classSummary: '星界骑士',
+    structured: {
+      'classRules': {
+        'hitDie': 10,
+        'savingThrowAbilities': ['wis', 'cha'],
+        'skillChoice': {'count': 2, 'options': ['洞悉', '医药']},
+        'spellcasting': {
+          'mode': 'prepared', 'ability': 'cha', 'archetype': 'half-caster',
+          'slots': {'5': {'1': 4, '2': 2}},
+        },
+        'resources': [
+          {'id': 'surge', 'name': '星界涌动', 'recovery': 'shortRestOne',
+           'maximum': {'formula': 'level'}},
+        ],
+      },
+    },
+  );
+
+  expect(rules.hitDie, 10);
+  expect(rules.savingThrowAbilities, {'wis', 'cha'});
+  expect(rules.spellSlots(1), {'1': 2});
+  expect(rules.spellSlots(5), {'1': 4, '2': 2});
+  expect(rules.preparedLimit(5), 6);
+  expect(rules.spellcastingAbility, 'cha');
+  final resources = rules.resourcesAt(7, const {'cha': 16});
+  expect(resources.single.id, 'surge');
+  expect(resources.single.maximum, 7);
+  expect(resources.single.recovery, 'shortRestOne');
+});
+
+test('未知职业不猜：数值为空而非回退到相近职业', () {
+  final rules = Dnd5eRules.resolveClassRules(
+    entryId: 'my-pack:class/unknown', classSummary: '星界游侠');
+  expect(rules.hitDie, isNull);
+  expect(rules.spellSlots(5), isEmpty);
+  expect(rules.preparedLimit(5), isNull);
+  expect(rules.savingThrowAbilities, isEmpty);
+});
+```
+
+- [ ] **步骤 2：运行确认失败**
+
+运行：`cd apps/client_flutter && flutter test test/rules/homebrew_class_end_to_end_test.dart`
+预期：FAIL（`ResolvedClassRules.resourcesAt` 等未实现/未接线）
+
+- [ ] **步骤 3：改构建器**
+
+`rules_driven_character_builder.dart`：
+- 取 `classEntry = _selectedEntry(build, 'class')` 后调用
+  `Dnd5eRules.resolveClassRules(entryId: classEntry?.id, classSummary: classEntry?.name ?? '', structured: classEntry?.structured ?? const {})`。
+- `saves` 初值来自 `rules.savingThrowAbilities`（删除对 `StructuredClassRules.savingThrowAbilities` 的调用）。
+- `_averageHitPoints` 改为接收 `int? hitDie`；`hitDie == null`（职业未声明）时按 §3.6 第 3 步
+  只计体质调整值（最低 1），实现为：
+
+```dart
+  int _averageHitPoints({
+    required int? hitDie,
+    required int level,
+    required int constitution,
+  }) {
+    final safeLevel = level.clamp(1, 20);
+    if (hitDie == null) {
+      // 未声明生命骰：不猜，只按体质调整值计，且总生命至少 1。
+      return (ruleAbilityModifier(constitution) * safeLevel).clamp(1, 1 << 30);
+    }
+    return Dnd5eRules.averageHitPointsForHitDie(
+      hitDie: hitDie, level: safeLevel, constitution: constitution);
+  }
+```
+
+- 产出的 `data` 增加：
+```dart
+        'classIdentity': {
+          'entryId': classEntry?.id,
+          'slug': classEntry?.slug,
+          'name': classEntry?.name,
+        },
+        'hitDie': rules.hitDie,
+        'savingThrowAbilities': rules.savingThrowAbilities.toList(),
+```
+- `spellSlots` 一律由 `rules.spellSlots(build.level)` 生成（不再读 `spellSlot:` grant）；
+  `classResources` 由 `rules.resourcesAt(build.level, abilities)` 生成。
+
+- [ ] **步骤 4：改 `character.dart` / `quick_build.dart` / `projector` / 详情页 / 编辑器**
+
+- `character.dart`：`classResources` getter 改为
+
+```dart
+  List<Dnd5eClassResource> get classResources {
+    final explicit = _explicitClassResources();
+    if (explicit.isNotEmpty) return explicit;
+    final identity = dataMap['classIdentity'];
+    final slug = identity is Map ? '${identity['slug'] ?? ''}' : '';
+    if (slug.isEmpty) return const [];
+    final rules = Dnd5eRules.resolveClassRules(
+      entryId: identity is Map ? identity['entryId'] as String? : null,
+      classSummary: classSummary,
+    );
+    return rules.resourcesAt(level, {
+      for (final entry in abilityMap.entries)
+        entry.key: _intValue(entry.value) == 0 ? 10 : _intValue(entry.value),
+    }).map((r) => Dnd5eClassResource(
+          id: r.id, name: r.name, maximum: r.maximum, recovery: r.recovery)).toList(growable: false);
+  }
+```
+
+- `quick_build.dart`：删除 `_saves` / `_abilities` 的"职业名分支"改为读档案
+  `Dnd5eRules.profile.classRules(slug)`；`classEntryId` 存在时用条目规则，否则用档案；
+  写 `classIdentity`。
+- `character_rule_projector.dart`：为没有 `classIdentity` 的角色按
+  `profile.classRules(name.toLowerCase())` 或 `profile.classRules(slug)` 精确匹配回填；
+  匹配不到则写 `{'entryId': null, 'slug': null, 'name': classSummary}` 并保留空资源。
+- `character_detail_page.dart` 的 `_slotMaximums()`：兜底改为
+  `Dnd5eRules.resolveClassRules(...).spellSlots(character.level)`。
+- `character_editor_page.dart`：等级摘要与法术选择改用 `resolveClassRules(...)`。
+
+- [ ] **步骤 5：运行回归**
+
+运行：`cd apps/client_flutter && flutter test`
+预期：全绿；若 `character_pages_test.dart` / `character_builder_choices_test.dart` 里出现旧
+`spellSlot:`/散文夹具，按新契约改写夹具（不是改断言）
+
+- [ ] **步骤 6：Commit**
+
+```bash
+git add -A apps/client_flutter
+git commit -m "refactor(rules): 全部消费方切换到规则档案与 classRules"
+```
+
+---
+
+## 任务 9：grant kind 收紧（9 项）
+
+**文件：**
+- 修改：`apps/client_flutter/lib/src/features/rules/domain/character_rule_definition.dart`
+- 修改：`apps/client_flutter/lib/src/features/characters/domain/rules_driven_character_builder.dart`
+- 修改：`apps/client_flutter/lib/src/features/characters/presentation/character_editor_page.dart:2617-2622`
+- 修改：`apps/client_flutter/lib/src/features/content/presentation/widgets/content_character_rules_view.dart:142-147`
+- 测试：`apps/client_flutter/test/rules/grant_kind_test.dart`
+
+- [ ] **步骤 1：写失败测试**
+
+```dart
+test('grant kind 收敛为 9 项，resource/conditionResistance/note 被拒绝', () {
+  expect(RuleGrantKind.values.map((k) => k.name).toSet(), {
+    'feature', 'proficiency', 'spell', 'equipment', 'action',
+    'speed', 'armorClass', 'hitPoints', 'ability',
+  });
+  for (final gone in ['resource', 'conditionResistance', 'note']) {
+    expect(() => RuleGrantKind.parse(gone), throwsFormatException, reason: gone);
+  }
+});
+
+test('hitPoints 与 ability grant 参与派生', () {
+  // 构造 rules.progression[1].grants = [
+  //   {kind: 'hitPoints', value: 2}, {kind: 'ability', target: 'cha', value: 1} ]
+  // 断言 maxHp 比无 grant 时多 2，且 cha 派生 +1（法术 DC +1）
+});
+```
+
+- [ ] **步骤 2：运行确认失败**
+
+运行：`cd apps/client_flutter && flutter test test/rules/grant_kind_test.dart`
+预期：FAIL
+
+- [ ] **步骤 3：实现**
+
+- `RuleGrantKind` 删除三项；`parse` 的 `orElse` 抛 `FormatException('Unknown rule grant kind: $value')` 保持。
+- 构建器：把 `ledger.grantsOfKind(RuleGrantKind.hitPoints)` 的 `value`/`formula`
+  累加进 `maxHp`（`formula` 经 `MaxSpec.tryParse` 求值，`level` 用职业等级）；
+  把 `ability` grant 收集成 `Map<String,int>`，在算 HP/AC/豁免/技能/DC **之前**叠加到 abilities。
+- 两个图标 map 删除被移除的三项。
+
+- [ ] **步骤 4：运行确认通过并全量回归**
+
+运行：`cd apps/client_flutter && flutter test`
+预期：全绿；测试夹具里若有 `kind: 'resource'` 一并改为 `classRules.resources`
+
+- [ ] **步骤 5：Commit**
+
+```bash
+git add -A apps/client_flutter
+git commit -m "feat(rules): grant kind 收敛为 9 项，实现 hitPoints/ability，移除三项空转"
+```
+
+---
+
+## 任务 10：提取器重写与重提取金标
+
+**文件：**
+- 修改：`scripts/extract_phb_2024_v2.py`（`parse_class_core_table`、`parse_spell_selection_table`、`_build_spell_slot_progression`、`extract_class`）
+- 修改：`scripts/test_phb_2024_v2_tools.py`
+- 创建：`apps/client_flutter/test/rules/reextracted_bundle_golden_test.dart`
+
+- [ ] **步骤 1：改 `parse_class_core_table`（散文 → 结构化）**
+
+```python
+ABILITY_KEYS = {"力量": "str", "敏捷": "dex", "体质": "con",
+                "智力": "int", "感知": "wis", "魅力": "cha"}
+
+def parse_saving_throws(value: str) -> list[str]:
+    """'力量与体质' → ['str','con']；顺序按 PHB 表的书写顺序。"""
+    return [ABILITY_KEYS[cn] for cn in ABILITY_KEYS if cn in value]
+
+def parse_skill_choice(value: str) -> dict[str, Any] | None:
+    """'选择2项：驯兽、运动、威吓' → {'count':2,'options':[...]}
+       '任选3项（见第一章）'      → {'count':3,'options':'any'}"""
+    m = re.search(r"(\d+)\s*项", value)
+    if not m:
+        return None
+    count = int(m.group(1))
+    after = value.split("：", 1)[-1] if "：" in value else ""
+    options = [s.strip() for s in re.split(r"[、,，]", after) if s.strip()]
+    if not options or "见" in after:
+        return {"count": count, "options": "any"}
+    return {"count": count, "options": options}
+```
+
+在 `parse_class_core_table` 里把 `savingThrows` / `skills` 转换为
+`classRules.savingThrowAbilities` / `classRules.skillChoice`，`hitDie` 输出 **int**，
+`structured` 变成：
+
+```python
+structured["classRules"] = {
+    "hitDie": int(die),
+    "savingThrowAbilities": saving_throws,
+    "skillChoice": skill_choice,
+    # spellcasting 由 extract_class 补，见步骤 2
+}
+```
+
+保留 `primaryAbility` / `weaponProficiency` / `armorProficiency` / `startingEquipment` 作为**展示元数据**
+（不属于 `classRules`）。
+
+- [ ] **步骤 2：`parse_spell_selection_table` 输出表而不是四列行数组**
+
+```python
+            return {
+                "mode": "prepared" if "准备法术" in header[maximum_column] else "known",
+                "ability": ability,
+                "listTags": [f"spell-list:{class_slug}"],
+                "archetype": ARCHETYPE_BY_CLASS[class_slug],      # 见步骤 3
+                "prepared": {str(row["level"]): row["maximumLeveledSpells"] for row in progression},
+                "cantrips": {str(row["level"]): row["maximumCantrips"] for row in progression},
+                "maximumSpellLevel": {str(row["level"]): row["maximumSpellLevel"] for row in progression},
+            }
+```
+
+- [ ] **步骤 3：删除 `_build_spell_slot_progression` 与脚本内的法术位表**
+
+```python
+ARCHETYPE_BY_CLASS = {
+    "吟游诗人": "full-caster", "牧师": "full-caster", "德鲁伊": "full-caster",
+    "术士": "full-caster", "法师": "full-caster",
+    "圣武士": "half-caster", "游侠": "half-caster",
+    "魔契师": "pact",
+}
+```
+
+删除 `full_caster_slots` / `half_caster_slots` / `pact_magic_slots` 三个脚本内副本与整个
+`_build_spell_slot_progression`；调用点一并删除。**法术位数值从此只存在于客户端内置档案**。
+
+- [ ] **步骤 4：改脚本测试**
+
+在 `scripts/test_phb_2024_v2_tools.py` 增加：
+
+```python
+    def test_class_entries_use_structured_rules(self):
+        """职业条目只允许新契约形状，不得残留散文与逐级 grant。"""
+        bundle = build_bundle()  # 复用现有夹具构建函数
+        for entry in bundle["entries"]:
+            if entry["type"] != "class":
+                continue
+            structured = entry["structured"]
+            self.assertNotIn("savingThrows", structured)
+            self.assertNotIn("skills", structured)
+            self.assertNotIn("preparedSpellcasting", structured)
+            self.assertIsInstance(structured["classRules"]["hitDie"], int)
+            text = json.dumps(entry.get("rules") or {}, ensure_ascii=False)
+            self.assertNotIn("spellSlot:", text)
+            self.assertNotIn("classResource:", text)
+```
+
+- [ ] **步骤 5：运行脚本测试**
+
+运行：`cd /mnt/c/Users/26047/Desktop/dnd-table-tool && python3 -m unittest scripts.test_phb_2024_v2_tools -v`
+预期：PASS
+
+- [ ] **步骤 6：重提取并写金标测试**
+
+运行：`python3 scripts/extract_phb_2024_v2.py`（按脚本现有用法生成 bundle 到 `private-imports/`）
+然后：
+
+```dart
+// test/rules/reextracted_bundle_golden_test.dart
+void main() {
+  final file = File('../../private-imports/phb-2024-v2-bundle.json');
+  if (!file.existsSync()) {
+    // 与现有私有路径测试一致：缺私有包时跳过
+    return;
+  }
+  test('重提取产物：12 职业 × 4 级派生数值与改造前一致', () {
+    final bundle = jsonDecode(file.readAsStringSync()) as Map<String, Object?>;
+    final classes = (bundle['entries']! as List)
+        .whereType<Map>()
+        .where((e) => e['type'] == 'class')
+        .toList();
+    expect(classes, hasLength(12));
+    for (final entry in classes) {
+      final rules = Dnd5eRules.resolveClassRules(
+        entryId: entry['id'] as String,
+        classSummary: entry['name'] as String,
+        structured: Map<String, Object?>.from(entry['structured']! as Map),
+      );
+      for (final level in [1, 5, 11, 20]) {
+        // 期望值来自官方表（与 dnd5e_rules_verification_test.dart 同源）
+        expect(rules.spellSlots(level), expectedSlots(entry['slug'] as String, level),
+            reason: '${entry['slug']} L$level');
+      }
+      expect(rules.hitDie, isNotNull, reason: entry['slug'] as String);
+    }
+  });
+}
+```
+
+- [ ] **步骤 7：全量门禁**
+
+运行：`cd /mnt/c/Users/26047/Desktop/dnd-table-tool && npm run test:scripts && cd apps/client_flutter && dart analyze lib test && flutter test`
+预期：脚本测试全绿、analyze 0 问题、客户端测试全绿且数量 **≥ 923**
+
+- [ ] **步骤 8：Commit**
+
+```bash
+git add scripts/extract_phb_2024_v2.py scripts/test_phb_2024_v2_tools.py \
+        apps/client_flutter/test/rules/reextracted_bundle_golden_test.dart
+git commit -m "feat(content): 提取器输出新契约形状，删除脚本内重复的法术位表"
+```
+
+---
+
+## 任务 11：导入器接入规则诊断
+
+**文件：**
+- 修改：`apps/client_flutter/lib/src/features/content/domain/content_import_report.dart`
+- 修改：`apps/client_flutter/lib/src/features/content/data/import/content_package_importer.dart`
+- 修改：`apps/client_flutter/lib/src/features/content/presentation/content_import_preview_dialog.dart`
+- 测试：`apps/client_flutter/test/rules/import_rule_diagnostics_test.dart`
+
+- [ ] **步骤 1：写失败测试**
+
+```dart
+test('非法 classRules 阻断整包，路径精确到字段', () async {
+  final report = await importer.previewJson(jsonEncode({
+    'formatVersion': 2, 'id': 'bad-pack', 'name': 'bad', 'version': '1',
+    'locale': 'zh-CN', 'system': 'dnd5e-2024', 'entryCount': 1,
+    'entries': [
+      {'id': 'bad-pack:class/x', 'type': 'class', 'slug': 'x', 'name': 'X',
+       'revision': 1, 'body': [],
+       'structured': {'classRules': {'hitDex': 10}}},
+    ],
+  }));
+  expect(report.valid, isFalse);
+  expect(report.errors.single.path, contains('structured.classRules.hitDex'));
+  expect(report.errors.single.message, contains('hitDie'));
+});
+
+test('缺 hitDie 只给 warning，不阻断', () async {
+  final report = await importer.previewJson(jsonEncode({ /* 同上，去掉 hitDie */ }));
+  expect(report.valid, isTrue);
+  expect(report.warnings.single.code, 'missingCoreField');
+});
+```
+
+- [ ] **步骤 2：运行确认失败**
+
+运行：`cd apps/client_flutter && flutter test test/rules/import_rule_diagnostics_test.dart`
+预期：FAIL（`warnings` 不存在 / 未校验 classRules）
+
+- [ ] **步骤 3：`ContentImportReport` 新增 `warnings`**
+
+```dart
+  final List<ContentValidationError> errors;
+  final List<ContentValidationError> warnings;   // 新增（默认 const []）
+```
+
+`_buildReport` 增加可选具名参数 `List<ContentValidationError> warnings = const []`。
+
+- [ ] **步骤 4：导入器调用解析器**
+
+在 `previewJson` 的 entry 解析循环里，对 `type == 'class'` 的条目：
+
+```dart
+          final diagnostics = <RuleDiagnostic>[];
+          final rawClassRules = (normalizedJson['structured'] as Map?)?['classRules'];
+          if (rawClassRules is Map) {
+            ClassRuleSet.parse(
+              Map<String, Object?>.from(rawClassRules),
+              path: r'$.entries[' + '$i' + r'].structured.classRules',
+              diagnostics: diagnostics,
+            );
+          } else if (normalizedType == 'class') {
+            diagnostics.add(RuleDiagnostic(
+              path: r'$.entries[' + '$i' + r'].structured.classRules',
+              severity: RuleSeverity.warning,
+              code: 'unresolvedClassRule',
+              message: '职业条目未声明 classRules，将只使用内置档案（若有同 slug）',
+            ));
+          }
+          for (final diagnostic in diagnostics) {
+            final target = diagnostic.severity == RuleSeverity.error ? errors : warnings;
+            target.add(ContentValidationError(
+                path: diagnostic.path, message: '${diagnostic.message}（${diagnostic.code}）'));
+          }
+```
+
+`previewJson` 与 `previewDndPack` 把 `warnings` 一并传给 `_buildReport`。
+
+- [ ] **步骤 5：导入预览展示 warnings**
+
+在 `ContentImportPreviewDialog` 的 errors 区块之后加入同样的列表，用
+`Theme.of(context).colorScheme.tertiary` 与 `Icons.info_outline`，文案前缀"提示（不阻断导入）"。
+
+- [ ] **步骤 6：运行测试与全量门禁**
+
+运行：`cd apps/client_flutter && flutter test test/rules/import_rule_diagnostics_test.dart && flutter test`
+预期：PASS 且全绿
+
+- [ ] **步骤 7：Commit**
+
+```bash
+git add apps/client_flutter/lib/src/features/content apps/client_flutter/test/rules/import_rule_diagnostics_test.dart
+git commit -m "feat(content): 导入器接入规则诊断，error 阻断、warning 提示"
+```
+
+---
+
+## 收尾检查（P2 完成标志）
+
+- [ ] `grep -rn "contains('战士')\|_fullCasterSlots\|_preparedDivine\|_hitDice = " apps/client_flutter/lib/` → 无输出
+- [ ] `cd apps/client_flutter && flutter test` → 全绿，数量 ≥ 923
+- [ ] `cd apps/client_flutter && dart analyze lib test` → 0 问题
+- [ ] `npm run test:scripts` → 27+ 通过
+- [ ] `npm run lint:server` → 0 问题（未改服务端，作为回归）
+- [ ] 用私有包做一次手工冒烟：建一个 5 级吟游诗人 → 法术位 4/3/2、准备上限 9、HP 与改造前一致
+
+---
+
+## 后续计划（本计划之外）
+
+| 计划 | 内容 |
+|---|---|
+| 计划 2 | P5 选择系统（§3.10 全部：值选项 + 内联 grants + 自动授予、`optionType: "spell"` + `countsToward`、`repeatable`、`requires`、`group`/`help`、装备 A/B、`skillChoice`/`spellcasting` 计数展开为规范选择，以及编辑器的选择面板改造） |
+| 计划 3 | P6 文档（§9.1 重写、§7.7 行为变化清单、§2/§16 基线、README 教程、AGENTS.md、§13.6 合规项） |
+
+> 规格里的 P3（校验）与 P4（grant kind 收紧）已并入本计划（任务 9 与任务 11），
+> 因此本计划完成后只剩选择系统与文档两块。

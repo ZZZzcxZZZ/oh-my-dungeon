@@ -498,6 +498,42 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 
 ---
 
+### 3.12 部分声明是一等功能（人性化）
+
+自制职业**不需要写完 1–20 级**。作者只声明他设计过的部分，其余由"继承"语义与界面提示兜住。
+
+**规则**
+
+1. **`rules.progression[]` 可以只声明部分等级**：不要求覆盖 1..20，也不要求必须含 1 级。
+   未声明的等级不产生任何 grants/choices（自然继承，不需要写空壳步骤）。
+2. **所有 `Table<T>` 允许短数组**：`prepared: [3, 4, 5]` 等价于只声明 1–3 级。
+   取值语义统一为：
+   - **高于最后声明等级 → 沿用最后声明值**（"后面按这个继续"）；
+   - **低于最早声明等级 → 未声明**（返回 `null`/空，**不会**借用更高等级的值，
+     然后按 §3.3 的优先级回退到 `archetype`，仍无则视为未声明）。
+   稀疏表 `{"5": …}` 同样遵守这两条（所以只写 5 级**不会**让 1–4 级获得 5 级的数值）。
+3. **声明范围是一等公民**：每个职业解析出 `declaredLevels`（从 `progression` 的
+   `levels` 与各 `Table` 的声明范围合并），并写进角色数据
+   `data.classIdentity.declaredLevels = {min: 1, max: 12}`。
+4. **部分声明既不报错也不警告**：导入期只在"完全没有 `hitDie`"等真正缺数值的情况下给 warning；
+   "只写到 12 级"是合法状态，由界面如实呈现（见下）。
+
+**必须体现在所有相关界面上**（同一个 `declaredLevels` 数据源，不许各界面自己算）：
+
+| 界面 | 呈现要求 |
+|---|---|
+| 导入预览（`ContentImportPreviewDialog`） | 条目行显示"职业声明：1–12 级"；这是信息，不写成错误色 |
+| 资料库条目详情（`content_character_rules_view.dart`） | 规则视图顶部显示声明范围；未声明等级不显示空行 |
+| 角色创建向导（`character_editor_page.dart`） | 等级滑杆在"已声明区间"用主题色、"未声明区间"用 `outlineVariant` 并加刻度提示；滑到未声明等级时，步骤面板顶部出现一条信息条："该职业未声明 N 级以上内容，你仍可继续（数值按未声明处理）"；选择面板不显示未声明等级的选择 |
+| 角色升级页（`character_upgrade_planner` + 升级页） | 目标等级超出声明范围时，`CharacterUpgradePlan` 带 `beyondDeclaredLevel` 标记，页面在"确认升级"上方显示同一信息条；升级结果里未声明字段为空而不是报错 |
+| 角色卡详情（`character_detail_page.dart`） | 法术位/资源/准备上限区在超出声明范围时显示"该职业未声明该等级的内容"；已有数值继续按继承语义显示 |
+| 自制内容编辑（S4 的 GUI） | 等级步骤列表默认只到已声明等级，"添加等级"按钮可继续补；不强制补满 20 级 |
+
+**同一个原则的另一面**：任何"未声明"都必须**可见**，不能表现为空白或静默为 0。
+数值型未声明一律显示为"未声明"，而不是 0 或空字符串。
+
+---
+
 ## 4. 组件设计
 
 ### 4.1 新增
@@ -572,7 +608,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `invalidSkillCount` | 技能选择的 `minimum`/`maximum` 不在 0..选项数 | `技能选择的数量必须为 0..6` |
 | `invalidSpellcastingMode` | `mode` 不在枚举 | `spellcasting.mode 必须是 prepared / known / pact / none` |
 | `unknownArchetype` | `archetype` 不在 `progressions` | `未知原型 "three-quarter-caster"` |
-| `invalidTable` | `Table<T>` 键不在 1..20、数组长度≠20、值类型不符或为负 | `prepared["21"] 的键必须为 1..20` |
+| `invalidTable` | `Table<T>` 键不在 1..20、数组长度为 0 或 >20、值类型不符或为负 | `prepared["21"] 的键必须为 1..20`（**短数组合法**，见 §3.12） |
 | `invalidMaxSpec` | 三种写法全缺或同时出现多种、`minimum` 为负、`formula` 不在封闭语法 | `maximum 必须且只能使用 value / formula / table 之一` |
 | `duplicateResourceId` | 同职业内 `resources[].id` 重复 | `资源 id "rage" 重复` |
 | `invalidRecovery` | `recovery` 不在枚举 | `recovery 必须是 shortRest / shortRestOne / longRest / none` |
@@ -597,6 +633,9 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `ignoredGlobalList` | 包自带了 `abilities` / `skills` 清单（内置档案为唯一权威，该清单被忽略） |
 | `unresolvedClassRule` | 条目没有任何可用规则来源（既无 `classRules` 也无档案匹配） |
 | `zeroLevelResource` | 资源的表在 `startsAtLevel` 及以上出现 0（该级上限为 0，UI 不显示） |
+
+> **不存在的 warning**：不得因为"职业只声明到 N 级"或"Table 是短数组"而产出任何 error/warning
+> ——这是合法写法（§3.12），只在界面作为信息呈现。
 
 > 不再存在任何"legacy 写法"warning：旧形状一律按未知字段/未知取值报 error（§3.9）。
 

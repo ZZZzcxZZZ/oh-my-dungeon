@@ -1,0 +1,241 @@
+[
+  {
+    "id": "wayfinder:class/wayfinder",
+    "type": "class",
+    "slug": "wayfinder",
+    "name": "引路者",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "一个把队伍带出荒野的职业——作者只设计到 5 级，剩下的以后再说。"
+      }
+    ],
+    "aliases": [],
+    "summary": "只设计到 5 级的示范职业：用来验证“不必写完 20 级”。",
+    "tags": [
+      "class"
+    ],
+    "structured": {
+      "primaryAbility": "感知",
+      "classRules": {
+        "hitDie": 8,
+        "savingThrowAbilities": [
+          "dex",
+          "wis"
+        ],
+        "spellcasting": {
+          "mode": "prepared",
+          "ability": "wis",
+          "listTags": [
+            "spell-list:wayfinder"
+          ],
+          "prepared": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "cantrips": [
+            2,
+            2,
+            2,
+            2,
+            3
+          ],
+          "maximumSpellLevel": [
+            1,
+            1,
+            1,
+            2,
+            2
+          ],
+          "slots": {
+            "1": {
+              "1": 2
+            },
+            "3": {
+              "1": 3,
+              "2": 2
+            }
+          }
+        },
+        "resources": [
+          {
+            "id": "waymark",
+            "name": "路标",
+            "maximum": {
+              "table": [
+                1,
+                1,
+                2,
+                2,
+                3
+              ]
+            },
+            "recovery": "shortRest"
+          },
+          {
+            "id": "far-sight",
+            "name": "远见",
+            "startsAtLevel": 3,
+            "maximum": {
+              "table": {
+                "3": 1,
+                "5": 2
+              }
+            },
+            "recovery": "longRest"
+          }
+        ]
+      }
+    },
+    "rules": {
+      "progression": [
+        {
+          "levels": [
+            1
+          ],
+          "grants": [
+            {
+              "id": "l1-mark",
+              "kind": "feature",
+              "label": "荒野路标",
+              "entryId": "wayfinder:classFeature/wild-mark"
+            }
+          ],
+          "choices": [
+            {
+              "id": "skills",
+              "label": "选择两项技能熟练",
+              "optionType": "skill",
+              "minimum": 2,
+              "maximum": 2,
+              "options": [
+                "驯兽",
+                "运动",
+                "洞悉",
+                "自然",
+                "察觉",
+                "求生",
+                "隐匿"
+              ],
+              "builderStep": "proficiencies"
+            }
+          ]
+        },
+        {
+          "levels": [
+            3
+          ],
+          "grants": [
+            {
+              "id": "l3-sight",
+              "kind": "feature",
+              "label": "远见",
+              "entryId": "wayfinder:classFeature/far-sight"
+            }
+          ]
+        },
+        {
+          "levels": [
+            5
+          ],
+          "grants": [
+            {
+              "id": "l5-guide",
+              "kind": "feature",
+              "label": "引路",
+              "entryId": "wayfinder:classFeature/guide"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "wayfinder:classFeature/wild-mark",
+    "type": "classFeature",
+    "slug": "wild-mark",
+    "name": "荒野路标",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你可以用一个动作标记一条路径，队友沿该路径移动时忽略困难地形。"
+      }
+    ],
+    "aliases": [],
+    "summary": "引路者 1 级特性",
+    "tags": [
+      "classFeature"
+    ],
+    "structured": {
+      "level": 1,
+      "classSlug": "wayfinder"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "wayfinder:class/wayfinder"
+      }
+    ]
+  },
+  {
+    "id": "wayfinder:classFeature/far-sight",
+    "type": "classFeature",
+    "slug": "far-sight",
+    "name": "远见",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你能看到 1 英里内地形的粗略轮廓。"
+      }
+    ],
+    "aliases": [],
+    "summary": "引路者 3 级特性",
+    "tags": [
+      "classFeature"
+    ],
+    "structured": {
+      "level": 3,
+      "classSlug": "wayfinder"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "wayfinder:class/wayfinder"
+      }
+    ]
+  },
+  {
+    "id": "wayfinder:classFeature/guide",
+    "type": "classFeature",
+    "slug": "guide",
+    "name": "引路",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你带领队伍急行时，队伍不会因地形而减速。"
+      }
+    ],
+    "aliases": [],
+    "summary": "引路者 5 级特性",
+    "tags": [
+      "classFeature"
+    ],
+    "structured": {
+      "level": 5,
+      "classSlug": "wayfinder"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "wayfinder:class/wayfinder"
+      }
+    ]
+  }
+]

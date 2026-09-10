@@ -312,48 +312,52 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('IntTable', () {
     test('完整 20 项数组', () {
-      final table = IntTable.tryParse(List.generate(20, (i) => i + 1));
-      expect(table, isNotNull);
-      expect(table!.at(1), 1);
+      final table = IntTable.tryParse(List.generate(20, (i) => i + 1))!;
+      expect(table.minLevel, 1);
+      expect(table.maxLevel, 20);
+      expect(table.at(1), 1);
       expect(table.at(20), 20);
     });
 
-    test('稀疏表向前取值，低于最小档位取最小档位', () {
-      final table = IntTable.tryParse({'3': 5, '10': 9});
-      expect(table!.at(1), 5);
+    test('短数组合法：只声明 1..3 级，4 级以上沿用最后值', () {
+      final table = IntTable.tryParse([3, 4, 5])!;
+      expect(table.at(1), 3);
       expect(table.at(3), 5);
-      expect(table.at(9), 5);
-      expect(table.at(10), 9);
-      expect(table.at(20), 9);
+      expect(table.at(9), 5, reason: '高于最后声明等级 → 沿用');
+      expect(table.at(20), 5);
+    });
+
+    test('稀疏表：高于最后声明沿用，低于最早声明为未声明', () {
+      final table = IntTable.tryParse({'5': 7, '9': 11})!;
+      expect(table.at(4), isNull, reason: '低于最早声明 → 未声明（不借用 5 级的值）');
+      expect(table.at(5), 7);
+      expect(table.at(8), 7);
+      expect(table.at(9), 11);
+      expect(table.at(20), 11);
     });
 
     test('非法输入返回 null', () {
-      expect(IntTable.tryParse([1, 2, 3]), isNull);          // 长度不是 20
-      expect(IntTable.tryParse({'0': 1}), isNull);           // 等级越界
-      expect(IntTable.tryParse({'1': -1}), isNull);          // 负值
+      expect(IntTable.tryParse([]), isNull);
+      expect(IntTable.tryParse(List.filled(21, 1)), isNull);
+      expect(IntTable.tryParse({'0': 1}), isNull);
+      expect(IntTable.tryParse({'1': -1}), isNull);
       expect(IntTable.tryParse('nope'), isNull);
-    });
-
-    test('等级越界时夹取', () {
-      final table = IntTable.tryParse({'1': 2})!;
-      expect(table.at(0), 2);
-      expect(table.at(99), 2);
     });
   });
 
   group('SlotTable', () {
-    test('稀疏覆盖整级替换，未声明等级返回空', () {
+    test('稀疏表：未声明等级为 null，高于最后声明沿用', () {
       final table = SlotTable.tryParse({'5': {'1': 4, '2': 2}})!;
       expect(table.at(5), {'1': 4, '2': 2});
-      expect(table.at(4), isEmpty);
-      expect(table.at(6), isEmpty);
+      expect(table.at(4), isNull, reason: '低于最早声明 → 未声明');
+      expect(table.at(9), {'1': 4, '2': 2}, reason: '高于最后声明 → 沿用');
     });
 
-    test('完整 20 项数组', () {
-      final raw = List.generate(20, (i) => i.isEven ? <String, Object?>{} : {'1': 1});
-      final table = SlotTable.tryParse(raw)!;
-      expect(table.at(1), isEmpty);
-      expect(table.at(2), {'1': 1});
+    test('短数组合法', () {
+      final table = SlotTable.tryParse([{'1': 2}, {'1': 3}, {'1': 3}])!;
+      expect(table.at(1), {'1': 2});
+      expect(table.at(3), {'1': 3});
+      expect(table.at(20), {'1': 3});
     });
 
     test('非法环阶与负值返回 null', () {
@@ -386,10 +390,13 @@ void main() {
       expect(str.resolve(level: 1, abilities: abilities), 1);
     });
 
-    test('等级表与稀疏等级表', () {
-      final spec = MaxSpec.tryParse({'table': {'1': 2, '17': 6}})!;
-      expect(spec.resolve(level: 10, abilities: abilities), 2);
-      expect(spec.resolve(level: 17, abilities: abilities), 6);
+    test('等级表：稀疏、短数组、向上沿用', () {
+      final sparse = MaxSpec.tryParse({'table': {'1': 2, '17': 6}})!;
+      expect(sparse.resolve(level: 10, abilities: abilities), 2);
+      expect(sparse.resolve(level: 17, abilities: abilities), 6);
+      expect(sparse.resolve(level: 20, abilities: abilities), 6);
+      final short = MaxSpec.tryParse({'table': [2, 2, 3]})!;
+      expect(short.resolve(level: 20, abilities: abilities), 3);
     });
 
     test('封闭语法之外一律拒绝', () {
@@ -414,65 +421,81 @@ void main() {
 ```dart
 import 'rule_math.dart';
 
-/// `Table<int>`：完整 20 项数组，或稀疏 `{"<等级>": 值}`（键 1..20）。
+/// `Table<int>`：长度 ≤20 的数组，或稀疏 `{"<等级>": 值}`（键 1..20）。
+/// 取值语义（§3.12）：高于最后声明等级 → 沿用最后声明值；低于最早声明等级 → null（未声明）。
 class IntTable {
-  const IntTable._(this.values);
+  const IntTable._(this._byLevel, this.minLevel, this.maxLevel);
 
-  final List<int> values; // 恒为 20 项
+  final Map<int, int> _byLevel;
+  final int minLevel;
+  final int maxLevel;
 
   static IntTable? tryParse(Object? raw) {
-    final byLevel = _expand(raw, (value) => value is num ? value.toInt() : null);
-    if (byLevel == null) return null;
-    if (byLevel.any((value) => value < 0)) return null;
-    return IntTable._(byLevel);
+    final byLevel = _expandInt(raw);
+    if (byLevel == null || byLevel.isEmpty) return null;
+    if (byLevel.values.any((value) => value < 0)) return null;
+    final levels = byLevel.keys.toList()..sort();
+    return IntTable._(byLevel, levels.first, levels.last);
   }
 
-  int at(int level) => values[level.clamp(1, 20) - 1];
+  int? at(int level) {
+    if (level < minLevel) return null;              // 未声明，交由 archetype 回退
+    return _byLevel[level] ?? _byLevel[maxLevel]!;  // 高于已声明 → 沿用最后一个
+  }
 }
 
-/// `Table<{环阶: 数量}>`：法术位。整级替换语义——未声明的等级为空表。
+/// `Table<{环阶: 数量}>`：法术位。整级替换语义 + §3.12 的两条取值规则。
 class SlotTable {
-  const SlotTable._(this.perLevel);
+  const SlotTable._(this._byLevel, this.minLevel, this.maxLevel);
 
-  final List<Map<String, int>> perLevel; // 恒为 20 项
+  final Map<int, Map<String, int>> _byLevel;
+  final int minLevel;
+  final int maxLevel;
 
   static SlotTable? tryParse(Object? raw) {
-    final source = <Object?>[];
+    final byLevel = <int, Map<String, int>>{};
     if (raw is List) {
-      if (raw.length != 20) return null;
-      source.addAll(raw);
-    } else if (raw is Map) {
-      for (final key in raw.keys) {
-        final level = int.tryParse('$key');
-        if (level == null || level < 1 || level > 20) return null; // 未知键一律拒绝
+      if (raw.isEmpty || raw.length > 20) return null;
+      for (var index = 0; index < raw.length; index++) {
+        final parsed = _slots(raw[index], index + 1);
+        if (parsed == null) return null;
+        byLevel[index + 1] = parsed;
       }
-      for (var level = 1; level <= 20; level++) {
-        source.add(raw['$level']);
+    } else if (raw is Map) {
+      for (final entry in raw.entries) {
+        final level = int.tryParse('${entry.key}');
+        if (level == null || level < 1 || level > 20) return null; // 未知键一律拒绝
+        final parsed = _slots(entry.value, level);
+        if (parsed == null) return null;
+        byLevel[level] = parsed;
       }
     } else {
       return null;
     }
-    final perLevel = <Map<String, int>>[];
-    for (final entry in source) {
-      if (entry == null) {
-        perLevel.add(const <String, int>{});
-        continue;
-      }
-      if (entry is! Map) return null;
-      final slots = <String, int>{};
-      for (final slot in entry.entries) {
-        final slotLevel = int.tryParse('${slot.key}');
-        final count = slot.value is num ? (slot.value! as num).toInt() : null;
-        if (slotLevel == null || slotLevel < 1 || slotLevel > 9) return null;
-        if (count == null || count < 0) return null;
-        if (count > 0) slots['$slotLevel'] = count;
-      }
-      perLevel.add(slots);
-    }
-    return SlotTable._(perLevel);
+    if (byLevel.isEmpty) return null;
+    final levels = byLevel.keys.toList()..sort();
+    return SlotTable._(byLevel, levels.first, levels.last);
   }
 
-  Map<String, int> at(int level) => perLevel[level.clamp(1, 20) - 1];
+  static Map<String, int>? _slots(Object? raw, int level) {
+    if (raw == null) return const <String, int>{};
+    if (raw is! Map) return null;
+    final slots = <String, int>{};
+    for (final slot in raw.entries) {
+      final slotLevel = int.tryParse('${slot.key}');
+      final count = slot.value is num ? (slot.value! as num).toInt() : null;
+      if (slotLevel == null || slotLevel < 1 || slotLevel > 9) return null;
+      if (count == null || count < 0) return null;
+      if (count > 0) slots['$slotLevel'] = count;
+    }
+    return slots;
+  }
+
+  /// null = 该等级未声明（低于最早声明等级），交由 archetype 回退。
+  Map<String, int>? at(int level) {
+    if (level < minLevel) return null;
+    return _byLevel[level] ?? _byLevel[maxLevel]!;
+  }
 }
 
 /// 资源上限：整数，或 `{"formula": "…"}` / `{"table": <Table<int>>}`，对象形态可带 `minimum`。
@@ -511,7 +534,7 @@ class MaxSpec {
     final raw = switch (this) {
       MaxSpec(value: final v?) => v,
       MaxSpec(formula: final f?) => _evaluate(f, level, abilities),
-      _ => table!.at(level),
+      _ => table!.at(level) ?? 0,
     };
     return minimum == null || raw >= minimum! ? raw : minimum!;
   }
@@ -533,37 +556,25 @@ int _evaluate(String formula, int level, Map<String, int> abilities) {
   return int.parse(formula);
 }
 
-/// 把"完整数组"或"稀疏 map"展开成 20 项；非法输入返回 null。
-List<T>? _expand<T>(Object? raw, T? Function(Object? value) convert) {
-  final result = <T>[];
+/// 解析"长度 ≤20 的数组"或"稀疏 map"；非法输入返回 null。
+Map<int, int>? _expandInt(Object? raw) {
+  final result = <int, int>{};
   if (raw is List) {
-    if (raw.length != 20) return null;
-    for (final item in raw) {
-      final value = convert(item);
-      if (value == null) return null;
-      result.add(value);
+    if (raw.isEmpty || raw.length > 20) return null;
+    for (var index = 0; index < raw.length; index++) {
+      final value = raw[index];
+      if (value is! num) return null;
+      result[index + 1] = value.toInt();
     }
     return result;
   }
   if (raw is Map) {
-    for (final key in raw.keys) {
-      final level = int.tryParse('$key');
+    for (final entry in raw.entries) {
+      final level = int.tryParse('${entry.key}');
       if (level == null || level < 1 || level > 20) return null; // 未知键一律拒绝
-    }
-    final byLevel = <int, T>{};
-    for (var level = 1; level <= 20; level++) {
-      final item = raw['$level'];
-      if (item == null) continue;
-      final value = convert(item);
-      if (value == null) return null;
-      byLevel[level] = value;
-    }
-    if (byLevel.isEmpty) return null;
-    final firstLevel = byLevel.keys.reduce((a, b) => a < b ? a : b);
-    var current = byLevel[firstLevel]!;
-    for (var level = 1; level <= 20; level++) {
-      current = byLevel[level] ?? current;
-      result.add(current);
+      final value = entry.value;
+      if (value is! num) return null;
+      result[level] = value.toInt();
     }
     return result;
   }
@@ -715,13 +726,16 @@ class ClassResourceRule {
   final MaxSpec maximum;
   final String recovery;
   final int startsAtLevel;
+
+  /// 资源表声明到的最高等级；只有 formula 的资源不贡献等级。
+  int? get declaredMaxLevel => maximum.table?.maxLevel;
 }
 
 class ClassSpellcasting {
   const ClassSpellcasting({
     required this.mode, this.ability, this.listTags = const [],
     this.archetype, this.slots, this.slotLevel, this.prepared,
-    this.cantrips, this.maximumSpellLevel, this.rawLevels = const {},
+    this.cantrips, this.maximumSpellLevel,
   });
   final String mode;
   final String? ability;
@@ -732,8 +746,15 @@ class ClassSpellcasting {
   final IntTable? prepared;
   final IntTable? cantrips;
   final IntTable? maximumSpellLevel;
-  /// 声明过哪些等级（合并时判断"条目是否覆盖了该级"）。
-  final Set<String> rawLevels;
+
+  /// 各表声明到的最高等级（供 declaredMaxLevel 汇总）。
+  List<int> get declaredMaxLevels => [
+        if (slots != null) slots!.maxLevel,
+        if (slotLevel != null) slotLevel!.maxLevel,
+        if (prepared != null) prepared!.maxLevel,
+        if (cantrips != null) cantrips!.maxLevel,
+        if (maximumSpellLevel != null) maximumSpellLevel!.maxLevel,
+      ];
 }
 
 class ClassRuleSet {
@@ -749,6 +770,16 @@ class ClassRuleSet {
   final Set<String> fields;
 
   bool declares(String field) => fields.contains(field);
+
+  /// 该职业**自身**声明的最高等级（§3.12）：取 spellcasting 各表与资源表的最大声明等级。
+  /// "只有 formula 的资源"与"没有随等级变化的表"都不贡献，返回 null。
+  int? get declaredMaxLevel {
+    final levels = <int>[
+      ...?spellcasting?.declaredMaxLevels,
+      ...resources.map((r) => r.declaredMaxLevel).whereType<int>(),
+    ];
+    return levels.isEmpty ? null : levels.reduce((a, b) => a > b ? a : b);
+  }
 
   static const _knownFields = {
     'hitDie', 'savingThrowAbilities', 'spellcasting', 'resources',
@@ -1125,7 +1156,7 @@ class ResolvedClassRules {
   const ResolvedClassRules({
     this.hitDie, this.savingThrowAbilities = const {},
     this.spellcasting, this.resources = const [], this.fieldSources = const {},
-    this.archetype,
+    this.archetype, this.declaredMaxLevel,
   });
 
   final int? hitDie;
@@ -1135,17 +1166,22 @@ class ResolvedClassRules {
   final ClassProgression? archetype;
   final Map<String, RuleFieldSource> fieldSources;
 
+  /// 职业**自身**声明的最高等级（不含 archetype 模板，§3.12）。
+  /// null 表示该职业没有声明任何随等级变化的表（只有特性 progression 也算，见构建器合并）。
+  final int? declaredMaxLevel;
+
   String? get spellcastingAbility => spellcasting?.ability;
   String get spellcastingMode => spellcasting?.mode ?? 'none';
 
-  /// 法术位：自身 slots 表优先（整级替换），否则原型表；低于 minimumLevel 一律为空。
+  /// 法术位：自身 slots 表优先（已声明的等级整级替换，哪怕是空表）；
+  /// 自身未声明该等级（`at` 返回 null）才回退原型；原型也低于 minimumLevel 则为空。
   Map<String, int> spellSlots(int level) {
     if (spellcastingMode == 'none') return const {};
-    final progression = archetype;
-    if (progression != null && level < progression.minimumLevel) return const {};
     final own = spellcasting?.slots?.at(level);
-    if (own != null && own.isNotEmpty) return own;
-    return progression?.slots?.at(level) ?? const {};
+    if (own != null) return own;
+    final progression = archetype;
+    if (progression == null || level < progression.minimumLevel) return const {};
+    return progression.slots?.at(level) ?? const {};
   }
 
   int? pactSlotLevel(int level) =>
@@ -1163,15 +1199,13 @@ class ResolvedClassRules {
   int? _pick(int level, IntTable? Function(ClassSpellcasting) own,
              IntTable? Function(ClassProgression) fromArchetype) {
     if (spellcastingMode == 'none') return null;
-    final progression = archetype;
     if (spellcasting != null) {
-      final table = own(spellcasting!);
-      if (table != null) return table.at(level);
+      final value = own(spellcasting!)?.at(level);
+      if (value != null) return value;   // 已声明该等级（含"高于最后声明沿用"）
     }
-    if (progression != null && level >= progression.minimumLevel) {
-      return fromArchetype(progression)?.at(level);
-    }
-    return null;
+    final progression = archetype;
+    if (progression == null || level < progression.minimumLevel) return null;
+    return fromArchetype(progression)?.at(level);
   }
 
   List<ResolvedResource> resourcesAt(int level, Map<String, int> abilities) => [
@@ -1306,6 +1340,7 @@ abstract final class RuleProfileResolver {
       resources: pick('resources', (r) => r.resources) ?? const [],
       archetype: profile.progression(spellcasting?.archetype),
       fieldSources: sources,
+      declaredMaxLevel: entryRules?.declaredMaxLevel,
     );
   }
 
@@ -1828,6 +1863,11 @@ test('未知职业不猜：数值为空而非回退到相近职业', () {
           'entryId': classEntry?.id,
           'slug': classEntry?.slug,
           'name': classEntry?.name,
+          // §3.12：部分声明是一等功能，声明范围要随角色持久化，供所有界面共用
+          'declaredLevels': {
+            'min': _declaredMinLevel(classEntry),
+            'max': _declaredMaxLevel(classEntry, rules),
+          },
         },
         'hitDie': rules.hitDie,
         'savingThrowAbilities': rules.savingThrowAbilities.toList(),
@@ -2236,6 +2276,138 @@ test('缺 hitDie 只给 warning，不阻断', () async {
 ```bash
 git add apps/client_flutter/lib/src/features/content apps/client_flutter/test/rules/import_rule_diagnostics_test.dart
 git commit -m "feat(content): 导入器接入规则诊断，error 阻断、warning 提示"
+```
+
+---
+
+## 任务 12：把"声明范围"体现到所有界面（§3.12）
+
+**文件：**
+- 创建：`apps/client_flutter/lib/src/features/characters/presentation/widgets/declared_level_banner.dart`
+- 修改：`apps/client_flutter/lib/src/features/content/presentation/widgets/content_character_rules_view.dart`
+- 修改：`apps/client_flutter/lib/src/features/characters/presentation/character_editor_page.dart`
+- 修改：`apps/client_flutter/lib/src/features/characters/presentation/character_upgrade_page.dart`
+- 修改：`apps/client_flutter/lib/src/features/characters/presentation/character_detail_page.dart`
+- 测试：`apps/client_flutter/test/declared_levels_ui_test.dart`
+
+- [ ] **步骤 1：写共用读取器 + 失败测试**
+
+```dart
+// lib/src/features/characters/domain/declared_levels.dart
+class DeclaredLevels {
+  const DeclaredLevels({required this.min, this.max});
+  final int min;
+  final int? max; // null = 该职业完全没有等级声明
+
+  bool covers(int level) => max != null && level >= min && level <= max!;
+  bool get isEmpty => max == null;
+
+  static DeclaredLevels fromCharacter(CharacterSheet character) {
+    final identity = character.dataMap['classIdentity'];
+    final raw = identity is Map ? identity['declaredLevels'] : null;
+    if (raw is! Map) return const DeclaredLevels(min: 1);
+    return DeclaredLevels(
+      min: raw['min'] is num ? (raw['min']! as num).toInt() : 1,
+      max: raw['max'] is num ? (raw['max']! as num).toInt() : null,
+    );
+  }
+}
+```
+
+```dart
+// test/declared_levels_ui_test.dart
+testWidgets('等级滑杆标出未声明区间，并在超出时给信息条', (tester) async {
+  await tester.pumpWidget(MaterialApp(home: CharacterEditorPage(
+    // 夹具：职业只声明到 5 级
+    initialDeclaredLevels: const DeclaredLevels(min: 1, max: 5),
+  )));
+  expect(find.textContaining('职业声明：1–5 级'), findsOneWidget);
+
+  // 把等级拉到 8 级
+  await tester.drag(find.byType(Slider), const Offset(300, 0));
+  await tester.pumpAndSettle();
+  expect(find.textContaining('该职业未声明 6 级以上内容'), findsOneWidget);
+  expect(find.textContaining('仍可继续'), findsOneWidget);
+});
+
+testWidgets('角色卡在未声明等级显示"未声明"而不是 0', (tester) async {
+  await tester.pumpWidget(MaterialApp(home: CharacterDetailPage(
+    character: _characterAtLevel8WithPartialClass,
+  )));
+  await tester.tap(find.text('法术'));
+  await tester.pumpAndSettle();
+  expect(find.textContaining('该职业未声明该等级的内容'), findsOneWidget);
+  expect(find.textContaining('准备上限 0'), findsNothing);
+});
+```
+
+- [ ] **步骤 2：运行确认失败**
+
+运行：`cd apps/client_flutter && flutter test test/declared_levels_ui_test.dart`
+预期：FAIL（`DeclaredLevels` 不存在 / 找不到文案）
+
+- [ ] **步骤 3：做共用信息条组件**
+
+```dart
+// widgets/declared_level_banner.dart
+class DeclaredLevelBanner extends StatelessWidget {
+  const DeclaredLevelBanner({required this.levels, required this.currentLevel, super.key});
+
+  final DeclaredLevels levels;
+  final int currentLevel;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final text = levels.isEmpty
+        ? '该职业未声明任何等级内容'
+        : '职业声明：${levels.min}–${levels.max} 级';
+    final beyond = !levels.isEmpty && !levels.covers(currentLevel);
+    return Card.outlined(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(children: [
+          Icon(beyond ? Icons.info_outline : Icons.rule_outlined,
+              color: beyond ? theme.colorScheme.tertiary : theme.colorScheme.primary),
+          const SizedBox(width: 8),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(text, style: theme.textTheme.bodyMedium),
+              if (beyond) ...[
+                const SizedBox(height: 4),
+                Text('该职业未声明 $currentLevel 级以上内容，你仍可继续（数值按未声明处理）',
+                    style: theme.textTheme.bodySmall),
+              ],
+            ],
+          )),
+        ]),
+      ),
+    );
+  }
+}
+```
+
+- [ ] **步骤 4：接到 5 个界面（每处 3–6 行）**
+
+| 界面 | 改动 |
+|---|---|
+| `content_character_rules_view.dart` | 规则视图顶部插入 `DeclaredLevelBanner`（用条目自身声明的范围；`currentLevel` 传 `levels.min` 以免出现"超出"文案） |
+| `character_editor_page.dart` | ① 等级滑杆的 `Slider` 外包一层，用 `activeColor`/`inactiveColor` 区分已声明区间，并在未声明区间显示刻度（`SliderTheme` + `divisions` 不变，仅改颜色与 `semanticFormatterCallback` 文案）；② 步骤面板顶部渲染 `DeclaredLevelBanner(levels: widget.declaredLevels, currentLevel: _level)` |
+| `character_upgrade_page.dart` | `CharacterUpgradePlan` 增加 `beyondDeclaredLevel`（由 planner 依据 `DeclaredLevels` 计算），页面在"确认升级"按钮上方渲染同一条信息条 |
+| `character_detail_page.dart` | 法术位/职业资源面板：当 `!levels.covers(character.level)` 且对应数值为空时，显示"该职业未声明该等级的内容"；**不得**把未声明渲染成 0 |
+| `character_import_preview_dialog.dart` | 预览行的副标题追加"职业声明：1–N 级"（信息样式，非错误色） |
+
+- [ ] **步骤 5：跑测试与全量回归**
+
+运行：`cd apps/client_flutter && flutter test test/declared_levels_ui_test.dart && flutter test`
+预期：PASS 且全绿
+
+- [ ] **步骤 6：Commit**
+
+```bash
+git add apps/client_flutter/lib apps/client_flutter/test/declared_levels_ui_test.dart
+git commit -m "feat(ui): 职业声明范围（部分声明）在全部相关界面可见"
 ```
 
 ---

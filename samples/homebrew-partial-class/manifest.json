@@ -1,0 +1,9 @@
+{
+  "formatVersion": 3,
+  "id": "wayfinder",
+  "name": "引路者（部分声明示范：只到 5 级）",
+  "version": "0.1.0",
+  "locale": "zh-CN",
+  "system": "dnd5e-2024",
+  "entryCount": 4
+}

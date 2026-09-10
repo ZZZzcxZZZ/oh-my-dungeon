@@ -298,7 +298,7 @@ maxSpellLevel = maximumSpellLevel[L] ?? expand(archetype).maximumSpellLevel[L]
 输入：角色所选职业的 `ContentEntry`（来自 `build.selections['class']`，或老角色 `data.classIdentity`）。
 
 1. **条目自身声明**：该条目 `structured.classRules`（规范化后的字段）。
-2. **档案补齐**：对仍缺失的字段，按该条目的 `slug`（规范化：`trim().toLowerCase()`），其次按 `aliases` 逐项精确匹配，在内置档案与已装规则档案中查找，字段级合并。
+2. **档案补齐**：对仍缺失的字段，按该条目的 `slug`（规范化：`trim().toLowerCase()`），其次按 `aliases` 逐项精确匹配，在**内置档案**中查找，字段级合并。
 3. **未声明即不猜**：仍缺失的字段视为"未声明"：
    - `hitDie` 缺失 → HP 仅按体质调整值计（最低 1），并在角色页与导入报告给出该职业的"未声明"提示；
    - `savingThrowAbilities` 缺失 → 无豁免熟练；
@@ -315,22 +315,22 @@ maxSpellLevel = maximumSpellLevel[L] ?? expand(archetype).maximumSpellLevel[L]
 ```dart
 class RuleFieldSource {
   final String field;      // 'hitDie' | 'resources' | 'spellcasting.slots' …
-  final String originId;   // 'builtin:dnd5e-2024' | 'phb-2024' | 'local-homebrew'
-  final int tier;          // 0 内置 / 100 已装包 / 1000 本地自制
+  final String originId;   // 'builtin:dnd5e-2024' | '<entryId>'
+  final int tier;          // 0 内置档案 / 100 条目声明
 }
 ```
 
-本次只在角色页与导入报告的诊断信息中显示来源；S3 用它实现"被哪个包覆盖 / 关掉覆盖回退"。
+本次只在角色页与导入报告的诊断信息中显示来源（"该数值来自内置档案"还是"来自本职业条目"）；
+S3 用它实现"被哪个包覆盖 / 关掉覆盖回退"。
 
 ### 3.8 优先级（本次范围）
 
-**三档固定优先级，不引入可配置 `priority` 字段**（避免本轮 Drift 迁移；可配置优先级与冲突 UI 属 S3）：
+**只有两级：内置档案 < 角色所用条目的声明。** 理由：一个角色只引用它自己那一个职业条目
+（`classIdentity.entryId`），所以包与包之间在**本阶段**不会对同一角色产生冲突——
+只有"条目没声明、档案有"这一种补齐关系，以及"条目声明了、档案也有"这一种覆盖关系。
 
-| 档 | 来源 | tier | 平级冲突 |
-|---|---|---|---|
-| 低 | 内置档案 | 0 | — |
-| 中 | 已装内容包（含私有 PHB） | 100 | `LocalContentPackages.installedAt` 较晚者胜（同 slug 字段级） |
-| 高 | `local-homebrew` 包（本地自制） | 1000 | — |
+因此本轮**不引入** `priority` 字段、不做全局条目扫描、也没有 Drift 迁移。
+S3 的 patch/replace 才需要跨包优先级与冲突 UI（届时一条 errata 才能作用于**已指向别的包条目**的角色）。
 
 ### 3.9 无兼容层：旧契约不读取，提取器同步重写
 
@@ -459,7 +459,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `ClassRuleSet` / `ClassSpellcasting` / `ClassResourceRule` / `MaxSpec` | 同上 | 值对象，含 `fromJson`/校验钩子 |
 | `RuleProfileResolver` | `features/rules/domain/rule_profile_resolver.dart` | 纯函数：内置档案 JSON + 条目集合 + tier 表 → `RuleProfile` + `RuleDiagnostics` |
 | `RuleDiagnostic` | 同上 | `{path, severity, code, message}`；导入器把它翻译成 `ContentValidationError`（error）或导入警告（warning） |
-| `RuleProfileStore` | `features/rules/data/rule_profile_store.dart` | 读资产（`AssetBundle` 可注入）+ 内容仓库条目 → 调 Resolver → `Dnd5eRules.configure(profile)`；负责缓存与内容变更后重建 |
+| `RuleProfileStore` | `features/rules/data/rule_profile_store.dart` | **只读内置档案资产**（`AssetBundle` 可注入）→ 调 Resolver → `Dnd5eRules.configure(profile)`。**不依赖内容仓库**：包里的职业声明在用到该条目时（建角色/升级/编辑/项目器）与档案做字段级合并 |
 
 ### 4.2 改造
 
@@ -488,14 +488,18 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 ### 4.3 数据流
 
 ```
-启动：RuleProfileStore.initialize()
-   ├─ AssetBundle 读 assets/rules/dnd5e-2024.rules.json   → tier 0
-   ├─ ContentRepository 取所有 class 条目（classRules + rules.choices → 规范化） → tier 100/1000
-   ├─ RuleProfileResolver.resolve(...) → RuleProfile + diagnostics
+启动：main() → await RuleProfileStore.initialize()
+   ├─ AssetBundle 读 assets/rules/dnd5e-2024.rules.json（只含数值，约 12 个职业）
+   ├─ RuleProfileResolver.resolveBuiltin(json) → RuleProfile + diagnostics
    └─ Dnd5eRules.configure(profile)     // 失败则 fail-fast 并给出明确错误
 
-建角色/升级：条目 classRules × profile 字段级合并 → ClassRuleSet → 派生 HP/AC/豁免/技能/法术位/资源
-导入包：previewJson → 解析条目 → RuleProfileResolver.resolveForPackage(entries) → diagnostics → error/warning
+建角色/升级/编辑/项目器（有条目在手，无全局扫描）：
+   entry.structured.classRules ∪ entry.rules.choices
+        ↓ 字段级合并（条目优先）  ↑ 内置档案按 slug/aliases
+   ClassRuleSet + 规范选择 → 派生 HP/AC/豁免/技能/法术位/资源/准备上限
+        ↓ 结果写入 character.data（classIdentity / classResources / spellSlots / …）
+
+导入包：previewJson → 解析条目 → RuleProfileResolver.validateEntry(...) → diagnostics → error/warning
 ```
 
 ### 4.4 失败处理
@@ -573,7 +577,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 
 ### 6.4 校验与解析链
 - §5.1 每条 error、§5.2 每条 warning 各一个最小反例包，断言 `path` 与消息。
-- 解析链：条目声明优先于档案；`slots`/`prepared`/`cantrips`/`maximumSpellLevel` 各自整表优先于 `archetype`；稀疏 `Table` 按"不超过当前等级的最大已声明档位"取值；slug 冲突按 tier 与 `installedAt`；未声明字段返回空且产出提示而非猜测。
+- 解析链：条目声明优先于档案；`slots`/`prepared`/`cantrips`/`maximumSpellLevel` 各自整表优先于 `archetype`；稀疏 `Table` 按"不超过当前等级的最大已声明档位"取值；条目声明优先于内置档案（字段级）；未声明字段返回空且产出提示而非猜测。
 - 回归：`RuleProfileStore` 加载失败时 fail-fast。
 
 ### 6.5 生成侧（P0，与契约定稿同步）
@@ -599,7 +603,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
   3. 准备法术上限不再需要独立开关（由 `spellcasting.mode` + `prepared` 表决定）。
   4. 未知技能名不再静默丢弃（现在会在导入期被拒绝并指出位置）。
   5. `conditionResistance` / `note` grant 会被拒绝（导入报错）。
-  6. 职业数值改为可被 `local-homebrew` 覆盖（tier 1000）。
+  6. 职业数值改为"条目声明优先于内置档案"，本地自制职业条目可覆盖同 slug 的内置数值。
   7. 自制职业可以只靠 `classRules` 声明规则；未声明字段显示"未声明"而非猜测。
   8. 法术选择与技能选择改为走统一的选择模型与同一套 UI。
 

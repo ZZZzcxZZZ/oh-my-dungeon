@@ -2076,6 +2076,19 @@ ARCHETYPE_BY_CLASS = {
 删除 `full_caster_slots` / `half_caster_slots` / `pact_magic_slots` 三个脚本内副本与整个
 `_build_spell_slot_progression`；调用点一并删除。**法术位数值从此只存在于客户端内置档案**。
 
+- [ ] **步骤 3b：另外两份私有包的版本号（必须先做，否则它们会被新校验拒绝）**
+
+`formatVersion: 3` 是唯一被接受的版本，所以**三份**现有私有包都要重生成：
+
+| 脚本 | 改动 | 产物 |
+|---|---|---|
+| `scripts/extract_phb_2024_v2.py:1617` | 版本号 + 步骤 1–3 的契约改造 | `private-imports/phb-2024-v2-bundle.json` |
+| `scripts/extract_monster_manual_private.py:742` | **只改版本号**（怪物条目不含 `rules`/`classRules`） | `private-imports/mm-2024-v1-bundle.json` |
+| `scripts/extract_dmg_2024_items.py:172` | **只改版本号** | `private-imports/dmg-2024-items-v1-bundle.json` |
+
+同时更新 `scripts/validate_phb_2024_v2.py:63` 的版本白名单为 `(3,)`，
+以及 `scripts/build_private_core_bundle.py:50`、`scripts/test_release_packaging.py:22,57` 里的 2 → 3。
+
 - [ ] **步骤 4：改脚本测试**
 
 在 `scripts/test_phb_2024_v2_tools.py` 增加：

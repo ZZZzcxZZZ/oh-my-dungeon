@@ -8,6 +8,16 @@
 > 本文是实现规格。面向使用者的契约说明在实现完成后写入 `docs/README.md` §9.1；
 > 本文不替代 `docs/README.md` 作为项目唯一事实来源的地位。
 
+## 0. 用户补充的关键需求（2026-09-10，优先级最高）
+
+> "我希望自己写职业时有很大的自定义空间。比如几级获得几个法术位，获得什么资源，
+> 获得什么特性，做出什么选择这些都可以自定义。**尤其是做选择这一部分非常关键。
+> 比如法术的选择。**"
+
+这条需求把"选择"从 S2 的附带项提升为**核心交付**。§3.10 是对应的现状盘点、
+目标模型与缺口清单；其范围归属（并入 S1+S2 还是独立成子项目）**待用户确认**，
+未确认前不进入实现计划。
+
 ---
 
 ## 1. 背景与现状（实测）
@@ -290,6 +300,111 @@ class RuleFieldSource {
 
 ---
 
+## 3.10 选择系统（choices）：现状、目标模型与缺口
+
+> 本节对应用户补充的关键需求（§0）。范围归属**待确认**。
+
+### 3.10.1 现状：三套并行的选择机制
+
+| 机制 | 代码位置 | 能表达什么 | 真实包实际用了什么 |
+|---|---|---|---|
+| **A. `rules.choices`** | `RuleChoiceDefinition` + `RuleChoiceResolver` + `CharacterRulesEngine._resolveChoices` | 从**条目**里选：`optionType`（条目类型）+ `optionTags`（全含）+ `optionEntryIds`（白名单）+ `maximumOptionLevel`（0–9）+ `minimum`/`maximum` + `recommendedEntryIds`；选中的条目会进入规则队列，从而带出它自己的 grants/choices | 仅 12 个"3 级选子职"（`optionType: subclass`, min=max=1） |
+| **B. 法术选择** | `SpellSelectionPolicy` + `structured.spellcasting.progression[].maximumCantrips / maximumLeveledSpells / maximumSpellLevel` + `listTags` | 按等级给出**戏法数**与**有环法术数**上限，并限定法术列表标签与最高环阶 | 8 个施法职业全部靠它 |
+| **C. 技能选择** | `StructuredClassRules.skillChoice`（解析 `structured.skillChoice`，或中文散文 `structured.skills`） | `count` + `options` 列表 | 12 个职业靠中文散文正则解析 |
+| **D. 装备选择** | `StructuredClassRules.startingEquipmentChoice` | 只有 `maximum`（自由挑选数量），**没有选项列表** | 真实包用散文 `startingEquipment`，未用该字段 |
+
+### 3.10.2 目标模型：一个选择模型，两种选项载体
+
+把 A–D 统一为**同一套声明**，写在 `rules.choices` / `rules.progression[].choices`（层级与作用域沿用现有 `{sourceEntryId}#{choiceId}` 键与 `builderStep`）：
+
+```jsonc
+{ "id": "skill-proficiency", "label": "选择两项技能熟练",
+  "optionType": "skill",              // 新增：值类型选项，不再是条目类型
+  "minimum": 2, "maximum": 2,
+  "options": [                        // 内联选项：携带自己的 grants
+    { "id": "athletics", "label": "运动", "grants": [
+        { "id": "prof", "kind": "proficiency", "label": "运动熟练", "target": "skill:运动" } ] },
+    { "id": "perception", "label": "察觉", "grants": [
+        { "id": "prof", "kind": "proficiency", "label": "察觉熟练", "target": "skill:察觉" } ] }
+  ] }
+
+{ "id": "asi-or-feat", "label": "属性提升或专长",
+  "optionType": "feat", "minimum": 1, "maximum": 1, "repeatable": false,
+  "optionTags": ["origin"], "optionEntryIds": [], "maximumOptionLevel": null,
+  "inlineOptions": [                  // 与条目选项可共存
+    { "id": "asi", "label": "属性提升 +1/+1", "grants": [
+        { "id": "asi-str", "kind": "ability", "label": "力量 +1", "target": "str", "value": 1 } ] }
+  ] }
+
+{ "id": "spellbook", "label": "法术书（选择法师法术）",
+  "optionType": "spell", "minimum": 6, "maximum": 6, "repeatable": false,
+  "optionTags": ["spell-list:wizard"], "maximumOptionLevel": 1,
+  "countsToward": "spellbook" }       // 与"已准备"区分
+```
+
+新增/扩展的字段语义：
+
+| 字段 | 类型 | 语义 |
+|---|---|---|
+| `options` | object[] | **内联选项**：`{id, label, description?, data?, grants?}`。`grants` 复用 `RuleGrantDefinition`（含 `hitPoints` / `ability`），选中即在派生时生效 |
+| `inlineOptions` | object[] | `options` 的等价别名（与 `optionEntryIds`/`optionTags` 共存时两者取并集），便于与"条目选项"并列书写 |
+| `optionType` | string | 新增值类型：`value`、`skill`、`ability`、`language`、`damageType`、`weaponMastery`。值类型只允许内联选项；条目类型允许两者共存 |
+| `repeatable` | bool，默认 `false` | `true` 时同一 option id 可被选多次（上限仍由 `maximum` 约束） |
+| `countsToward` | string 或 `null` | 法术选择计入哪个数量池（`spellbook` / `known` / `prepared`）；`null` = 不占上限（固定授予、专长给的法术） |
+| `requires` | object[] | 前置依赖：`{choice, option}` 或 `{ability, minimum}`。**若本轮不实现运行时支持，则导入报 error（原则 6）** |
+
+必须能表达（本轮需求清单）：
+
+| 能力 | 说明 | 现状 |
+|---|---|---|
+| 逐级法术位 | 几级获得几个法术位，完全自定义 | 已有：`slotOverrides` / `archetype`（§3.3） |
+| 逐级资源 | 几级获得几个资源、恢复语义 | 已有：`resources` + `startsAtLevel`（§3.4） |
+| 逐级特性 | 几级获得什么特性 | 已有：`rules.progression[].grants`（`kind: feature`，可带内联 label） |
+| 子职/条目选择 | 从条目里选（带标签/等级/白名单过滤） | 已有（机制 A） |
+| **值选项** | 属性 +1、技能熟练、伤害类型、语言、武器精通等**不建条目**也能选，且**选中后真的生效** | **缺**：选项必须是条目；`optionEntryIds` 里的 id 必须存在于包内 |
+| **法术选择纳入同一模型** | 按等级/环阶/标签选 N 个法术，区分"已知 / 准备 / 法术书"，固定授予的法术不占上限 | **半缺**：机制 B 独立于 A，无法表达"某级再选 2 个""替换一个""不占上限" |
+| **可重复选取** | 同一选项可被选多次（如可重复的祈唤） | **缺**：UI 用 `Set` 存选择，引擎按 id 去重 |
+| **前置依赖** | 选项/选择依赖其他选择结果或属性门槛（如"力量 13 以上才能选"） | **缺** |
+| **分组与呈现** | 分组标题、帮助文案、互斥提示、每步的完成度 | **半缺**：只有 `builderStep` 与 `recommendedEntryIds` |
+| 装备选择 | 从装备列表里选（A/B 方案） | **缺**：机制 D 只有数量上限 |
+
+### 3.10.3 设计要点
+
+1. **选项要么指向条目，要么内联携带 grants**——内联选项复用现有 `RuleGrantDefinition`（含本轮实现的
+   `hitPoints` / `ability`），因此"选属性 +1""选技能熟练"天然生效，不需要为每种值类型写新代码。
+2. **`optionType` 语义扩展**：现有取值是条目类型（`subclass`/`feat`/`spell`/`item`/`classFeature`/…），
+   本轮新增**值类型**：`value`（自由值，仅记录）、`skill`、`ability`、`language`、`damageType`、`weaponMastery`。
+   值类型只允许使用 `options` 内联选项；条目类型允许 `optionEntryIds`/`optionTags` 与 `inlineOptions` 共存。
+3. **法术选择统一**：机制 B 的 `structured.spellcasting.progression` 保留为**兼容输入**，解析器把它
+   展开成等价的法术选择定义（戏法一个、有环法术一个，计数来自 `maximumCantrips` / `maximumLeveledSpells`，
+   环阶上限来自 `maximumSpellLevel`，列表来自 `listTags`）。新包可直接写 `optionType: "spell"` 的选择，
+   获得"某级再选 N 个""可重复""不占上限（`countsToward: null`）"等能力。
+4. **可重复选取**：选择存储从 `Set` 改为有序 `List`（`CharacterBuild.choices` 已是 `Map<String, List<String>>`，
+   引擎天然支持重复；需要改的是编辑器状态与去重校验）。`repeatable: false` 时同一 option id 只允许出现一次。
+5. **前置依赖**：新增 `requires` 数组，元素形如
+   `{ "choice": "<choiceId>", "option": "<optionId>" }` 或 `{ "ability": "str", "minimum": 13 }`；
+   不满足时该选择/选项**隐藏**（而不是报错），并在导入时静态校验引用存在性。
+   按 §3.10.4 该能力建议归入 S2.5，故本轮若未实现运行时支持，出现 `requires` 必须**报 error 拒绝**（原则 6）。
+6. **不接受"声明了但用不了"**：值类型选项、`repeatable`、`requires` 若在本轮不实现运行时支持，
+   导入时必须**报 error 拒绝**，不得静默接受。这是本轮反复强调的原则。
+
+### 3.10.4 缺口 → 归属建议（**待用户确认**）
+
+| 缺口 | 建议归属 | 理由 |
+|---|---|---|
+| 值选项（内联 grants）+ 值类型 `optionType` | **并入 S1+S2** | 复用既有 grant 机制，是"选择自定义"的核心；契约与运行时都小 |
+| 法术选择统一（兼容展开 + `optionType: "spell"` 选择） | **并入 S1+S2** | 用户点名的重点；且能顺带修掉"准备上限由独立开关控制"的缺陷 |
+| `repeatable` | **并入 S1+S2** | 改动集中在选择存储（Set→List）与校验 |
+| `requires` 前置依赖 | 独立子项目 S2.5 | 涉及解析顺序、隐藏语义与 UI 交互，风险独立 |
+| 分组/帮助文案/完成度呈现 | 独立子项目 S2.5 | 纯 UI 体验，不阻塞契约 |
+| 装备选择（选项列表 + A/B 方案） | 独立子项目 S2.5 | 与角色卡装备/负重联动，独立 |
+| 机制 C（技能散文）与 D 的迁移 | **并入 S1+S2** | 属于 legacy 兼容层，随 §3.9 一起做 |
+
+若全部并入，S1+S2 的规模会显著变大（新增选择契约 + 引擎 + 编辑器改造 + 校验 + 测试）。**建议**：
+按上表把"值选项 / 法术选择统一 / `repeatable` / C·D 迁移"并入 S1+S2，其余留给 S2.5。
+
+---
+
 ## 4. 组件设计
 
 ### 4.1 新增
@@ -465,6 +580,7 @@ class RuleFieldSource {
 5. §5.1 / §5.2 每条诊断都有对应测试，`path` 精确。
 6. `npm run check`、`npm run test:scripts`、`npm run lint:design` 全绿。
 7. `docs/README.md` §9.1 含完整自制职业示例，且示例可被测试中的合成包复用（文档与实现不脱节）。
+8. **选择系统（§3.10，范围待确认）**：值类型选项（内联 grants）选中后数值真的生效；法术选择可由 `optionType: "spell"` 完全声明（含计数、环阶上限、列表标签、重复）；`repeatable` 可重复选取且校验正确；legacy 机制 B/C/D 能展开为等价选择且行为不变；本轮不支持的选项能力在导入时报 error 而非静默接受。
 
 ---
 
@@ -472,6 +588,7 @@ class RuleFieldSource {
 
 - **S3**：`mode: "patch" | "replace"` 声明、可配置 `priority` 字段（含 Drift 迁移）、覆盖冲突 UI、关闭覆盖回退内置。
 - **S4**：作者 GUI（规则表单）、基于已有条目创建覆盖、`.dndpack` 导出。
+- **S2.5（§3.10.4 建议）**：`requires` 前置依赖、选择的分组与呈现、装备选择（A/B 方案）。
 - **C 场景**：自定义技能/属性清单、自定义 AC 公式（护甲敏捷上限、无甲防御）、自定义休息与恢复语义。
 - **仍不建模的规则能力**（继续留在 §7.7 已知限制）：其他职业资源池（引导神力/野性形态/专注点/术法点/诗人激励/宿敌/圣疗/魔法诡计/先天术法）、伤害抗性与免疫结算、**奥法骑士/诡术师的准备或已知法术上限与戏法上限**（2024 职业表未给出，不臆造）、命中骰池、力竭等级惩罚、专注校验、专精、多职业、XP、负重。
 
@@ -485,6 +602,7 @@ class RuleFieldSource {
 | P2 | `Dnd5eRules` 改为读 profile（删除职业表与中文匹配）+ `RuleProfileStore` 启动装配 + 消费者改造 + 私有包金标 | `npm run check` 全绿且客户端测试数量不减；金标数值全等 |
 | P3 | 导入校验与 warnings（含 `ContentImportReport.warnings` + 预览 UI）+ `classIdentity` 与老角色回填 | §5 每条诊断都有测试；老角色提示正确 |
 | P4 | grant kind 收紧：实现 `hitPoints`/`ability`、移除 `conditionResistance`/`note`、修邪术师双重表示 | 行为变化清单逐条有测试 |
+| P4.5 | **选择系统（§3.10，范围待确认）**：值类型选项 + 内联 grants、`optionType: "spell"`、`repeatable`、legacy B/C/D 展开 | §10.8 逐条有测试；编辑器可选择并生效 |
 | P5 | 生成脚本升级 + 文档（§9.1 重写、§7.7、§2/§16、README、AGENTS.md） | 文档示例与合成包一致；warning 消失 |
 
 P1→P2 之间必须有一次全量回归（这是数值搬迁的安全网，不可跳过）。

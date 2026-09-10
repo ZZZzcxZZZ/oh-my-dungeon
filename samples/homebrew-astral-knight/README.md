@@ -8,13 +8,15 @@
 
 | 契约能力 | 在包里的位置 |
 |---|---|
-| 自定义生命骰 / 豁免 / 技能选择 | `class.structured.classRules`（d10、智力+感知、2 项技能） |
+| 自定义生命骰 / 豁免 | `class.structured.classRules`（`hitDie: 10`、`savingThrowAbilities: [int, wis]`） |
 | 自定义施法模型与逐级法术位 | `classRules.spellcasting`：`archetype: half-caster` **+ 稀疏覆盖** `slots`/`prepared`/`maximumSpellLevel`（5 级起比圣武士更宽，演示覆盖生效） |
 | 逐级资源 + 恢复语义 | `classRules.resources`：星界涌动（`formula: level`、短休恢复 1 次）、星界守护（稀疏表、长休、3 级起） |
 | 逐级特性 | `rules.progression[].grants`（`kind: feature` 指向特性条目） |
+| 同一效果在多个等级重复 | `{"levels": [4, 8, 12, 16], "grants": [...]}` —— 只写一份 |
+| 技能选择 | `optionType: "skill"` 的 choice，`options: ["奥秘", ...]` 字符串自动补熟练（唯一写法，没有 `skillChoice` 简写） |
 | HP / AC / 速度加值 | 6 级 `kind: hitPoints`（每级 +1）、10 级 `kind: armorClass`（+1）、7 级 `kind: speed`（+10） |
 | 属性加值 | 4/8/12/16 级 `kind: ability` |
-| 值选项（内联 grants，不建条目） | 1 级战斗风格里的 `inlineOptions`「星界之势」 |
+| 值选项（内联 grants，不建条目） | 1 级战斗风格里的 `options`「星界之势」 |
 | 装备 A / B 方案 | 1 级 `optionType: equipmentBundle` + 两个 `equipmentBundle` 条目 |
 | 法术选择 | 1 级 `optionType: spell` + `countsToward: prepared`；子职 3 级 `countsToward: null`（誓约法术不占上限） |
 | 子职选择与子职进阶 | 3 级 `optionType: subclass`；`oath-of-the-astral` 自带 3/7/15/20 级进阶 |
@@ -22,7 +24,11 @@
 | 前置依赖 | 2 级祈唤 `requires: [{ability: "int", minimum: 13}]` |
 | 分组与帮助文案 | `group` / `help` |
 
-共 26 个条目：1 职业 / 1 子职 / 19 职业特性（含 3 祈唤）/ 3 专长 / 2 装备方案。
+共 26 个条目：1 职业 / 1 子职 / 19 职业特性（含 3 祈唤）/ 3 专长 / 2 装备方案，9 个选择定义。
+
+包格式：**`formatVersion: 3`**（唯一被接受的版本；1/2 会被整包拒绝并提示重新生成）。
+`classRules` 只有 4 个字段：`hitDie` / `savingThrowAbilities` / `spellcasting` / `resources`——
+技能选择、法术选择、特性都属于"选择与效果"，写在 `rules.progression[].choices` / `.grants` 里。
 
 ## 如何打包成 `.dndpack`
 

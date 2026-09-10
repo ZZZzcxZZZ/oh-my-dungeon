@@ -26,10 +26,10 @@
    `spellSlot:`/`classResource:` 逐级 grant）**不再解析**；`scripts/extract_phb_2024_v2.py`
    与私有包一起**按新契约重写/重提取**。因此契约可以按"最好写、最强表达"来设计，
    不必迁就历史形状。
-2. **"自定义程度"与"方便程度"是并列的硬指标**，不是取舍关系：既要能表达任意职业进阶、
-   任意选择结构，又要让作者用尽量少的字段写出来。为此引入两层：
-   **简写层（`classRules` / 内联选项 / 自动授予）** 与 **规范层（canonical：choices / grants / tables）**，
-   解析器负责把简写规范化为规范层，诊断信息指向作者写的那一行。
+2. **"自定义程度"与"方便程度"是并列的硬指标**，但不是靠"多给几种写法"实现的。
+   契约的第一原则是：**一个概念只有一种写法**（one concept, one shape）。
+   方便程度由这四件事保证：字段少、默认值合理、错误信息可操作、GUI 兜底（S4）。
+   因此本契约**没有**别名、没有"简写与规范两种写法"、没有"兼容写法"。
 3. 唯一保留的迁移是**用户数据**：老角色卡一次性回填 `data.classIdentity`（内容可以重提取，
    玩家的角色卡不能重来）。除此之外不做任何旧格式读取。
 
@@ -134,7 +134,6 @@
     "barbarian": {
       "hitDie": 12,
       "savingThrowAbilities": ["str", "con"],
-      "skillChoice": { "count": 2, "options": ["驯兽","运动","威吓","自然","察觉","求生"] },
       "spellcasting": { "mode": "none" },
       "resources": [
         { "id": "rage", "name": "狂暴",
@@ -145,7 +144,6 @@
     "fighter": {
       "hitDie": 10,
       "savingThrowAbilities": ["str", "con"],
-      "skillChoice": { "count": 2, "options": ["特技","驯兽","运动","历史","洞悉","威吓","说服","察觉","求生"] },
       "spellcasting": { "mode": "none" },
       "resources": [
         { "id": "second_wind", "name": "第二气息",
@@ -188,7 +186,6 @@
   "classRules": {
     "hitDie": 10,
     "savingThrowAbilities": ["wis", "cha"],
-    "skillChoice": { "count": 2, "options": ["洞悉","医药","说服","宗教"] },
     "spellcasting": {
       "mode": "prepared",
       "ability": "cha",
@@ -212,15 +209,16 @@
 
 | 字段 | 类型 | 必填 | 语义 |
 |---|---|---|---|
-| `hitDie` | int 或 `"dN"` 字符串 | 否* | 生命骰面数，必须 ∈ 4..20（`"d10"` 与 `10` 等价，两种写法都接受）。缺省时 HP 只按体质调整值计，见 §3.6 第 3 步 |
+| `hitDie` | int | 否* | 生命骰面数，必须 ∈ 4..20。**只写整数**（规则书里的 `d10` 就写 `10`）。缺省时 HP 只按体质调整值计，见 §3.6 第 3 步 |
 | `savingThrowAbilities` | string[]（属性键） | 否* | 豁免熟练，元素必须 ∈ `abilities` |
-| `skillChoice` | `{count:int, options:string[] 或 "any"}` | 否 | **简写**：等价于一条 `optionType: "skill"` 的规范选择（§3.10）。`count` ∈ 0..选项数（`"any"` 时上界为技能总数） |
 | `spellcasting` | object | 否 | 见 §3.3 |
 | `resources` | object[] | 否 | 见 §3.4 |
 
 \* 标 `否` 是契约层面的可缺省；但缺 `hitDie` 会导致 HP 无法计算，导入时给 **warning**（§5.2）。
 
-**简写层与规范层**：`classRules` 是**方便层**——`skillChoice` 规范化成一条技能选择，`spellcasting` 的计数规范化成法术选择，两者最终都进入同一个选择模型（§3.10）。想直接控制选择结构的高级作者可以跳过简写，直接把 `choices` 写在 `rules` 里；两种写法可以混用，规范层的定义优先。
+**`classRules` 只有这 4 个字段，全部是"数值事实"。** 技能选择、法术选择、特性、熟练、
+装备方案一律属于**选择与效果**，只有一种写法：`rules.progression[].grants` / `.choices`（§3.5、§3.10）。
+档案（tier 0）因此只提供数值，选择与特性永远由内容条目声明——这也让"档案只含数值"的合规边界更硬。
 
 **HP 加值与属性加值不作为 `classRules` 字段**：它们天然是"按等级生效的效果"，统一用 `rules.progression[].grants` 的 `kind: "hitPoints"` / `kind: "ability"` 表达（§3.5），避免同一件事有两种写法。
 
@@ -268,13 +266,15 @@ maxSpellLevel = maximumSpellLevel[L] ?? expand(archetype).maximumSpellLevel[L]
 
 `startsAtLevel` 与表的取值关系必须明确：**低于 `startsAtLevel` 的等级一律视为不存在该资源**（表中对应项被忽略，即使写了非 0）；`startsAtLevel` 及以上按表取值。内置档案里"战士 2 级才有动作如潮"用 `startsAtLevel: 2` 表达，而不是写一串 0。
 
-`<MaxSpec>` 有 **3 种**写法（互斥；`minimum` 可选、对所有写法生效：最终取 `max(结算结果, minimum)`）：
+`<MaxSpec>` 是"整数或对象"的二选一（对象内 `formula` / `table` 互斥，`minimum` 可选且只对对象形态有意义）：
 
 | 写法 | 例 | 语义 |
 |---|---|---|
-| 固定值 | `{"value": 3}` | 与等级无关，可省略为 `"maximum": 3` |
+| 整数 | `"maximum": 3` | 与等级无关 |
 | 封闭公式 | `{"formula": "ability:cha", "minimum": 1}` | 见下方语法 |
 | 等级表 | `{"table": {"1":2, "3":3}}` 或 `{"table": [20 个数]}` | `Table<int>`，稀疏即可 |
+
+`minimum` 对公式与等级表都生效：最终取 `max(结算结果, minimum)`。
 
 `formula` 的封闭语法（正则级）：`level` | `ability:<abilities 中的键>` | `<非负整数>*level` | `<非负整数>`。**不实现通用表达式求值**。
 
@@ -290,7 +290,14 @@ maxSpellLevel = maximumSpellLevel[L] ?? expand(archetype).maximumSpellLevel[L]
 | **移除** | `conditionResistance` | 无消费方、真实包未使用。移除后误用会在导入时报错，而不是静默无效；抗性/免疫结算记入 §11 待办 |
 | **移除** | `note` | 同上；角色卡备注由 `notes` 字段承担 |
 
-`rules.progression[].grants` 用于"某等级解锁什么"（特性、选择、熟练、法术、装备）。
+`rules.progression[]` 的每一步**只用一个 `levels` 数组**声明生效等级（不再有单个 `level` 字段）：
+
+```jsonc
+{"levels": [1], "grants": [ … ]}              // 单级
+{"levels": [4, 8, 12, 16], "grants": [ … ]}   // 同一批效果在多个等级重复生效
+```
+
+这样"属性提升在 4/8/12/16 级各来一次"只写一份，不需要第二套语法。
 `hitPoints` / `ability` 的 `formula` 与 `resource.maximum` 共用同一封闭语法与同一求值器。
 
 ### 3.6 解析链（字段级）
@@ -336,10 +343,14 @@ S3 的 patch/replace 才需要跨包优先级与冲突 UI（届时一条 errata 
 
 按用户决定（§0 需求二），**不实现任何旧契约的读取路径**。以下形状在导入时按"未知字段 / 未知取值"处理：
 
+**只有一个包格式版本**：`formatVersion: 3`。导入器接受且仅接受 3；
+遇到 `1` / `2` 直接整包拒绝，并给出可操作提示"这是旧格式，请用新版工具重新生成/重提取"。
+（`1` 的"只读兼容"分支一并删除——不留第二套格式。）
+
 | 不再支持 | 替代写法 |
 |---|---|
 | `structured.savingThrows`（中文散文） | `classRules.savingThrowAbilities` |
-| `structured.skills`（中文散文，含"任选3项"） | `classRules.skillChoice` |
+| `structured.skills`（中文散文，含"任选3项"） | `rules.progression[].choices` 里 `optionType: "skill"` 的选择 |
 | `structured.preparedSpellcasting` 开关 | `classRules.spellcasting.mode` + `prepared` 表 |
 | `structured.spellcasting.progression[]` 四列行数组 | `archetype` + `slots` / `prepared` / `cantrips` / `maximumSpellLevel` 表 |
 | `rules.progression[].grants` 的 `spellSlot:<n>` | `classRules.spellcasting.slots` |
@@ -348,8 +359,9 @@ S3 的 patch/replace 才需要跨包优先级与冲突 UI（届时一条 errata 
 
 配套动作：
 
-1. `scripts/extract_phb_2024_v2.py` **按新契约重写输出**（不再产出散文与逐级 grant），并把
-   `skills` 的选项、豁免、法术位、准备数、资源全部结构化；`scripts/test_phb_2024_v2_tools.py` 同步。
+1. `scripts/extract_phb_2024_v2.py` **按新契约重写输出**：`formatVersion: 3`、
+   `classRules`（生命骰/豁免/施法数值表/资源）、技能与法术**选择**写成 `rules.progression[].choices`
+   （`levels` 数组），不再产出散文与逐级 grant；`scripts/test_phb_2024_v2_tools.py` 同步。
    这一步是 P0，必须与契约定稿一起落地。
 2. 私有包**重新提取**后导入；重提取产物需通过 §6.1 官方表核算与 §6.2 的"无旧形状残留"断言。
 3. `CharacterRulesEngine` 不再需要"逐级 resource grant → 资源表"的运行时翻译逻辑，代码量随之减少。
@@ -366,7 +378,7 @@ S3 的 patch/replace 才需要跨包优先级与冲突 UI（届时一条 errata 
 |---|---|---|---|
 | **A. `rules.choices`** | `RuleChoiceDefinition` + `RuleChoiceResolver` + `CharacterRulesEngine._resolveChoices` | 从**条目**里选：`optionType`（条目类型）+ `optionTags`（全含）+ `optionEntryIds`（白名单）+ `maximumOptionLevel`（0–9）+ `minimum`/`maximum` + `recommendedEntryIds`；选中的条目进入规则队列，带出它自己的 grants/choices | 仅 12 个"3 级选子职"（min=max=1） |
 | **B. 法术选择** | `SpellSelectionPolicy` + `structured.spellcasting.progression[].maximumCantrips / maximumLeveledSpells / maximumSpellLevel` + `listTags` | 按等级给戏法数与有环法术数上限，限定列表标签与最高环阶 | 8 个施法职业全部靠它 |
-| **C. 技能选择** | `StructuredClassRules.skillChoice`（解析 `structured.skillChoice`，或中文散文） | `count` + `options` 列表 | 12 个职业靠中文散文正则解析 |
+| **C. 技能选择** | `StructuredClassRules.skillChoice`（解析 `structured.skillChoice`，或中文散文） | `count` + `options` 列表 | 12 个职业靠中文散文正则解析（**本轮改为** `optionType: "skill"` 的选择，见 §3.10.2） |
 | **D. 装备选择** | `StructuredClassRules.startingEquipmentChoice` | 只有 `maximum`（自由挑选数量），**没有选项列表** | 真实包用散文 `startingEquipment`，未用该字段 |
 
 #### 3.10.2 目标：一个模型，两种选项载体
@@ -379,16 +391,17 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 - **内联选项**：`options` 里的对象，**自带 `grants`**，不建条目也能选、并且选中即生效。
 
 ```jsonc
-// 1) 简写：技能选择（作者最少只写这一行）
+// 1) 技能选择（内联选项 + 自动授予）
 { "id": "class-skills", "label": "选择两项技能熟练",
   "optionType": "skill", "minimum": 2, "maximum": 2,
-  "options": ["洞悉", "医药", "说服", "宗教"] }        // 字符串简写 → 自动授予对应熟练
+  "options": ["洞悉", "医药", "说服", "宗教"],       // 字符串简写 → 自动授予对应熟练
+  "builderStep": "proficiencies" }
 
-// 2) 内联选项 + 属性提升（不建条目）
+// 2) 内联选项 + 属性提升（同样只写 options）
 { "id": "asi-or-feat", "label": "属性提升或专长",
   "optionType": "feat", "minimum": 1, "maximum": 1,
   "optionTags": ["origin"],
-  "inlineOptions": [
+  "options": [
     { "id": "asi", "label": "属性提升 +1/+1", "grants": [
         { "id": "asi-str", "kind": "ability", "target": "str", "value": 1 } ] } ] }
 
@@ -416,7 +429,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `id` / `label` | string | 必填；选择键 = `{sourceEntryId}#{id}` |
 | `optionType` | string | **条目类型**（`subclass`/`feat`/`spell`/`item`/`classFeature`/`equipmentBundle`/`custom`…）或**值类型**（`value`/`skill`/`ability`/`language`/`damageType`/`weaponMastery`） |
 | `minimum` / `maximum` | int | 默认 `1` / 等于 `minimum`；`maximum` 为可选数量上限 |
-| `options` / `inlineOptions` | array | 内联选项。**字符串简写**：`"察觉"` 等价于 `{id: "察觉", label: "察觉"}`，并按 `optionType` 自动补 `grants`（见下） |
+| `options` | array | **内联选项**（唯一写法，没有别名）。元素可以是字符串 `"察觉"`（等价于 `{id:"察觉", label:"察觉"}`）或对象 `{id, label, description?, data?, grants?}`；字符串元素会按 `optionType` 自动补 `grants`（见下） |
 | `optionEntryIds` / `optionTags` | string[] | 条目选项的白名单 / 标签过滤（跨字段 AND、同字段 OR，沿用现有语义） |
 | `maximumOptionLevel` | int? | 条目选项的等级上限（0–9） |
 | `recommendedEntryIds` | string[] | 推荐项，UI 预选 |
@@ -426,7 +439,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `group` / `help` | string? | 分组标题与帮助文案（呈现用，无规则语义） |
 | `builderStep` | string | 归属创建向导步骤（沿用 `allowedBuilderSteps`） |
 
-**自动授予（方便程度的关键）**：当 `optionType` 是值类型时，字符串简写会自动生成 grants：
+**自动授予**：当 `optionType` 是值类型时，字符串元素会自动生成 grants（写成对象可覆盖）：
 
 | `optionType` | 自动 grants |
 |---|---|
@@ -440,8 +453,10 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 #### 3.10.3 设计要点
 
 1. **内联选项复用 `RuleGrantDefinition`**（含本轮实现的 `hitPoints` / `ability`），因此"选属性 +1""选技能熟练""选 HP +2"天然生效，不需要为每种值类型写新代码。
-2. **值类型与条目类型**：值类型只允许内联选项（`options`/`inlineOptions`）；条目类型允许两者共存，UI 合并展示并分组。
-3. **法术选择统一**：`classRules.spellcasting` 的计数（`cantrips`/`prepared`/`maximumSpellLevel`/`listTags`）在解析期**展开成规范法术选择**（戏法一条、有环法术一条），于是法术选择与其它选择走同一套引擎、同一套校验、同一个 UI 面板；高级作者可直接写 `optionType: "spell"` 的选择表达"某级再选 N 个""可重复""不占上限"。
+2. **值类型与条目类型**：值类型只允许内联 `options`；条目类型允许 `options` 与 `optionEntryIds`/`optionTags` 共存，UI 合并展示并分组。
+3. **法术选择只有一种写法**：显式 `optionType: "spell"` 的选择（`maximum` 给数量、`maximumOptionLevel` 给环阶上限、`optionTags` 给法术列表、`countsToward` 给计入哪个池）。
+   `classRules.spellcasting` 只声明**数值表**（法术位、准备数、戏法数、最高环阶），不派生选择——
+   声明与选择分离，各自只有一种形态。提取器按规则书的表格生成这些选择（P0）。
 4. **可重复选取**：`CharacterBuild.choices` 已是 `Map<String, List<String>>`，引擎天然支持重复；需要改的是编辑器状态（`Set` → 有序 `List`）与校验（`repeatable: false` 时同一 id 只允许出现一次）。
 5. **前置依赖**：`requires` 不满足时隐藏；隐藏项若已被选择则进入 pending 并在 UI 提示。导入期静态校验引用存在性（`choice` 必须存在于同一条目或祖先条目，`ability` 必须合法）。
 6. **装备选择**：`optionType: "equipmentBundle"` 让"选择 A 或 B"成为普通选择；选中结果写入 `inventory`，与现有 `equipmentBundle` 类型、`startingEquipmentChoice` 简写打通。
@@ -462,13 +477,24 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | A3 | **`countsToward: null`（不占上限）与现有"已准备"存储的关系未定义** | `countsToward` 只决定**是否计入数量上限**；无论取值如何，选中的法术都写入 `manualOverrides.spells.preparedEntryIds`（`null` 时额外记 `alwaysPreparedEntryIds`，仅用于展示"始终准备"标记） |
 | A4 | **`requires` 的 `choice` 引用作用域未定义** | 可引用"同一 `sourceEntryId`"，或沿 `relations` 的 `featureOf` / `subclassOf` 链向上找到的祖先条目；导入期按该链校验引用存在性 |
 
-**B 类：需要用户拍板的三处**
+**B 类：用户已拍板——"包格式最后统一到只有一个；一定要干净稳定强大"**
 
-| # | 缺口 | 现状 | 影响 |
-|---|---|---|---|
-| B1 | **包格式版本无法区分新旧契约** | 导入器只接受 `formatVersion` 1 或 2（`formatVersion must be 1 or 2`），所以新契约包必须写 2，与旧包同版；旧包会得到一堆 entry 级 `unknownField` error，作者很难判断"我该重新提取" | 建议新契约用 **3**，并把 `2` 直接判为"旧契约，请用新版提取器重新提取"；`1` 保持只读兼容 |
-| B2 | **自制职业的 slug 会静默继承内置数值**（危险） | 若把 slug 误写成 `fighter`，该职业会**静默拿到战士的生命骰/豁免/资源**，作者完全看不出 | 建议：slug 命中 12 个内置 slug 且**未声明** `classRules` 时给 warning（"你在继承内置职业 X 的数值"）；显式声明 `classRules` 时视为有意覆盖，不提示 |
-| B3 | **重复声明的书写量** | 4/8/12/16 级的"属性提升"要写 4 遍 `grants`（试写时确实写了 4 份） | 建议加语法糖 `{"levels": [4, 8, 12, 16], "grants": [...]}`，等价于为每个等级生成一份；与现有 `level` 二选一 |
+| # | 结论 |
+|---|---|
+| B1 | **单一格式版本**：只接受 `formatVersion: 3`；`1` / `2` 整包拒绝并提示重新生成；删除 `1` 的只读兼容分支（§3.9） |
+| B2 | **静默继承改为 error**：`type: "class"` 的条目其 `slug` 命中 12 个内置 slug 时，**必须显式声明 `classRules`**（视为有意的房规覆盖）；未声明则报 `builtinSlugRequiresExplicitRules`，杜绝"误写 slug 就悄悄拿到别的职业数值" |
+| B3 | **不做第二个写法**：`rules.progression[]` 统一用 `levels` 数组（`level` 字段删除），既能写一个也能写多个，不存在"两种声明方式" |
+
+**同时清除的其余"多写法"**（本次一并收敛，见 §3.2–§3.4、§3.10）：
+
+| 清掉的写法 | 保留的唯一写法 |
+|---|---|
+| `inlineOptions`（`options` 的别名） | `options` |
+| `classRules.skillChoice` 简写 | 显式 `optionType: "skill"` 的 choice |
+| 由 `spellcasting` 计数派生法术选择 | 显式 `optionType: "spell"` 的 choice |
+| `hitDie: "d10"` 字符串 | `hitDie: 10` |
+| `{"value": 3}` | 整数 `3` |
+| `progression[].level` | `progression[].levels` |
 
 ---
 
@@ -478,7 +504,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 
 | 组件 | 文件 | 职责 |
 |---|---|---|
-| `RuleProfile` | `features/rules/domain/rule_profile.dart` | 不可变；`abilities`、`skills`、`progressions`、`classes(slug→ClassRuleSet)`、`fieldSources`；纯查询（`hitDie(slug)`、`savingThrows(slug)`、`skillChoice(slug)`、`spellSlots(slug, level)`、`pactSlotLevel(slug, level)`、`preparedLimit(slug, level)`、`classResources(slug, level)`、`spellcastingAbility(slug)`、`isPact(slug)`）与 `merge` |
+| `RuleProfile` | `features/rules/domain/rule_profile.dart` | 不可变；`abilities`、`skills`、`progressions`、`classes(slug→ClassRuleSet)`、`fieldSources`；纯查询（`hitDie(slug)`、`savingThrows(slug)`、`spellSlots(slug, level)`、`pactSlotLevel(slug, level)`、`preparedLimit(slug, level)`、`classResources(slug, level)`、`spellcastingAbility(slug)`、`isPact(slug)`）与 `merge` |
 | `ClassRuleSet` / `ClassSpellcasting` / `ClassResourceRule` / `MaxSpec` | 同上 | 值对象，含 `fromJson`/校验钩子 |
 | `RuleProfileResolver` | `features/rules/domain/rule_profile_resolver.dart` | 纯函数：内置档案 JSON + 条目集合 + tier 表 → `RuleProfile` + `RuleDiagnostics` |
 | `RuleDiagnostic` | 同上 | `{path, severity, code, message}`；导入器把它翻译成 `ContentValidationError`（error）或导入警告（warning） |
@@ -489,8 +515,8 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | 位置 | 变化 |
 |---|---|
 | `Dnd5eRules` | 保留纯运算（`abilityModifier`、`proficiencyBonus`、`saveBonus`、`skillBonus`、`baseArmorClass`、`initiativeBonus`、`attackBonus`、`damageFormula`、`averageHitPointsForHitDie`、`applyHitPointDelta`、`classResourcesAfterRest`、`spellSlotsAfterRest`）；**删除全部职业表与中文匹配**，改为读 `Dnd5eRules.profile`；新增 `configure(profile)` / `profile` 访问器（一次性装配，之后不可变） |
-| `structured_class_rules.dart` | 退化为适配器：`structured.classRules` → `ClassRuleSet` + 规范选择（**只认新契约**）；`savingThrowAbilities` / `skillChoice` 保留签名，`preparedSpellLimit` 改由 `spellcasting` 表推导 |
-| `character_rule_definition.dart` | `RuleChoiceDefinition` 扩展 `options`/`inlineOptions`/`repeatable`/`countsToward`/`requires`/`group`/`help`；`RuleGrantKind` 收敛为 9 项 |
+| `structured_class_rules.dart` | 退化为适配器：`structured.classRules` → `ClassRuleSet`（**只认新契约的 4 个数值字段**）；保留 `savingThrowAbilities` / `hitDie` 查询，删除 `skillChoice`（改由 `rules.choices` 承担） |
+| `character_rule_definition.dart` | `RuleChoiceDefinition` 扩展 `options`/`repeatable`/`countsToward`/`requires`/`group`/`help`；`RuleProgressionDefinition.level` 改为 `levels` 数组；`RuleGrantKind` 收敛为 9 项 |
 | `rule_choice_resolver.dart` | 选项解析支持值类型与内联选项合并；`requires` 过滤；简写自动授予生成 |
 | `character_rules_engine.dart` | 选中内联选项时合并其 `grants`；`repeatable` 的去重规则；选择结果的存储（`Map<String, List<String>>` 支持重复） |
 | `character_editor_page.dart`（选择面板） | 选择状态 `Set` → 有序 `List`；值类型与条目选项分组展示；`group`/`help`；`requires` 隐藏；选择计数校验走统一模型 |
@@ -542,8 +568,8 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `unknownField` | `classRules` / 选择 / 资源对象内出现未定义字段 | `未知字段 classRules.hitDices，是否想写 hitDie？` |
 | `invalidHitDie` | `hitDie` 非 `d4..d20` / int 不在 4..20 | `生命骰必须是 d4–d20 或 4–20 的整数` |
 | `unknownAbility` | 豁免 / 施法属性 / `formula ability:x` / `kind:"ability"` 的 `target` 不在 `abilities` | `未知属性键 "力量"，可用：str, dex, con, int, wis, cha` |
-| `unknownSkill` | 技能选择的选项不在 `skills` | `未知技能 "特技"（可用别名：杂技）` |
-| `invalidSkillCount` | `skillChoice.count` 不在 0..选项数 | `skillChoice.count 必须为 0..6` |
+| `unknownSkill` | `optionType: "skill"` 的选择里的选项不在 `skills` | `未知技能 "特技"（可用别名：杂技）` |
+| `invalidSkillCount` | 技能选择的 `minimum`/`maximum` 不在 0..选项数 | `技能选择的数量必须为 0..6` |
 | `invalidSpellcastingMode` | `mode` 不在枚举 | `spellcasting.mode 必须是 prepared / known / pact / none` |
 | `unknownArchetype` | `archetype` 不在 `progressions` | `未知原型 "three-quarter-caster"` |
 | `invalidTable` | `Table<T>` 键不在 1..20、数组长度≠20、值类型不符或为负 | `prepared["21"] 的键必须为 1..20` |
@@ -552,6 +578,8 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `invalidRecovery` | `recovery` 不在枚举 | `recovery 必须是 shortRest / shortRestOne / longRest / none` |
 | `unknownGrantKind` | `kind` 不在 9 项枚举（含被移除的 `resource` / `conditionResistance` / `note`） | `未知 grant kind "resource"，职业资源请改用 classRules.resources` |
 | `unknownOptionType` | `optionType` 既不是已知条目类型也不是已知值类型 | `未知选项类型 "savingThrow"` |
+| `unsupportedFormatVersion` | `formatVersion != 3` | `只支持 formatVersion 3；这是旧格式，请用新版工具重新生成` |
+| `builtinSlugRequiresExplicitRules` | `class` 条目 slug 命中内置 12 slug 却未声明 `classRules` | `slug "fighter" 属于内置职业：要覆盖其数值必须显式声明 classRules` |
 | `invalidChoiceRange` | `minimum`/`maximum` 为负或 `maximum < minimum` | `maximum 不能小于 minimum` |
 | `invalidOptionRef` | 条目选项引用不存在、或未通过 `optionType`/`optionTags`/`maximumOptionLevel` 过滤、或 `recommendedEntryIds` 不合法 | `选项 "x:feat/a" 不满足本选择的类型/标签/等级过滤` |
 | `duplicateOptionId` | 同一选择内 inline 选项 id 重复，或 id 与条目选项冲突 | `选项 id "asi" 重复` |
@@ -593,10 +621,10 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 
 ### 6.3 端到端自制职业（核心验收）
 构造一个合成包（条目 id/slug/name 均不含任何核心职业名）：
-- `classRules` 声明 `hitDie: 10`、豁免、`skillChoice`、`spellcasting{ mode: prepared, ability: cha, archetype: half-caster, slots: {"5": {"1":4,"2":2}} }`、两个资源（一个 `formula: "level"`、一个 `table` + `startsAtLevel: 3`）；另在 `rules.progression` 里用 `kind: "hitPoints"`（`formula: "level"`）与 `kind: "ability"`（`target: "cha"`, `value: 1`）声明按等级生效的效果。
+- `classRules` 声明 `hitDie: 10`、豁免、`spellcasting{ mode: prepared, ability: cha, archetype: half-caster, slots: {"5": {"1":4,"2":2}} }`；技能选择写在 `rules.progression[].choices`（`optionType: "skill"`）、两个资源（一个 `formula: "level"`、一个 `table` + `startsAtLevel: 3`）；另在 `rules.progression` 里用 `kind: "hitPoints"`（`formula: "level"`）与 `kind: "ability"`（`target: "cha"`, `value: 1`）声明按等级生效的效果。
 - 流程：导入 → 断言无 error → 建角色（第 1、5、20 级）→ 断言 HP（含 `hitPoints` grant）、属性（含 `ability` grant 及其对 DC/技能的连带影响）、豁免、技能选择上限、法术位、资源次数与恢复语义、准备上限、施法 DC；→ 升级 +1 级后断言增量。
 - 选择系统专项（§3.10）：字符串简写技能选项自动授予熟练；内联 `options` 的 `ability +1` 真的改变派生；`optionType: "spell"` + `countsToward` 的法术选择受 `prepared` 上限约束；`repeatable: true` 允许同一选项选两次而 `repeatable: false` 被拒；`requires` 不满足时选项隐藏；`group`/`help` 出现在编辑器；装备 A/B 方案写入 `inventory`。
-- 变体：只声明 `hitDie` + 豁免 + `skillChoice` 的最小职业（断言其余数值为"未声明"而非猜测）；只声明 `archetype: pact` 的契约施法者（断言 `{"<环阶>": n}` 形状与短休恢复）；用 `slots` 表写满 20 级的自定义施法者。
+- 变体：只声明 `hitDie` + 豁免的最小职业（断言其余数值为"未声明"而非猜测）；只声明 `archetype: pact` 的契约施法者（断言 `{"<环阶>": n}` 形状与短休恢复）；用 `slots` 表写满 20 级的自定义施法者。
 
 ### 6.4 校验与解析链
 - §5.1 每条 error、§5.2 每条 warning 各一个最小反例包，断言 `path` 与消息。
@@ -605,7 +633,8 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 
 ### 6.5 生成侧（P0，与契约定稿同步）
 - 重写 `scripts/extract_phb_2024_v2.py`：输出 `classRules`（`hitDie` / `savingThrowAbilities` /
-  `skillChoice` / `spellcasting` 表 / `resources`），不再输出散文与逐级 `spellSlot:`/`classResource:` grant。
+  `spellcasting` 表 / `resources`，并把技能与法术**选择**写成 `rules.progression[].choices`），
+  不再输出散文与逐级 `spellSlot:`/`classResource:` grant。
 - `scripts/test_phb_2024_v2_tools.py` 同步断言"产物只含新契约形状"；`npm run test:scripts` 保持全绿。
 
 ### 6.6 门禁
@@ -670,7 +699,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 5. §5.1 / §5.2 每条诊断都有对应测试，`path` 精确。
 6. `npm run check`、`npm run test:scripts`、`npm run lint:design` 全绿。
 7. `docs/README.md` §9.1 含完整自制职业示例（含选择与法术选择），且示例可被测试中的合成包复用（文档与实现不脱节）。
-8. **选择系统（§3.10）**：字符串简写自动授予且选中生效；内联选项的 `ability`/`hitPoints` 改变派生结果；`optionType: "spell"` + `countsToward` 受 `prepared` 约束；`repeatable` 行为正确；`requires` 隐藏语义正确；`group`/`help` 呈现；装备 A/B 方案写入 `inventory`；`classRules` 的 `skillChoice` 与 `spellcasting` 计数展开为等价规范选择。
+8. **选择系统（§3.10）**：字符串简写自动授予且选中生效；内联选项的 `ability`/`hitPoints` 改变派生结果；`optionType: "spell"` + `countsToward` 受 `prepared` 约束；`repeatable` 行为正确；`requires` 隐藏语义正确；`group`/`help` 呈现；装备 A/B 方案写入 `inventory`；技能选择与法术选择都只由 `optionType: "skill"` / `"spell"` 的选择定义承担（`classRules` 不再派生选择）。
 
 ---
 
@@ -693,7 +722,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | P2 | `Dnd5eRules` 改为读 profile（删除职业表与中文匹配）+ `RuleProfileStore` 启动装配 + 消费者改造 + 重提取金标 | `npm run check` 全绿且客户端测试数量不减；金标数值全等 |
 | P3 | 导入校验与 warnings（含 `ContentImportReport.warnings` + 预览 UI）+ `classIdentity` 与老角色回填 | §5 每条诊断都有测试；老角色提示正确 |
 | P4 | grant kind 收紧：实现 `hitPoints`/`ability`、移除 `resource`/`conditionResistance`/`note`、修邪术师双重表示 | 行为变化清单逐条有测试 |
-| **P5** | **选择系统落地**（§3.10）：值类型选项 + 内联 grants + 自动授予、`optionType: "spell"` + `countsToward`、`repeatable`、`requires`、`group`/`help`、装备 A/B、`skillChoice`/`spellcasting` 计数展开 | §10.8 逐条有测试；编辑器可选择且生效 |
+| **P5** | **选择系统落地**（§3.10）：值类型选项 + 内联 grants + 自动授予、`optionType: "spell"` + `countsToward`、`repeatable`、`requires`、`group`/`help`、装备 A/B、`progression[].levels` 数组 | §10.8 逐条有测试；编辑器可选择且生效 |
 | P6 | 文档（§9.1 重写、§7.7、§2/§16、README、AGENTS.md、§13.6） | 文档示例与合成包一致 |
 
 P1→P2 之间必须有一次全量回归（这是数值搬迁的安全网，不可跳过）。

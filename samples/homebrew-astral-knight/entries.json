@@ -20,25 +20,12 @@
       "primaryAbility": "智力",
       "weaponProficiency": "简易武器、军用武器",
       "armorProficiency": "轻甲、中甲、盾牌",
-      "startingEquipment": "选择 A 或 B（见条目内的初始装备选择）。",
       "classRules": {
         "hitDie": 10,
         "savingThrowAbilities": [
           "int",
           "wis"
         ],
-        "skillChoice": {
-          "count": 2,
-          "options": [
-            "奥秘",
-            "运动",
-            "历史",
-            "洞悉",
-            "调查",
-            "察觉",
-            "宗教"
-          ]
-        },
         "spellcasting": {
           "mode": "prepared",
           "ability": "int",
@@ -69,8 +56,7 @@
             "3": 2,
             "5": 3,
             "9": 4,
-            "13": 5,
-            "17": 5
+            "13": 5
           }
         },
         "resources": [
@@ -104,7 +90,9 @@
     "rules": {
       "progression": [
         {
-          "level": 1,
+          "levels": [
+            1
+          ],
           "grants": [
             {
               "id": "l1-arsenal",
@@ -121,6 +109,23 @@
           ],
           "choices": [
             {
+              "id": "class-skills",
+              "label": "选择两项技能熟练",
+              "optionType": "skill",
+              "minimum": 2,
+              "maximum": 2,
+              "options": [
+                "奥秘",
+                "运动",
+                "历史",
+                "洞悉",
+                "调查",
+                "察觉",
+                "宗教"
+              ],
+              "builderStep": "proficiencies"
+            },
+            {
               "id": "fighting-style",
               "label": "选择一项战斗风格",
               "optionType": "feat",
@@ -129,7 +134,7 @@
               "optionTags": [
                 "fighting-style"
               ],
-              "inlineOptions": [
+              "options": [
                 {
                   "id": "astral-poise",
                   "label": "星界之势",
@@ -138,7 +143,10 @@
                     {
                       "id": "fs-poise",
                       "kind": "feature",
-                      "label": "星界之势"
+                      "label": "星界之势",
+                      "data": {
+                        "description": "命中后目标无法对你发动借机攻击。"
+                      }
                     }
                   ]
                 }
@@ -160,21 +168,23 @@
             },
             {
               "id": "spells-1",
-              "label": "戏法与法术（自星界骑士法术列表选择）",
+              "label": "戏法（自星界骑士法术列表选择）",
               "optionType": "spell",
               "minimum": 0,
               "maximum": 2,
               "optionTags": [
                 "spell-list:astral-knight"
               ],
-              "maximumOptionLevel": 1,
+              "maximumOptionLevel": 0,
               "countsToward": "prepared",
               "builderStep": "spells"
             }
           ]
         },
         {
-          "level": 2,
+          "levels": [
+            2
+          ],
           "grants": [
             {
               "id": "l2-surge",
@@ -207,7 +217,9 @@
           ]
         },
         {
-          "level": 3,
+          "levels": [
+            3
+          ],
           "grants": [
             {
               "id": "l3-echo",
@@ -229,20 +241,18 @@
           ]
         },
         {
-          "level": 4,
+          "levels": [
+            4,
+            8,
+            12,
+            16
+          ],
           "grants": [
             {
-              "id": "l4-asi",
+              "id": "asi-int",
               "kind": "ability",
               "label": "属性提升：智力 +1",
               "target": "int",
-              "value": 1
-            },
-            {
-              "id": "l4-asi-2",
-              "kind": "ability",
-              "label": "属性提升：任选 +1",
-              "target": "con",
               "value": 1
             }
           ],
@@ -260,12 +270,14 @@
                 "astral-knight:feat/astral-adept"
               ],
               "builderStep": "details",
-              "group": "4 级：属性提升"
+              "group": "属性提升等级"
             }
           ]
         },
         {
-          "level": 5,
+          "levels": [
+            5
+          ],
           "grants": [
             {
               "id": "l5-extra-attack",
@@ -276,7 +288,9 @@
           ]
         },
         {
-          "level": 6,
+          "levels": [
+            6
+          ],
           "grants": [
             {
               "id": "l6-vigor",
@@ -293,7 +307,9 @@
           ]
         },
         {
-          "level": 7,
+          "levels": [
+            7
+          ],
           "grants": [
             {
               "id": "l7-stride",
@@ -310,33 +326,9 @@
           ]
         },
         {
-          "level": 8,
-          "grants": [
-            {
-              "id": "l8-asi",
-              "kind": "ability",
-              "label": "属性提升：智力 +1",
-              "target": "int",
-              "value": 1
-            }
+          "levels": [
+            10
           ],
-          "choices": [
-            {
-              "id": "asi-or-feat-8",
-              "label": "属性提升或专长",
-              "optionType": "feat",
-              "minimum": 1,
-              "maximum": 1,
-              "optionTags": [
-                "astral-adept"
-              ],
-              "builderStep": "details",
-              "group": "8 级：属性提升"
-            }
-          ]
-        },
-        {
-          "level": 10,
           "grants": [
             {
               "id": "l10-cloak",
@@ -353,7 +345,9 @@
           ]
         },
         {
-          "level": 11,
+          "levels": [
+            11
+          ],
           "grants": [
             {
               "id": "l11-leap",
@@ -364,19 +358,9 @@
           ]
         },
         {
-          "level": 12,
-          "grants": [
-            {
-              "id": "l12-asi",
-              "kind": "ability",
-              "label": "属性提升：智力 +1",
-              "target": "int",
-              "value": 1
-            }
-          ]
-        },
-        {
-          "level": 14,
+          "levels": [
+            14
+          ],
           "grants": [
             {
               "id": "l14-eye",
@@ -387,19 +371,9 @@
           ]
         },
         {
-          "level": 16,
-          "grants": [
-            {
-              "id": "l16-asi",
-              "kind": "ability",
-              "label": "属性提升：智力 +1",
-              "target": "int",
-              "value": 1
-            }
-          ]
-        },
-        {
-          "level": 18,
+          "levels": [
+            18
+          ],
           "grants": [
             {
               "id": "l18-bulwark",
@@ -410,7 +384,9 @@
           ]
         },
         {
-          "level": 19,
+          "levels": [
+            19
+          ],
           "choices": [
             {
               "id": "epic-boon",
@@ -427,7 +403,9 @@
           ]
         },
         {
-          "level": 20,
+          "levels": [
+            20
+          ],
           "grants": [
             {
               "id": "l20-avatar",
@@ -449,7 +427,7 @@
     "body": [
       {
         "type": "paragraph",
-        "text": "你可以用一个附赠动作召唤一件星界兵装；它在你的手中视为你熟练的武器，并可造成力场伤害。"
+        "text": "你可以用一个附赠动作召唤一件星界兵装；它在你手中视为你熟练的武器，并可造成力场伤害。"
       }
     ],
     "aliases": [],
@@ -757,7 +735,7 @@
     "body": [
       {
         "type": "paragraph",
-        "text": "你的星界兵装与本体合一：你获得力场伤害免疫，且星界涌动始终可用。"
+        "text": "你的星界兵装与本体合一：你获得力场伤害免疫。"
       }
     ],
     "aliases": [],
@@ -891,14 +869,10 @@
     "rules": {
       "progression": [
         {
-          "level": 3,
+          "levels": [
+            3
+          ],
           "grants": [
-            {
-              "id": "oath-spell-shield",
-              "kind": "spell",
-              "label": "誓约法术：护盾术（始终准备）",
-              "entryId": null
-            },
             {
               "id": "oath-pact",
               "kind": "feature",
@@ -919,12 +893,14 @@
               "maximumOptionLevel": 1,
               "countsToward": null,
               "builderStep": "spells",
-              "help": "选中的法术始终处于准备状态，且不占用星界骑士的准备法术上限。"
+              "help": "选中的法术始终准备，且不占用星界骑士的准备法术上限。"
             }
           ]
         },
         {
-          "level": 7,
+          "levels": [
+            7
+          ],
           "grants": [
             {
               "id": "oath-assault",
@@ -935,7 +911,9 @@
           ]
         },
         {
-          "level": 15,
+          "levels": [
+            15
+          ],
           "grants": [
             {
               "id": "oath-aegis",
@@ -946,7 +924,9 @@
           ]
         },
         {
-          "level": 20,
+          "levels": [
+            20
+          ],
           "grants": [
             {
               "id": "oath-ascension",
@@ -968,7 +948,7 @@
     "body": [
       {
         "type": "paragraph",
-        "text": "你与星界签订盟约，可选择一条誓约法术，它始终准备且不占上限。"
+        "text": "你与星界签订盟约：可选择一条誓约法术，它始终准备且不占上限。"
       }
     ],
     "aliases": [],
@@ -1109,7 +1089,7 @@
       }
     ],
     "aliases": [],
-    "summary": "属性提升或用它换取星界专精，强化你的祈唤。",
+    "summary": "强化祈唤的通用专长。",
     "tags": [
       "astral-adept"
     ],
@@ -1147,11 +1127,11 @@
     "body": [
       {
         "type": "paragraph",
-        "text": "军用武器、轻甲、盾牌、探索套组与 15 GP。"
+        "text": "武器、轻甲、盾牌、探索套组与 15 GP。"
       }
     ],
     "aliases": [],
-    "summary": "(A) 军用武器（长剑或战锤）、轻甲、盾牌、探索套组、15 GP",
+    "summary": "(A) 武器、轻甲、盾牌、探索套组、15 GP",
     "tags": [],
     "structured": {
       "items": [
@@ -1173,7 +1153,11 @@
         }
       ],
       "currency": {
-        "gp": 15
+        "cp": 0,
+        "sp": 0,
+        "ep": 0,
+        "gp": 15,
+        "pp": 0
       }
     }
   },
@@ -1195,7 +1179,11 @@
     "structured": {
       "items": [],
       "currency": {
-        "gp": 100
+        "cp": 0,
+        "sp": 0,
+        "ep": 0,
+        "gp": 100,
+        "pp": 0
       }
     }
   }

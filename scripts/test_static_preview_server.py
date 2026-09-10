@@ -1,8 +1,12 @@
+import sys
 import unittest
 from io import BytesIO
 from pathlib import Path
 
-from static_preview_server import NoCacheRequestHandler
+# 允许从仓库根运行: python -m unittest scripts/test_static_preview_server.py
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from static_preview_server import NoCacheRequestHandler  # noqa: E402
 
 
 class StaticPreviewServerTest(unittest.TestCase):

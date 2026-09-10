@@ -1,6 +1,6 @@
 # 文档索引
 
-本目录区分“当前事实来源”和“历史档案”。开发前只需阅读当前文档；`archive/` 中的
+本目录区分「当前事实来源」与「历史档案」。开发前只需阅读当前文档；`archive/` 中的
 文件仅用于追溯决策，不代表现行架构、版本或待办。
 
 ## 当前事实来源
@@ -14,19 +14,28 @@
 - [统一资料 Schema 与本地自制内容](architecture/content-schema-and-homebrew.md)
 - [内容包 v2 规范](content/content-package-format-v2.md)
 - [工程规范](engineering/engineering-standards.md)
+- [设计系统规范](../DESIGN.md)（仓库根，token 与组件契约）
 
 ## 当前 0.1
 
 - [当前执行状态](roadmap/current-execution-status.md)
 - [私人工作区与战役体验收敛规格](superpowers/specs/2026-07-29-private-workspaces-and-campaign-convergence-design.md)
+- [战役角色与 Material 3 收敛设计](superpowers/specs/2026-07-30-campaign-character-and-material3-convergence-design.md)
 - [AI Ready 验收清单](acceptance/ai-ready-foundation-acceptance.md)
 - [OhMyDungeon 0.1 测试候选版验收](acceptance/ohmydungeon-0.1-test-readiness.md)
-- [仓库归档清理规格](superpowers/specs/2026-07-29-repository-archive-cleanup-design.md)
+
+## 设计
+
+- [UI 设计系统审查报告](design/design-audit.md)：全量元素审查、问题定位与修复记录；
+  契约测试与 golden 基线见 `apps/client_flutter/test/app_theme_test.dart`、
+  `apps/client_flutter/test/golden/`。
 
 ## 开发与部署
 
 - [Agent 执行指南](agents/agent-execution-guide.md)
 - [本地开发](development/local-setup.md)
+- [私有资料流水线](development/private-content-pipeline.md)（提取、校验、私有构建、
+  离线 Prisma 引擎与合规清单）
 - [自托管](deployment/self-hosting.md)
 - [数据库迁移](deployment/database-migrations.md)
 - [备份与恢复](deployment/backup-restore.md)

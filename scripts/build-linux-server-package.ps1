@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
   [string]$Version = "0.1.0",
   [string]$OutputDirectory
@@ -11,6 +11,22 @@ $OutputDirectory = if ($OutputDirectory) { $OutputDirectory } else { Join-Path $
 $packageName = "ohmydungeon-server-linux-$Version"
 $staging = Join-Path $OutputDirectory $packageName
 $archive = Join-Path $OutputDirectory "$packageName.tar.gz"
+# 离线 Prisma 引擎被 .gitignore 排除，但 Docker 构建期必需。
+# 在此提前失败，避免镜像构建到 prisma generate 阶段才报路径不存在。
+# 注意：本文件必须保留 UTF-8 BOM，否则 PowerShell 5.1 会按 ANSI 解析中文注释并报错。
+$enginesSource = Join-Path $root "apps\server_nest\engines"
+$requiredEngines = @(
+  "schema-engine-linux-musl-openssl-3.0.x",
+  "libquery_engine-linux-musl-openssl-3.0.x.so.node"
+)
+if (-not (Test-Path -LiteralPath $enginesSource)) {
+  throw "Missing apps/server_nest/engines. Restore the offline Prisma engines before packaging (see docs/development/private-content-pipeline.md)."
+}
+foreach ($engine in $requiredEngines) {
+  if (-not (Test-Path -LiteralPath (Join-Path $enginesSource $engine))) {
+    throw "Missing Prisma engine: apps/server_nest/engines/$engine"
+  }
+}
 
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 if (Test-Path -LiteralPath $staging) {

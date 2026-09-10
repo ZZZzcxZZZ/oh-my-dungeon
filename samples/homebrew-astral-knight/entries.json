@@ -1,0 +1,1202 @@
+[
+  {
+    "id": "astral-knight:class/astral-knight",
+    "type": "class",
+    "slug": "astral-knight",
+    "name": "星界骑士",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你以智力施法，把星界之力铸进兵装与誓约。"
+      }
+    ],
+    "aliases": [],
+    "summary": "以智力施法的半施法者骑士，用星界兵装与祈唤作战。",
+    "tags": [
+      "class"
+    ],
+    "structured": {
+      "primaryAbility": "智力",
+      "weaponProficiency": "简易武器、军用武器",
+      "armorProficiency": "轻甲、中甲、盾牌",
+      "startingEquipment": "选择 A 或 B（见条目内的初始装备选择）。",
+      "classRules": {
+        "hitDie": 10,
+        "savingThrowAbilities": [
+          "int",
+          "wis"
+        ],
+        "skillChoice": {
+          "count": 2,
+          "options": [
+            "奥秘",
+            "运动",
+            "历史",
+            "洞悉",
+            "调查",
+            "察觉",
+            "宗教"
+          ]
+        },
+        "spellcasting": {
+          "mode": "prepared",
+          "ability": "int",
+          "listTags": [
+            "spell-list:astral-knight"
+          ],
+          "archetype": "half-caster",
+          "slots": {
+            "5": {
+              "1": 4,
+              "2": 3
+            },
+            "9": {
+              "1": 4,
+              "2": 3,
+              "3": 3
+            }
+          },
+          "prepared": {
+            "1": 3,
+            "5": 7,
+            "9": 11,
+            "13": 13,
+            "17": 16
+          },
+          "maximumSpellLevel": {
+            "1": 1,
+            "3": 2,
+            "5": 3,
+            "9": 4,
+            "13": 5,
+            "17": 5
+          }
+        },
+        "resources": [
+          {
+            "id": "astral-surge",
+            "name": "星界涌动",
+            "startsAtLevel": 2,
+            "maximum": {
+              "formula": "level",
+              "minimum": 1
+            },
+            "recovery": "shortRestOne"
+          },
+          {
+            "id": "astral-ward",
+            "name": "星界守护",
+            "startsAtLevel": 3,
+            "maximum": {
+              "table": {
+                "3": 1,
+                "7": 2,
+                "12": 3,
+                "17": 4
+              }
+            },
+            "recovery": "longRest"
+          }
+        ]
+      }
+    },
+    "rules": {
+      "progression": [
+        {
+          "level": 1,
+          "grants": [
+            {
+              "id": "l1-arsenal",
+              "kind": "feature",
+              "label": "星界兵装",
+              "entryId": "astral-knight:classFeature/astral-arsenal"
+            },
+            {
+              "id": "l1-sense",
+              "kind": "feature",
+              "label": "星界感知",
+              "entryId": "astral-knight:classFeature/astral-sense"
+            }
+          ],
+          "choices": [
+            {
+              "id": "fighting-style",
+              "label": "选择一项战斗风格",
+              "optionType": "feat",
+              "minimum": 1,
+              "maximum": 1,
+              "optionTags": [
+                "fighting-style"
+              ],
+              "inlineOptions": [
+                {
+                  "id": "astral-poise",
+                  "label": "星界之势",
+                  "description": "你的星界兵装命中后，目标在你下回合开始前不能对你发动借机攻击。",
+                  "grants": [
+                    {
+                      "id": "fs-poise",
+                      "kind": "feature",
+                      "label": "星界之势"
+                    }
+                  ]
+                }
+              ],
+              "builderStep": "class",
+              "group": "1 级：战斗风格"
+            },
+            {
+              "id": "starting-equipment",
+              "label": "初始装备（A 或 B）",
+              "optionType": "equipmentBundle",
+              "minimum": 1,
+              "maximum": 1,
+              "optionEntryIds": [
+                "astral-knight:equipmentBundle/starting-a",
+                "astral-knight:equipmentBundle/starting-b"
+              ],
+              "builderStep": "equipment"
+            },
+            {
+              "id": "spells-1",
+              "label": "戏法与法术（自星界骑士法术列表选择）",
+              "optionType": "spell",
+              "minimum": 0,
+              "maximum": 2,
+              "optionTags": [
+                "spell-list:astral-knight"
+              ],
+              "maximumOptionLevel": 1,
+              "countsToward": "prepared",
+              "builderStep": "spells"
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "grants": [
+            {
+              "id": "l2-surge",
+              "kind": "feature",
+              "label": "星界涌动",
+              "entryId": "astral-knight:classFeature/astral-surge"
+            }
+          ],
+          "choices": [
+            {
+              "id": "invocations",
+              "label": "星界祈唤（可重复选取）",
+              "optionType": "classFeature",
+              "minimum": 1,
+              "maximum": 2,
+              "repeatable": true,
+              "optionTags": [
+                "astral-invocation"
+              ],
+              "requires": [
+                {
+                  "ability": "int",
+                  "minimum": 13
+                }
+              ],
+              "builderStep": "class",
+              "group": "2 级：星界祈唤",
+              "help": "智力 13 以上才能选取；同一祈唤可以重复选取（上限 2 次）。"
+            }
+          ]
+        },
+        {
+          "level": 3,
+          "grants": [
+            {
+              "id": "l3-echo",
+              "kind": "feature",
+              "label": "星界回响",
+              "entryId": "astral-knight:classFeature/astral-echo"
+            }
+          ],
+          "choices": [
+            {
+              "id": "subclass",
+              "label": "选择星界誓约",
+              "optionType": "subclass",
+              "minimum": 1,
+              "maximum": 1,
+              "builderStep": "class",
+              "group": "3 级：子职"
+            }
+          ]
+        },
+        {
+          "level": 4,
+          "grants": [
+            {
+              "id": "l4-asi",
+              "kind": "ability",
+              "label": "属性提升：智力 +1",
+              "target": "int",
+              "value": 1
+            },
+            {
+              "id": "l4-asi-2",
+              "kind": "ability",
+              "label": "属性提升：任选 +1",
+              "target": "con",
+              "value": 1
+            }
+          ],
+          "choices": [
+            {
+              "id": "asi-or-feat",
+              "label": "属性提升或专长",
+              "optionType": "feat",
+              "minimum": 1,
+              "maximum": 1,
+              "optionTags": [
+                "astral-adept"
+              ],
+              "recommendedEntryIds": [
+                "astral-knight:feat/astral-adept"
+              ],
+              "builderStep": "details",
+              "group": "4 级：属性提升"
+            }
+          ]
+        },
+        {
+          "level": 5,
+          "grants": [
+            {
+              "id": "l5-extra-attack",
+              "kind": "feature",
+              "label": "额外攻击",
+              "entryId": "astral-knight:classFeature/extra-attack"
+            }
+          ]
+        },
+        {
+          "level": 6,
+          "grants": [
+            {
+              "id": "l6-vigor",
+              "kind": "hitPoints",
+              "label": "星界体魄（每级 +1 HP）",
+              "formula": "level"
+            },
+            {
+              "id": "l6-vigor-feature",
+              "kind": "feature",
+              "label": "星界体魄",
+              "entryId": "astral-knight:classFeature/astral-vigor"
+            }
+          ]
+        },
+        {
+          "level": 7,
+          "grants": [
+            {
+              "id": "l7-stride",
+              "kind": "speed",
+              "label": "星界步（+10 尺）",
+              "value": 10
+            },
+            {
+              "id": "l7-stride-feature",
+              "kind": "feature",
+              "label": "星界步",
+              "entryId": "astral-knight:classFeature/astral-stride"
+            }
+          ]
+        },
+        {
+          "level": 8,
+          "grants": [
+            {
+              "id": "l8-asi",
+              "kind": "ability",
+              "label": "属性提升：智力 +1",
+              "target": "int",
+              "value": 1
+            }
+          ],
+          "choices": [
+            {
+              "id": "asi-or-feat-8",
+              "label": "属性提升或专长",
+              "optionType": "feat",
+              "minimum": 1,
+              "maximum": 1,
+              "optionTags": [
+                "astral-adept"
+              ],
+              "builderStep": "details",
+              "group": "8 级：属性提升"
+            }
+          ]
+        },
+        {
+          "level": 10,
+          "grants": [
+            {
+              "id": "l10-cloak",
+              "kind": "armorClass",
+              "label": "星界披风（AC +1）",
+              "value": 1
+            },
+            {
+              "id": "l10-cloak-feature",
+              "kind": "feature",
+              "label": "星界披风",
+              "entryId": "astral-knight:classFeature/astral-cloak"
+            }
+          ]
+        },
+        {
+          "level": 11,
+          "grants": [
+            {
+              "id": "l11-leap",
+              "kind": "feature",
+              "label": "星界飞跃",
+              "entryId": "astral-knight:classFeature/astral-leap"
+            }
+          ]
+        },
+        {
+          "level": 12,
+          "grants": [
+            {
+              "id": "l12-asi",
+              "kind": "ability",
+              "label": "属性提升：智力 +1",
+              "target": "int",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "level": 14,
+          "grants": [
+            {
+              "id": "l14-eye",
+              "kind": "feature",
+              "label": "星界之眼",
+              "entryId": "astral-knight:classFeature/astral-eye"
+            }
+          ]
+        },
+        {
+          "level": 16,
+          "grants": [
+            {
+              "id": "l16-asi",
+              "kind": "ability",
+              "label": "属性提升：智力 +1",
+              "target": "int",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "level": 18,
+          "grants": [
+            {
+              "id": "l18-bulwark",
+              "kind": "feature",
+              "label": "星界壁垒",
+              "entryId": "astral-knight:classFeature/astral-bulwark"
+            }
+          ]
+        },
+        {
+          "level": 19,
+          "choices": [
+            {
+              "id": "epic-boon",
+              "label": "传奇恩惠",
+              "optionType": "feat",
+              "minimum": 1,
+              "maximum": 1,
+              "optionTags": [
+                "epic-boon"
+              ],
+              "builderStep": "details",
+              "group": "19 级：传奇恩惠"
+            }
+          ]
+        },
+        {
+          "level": 20,
+          "grants": [
+            {
+              "id": "l20-avatar",
+              "kind": "feature",
+              "label": "星界化身",
+              "entryId": "astral-knight:classFeature/astral-avatar"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "astral-knight:classFeature/astral-arsenal",
+    "type": "classFeature",
+    "slug": "astral-arsenal",
+    "name": "星界兵装",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你可以用一个附赠动作召唤一件星界兵装；它在你的手中视为你熟练的武器，并可造成力场伤害。"
+      }
+    ],
+    "aliases": [],
+    "summary": "星界骑士 1 级特性",
+    "tags": [
+      "classFeature"
+    ],
+    "structured": {
+      "level": 1,
+      "classSlug": "astral-knight"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "astral-knight:class/astral-knight"
+      }
+    ]
+  },
+  {
+    "id": "astral-knight:classFeature/astral-sense",
+    "type": "classFeature",
+    "slug": "astral-sense",
+    "name": "星界感知",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你可以用一个动作感知 30 尺内隐形生物与星界通道的位置。"
+      }
+    ],
+    "aliases": [],
+    "summary": "星界骑士 1 级特性",
+    "tags": [
+      "classFeature"
+    ],
+    "structured": {
+      "level": 1,
+      "classSlug": "astral-knight"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "astral-knight:class/astral-knight"
+      }
+    ]
+  },
+  {
+    "id": "astral-knight:classFeature/astral-surge",
+    "type": "classFeature",
+    "slug": "astral-surge",
+    "name": "星界涌动",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你可以引导星界之力，让你的兵装在一瞬间获得额外动量。"
+      }
+    ],
+    "aliases": [],
+    "summary": "星界骑士 2 级特性",
+    "tags": [
+      "classFeature"
+    ],
+    "structured": {
+      "level": 2,
+      "classSlug": "astral-knight"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "astral-knight:class/astral-knight"
+      }
+    ]
+  },
+  {
+    "id": "astral-knight:classFeature/astral-echo",
+    "type": "classFeature",
+    "slug": "astral-echo",
+    "name": "星界回响",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你的星界兵装命中时，回声会标记目标，直到你的下回合结束。"
+      }
+    ],
+    "aliases": [],
+    "summary": "星界骑士 3 级特性",
+    "tags": [
+      "classFeature"
+    ],
+    "structured": {
+      "level": 3,
+      "classSlug": "astral-knight"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "astral-knight:class/astral-knight"
+      }
+    ]
+  },
+  {
+    "id": "astral-knight:classFeature/extra-attack",
+    "type": "classFeature",
+    "slug": "extra-attack",
+    "name": "额外攻击",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "当你执行攻击动作时，你可以攻击两次而非一次。"
+      }
+    ],
+    "aliases": [],
+    "summary": "星界骑士 5 级特性",
+    "tags": [
+      "classFeature"
+    ],
+    "structured": {
+      "level": 5,
+      "classSlug": "astral-knight"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "astral-knight:class/astral-knight"
+      }
+    ]
+  },
+  {
+    "id": "astral-knight:classFeature/astral-vigor",
+    "type": "classFeature",
+    "slug": "astral-vigor",
+    "name": "星界体魄",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "星界之力强化你的躯体：你的生命值上限每级额外 +1。"
+      }
+    ],
+    "aliases": [],
+    "summary": "星界骑士 6 级特性",
+    "tags": [
+      "classFeature"
+    ],
+    "structured": {
+      "level": 6,
+      "classSlug": "astral-knight"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "astral-knight:class/astral-knight"
+      }
+    ]
+  },
+  {
+    "id": "astral-knight:classFeature/astral-stride",
+    "type": "classFeature",
+    "slug": "astral-stride",
+    "name": "星界步",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你的速度提高 10 尺，且你忽略困难地形。"
+      }
+    ],
+    "aliases": [],
+    "summary": "星界骑士 7 级特性",
+    "tags": [
+      "classFeature"
+    ],
+    "structured": {
+      "level": 7,
+      "classSlug": "astral-knight"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "astral-knight:class/astral-knight"
+      }
+    ]
+  },
+  {
+    "id": "astral-knight:classFeature/astral-cloak",
+    "type": "classFeature",
+    "slug": "astral-cloak",
+    "name": "星界披风",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "一层星界薄幕环绕你：你的 AC +1。"
+      }
+    ],
+    "aliases": [],
+    "summary": "星界骑士 10 级特性",
+    "tags": [
+      "classFeature"
+    ],
+    "structured": {
+      "level": 10,
+      "classSlug": "astral-knight"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "astral-knight:class/astral-knight"
+      }
+    ]
+  },
+  {
+    "id": "astral-knight:classFeature/astral-leap",
+    "type": "classFeature",
+    "slug": "astral-leap",
+    "name": "星界飞跃",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你可以用一个附赠动作传送至 30 尺内你可见的未占据空间。"
+      }
+    ],
+    "aliases": [],
+    "summary": "星界骑士 11 级特性",
+    "tags": [
+      "classFeature"
+    ],
+    "structured": {
+      "level": 11,
+      "classSlug": "astral-knight"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "astral-knight:class/astral-knight"
+      }
+    ]
+  },
+  {
+    "id": "astral-knight:classFeature/astral-eye",
+    "type": "classFeature",
+    "slug": "astral-eye",
+    "name": "星界之眼",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你获得 60 尺真实视觉。"
+      }
+    ],
+    "aliases": [],
+    "summary": "星界骑士 14 级特性",
+    "tags": [
+      "classFeature"
+    ],
+    "structured": {
+      "level": 14,
+      "classSlug": "astral-knight"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "astral-knight:class/astral-knight"
+      }
+    ]
+  },
+  {
+    "id": "astral-knight:classFeature/astral-bulwark",
+    "type": "classFeature",
+    "slug": "astral-bulwark",
+    "name": "星界壁垒",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "当你不移动时，星界壁垒会为你和 10 尺内的盟友提供掩护。"
+      }
+    ],
+    "aliases": [],
+    "summary": "星界骑士 18 级特性",
+    "tags": [
+      "classFeature"
+    ],
+    "structured": {
+      "level": 18,
+      "classSlug": "astral-knight"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "astral-knight:class/astral-knight"
+      }
+    ]
+  },
+  {
+    "id": "astral-knight:classFeature/astral-avatar",
+    "type": "classFeature",
+    "slug": "astral-avatar",
+    "name": "星界化身",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你的星界兵装与本体合一：你获得力场伤害免疫，且星界涌动始终可用。"
+      }
+    ],
+    "aliases": [],
+    "summary": "星界骑士 20 级特性",
+    "tags": [
+      "classFeature"
+    ],
+    "structured": {
+      "level": 20,
+      "classSlug": "astral-knight"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "astral-knight:class/astral-knight"
+      }
+    ]
+  },
+  {
+    "id": "astral-knight:classFeature/invocation-keen-edge",
+    "type": "classFeature",
+    "slug": "invocation-keen-edge",
+    "name": "锐锋祈唤",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你的星界兵装重击范围扩大 1（19–20 即重击）。"
+      }
+    ],
+    "aliases": [],
+    "summary": "星界祈唤",
+    "tags": [
+      "astral-invocation"
+    ],
+    "structured": {
+      "level": 2,
+      "classSlug": "astral-knight"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "astral-knight:class/astral-knight"
+      }
+    ]
+  },
+  {
+    "id": "astral-knight:classFeature/invocation-distant-step",
+    "type": "classFeature",
+    "slug": "invocation-distant-step",
+    "name": "远步祈唤",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你的星界飞跃距离提高 30 尺。"
+      }
+    ],
+    "aliases": [],
+    "summary": "星界祈唤",
+    "tags": [
+      "astral-invocation"
+    ],
+    "structured": {
+      "level": 2,
+      "classSlug": "astral-knight"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "astral-knight:class/astral-knight"
+      }
+    ]
+  },
+  {
+    "id": "astral-knight:classFeature/invocation-warding-light",
+    "type": "classFeature",
+    "slug": "invocation-warding-light",
+    "name": "护光祈唤",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "当你的星界守护被消耗时，你获得 5 点临时生命值。"
+      }
+    ],
+    "aliases": [],
+    "summary": "星界祈唤",
+    "tags": [
+      "astral-invocation"
+    ],
+    "structured": {
+      "level": 2,
+      "classSlug": "astral-knight"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "astral-knight:class/astral-knight"
+      }
+    ]
+  },
+  {
+    "id": "astral-knight:subclass/oath-of-the-astral",
+    "type": "subclass",
+    "slug": "oath-of-the-astral",
+    "name": "星界誓约",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你立下星界誓约，把星界之力用于守护而非征服。"
+      }
+    ],
+    "aliases": [],
+    "summary": "以誓约约束星界之力，为盟友张开星界壁垒。",
+    "tags": [
+      "subclass"
+    ],
+    "structured": {
+      "parentClass": "星界骑士",
+      "level": 3,
+      "classSlug": "astral-knight"
+    },
+    "relations": [
+      {
+        "type": "subclassOf",
+        "targetId": "astral-knight:class/astral-knight"
+      }
+    ],
+    "rules": {
+      "progression": [
+        {
+          "level": 3,
+          "grants": [
+            {
+              "id": "oath-spell-shield",
+              "kind": "spell",
+              "label": "誓约法术：护盾术（始终准备）",
+              "entryId": null
+            },
+            {
+              "id": "oath-pact",
+              "kind": "feature",
+              "label": "星界盟约",
+              "entryId": "astral-knight:classFeature/astral-pact"
+            }
+          ],
+          "choices": [
+            {
+              "id": "oath-spells",
+              "label": "选择一条誓约法术（始终准备，不占上限）",
+              "optionType": "spell",
+              "minimum": 1,
+              "maximum": 1,
+              "optionTags": [
+                "spell-list:astral-knight"
+              ],
+              "maximumOptionLevel": 1,
+              "countsToward": null,
+              "builderStep": "spells",
+              "help": "选中的法术始终处于准备状态，且不占用星界骑士的准备法术上限。"
+            }
+          ]
+        },
+        {
+          "level": 7,
+          "grants": [
+            {
+              "id": "oath-assault",
+              "kind": "feature",
+              "label": "星界突袭",
+              "entryId": "astral-knight:classFeature/astral-assault"
+            }
+          ]
+        },
+        {
+          "level": 15,
+          "grants": [
+            {
+              "id": "oath-aegis",
+              "kind": "feature",
+              "label": "星界神盾",
+              "entryId": "astral-knight:classFeature/astral-aegis"
+            }
+          ]
+        },
+        {
+          "level": 20,
+          "grants": [
+            {
+              "id": "oath-ascension",
+              "kind": "feature",
+              "label": "星界升格",
+              "entryId": "astral-knight:classFeature/astral-ascension"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "astral-knight:classFeature/astral-pact",
+    "type": "classFeature",
+    "slug": "astral-pact",
+    "name": "星界盟约",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你与星界签订盟约，可选择一条誓约法术，它始终准备且不占上限。"
+      }
+    ],
+    "aliases": [],
+    "summary": "星界誓约 3 级特性",
+    "tags": [
+      "classFeature"
+    ],
+    "structured": {
+      "level": 3,
+      "classSlug": "astral-knight",
+      "subclassName": "星界誓约"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "astral-knight:subclass/oath-of-the-astral"
+      }
+    ]
+  },
+  {
+    "id": "astral-knight:classFeature/astral-assault",
+    "type": "classFeature",
+    "slug": "astral-assault",
+    "name": "星界突袭",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "当你的星界兵装命中被星界回响标记的目标时，额外造成 1d8 力场伤害。"
+      }
+    ],
+    "aliases": [],
+    "summary": "星界誓约 7 级特性",
+    "tags": [
+      "classFeature"
+    ],
+    "structured": {
+      "level": 7,
+      "classSlug": "astral-knight",
+      "subclassName": "星界誓约"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "astral-knight:subclass/oath-of-the-astral"
+      }
+    ]
+  },
+  {
+    "id": "astral-knight:classFeature/astral-aegis",
+    "type": "classFeature",
+    "slug": "astral-aegis",
+    "name": "星界神盾",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你可以用一个反应为自己或 30 尺内盟友展开星界神盾，抵消一次攻击。"
+      }
+    ],
+    "aliases": [],
+    "summary": "星界誓约 15 级特性",
+    "tags": [
+      "classFeature"
+    ],
+    "structured": {
+      "level": 15,
+      "classSlug": "astral-knight",
+      "subclassName": "星界誓约"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "astral-knight:subclass/oath-of-the-astral"
+      }
+    ]
+  },
+  {
+    "id": "astral-knight:classFeature/astral-ascension",
+    "type": "classFeature",
+    "slug": "astral-ascension",
+    "name": "星界升格",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你成为星界的代行者：星界守护的恢复速度改为短休恢复。"
+      }
+    ],
+    "aliases": [],
+    "summary": "星界誓约 20 级特性",
+    "tags": [
+      "classFeature"
+    ],
+    "structured": {
+      "level": 20,
+      "classSlug": "astral-knight",
+      "subclassName": "星界誓约"
+    },
+    "relations": [
+      {
+        "type": "featureOf",
+        "targetId": "astral-knight:subclass/oath-of-the-astral"
+      }
+    ]
+  },
+  {
+    "id": "astral-knight:feat/fighting-style-astral-poise",
+    "type": "feat",
+    "slug": "fighting-style-astral-poise",
+    "name": "战斗风格：星界之势",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你的兵装命中后，目标在你下回合开始前不能对你发动借机攻击。"
+      }
+    ],
+    "aliases": [],
+    "summary": "战斗风格专长",
+    "tags": [
+      "fighting-style"
+    ],
+    "structured": {
+      "category": "战斗风格"
+    }
+  },
+  {
+    "id": "astral-knight:feat/astral-adept",
+    "type": "feat",
+    "slug": "astral-adept",
+    "name": "星界专精",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你的星界涌动可用次数 +1，并选择一个额外的星界祈唤。"
+      }
+    ],
+    "aliases": [],
+    "summary": "属性提升或用它换取星界专精，强化你的祈唤。",
+    "tags": [
+      "astral-adept"
+    ],
+    "structured": {
+      "category": "通用"
+    }
+  },
+  {
+    "id": "astral-knight:feat/epic-boon-of-the-astral",
+    "type": "feat",
+    "slug": "epic-boon-of-the-astral",
+    "name": "传奇恩惠：星界共鸣",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你的星界兵装在重击时会向 10 尺内的敌人释放星界冲击。"
+      }
+    ],
+    "aliases": [],
+    "summary": "传奇恩惠专长",
+    "tags": [
+      "epic-boon"
+    ],
+    "structured": {
+      "category": "传奇恩惠"
+    }
+  },
+  {
+    "id": "astral-knight:equipmentBundle/starting-a",
+    "type": "equipmentBundle",
+    "slug": "starting-a",
+    "name": "星界骑士起始装备 A",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "军用武器、轻甲、盾牌、探索套组与 15 GP。"
+      }
+    ],
+    "aliases": [],
+    "summary": "(A) 军用武器（长剑或战锤）、轻甲、盾牌、探索套组、15 GP",
+    "tags": [],
+    "structured": {
+      "items": [
+        {
+          "name": "长剑",
+          "quantity": 1
+        },
+        {
+          "name": "皮甲",
+          "quantity": 1
+        },
+        {
+          "name": "盾牌",
+          "quantity": 1
+        },
+        {
+          "name": "探索套组",
+          "quantity": 1
+        }
+      ],
+      "currency": {
+        "gp": 15
+      }
+    }
+  },
+  {
+    "id": "astral-knight:equipmentBundle/starting-b",
+    "type": "equipmentBundle",
+    "slug": "starting-b",
+    "name": "星界骑士起始装备 B",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "直接获得 100 GP 自行采购。"
+      }
+    ],
+    "aliases": [],
+    "summary": "(B) 100 GP",
+    "tags": [],
+    "structured": {
+      "items": [],
+      "currency": {
+        "gp": 100
+      }
+    }
+  }
+]

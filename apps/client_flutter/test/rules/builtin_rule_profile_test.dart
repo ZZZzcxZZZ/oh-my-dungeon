@@ -71,6 +71,21 @@ void main() {
     }
   });
 
+  test('class 对象只允许契约字段（防止混入散文/多余键）', () {
+    const allowed = {'hitDie', 'savingThrowAbilities', 'spellcasting', 'resources'};
+    classes.forEach((slug, value) {
+      final rules = value! as Map<String, Object?>;
+      final extra = rules.keys.toSet().difference(allowed);
+      expect(extra, isEmpty, reason: '$slug 出现契约外字段：$extra');
+    });
+  });
+
+  test('third-caster 的最高环阶由法术位表推导', () {
+    final third = (archive['progressions']! as Map)['third-caster']! as Map;
+    expect(third['maximumSpellLevel'],
+        [0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4]);
+  });
+
   test('生命骰与豁免对照 SRD 5.2', () {
     const expected = {
       'barbarian': [12, ['str', 'con']],

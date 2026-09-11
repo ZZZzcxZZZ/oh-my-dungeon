@@ -1988,6 +1988,25 @@ git commit -m "refactor(rules): Dnd5eRules 表查询改读内置档案，删除�
 
 ---
 
+## 任务 6.5：任务 6 审查后的收尾（**在任务 7 之前完成**）
+
+任务 6 已通过两阶段审查（行为等价性对拍：12 职业 × 5 级的法术位/准备上限/生命骰/豁免/契约位/资源逐项一致）。
+以下是审查给出的应修项：
+
+1. **收紧"反向包含"匹配（重要）**：`dnd5e_rules.dart` 的 slug 解析现在放行裸子串，
+   于是 `星界游侠` 会命中 `游侠`（正是 §9 反对的"子串猜测"）。按契约 §3.6（已更新）改为
+   **精确相等**或**`<别名><分隔符>` 前缀**（分隔符限 `（` `(` 空格 `-` `/`）。加测试：
+   - `战士（奥法骑士）` → `fighter`（前缀命中）、`法师 / Wizard` → `wizard`；
+   - `星界游侠` → **不命中**（`hitDie == null`，不是 ranger 的 10）。
+2. **`abilityLabels` 与 `profile.abilities` 的一致性守卫（重要）**：`dnd5e_rules.dart` 的注释承诺
+   "两者的键集合由测试断言一致"，但全仓无人断言。在档案测试（`builtin_rule_profile_test.dart`）里补一条
+   `expect(Dnd5eRules.abilityLabels.keys.toSet(), profile.abilities)`（或与档案 `abilities` 数组比对）。
+3. **修断链注释（次要）**：`dnd5e_rules.dart` 里引用的 `§10.1` 不存在，改为 `§10 第 1 条`。
+4. **`classResources` 的 `abilities` 传参（重要，落地在任务 8）**：三处既有调用点
+   （`character.dart:157`、`quick_build.dart:92`、`character_editor_page.dart:3012`）都没传 `abilities`，
+   导致公式类资源（诗人激励 = 魅力调整值）按调整值 0 算。任务 8 迁移时必须把 `abilities` 传进去，
+   并在**任务 8 的验收**里显式检查一次真实数值（例如 CHA 16 的诗人激励应为 3）。
+
 ## 任务 7：`structured_class_rules.dart` 只认新契约
 
 **文件：**
@@ -2250,7 +2269,15 @@ List<_WeaponAttackAction> _deriveWeaponAttacks(CharacterSheet character) {
 
 运行：`cd apps/client_flutter && flutter test`
 预期：全绿；若 `character_pages_test.dart` / `character_builder_choices_test.dart` 里出现旧
-`spellSlot:`/散文夹具，按新契约改写夹具（不是改断言）
+`spellSlot:`/散文夹具，按新契约改写夹具（不是改断言）。
+
+额外验收（本步骤必查）：
+- **三处 `classResources` 调用点都传 `abilities`**（`character.dart` 的 getter、`quick_build.dart`、
+  `character_editor_page.dart`），并写一条断言：CHA 16 的吟游诗人「诗人激励」上限 == 3（不是 1）；
+- **删除全部过渡 shim**（`dnd5e_rules.dart` 里标了"任务 8 迁移后删除"的 8 个方法）与裸子串匹配；
+- `grep -rn "contains('法师')\|contains('战士')" apps/client_flutter/lib` 在 UI 预设之外应无命中
+  （`quick_build.dart` 的 `_classAbilityPresets` 若仍需按名预设，改为**读档案 `classAliases`** 的键，
+  不再写死中文名）。
 
 - [ ] **步骤 6：Commit**
 

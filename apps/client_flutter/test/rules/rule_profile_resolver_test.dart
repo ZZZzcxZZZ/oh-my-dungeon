@@ -1,6 +1,7 @@
 // test/rules/rule_profile_resolver_test.dart
 import 'package:dnd_table_client/src/features/rules/domain/class_rule_set.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_diagnostic.dart';
+import 'package:dnd_table_client/src/features/rules/domain/rule_profile_resolver.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _path = r'$.structured.classRules';
@@ -730,6 +731,212 @@ void main() {
         );
         expect(withTables.declaredMinLevel, 3, reason: '取各表最早声明等级');
       });
+    });
+  });
+
+  group('RuleProfileResolver', () {
+    Map<String, Object?> archive() => {
+      'rulebookVersion': 1,
+      'system': 'dnd5e-2024',
+      'abilities': ['str', 'dex', 'con', 'int', 'wis', 'cha'],
+      'skills': [
+        {'name': '察觉', 'ability': 'wis'},
+      ],
+      'progressions': {
+        'none': {'slots': []},
+        'half-caster': {
+          'minimumLevel': 1,
+          'slots': List.generate(20, (_) => <String, Object?>{'1': 2}),
+          // 原型**故意**保留 prepared / cantrips：契约 §3.1 禁止原型承载这两列，
+          // 解析必须忽略它们，这两行用于证明 preparedLimit 没有原型回退路径。
+          'prepared': [
+            2,
+            3,
+            4,
+            5,
+            6,
+            6,
+            7,
+            7,
+            9,
+            9,
+            10,
+            10,
+            11,
+            11,
+            12,
+            12,
+            14,
+            14,
+            15,
+            15,
+          ],
+          'cantrips': List.filled(20, 0),
+          'maximumSpellLevel': List.filled(20, 1),
+        },
+        'third-caster': {
+          'minimumLevel': 3,
+          'slots': List.generate(20, (_) => <String, Object?>{'1': 1}),
+        },
+      },
+      'classes': {
+        'barbarian': {
+          'hitDie': 12,
+          'savingThrowAbilities': ['str', 'con'],
+        },
+      },
+    };
+
+    test('解析内置档案并可查询', () {
+      final result = RuleProfileResolver.resolveBuiltin(archive());
+      expect(result.errors, isEmpty);
+      final profile = result.profile!;
+      expect(profile.abilities, hasLength(6));
+      expect(profile.classRules('barbarian')!.hitDie, 12);
+      expect(profile.classRules('BARBARIAN')!.hitDie, 12); // 大小写归一
+      expect(profile.classRules('nope'), isNull);
+    });
+
+    test('未知原型报 error', () {
+      final raw = archive();
+      (raw['classes']! as Map)['barbarian'] = {
+        'hitDie': 12,
+        'spellcasting': {
+          'mode': 'prepared',
+          'ability': 'wis',
+          'archetype': 'three-quarter',
+        },
+      };
+      final result = RuleProfileResolver.resolveBuiltin(raw);
+      expect(result.errors.single.code, 'unknownArchetype');
+    });
+
+    test('字段级合并：条目优先，档案补齐，并记录来源', () {
+      final profile = RuleProfileResolver.resolveBuiltin(archive()).profile!;
+      final diagnostics = <RuleDiagnostic>[];
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'barbarian',
+        entryRules: ClassRuleSet.parse(
+          {
+            'savingThrowAbilities': ['dex'],
+          },
+          path: r'$.structured.classRules',
+          diagnostics: diagnostics,
+        ),
+      );
+      expect(merged.hitDie, 12, reason: '档案补齐');
+      expect(merged.savingThrowAbilities, {'dex'}, reason: '条目优先，整字段替换');
+      expect(merged.fieldSources['hitDie']!.originId, 'builtin:dnd5e-2024');
+      expect(merged.fieldSources['savingThrowAbilities']!.originId, '<entry>');
+      // 来源只记录真正被声明过的字段：双方都没声明 spellcasting / resources 时
+      // 不得因为"默认空集合"而凭空记一条来源。
+      expect(merged.fieldSources.keys, {'hitDie', 'savingThrowAbilities'});
+    });
+
+    test('条目完全没有规则时用档案，完全未声明时为空', () {
+      final profile = RuleProfileResolver.resolveBuiltin(archive()).profile!;
+      final fromArchive = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'barbarian',
+        entryRules: null,
+      );
+      expect(fromArchive.hitDie, 12);
+      final unknown = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'astral-knight',
+        entryRules: null,
+      );
+      expect(unknown.hitDie, isNull);
+      expect(unknown.savingThrowAbilities, isEmpty);
+    });
+
+    test('法术位解析：原型展开 + 整级替换 + minimumLevel', () {
+      final profile = RuleProfileResolver.resolveBuiltin(archive()).profile!;
+      final half = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'barbarian',
+        entryRules: null,
+      );
+      expect(half.spellcasting, isNull);
+      final caster = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'astral',
+        entryRules: ClassRuleSet.parse(
+          {
+            'spellcasting': {
+              'mode': 'prepared',
+              'ability': 'wis',
+              'archetype': 'half-caster',
+              'slots': {
+                '3': <String, Object?>{},
+                '5': {'1': 9},
+              },
+            },
+          },
+          path: r'$.structured.classRules',
+          diagnostics: <RuleDiagnostic>[],
+        ),
+      );
+      expect(caster.spellSlots(1), {'1': 2}, reason: '原型展开');
+      expect(caster.spellSlots(3), isEmpty, reason: '条目显式空表不回落原型');
+      expect(caster.spellSlots(5), {'1': 9}, reason: '整级替换');
+      expect(caster.preparedLimit(5), isNull, reason: '原型不承载 prepared（§3.1）');
+      expect(caster.cantripLimit(5), isNull, reason: '原型不承载 cantrips（§3.1）');
+
+      final third = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'astral',
+        entryRules: ClassRuleSet.parse(
+          {
+            'spellcasting': {
+              'mode': 'prepared',
+              'ability': 'wis',
+              'archetype': 'third-caster',
+            },
+          },
+          path: r'$.structured.classRules',
+          diagnostics: <RuleDiagnostic>[],
+        ),
+      );
+      expect(third.spellSlots(2), isEmpty, reason: '低于原型 minimumLevel');
+      expect(third.spellSlots(3), {'1': 1}, reason: '达到原型 minimumLevel 后展开');
+    });
+
+    test('资源：startsAtLevel 过滤 + 未声明上限跳过（不产出上限 0）', () {
+      final profile = RuleProfileResolver.resolveBuiltin(archive()).profile!;
+      final rules = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'astral',
+        entryRules: ClassRuleSet.parse(
+          {
+            'resources': [
+              {
+                'id': 'surge',
+                'name': '星界涌动',
+                'recovery': 'shortRestOne',
+                'maximum': {
+                  'table': {'5': 3},
+                },
+              },
+              {'id': 'late', 'name': '晚成', 'maximum': 2, 'startsAtLevel': 7},
+            ],
+          },
+          path: r'$.structured.classRules',
+          diagnostics: <RuleDiagnostic>[],
+        ),
+      );
+      // 上限表 5 级才声明：3 级是"未声明"，必须整条跳过而不是上限 0。
+      expect(rules.resourcesAt(3, const {}), isEmpty);
+      final at5 = rules.resourcesAt(5, const {});
+      expect(at5.single.id, 'surge');
+      expect(at5.single.maximum, 3);
+      expect(at5.single.recovery, 'shortRestOne');
+      // startsAtLevel = 7 之前不出现该资源。
+      expect(rules.resourcesAt(7, const {}).map((r) => r.id).toList(), [
+        'surge',
+        'late',
+      ]);
     });
   });
 }

@@ -144,20 +144,24 @@
      "maximum":{"table":{"2":1,"17":2}}}] }
 ```
 
-其余 10 个职业的完整数据：
+其余 10 个职业的完整数据（**资源池数值已按 SRD 5.2 原文逐条核对**，注意恢复语义有四种）：
 
-| slug | hitDie | savingThrowAbilities | spellcasting | resources |
+| slug | hitDie | saves | spellcasting | resources（id / name / maximum / recovery / startsAtLevel） |
 |---|---|---|---|---|
-| bard | 8 | dex, cha | `{"mode":"prepared","ability":"cha","archetype":"full-caster"}` | — |
-| cleric | 8 | wis, cha | `{"mode":"prepared","ability":"wis","archetype":"full-caster"}` | — |
-| druid | 8 | int, wis | `{"mode":"prepared","ability":"wis","archetype":"full-caster"}` | — |
-| monk | 8 | dex, wis | `{"mode":"none"}` | — |
-| paladin | 10 | wis, cha | `{"mode":"prepared","ability":"cha","archetype":"half-caster"}` | — |
-| ranger | 10 | dex, str | `{"mode":"prepared","ability":"wis","archetype":"half-caster"}` | — |
+| bard | 8 | dex, cha | prepared, cha, full-caster | `bardic_inspiration` 诗人激励 `{"formula":"ability:cha","minimum":1}` / `{"table":{"1":"longRest","5":"shortRest"}}` / 1 |
+| cleric | 8 | wis, cha | prepared, wis, full-caster | `channel_divinity` 引导神力 `{"table":{"2":2,"6":3,"18":4}}` / `shortRestOne` / 2 |
+| druid | 8 | int, wis | prepared, wis, full-caster | `wild_shape` 野性形态 `{"table":{"2":2,"6":3,"17":4}}` / `shortRestOne` / 2 |
+| monk | 8 | dex, wis | `{"mode":"none"}` | `focus_points` 专注点 `{"formula":"level"}` / `shortRest` / 2 |
+| paladin | 10 | wis, cha | prepared, cha, half-caster | `channel_divinity` 引导神力 `{"table":{"3":2,"11":3}}` / `shortRestOne` / 3；`lay_on_hands` 圣疗（治疗池）`{"formula":"5*level"}` / `longRest` / 1 |
+| ranger | 10 | dex, str | prepared, wis, half-caster | `favored_enemy` 宿敌 `{"table":{"1":2,"5":3,"9":4,"13":5,"17":6}}` / `longRest` / 1 |
 | rogue | 8 | dex, int | `{"mode":"none"}` | — |
-| sorcerer | 6 | con, cha | `{"mode":"prepared","ability":"cha","archetype":"full-caster"}` | — |
-| warlock | 8 | wis, cha | `{"mode":"prepared","ability":"cha","archetype":"pact"}` | — |
-| wizard | 6 | int, wis | `{"mode":"prepared","ability":"int","archetype":"full-caster"}` | — |
+| sorcerer | 6 | con, cha | prepared, cha, full-caster | `sorcery_points` 术法点 `{"formula":"level"}` / `longRest` / 2；`innate_sorcery` 先天术法 `2` / `longRest` / 2 |
+| warlock | 8 | wis, cha | prepared, cha, pact | `magical_cunning` 魔法诡计 `1` / `longRest` / 2 |
+| wizard | 6 | int, wis | prepared, int, full-caster | — |
+
+> 关键事实（易写错，已核对原文）：**诗人激励 = 魅力调整值（最低 1）且长休恢复，5 级"激发灵感"改为短休也全恢复**；
+> **引导神力（牧师/圣武士）与野性形态都是短休只恢复 1 次**；**先天术法是长休恢复**（不是短休 1 次）；
+> **专注点/术法点上限等于职业等级**；**圣疗是 5×等级的治疗池**（不是"次数"）。
 
 > 12 个核心 slug 因此只声明"数值事实"；技能选择等由私有包（任务 10 的提取器）声明，
 > 示范做法见 `samples/homebrew-astral-knight/entries.json`。
@@ -498,6 +502,45 @@ class SlotTable {
   }
 }
 
+/// `Table<String>`：与 [IntTable] 同一套"常量或表"语义，用于随等级变化的枚举值（如 `recovery`）。
+class _StringTable {
+  const _StringTable._(this._byLevel, this.minLevel, this.maxLevel);
+
+  final Map<int, String> _byLevel;
+  final int minLevel;
+  final int maxLevel;
+
+  static _StringTable? tryParse(Object? raw, Set<String> allowed) {
+    final result = <int, String>{};
+    if (raw is List) {
+      if (raw.isEmpty || raw.length > 20) return null;
+      for (var index = 0; index < raw.length; index++) {
+        final value = '${raw[index]}'.trim();
+        if (!allowed.contains(value)) return null;
+        result[index + 1] = value;
+      }
+    } else if (raw is Map) {
+      for (final entry in raw.entries) {
+        final level = int.tryParse('${entry.key}');
+        final value = '${entry.value}'.trim();
+        if (level == null || level < 1 || level > 20) return null;
+        if (!allowed.contains(value)) return null;
+        result[level] = value;
+      }
+    } else {
+      return null;
+    }
+    if (result.isEmpty) return null;
+    final levels = result.keys.toList()..sort();
+    return _StringTable._(result, levels.first, levels.last);
+  }
+
+  String? at(int level) {
+    if (level < minLevel) return null;
+    return _byLevel[level] ?? _byLevel[maxLevel]!;
+  }
+}
+
 /// 资源上限：整数，或 `{"formula": "…"}` / `{"table": <Table<int>>}`，对象形态可带 `minimum`。
 class MaxSpec {
   const MaxSpec._({this.value, this.formula, this.table, this.minimum});
@@ -719,13 +762,18 @@ const kDefaultSkills = {
 class ClassResourceRule {
   const ClassResourceRule({
     required this.id, required this.name, required this.maximum,
-    required this.recovery, this.startsAtLevel = 1,
+    required this.recovery, this.recoveryTable, this.startsAtLevel = 1,
   });
   final String id;
   final String name;
   final MaxSpec maximum;
+  /// 常量恢复语义（未随等级变化时）。
   final String recovery;
+  /// 随等级变化的恢复语义（如诗人激励 1 级长休、5 级短休）。
+  final _StringTable? recoveryTable;
   final int startsAtLevel;
+
+  String recoveryAt(int level) => recoveryTable?.at(level) ?? recovery;
 
   /// 资源表声明到的最高等级；只有 formula 的资源不贡献等级。
   int? get declaredMaxLevel => maximum.table?.maxLevel;
@@ -918,11 +966,30 @@ class ClassRuleSet {
                 message: '资源 id "$id" 重复'));
             continue;
           }
-          final recovery = '${item['recovery'] ?? 'longRest'}'.trim();
-          if (!_recoveries.contains(recovery)) {
+          final recoveryRaw = item['recovery'] ?? 'longRest';
+          var recovery = 'longRest';
+          _StringTable? recoveryTable;
+          if (recoveryRaw is String) {
+            recovery = recoveryRaw.trim();
+            if (!_recoveries.contains(recovery)) {
+              diagnostics.add(RuleDiagnostic(path: '$itemPath.recovery',
+                  severity: RuleSeverity.error, code: 'invalidRecovery',
+                  message: 'recovery 必须是 shortRest / shortRestOne / longRest / none'));
+              continue;
+            }
+          } else if (recoveryRaw is Map && recoveryRaw['table'] != null) {
+            recoveryTable = _StringTable.tryParse(recoveryRaw['table'], _recoveries);
+            if (recoveryTable == null) {
+              diagnostics.add(RuleDiagnostic(path: '$itemPath.recovery.table',
+                  severity: RuleSeverity.error, code: 'invalidRecovery',
+                  message: 'recovery 表的值必须是 shortRest / shortRestOne / longRest / none'));
+              continue;
+            }
+            recovery = recoveryTable.at(recoveryTable.minLevel) ?? 'longRest';
+          } else {
             diagnostics.add(RuleDiagnostic(path: '$itemPath.recovery',
                 severity: RuleSeverity.error, code: 'invalidRecovery',
-                message: 'recovery 必须是 shortRest / shortRestOne / longRest / none'));
+                message: 'recovery 只接受字符串或 {"table": …}'));
             continue;
           }
           final maximum = MaxSpec.tryParse(item['maximum']);
@@ -941,7 +1008,7 @@ class ClassRuleSet {
             continue;
           }
           resources.add(ClassResourceRule(id: id, name: name, maximum: maximum,
-              recovery: recovery, startsAtLevel: startsAt));
+              recovery: recovery, recoveryTable: recoveryTable, startsAtLevel: startsAt));
         }
       }
     }
@@ -1212,7 +1279,7 @@ class ResolvedClassRules {
         for (final rule in resources)
           if (level >= rule.startsAtLevel)
             ResolvedResource(
-              id: rule.id, name: rule.name, recovery: rule.recovery,
+              id: rule.id, name: rule.name, recovery: rule.recoveryAt(level),
               maximum: rule.maximum.resolve(level: level, abilities: abilities),
             ),
       ];
@@ -1907,6 +1974,53 @@ test('未知职业不猜：数值为空而非回退到相近职业', () {
 - `character_detail_page.dart` 的 `_slotMaximums()`：兜底改为
   `Dnd5eRules.resolveClassRules(...).spellSlots(character.level)`。
 - `character_editor_page.dart`：等级摘要与法术选择改用 `resolveClassRules(...)`。
+- **武器攻击（删除 `Dnd5eRules._weaponProfiles` 与 `weaponProfile`）**：改为读物品条目自身的声明。
+  `character_detail_page.dart` 的 `_deriveWeaponAttacks` 改为：
+
+```dart
+List<_WeaponAttackAction> _deriveWeaponAttacks(CharacterSheet character) {
+  final attacks = <_WeaponAttackAction>[];
+  for (final item in _normalizeInventory(character.inventoryList)) {
+    final entryId = item['entryId'];
+    final entry = entryId == null
+        ? null
+        : widget.contentEntries.where((c) => c.id == entryId).firstOrNull;
+    final damage = '${entry?.structured['damage'] ?? ''}'.trim();   // 例："1d8 挥砍"
+    final match = RegExp(r'^(\d*d\d+(?:[+-]\d+)?)\s*(\S+)?$').firstMatch(damage);
+    if (match == null) continue;            // 未声明伤害 → 不产出攻击（不猜）
+    final die = match.group(1)!;
+    final damageType = (match.group(2) ?? '').trim();
+    final finesse = entry?.structured['finesse'] == true ||
+        '${entry?.structured['category'] ?? ''}'.contains('灵巧');
+    final ability = finesse
+        ? (Dnd5eRules.abilityBonus(character.abilityMap, 'dex') >=
+                   Dnd5eRules.abilityBonus(character.abilityMap, 'str')
+               ? 'dex'
+               : 'str')
+        : (Dnd5eRules.weaponAbility(entry?.structured) ?? 'str');
+    final attackBonus = Dnd5eRules.attackBonus(
+      abilities: character.abilityMap, level: character.level, ability: ability);
+    attacks.add(_WeaponAttackAction(
+      name: '${entry?.name ?? item['name']}',
+      bonus: attackBonus,
+      toHit: '${Dnd5eRules.formatModifier(attackBonus)} 命中',
+      damage: '$die ${damageType.isEmpty ? '' : damageType}'.trim(),
+      damageFormula: Dnd5eRules.damageFormula(
+        Dnd5eWeaponProfile(name: '${entry?.name}', ability: ability,
+            damageDie: die, damageType: damageType),
+        character.abilityMap),
+      damageType: damageType,
+    ));
+  }
+  return attacks;
+}
+```
+
+`Dnd5eRules.weaponAbility(structured)` 只读声明，不再按名字猜：
+- `structured.ability` ∈ {str,dex} → 用它；
+- 否则 `structured.category` 含"远程" → dex；
+- 否则 str。
+`_weaponProfiles` / `weaponProfile()` **整体删除**（连同 `dnd5e_rules_test.dart` 里对 `weaponProfile('长弓')` 的用例，改为构造带 `damage` 的物品条目断言）。
 
 - [ ] **步骤 5：运行回归**
 

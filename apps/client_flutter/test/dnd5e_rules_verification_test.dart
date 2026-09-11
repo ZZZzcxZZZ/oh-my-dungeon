@@ -703,6 +703,15 @@ void main() {
       expect(Dnd5eRules.classSavingThrows('星界游侠'), isEmpty);
     });
 
+    test('别名后必须紧跟白名单分隔符：无分隔符不命中，三种分隔符命中', () {
+      // `战士奥法骑士` 的 `战士` 后没有分隔符，不是前缀命中 → 不猜成 fighter。
+      expect(Dnd5eRules.hitDieFor(classSummary: '战士奥法骑士'), isNull);
+      // 白名单分隔符 `-` / ASCII `(` / 空格各自命中母职业 fighter。
+      expect(Dnd5eRules.hitDieFor(classSummary: '战士-奥法骑士'), 10);
+      expect(Dnd5eRules.hitDieFor(classSummary: '战士(奥法骑士)'), 10);
+      expect(Dnd5eRules.hitDieFor(classSummary: '战士 奥法骑士'), 10);
+    });
+
     test('精确相等命中（别名与 slug 都可）', () {
       expect(Dnd5eRules.hitDieFor(classSummary: '战士'), 10);
       expect(Dnd5eRules.hitDieFor(classSummary: 'Fighter'), 10);

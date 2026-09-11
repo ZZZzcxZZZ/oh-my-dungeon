@@ -4,6 +4,7 @@ import 'package:dnd_table_client/src/core/database/app_database.dart';
 import 'package:dnd_table_client/src/features/characters/domain/structured_class_rules.dart';
 import 'package:dnd_table_client/src/features/content/data/import/content_package_importer.dart';
 import 'package:dnd_table_client/src/features/content/data/local/content_repository.dart';
+import 'package:dnd_table_client/src/features/rules/domain/character_rule_definition.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_choice_resolver.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -82,19 +83,67 @@ void main() {
           reason:
               '${classEntry.name} should expose two saving throw proficiencies',
         );
-        final skillChoice = StructuredClassRules.skillChoice(classEntry);
-        expect(
-          skillChoice.count,
-          greaterThan(0),
-          reason: '${classEntry.name} should expose a skill choice count',
-        );
-        expect(
-          skillChoice.options,
-          isNotEmpty,
-          reason: '${classEntry.name} should expose canonical skill options',
-        );
       }
     },
     skip: packagePath.isEmpty ? 'No private package path was provided.' : false,
+  );
+
+  // 任务 10 完成后**必须移除本用例的 skip**，并确认它在私有包上转绿：
+  // 新契约下技能选择的唯一来源是 `classEntry.rules` 的 `choices`（含
+  // `progression[].choices`）里 `optionType == "skill"` 的选择（`minimum` 是必选
+  // 项数、内联 `options` 是候选值）。私有包内容尚未迁移到新契约（任务 10），条目
+  // 里还没有这类选择，因此这里显式 skip，而不是放宽断言。
+  test(
+    'every included class exposes its skill choice through rules.choices',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final repository = DriftContentRepository(database);
+      final importer = ContentPackageImporter(repository);
+      final report = await importer.previewJson(
+        await File(packagePath).readAsString(),
+      );
+      expect(report.valid, isTrue);
+      await importer.importReport(report);
+
+      final installed = await repository.search(const ContentQuery());
+      final classes = installed
+          .where((entry) => entry.type == 'class')
+          .toList(growable: false);
+
+      if (classes.isEmpty) return;
+
+      for (final classEntry in classes) {
+        final rules = classEntry.rules;
+        final skillChoices = rules == null
+            ? const <RuleChoiceDefinition>[]
+            : <RuleChoiceDefinition>[
+                ...rules.choices,
+                for (final step in rules.progression) ...step.choices,
+              ].where((choice) => choice.optionType == 'skill').toList(
+                growable: false,
+              );
+        expect(
+          skillChoices,
+          isNotEmpty,
+          reason: '${classEntry.name} is missing its skill choice',
+        );
+        for (final choice in skillChoices) {
+          expect(
+            choice.minimum,
+            greaterThan(0),
+            reason: '${classEntry.name} skill choice must require a pick',
+          );
+          expect(
+            choice.options,
+            isNotEmpty,
+            reason: '${classEntry.name} should expose inline skill options',
+          );
+        }
+      }
+    },
+    skip: packagePath.isEmpty
+        ? 'No private package path was provided.'
+        : '私有包内容尚未迁移到新契约（任务 10 迁移后移除此 skip）',
   );
 }

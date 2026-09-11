@@ -2127,6 +2127,16 @@ git commit -m "refactor(rules): StructuredClassRules 只读 classRules 与 rules
 
 ## 任务 8：切换全部消费方（构建器 / 快速创建 / 角色卡 / 项目器 / 编辑器）
 
+> **已知过渡期倒退（任务 10 后消失）**：本任务把消费方切到新契约后，在私有包内容
+> 尚未迁移到新契约（任务 10）之前，会出现以下**已知且可接受**的临时倒退：
+> - **编辑器技能步骤**：真实职业条目还没有 `optionType: "skill"` 的选择时
+>   `StructuredClassRules.skillChoice(...).count == 0`，背景技能不再被排除，
+>   退化为"18 技能全列表"。
+> - **规则选择卡片**：半提取态下会显示"资料库中缺少 skill 选项"。
+> - **私有包校验测试**：`test/tooling/private_content_package_validation_test.dart`
+>   的技能选择用例已被显式 `skip`（契约迁移前不放宽断言），任务 10 完成后**必须**
+>   移除该 `skip` 并确认转绿。
+
 **文件：**
 - 修改：`apps/client_flutter/lib/src/features/characters/domain/rules_driven_character_builder.dart`
 - 修改：`apps/client_flutter/lib/src/features/characters/domain/quick_build.dart`

@@ -466,6 +466,99 @@ void main() {
       expect(CharacterRuntime.fromJson(runtime.toJson()), runtime);
     });
   });
+
+  group('RuleChoiceDefinition.options（内联选项解析与序列化）', () {
+    test('字符串简写展开为 id == label', () {
+      final choice = RuleChoiceDefinition.fromJson(const {
+        'id': 'class-skills',
+        'label': '职业技能',
+        'optionType': 'skill',
+        'minimum': 2,
+        'maximum': 2,
+        'options': ['察觉'],
+      });
+
+      expect(choice.options, hasLength(1));
+      expect(choice.options.single.id, '察觉');
+      expect(choice.options.single.label, '察觉');
+      expect(choice.options.single.description, isNull);
+      expect(choice.options.single.data, isEmpty);
+      expect(choice.options.single.grants, isEmpty);
+    });
+
+    test('对象元素（description/data/grants）无损往返', () {
+      const source = <String, Object?>{
+        'id': 'class-skills',
+        'label': '职业技能',
+        'optionType': 'skill',
+        'minimum': 1,
+        'maximum': 3,
+        'options': [
+          {
+            'id': 'perception',
+            'label': '察觉',
+            'description': '看穿隐藏事物',
+            'data': {'ability': 'wis'},
+            'grants': [
+              {
+                'id': 'perception-proficiency',
+                'kind': 'proficiency',
+                'label': '察觉熟练',
+                'target': 'skill:perception',
+                'value': 1,
+              },
+            ],
+          },
+          '运动',
+        ],
+      };
+
+      final first = RuleChoiceDefinition.fromJson(source);
+      expect(first.options, hasLength(2));
+
+      final rich = first.options.first;
+      expect(rich.id, 'perception');
+      expect(rich.label, '察觉');
+      expect(rich.description, '看穿隐藏事物');
+      expect(rich.data, {'ability': 'wis'});
+      expect(rich.grants, hasLength(1));
+      expect(rich.grants.single.kind, RuleGrantKind.proficiency);
+      expect(rich.grants.single.target, 'skill:perception');
+      expect(rich.grants.single.value, 1);
+
+      // fromJson → toJson → fromJson 后 toJson 稳定。
+      final encoded = first.toJson();
+      final second = RuleChoiceDefinition.fromJson(encoded);
+      expect(second.toJson(), encoded);
+      // 字符串简写在往返后依然是 id == label。
+      expect(second.options[1].id, '运动');
+      expect(second.options[1].label, '运动');
+    });
+
+    test('非法元素（非 string 非 map）抛 FormatException', () {
+      expect(
+        () => RuleChoiceDefinition.fromJson(const {
+          'id': 'class-skills',
+          'optionType': 'skill',
+          'options': [42],
+        }),
+        throwsFormatException,
+      );
+    });
+
+    test('对象元素缺 id 抛 FormatException', () {
+      expect(
+        () => RuleChoiceDefinition.fromJson(const {
+          'id': 'class-skills',
+          'optionType': 'skill',
+          'options': [
+            {'label': '察觉'},
+          ],
+        }),
+        throwsFormatException,
+      );
+    });
+  });
 }
 
 ContentEntry _entry({

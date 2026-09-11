@@ -833,10 +833,13 @@ class ClassResourceRule {
   const ClassResourceRule({
     required this.id, required this.name, required this.maximum,
     required this.recovery, this.recoveryTable, this.startsAtLevel = 1,
+    this.description,
   });
   final String id;
   final String name;
   final MaxSpec maximum;
+  /// 可选的一句话说明（**档案里禁止出现**，见 §3.1；第三方包可用）。
+  final String? description;
   /// 常量恢复语义（未随等级变化时）。
   final String recovery;
   /// 随等级变化的恢复语义（如诗人激励 1 级长休、5 级短休）。
@@ -902,6 +905,15 @@ class ClassRuleSet {
   static const _knownFields = {
     'hitDie', 'savingThrowAbilities', 'spellcasting', 'resources',
   };
+  static const _spellcastingFields = {
+    'mode', 'ability', 'listTags', 'archetype', 'slots', 'slotLevel',
+    'prepared', 'cantrips', 'maximumSpellLevel',
+  };
+  static const _resourceFields = {
+    'id', 'name', 'maximum', 'recovery', 'startsAtLevel', 'description',
+  };
+  /// 标准骰面（生命骰只可能是这五种；d7/d9/d20 一律拒绝）
+  static const _hitDieFaces = {4, 6, 8, 10, 12};
   static const _modes = {'prepared', 'known', 'pact', 'none'};
   static const _recoveries = {'shortRest', 'shortRestOne', 'longRest', 'none'};
 
@@ -910,7 +922,6 @@ class ClassRuleSet {
     required String path,
     required List<RuleDiagnostic> diagnostics,
     Set<String> abilities = kDefaultAbilities,
-    Set<String> skills = kDefaultSkills,
   }) {
     void error(String code, String field, String message) => diagnostics.add(
         RuleDiagnostic(path: '$path.$field', severity: RuleSeverity.error,
@@ -925,9 +936,9 @@ class ClassRuleSet {
       fields.add('hitDie');
       final value = raw['hitDie'];
       final parsed = value is int ? value : null;
-      if (parsed == null || parsed < 4 || parsed > 20) {
+      if (parsed == null || !_hitDieFaces.contains(parsed)) {
         error('invalidHitDie', 'hitDie',
-            '生命骰只写整数（规则书的 d10 就写 10），范围 4..20');
+            '生命骰只写整数且必须是标准骰面 4/6/8/10/12，例如 d10 写 10');
       } else {
         hitDie = parsed;
       }
@@ -961,6 +972,10 @@ class ClassRuleSet {
       if (value is! Map) {
         error('invalidSpellcastingMode', 'spellcasting', '必须是对象');
       } else {
+        for (final key in value.keys) {
+          if (_spellcastingFields.contains('$key')) continue;
+          error('unknownField', 'spellcasting.$key', '未知字段 $key');
+        }
         final mode = '${value['mode'] ?? 'none'}'.trim();
         if (!_modes.contains(mode)) {
           error('invalidSpellcastingMode', 'spellcasting.mode',
@@ -1022,6 +1037,12 @@ class ClassRuleSet {
                 message: '资源必须是对象'));
             continue;
           }
+          for (final key in item.keys) {
+            if (_resourceFields.contains('$key')) continue;
+            diagnostics.add(RuleDiagnostic(path: '$itemPath.$key',
+                severity: RuleSeverity.error, code: 'unknownField',
+                message: '未知字段 $key'));
+          }
           final id = '${item['id'] ?? ''}'.trim();
           final name = '${item['name'] ?? ''}'.trim();
           if (id.isEmpty || name.isEmpty) {
@@ -1077,8 +1098,12 @@ class ClassRuleSet {
                 message: 'startsAtLevel 必须为 1..20'));
             continue;
           }
-          resources.add(ClassResourceRule(id: id, name: name, maximum: maximum,
-              recovery: recovery, recoveryTable: recoveryTable, startsAtLevel: startsAt));
+          resources.add(ClassResourceRule(
+              id: id, name: name, maximum: maximum, recovery: recovery,
+              recoveryTable: recoveryTable, startsAtLevel: startsAt,
+              description: item['description'] == null
+                  ? null
+                  : '${item['description']}'));
         }
       }
     }
@@ -1425,7 +1450,6 @@ abstract final class RuleProfileResolver {
           path: r'$.classes.' + slug,
           diagnostics: diagnostics,
           abilities: abilities.isEmpty ? kDefaultAbilities : abilities,
-          skills: skills.isEmpty ? kDefaultSkills : skills.keys.toSet(),
         );
       });
     }

@@ -241,7 +241,7 @@
 
 | 字段 | 类型 | 必填 | 语义 |
 |---|---|---|---|
-| `hitDie` | int | 否* | 生命骰面数，必须 ∈ 4..20。**只写整数**（规则书里的 `d10` 就写 `10`）。缺省时 HP 只按体质调整值计，见 §3.6 第 3 步 |
+| `hitDie` | int | 否* | 生命骰面数，**只写整数**（规则书的 `d10` 写 `10`），且必须是标准骰面之一：**4 / 6 / 8 / 10 / 12**。`d7`、`d9`、`d20` 等一律拒绝。缺省时 HP 只按体质调整值计，见 §3.6 第 3 步 |
 | `savingThrowAbilities` | string[]（属性键） | 否* | 豁免熟练，元素必须 ∈ `abilities` |
 | `spellcasting` | object | 否 | 见 §3.3 |
 | `resources` | object[] | 否 | 见 §3.4。**内置档案里 `startsAtLevel` 一律显式写出**（见下方书写约定） |
@@ -642,14 +642,14 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 
 | code | 条件 | 示例消息 |
 |---|---|---|
-| `unknownField` | `classRules` / 选择 / 资源对象内出现未定义字段 | `未知字段 classRules.hitDices，是否想写 hitDie？` |
-| `invalidHitDie` | `hitDie` 非 `d4..d20` / int 不在 4..20 | `生命骰必须是 d4–d20 或 4–20 的整数` |
+| `unknownField` | `classRules` 顶层、`spellcasting` 对象内、**每个资源对象内**、选择对象内出现未定义字段 | `未知字段 classRules.hitDices，是否想写 hitDie？` |
+| `invalidHitDie` | `hitDie` 不是标准骰面 `{4,6,8,10,12}`，或写成 `"d10"` 字符串 | `生命骰只写整数且必须是标准骰面 4/6/8/10/12，例如 d10 写 10` |
 | `unknownAbility` | 豁免 / 施法属性 / `formula ability:x` / `kind:"ability"` 的 `target` 不在 `abilities` | `未知属性键 "力量"，可用：str, dex, con, int, wis, cha` |
 | `unknownSkill` | `optionType: "skill"` 的选择里的选项不在 `skills` | `未知技能 "特技"（可用别名：杂技）` |
 | `invalidSkillCount` | 技能选择的 `minimum`/`maximum` 不在 0..选项数 | `技能选择的数量必须为 0..6` |
 | `invalidSpellcastingMode` | `mode` 不在枚举 | `spellcasting.mode 必须是 prepared / known / pact / none` |
 | `unknownArchetype` | `archetype` 不在 `progressions` | `未知原型 "three-quarter-caster"` |
-| `invalidTable` | `Table<T>` 键不在 1..20、数组长度为 0 或 >20、值类型不符或为负 | `prepared["21"] 的键必须为 1..20`（**短数组合法**，见 §3.12） |
+| `invalidTable` | `Table<T>` 键不在 1..20、数组长度为 0 或 >20、值类型不符或为负；`resources[].startsAtLevel` 不在 1..20（沿用本 code，不新增） | `prepared["21"] 的键必须为 1..20`（**短数组合法**，见 §3.12） |
 | `invalidMaxSpec` | 三种写法全缺或同时出现多种、`minimum` 为负、`formula` 不在封闭语法 | `maximum 必须且只能使用 value / formula / table 之一` |
 | `duplicateResourceId` | 同职业内 `resources[].id` 重复 | `资源 id "rage" 重复` |
 | `invalidRecovery` | `recovery` 不在枚举 | `recovery 必须是 shortRest / shortRestOne / longRest / none` |

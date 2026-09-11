@@ -460,6 +460,17 @@ void main() {
       expect(short.resolve(level: 20, abilities: abilities), 3);
     });
 
+    test('表未声明的等级返回 null 而不是 0（§3.12）', () {
+      final sparse = MaxSpec.tryParse({'table': {'3': 1, '7': 2}})!;
+      expect(sparse.resolve(level: 2, abilities: abilities), isNull,
+          reason: '低于最早声明等级 → 未声明，不得成为 0 次');
+      expect(sparse.resolve(level: 3, abilities: abilities), 1);
+      // 显式写 0 与"未声明"语义不同：0 表示存在但上限为 0
+      final zero = MaxSpec.tryParse({'table': {'1': 0, '5': 2}})!;
+      expect(zero.resolve(level: 1, abilities: abilities), 0);
+      expect(zero.resolve(level: 4, abilities: abilities), 0);
+    });
+
     test('封闭语法之外一律拒绝', () {
       for (final bad in ['prof', 'level*2', 'ability', 'ability:luck', '1+1', '']) {
         expect(MaxSpec.tryParse({'formula': bad}), isNull, reason: bad);
@@ -630,12 +641,14 @@ class MaxSpec {
     return MaxSpec._(table: table, minimum: minimum);
   }
 
-  int resolve({required int level, required Map<String, int> abilities}) {
+  /// 返回 `int?`：表在该等级**未声明**时返回 null（调用方跳过），不静默变 0（§3.12）。
+  int? resolve({required int level, required Map<String, int> abilities}) {
     final raw = switch (this) {
       MaxSpec(value: final v?) => v,
       MaxSpec(formula: final f?) => _evaluate(f, level, abilities),
-      _ => table!.at(level) ?? 0,
+      _ => table!.at(level),
     };
+    if (raw == null) return null;
     return minimum == null || raw >= minimum! ? raw : minimum!;
   }
 }
@@ -1332,14 +1345,20 @@ class ResolvedClassRules {
     return fromArchetype(progression)?.at(level);
   }
 
-  List<ResolvedResource> resourcesAt(int level, Map<String, int> abilities) => [
-        for (final rule in resources)
-          if (level >= rule.startsAtLevel)
-            ResolvedResource(
-              id: rule.id, name: rule.name, recovery: rule.recoveryAt(level),
-              maximum: rule.maximum.resolve(level: level, abilities: abilities),
-            ),
-      ];
+  /// 未声明该等级上限的资源会被**跳过**（不是产出"上限 0"的假资源，§3.12）。
+  List<ResolvedResource> resourcesAt(int level, Map<String, int> abilities) {
+    final result = <ResolvedResource>[];
+    for (final rule in resources) {
+      if (level < rule.startsAtLevel) continue;
+      final maximum = rule.maximum.resolve(level: level, abilities: abilities);
+      if (maximum == null) continue;
+      result.add(ResolvedResource(
+        id: rule.id, name: rule.name, recovery: rule.recoveryAt(level),
+        maximum: maximum,
+      ));
+    }
+    return result;
+  }
 }
 ```
 

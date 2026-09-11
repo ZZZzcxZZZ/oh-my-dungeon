@@ -27,6 +27,7 @@
       "slots": []
     },
     "full-caster": {
+      "minimumLevel": 1,
       "slots": [[2], [3], [4, 2], [4, 3], [4, 3, 2], [4, 3, 3], [4, 3, 3, 1], [4, 3, 3, 2], [4, 3, 3, 3, 1], [4, 3, 3, 3, 2],
                 [4, 3, 3, 3, 2, 1], [4, 3, 3, 3, 2, 1], [4, 3, 3, 3, 2, 1, 1], [4, 3, 3, 3, 2, 1, 1], [4, 3, 3, 3, 2, 1, 1, 1],
                 [4, 3, 3, 3, 2, 1, 1, 1], [4, 3, 3, 3, 2, 1, 1, 1, 1], [4, 3, 3, 3, 3, 1, 1, 1, 1], [4, 3, 3, 3, 3, 2, 1, 1, 1],
@@ -58,7 +59,7 @@
       "savingThrowAbilities": ["str", "con"],
       "spellcasting": {"mode": "none"},
       "resources": [
-        {"id": "rage", "name": "狂暴", "recovery": "shortRestOne",
+        {"id": "rage", "name": "狂暴", "startsAtLevel": 1, "recovery": "shortRestOne",
          "maximum": {"table": {"1": 2, "3": 3, "6": 4, "12": 5, "17": 6}}}
       ]
     },
@@ -154,7 +155,7 @@
     },
     "ranger": {
       "hitDie": 10,
-      "savingThrowAbilities": ["dex", "str"],
+      "savingThrowAbilities": ["str", "dex"],
       "spellcasting": {
         "mode": "prepared",
         "ability": "wis",

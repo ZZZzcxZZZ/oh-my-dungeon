@@ -1,4 +1,7 @@
 // test/rules/rule_profile_resolver_test.dart
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:dnd_table_client/src/features/rules/domain/class_rule_set.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_diagnostic.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_profile.dart';
@@ -783,6 +786,186 @@ void main() {
       expect(profile.classRules('barbarian')!.hitDie, 12);
       expect(profile.classRules('BARBARIAN')!.hitDie, 12); // 大小写归一
       expect(profile.classRules('nope'), isNull);
+    });
+
+    group('原型 slots 模板压缩编码（§3.1 唯一展开点）', () {
+      // 直接读真实内置档案喂 `resolveBuiltin`——不经过 `RuleProfileStore`，
+      // 守住"展开发生在解析器里"（数据层只读资产）。
+      Map<String, Object?> realArchive() =>
+          jsonDecode(
+                File('assets/rules/dnd5e-2024.rules.json').readAsStringSync(),
+              )
+              as Map<String, Object?>;
+
+      Map<String, Object?> withProgression(
+        String name,
+        Map<String, Object?> progression,
+      ) => archive()..['progressions'] = {name: progression};
+
+      test('真实内置档案：没有 store 参与也能解析出 profile', () {
+        final result = RuleProfileResolver.resolveBuiltin(realArchive());
+        expect(result.errors, isEmpty);
+        final profile = result.profile;
+        expect(profile, isNotNull);
+        // `slotLevel` / `maximumSpellLevel` 仍走 `IntTable`（完整 20 项数组），
+        // 口径不因 `slots` 的展开而改变（§3.1）。
+        expect(profile!.progression('pact')!.slotLevel!.at(5), 3);
+        expect(profile.progression('pact')!.slotLevel!.at(17), 5);
+        expect(profile.progression('full-caster')!.maximumSpellLevel!.at(9), 5);
+        expect(
+          profile.progression('full-caster')!.maximumSpellLevel!.at(17),
+          9,
+        );
+      });
+
+      test('普通原型：计数数组下标 + 1 即环阶；pact 的环阶来自同级 slotLevel', () {
+        final profile = RuleProfileResolver.resolveBuiltin(
+          realArchive(),
+        ).profile!;
+
+        // 普通施法者：行内下标 + 1 就是环阶。
+        expect(profile.progression('full-caster')!.slots!.at(3), {
+          '1': 4,
+          '2': 2,
+        });
+        expect(profile.progression('half-caster')!.slots!.at(5), {
+          '1': 4,
+          '2': 2,
+        });
+        expect(profile.progression('third-caster')!.slots!.at(3), {'1': 2});
+        // 空行是"该级有法术位表但一个位也没有"的显式空表，不是"未声明"（§3.12）。
+        expect(profile.progression('third-caster')!.slots!.at(1), isEmpty);
+
+        // pact：环阶来自同级的 `slotLevel`，不是行下标（§3.3）。
+        // 与旧 `Dnd5eRules.pactSlotMaximums` 的返回值一致。
+        expect(profile.progression('pact')!.slots!.at(1), {'1': 1});
+        expect(profile.progression('pact')!.slots!.at(5), {'3': 2});
+        expect(profile.progression('pact')!.slots!.at(10), {'5': 2});
+        expect(profile.progression('pact')!.slots!.at(11), {'5': 3});
+        expect(profile.progression('pact')!.slots!.at(17), {'5': 4});
+
+        // `none` 仍是"没有法术位表"，不是空表。
+        expect(profile.progression('none')!.slots, isNull);
+      });
+
+      test('压缩编码展开：省略 0 值，空行是显式空表', () {
+        final profile = RuleProfileResolver.resolveBuiltin(
+          withProgression('caster', {
+            'slots': [
+              <Object?>[2],
+              <Object?>[],
+              <Object?>[4, 0, 2],
+            ],
+          }),
+        ).profile!;
+        final slots = profile.progression('caster')!.slots!;
+        expect(slots.at(1), {'1': 2});
+        expect(slots.at(2), isEmpty, reason: '空行 = 显式空表，不是未声明（§3.12）');
+        expect(slots.at(3), {'1': 4, '3': 2}, reason: '编码约定：0 值省略（§3.1）');
+      });
+
+      test('pact 展开：每级一个计数，环阶取同级 slotLevel', () {
+        final profile = RuleProfileResolver.resolveBuiltin(
+          withProgression('pact', {
+            'slots': [
+              <Object?>[1],
+              <Object?>[2],
+              <Object?>[2],
+              <Object?>[2],
+              <Object?>[2],
+            ],
+            'slotLevel': [1, 1, 2, 2, 3],
+          }),
+        ).profile!;
+        final slots = profile.progression('pact')!.slots!;
+        expect(slots.at(1), {'1': 1});
+        expect(slots.at(3), {'2': 2});
+        expect(slots.at(5), {'3': 2});
+      });
+
+      test('形状非法 → invalidTable（error）并整包阻断，不静默修正', () {
+        final cases = <(String, String, Map<String, Object?>)>[
+          (
+            '某级不是数组',
+            'caster',
+            {
+              'slots': [
+                <Object?>[2],
+                3,
+              ],
+            },
+          ),
+          (
+            '级数 > 20',
+            'caster',
+            {
+              'slots': List.generate(21, (_) => <Object?>[2]),
+            },
+          ),
+          (
+            '计数为负数',
+            'caster',
+            {
+              'slots': [
+                <Object?>[-1],
+              ],
+            },
+          ),
+          (
+            '计数非整数',
+            'caster',
+            {
+              'slots': [
+                <Object?>[2.5],
+              ],
+            },
+          ),
+          (
+            '每级最多 9 个环阶',
+            'caster',
+            {
+              'slots': [List.filled(10, 1)],
+            },
+          ),
+          (
+            'pact 缺 slotLevel',
+            'pact',
+            {
+              'slots': [
+                <Object?>[1],
+                <Object?>[2],
+              ],
+            },
+          ),
+          (
+            'pact 每级只能有一个计数',
+            'pact',
+            {
+              'slots': [
+                <Object?>[1, 2],
+              ],
+              'slotLevel': [3],
+            },
+          ),
+        ];
+        for (final (label, name, progression) in cases) {
+          final result = RuleProfileResolver.resolveBuiltin(
+            withProgression(name, progression),
+          );
+          expect(result.profile, isNull, reason: label);
+          expect(result.errors.single.code, 'invalidTable', reason: label);
+          expect(
+            result.errors.single.path,
+            '\$.progressions.$name.slots',
+            reason: label,
+          );
+          expect(
+            result.errors.single.severity,
+            RuleSeverity.error,
+            reason: label,
+          );
+        }
+      });
     });
 
     test('未知原型报 error', () {

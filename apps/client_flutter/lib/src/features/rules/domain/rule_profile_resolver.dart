@@ -6,6 +6,9 @@
 // 档案解析是 fail-fast（§3.1）：`abilities` / `skills` 是校验参照表，必须由档案
 // **显式声明**；`progressions` 只允许 `kProgressionFields` 里的键。任何一处缺失、
 // 为空或类型错误都报 error 并让 `profile == null`，绝不伪造占位值兜底。
+//
+// 原型 `slots` 的"模板压缩编码"是**只在内置档案里使用**的写法（§3.1），本文件是
+// 契约里唯一的展开点：展开后运行期只有 `{环阶: 数量}` 一种形状。
 import 'class_rule_set.dart';
 import 'rule_diagnostic.dart';
 import 'rule_profile.dart';
@@ -138,18 +141,7 @@ abstract final class RuleProfileResolver {
           _unknownField(diagnostics, '$path.$rawKey', rawKey);
         }
       }
-      final slots = SlotTable.tryParse(map['slots']);
-      // 空数组 / 空对象是"该原型没有声明任何档位"的合法写法（§3.1 的 `none`
-      // 就是 `{"slots": []}`），不是错误；只有写了内容却解析不出表才报错。
-      if (map['slots'] != null &&
-          !_isEmptyTable(map['slots']) &&
-          slots == null) {
-        _invalidTable(
-          diagnostics,
-          '$path.slots',
-          'slots 必须是 20 项数组或稀疏 {"等级": 值}',
-        );
-      }
+      final slots = _parseSlots(map, name, path, diagnostics);
       progressions[name] = ClassProgression(
         name: name,
         minimumLevel: _parseMinimumLevel(map, path, diagnostics),
@@ -164,6 +156,145 @@ abstract final class RuleProfileResolver {
       );
     });
     return progressions;
+  }
+
+  /// 解析原型的 `slots`，并在**契约里唯一的展开点**把内置档案的模板压缩编码
+  /// （§3.1）展开成运行期统一的 `{环阶: 数量}`，再交给 [SlotTable]。
+  ///
+  /// 除压缩编码外的写法（稀疏 `{"等级": {环阶:数量}}`、20 项 `{环阶:数量}` 数组）
+  /// 原样交给 [SlotTable] 判定，解析器不额外认识第二种形状。空数组 / 空对象是
+  /// "该原型没有声明任何档位"的合法写法（§3.1 的 `none` 就是 `{"slots": []}`），
+  /// 不是错误；只有写了内容却解析不出表才报错。
+  static SlotTable? _parseSlots(
+    Map<String, Object?> map,
+    String name,
+    String path,
+    List<RuleDiagnostic> diagnostics,
+  ) {
+    final raw = map['slots'];
+    if (raw == null || _isEmptyTable(raw)) return null;
+    Object? normalized = raw;
+    if (_isCompressedSlots(raw)) {
+      final rows = raw as List<Object?>;
+      // `slotLevel` 只有 pact 原型会写（§3.1、§3.3），原型名 `pact` 是同一回事；
+      // 两者取其一即按"每级一个环阶计数"展开。
+      final isPact = name == _pactArchetype || map.containsKey('slotLevel');
+      if (isPact) {
+        final slotLevels = IntTable.tryParse(map['slotLevel']);
+        if (slotLevels == null) {
+          // 缺 `slotLevel`：环阶无从得知（这里补报）；写了但非法：`_progressionTable`
+          // 已报 `invalidTable`，不再重复报——两种情况都放弃展开，绝不猜环阶。
+          if (!map.containsKey('slotLevel')) {
+            _invalidTable(
+              diagnostics,
+              '$path.slots',
+              'pact 原型的 slots 需要同级 slotLevel 提供环阶',
+            );
+          }
+          return null;
+        }
+        normalized = _expandPactSlots(rows, slotLevels, path, diagnostics);
+      } else {
+        normalized = _expandCasterSlots(rows, path, diagnostics);
+      }
+      if (normalized == null) return null; // 压缩编码形状非法，已报 invalidTable
+    }
+    final slots = SlotTable.tryParse(normalized);
+    if (slots == null) {
+      _invalidTable(
+        diagnostics,
+        '$path.slots',
+        'slots 必须是 20 项数组或稀疏 {"等级": 值}',
+      );
+    }
+    return slots;
+  }
+
+  /// 是否内置档案的"每级一个计数数组"模板压缩编码（§3.1）：`[[2],[3],[4,2],…]`。
+  /// 任一级不是数组就不是该编码（例如 20 项 `{环阶:数量}` 数组），原样交回。
+  static bool _isCompressedSlots(Object? raw) =>
+      raw is List && raw.isNotEmpty && raw.every((row) => row is List);
+
+  /// 普通原型的展开：第 n 项的下标 + 1 即环阶（`[4,2]` → `{"1":4,"2":2}`），
+  /// 0 值按编码约定省略；空行展开为**显式空表** `{}`（§3.12：该级有法术位表但
+  /// 一个法术位也没有，与"未声明"不同）。
+  static List<Object?>? _expandCasterSlots(
+    List<Object?> rows,
+    String path,
+    List<RuleDiagnostic> diagnostics,
+  ) {
+    if (rows.length > 20) {
+      _invalidTable(diagnostics, '$path.slots', 'slots 压缩编码最多 20 项（每级一项）');
+      return null;
+    }
+    final expanded = <Object?>[];
+    for (var index = 0; index < rows.length; index++) {
+      final level = index + 1;
+      final row = rows[index] as List;
+      if (row.length > 9) {
+        _invalidTable(
+          diagnostics,
+          '$path.slots',
+          '$level 级的法术位最多 9 项（环阶 1..9）',
+        );
+        return null;
+      }
+      final slots = <String, Object?>{};
+      for (var ring = 0; ring < row.length; ring++) {
+        final count = _slotCount(row[ring]);
+        if (count == null) {
+          _invalidTable(
+            diagnostics,
+            '$path.slots',
+            '$level 级第 ${ring + 1} 环的法术位必须是非负整数',
+          );
+          return null;
+        }
+        if (count == 0) continue;
+        slots['${ring + 1}'] = count;
+      }
+      expanded.add(slots);
+    }
+    return expanded;
+  }
+
+  /// `pact` 原型的展开：每级只有一个计数，环阶由同级 `slotLevel[L]` 提供
+  /// （5 级 → `{"3": 2}`，与旧 `pactSlotMaximums` 的形状一致，§3.3）。
+  static List<Object?>? _expandPactSlots(
+    List<Object?> rows,
+    IntTable slotLevels,
+    String path,
+    List<RuleDiagnostic> diagnostics,
+  ) {
+    if (rows.length > 20) {
+      _invalidTable(diagnostics, '$path.slots', 'slots 压缩编码最多 20 项（每级一项）');
+      return null;
+    }
+    final expanded = <Object?>[];
+    for (var index = 0; index < rows.length; index++) {
+      final level = index + 1;
+      final row = rows[index] as List;
+      if (row.length != 1) {
+        _invalidTable(diagnostics, '$path.slots', 'pact 原型的每级 slots 只能有一个环阶计数');
+        return null;
+      }
+      final count = _slotCount(row.single);
+      if (count == null) {
+        _invalidTable(diagnostics, '$path.slots', '$level 级的法术位数量必须是非负整数');
+        return null;
+      }
+      final slotLevel = slotLevels.at(level);
+      if (slotLevel == null || slotLevel < 1 || slotLevel > 9) {
+        _invalidTable(
+          diagnostics,
+          '$path.slots',
+          'pact 原型 $level 级缺少可用的 slotLevel（1..9）',
+        );
+        return null;
+      }
+      expanded.add(<String, Object?>{'$slotLevel': count});
+    }
+    return expanded;
   }
 
   /// 原型里的 `IntTable` 字段；写了内容却解析不出表 → `invalidTable`（不静默 return）。
@@ -372,3 +503,10 @@ void _unknownField(List<RuleDiagnostic> out, String path, String name) =>
 /// 空数组 / 空对象 = 没有声明任何档位（§3.1 的 `none` 原型就是 `[]`），不是错误。
 bool _isEmptyTable(Object? raw) =>
     (raw is List && raw.isEmpty) || (raw is Map && raw.isEmpty);
+
+/// 契约法术位的原型名（§3.1、§3.3）：它的 `slots` 行内只有计数，环阶由
+/// 同级 `slotLevel` 提供；缺 `slotLevel` 即形状非法。
+const _pactArchetype = 'pact';
+
+/// 压缩编码里的法术位计数：必须是非负整数（小数、负数、非数字一律非法）。
+int? _slotCount(Object? raw) => raw is int && raw >= 0 ? raw : null;

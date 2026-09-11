@@ -32,10 +32,15 @@ class ClassResourceRule {
     required this.recovery,
     this.recoveryTable,
     this.startsAtLevel = 1,
+    this.description,
   });
 
   final String id;
   final String name;
+
+  /// 可选的一句话说明（**档案里禁止出现**，见 §3.1；第三方包可用）。
+  final String? description;
+
   final MaxSpec maximum;
 
   /// 常量恢复语义（未随等级变化时）。
@@ -127,21 +132,36 @@ class ClassRuleSet {
     'spellcasting',
     'resources',
   };
+  static const _spellcastingFields = {
+    'mode',
+    'ability',
+    'listTags',
+    'archetype',
+    'slots',
+    'slotLevel',
+    'prepared',
+    'cantrips',
+    'maximumSpellLevel',
+  };
+  static const _resourceFields = {
+    'id',
+    'name',
+    'maximum',
+    'recovery',
+    'startsAtLevel',
+    'description',
+  };
   static const _modes = {'prepared', 'known', 'pact', 'none'};
   static const _recoveries = {'shortRest', 'shortRestOne', 'longRest', 'none'};
 
-  /// 标准骰面（§5.1 "hitDie 非 d4..d20" 的枚举解释）。
-  ///
-  /// 契约 §3.2 只写了"∈ 4..20"，但该范围会放行 d7/d9 这类不存在的骰子，
-  /// 且与任务给定的 `hitDie: 7 → invalidHitDie` 用例冲突；这里按标准骰面收紧。
-  static const _hitDieFaces = {4, 6, 8, 10, 12, 20};
+  /// 标准骰面（生命骰只可能是这五种；d7/d9/d20 一律拒绝）
+  static const _hitDieFaces = {4, 6, 8, 10, 12};
 
   static ClassRuleSet parse(
     Map<String, Object?> raw, {
     required String path,
     required List<RuleDiagnostic> diagnostics,
     Set<String> abilities = kDefaultAbilities,
-    Set<String> skills = kDefaultSkills,
   }) {
     void error(String code, String field, String message) => diagnostics.add(
       RuleDiagnostic(
@@ -170,7 +190,7 @@ class ClassRuleSet {
         error(
           'invalidHitDie',
           'hitDie',
-          '生命骰只写整数面数（规则书的 d10 就写 10），且必须是标准骰面 d4 / d6 / d8 / d10 / d12 / d20',
+          '生命骰只写整数且必须是标准骰面 4/6/8/10/12，例如 d10 写 10',
         );
       } else {
         hitDie = parsed;
@@ -208,6 +228,10 @@ class ClassRuleSet {
       if (value is! Map) {
         error('invalidSpellcastingMode', 'spellcasting', '必须是对象');
       } else {
+        for (final key in value.keys) {
+          if (_spellcastingFields.contains('$key')) continue;
+          error('unknownField', 'spellcasting.$key', '未知字段 $key');
+        }
         final mode = '${value['mode'] ?? 'none'}'.trim();
         if (!_modes.contains(mode)) {
           error(
@@ -296,6 +320,17 @@ class ClassRuleSet {
               ),
             );
             continue;
+          }
+          for (final key in item.keys) {
+            if (_resourceFields.contains('$key')) continue;
+            diagnostics.add(
+              RuleDiagnostic(
+                path: '$itemPath.$key',
+                severity: RuleSeverity.error,
+                code: 'unknownField',
+                message: '未知字段 $key',
+              ),
+            );
           }
           final id = '${item['id'] ?? ''}'.trim();
           final name = '${item['name'] ?? ''}'.trim();
@@ -401,6 +436,9 @@ class ClassRuleSet {
               recovery: recovery,
               recoveryTable: recoveryTable,
               startsAtLevel: startsAt,
+              description: item['description'] == null
+                  ? null
+                  : '${item['description']}',
             ),
           );
         }

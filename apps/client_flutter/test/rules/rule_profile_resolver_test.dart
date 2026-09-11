@@ -77,7 +77,7 @@ void main() {
       expect(errors.single.message, contains('hitDie'));
     });
 
-    test('非法生命骰、未知属性、未知技能都报 error', () {
+    test('非法生命骰、未知属性都报 error', () {
       final diagnostics = <RuleDiagnostic>[];
       ClassRuleSet.parse(
         {
@@ -87,7 +87,6 @@ void main() {
         path: _path,
         diagnostics: diagnostics,
         abilities: const {'str', 'dex', 'con', 'int', 'wis', 'cha'},
-        skills: const {'洞悉', '医药'},
       );
       final codes = diagnostics.map((d) => d.code).toSet();
       expect(codes, containsAll(['invalidHitDie', 'unknownAbility']));
@@ -107,8 +106,20 @@ void main() {
     });
 
     test('hitDie 只接受标准骰面且诊断精确到字段', () {
-      // 非整数、非标准骰面（d7/d9 这类不存在的骰子）、越界都报错。
-      for (final raw in <Object?>['d12', '10', 3, 5, 7, 9, 11, 13, 21, true]) {
+      // 非整数、非标准骰面（d5/d7/d9/d20 这类不存在或非标准的骰子）、越界都报错。
+      for (final raw in <Object?>[
+        'd12',
+        '10',
+        3,
+        5,
+        7,
+        9,
+        11,
+        13,
+        20,
+        21,
+        true,
+      ]) {
         final diagnostics = <RuleDiagnostic>[];
         ClassRuleSet.parse(
           {'hitDie': raw},
@@ -120,7 +131,7 @@ void main() {
         expect(diagnostics.single.severity, RuleSeverity.error, reason: '$raw');
       }
       // 标准骰面全部接受。
-      for (final raw in <Object?>[4, 6, 8, 10, 12, 20]) {
+      for (final raw in <Object?>[4, 6, 8, 10, 12]) {
         final diagnostics = <RuleDiagnostic>[];
         final rules = ClassRuleSet.parse(
           {'hitDie': raw},
@@ -233,6 +244,63 @@ void main() {
       );
       expect(diagnostics.single.code, 'invalidTable');
       expect(diagnostics.single.path, '$_path.spellcasting.prepared');
+    });
+
+    test('spellcasting 内的未知键报 unknownField，path 精确到键', () {
+      final diagnostics = <RuleDiagnostic>[];
+      ClassRuleSet.parse(
+        {
+          'hitDie': 10,
+          'spellcasting': {
+            'mode': 'prepared',
+            'ability': 'cha',
+            'spellLists': ['spell-list:astral'],
+          },
+        },
+        path: _path,
+        diagnostics: diagnostics,
+      );
+      expect(diagnostics.single.code, 'unknownField');
+      expect(diagnostics.single.path, '$_path.spellcasting.spellLists');
+      expect(diagnostics.single.severity, RuleSeverity.error);
+    });
+
+    test('资源对象内的未知键报 unknownField，path 精确到键', () {
+      final diagnostics = <RuleDiagnostic>[];
+      ClassRuleSet.parse(
+        {
+          'hitDie': 10,
+          'resources': [
+            {'id': 'a', 'name': 'A', 'maximum': 1, 'recover': 'longRest'},
+          ],
+        },
+        path: _path,
+        diagnostics: diagnostics,
+      );
+      expect(diagnostics.single.code, 'unknownField');
+      expect(diagnostics.single.path, '$_path.resources[0].recover');
+      expect(diagnostics.single.severity, RuleSeverity.error);
+    });
+
+    test('资源可选 description（第三方包可用）', () {
+      final diagnostics = <RuleDiagnostic>[];
+      final rules = ClassRuleSet.parse(
+        {
+          'hitDie': 10,
+          'resources': [
+            {
+              'id': 'a',
+              'name': 'A',
+              'maximum': 1,
+              'description': '每回合可用一次',
+            },
+          ],
+        },
+        path: _path,
+        diagnostics: diagnostics,
+      );
+      expect(diagnostics, isEmpty);
+      expect(rules.resources.single.description, '每回合可用一次');
     });
 
     test('recovery 默认 longRest，表形态随等级变化', () {

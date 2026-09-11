@@ -1,5 +1,36 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
+import '../../rules/domain/rule_profile.dart';
+
 class Dnd5eRules {
   const Dnd5eRules._();
+
+  /// 启动时装配的内置规则档案（tier 0）。
+  ///
+  /// 这里是**装配入口**，不是表查询逻辑：本步骤只把档案挂上去，具体查询迁移
+  /// 由后续任务完成。未装配时任何读取都抛错，绝不返回 null / 空档案兜底
+  /// （契约 §4.4：内置档案缺失或非法即启动 fail-fast）。
+  static RuleProfile? _profile;
+
+  static RuleProfile get profile {
+    final profile = _profile;
+    if (profile == null) {
+      throw StateError(
+        'Dnd5eRules 尚未配置规则档案：请在启动时 await Dnd5eRules.configure(...)',
+      );
+    }
+    return profile;
+  }
+
+  static Future<void> configure(RuleProfile profile) async {
+    if (_profile != null) {
+      throw StateError('规则档案已配置，重复 configure 被拒绝');
+    }
+    _profile = profile;
+  }
+
+  @visibleForTesting
+  static void resetForTests() => _profile = null;
 
   static const abilityLabels = {
     'str': '力量',

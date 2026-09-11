@@ -37,6 +37,16 @@ const kClassRuleFields = {
   'resources',
 };
 
+/// `progressions.<name>` 允许的字段（§3.1）。原型**只承载跨职业共享**的进阶量；
+/// `prepared` / `cantrips` 逐职业不同，写在 `classRules.<slug>.spellcasting` 里。
+/// 出现白名单之外的键在解析期就报 `unknownField`，不靠注释或测试兜底。
+const kProgressionFields = {
+  'slots',
+  'slotLevel',
+  'maximumSpellLevel',
+  'minimumLevel',
+};
+
 /// `classRules.<slug>.spellcasting` 允许的字段（§3.3）。
 const kSpellcastingFields = {
   'mode',

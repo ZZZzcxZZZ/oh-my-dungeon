@@ -1,6 +1,7 @@
 // test/rules/rule_profile_resolver_test.dart
 import 'package:dnd_table_client/src/features/rules/domain/class_rule_set.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_diagnostic.dart';
+import 'package:dnd_table_client/src/features/rules/domain/rule_profile.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_profile_resolver.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -744,39 +745,26 @@ void main() {
       ],
       'progressions': {
         'none': {'slots': []},
+        // 原型**只承载** slots / slotLevel / maximumSpellLevel / minimumLevel（§3.1）；
+        // 白名单之外的键（典型是 prepared / cantrips）由解析期报 unknownField，
+        // 并有专门的测试守住——本 fixture 不得再往原型里塞这两列。
         'half-caster': {
           'minimumLevel': 1,
           'slots': List.generate(20, (_) => <String, Object?>{'1': 2}),
-          // 原型**故意**保留 prepared / cantrips：契约 §3.1 禁止原型承载这两列，
-          // 解析必须忽略它们，这两行用于证明 preparedLimit 没有原型回退路径。
-          'prepared': [
-            2,
-            3,
-            4,
-            5,
-            6,
-            6,
-            7,
-            7,
-            9,
-            9,
-            10,
-            10,
-            11,
-            11,
-            12,
-            12,
-            14,
-            14,
-            15,
-            15,
-          ],
-          'cantrips': List.filled(20, 0),
           'maximumSpellLevel': List.filled(20, 1),
         },
         'third-caster': {
           'minimumLevel': 3,
           'slots': List.generate(20, (_) => <String, Object?>{'1': 1}),
+          'maximumSpellLevel': List.filled(20, 2),
+        },
+        // pact：minimumLevel(3) 比 slotLevel 表自身的最早声明等级(1) 更晚，
+        // 用来区分"原型的 minimumLevel 守卫"与"表自己的下界"。
+        'pact': {
+          'minimumLevel': 3,
+          'slots': List.generate(20, (_) => <String, Object?>{'1': 1}),
+          'slotLevel': {'1': 1, '3': 2, '5': 3},
+          'maximumSpellLevel': List.filled(20, 1),
         },
       },
       'classes': {
@@ -809,6 +797,98 @@ void main() {
       };
       final result = RuleProfileResolver.resolveBuiltin(raw);
       expect(result.errors.single.code, 'unknownArchetype');
+      // error ⇒ 整包阻断：消费方拿不到半成品档案（§4.4）。
+      expect(result.profile, isNull);
+    });
+
+    test('原型白名单：prepared / cantrips 等原型不得承载的键报 unknownField', () {
+      for (final extra in ['prepared', 'cantrips']) {
+        final raw = archive();
+        (raw['progressions']! as Map)['half-caster'] = {
+          'minimumLevel': 1,
+          'slots': List.generate(20, (_) => <String, Object?>{'1': 2}),
+          'maximumSpellLevel': List.filled(20, 1),
+          extra: List.filled(20, 1),
+        };
+        final result = RuleProfileResolver.resolveBuiltin(raw);
+        expect(result.profile, isNull, reason: extra);
+        expect(result.errors.single.code, 'unknownField', reason: extra);
+        expect(
+          result.errors.single.severity,
+          RuleSeverity.error,
+          reason: extra,
+        );
+        expect(
+          result.errors.single.path,
+          '\$.progressions.half-caster.$extra',
+          reason: extra,
+        );
+      }
+    });
+
+    test('档案必须显式声明 abilities 与 skills（缺失 / 为空 / 类型错误都阻断）', () {
+      final cases = <(String, Map<String, Object?>)>[
+        ('abilities 缺失', archive()..remove('abilities')),
+        ('abilities 为空', archive()..['abilities'] = <Object?>[]),
+        ('abilities 类型错误', archive()..['abilities'] = 'str,dex'),
+        ('abilities 项类型错误', archive()..['abilities'] = ['str', 3]),
+        ('skills 缺失', archive()..remove('skills')),
+        ('skills 为空', archive()..['skills'] = <Object?>[]),
+        ('skills 类型错误', archive()..['skills'] = {'察觉': 'wis'}),
+        ('skills 项类型错误', archive()..['skills'] = ['察觉']),
+        (
+          'skills 项缺 ability',
+          archive()
+            ..['skills'] = [
+              {'name': '察觉'},
+            ],
+        ),
+      ];
+      for (final (label, raw) in cases) {
+        final result = RuleProfileResolver.resolveBuiltin(raw);
+        expect(result.profile, isNull, reason: label);
+        expect(result.errors.map((d) => d.code).toSet(), {
+          'invalidTable',
+        }, reason: label);
+      }
+    });
+
+    test('progressions / classes 及单项类型错误报 invalidTable，不静默吞掉', () {
+      final cases = <(String, Map<String, Object?>)>[
+        ('progressions 缺失', archive()..remove('progressions')),
+        ('progressions 类型错误', archive()..['progressions'] = <Object?>[]),
+        ('进度原型不是对象', archive()..['progressions'] = {'none': <Object?>[]}),
+        (
+          'slotLevel 非法',
+          archive()
+            ..['progressions'] = {
+              'pact': {
+                'slots': <Object?>[],
+                'slotLevel': {'21': 3},
+              },
+            },
+        ),
+        (
+          'minimumLevel 类型错误',
+          archive()
+            ..['progressions'] = {
+              'third-caster': {'slots': <Object?>[], 'minimumLevel': '3'},
+            },
+        ),
+        ('classes 缺失', archive()..remove('classes')),
+        ('classes 类型错误', archive()..['classes'] = 'barbarian'),
+        ('职业规则不是对象', archive()..['classes'] = {'barbarian': 12}),
+      ];
+      for (final (label, raw) in cases) {
+        final result = RuleProfileResolver.resolveBuiltin(raw);
+        expect(result.profile, isNull, reason: label);
+        expect(result.errors.single.code, 'invalidTable', reason: label);
+        expect(
+          result.errors.single.severity,
+          RuleSeverity.error,
+          reason: label,
+        );
+      }
     });
 
     test('字段级合并：条目优先，档案补齐，并记录来源', () {
@@ -828,7 +908,17 @@ void main() {
       expect(merged.hitDie, 12, reason: '档案补齐');
       expect(merged.savingThrowAbilities, {'dex'}, reason: '条目优先，整字段替换');
       expect(merged.fieldSources['hitDie']!.originId, 'builtin:dnd5e-2024');
+      expect(
+        merged.fieldSources['hitDie']!.tier,
+        kBuiltinTier,
+        reason: '档案来源 tier 0',
+      );
       expect(merged.fieldSources['savingThrowAbilities']!.originId, '<entry>');
+      expect(
+        merged.fieldSources['savingThrowAbilities']!.tier,
+        kEntryTier,
+        reason: '条目来源 tier 100',
+      );
       // 来源只记录真正被声明过的字段：双方都没声明 spellcasting / resources 时
       // 不得因为"默认空集合"而凭空记一条来源。
       expect(merged.fieldSources.keys, {'hitDie', 'savingThrowAbilities'});
@@ -903,6 +993,93 @@ void main() {
       expect(third.spellSlots(3), {'1': 1}, reason: '达到原型 minimumLevel 后展开');
     });
 
+    test('maxSpellLevel：自身稀疏表低于最早声明等级时回退原型（§3.12）', () {
+      final profile = RuleProfileResolver.resolveBuiltin(archive()).profile!;
+      ResolvedClassRules withArchetype(String archetype, Object? ownTable) =>
+          RuleProfileResolver.resolveClassRules(
+            profile: profile,
+            slug: 'astral',
+            entryRules: ClassRuleSet.parse(
+              {
+                'spellcasting': {
+                  'mode': 'prepared',
+                  'ability': 'wis',
+                  'archetype': archetype,
+                  'maximumSpellLevel': ?ownTable,
+                },
+              },
+              path: r'$.structured.classRules',
+              diagnostics: <RuleDiagnostic>[],
+            ),
+          );
+
+      // half-caster 的 minimumLevel = 1：自身表 5 级才声明，1..4 级回退原型。
+      final half = withArchetype('half-caster', {'5': 3});
+      expect(half.maxSpellLevel(1), 1, reason: '自身未声明该等级 → 回退原型');
+      expect(half.maxSpellLevel(4), 1, reason: '低于自身表最早声明等级仍回退原型');
+      expect(half.maxSpellLevel(5), 3, reason: '自身已声明 → 用自身值');
+      expect(half.maxSpellLevel(9), 3, reason: '高于最后声明沿用自身最后值');
+
+      // third-caster 的 minimumLevel = 3：原型的 minimumLevel 守卫独立生效
+      // （它的 maximumSpellLevel 表本身最早声明等级是 1，两者不能互相冒充）。
+      final third = withArchetype('third-caster', {'5': 4});
+      expect(third.maxSpellLevel(2), isNull, reason: '低于原型 minimumLevel → 未声明');
+      expect(third.maxSpellLevel(3), 2, reason: '达到原型 minimumLevel 后回退原型');
+      expect(third.maxSpellLevel(5), 4, reason: '自身已声明 → 用自身值');
+    });
+
+    test('pactSlotLevel：none / 低于 minimumLevel / 正常三态都走统一守卫（§3.3）', () {
+      final profile = RuleProfileResolver.resolveBuiltin(archive()).profile!;
+      ResolvedClassRules withMode(String mode) =>
+          RuleProfileResolver.resolveClassRules(
+            profile: profile,
+            slug: 'astral',
+            entryRules: ClassRuleSet.parse(
+              {
+                'spellcasting': {
+                  'mode': mode,
+                  'ability': 'cha',
+                  'archetype': 'pact',
+                },
+              },
+              path: r'$.structured.classRules',
+              diagnostics: <RuleDiagnostic>[],
+            ),
+          );
+
+      expect(
+        withMode('none').pactSlotLevel(5),
+        isNull,
+        reason: 'mode none → 契约法术位不存在（无守卫的旧实现会回退原型）',
+      );
+      expect(
+        withMode('pact').pactSlotLevel(2),
+        isNull,
+        reason: '低于原型 minimumLevel（原型 slotLevel 表本身 1 级就有值）',
+      );
+      expect(withMode('pact').pactSlotLevel(3), 2);
+      expect(withMode('pact').pactSlotLevel(5), 3);
+      expect(withMode('pact').pactSlotLevel(9), 3, reason: '高于最后声明沿用');
+    });
+
+    test('spellcastingAbility：mode none 时不返回属性（§3.6 第 3 步）', () {
+      final profile = RuleProfileResolver.resolveBuiltin(archive()).profile!;
+      ResolvedClassRules withMode(String mode) =>
+          RuleProfileResolver.resolveClassRules(
+            profile: profile,
+            slug: 'astral',
+            entryRules: ClassRuleSet.parse(
+              {
+                'spellcasting': {'mode': mode, 'ability': 'cha'},
+              },
+              path: r'$.structured.classRules',
+              diagnostics: <RuleDiagnostic>[],
+            ),
+          );
+      expect(withMode('none').spellcastingAbility, isNull);
+      expect(withMode('prepared').spellcastingAbility, 'cha');
+    });
+
     test('资源：startsAtLevel 过滤 + 未声明上限跳过（不产出上限 0）', () {
       final profile = RuleProfileResolver.resolveBuiltin(archive()).profile!;
       final rules = RuleProfileResolver.resolveClassRules(
@@ -937,6 +1114,33 @@ void main() {
         'surge',
         'late',
       ]);
+    });
+
+    test('resourcesAt：表内显式 0 仍是"存在但上限 0"的资源（§3.12）', () {
+      final profile = RuleProfileResolver.resolveBuiltin(archive()).profile!;
+      final rules = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'astral',
+        entryRules: ClassRuleSet.parse(
+          {
+            'resources': [
+              {
+                'id': 'drained',
+                'name': '枯竭',
+                'maximum': {
+                  'table': {'5': 0},
+                },
+              },
+            ],
+          },
+          path: r'$.structured.classRules',
+          diagnostics: <RuleDiagnostic>[],
+        ),
+      );
+      expect(rules.resourcesAt(4, const {}), isEmpty, reason: '未声明等级整条跳过');
+      final at5 = rules.resourcesAt(5, const {});
+      expect(at5.single.id, 'drained');
+      expect(at5.single.maximum, 0, reason: '显式 0 是合法上限，不是"未声明"');
     });
   });
 }

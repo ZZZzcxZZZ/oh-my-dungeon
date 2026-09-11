@@ -34,18 +34,16 @@ class RuleFieldSource {
 
 /// `progressions.<name>`：跨职业共享的进阶模板（§3.1）。
 ///
-/// 契约规定原型**只承载** `slots` / `slotLevel`（仅 pact）/ `maximumSpellLevel`；
-/// `prepared` / `cantrips` 逐职业不同，必须写在职职业自己的 `spellcasting` 里。
-/// 这里保留后两个字段只是为了照实解析档案形状，**解析时一律不得读取它们**
-/// （否则会把逐职业的数值静默换成原型值，见 §3.1）。
+/// 契约规定原型**只承载** `slots` / `slotLevel`（仅 pact）/ `maximumSpellLevel`
+/// （外加 `minimumLevel` 这一元数据）。`prepared` / `cantrips` 逐职业不同，必须有
+/// 职业自己的 `spellcasting` 承载——因此这两个字段**不在类型上存在**，让"禁止原型
+/// 承载它们"由编译期保证，而不是只靠注释（解析期另有 `unknownField` 白名单，§3.1）。
 class ClassProgression {
   const ClassProgression({
     required this.name,
     this.minimumLevel = 1,
     this.slots,
     this.slotLevel,
-    this.prepared,
-    this.cantrips,
     this.maximumSpellLevel,
   });
 
@@ -53,11 +51,6 @@ class ClassProgression {
   final int minimumLevel;
   final SlotTable? slots;
   final IntTable? slotLevel;
-
-  /// 原型**不得**承载的列：解析保留，但 `preparedLimit` 绝不回退到这里（§3.1）。
-  final IntTable? prepared;
-  final IntTable? cantrips;
-
   final IntTable? maximumSpellLevel;
 }
 
@@ -136,7 +129,9 @@ class ResolvedClassRules {
   /// 职业**自身**声明的最早等级（§3.12 的 `{min, max}` 里的 min）。
   final int? declaredMinLevel;
 
-  String? get spellcastingAbility => spellcasting?.ability;
+  /// `mode == 'none'` 即"不使用施法"：无施法属性（§3.6 第 3 步）。
+  String? get spellcastingAbility =>
+      spellcastingMode == 'none' ? null : spellcasting?.ability;
 
   String get spellcastingMode => spellcasting?.mode ?? 'none';
 
@@ -154,8 +149,10 @@ class ResolvedClassRules {
     return progression.slots?.at(level) ?? const {};
   }
 
+  /// 契约魔法法术位的环阶：与 [maxSpellLevel] 走同一套两级取值（§3.3、§3.12）——
+  /// `mode == 'none'`、低于原型 `minimumLevel`、两侧都未声明时都是 null。
   int? pactSlotLevel(int level) =>
-      spellcasting?.slotLevel?.at(level) ?? archetype?.slotLevel?.at(level);
+      _pick(level, (c) => c.slotLevel, (p) => p.slotLevel);
 
   /// 已准备/已知法术上限：**只看职业自身**，原型不提供这一列（§3.1、§3.3）。
   /// 未声明返回 null，不回退原型、不猜。

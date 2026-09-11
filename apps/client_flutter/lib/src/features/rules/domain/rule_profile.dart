@@ -18,9 +18,9 @@ const kEntryTier = 100;
 
 /// 契约法术位的原型名（§3.1、§3.3）。
 ///
-/// 它是"是否使用契约魔法"的唯一判据来源：主职业可以显式写 `mode: "pact"`，也可以
-/// 写 `mode: "prepared"` + `archetype: "pact"`（内置档案的邪术师即后者）。
-/// 两条路径都由 [ResolvedClassRules.usesPactMagic] 归一。
+/// 它是"是否使用契约魔法"的**唯一**判据：只看 `spellcasting.archetype` 挂载到的
+/// 原型名，**不看 `mode`**（2024 邪术师写 `mode: "prepared"` + `archetype: "pact"`，
+/// 它准备法术，但法术位走契约魔法）。读取口只有 [ResolvedClassRules.usesPactMagic]。
 const kPactArchetype = 'pact';
 
 /// 某个字段最终取自哪里（§3.7）。
@@ -142,10 +142,11 @@ class ResolvedClassRules {
 
   String get spellcastingMode => spellcasting?.mode ?? 'none';
 
-  /// 是否使用契约魔法：显式 `mode: "pact"`，或所挂载的原型就是 `pact`
-  /// （内置档案里的邪术师写成 `mode: "prepared"` + `archetype: "pact"`）。
-  bool get usesPactMagic =>
-      spellcastingMode == 'pact' || archetype?.name == kPactArchetype;
+  /// 是否使用契约魔法：**唯一判据**是所挂载的原型名是 [kPactArchetype]。
+  /// `mode` 不参与判断——`mode: "pact"` 已不是合法取值（§3.3），2024 邪术师写成
+  /// `mode: "prepared"` + `archetype: "pact"`。shim 与所有调用方都走这里，
+  /// 不再有第二处"mode 或 archetype"的双重信号。
+  bool get usesPactMagic => archetype?.name == kPactArchetype;
 
   /// 法术位：自身 slots 表优先（**已声明**的等级整级替换，哪怕是空表 `{}`）；
   /// 自身未声明该等级（`at` 返回 null）才回退原型；原型也低于 `minimumLevel`

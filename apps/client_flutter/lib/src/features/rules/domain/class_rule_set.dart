@@ -73,7 +73,9 @@ const kResourceFields = {
 /// 标准生命骰骰面（§3.2）：生命骰只可能是这五种；d7/d9/d20 一律拒绝。
 const kStandardHitDieFaces = {4, 6, 8, 10, 12};
 
-const _modes = {'prepared', 'known', 'pact', 'none'};
+/// 法术选择模型（§3.3）：契约魔法**不在这里**表示，唯一信号是
+/// `spellcasting.archetype == 'pact'`。
+const _modes = {'prepared', 'known', 'none'};
 const _recoveries = {'shortRest', 'shortRestOne', 'longRest', 'none'};
 
 void _addError(
@@ -462,7 +464,7 @@ String _parseSpellcastingMode(
       diagnostics,
       '$path.spellcasting.mode',
       'invalidSpellcastingMode',
-      'spellcasting.mode 必须是 prepared / known / pact / none',
+      'spellcasting.mode 必须是 prepared / known / none',
     );
   }
   return mode;

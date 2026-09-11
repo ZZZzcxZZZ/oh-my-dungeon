@@ -194,6 +194,28 @@ void main() {
         expect(diagnostics.single.path, '$_path.spellcasting.mode');
       });
 
+      test('mode 不再接受 pact：契约魔法只由 archetype 表示', () {
+        // 契约魔法是"法术位进阶"而不是"法术选择模型"：`mode` 的枚举里没有 pact，
+        // 唯一信号是 `archetype`（§3.3）。旧值必须报 invalidSpellcastingMode。
+        final diagnostics = <RuleDiagnostic>[];
+        final rules = ClassRuleSet.parse(
+          {
+            'hitDie': 10,
+            'spellcasting': {'mode': 'pact', 'ability': 'cha'},
+          },
+          path: _path,
+          diagnostics: diagnostics,
+        );
+        expect(diagnostics.single.code, 'invalidSpellcastingMode');
+        expect(diagnostics.single.path, '$_path.spellcasting.mode');
+        expect(
+          diagnostics.single.message,
+          'spellcasting.mode 必须是 prepared / known / none',
+        );
+        // 解析器保留原值交给诊断，但契约侧不再把 mode 当契约魔法信号。
+        expect(rules.spellcasting!.mode, 'pact');
+      });
+
       test('施法属性缺失或非法报 unknownAbility', () {
         final missing = <RuleDiagnostic>[];
         ClassRuleSet.parse(
@@ -221,7 +243,7 @@ void main() {
       });
 
       test('mode != none 时 ability 必填', () {
-        for (final mode in ['prepared', 'known', 'pact']) {
+        for (final mode in ['prepared', 'known']) {
           final diagnostics = <RuleDiagnostic>[];
           ClassRuleSet.parse(
             {
@@ -1236,13 +1258,13 @@ void main() {
         reason: 'mode none → 契约法术位不存在（无守卫的旧实现会回退原型）',
       );
       expect(
-        withMode('pact').pactSlotLevel(2),
+        withMode('prepared').pactSlotLevel(2),
         isNull,
         reason: '低于原型 minimumLevel（原型 slotLevel 表本身 1 级就有值）',
       );
-      expect(withMode('pact').pactSlotLevel(3), 2);
-      expect(withMode('pact').pactSlotLevel(5), 3);
-      expect(withMode('pact').pactSlotLevel(9), 3, reason: '高于最后声明沿用');
+      expect(withMode('prepared').pactSlotLevel(3), 2);
+      expect(withMode('prepared').pactSlotLevel(5), 3);
+      expect(withMode('prepared').pactSlotLevel(9), 3, reason: '高于最后声明沿用');
     });
 
     test('spellcastingAbility：mode none 时不返回属性（§3.6 第 3 步）', () {

@@ -168,6 +168,59 @@ void main() {
     });
   });
 
+  group('契约魔法判据（只看 archetype，不看 mode）', () {
+    // 契约魔法属于"法术位进阶"而不是"法术选择模型"：唯一信号是
+    // `archetype: "pact"`。内置档案的邪术师写 `mode: "prepared"`（它准备法术），
+    // 仍然使用契约魔法；`mode: "pact"` 已不是合法取值。
+    const pactEntry = <String, Object?>{
+      'classRules': <String, Object?>{
+        'hitDie': 8,
+        'spellcasting': <String, Object?>{
+          'mode': 'prepared',
+          'ability': 'cha',
+          'archetype': 'pact',
+        },
+      },
+    };
+
+    test('mode: prepared + archetype: pact → 契约魔法，法术位来自 pact 原型', () {
+      final rules = Dnd5eRules.resolveClassRules(
+        entryId: 'test-pack:class/star-pact',
+        classSummary: '星之契约者',
+        structured: pactEntry,
+      );
+      expect(rules.spellcastingMode, 'prepared');
+      expect(
+        rules.usesPactMagic,
+        isTrue,
+        reason: '判据来自 archetype，而不是 mode（mode 是 prepared）',
+      );
+      // 档案 pact 原型 5 级：slotLevel=3、每级计数 2 → {"3": 2}；
+      // 若误按行下标展开会得到 {"1": 2}，这里的断言把它钉死。
+      expect(rules.spellSlots(5), {'3': 2});
+    });
+
+    test('mode: pact 已非法，且不再表示契约魔法', () {
+      final rules = Dnd5eRules.resolveClassRules(
+        entryId: 'test-pack:class/legacy-pact',
+        classSummary: '旧契约者',
+        structured: const <String, Object?>{
+          'classRules': <String, Object?>{
+            'hitDie': 8,
+            'spellcasting': <String, Object?>{
+              'mode': 'pact',
+              'ability': 'cha',
+            },
+          },
+        },
+      );
+      // 没有 archetype 可回退：旧的双重信号已被移除，mode: pact 不再算契约魔法。
+      expect(rules.usesPactMagic, isFalse);
+      expect(rules.pactSlotLevel(5), isNull);
+      expect(rules.spellSlots(5), isEmpty);
+    });
+  });
+
   group('职业资源', () {
     test('战士：第二气息与动作如潮', () {
       final l1 = Dnd5eRules.classResourceMaximums(classSummary: '战士', level: 1);

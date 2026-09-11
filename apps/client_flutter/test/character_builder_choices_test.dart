@@ -486,18 +486,17 @@ void main() {
                 name: '法师 / Wizard',
                 structured: const {
                   'hitDie': 'd6',
-                  'spellcasting': {
-                    'mode': 'prepared',
-                    'ability': 'int',
-                    'listTags': ['spell-list:wizard'],
-                    'progression': [
-                      {
-                        'level': 1,
-                        'maximumSpellLevel': 1,
-                        'maximumCantrips': 3,
-                        'maximumLeveledSpells': 4,
-                      },
-                    ],
+                  // 任务 8.5：法术选择规则走新契约 `classRules.spellcasting`
+                  // （逐级表 + 原型），不再有顶层 progression 行数组。
+                  'classRules': {
+                    'spellcasting': {
+                      'mode': 'prepared',
+                      'ability': 'int',
+                      'listTags': ['spell-list:wizard'],
+                      'maximumSpellLevel': [1],
+                      'cantrips': [3],
+                      'prepared': [4],
+                    },
                   },
                 },
               ),

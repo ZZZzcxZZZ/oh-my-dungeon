@@ -169,26 +169,44 @@ class Dnd5eRules {
     return '${weapon.damageDie}${formatModifier(bonus)}';
   }
 
-  /// 武器是否灵巧：只读条目声明（`finesse: true` 或 `properties` 含「灵巧」）。
+  /// 武器是否灵巧：只读条目声明（`finesse: true`，或 `properties` / `category`
+  /// 文本含「灵巧」）。真实 PHB 条目的特性写在 `properties`（如 `"灵巧，轻型"`），
+  /// `category` 只写类别（如 `"军用武器"`）。
   static bool isFinesse(Map<String, Object?>? structured) {
     if (structured == null) return false;
     if (structured['finesse'] == true) return true;
-    return '${structured['properties'] ?? ''}'.contains('灵巧');
+    return _weaponText(structured).contains('灵巧');
   }
+
+  /// `properties` 与 `category` 的拼接文本：真实物品条目把武器特性分散在这两处，
+  /// 文本判据只在这里拼一次，[isFinesse] 与 [weaponAbility] 共用。
+  static String _weaponText(Map<String, Object?> structured) =>
+      '${structured['properties'] ?? ''} ${structured['category'] ?? ''}';
 
   /// 武器攻击属性：**只读物品条目的声明**，不按物品名猜。
   ///
-  /// 顺序（契约 §3.6 第 3 步的"未声明即不猜"在武器条目上的落地）：
+  /// 判据顺序（唯一实现，[WeaponAttackDerivation] 也必须走这里，不再各写一份）：
   /// 1. `structured.ability` ∈ {str, dex} → 用它；
-  /// 2. 否则 `structured.finesse == true` 或 `structured.properties` 含「灵巧」→ dex；
-  /// 3. 否则 `structured.category` 含「远程」→ dex；
+  /// 2. `properties` / `category` 含「弹药」或「远程」→ dex（真实长弓写
+  ///    `properties: "弹药（射程 150/600），重型，双手"`，`category` 不含「远程」）；
+  /// 3. `finesse: true` 或 `properties` / `category` 含「灵巧」→ 取 STR/DEX 较优者
+  ///    （提供 [abilities] 时比较调整值，平手取 dex；未提供时取 dex）；
   /// 4. 否则 str。
-  static String? weaponAbility(Map<String, Object?>? structured) {
+  static String? weaponAbility(
+    Map<String, Object?>? structured, {
+    Map<String, Object?>? abilities,
+  }) {
     if (structured == null) return null;
     final declared = '${structured['ability'] ?? ''}'.trim().toLowerCase();
     if (declared == 'str' || declared == 'dex') return declared;
-    if (isFinesse(structured)) return 'dex';
-    if ('${structured['category'] ?? ''}'.contains('远程')) return 'dex';
+    final text = _weaponText(structured);
+    if (text.contains('弹药') || text.contains('远程')) return 'dex';
+    if (isFinesse(structured)) {
+      if (abilities == null) return 'dex';
+      final dex = abilityBonus(abilities, 'dex');
+      final str = abilityBonus(abilities, 'str');
+      return dex >= str ? 'dex' : 'str';
+    }
     return 'str';
   }
 

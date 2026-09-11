@@ -99,10 +99,16 @@ void main() {
       };
 
       // 任务 8：武器数值来自物品条目自身的声明，物品名映射表已删除。
+      // 任务 8.5：真实 PHB 长弓没有 `ability`，`category` 也不含「远程」，
+      // 只能靠 `properties` 里的「弹药」判成 DEX。
       final longbow = _weaponEntry(
         id: 'guide:equipment/longbow',
         name: '长弓',
-        structured: const {'category': '远程武器', 'damage': '1d8 穿刺'},
+        structured: const {
+          'category': '军用武器',
+          'damage': '1d8 穿刺',
+          'properties': '弹药（射程 150/600），重型，双手',
+        },
       );
       final ability = Dnd5eRules.weaponAbility(longbow.structured)!;
 
@@ -158,13 +164,44 @@ void main() {
     });
 
     test('weaponAbility 只读条目声明，不按物品名猜', () {
-      // ability 显式声明优先。
+      // ① ability 显式声明优先（任务 10 的提取器会为武器输出这一列）。
       expect(
         Dnd5eRules.weaponAbility(const {'ability': 'dex', 'category': '军用武器'}),
         'dex',
       );
-      // 灵巧（finesse 或 properties 里的「灵巧」）→ dex。
-      expect(Dnd5eRules.weaponAbility(const {'finesse': true}), 'dex');
+      expect(
+        Dnd5eRules.weaponAbility(const {
+          'ability': 'str',
+          'category': '军用武器',
+          'properties': '灵巧，轻型',
+        }),
+        'str',
+        reason: '显式 ability 优先于文本判据',
+      );
+      // ② 弹药 / 远程 → dex（真实长弓的 properties 文本）。
+      expect(
+        Dnd5eRules.weaponAbility(const {
+          'category': '军用武器',
+          'properties': '弹药（射程 150/600），重型，双手',
+        }),
+        'dex',
+      );
+      expect(Dnd5eRules.weaponAbility(const {'category': '远程武器'}), 'dex');
+      // ③ 灵巧 → 取 STR/DEX 较优者（无属性上下文时取 dex）。
+      expect(
+        Dnd5eRules.weaponAbility(
+          const {'category': '军用武器', 'properties': '灵巧，轻型'},
+          abilities: const {'str': 16, 'dex': 10},
+        ),
+        'str',
+      );
+      expect(
+        Dnd5eRules.weaponAbility(
+          const {'category': '军用武器', 'properties': '灵巧，轻型'},
+          abilities: const {'str': 10, 'dex': 16},
+        ),
+        'dex',
+      );
       expect(
         Dnd5eRules.weaponAbility(const {
           'category': '军用武器',
@@ -172,10 +209,60 @@ void main() {
         }),
         'dex',
       );
-      // 远程类别 → dex；近战默认 str。
-      expect(Dnd5eRules.weaponAbility(const {'category': '远程武器'}), 'dex');
+      expect(Dnd5eRules.weaponAbility(const {'finesse': true}), 'dex');
+      // ④ 其余近战默认 str。
       expect(Dnd5eRules.weaponAbility(const {'category': '军用武器'}), 'str');
       expect(Dnd5eRules.weaponAbility(null), isNull);
+    });
+
+    test('真实 PHB 形状的武器判据：长弓 DEX、短剑取较优、长剑 STR', () {
+      const abilities = {'str': 16, 'dex': 12};
+
+      // 长弓：无 ability、category 不含「远程」，properties 含「弹药」→ dex。
+      expect(
+        Dnd5eRules.weaponAbility(
+          const {
+            'category': '军用武器',
+            'damage': '1d8 穿刺',
+            'properties': '弹药（射程 150/600），重型，双手',
+          },
+          abilities: abilities,
+        ),
+        'dex',
+      );
+
+      // 短剑：properties 含「灵巧」→ STR/DEX 较优者。
+      const shortsword = {
+        'category': '军用武器',
+        'damage': '1d6 穿刺',
+        'properties': '灵巧，轻型',
+      };
+      expect(
+        Dnd5eRules.weaponAbility(shortsword, abilities: abilities),
+        'str',
+        reason: 'STR 16 > DEX 12',
+      );
+      expect(
+        Dnd5eRules.weaponAbility(shortsword, abilities: const {
+          'str': 12,
+          'dex': 16,
+        }),
+        'dex',
+        reason: 'DEX 16 > STR 12',
+      );
+
+      // 普通长剑：既非弹药/远程也非灵巧 → str。
+      expect(
+        Dnd5eRules.weaponAbility(
+          const {
+            'category': '军用武器',
+            'damage': '1d8 挥砍',
+            'properties': '多用（1d10）',
+          },
+          abilities: abilities,
+        ),
+        'str',
+      );
     });
   });
 
@@ -219,7 +306,12 @@ void main() {
       _weaponEntry(
         id: 'guide:equipment/longbow',
         name: '长弓',
-        structured: const {'category': '远程武器', 'damage': '1d8 穿刺'},
+        // 真实 PHB 形状：没有 ability，category 不含「远程」。
+        structured: const {
+          'category': '军用武器',
+          'damage': '1d8 穿刺',
+          'properties': '弹药（射程 150/600），重型，双手',
+        },
       ),
       _weaponEntry(
         id: 'guide:equipment/longsword',
@@ -302,6 +394,101 @@ void main() {
 
       expect(attacks.single.bonus, 5, reason: 'DEX 16 → +3，熟练 +2');
       expect(attacks.single.damageFormula, '1d4+3');
+    });
+
+    test('真实形状的长弓即使力量更高也按敏捷派生（任务 8.5 回归）', () {
+      final strongCharacter = character.copyWith(
+        abilities: const <String, Object?>{
+          'str': 18,
+          'dex': 10,
+          'con': 12,
+          'int': 10,
+          'wis': 14,
+          'cha': 8,
+        },
+        inventory: const <Map<String, Object?>>[
+          <String, Object?>{
+            'entryId': 'guide:equipment/longbow',
+            'name': '长弓',
+            'quantity': 1,
+          },
+        ],
+      );
+      final attacks = WeaponAttackDerivation.derive(
+        character: strongCharacter,
+        contentEntries: <ContentEntry>[
+          _weaponEntry(
+            id: 'guide:equipment/longbow',
+            name: '长弓',
+            structured: const {
+              'category': '军用武器',
+              'damage': '1d8 穿刺',
+              'properties': '弹药（射程 150/600），重型，双手',
+            },
+          ),
+        ],
+      );
+
+      expect(
+        attacks.single.bonus,
+        2,
+        reason: 'DEX 10 → +0，熟练 +2；若误用 STR 18 会是 +6',
+      );
+      expect(attacks.single.damageFormula, '1d8');
+    });
+
+    test('真实形状的短剑在 str / dex 中取较高者', () {
+      ContentEntry shortsword() => _weaponEntry(
+        id: 'guide:equipment/shortsword',
+        name: '短剑',
+        // 真实 PHB 数据把"灵巧"写在 properties 里，而不是布尔字段。
+        structured: const {
+          'category': '军用武器',
+          'damage': '1d6 穿刺',
+          'properties': '灵巧，轻型',
+        },
+      );
+      List<Map<String, Object?>> inventory() => const <Map<String, Object?>>[
+        <String, Object?>{
+          'entryId': 'guide:equipment/shortsword',
+          'name': '短剑',
+          'quantity': 1,
+        },
+      ];
+
+      final strong = WeaponAttackDerivation.derive(
+        character: character.copyWith(
+          abilities: const <String, Object?>{
+            'str': 16,
+            'dex': 10,
+            'con': 12,
+            'int': 10,
+            'wis': 14,
+            'cha': 8,
+          },
+          inventory: inventory(),
+        ),
+        contentEntries: <ContentEntry>[shortsword()],
+      );
+      expect(strong.single.bonus, 5, reason: 'STR 16 → +3，熟练 +2');
+      expect(strong.single.damageFormula, '1d6+3');
+
+      final nimble = WeaponAttackDerivation.derive(
+        character: character.copyWith(
+          abilities: const <String, Object?>{
+            'str': 10,
+            'dex': 16,
+            'con': 12,
+            'int': 10,
+            'wis': 14,
+            'cha': 8,
+          },
+          inventory: inventory(),
+        ),
+        contentEntries: <ContentEntry>[shortsword()],
+      );
+      expect(nimble.single.bonus, 5, reason: 'DEX 16 → +3，熟练 +2');
+      expect(nimble.single.damageFormula, '1d6+3');
     });
 
     test('条目不在资料库（或物品名相同但没有 entryId）时不产出攻击', () {

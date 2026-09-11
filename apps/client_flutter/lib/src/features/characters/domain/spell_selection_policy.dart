@@ -1,4 +1,5 @@
 import '../../content/domain/content_entry.dart';
+import 'dnd5e_rules.dart';
 
 class SpellSelectionRules {
   const SpellSelectionRules({
@@ -33,47 +34,44 @@ class SpellSelectionRules {
 }
 
 abstract final class SpellSelectionPolicy {
+  /// 法术选择规则：**只读新契约**（`structured.classRules.spellcasting` ∪ 内置档案，
+  /// 条目优先），不再读旧的顶层 `structured.spellcasting.progression` 行数组。
+  ///
+  /// 取值全部经 [Dnd5eRules.resolveClassRules]：
+  /// - `mode` / `ability` / `listTags` 来自解析出的 `spellcasting`；
+  /// - `maximumSpellLevel` 来自 `resolved.maxSpellLevel(level)`（自身表 → 原型表）；
+  /// - `maximumCantrips` / `maximumLeveledSpells` 来自 `cantripLimit` / `preparedLimit`
+  ///   （只看职业自身，原型不承载这两列）。
+  ///
+  /// **未声明即未配置**：没有 `spellcasting` 声明、`mode == 'none'`，或该等级算不出
+  /// 最高环阶时返回 [SpellSelectionRules.unconfigured]，绝不猜。
   static SpellSelectionRules rulesFor({
     required ContentEntry? classEntry,
     required int characterLevel,
   }) {
-    final raw = classEntry?.structured['spellcasting'];
-    if (raw is! Map) return const SpellSelectionRules.unconfigured();
-
-    final spellcasting = Map<String, Object?>.from(raw);
-    final progression = _mapList(spellcasting['progression']);
-    final level = characterLevel.clamp(1, 20);
-    Map<String, Object?>? activeRow;
-    for (final row in progression) {
-      final rowLevel = _intValue(row['level']);
-      if (rowLevel == null || rowLevel > level) continue;
-      if (activeRow == null ||
-          rowLevel > (_intValue(activeRow['level']) ?? -1)) {
-        activeRow = row;
-      }
-    }
-
-    final maximumSpellLevel = _intValue(
-      activeRow?['maximumSpellLevel'] ?? spellcasting['maximumSpellLevel'],
+    final resolved = Dnd5eRules.resolveClassRules(
+      entryId: classEntry?.id,
+      classSummary: classEntry?.name ?? '',
+      structured: classEntry?.structured ?? const <String, Object?>{},
     );
+    final spellcasting = resolved.spellcasting;
+    if (spellcasting == null || spellcasting.mode == 'none') {
+      return const SpellSelectionRules.unconfigured();
+    }
+    final level = characterLevel.clamp(1, 20);
+    final maximumSpellLevel = resolved.maxSpellLevel(level);
     if (maximumSpellLevel == null) {
       return const SpellSelectionRules.unconfigured();
     }
 
     return SpellSelectionRules(
       configured: true,
-      mode: _stringValue(spellcasting['mode']),
-      ability: _stringValue(spellcasting['ability']),
-      listTags: _stringList(spellcasting['listTags']),
+      mode: spellcasting.mode,
+      ability: spellcasting.ability,
+      listTags: spellcasting.listTags,
       maximumSpellLevel: maximumSpellLevel,
-      maximum: _intValue(activeRow?['maximum'] ?? spellcasting['maximum']),
-      maximumCantrips: _intValue(
-        activeRow?['maximumCantrips'] ?? spellcasting['maximumCantrips'],
-      ),
-      maximumLeveledSpells: _intValue(
-        activeRow?['maximumLeveledSpells'] ??
-            spellcasting['maximumLeveledSpells'],
-      ),
+      maximumCantrips: resolved.cantripLimit(level),
+      maximumLeveledSpells: resolved.preparedLimit(level),
     );
   }
 
@@ -107,29 +105,8 @@ abstract final class SpellSelectionPolicy {
     return '${entry.structured['school'] ?? ''}'.trim();
   }
 
-  static List<Map<String, Object?>> _mapList(Object? value) {
-    if (value is! Iterable) return const [];
-    return value
-        .whereType<Map>()
-        .map((item) => Map<String, Object?>.from(item))
-        .toList(growable: false);
-  }
-
-  static List<String> _stringList(Object? value) {
-    if (value is! Iterable) return const [];
-    return value
-        .map((item) => '$item'.trim())
-        .where((item) => item.isNotEmpty)
-        .toList(growable: false);
-  }
-
   static int? _intValue(Object? value) {
     if (value is num) return value.toInt();
     return int.tryParse('$value');
-  }
-
-  static String? _stringValue(Object? value) {
-    final result = '$value'.trim();
-    return value == null || result.isEmpty ? null : result;
   }
 }

@@ -80,14 +80,14 @@ abstract final class WeaponAttackDerivation {
     return attacks;
   }
 
-  /// 灵巧武器（`finesse`）用 str / dex 中较高者的调整值；其余按条目声明。
+  /// 攻击属性：判据只有一份，在 [Dnd5eRules.weaponAbility]（含灵巧的 STR/DEX
+  /// 较优判断）；这里只把角色属性传进去，不再各写一遍。
   static String _attackAbility(CharacterSheet character, ContentEntry entry) {
-    if (!Dnd5eRules.isFinesse(entry.structured)) {
-      return Dnd5eRules.weaponAbility(entry.structured) ?? 'str';
-    }
-    final dex = Dnd5eRules.abilityBonus(character.abilityMap, 'dex');
-    final str = Dnd5eRules.abilityBonus(character.abilityMap, 'str');
-    return dex >= str ? 'dex' : 'str';
+    return Dnd5eRules.weaponAbility(
+          entry.structured,
+          abilities: character.abilityMap,
+        ) ??
+        'str';
   }
 
   static List<Map<String, Object?>> _normalizeInventory(List<Object?> items) {

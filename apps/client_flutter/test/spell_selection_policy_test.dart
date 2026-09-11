@@ -22,6 +22,8 @@ void main() {
     });
   }
 
+  /// 新契约（任务 8.5）：法术规则只来自 `structured.classRules.spellcasting`，
+  /// **没有**旧的顶层 `progression` 四列行数组，改为逐级表 + 原型。
   ContentEntry customClass() => ContentEntry.fromJson({
     'id': 'test:class/chronomancer',
     'type': 'class',
@@ -30,26 +32,40 @@ void main() {
     'body': <Map<String, Object?>>[],
     'revision': 1,
     'structured': {
-      'spellcasting': {
-        'mode': 'known',
-        'ability': 'int',
-        'listTags': ['spell-list:chronomancer'],
-        'progression': [
-          {
-            'level': 1,
-            'maximumSpellLevel': 1,
-            'maximumCantrips': 2,
-            'maximumLeveledSpells': 3,
-          },
-          {
-            'level': 5,
-            'maximumSpellLevel': 3,
-            'maximumCantrips': 3,
-            'maximumLeveledSpells': 8,
-          },
-        ],
+      'classRules': {
+        'spellcasting': {
+          'mode': 'known',
+          'ability': 'int',
+          'listTags': ['spell-list:chronomancer'],
+          'maximumSpellLevel': [1, 1, 2, 2, 3],
+          'cantrips': [2, 2, 2, 3, 3],
+          'prepared': [3, 4, 5, 6, 8],
+        },
       },
     },
+  });
+
+  test('classRules.spellcasting 声明给出正确的环阶与数量上限', () {
+    final levelOne = SpellSelectionPolicy.rulesFor(
+      classEntry: customClass(),
+      characterLevel: 1,
+    );
+    expect(levelOne.configured, isTrue);
+    expect(levelOne.mode, 'known');
+    expect(levelOne.ability, 'int');
+    expect(levelOne.listTags, ['spell-list:chronomancer']);
+    expect(levelOne.maximumSpellLevel, 1);
+    expect(levelOne.maximumCantrips, 2);
+    expect(levelOne.maximumLeveledSpells, 3);
+
+    // 逐级表按等级取值（3 级这一档显式声明）。
+    final levelThree = SpellSelectionPolicy.rulesFor(
+      classEntry: customClass(),
+      characterLevel: 3,
+    );
+    expect(levelThree.maximumSpellLevel, 2);
+    expect(levelThree.maximumCantrips, 2);
+    expect(levelThree.maximumLeveledSpells, 5);
   });
 
   test('custom class sees only spells allowed by its declarative rules', () {
@@ -88,12 +104,9 @@ void main() {
     );
 
     expect(options.map((entry) => entry.name), ['火焰箭', '警报术']);
-    expect(rules.maximumCantrips, 2);
-    expect(rules.maximumLeveledSpells, 3);
-    expect(rules.maximumSpellLevel, 1);
   });
 
-  test('uses the latest progression row at or below the character level', () {
+  test('uses the latest declared table row at or below the character level', () {
     final rules = SpellSelectionPolicy.rulesFor(
       classEntry: customClass(),
       characterLevel: 7,
@@ -122,5 +135,58 @@ void main() {
       SpellSelectionPolicy.eligibleSpells(entries: const [], rules: rules),
       isEmpty,
     );
+  });
+
+  test('mode: none 也是未配置', () {
+    final entry = ContentEntry.fromJson({
+      'id': 'test:class/noncaster',
+      'type': 'class',
+      'slug': 'noncaster',
+      'name': '无施法者',
+      'body': <Map<String, Object?>>[],
+      'revision': 1,
+      'structured': {
+        'classRules': {
+          'spellcasting': {'mode': 'none'},
+        },
+      },
+    });
+    final rules = SpellSelectionPolicy.rulesFor(
+      classEntry: entry,
+      characterLevel: 5,
+    );
+    expect(rules.configured, isFalse);
+    expect(rules.mode, isNull);
+  });
+
+  test('旧形状（顶层 structured.spellcasting）不再被读取', () {
+    final entry = ContentEntry.fromJson({
+      'id': 'test:class/legacy',
+      'type': 'class',
+      'slug': 'legacy',
+      'name': '旧式施法者',
+      'body': <Map<String, Object?>>[],
+      'revision': 1,
+      'structured': {
+        'spellcasting': {
+          'mode': 'known',
+          'ability': 'int',
+          'listTags': ['spell-list:legacy'],
+          'progression': [
+            {
+              'level': 1,
+              'maximumSpellLevel': 1,
+              'maximumCantrips': 2,
+              'maximumLeveledSpells': 3,
+            },
+          ],
+        },
+      },
+    });
+    final rules = SpellSelectionPolicy.rulesFor(
+      classEntry: entry,
+      characterLevel: 1,
+    );
+    expect(rules.configured, isFalse);
   });
 }

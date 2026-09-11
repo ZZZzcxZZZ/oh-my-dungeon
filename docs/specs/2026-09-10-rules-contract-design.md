@@ -190,6 +190,13 @@
 把 `prepared`/`cantrips` 塞回原型）→ `unknownField`（error）。这条与"原型只管三件事"配套，让该约束
 在解析期就生效，而不是只靠测试拦。
 
+**原型的 `slots` 是"模板压缩编码"**：写成"每级一个计数数组" `[[2],[3],[4,2],…]`（第 n 项是第 n 级，
+数组内第 k 个数字表示 k 环法术位的数量，省略 0）。这是**只在内置档案里使用的模板编码**，
+第三方作者永远不写它（他们只写 `archetype: <名>`）。
+**唯一的展开点**是 `RuleProfileResolver` 解析原型时：把该编码展开成运行期统一的 `{环阶: 数量}` 形状
+（`pact` 的每级只有计数，环阶由同级 `slotLevel` 提供）。除这一处外，契约里 `slots` 只有一种形状：
+`{环阶: 数量}`。压缩编码形状不合法（非数组、长度 >20、含非非负整数、`pact` 缺 `slotLevel`）→ `invalidTable`。
+
 **原型只管三件事**：`slots`、`slotLevel`（仅 `pact`）、`maximumSpellLevel`。
 **`prepared`（准备/已知法术数）与 `cantrips`（戏法数）永远是职业自己的字段**——2024 官方表里这两列逐职业不同
 （法师 20 级 25、术士 1 级 2、德鲁伊戏法 2、术士戏法 4…），只有法术位与最高环阶是原型共用的。
@@ -281,6 +288,7 @@
 
 ```
 slots         = slots[L] ?? expand(archetype).slots[L] ?? {}          // pact 结果形如 {"3": 2}
+              // expand() 由 RuleProfileResolver 完成（模板压缩编码 → {环阶:数量}），见 §3.1
 slotLevel     = slotLevel[L] ?? expand(archetype).slotLevel[L]
 maxSpellLevel = maximumSpellLevel[L] ?? expand(archetype).maximumSpellLevel[L]
 prepared      = prepared[L]                                        // 只看职业自身，无原型回退

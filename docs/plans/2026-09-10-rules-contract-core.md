@@ -1583,6 +1583,30 @@ git commit -m "feat(rules): RuleProfile 与字段级合并解析器"
 
 ---
 
+## 任务 4.6：把原型 `slots` 的展开下沉到解析器（**在任务 5 审查之前完成**）
+
+任务 5 的实现者发现：内置档案里原型 `slots` 用的是模板压缩编码 `[[2],[3],[4,2],…]`，
+而已交付的 `SlotTable.tryParse` 只认 `{环阶: 数量}`，导致**真实档案解析恒失败**（4 条 `invalidTable`，
+`profile == null`）。它临时把展开做在 `rule_profile_store.dart`（数据层）里才让应用能启动。
+
+**这个位置是错的**：解析/展开属于解析器，数据层只该读资产。按契约新写明的分界修正：
+
+**要做的**
+
+1. 在 `rule_profile_resolver.dart` 里实现原型 `slots` 的展开（契约 §3.1 的"模板压缩编码"）：
+   - 普通原型：第 n 项的数组 → `{'1': a1, '2': a2, …}`（下标 +1 即环阶，省略 0 值）；
+   - `pact`：每级数组只有计数（通常一个元素），环阶由同级 `slotLevel` 提供 → `{'<slotLevel>': count}`；
+   - 形状不合法（非数组 / 项数 >20 / 含非非负整数 / `pact` 缺 `slotLevel`）→ `invalidTable`（error）。
+2. **删除 `rule_profile_store.dart` 里的展开桥**：store 只负责"读资产 → 调 `RuleProfileResolver.resolveBuiltin`"。
+3. 把 `rule_profile_store_test.dart` 里那几条"展开/非法形状"断言**搬到**
+   `rule_profile_resolver_test.dart` 的原型测试组。
+4. 顺带核对：`resolveBuiltin` 对原型 `maximumSpellLevel`/`slotLevel` 的解析是否仍走 `IntTable`（完整 20 项数组）不变。
+
+**验收**：`RuleProfileResolver.resolveBuiltin(真实档案)` 在**没有 store 参与**的情况下通过、
+`profile != null`；store 文件里不含任何展开/形状判断逻辑（只有读资产与错误包装）。
+
+---
+
 ## 任务 5：`RuleProfileStore` 与 `Dnd5eRules.configure`
 
 **文件：**

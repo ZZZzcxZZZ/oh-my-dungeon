@@ -1799,7 +1799,7 @@ void main() {
       MaterialApp(
         home: CharacterEditorPage(
           defaultCreationMethod: 'standard',
-          contentEntries: const [_fighterContent],
+          contentEntries: [_fighterRulesContent],
           onSubmit: (_) async => true,
         ),
       ),
@@ -2612,6 +2612,44 @@ const _fighterContent = ContentEntry(
   tags: ['private-phb-2024-index', 'class'],
   source: ContentSource(label: 'Private PHB 2024 PDF Index'),
 );
+
+/// 与 [_fighterContent] 同样的展示字段，但技能选择改由**新契约**承载：
+/// `rules.choices` 里 `optionType: "skill"` 的内联 `options`。
+/// 旧的中文散文 `structured.skills` 不再被解析，这里保留它只是为了覆盖
+/// 「摘要仍照原样展示 structured 字段」。
+final _fighterRulesContent = ContentEntry.fromJson({
+  'id': 'content-class-fighter',
+  'type': 'class',
+  'slug': 'class-fighter',
+  'name': '战士 / Fighter',
+  'body': <Map<String, Object?>>[],
+  'revision': 1,
+  'structured': {
+    'page': 60,
+    'primaryAbility': '力量或敏捷',
+    'hitDie': 'd10',
+    'savingThrows': '力量与体质',
+    'skills': '选择2项：特技、驯兽、运动、历史、洞悉、威吓、游说、察觉、求生',
+    'weaponProficiency': '简易武器与军用武器',
+    'armorProficiency': '轻甲、中甲、重甲与盾牌',
+    'startingEquipment': '链甲、巨剑、轻弩、20支弩矢、地城套组以及4GP',
+  },
+  'rules': {
+    'choices': [
+      {
+        'id': 'class-skills',
+        'label': '选择两项技能熟练',
+        'optionType': 'skill',
+        'minimum': 2,
+        'maximum': 2,
+        'builderStep': 'proficiencies',
+        'options': ['杂技', '驯兽', '运动', '历史', '洞悉', '威吓', '说服', '察觉', '求生'],
+      },
+    ],
+  },
+  'tags': ['private-phb-2024-index', 'class'],
+  'source': {'label': 'Private PHB 2024 PDF Index'},
+});
 
 const _wizardContent = ContentEntry(
   id: 'content-class-wizard',

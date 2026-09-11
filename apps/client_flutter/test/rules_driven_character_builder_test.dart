@@ -364,12 +364,14 @@ void main() {
     expect(draft.data['preparedSpellLimit'], 4);
   });
 
-  test('omits preparedSpellLimit for non-prepared casters', () {
+  test('omits preparedSpellLimit without a prepared table', () {
     final classEntry = _entry(
-      id: 'test:class/sorcerer',
+      id: 'test:class/barbarian',
       type: 'class',
-      name: 'Sorcerer',
-      structured: const {'spellcastingAbility': 'cha'},
+      name: 'Barbarian',
+      // 新契约：准备上限只来自职业自身 `spellcasting.prepared` 表；内置档案里
+      // 野蛮人 `mode == "none"`，因此没有准备上限（不再看旧开关）。
+      structured: const {},
       rules: const {
         'progression': [
           {
@@ -393,10 +395,10 @@ void main() {
           name: 'Aria',
           build: const CharacterBuild(
             level: 1,
-            selections: {'class': 'test:class/sorcerer'},
+            selections: {'class': 'test:class/barbarian'},
           ),
           abilities: const {
-            'str': 8,
+            'str': 16,
             'dex': 14,
             'con': 14,
             'int': 12,

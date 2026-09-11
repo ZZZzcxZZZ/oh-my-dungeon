@@ -73,6 +73,37 @@ class RuleGrantDefinition {
   };
 }
 
+/// `rules.choices[].options` 的内联选项（契约 §3.10.2）。
+///
+/// 字符串简写 `"察觉"` 等价于 `{id: "察觉", label: "察觉"}`（见
+/// [_parseChoiceOptions]）；对象形态可另带 `description` / `data` / `grants`。
+/// 字符串元素按 `optionType` 自动补 grants 属于**选择系统**的行为（计划 2），
+/// 不在解析层推断。
+class RuleChoiceOption {
+  const RuleChoiceOption({
+    required this.id,
+    required this.label,
+    this.description,
+    this.data = const <String, Object?>{},
+    this.grants = const <RuleGrantDefinition>[],
+  });
+
+  final String id;
+  final String label;
+  final String? description;
+  final Map<String, Object?> data;
+  final List<RuleGrantDefinition> grants;
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'label': label,
+    if (description != null) 'description': description,
+    if (data.isNotEmpty) 'data': data,
+    if (grants.isNotEmpty)
+      'grants': grants.map((grant) => grant.toJson()).toList(),
+  };
+}
+
 class RuleChoiceDefinition {
   static const allowedBuilderSteps = {
     'class',
@@ -92,6 +123,7 @@ class RuleChoiceDefinition {
     required this.maximum,
     this.optionEntryIds = const <String>[],
     this.optionTags = const <String>[],
+    this.options = const <RuleChoiceOption>[],
     this.maximumOptionLevel,
     this.recommendedEntryIds = const <String>[],
     this.builderStep,
@@ -104,6 +136,10 @@ class RuleChoiceDefinition {
   final int maximum;
   final List<String> optionEntryIds;
   final List<String> optionTags;
+
+  /// 内联选项（契约 §3.10.2）：候选值直接写在条目里，不引用其它条目。
+  final List<RuleChoiceOption> options;
+
   final int? maximumOptionLevel;
   final List<String> recommendedEntryIds;
   final String? builderStep;
@@ -121,6 +157,7 @@ class RuleChoiceDefinition {
     }
     final options = json['optionEntryIds'];
     final optionTags = json['optionTags'];
+    final inlineOptions = json['options'];
     final recommended = json['recommendedEntryIds'];
     final maximumOptionLevel = (json['maximumOptionLevel'] as num?)?.toInt();
     final builderStep = json['builderStep'] as String?;
@@ -148,6 +185,7 @@ class RuleChoiceDefinition {
       optionTags: optionTags is List
           ? optionTags.map((item) => '$item').toList(growable: false)
           : const <String>[],
+      options: _parseChoiceOptions(inlineOptions),
       maximumOptionLevel: maximumOptionLevel,
       recommendedEntryIds: recommended is List
           ? recommended.map((item) => '$item').toList(growable: false)
@@ -164,6 +202,8 @@ class RuleChoiceDefinition {
     'maximum': maximum,
     if (optionEntryIds.isNotEmpty) 'optionEntryIds': optionEntryIds,
     if (optionTags.isNotEmpty) 'optionTags': optionTags,
+    if (options.isNotEmpty)
+      'options': options.map((option) => option.toJson()).toList(),
     if (maximumOptionLevel != null) 'maximumOptionLevel': maximumOptionLevel,
     if (recommendedEntryIds.isNotEmpty)
       'recommendedEntryIds': recommendedEntryIds,
@@ -247,6 +287,53 @@ List<T> _parseList<T>(
           throw const FormatException('Rule list item must be an object');
         }
         return parser(Map<String, Object?>.from(item));
+      })
+      .toList(growable: false);
+}
+
+/// 内联选项的两态解析（契约 §3.10.2）：字符串简写 `"察觉"` 等价于
+/// `{id: "察觉", label: "察觉"}`；对象形态要求非空 `id`，`label` 缺省等于 `id`。
+/// 形状非法一律 fail-fast（与 [RuleChoiceDefinition.fromJson] 其余字段一致），
+/// 不静默丢选项。
+List<RuleChoiceOption> _parseChoiceOptions(Object? value) {
+  if (value == null) return const [];
+  if (value is! List) {
+    throw const FormatException('Rule choice options must be a list');
+  }
+  return value
+      .map((item) {
+        if (item is String) {
+          final text = item.trim();
+          if (text.isEmpty) {
+            throw const FormatException('Rule choice option must not be empty');
+          }
+          return RuleChoiceOption(id: text, label: text);
+        }
+        if (item is! Map) {
+          throw const FormatException(
+            'Rule choice option must be a string or an object',
+          );
+        }
+        final json = Map<String, Object?>.from(item);
+        final id = json['id'];
+        if (id is! String || id.trim().isEmpty) {
+          throw const FormatException(
+            'Rule choice option requires a non-empty id',
+          );
+        }
+        final label = json['label'];
+        final grants = json['grants'];
+        return RuleChoiceOption(
+          id: id,
+          label: label is String && label.trim().isNotEmpty ? label : id,
+          description: json['description'] as String?,
+          data: json['data'] is Map
+              ? Map<String, Object?>.from(json['data'] as Map)
+              : const <String, Object?>{},
+          grants: grants is List
+              ? _parseList(grants, RuleGrantDefinition.fromJson)
+              : const <RuleGrantDefinition>[],
+        );
       })
       .toList(growable: false);
 }

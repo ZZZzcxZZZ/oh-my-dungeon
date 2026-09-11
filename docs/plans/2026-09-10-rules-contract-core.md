@@ -560,14 +560,14 @@ class SlotTable {
 }
 
 /// `Table<String>`：与 [IntTable] 同一套"常量或表"语义，用于随等级变化的枚举值（如 `recovery`）。
-class _StringTable {
-  const _StringTable._(this._byLevel, this.minLevel, this.maxLevel);
+class StringTable {
+  const StringTable._(this._byLevel, this.minLevel, this.maxLevel);
 
   final Map<int, String> _byLevel;
   final int minLevel;
   final int maxLevel;
 
-  static _StringTable? tryParse(Object? raw, Set<String> allowed) {
+  static StringTable? tryParse(Object? raw, Set<String> allowed) {
     final result = <int, String>{};
     if (raw is List) {
       if (raw.isEmpty || raw.length > 20) return null;
@@ -589,7 +589,7 @@ class _StringTable {
     }
     if (result.isEmpty) return null;
     final levels = result.keys.toList()..sort();
-    return _StringTable._(result, levels.first, levels.last);
+    return StringTable._(result, levels.first, levels.last);
   }
 
   String? at(int level) {
@@ -827,7 +827,7 @@ class ClassResourceRule {
   /// 常量恢复语义（未随等级变化时）。
   final String recovery;
   /// 随等级变化的恢复语义（如诗人激励 1 级长休、5 级短休）。
-  final _StringTable? recoveryTable;
+  final StringTable? recoveryTable;
   final int startsAtLevel;
 
   String recoveryAt(int level) => recoveryTable?.at(level) ?? recovery;
@@ -1025,7 +1025,7 @@ class ClassRuleSet {
           }
           final recoveryRaw = item['recovery'] ?? 'longRest';
           var recovery = 'longRest';
-          _StringTable? recoveryTable;
+          StringTable? recoveryTable;
           if (recoveryRaw is String) {
             recovery = recoveryRaw.trim();
             if (!_recoveries.contains(recovery)) {
@@ -1035,7 +1035,7 @@ class ClassRuleSet {
               continue;
             }
           } else if (recoveryRaw is Map && recoveryRaw['table'] != null) {
-            recoveryTable = _StringTable.tryParse(recoveryRaw['table'], _recoveries);
+            recoveryTable = StringTable.tryParse(recoveryRaw['table'], _recoveries);
             if (recoveryTable == null) {
               diagnostics.add(RuleDiagnostic(path: '$itemPath.recovery.table',
                   severity: RuleSeverity.error, code: 'invalidRecovery',

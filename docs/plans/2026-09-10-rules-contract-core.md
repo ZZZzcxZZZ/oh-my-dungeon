@@ -1538,6 +1538,51 @@ git commit -m "feat(rules): RuleProfile 与字段级合并解析器"
 
 ---
 
+## 任务 4.5：任务 4 审查后的收尾清单（**执行任务 5 之前必须完成**）
+
+任务 4 已通过两阶段审查；以下是审查给出的应修项，控制者已逐条裁定，按此落地：
+
+**重要**
+
+1. **`pactSlotLevel` 绕过统一守卫**（`rule_profile.dart`）：它无 `mode == 'none'` 早退、无 `archetype.minimumLevel`、
+   手写两级回退，且零测试。改为走已有的 `_pick`：
+   `int? pactSlotLevel(int level) => _pick(level, (c) => c.slotLevel, (p) => p.slotLevel);`
+2. **`spellcastingAbility` 未按 `mode` 门控**：`mode == 'none'` 时仍返回 ability。
+   改为 `spellcastingMode == 'none' ? null : spellcasting?.ability`（与 §3.6 第 3 步一致）。
+3. **`resolveBuiltin` 94 行、≥4 职责**：拆成 `_parseSkills` / `_parseProgressions` / `_parseClasses` /
+   `_validateArchetypes`，`resolveBuiltin` 只留编排。每个函数 <60 行。
+4. **`ClassProgression` 仍携带 `prepared`/`cantrips`**：契约禁止原型承载这两列，但类型上仍可读到
+   （`merged.archetype!.prepared`）。**从 `ClassProgression` 删除这两个字段**；并在 `resolveBuiltin` 解析原型时
+   对白名单 `{slots, slotLevel, maximumSpellLevel, minimumLevel}` 之外的键报 `unknownField`
+   （契约新增，见规格 §3.1）。
+5. **补 5 条测试断言**（审查用变异证明这些路径目前无人守护）：
+   - `resolveBuiltin` 有 error 时 `profile == null`（现在只断言了 `errors.single.code`）；
+   - 档案来源的 `fieldSources[...].tier == 0`（现在只断言了 `originId`）；
+   - `maxSpellLevel` 自身稀疏表在低于最早声明等级时回退原型（含 `minimumLevel` 守卫）；
+   - `pactSlotLevel` 的三态（`none` / 低于 `minimumLevel` / 正常）；
+   - `resourcesAt` 里"表内显式 0"仍以资源形式返回（上限 0，而不是被跳过）。
+
+**次要（顺手清）**
+
+6. **删除两个同名 `pick`**：`ResolvedClassRules._pick` 与 resolver 内的 `pick` 跨文件同名不同义。
+   把 resolver 的闭包提成 `_mergeField<T>`（或改名 `_readDeclared`），`ResolvedClassRules._pick` 保留。
+7. **`skills`/`abilities` 的回退不要伪造占位**（`rule_profile_resolver.dart:115-117`）：档案缺 `skills`
+   或 `skills` 为空数组时，现在回退成 `{每个技能名: ''}`，消费方分不清"属性是空串"与"合法属性"。
+   按新契约改为：**档案必须显式声明 `abilities` 与 `skills`**；缺失、为空或类型错误 → `invalidTable` error
+   → `profile == null`。删掉伪造回退。
+8. **`progressions` / `classes` 及其中单项的类型错误不要静默 return**：补 `invalidTable` error
+   （写错一节现在会得到空档案且零诊断）。
+9. **`dart format` 不要全仓跑**：本 SDK 的格式化器与仓库现状不一致，会重排 52 个既有文件（CI 只跑
+   `flutter analyze` + `flutter test`，不校验格式）。只对自己新增/修改的文件跑。
+
+**同时要修的一处跨任务不一致**
+
+10. 任务 8 的端到端用例里 `expect(rules.preparedLimit(5), 6)` 与本契约（`prepared` 无原型回退、
+    `astral-knight` 自带 20 项 `prepared` 表且每级比圣武士 +1）不符 —— 应改为 **7**。
+    落地任务 8 时按 `samples/homebrew-astral-knight/entries.json` 的实际数据核对。
+
+---
+
 ## 任务 5：`RuleProfileStore` 与 `Dnd5eRules.configure`
 
 **文件：**
@@ -1980,7 +2025,7 @@ test('自制职业：只靠 classRules 就能算出 HP/豁免/技能/法术位/�
   expect(rules.savingThrowAbilities, {'wis', 'cha'});
   expect(rules.spellSlots(1), {'1': 2});
   expect(rules.spellSlots(5), {'1': 4, '2': 2});
-  expect(rules.preparedLimit(5), 6);
+  expect(rules.preparedLimit(5), 7);
   expect(rules.spellcastingAbility, 'cha');
   final resources = rules.resourcesAt(7, const {'cha': 16});
   expect(resources.single.id, 'surge');

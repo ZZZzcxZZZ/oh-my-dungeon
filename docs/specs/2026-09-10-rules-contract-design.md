@@ -159,6 +159,9 @@
 
 **内容边界（合规）**：档案只允许存放数值与枚举，**不得**包含规则书正文、法术描述、怪物数据或任何散文段落。
 
+**两份参照清单必须显式声明**：`abilities` 与 `skills` 缺失、为空或类型错误时，`resolveBuiltin` 报 `invalidTable`
+并使 `profile == null`（启动即 fail-fast）；**不得**伪造占位值（例如把技能属性写成空字符串）来兜底。
+
 **两份参照清单**：`abilities` 与 `skills` 是**校验参照表**（场景 C 已排除扩展），以**内置档案**为唯一权威；包若自带同名清单，解析器忽略它并给出 warning（§5.2 `ignoredGlobalList`）。因此第三方的豁免键、技能名、`formula ability:<key>` 都必须落在内置清单内。
 
 **档案键即职业对齐键**：`classes` 的键是 12 个核心职业的规范英文 slug（`barbarian`、`bard`…）。条目要继承内置数值，其 `slug` 必须等于其中之一；用中文名或其它 slug 的自制职业不会命中内置数值（这是刻意的：不猜）。
@@ -182,6 +185,10 @@
 
 （武僧/术士的上限等于职业等级；牧师引导神力、圣武士引导神力、德鲁伊野性形态都是**短休只恢复 1 次**；
 诗人激励是**魅力调整值（最低 1）且长休恢复，5 级起改为短休也能全恢复**——以上均按 SRD 5.2 原文核对。）
+
+**原型的键必须落在白名单内**：`{slots, slotLevel, maximumSpellLevel, minimumLevel}`；出现其它键（典型是
+把 `prepared`/`cantrips` 塞回原型）→ `unknownField`（error）。这条与"原型只管三件事"配套，让该约束
+在解析期就生效，而不是只靠测试拦。
 
 **原型只管三件事**：`slots`、`slotLevel`（仅 `pact`）、`maximumSpellLevel`。
 **`prepared`（准备/已知法术数）与 `cantrips`（戏法数）永远是职业自己的字段**——2024 官方表里这两列逐职业不同
@@ -359,11 +366,15 @@ cantrips      = cantrips[L]                                        // 同上
 
 ```dart
 class RuleFieldSource {
-  final String field;      // 'hitDie' | 'resources' | 'spellcasting.slots' …
+  final String field;      // 'hitDie' | 'savingThrowAbilities' | 'spellcasting' | 'resources'（**整字段粒度**）
   final String originId;   // 'builtin:dnd5e-2024' | '<entryId>'
   final int tier;          // 0 内置档案 / 100 条目声明
 }
 ```
+
+来源的粒度是**顶层字段级**（`spellcasting` 是整字段，不细分到 `spellcasting.slots`）：字段级合并本身就是
+整 `spellcasting` 替换，因此列级来源在本契约下无法产生。S3 若要"只覆盖 prepared、保留档案 slots"，
+必须先把合并粒度改到列级——这是一条**已知限制**，S3 之前必须决策。
 
 本次只在角色页与导入报告的诊断信息中显示来源（"该数值来自内置档案"还是"来自本职业条目"）；
 S3 用它实现"被哪个包覆盖 / 关掉覆盖回退"。

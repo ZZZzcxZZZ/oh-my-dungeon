@@ -2343,6 +2343,24 @@ git commit -m "refactor(rules): 全部消费方切换到规则档案与 classRul
 
 ---
 
+## 任务 8.5：任务 8 遗留的两处消费方（**在任务 9 之前完成**）
+
+任务 8 已把主要消费方切到新契约，但有两处**未迁移**，且都会在任务 10 迁移内容后暴露为功能故障：
+
+1. **`spell_selection_policy.dart` 仍读旧的顶层 `structured.spellcasting.progression`**。
+   任务 10 把私有包改成只声明 `classRules.spellcasting` 之后，编辑器的"法术"步骤会得到 `unconfigured`
+   （法术列表为空）。改为经 `Dnd5eRules.resolveClassRules(entryId, ...)` 读取
+   `spellcasting` 的 `mode`/`ability`/`listTags`/`prepared`/`cantrips`/`maxSpellLevel` 与原型表；
+   找不到声明时保持"未配置"（不猜）。加测试：只声明 `classRules.spellcasting` 的条目应能给出
+   正确的可学环阶与数量上限。
+
+2. **武器"远程/灵巧"判据对真实物品数据不成立**。PHB 物品的 `properties` 是文本（如 `"灵巧，轻型"`），
+   `category` 里也不含"远程"，因此长弓当前会按力量算伤害。两步修：
+   - 现在：`weaponAbility` 除 `structured.ability` 外，还要识别 `properties` 含 `灵巧`（→ 取 STR/DEX 较优）
+     与含 `弹药`/`远程`（→ DEX）；
+   - 任务 10：提取器为武器物品**显式输出 `structured.ability`**（由规则书的属性列推导），
+     让判据不再依赖文本匹配。任务 10 的验收里加一条：长弓的派生攻击必须用敏捷。
+
 ## 任务 9：规则定义收紧（grant kind 9 项 + progression 用 `levels`）
 
 **文件：**
@@ -2571,6 +2589,13 @@ void main() {
   });
 }
 ```
+
+- [ ] **步骤 6b：内容侧补两件事**
+
+1. 为武器物品显式输出 `structured.ability`（`str`/`dex`），使 `weaponAbility` 不再依赖
+   `properties` 文本匹配；
+2. 移除 `private_content_package_validation_test.dart` 里那条 `skip`
+   （`'私有包内容尚未迁移到新契约（任务 10 迁移后移除此 skip）'`），确认转绿。
 
 - [ ] **步骤 7：全量门禁**
 

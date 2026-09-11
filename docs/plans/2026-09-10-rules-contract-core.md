@@ -224,13 +224,39 @@ void main() {
     });
   });
 
-  test('战士与野蛮人的资源恢复语义', () {
-    final fighter = (classes['fighter']! as Map)['resources']! as List;
-    expect((fighter[0] as Map)['recovery'], 'shortRestOne');
-    expect((fighter[1] as Map)['recovery'], 'shortRest');
-    expect((fighter[1] as Map)['startsAtLevel'], 2);
-    final barbarian = (classes['barbarian']! as Map)['resources']! as List;
-    expect((barbarian.single as Map)['recovery'], 'shortRestOne');
+  test('12 职业资源池的 id 与恢复语义（四种恢复形式都要覆盖）', () {
+    Map<String, Object?> resource(String slug, String id) {
+      final list = (classes[slug]! as Map)['resources']! as List;
+      return list.cast<Map>().firstWhere((r) => r['id'] == id).cast<String, Object?>();
+    }
+
+    // shortRest / shortRestOne / longRest / 随等级变化的表，各至少一例
+    expect(resource('fighter', 'action_surge')['recovery'], 'shortRest');
+    expect(resource('barbarian', 'rage')['recovery'], 'shortRestOne');
+    expect(resource('cleric', 'channel_divinity')['recovery'], 'shortRestOne',
+        reason: '牧师引导神力短休只恢复 1 次');
+    expect(resource('druid', 'wild_shape')['recovery'], 'shortRestOne');
+    expect(resource('sorcerer', 'innate_sorcery')['recovery'], 'longRest',
+        reason: '先天术法是长休恢复');
+    expect(resource('ranger', 'favored_enemy')['recovery'], 'longRest');
+    expect((resource('bard', 'bardic_inspiration')['recovery']! as Map)['table'],
+        {'1': 'longRest', '5': 'shortRest'},
+        reason: '诗人激励 5 级激发灵感后短休也能全恢复');
+    expect(resource('monk', 'focus_points')['startsAtLevel'], 2);
+    expect(resource('paladin', 'channel_divinity')['startsAtLevel'], 3);
+    expect(resource('warlock', 'magical_cunning')['maximum'], 1);
+    expect(resource('paladin', 'lay_on_hands')['maximum'], {'formula': '5*level'});
+  });
+
+  test('资源池覆盖 12 个职业（除游荡者与法师外都有）', () {
+    const withResources = ['barbarian','bard','cleric','druid','fighter','monk',
+                           'paladin','ranger','sorcerer','warlock'];
+    for (final slug in withResources) {
+      expect(((classes[slug]! as Map)['resources']! as List), isNotEmpty, reason: slug);
+    }
+    for (final slug in ['rogue', 'wizard']) {
+      expect((classes[slug]! as Map)['resources'], anyOf(isNull, isEmpty), reason: slug);
+    }
   });
 
   test('每个原型的关键表长度都是 20 或为空', () {

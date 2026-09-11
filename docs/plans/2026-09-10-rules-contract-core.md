@@ -1243,7 +1243,7 @@ git commit -m "feat(rules): 职业规则块 ClassRuleSet 与字段级诊断"
       );
       expect(caster.spellSlots(1), {'1': 2}, reason: '原型展开');
       expect(caster.spellSlots(5), {'1': 9}, reason: '整级替换');
-      expect(caster.preparedLimit(5), 6, reason: '原型 prepared 表');
+      expect(caster.preparedLimit(5), isNull, reason: '原型不承载 prepared，无回退');
     });
   });
 ```

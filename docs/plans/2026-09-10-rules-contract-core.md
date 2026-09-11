@@ -1882,13 +1882,55 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
       resolveClassRules(entryId: null, classSummary: classSummary).savingThrowAbilities;
 ```
 
-**签名变更（需要改调用方，任务 8 统一处理）：**
-- `spellSlotMaximums({required String classSummary, required int level})` →
-  `spellSlotMaximumsFromRules(ResolvedClassRules rules, int level)`
-- `classResources({required String classSummary, required int level})` →
-  `classResourcesFromRules(ResolvedClassRules rules, int level, Map<String,int> abilities)`
-- `usesPactMagic` / `pactSlotMaximums` / `preparedSpellMaximums` / `spellcastingAbility` →
-  由 `ResolvedClassRules` 的 `spellcastingMode` / `spellSlots` / `preparedLimit` / `spellcastingAbility` 取代
+**步骤 3c：保留旧公开签名作为过渡 shim（本任务**不得**破坏构建）**
+
+任务 8 才迁移调用方。因此本任务**必须**让 `quick_build.dart` / `character.dart` /
+`character_detail_page.dart` / `character_editor_page.dart` 等既有调用点**继续编译且行为不变**：
+旧方法全部保留原签名，内部改为"按 `classSummary` 当 slug 解析 → 查 profile → 委托新 API"。
+
+```dart
+  // ── 过渡 shim：签名不变，内部改为读档案（任务 8 迁移调用方后删除） ──
+  static Map<String, int> spellSlotMaximums({
+    required String classSummary,
+    required int level,
+  }) => resolveClassRules(entryId: null, classSummary: classSummary).spellSlots(level);
+
+  static List<Dnd5eClassResource> classResources({
+    required String classSummary,
+    required int level,
+    Map<String, Object?> abilities = const <String, Object?>{},
+  }) => resolveClassRules(entryId: null, classSummary: classSummary)
+      .resourcesAt(level, {
+        for (final key in Dnd5eRules.abilityLabels.keys)
+          key: abilityScore(abilities, key),
+      })
+      .map((r) => Dnd5eClassResource(
+            id: r.id, name: r.name, maximum: r.maximum, recovery: r.recovery))
+      .toList(growable: false);
+
+  static bool usesPactMagic(String classSummary) =>
+      resolveClassRules(entryId: null, classSummary: classSummary).spellcastingMode == 'pact';
+
+  /// 契约魔法位：由档案的 `pact` 原型提供（不再有硬编码表）。
+  static Map<String, int> pactSlotMaximums(int level) {
+    final pact = profile.progression('pact');
+    if (pact == null) return const {};
+    if (level < pact.minimumLevel) return const {};
+    return pact.slots?.at(level) ?? const {};
+  }
+
+  static int? preparedSpellMaximums({
+    required String classSummary,
+    required int level,
+  }) => resolveClassRules(entryId: null, classSummary: classSummary).preparedLimit(level);
+```
+
+`abilityLabels` / `skills` / `defaultAbilities` 三个常量保留（被大量调用点与 UI 使用）；
+`abilityLabels` 的内容改为从 `profile.abilities` 派生**仅用于校验**，展示用的中文标签保留在代码里
+（标签是 UI 文案，不是规则数值）。
+
+**新增 API（任务 8 会用它迁移）：** `resolveClassRules(...)`、`hitDieFor(...)`,
+以及 `spellSlotMaximumsFromRules` / `classResourcesFromRules`（签名见上文 §4.2）。
 
 - [ ] **步骤 3：把 `dnd5e_rules_verification_test.dart` 改为对档案断言**
 
@@ -1926,10 +1968,19 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
 运行：`cd apps/client_flutter && grep -rn "contains('战士')\|contains('法师')\|_fullCasterSlots\|_preparedDivine" lib/ || echo CLEAN`
 预期：`CLEAN`
 
-- [ ] **步骤 6：Commit**
+- [ ] **步骤 6：跑全量回归（本任务的最大风险点）**
+
+运行：`cd apps/client_flutter && flutter test`
+预期：**全绿**，通过数不减（本任务不新增测试，只改内部实现；`dnd5e_rules_verification_test.dart` 的
+期望值一个字都不许改，除非是把它从"直接断言硬编码表"改成"断言档案解析结果"）。
+若出现失败，**优先怀疑 shim 的 slug 解析**（例如 `classSummary` 是"战士（奥法骑士）"这类散文时解析不到
+slug —— 此时 shim 必须回退到"按档案的 name/aliases 精确匹配"而不是子串匹配）。
+
+- [ ] **步骤 7：Commit**
 
 ```bash
 git add apps/client_flutter/lib/src/features/characters/domain/dnd5e_rules.dart \
+        apps/client_flutter/lib/src/features/characters/data/character_markdown_codec.dart \
         apps/client_flutter/test/dnd5e_rules_test.dart \
         apps/client_flutter/test/dnd5e_rules_verification_test.dart
 git commit -m "refactor(rules): Dnd5eRules 表查询改读内置档案，删除职业名匹配与硬编码表"

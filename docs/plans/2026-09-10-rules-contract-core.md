@@ -1318,7 +1318,7 @@ class ResolvedClassRules {
   const ResolvedClassRules({
     this.hitDie, this.savingThrowAbilities = const {},
     this.spellcasting, this.resources = const [], this.fieldSources = const {},
-    this.archetype, this.declaredMaxLevel,
+    this.archetype, this.declaredMaxLevel, this.declaredMinLevel,
   });
 
   final int? hitDie;
@@ -1331,6 +1331,9 @@ class ResolvedClassRules {
   /// 职业**自身**声明的最高等级（不含 archetype 模板，§3.12）。
   /// null 表示该职业没有声明任何随等级变化的表（只有特性 progression 也算，见构建器合并）。
   final int? declaredMaxLevel;
+
+  /// 职业**自身**声明的最早等级（§3.12 的 `{min, max}` 里的 min）。
+  final int? declaredMinLevel;
 
   String? get spellcastingAbility => spellcasting?.ability;
   String get spellcastingMode => spellcasting?.mode ?? 'none';
@@ -1408,7 +1411,7 @@ class RuleProfileResolution {
 abstract final class RuleProfileResolver {
   static RuleProfileResolution resolveBuiltin(Map<String, Object?> raw) {
     final diagnostics = <RuleDiagnostic>[];
-    final abilities = _stringSet(raw['abilities'], 'str');
+    final abilities = _stringSet(raw['abilities']);
     final skills = <String, String>{};
     if (raw['skills'] is List) {
       for (final item in raw['skills']! as List) {
@@ -1508,10 +1511,11 @@ abstract final class RuleProfileResolver {
       archetype: profile.progression(spellcasting?.archetype),
       fieldSources: sources,
       declaredMaxLevel: entryRules?.declaredMaxLevel,
+      declaredMinLevel: entryRules?.declaredMinLevel,
     );
   }
 
-  static Set<String> _stringSet(Object? raw, String kind) {
+  static Set<String> _stringSet(Object? raw) {
     if (raw is! Iterable) return const {};
     return raw.map((item) => '$item'.trim().toLowerCase()).toSet();
   }

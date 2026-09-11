@@ -115,9 +115,10 @@
     // …共 18 项，与 Dnd5eRules.skills 一致
   ],
   "progressions": {
+    // none 没有法术位，是唯一不写 minimumLevel 的原型（其余原型一律显式写出默认值 1）
     "none":         { "slots": [] },
     // 原型只承载"跨职业共享"的进阶量：slots / slotLevel / maximumSpellLevel
-    "full-caster":  { "slots": [[2],[3],[4,2],"…20 行"],
+    "full-caster":  { "minimumLevel": 1, "slots": [[2],[3],[4,2],"…20 行"],
                       "maximumSpellLevel": [1,1,2,"…"] },
     "half-caster":  { "minimumLevel": 1, "slots": [[2],[2],[3],"…"],
                       "maximumSpellLevel": [1,1,1,"…"] },
@@ -135,7 +136,7 @@
       "savingThrowAbilities": ["str", "con"],
       "spellcasting": { "mode": "none" },
       "resources": [
-        { "id": "rage", "name": "狂暴",
+        { "id": "rage", "name": "狂暴", "startsAtLevel": 1,
           "maximum": { "table": {"1":2, "3":3, "6":4, "12":5, "17":6} },
           "recovery": "shortRestOne" }
       ]
@@ -145,7 +146,7 @@
       "savingThrowAbilities": ["str", "con"],
       "spellcasting": { "mode": "none" },
       "resources": [
-        { "id": "second_wind", "name": "第二气息",
+        { "id": "second_wind", "name": "第二气息", "startsAtLevel": 1,
           "maximum": { "table": {"1":2, "4":3, "10":4} }, "recovery": "shortRestOne" },
         { "id": "action_surge", "name": "动作如潮", "startsAtLevel": 2,
           "maximum": { "table": {"2":1, "17":2} }, "recovery": "shortRest" }
@@ -241,7 +242,7 @@
 | `hitDie` | int | 否* | 生命骰面数，必须 ∈ 4..20。**只写整数**（规则书里的 `d10` 就写 `10`）。缺省时 HP 只按体质调整值计，见 §3.6 第 3 步 |
 | `savingThrowAbilities` | string[]（属性键） | 否* | 豁免熟练，元素必须 ∈ `abilities` |
 | `spellcasting` | object | 否 | 见 §3.3 |
-| `resources` | object[] | 否 | 见 §3.4 |
+| `resources` | object[] | 否 | 见 §3.4。**内置档案里 `startsAtLevel` 一律显式写出**（见下方书写约定） |
 
 \* 标 `否` 是契约层面的可缺省；但缺 `hitDie` 会导致 HP 无法计算，导入时给 **warning**（§5.2）。
 

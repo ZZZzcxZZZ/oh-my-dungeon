@@ -595,9 +595,11 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
    - **低于最早声明等级 → 未声明**（返回 `null`/空，**不会**借用更高等级的值，
      然后按 §3.3 的优先级回退到 `archetype`，仍无则视为未声明）。
    稀疏表 `{"5": …}` 同样遵守这两条（所以只写 5 级**不会**让 1–4 级获得 5 级的数值）。
-3. **声明范围是一等公民**：每个职业解析出 `declaredLevels`（从 `progression` 的
-   `levels` 与各 `Table` 的声明范围合并），并写进角色数据
-   `data.classIdentity.declaredLevels = {min: 1, max: 12}`。
+3. **声明范围是一等公民，且只有一种口径**：`declaredLevels` = **合并后实际生效的范围**
+   （条目声明的 `progression[].levels` 与各 `Table` 的声明范围，**并上**内置档案同 slug 职业的相应范围），
+   写进角色数据 `data.classIdentity.declaredLevels = {min: 1, max: 12}`。
+   **所有界面必须读同一个口径**（持久化值或由同一函数算出），不得有的界面用"条目自身"、有的用"合并后"。
+   `max` 为 null 表示合并后仍无任何等级声明。
 4. **部分声明既不报错也不警告**：导入期只在"完全没有 `hitDie`"等真正缺数值的情况下给 warning；
    "只写到 12 级"是合法状态，由界面如实呈现（见下）。
 

@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:dnd_table_client/src/features/content/data/local/content_repository.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_block.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
@@ -14,7 +16,30 @@ ContentEntry testFighterEntry() => ContentEntry.fromJson({
   'name': '战士',
   'body': <Map<String, Object?>>[],
   'revision': 1,
+  // 任务 11 起：命内置 slug 的职业条目必须显式声明 classRules，否则导入被拒。
+  'structured': <String, Object?>{
+    'classRules': <String, Object?>{'hitDie': 10},
+  },
 });
+
+/// 构造一个 `.dndpack` 字节流（manifest.json + entries.json）。
+Uint8List dndPackBytes({
+  required Map<String, Object?> manifest,
+  required List<Map<String, Object?>> entries,
+  Map<String, List<int>> assets = const {},
+}) {
+  final archive = Archive()
+    ..addFile(
+      ArchiveFile.bytes('manifest.json', utf8.encode(jsonEncode(manifest))),
+    )
+    ..addFile(
+      ArchiveFile.bytes('entries.json', utf8.encode(jsonEncode(entries))),
+    );
+  for (final asset in assets.entries) {
+    archive.addFile(ArchiveFile.bytes(asset.key, asset.value));
+  }
+  return Uint8List.fromList(ZipEncoder().encode(archive));
+}
 
 class MemoryContentFilePicker implements ContentFilePicker {
   MemoryContentFilePicker({this.result, this.multipleResult});

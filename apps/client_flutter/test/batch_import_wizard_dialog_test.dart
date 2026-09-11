@@ -24,7 +24,7 @@ void main() {
     int entryCount = 1,
   }) {
     final json = jsonEncode({
-      'formatVersion': 1,
+      'formatVersion': 3,
       'id': id,
       'name': name,
       'version': '1.0.0',
@@ -40,7 +40,7 @@ void main() {
 
   PickedContentFile invalidFile({required String id}) {
     final json = jsonEncode({
-      'formatVersion': 1,
+      'formatVersion': 3,
       'id': id,
       'name': id,
       'version': '1.0.0',

@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/content_test_support.dart';
 
 const _bundle = '''{
-  "formatVersion": 2,
+  "formatVersion": 3,
   "id": "test.bundle",
   "name": "Test bundle",
   "version": "1.0.0",

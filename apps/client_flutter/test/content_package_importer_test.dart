@@ -18,7 +18,7 @@ void main() {
       final importer = ContentPackageImporter(repository);
 
       final report = await importer.previewJson('''{
-      "formatVersion":1,
+      "formatVersion":3,
       "id":"legacy-phb",
       "name":"Legacy PHB",
       "version":"1.0.0",
@@ -32,7 +32,7 @@ void main() {
         "name":"战士",
         "body":[],
         "revision":1,
-        "structured":{"features":[
+        "structured":{"classRules":{"hitDie":10},"features":[
           "1级：回气 Second Wind你可以恢复生命值。",
           "2级：动作如潮 Action Surge你可以执行一个额外动作。"
         ]}
@@ -77,7 +77,7 @@ void main() {
 
   test('unknown external entry types degrade to custom', () async {
     const source = '''{
-      "formatVersion": 2,
+      "formatVersion": 3,
       "id": "homebrew",
       "name": "Homebrew",
       "version": "1.0.0",
@@ -102,7 +102,7 @@ void main() {
 
   test('validates links before replacing the installed package', () async {
     final report = await importer.previewJson('''{
-      "formatVersion":1,
+      "formatVersion":3,
       "id":"example",
       "name":"Example",
       "version":"1.0.0",
@@ -115,7 +115,8 @@ void main() {
         "slug":"fighter",
         "name":"战士",
         "body":[{"type":"entryLink","targetId":"missing","text":"缺失"}],
-        "revision":1
+        "revision":1,
+        "structured":{"classRules":{"hitDie":10}}
       }]
     }''');
 
@@ -126,7 +127,7 @@ void main() {
 
   test('previews a valid package without importing', () async {
     final report = await importer.previewJson('''{
-      "formatVersion":1,
+      "formatVersion":3,
       "id":"example",
       "name":"Example",
       "version":"1.0.0",
@@ -139,7 +140,8 @@ void main() {
         "slug":"fighter",
         "name":"战士",
         "body":[],
-        "revision":1
+        "revision":1,
+        "structured":{"classRules":{"hitDie":10}}
       }]
     }''');
 
@@ -149,10 +151,10 @@ void main() {
   });
 
   test(
-    'imports a D&D 2024 v2 package with executable rule declarations',
+    'imports a D&D 2024 v3 package with executable rule declarations',
     () async {
       final report = await importer.previewJson('''{
-      "formatVersion":2,
+      "formatVersion":3,
       "id":"example.rules",
       "name":"Example rules",
       "version":"2.0.0",
@@ -166,6 +168,7 @@ void main() {
         "name":"战士",
         "body":[],
         "revision":1,
+        "structured":{"classRules":{"hitDie":10}},
         "rules":{"progression":[{"levels":[1],"grants":[{
           "id":"second-wind","kind":"feature","label":"回气"
         }]}]}
@@ -185,7 +188,7 @@ void main() {
 
   test('imports and preserves validated content relationships', () async {
     final report = await importer.previewJson('''{
-      "formatVersion":2,
+      "formatVersion":3,
       "id":"example.rules",
       "name":"Example rules",
       "version":"2.0.0",
@@ -198,7 +201,8 @@ void main() {
         "slug":"wizard",
         "name":"法师",
         "body":[],
-        "revision":1
+        "revision":1,
+        "structured":{"classRules":{"hitDie":6}}
       },{
         "id":"example.rules:subclass/evoker",
         "type":"subclass",
@@ -223,7 +227,7 @@ void main() {
 
   test('rejects unresolved relationship targets', () async {
     final report = await importer.previewJson('''{
-      "formatVersion":2,"id":"broken","name":"Broken","version":"1.0.0",
+      "formatVersion":3,"id":"broken","name":"Broken","version":"1.0.0",
       "locale":"zh-CN","system":"dnd5e-2024","entryCount":1,
       "entries":[{
         "id":"broken:subclass/evoker","type":"subclass","slug":"evoker",
@@ -241,9 +245,9 @@ void main() {
     );
   });
 
-  test('rejects non-2024 systems for v2 rule packages', () async {
+  test('rejects non-2024 systems for v3 rule packages', () async {
     final report = await importer.previewJson('''{
-      "formatVersion":2,"id":"legacy","name":"Legacy","version":"1.0.0",
+      "formatVersion":3,"id":"legacy","name":"Legacy","version":"1.0.0",
       "locale":"zh-CN","system":"dnd5e-2014","entryCount":0,"entries":[]
     }''');
 
@@ -251,13 +255,14 @@ void main() {
     expect(report.errors.any((error) => error.path == r'$.system'), isTrue);
   });
 
-  test('rejects unresolved rule entry references in v2 packages', () async {
+  test('rejects unresolved rule entry references in v3 packages', () async {
     final report = await importer.previewJson('''{
-      "formatVersion":2,"id":"broken","name":"Broken","version":"1.0.0",
+      "formatVersion":3,"id":"broken","name":"Broken","version":"1.0.0",
       "locale":"zh-CN","system":"dnd5e-2024","entryCount":1,
       "entries":[{
         "id":"broken:class/fighter","type":"class","slug":"fighter",
         "name":"战士","body":[],"revision":1,
+        "structured":{"classRules":{"hitDie":10}},
         "rules":{"grants":[{
           "id":"missing-feature","kind":"feature",
           "entryId":"broken:class-feature/missing"
@@ -276,7 +281,7 @@ void main() {
 
   test('rejects unresolved recommended choice references', () async {
     final report = await importer.previewJson('''{
-      "formatVersion":2,"id":"broken","name":"Broken","version":"1.0.0",
+      "formatVersion":3,"id":"broken","name":"Broken","version":"1.0.0",
       "locale":"zh-CN","system":"dnd5e-2024","entryCount":1,
       "entries":[{
         "id":"broken:class/guardian","type":"class","slug":"guardian",
@@ -304,7 +309,7 @@ void main() {
     'rejects recommended choices that do not satisfy their filters',
     () async {
       final report = await importer.previewJson('''{
-      "formatVersion":2,"id":"broken","name":"Broken","version":"1.0.0",
+      "formatVersion":3,"id":"broken","name":"Broken","version":"1.0.0",
       "locale":"zh-CN","system":"dnd5e-2024","entryCount":2,
       "entries":[{
         "id":"broken:class/mage","type":"class","slug":"mage",
@@ -335,7 +340,7 @@ void main() {
 
   test('imports a valid package', () async {
     final report = await importer.previewJson('''{
-      "formatVersion":1,
+      "formatVersion":3,
       "id":"example",
       "name":"Example",
       "version":"1.0.0",
@@ -348,7 +353,8 @@ void main() {
         "slug":"fighter",
         "name":"战士",
         "body":[],
-        "revision":1
+        "revision":1,
+        "structured":{"classRules":{"hitDie":10}}
       }]
     }''');
 
@@ -359,44 +365,33 @@ void main() {
   });
 
   test('previews and imports a dndpack zip with assets', () async {
-    final archive = Archive()
-      ..addFile(
-        ArchiveFile.bytes(
-          'manifest.json',
-          utf8.encode(
-            jsonEncode({
-              'formatVersion': 1,
-              'id': 'example.pack',
-              'name': 'Example pack',
-              'version': '1.0.0',
-              'locale': 'zh-CN',
-              'system': 'dnd5e-2024',
-              'entryCount': 1,
-            }),
-          ),
-        ),
-      )
-      ..addFile(
-        ArchiveFile.bytes(
-          'entries.json',
-          utf8.encode(
-            jsonEncode([
-              {
-                'id': 'example.pack:class/fighter',
-                'type': 'class',
-                'slug': 'fighter',
-                'name': 'Fighter',
-                'body': [
-                  {'type': 'image', 'asset': 'assets/hero.png', 'alt': 'Hero'},
-                ],
-                'revision': 1,
-              },
-            ]),
-          ),
-        ),
-      )
-      ..addFile(
-        ArchiveFile.bytes('assets/hero.png', const [
+    final bytes = dndPackBytes(
+      manifest: {
+        'formatVersion': 3,
+        'id': 'example.pack',
+        'name': 'Example pack',
+        'version': '1.0.0',
+        'locale': 'zh-CN',
+        'system': 'dnd5e-2024',
+        'entryCount': 1,
+      },
+      entries: [
+        {
+          'id': 'example.pack:class/fighter',
+          'type': 'class',
+          'slug': 'fighter',
+          'name': 'Fighter',
+          'body': [
+            {'type': 'image', 'asset': 'assets/hero.png', 'alt': 'Hero'},
+          ],
+          'revision': 1,
+          'structured': {
+            'classRules': {'hitDie': 10},
+          },
+        },
+      ],
+      assets: {
+        'assets/hero.png': const [
           0x89,
           0x50,
           0x4e,
@@ -405,9 +400,9 @@ void main() {
           0x0a,
           0x1a,
           0x0a,
-        ]),
-      );
-    final bytes = Uint8List.fromList(ZipEncoder().encode(archive));
+        ],
+      },
+    );
 
     final report = await importer.previewDndPack(bytes);
 
@@ -434,14 +429,14 @@ void main() {
 
   test('upgrade preserves favorites and notes by stable entry ID', () async {
     final json1 = '''{
-      "formatVersion":1,"id":"example","name":"Example","version":"1.0.0",
+      "formatVersion":3,"id":"example","name":"Example","version":"1.0.0",
       "locale":"zh-CN","system":"dnd5e-2024","entryCount":1,
-      "entries":[{"id":"example:class/fighter","type":"class","slug":"fighter","name":"战士","body":[],"revision":1}]
+      "entries":[{"id":"example:class/fighter","type":"class","slug":"fighter","name":"战士","body":[],"revision":1,"structured":{"classRules":{"hitDie":10}}}]
     }''';
     final json2 = '''{
-      "formatVersion":1,"id":"example","name":"Example","version":"2.0.0",
+      "formatVersion":3,"id":"example","name":"Example","version":"2.0.0",
       "locale":"zh-CN","system":"dnd5e-2024","entryCount":1,
-      "entries":[{"id":"example:class/fighter","type":"class","slug":"fighter","name":"战士","body":[],"revision":2}]
+      "entries":[{"id":"example:class/fighter","type":"class","slug":"fighter","name":"战士","body":[],"revision":2,"structured":{"classRules":{"hitDie":10}}}]
     }''';
 
     final report1 = await importer.previewJson(json1);
@@ -463,9 +458,9 @@ void main() {
 
   test('rejects entry count mismatch', () async {
     final report = await importer.previewJson('''{
-      "formatVersion":1,"id":"example","name":"Example","version":"1.0.0",
+      "formatVersion":3,"id":"example","name":"Example","version":"1.0.0",
       "locale":"zh-CN","system":"dnd5e-2024","entryCount":5,
-      "entries":[{"id":"example:class/fighter","type":"class","slug":"fighter","name":"战士","body":[],"revision":1}]
+      "entries":[{"id":"example:class/fighter","type":"class","slug":"fighter","name":"战士","body":[],"revision":1,"structured":{"classRules":{"hitDie":10}}}]
     }''');
 
     expect(report.valid, isFalse);
@@ -474,11 +469,11 @@ void main() {
 
   test('rejects duplicate entry IDs within a package', () async {
     final report = await importer.previewJson('''{
-      "formatVersion":1,"id":"example","name":"Example","version":"1.0.0",
+      "formatVersion":3,"id":"example","name":"Example","version":"1.0.0",
       "locale":"zh-CN","system":"dnd5e-2024","entryCount":2,
       "entries":[
-        {"id":"example:class/fighter","type":"class","slug":"fighter","name":"战士","body":[],"revision":1},
-        {"id":"example:class/fighter","type":"class","slug":"fighter","name":"战士","body":[],"revision":1}
+        {"id":"example:class/fighter","type":"class","slug":"fighter","name":"战士","body":[],"revision":1,"structured":{"classRules":{"hitDie":10}}},
+        {"id":"example:class/fighter","type":"class","slug":"fighter","name":"战士","body":[],"revision":1,"structured":{"classRules":{"hitDie":10}}}
       ]
     }''');
 
@@ -488,9 +483,9 @@ void main() {
 
   test('validates entry ID prefix matches package ID', () async {
     final report = await importer.previewJson('''{
-      "formatVersion":1,"id":"example","name":"Example","version":"1.0.0",
+      "formatVersion":3,"id":"example","name":"Example","version":"1.0.0",
       "locale":"zh-CN","system":"dnd5e-2024","entryCount":1,
-      "entries":[{"id":"other:class/fighter","type":"class","slug":"fighter","name":"战士","body":[],"revision":1}]
+      "entries":[{"id":"other:class/fighter","type":"class","slug":"fighter","name":"战士","body":[],"revision":1,"structured":{"classRules":{"hitDie":10}}}]
     }''');
 
     expect(report.valid, isFalse);

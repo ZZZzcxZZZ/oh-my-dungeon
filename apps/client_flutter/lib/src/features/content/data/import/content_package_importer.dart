@@ -9,8 +9,12 @@ import '../../domain/content_entry.dart';
 import '../../domain/content_import_report.dart';
 import '../../domain/content_package_manifest.dart';
 import '../../domain/content_schema_registry.dart';
+import '../../../characters/domain/dnd5e_rules.dart';
 import '../../../rules/domain/character_rule_definition.dart';
+import '../../../rules/domain/class_rule_set.dart';
 import '../../../rules/domain/rule_choice_resolver.dart';
+import '../../../rules/domain/rule_diagnostic.dart';
+import '../../../rules/domain/rule_values.dart';
 import '../local/content_repository.dart';
 import 'legacy_class_feature_rules_migrator.dart';
 
@@ -154,6 +158,7 @@ class ContentPackageImporter {
     final combined = Map<String, Object?>.from(manifest)..['entries'] = entries;
     final parsedReport = await previewJson(jsonEncode(combined));
     final errors = [...parsedReport.errors];
+    final warnings = [...parsedReport.warnings];
     for (
       var entryIndex = 0;
       entryIndex < parsedReport.entries.length;
@@ -176,6 +181,7 @@ class ContentPackageImporter {
     }
     return _buildReport(
       errors: errors,
+      warnings: warnings,
       contentHash: contentHash,
       formatVersion: parsedReport.formatVersion,
       packageId: parsedReport.packageId,
@@ -191,6 +197,7 @@ class ContentPackageImporter {
 
   Future<ContentImportReport> previewJson(String jsonStr) async {
     final errors = <ContentValidationError>[];
+    final warnings = <ContentValidationError>[];
     final assets = <String, Uint8List>{};
     final contentHash = sha256.convert(utf8.encode(jsonStr)).toString();
 
@@ -225,6 +232,7 @@ class ContentPackageImporter {
       );
       return _buildReport(
         errors: errors,
+        warnings: warnings,
         contentHash: contentHash,
         formatVersion: 0,
         packageId: '',
@@ -240,7 +248,7 @@ class ContentPackageImporter {
 
     final json = parsed;
 
-    // Validate formatVersion
+    // Validate formatVersion：契约只承认一个版本，1/2 是旧格式，整包拒绝。
     final formatVersionValue = json['formatVersion'];
     var formatVersion = 0;
     if (formatVersionValue == null) {
@@ -250,16 +258,24 @@ class ContentPackageImporter {
           message: 'formatVersion is required',
         ),
       );
-    } else if (formatVersionValue is! num ||
-        !const {1, 2}.contains(formatVersionValue.toInt())) {
+    } else if (formatVersionValue is! num) {
       errors.add(
         const ContentValidationError(
           path: r'$.formatVersion',
-          message: 'formatVersion must be 1 or 2',
+          message: 'formatVersion must be a number',
+        ),
+      );
+    } else if (formatVersionValue.toInt() != 3) {
+      errors.add(
+        ContentValidationError(
+          path: r'$.formatVersion',
+          message:
+              'formatVersion ${formatVersionValue.toInt()} 是旧格式，只支持 formatVersion 3；'
+              '请用新版工具重新生成/重新提取资料包',
         ),
       );
     } else {
-      formatVersion = formatVersionValue.toInt();
+      formatVersion = 3;
     }
 
     // Validate required string fields
@@ -376,13 +392,24 @@ class ContentPackageImporter {
           );
           normalizedJson['type'] = normalizedType;
           final structured = normalizedJson['structured'];
+          Object? rawClassRules;
           if (structured is Map) {
-            normalizedJson['structured'] = ContentSchemaRegistry.defaults
+            final normalizedStructured = ContentSchemaRegistry.defaults
                 .normalizeStructured(
                   normalizedType,
                   Map<String, Object?>.from(structured),
                 );
+            rawClassRules = normalizedStructured['classRules'];
+            normalizedJson['structured'] = normalizedStructured;
           }
+          _validateStructuredClassRules(
+            normalizedType: normalizedType,
+            slug: '${normalizedJson['slug'] ?? ''}',
+            rawClassRules: rawClassRules,
+            path: '$entryPath.structured.classRules',
+            errors: errors,
+            warnings: warnings,
+          );
           final entry = ContentEntry.fromJson(normalizedJson);
           parsedEntries[i] = entry;
           entries.add(entry);
@@ -436,6 +463,13 @@ class ContentPackageImporter {
             errors,
           );
         }
+        if (entry.rules != null) {
+          _validateGrantFormulas(
+            entry.rules!,
+            '\$.entries[$i].rules',
+            errors,
+          );
+        }
       }
     }
 
@@ -444,6 +478,7 @@ class ContentPackageImporter {
         : entries;
     return _buildReport(
       errors: errors,
+      warnings: warnings,
       contentHash: contentHash,
       formatVersion: formatVersion,
       packageId: packageId,
@@ -641,8 +676,136 @@ class ContentPackageImporter {
     }
   }
 
+  /// `structured.classRules` 的导入期诊断（契约：error 阻断整包、warning 只提示）。
+  ///
+  /// 三条规则：
+  /// 1. 显式声明了 `classRules` → 交给 [ClassRuleSet.parse]，按 severity 分流；
+  /// 2. 未声明、且 slug 命中**内置档案**的职业 → error
+  ///    `builtinSlugRequiresExplicitRules`：杜绝"slug 写错就静默继承内置职业数值"。
+  ///    判据来自 [Dnd5eRules.profile] 的 `classes` / `classAliases`，不写死名单；
+  /// 3. 未声明的普通自制职业 → warning `unresolvedClassRule`（只使用内置档案，
+  ///    若有同 slug）。
+  void _validateStructuredClassRules({
+    required String normalizedType,
+    required String slug,
+    required Object? rawClassRules,
+    required String path,
+    required List<ContentValidationError> errors,
+    required List<ContentValidationError> warnings,
+  }) {
+    if (normalizedType != 'class') return;
+
+    final diagnostics = <RuleDiagnostic>[];
+    if (rawClassRules is Map) {
+      ClassRuleSet.parse(
+        Map<String, Object?>.from(rawClassRules),
+        path: path,
+        diagnostics: diagnostics,
+      );
+    } else {
+      diagnostics.add(
+        RuleDiagnostic(
+          path: path,
+          severity: RuleSeverity.warning,
+          code: 'unresolvedClassRule',
+          message: '职业条目未声明 classRules，将只使用内置档案（若有同 slug）',
+        ),
+      );
+    }
+
+    // 内置 slug 保护：声明了 classRules 就不再报；未声明但命中内置职业必须阻断。
+    if (rawClassRules is! Map && Dnd5eRules.profile.classRules(slug) != null) {
+      diagnostics.add(
+        RuleDiagnostic(
+          path: path,
+          severity: RuleSeverity.error,
+          code: 'builtinSlugRequiresExplicitRules',
+          message:
+              'slug "$slug" 属于内置职业：若要覆盖其数值必须显式声明 classRules，'
+              '否则会静默继承内置数值',
+        ),
+      );
+    }
+
+    for (final diagnostic in diagnostics) {
+      final target = diagnostic.severity == RuleSeverity.error
+          ? errors
+          : warnings;
+      target.add(
+        ContentValidationError(
+          path: diagnostic.path,
+          message: '${diagnostic.message}（${diagnostic.code}）',
+        ),
+      );
+    }
+  }
+
+  /// `hitPoints` / `ability` grant 的 `formula` 必须过 [MaxSpec] 的同一套封闭语法。
+  ///
+  /// 契约：非法 formula 在**导入期**就报 `invalidMaxSpec`，不能只在运行期静默跳过
+  /// （运行期 [MaxSpec.tryParse] 返回 null 会让加值悄悄消失）。其它 grant kind 的
+  /// `formula` 语义不同（如伤害骰），不受该封闭语法约束。
+  void _validateGrantFormulas(
+    CharacterRuleDefinition rules,
+    String rulesPath,
+    List<ContentValidationError> errors,
+  ) {
+    void validate(
+      List<RuleGrantDefinition> grants,
+      String grantsPath,
+    ) {
+      for (var i = 0; i < grants.length; i++) {
+        final grant = grants[i];
+        if (grant.kind != RuleGrantKind.hitPoints &&
+            grant.kind != RuleGrantKind.ability) {
+          continue;
+        }
+        final formula = grant.formula;
+        if (formula == null) continue;
+        if (MaxSpec.tryParse(<String, Object?>{'formula': formula}) != null) {
+          continue;
+        }
+        errors.add(
+          ContentValidationError(
+            path: '$grantsPath[$i].formula',
+            message:
+                'formula "$formula" 非法：只支持 level / ability:<属性键> / <整数>*level / <整数>'
+                '（invalidMaxSpec）',
+          ),
+        );
+      }
+    }
+
+    // 内联选项里的 grants 也带 formula（契约 §3.10.2），一并走同一套校验。
+    void validateChoiceOptions(
+      List<RuleChoiceDefinition> choices,
+      String choicesPath,
+    ) {
+      for (var i = 0; i < choices.length; i++) {
+        final options = choices[i].options;
+        for (var j = 0; j < options.length; j++) {
+          validate(
+            options[j].grants,
+            '$choicesPath[$i].options[$j].grants',
+          );
+        }
+      }
+    }
+
+    validate(rules.grants, '$rulesPath.grants');
+    validateChoiceOptions(rules.choices, '$rulesPath.choices');
+    for (var i = 0; i < rules.progression.length; i++) {
+      validate(rules.progression[i].grants, '$rulesPath.progression[$i].grants');
+      validateChoiceOptions(
+        rules.progression[i].choices,
+        '$rulesPath.progression[$i].choices',
+      );
+    }
+  }
+
   ContentImportReport _buildReport({
     required List<ContentValidationError> errors,
+    List<ContentValidationError> warnings = const [],
     required String contentHash,
     required int formatVersion,
     required String packageId,
@@ -665,6 +828,7 @@ class ContentPackageImporter {
       entryCount: entryCount,
       entries: entries,
       errors: errors,
+      warnings: warnings,
       assets: assets,
       contentHash: contentHash,
     );

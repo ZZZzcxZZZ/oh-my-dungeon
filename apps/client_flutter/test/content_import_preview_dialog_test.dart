@@ -3,9 +3,14 @@ import 'package:dnd_table_client/src/features/content/presentation/content_impor
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-ContentImportReport _validReport({required int formatVersion}) {
+ContentImportReport _report({
+  bool valid = true,
+  int formatVersion = 3,
+  List<ContentValidationError> errors = const [],
+  List<ContentValidationError> warnings = const [],
+}) {
   return ContentImportReport(
-    valid: true,
+    valid: valid,
     formatVersion: formatVersion,
     packageId: 'test-pkg',
     packageName: 'Test Package',
@@ -14,70 +19,86 @@ ContentImportReport _validReport({required int formatVersion}) {
     system: 'dnd5e-2024',
     entryCount: 0,
     entries: const [],
-    errors: const [],
+    errors: errors,
+    warnings: warnings,
     assets: const {},
     contentHash: 'fake-hash',
   );
 }
 
+Future<void> _pump(
+  WidgetTester tester,
+  ContentImportReport report,
+) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: ContentImportPreviewDialog(report: report, onConfirm: () async {}),
+    ),
+  );
+  await tester.pump();
+}
+
 void main() {
-  group('ContentImportPreviewDialog legacy format banner', () {
-    testWidgets('shows legacy banner when formatVersion is 1', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ContentImportPreviewDialog(
-            report: _validReport(formatVersion: 1),
-            onConfirm: () async {},
-          ),
+  group('ContentImportPreviewDialog warnings', () {
+    testWidgets('valid report with warnings shows the 提示 block', (tester) async {
+      await _pump(
+        tester,
+        _report(
+          warnings: const [
+            ContentValidationError(
+              path: r'$.entries[0].structured.classRules',
+              message: '未声明 classRules（unresolvedClassRule）',
+            ),
+          ],
         ),
       );
-      await tester.pump();
-      expect(find.byKey(const Key('legacy-format-banner')), findsOneWidget);
-      expect(find.textContaining('旧版资料包格式'), findsOneWidget);
+      expect(find.byKey(const Key('import-preview-warnings')), findsOneWidget);
+      expect(find.text('提示（不阻断导入）'), findsOneWidget);
+      expect(find.byIcon(Icons.info_outline), findsOneWidget);
+      expect(find.textContaining('unresolvedClassRule'), findsOneWidget);
+      // warning 不阻断：确认导入按钮仍然可用。
+      expect(find.widgetWithText(FilledButton, '确认导入'), findsOneWidget);
     });
 
-    testWidgets('does not show legacy banner when formatVersion is 2', (
+    testWidgets('valid report without warnings hides the 提示 block', (
       tester,
     ) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ContentImportPreviewDialog(
-            report: _validReport(formatVersion: 2),
-            onConfirm: () async {},
-          ),
-        ),
-      );
-      await tester.pump();
-      expect(find.byKey(const Key('legacy-format-banner')), findsNothing);
+      await _pump(tester, _report());
+      expect(find.byKey(const Key('import-preview-warnings')), findsNothing);
+      expect(find.text('提示（不阻断导入）'), findsNothing);
     });
 
-    testWidgets('does not show legacy banner for invalid reports', (
+    testWidgets('invalid report shows errors first, then warnings', (
       tester,
     ) async {
-      final report = ContentImportReport(
-        valid: false,
-        formatVersion: 1,
-        packageId: '',
-        packageName: '',
-        version: '',
-        locale: '',
-        system: '',
-        entryCount: 0,
-        entries: const [],
-        errors: const [ContentValidationError(path: r'$', message: 'boom')],
-        assets: const {},
-        contentHash: 'fake-hash',
-      );
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ContentImportPreviewDialog(
-            report: report,
-            onConfirm: () async {},
-          ),
+      await _pump(
+        tester,
+        _report(
+          valid: false,
+          errors: const [
+            ContentValidationError(path: r'$.formatVersion', message: 'boom'),
+          ],
+          warnings: const [
+            ContentValidationError(
+              path: r'$.entries[0].structured.classRules.hitDie',
+              message: '缺生命骰（missingCoreField）',
+            ),
+          ],
         ),
       );
-      await tester.pump();
+      expect(find.byKey(const Key('import-preview-errors')), findsOneWidget);
+      expect(find.byKey(const Key('import-preview-warnings')), findsOneWidget);
+      expect(find.textContaining('boom'), findsOneWidget);
+      expect(find.textContaining('missingCoreField'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, '关闭'), findsOneWidget);
+    });
+
+    testWidgets('legacy v1 banner is gone (v1 is rejected, never previewed)', (
+      tester,
+    ) async {
+      await _pump(tester, _report(valid: false, formatVersion: 1));
       expect(find.byKey(const Key('legacy-format-banner')), findsNothing);
+      expect(find.textContaining('旧版资料包格式'), findsNothing);
     });
   });
 }

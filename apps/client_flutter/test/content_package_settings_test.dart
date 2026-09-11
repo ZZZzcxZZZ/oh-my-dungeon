@@ -15,7 +15,7 @@ void main() {
   ) async {
     final bytes = utf8.encode(
       jsonEncode({
-        'formatVersion': 1,
+        'formatVersion': 3,
         'id': 'example',
         'name': 'Example',
         'version': '1.0.0',
@@ -52,7 +52,7 @@ void main() {
     // Pre-import a package so the list shows it
     final report = await importer.previewJson(
       jsonEncode({
-        'formatVersion': 1,
+        'formatVersion': 3,
         'id': 'example',
         'name': 'Example',
         'version': '1.0.0',
@@ -84,7 +84,7 @@ void main() {
     final importer = ContentPackageImporter(repository);
     final report = await importer.previewJson(
       jsonEncode({
-        'formatVersion': 1,
+        'formatVersion': 3,
         'id': 'example',
         'name': 'Example',
         'version': '1.0.0',
@@ -120,7 +120,7 @@ void main() {
   testWidgets('rejects invalid package preview', (tester) async {
     final bytes = utf8.encode(
       jsonEncode({
-        'formatVersion': 1,
+        'formatVersion': 3,
         'id': 'example',
         'name': 'Example',
         'version': '1.0.0',
@@ -158,7 +158,7 @@ void main() {
     for (final packageId in ['alpha', 'beta']) {
       final report = await importer.previewJson(
         jsonEncode({
-          'formatVersion': 1,
+          'formatVersion': 3,
           'id': packageId,
           'name': packageId,
           'version': '1.0.0',
@@ -207,7 +207,7 @@ void main() {
     final importer = ContentPackageImporter(repository);
     final report = await importer.previewJson(
       jsonEncode({
-        'formatVersion': 1,
+        'formatVersion': 3,
         'id': 'example',
         'name': 'Example',
         'version': '1.0.0',
@@ -245,7 +245,7 @@ void main() {
     (tester) async {
       final alphaBytes = utf8.encode(
         jsonEncode({
-          'formatVersion': 1,
+          'formatVersion': 3,
           'id': 'alpha',
           'name': 'Alpha',
           'version': '1.0.0',
@@ -259,7 +259,7 @@ void main() {
       );
       final betaBytes = utf8.encode(
         jsonEncode({
-          'formatVersion': 1,
+          'formatVersion': 3,
           'id': 'beta',
           'name': 'Beta',
           'version': '1.0.0',

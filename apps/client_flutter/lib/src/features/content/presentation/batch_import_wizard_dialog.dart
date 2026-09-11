@@ -240,16 +240,6 @@ class _PreviewCard extends StatelessWidget {
                       '${report.version} · ${report.entryCount} 个条目',
                       style: theme.textTheme.bodySmall,
                     ),
-                    if (report.formatVersion == 1)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          '旧版 v1 资料包, 导入时会自动迁移',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
                   ] else ...[
                     for (final error in report.errors.take(3))
                       Padding(

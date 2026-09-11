@@ -3,6 +3,7 @@ import '../../rules/domain/character_build.dart';
 import '../../rules/domain/character_rules_engine.dart';
 import 'character.dart';
 import 'character_content_reference.dart';
+import 'declared_levels.dart';
 import 'dnd5e_rules.dart';
 import 'rules_driven_character_builder.dart';
 
@@ -14,6 +15,7 @@ class CharacterUpgradePlan {
     required this.newGrants,
     required this.choices,
     required this.missingEntryIds,
+    required this.declaredLevels,
   });
 
   final int currentLevel;
@@ -22,6 +24,13 @@ class CharacterUpgradePlan {
   final List<ResolvedRuleGrant> newGrants;
   final List<ActiveRuleChoice> choices;
   final List<String> missingEntryIds;
+
+  /// 角色的职业声明范围（§3.12）。
+  final DeclaredLevels declaredLevels;
+
+  /// 目标等级是否落在声明范围之外（低于最早声明等级或高于最后声明等级）。
+  /// 界面据此提示"该职业未声明…，你仍可继续（数值按未声明处理）"。
+  bool get beyondDeclaredLevel => !declaredLevels.covers(targetLevel);
 
   bool get isComplete =>
       missingEntryIds.isEmpty && choices.every((choice) => choice.isValid);
@@ -45,7 +54,11 @@ class CharacterUpgradePlanner {
       selections: savedBuild.selections,
       choices: savedBuild.choices,
     );
-    return _evaluate(character.level, build);
+    return _evaluate(
+      character.level,
+      build,
+      declaredLevels: DeclaredLevels.fromCharacter(character),
+    );
   }
 
   CharacterUpgradePlan select(
@@ -65,6 +78,7 @@ class CharacterUpgradePlanner {
         selections: plan.build.selections,
         choices: choices,
       ),
+      declaredLevels: plan.declaredLevels,
     );
   }
 
@@ -132,7 +146,11 @@ class CharacterUpgradePlanner {
     );
   }
 
-  CharacterUpgradePlan _evaluate(int currentLevel, CharacterBuild build) {
+  CharacterUpgradePlan _evaluate(
+    int currentLevel,
+    CharacterBuild build, {
+    required DeclaredLevels declaredLevels,
+  }) {
     final ledger = _engine.evaluate(build);
     return CharacterUpgradePlan(
       currentLevel: currentLevel,
@@ -149,6 +167,7 @@ class CharacterUpgradePlanner {
           .where((choice) => choice.sourceLevel == build.level)
           .toList(growable: false),
       missingEntryIds: ledger.missingEntryIds,
+      declaredLevels: declaredLevels,
     );
   }
 

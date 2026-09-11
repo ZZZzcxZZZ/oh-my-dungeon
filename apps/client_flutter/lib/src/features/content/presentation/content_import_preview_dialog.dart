@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../characters/domain/declared_levels.dart';
 import '../domain/content_import_report.dart';
 
 class ContentImportPreviewDialog extends StatelessWidget {
@@ -15,6 +16,14 @@ class ContentImportPreviewDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (report.valid) {
+      final theme = Theme.of(context);
+      // §3.12：部分声明是一等功能，导入前先把每个职业条目声明的等级范围摆出来
+      // （信息样式，不是错误色）。
+      final classLevels = <({String name, DeclaredLevels levels})>[
+        for (final entry in report.entries)
+          if (entry.type == 'class')
+            (name: entry.name, levels: DeclaredLevels.fromEntry(entry)),
+      ];
       return AlertDialog(
         title: const Text('导入预览'),
         content: Column(
@@ -24,6 +33,15 @@ class ContentImportPreviewDialog extends StatelessWidget {
             Text(report.packageName),
             Text(report.version),
             Text('${report.entryCount} 个条目'),
+            for (final item in classLevels) ...[
+              const SizedBox(height: 4),
+              Text(
+                '${item.name} · ${item.levels.rangeLabel}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
             // 规则契约的 warning 级诊断：只提示，不阻断导入。
             if (report.warnings.isNotEmpty) ...[
               const SizedBox(height: 12),

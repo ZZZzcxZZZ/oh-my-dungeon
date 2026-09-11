@@ -6,6 +6,7 @@ import '../../rules/domain/character_rules_engine.dart';
 import '../../rules/domain/rule_choice_resolver.dart';
 import '../domain/character.dart';
 import '../domain/character_upgrade_planner.dart';
+import 'widgets/declared_level_banner.dart';
 
 typedef CharacterUpgradeApply = Future<bool> Function(CharacterSheet character);
 
@@ -128,23 +129,38 @@ class _CharacterUpgradePageState extends State<CharacterUpgradePage> {
                   top: false,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        key: const Key('apply-upgrade'),
-                        onPressed: plan.isComplete && !_applying
-                            ? _apply
-                            : null,
-                        icon: _applying
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.upgrade),
-                        label: const Text('确认升级'),
-                      ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // §3.12：目标等级超出职业声明范围时，在确认按钮上方说明
+                        // "仍可继续（数值按未声明处理）"，不阻断升级。
+                        if (plan.beyondDeclaredLevel) ...[
+                          DeclaredLevelBanner(
+                            levels: plan.declaredLevels,
+                            currentLevel: plan.targetLevel,
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            key: const Key('apply-upgrade'),
+                            onPressed: plan.isComplete && !_applying
+                                ? _apply
+                                : null,
+                            icon: _applying
+                                ? const SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.upgrade),
+                            label: const Text('确认升级'),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

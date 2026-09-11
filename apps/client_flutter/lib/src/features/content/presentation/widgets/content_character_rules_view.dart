@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/content_entry.dart';
+import '../../../characters/domain/declared_levels.dart';
+import '../../../characters/presentation/widgets/declared_level_banner.dart';
 import '../../../rules/domain/character_rule_definition.dart';
 
 class ContentCharacterRulesView extends StatelessWidget {
@@ -19,6 +21,10 @@ class ContentCharacterRulesView extends StatelessWidget {
     if (rules == null) return const SizedBox.shrink();
     final theme = Theme.of(context);
     final immediateGrants = _visibleGrants(rules.grants);
+    // §3.12：声明范围是**职业**概念，用条目自身声明的范围展示；职业条目即使完全
+    // 没有声明也要显式说明"未声明"，非职业条目（物种/背景等）没有这个概念就不显示。
+    final declaredLevels = DeclaredLevels.fromEntry(entry);
+    final showDeclaredLevels = entry.type == 'class' || !declaredLevels.isEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -37,6 +43,15 @@ class ContentCharacterRulesView extends StatelessWidget {
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
+        if (showDeclaredLevels) ...[
+          const SizedBox(height: 8),
+          // `currentLevel` 传最早声明等级：规则视图只说"声明了什么范围"，
+          // 不针对某个角色喊"超出"。
+          DeclaredLevelBanner(
+            levels: declaredLevels,
+            currentLevel: declaredLevels.min,
+          ),
+        ],
         if (immediateGrants.isNotEmpty || rules.choices.isNotEmpty) ...[
           const SizedBox(height: 8),
           _RuleGroup(

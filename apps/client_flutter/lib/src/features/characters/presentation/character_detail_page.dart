@@ -10,9 +10,11 @@ import '../domain/character_manual_overrides.dart';
 import '../domain/character_override_resolver.dart';
 import '../domain/character_profile.dart';
 import '../domain/character_quick_edit_service.dart';
+import '../domain/declared_levels.dart';
 import '../domain/dnd5e_rules.dart';
 import '../domain/weapon_attack_derivation.dart';
 import 'widgets/character_sheet_shell.dart';
+import 'widgets/declared_level_banner.dart';
 import '../../../core/presentation/dialog_sizes.dart';
 import '../../../core/widgets/empty_state.dart';
 
@@ -932,6 +934,10 @@ class _SpellsPanelState extends State<_SpellsPanel> {
     final resolved = CharacterOverrideResolver.resolve(widget.character);
     final spellRefs = resolved.spellEntryIds;
     final spellsByLevel = _spellsByLevel(spellRefs);
+    // §3.12：该等级不在职业声明范围内 → 数值为空时显式说"未声明"，不渲染成 0。
+    final levelUndeclared = !DeclaredLevels.fromCharacter(
+      widget.character,
+    ).covers(widget.character.level);
 
     if (ability == null &&
         slotMaximums.isEmpty &&
@@ -976,7 +982,12 @@ class _SpellsPanelState extends State<_SpellsPanel> {
           title: '法术位',
           icon: Icons.hourglass_bottom_outlined,
           child: slotMaximums.isEmpty
-              ? Text('暂无法术位', style: Theme.of(context).textTheme.bodyMedium)
+              ? (levelUndeclared
+                    ? const UndeclaredLevelNotice()
+                    : Text(
+                        '暂无法术位',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ))
               : Column(
                   children: [
                     for (final entry in _sortedSlotEntries(slotMaximums))
@@ -2675,6 +2686,10 @@ class _ResourcesPanelState extends State<_ResourcesPanel> {
 
   @override
   Widget build(BuildContext context) {
+    // §3.12：该等级不在职业声明范围内 → 没有资源时显式说"未声明"，不渲染成 0。
+    final levelUndeclared = !DeclaredLevels.fromCharacter(
+      widget.character,
+    ).covers(widget.character.level);
     return _Section(
       title: '职业资源',
       icon: Icons.bolt_outlined,
@@ -2704,10 +2719,12 @@ class _ResourcesPanelState extends State<_ResourcesPanel> {
           if (_resources.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text(
-                '暂无可追踪资源',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
+              child: levelUndeclared
+                  ? const UndeclaredLevelNotice()
+                  : Text(
+                      '暂无可追踪资源',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
             )
           else
             LayoutBuilder(

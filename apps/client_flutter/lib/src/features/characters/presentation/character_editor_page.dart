@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../domain/ability_score_generator.dart';
 import '../domain/character.dart';
 import '../domain/character_edit_draft.dart';
+import '../domain/declared_levels.dart';
 import '../domain/dnd5e_rules.dart';
 import '../domain/equipment_cost.dart';
 import '../domain/quick_build.dart';
@@ -21,6 +22,7 @@ import '../../rules/domain/character_rule_definition.dart';
 import '../../rules/domain/character_rules_engine.dart';
 import '../../rules/domain/rule_choice_resolver.dart';
 import 'widgets/character_builder_shell.dart';
+import 'widgets/declared_level_banner.dart';
 
 class CharacterEditorPage extends StatefulWidget {
   const CharacterEditorPage({
@@ -3031,75 +3033,129 @@ class _LevelProgressionSection extends StatelessWidget {
       level: level,
       abilities: abilities,
     );
+    // §3.12：条目 ∪ 档案合并后实际生效的声明范围；滑杆据此区分已声明 / 未声明区间。
+    final declaredLevels = DeclaredLevels.fromResolvedClassRules(classRules);
+    final declaredColor = theme.colorScheme.primary;
+    final undeclaredColor = theme.colorScheme.tertiary;
+    final coversLevel = declaredLevels.covers(level);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
-      child: Card.outlined(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text('等级', style: theme.textTheme.titleMedium),
-                  ),
-                  InputChip(
-                    avatar: const Icon(Icons.trending_up_outlined),
-                    label: Text('当前等级 $level'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  IconButton.filledTonal(
-                    key: const Key('standard-level-decrement-button'),
-                    tooltip: '降低等级',
-                    onPressed: level <= 1 ? null : () => onChanged(level - 1),
-                    icon: const Icon(Icons.remove),
-                  ),
-                  Expanded(
-                    child: Slider(
-                      value: level.toDouble(),
-                      min: 1,
-                      max: 20,
-                      divisions: 19,
-                      label: '$level',
-                      onChanged: (value) => onChanged(value.round()),
-                    ),
-                  ),
-                  IconButton.filledTonal(
-                    key: const Key('standard-level-increment-button'),
-                    tooltip: '提高等级',
-                    onPressed: level >= 20 ? null : () => onChanged(level + 1),
-                    icon: const Icon(Icons.add),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  Chip(label: Text('HP $hp')),
-                  Chip(label: Text('熟练 +$proficiency')),
-                  if (spellSlots.isNotEmpty)
-                    Chip(label: Text('法术位 ${_formatSpellSlots(spellSlots)}')),
-                  if (classResources.isNotEmpty)
-                    Chip(
-                      label: Text(
-                        '职业资源 ${_formatClassResources(classResources)}',
-                      ),
-                    ),
-                ],
-              ),
-            ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DeclaredLevelBanner(
+            levels: declaredLevels,
+            currentLevel: level,
           ),
-        ),
+          const SizedBox(height: 8),
+          Card.outlined(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text('等级', style: theme.textTheme.titleMedium),
+                      ),
+                      InputChip(
+                        avatar: const Icon(Icons.trending_up_outlined),
+                        label: Text('当前等级 $level'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      IconButton.filledTonal(
+                        key: const Key('standard-level-decrement-button'),
+                        tooltip: '降低等级',
+                        onPressed: level <= 1 ? null : () => onChanged(level - 1),
+                        icon: const Icon(Icons.remove),
+                      ),
+                      Expanded(
+                        child: SliderTheme(
+                          data: SliderTheme.of(context).copyWith(
+                            activeTrackColor: coversLevel
+                                ? declaredColor
+                                : undeclaredColor,
+                            thumbColor: coversLevel
+                                ? declaredColor
+                                : undeclaredColor,
+                          ),
+                          child: Slider(
+                            value: level.toDouble(),
+                            min: 1,
+                            max: 20,
+                            divisions: 19,
+                            label: '$level',
+                            semanticFormatterCallback: (value) =>
+                                declaredLevels.covers(value.round())
+                                ? '第 ${value.round()} 级（已声明）'
+                                : '第 ${value.round()} 级（该职业未声明）',
+                            onChanged: (value) => onChanged(value.round()),
+                          ),
+                        ),
+                      ),
+                      IconButton.filledTonal(
+                        key: const Key('standard-level-increment-button'),
+                        tooltip: '提高等级',
+                        onPressed: level >= 20 ? null : () => onChanged(level + 1),
+                        icon: const Icon(Icons.add),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _declaredRangeCaption(declaredLevels),
+                    key: const Key('standard-level-declared-range'),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: coversLevel
+                          ? theme.colorScheme.onSurfaceVariant
+                          : undeclaredColor,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      Chip(label: Text('HP $hp')),
+                      Chip(label: Text('熟练 +$proficiency')),
+                      if (spellSlots.isNotEmpty)
+                        Chip(
+                          label: Text('法术位 ${_formatSpellSlots(spellSlots)}'),
+                        ),
+                      if (classResources.isNotEmpty)
+                        Chip(
+                          label: Text(
+                            '职业资源 ${_formatClassResources(classResources)}',
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  /// 滑杆下方的区间说明：明确哪一段已声明、哪一段未声明（§3.12）。
+  static String _declaredRangeCaption(DeclaredLevels levels) {
+    final maximum = levels.max;
+    if (maximum == null) {
+      return '该职业未声明任何等级 · 1–20 级均按未声明处理';
+    }
+    return <String>[
+      '已声明 ${levels.min}–$maximum 级',
+      if (levels.min > 1) '1–${levels.min - 1} 级未声明',
+      if (maximum < 20) '${maximum + 1}–20 级未声明',
+    ].join(' · ');
   }
 
   static String _formatSpellSlots(Map<String, int> slots) {

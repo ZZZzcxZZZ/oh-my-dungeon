@@ -272,7 +272,7 @@
 
 | 字段 | 类型 | 语义 |
 |---|---|---|
-| `mode` | `"prepared" \| "known" \| "pact" \| "none"` | 施法模型；`none` 表示非施法者。默认 `none` |
+| `mode` | `"prepared" \| "known" \| "none"` | **法术选择模型**（怎么选法术列表），默认 `none`。非法值 → `invalidSpellcastingMode` |
 | `ability` | 属性键 | 施法属性，必须 ∈ `abilities`；`mode != "none"` 时必填 |
 | `listTags` | string[] | 法术列表过滤标签，透传给法术选择 |
 | `archetype` | 原型名 | 简写：从档案 `progressions` 取整套表 |
@@ -437,6 +437,17 @@ S3 的 patch/replace 才需要跨包优先级与冲突 UI（届时一条 errata 
 | **B. 法术选择** | `SpellSelectionPolicy` + `structured.spellcasting.progression[].maximumCantrips / maximumLeveledSpells / maximumSpellLevel` + `listTags` | 按等级给戏法数与有环法术数上限，限定列表标签与最高环阶 | 8 个施法职业全部靠它 |
 | **C. 技能选择** | `StructuredClassRules.skillChoice`（解析 `structured.skillChoice`，或中文散文） | `count` + `options` 列表 | 12 个职业靠中文散文正则解析（**本轮改为** `optionType: "skill"` 的选择，见 §3.10.2） |
 | **D. 装备选择** | `StructuredClassRules.startingEquipmentChoice` | 只有 `maximum`（自由挑选数量），**没有选项列表** | 真实包用散文 `startingEquipment`，未用该字段 |
+
+**两个概念各自只有一个信号**（避免"pact 既写 mode 又写 archetype"这类双信号）：
+
+| 概念 | 唯一信号 |
+|---|---|
+| 法术选择模型（怎么选法术列表：准备 / 已知 / 不施法） | `spellcasting.mode ∈ {prepared, known, none}` |
+| 法术位进阶（法术位数量与环阶怎么涨） | `spellcasting.archetype`（`full-caster` / `half-caster` / `third-caster` / `pact` / `none`） |
+| **是否契约魔法**（短休恢复、单一环阶） | `archetype == "pact"` —— **不再看 `mode`** |
+
+例如 2024 邪术师：`{"mode": "prepared", "ability": "cha", "archetype": "pact"}` ——
+它**准备**法术（mode），但法术位走**契约魔法**（archetype）。
 
 #### 3.10.2 目标：一个模型，两种选项载体
 
@@ -666,7 +677,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `unknownAbility` | 豁免 / 施法属性 / `formula ability:x` / `kind:"ability"` 的 `target` 不在 `abilities` | `未知属性键 "力量"，可用：str, dex, con, int, wis, cha` |
 | `unknownSkill` | `optionType: "skill"` 的选择里的选项不在 `skills` | `未知技能 "特技"（可用别名：杂技）` |
 | `invalidSkillCount` | 技能选择的 `minimum`/`maximum` 不在 0..选项数 | `技能选择的数量必须为 0..6` |
-| `invalidSpellcastingMode` | `mode` 不在枚举 | `spellcasting.mode 必须是 prepared / known / pact / none` |
+| `invalidSpellcastingMode` | `mode` 不在枚举 | `spellcasting.mode 必须是 prepared / known / none` |
 | `unknownArchetype` | `archetype` 不在 `progressions` | `未知原型 "three-quarter-caster"` |
 | `invalidTable` | `Table<T>` 键不在 1..20、数组长度为 0 或 >20、值类型不符或为负；`resources[].startsAtLevel` 不在 1..20（沿用本 code，不新增） | `prepared["21"] 的键必须为 1..20`（**短数组合法**，见 §3.12） |
 | `invalidMaxSpec` | 三种写法全缺或同时出现多种、`minimum` 为负、`formula` 不在封闭语法 | `maximum 必须且只能使用 value / formula / table 之一` |

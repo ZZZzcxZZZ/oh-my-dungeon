@@ -77,19 +77,24 @@ class LegacyClassFeatureRulesMigrator {
     }
 
     final existingRules = entry.rules ?? const CharacterRuleDefinition();
+    // 按等级归类，便于与旧版逐级特性合并；多等级步骤（`levels`）展开成逐级条目，
+    // 合并语义与旧版"每个等级一个步骤"一致。
     final progression = <int, RuleProgressionDefinition>{
-      for (final step in existingRules.progression) step.level: step,
+      for (final step in existingRules.progression)
+        for (final stepLevel in step.levels) stepLevel: step,
     };
     for (final level in grantsByLevel.keys) {
       final existing = progression[level];
       progression[level] = RuleProgressionDefinition(
-        level: level,
+        levels: [level],
         grants: [...?existing?.grants, ...grantsByLevel[level]!],
         choices: existing?.choices ?? const [],
       );
     }
     final sortedProgression = progression.values.toList()
-      ..sort((left, right) => left.level.compareTo(right.level));
+      ..sort(
+        (left, right) => left.levels.first.compareTo(right.levels.first),
+      );
 
     return _MigratedClass(
       classEntry: ContentEntry(

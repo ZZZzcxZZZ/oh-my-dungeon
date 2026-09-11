@@ -5,6 +5,7 @@ import '../../rules/domain/character_rules_engine.dart';
 import '../../rules/domain/class_rule_set.dart';
 import '../../rules/domain/rule_diagnostic.dart';
 import '../../rules/domain/rule_math.dart' as rule_math;
+import '../../rules/domain/rule_values.dart';
 import 'character_content_reference.dart';
 import 'character_edit_draft.dart';
 import 'dnd5e_rules.dart';
@@ -42,6 +43,12 @@ class RulesDrivenCharacterBuilder {
       selections: build.selections,
       choices: ledger.resolvedChoices,
     );
+    // 属性加值（`kind: ability`）必须在**任何派生之前**叠加：HP / AC / 豁免 /
+    // 技能 / 法术 DC 全部读 [effectiveAbilities]，不再读入参 [abilities]。
+    final effectiveAbilities = <String, int>{...abilities};
+    _abilityGrantBonuses(ledger).forEach((key, value) {
+      effectiveAbilities[key] = (effectiveAbilities[key] ?? 10) + value;
+    });
     final saves = {for (final key in Dnd5eRules.abilityLabels.keys) key: false};
     final skills = {for (final skill in Dnd5eRules.skills) skill.name: false};
 
@@ -77,13 +84,13 @@ class RulesDrivenCharacterBuilder {
       ..._choiceEntryRefs(ledger, const {'equipment', 'item'}),
       ...extraItemRefs.where(entries.containsKey),
     }.toList(growable: false);
-    // 法术位与职业资源一律来自新契约的职业规则（条目声明 ∪ 档案），
-    // 不再读 `spellSlot:` / `resource` 授予（任务 9 会移除这两个 grant kind）。
+    // 法术位与职业资源一律来自新契约的职业规则（条目声明 ∪ 档案）：
+    // `resource` / `spellSlot:` 授予已在任务 9 移除，数值只由 classRules 提供。
     final spellSlots = classRules.spellSlots(build.level);
     final classResources = Dnd5eRules.classResourcesFromRules(
       rules: classRules,
       level: build.level,
-      abilities: abilities,
+      abilities: effectiveAbilities,
     );
     final actions = ledger.grantsOfKind(RuleGrantKind.action).toList();
     final armorBonus = ledger
@@ -94,7 +101,8 @@ class RulesDrivenCharacterBuilder {
     final maxHp = _averageHitPoints(
       hitDie: classRules.hitDie,
       level: build.level,
-      constitution: abilities['con'] ?? 10,
+      constitution: effectiveAbilities['con'] ?? 10,
+      bonus: _hitPointGrantBonus(ledger, level: build.level, abilities: effectiveAbilities),
     );
     final contentReferences = _contentReferences(
       effectiveBuild,
@@ -109,10 +117,10 @@ class RulesDrivenCharacterBuilder {
       raceSummary: speciesEntry?.name ?? '',
       currentHp: maxHp,
       maxHp: maxHp,
-      armorClass: Dnd5eRules.baseArmorClass(abilities) + armorBonus,
+      armorClass: Dnd5eRules.baseArmorClass(effectiveAbilities) + armorBonus,
       speed: speedGrant?.value?.toInt() ?? 30,
-      initiativeBonus: Dnd5eRules.initiativeBonus(abilities),
-      abilities: Map<String, int>.from(abilities),
+      initiativeBonus: Dnd5eRules.initiativeBonus(effectiveAbilities),
+      abilities: Map<String, int>.from(effectiveAbilities),
       saves: saves,
       skills: skills,
       inventory: [
@@ -299,23 +307,60 @@ class RulesDrivenCharacterBuilder {
 
   /// 生命骰来自职业规则（条目声明 ∪ 档案）。未声明生命骰（`hitDie == null`）
   /// 不猜：只按体质调整值计，且总生命至少 1（§3.6 第 3 步）。
+  ///
+  /// [bonus] 是 `kind: hitPoints` 授予结算出的固定加值（`value` + `formula`），
+  /// 在基础生命值之上叠加；两者之和仍至少为 1。
   int _averageHitPoints({
     required int? hitDie,
     required int level,
     required int constitution,
+    required int bonus,
   }) {
     final safeLevel = level.clamp(1, 20);
-    if (hitDie == null) {
-      return (rule_math.abilityModifier(constitution) * safeLevel).clamp(
-        1,
-        1 << 30,
-      );
+    final base = hitDie == null
+        ? (rule_math.abilityModifier(constitution) * safeLevel).clamp(1, 1 << 30)
+        : Dnd5eRules.averageHitPointsForHitDie(
+            hitDie: hitDie,
+            level: safeLevel,
+            constitution: constitution,
+          );
+    return (base + bonus).clamp(1, 1 << 30);
+  }
+
+  /// `kind: ability` 授予的属性加值：`target` 是属性键（档案 `abilities` 之一），
+  /// `value` 累加；无 `target` 或非档案属性的授予被跳过（不是属性加值）。
+  Map<String, int> _abilityGrantBonuses(CharacterGrantLedger ledger) {
+    final bonuses = <String, int>{};
+    for (final grant in ledger.grantsOfKind(RuleGrantKind.ability)) {
+      final target = grant.target;
+      if (target == null || !Dnd5eRules.abilityLabels.containsKey(target)) {
+        continue;
+      }
+      final value = grant.value?.toInt() ?? 0;
+      if (value == 0) continue;
+      bonuses[target] = (bonuses[target] ?? 0) + value;
     }
-    return Dnd5eRules.averageHitPointsForHitDie(
-      hitDie: hitDie,
-      level: safeLevel,
-      constitution: constitution,
-    );
+    return bonuses;
+  }
+
+  /// `kind: hitPoints` 授予结算为固定加值：`value` 直接累加；`formula` 经
+  /// `MaxSpec.tryParse` + `resolve`（封闭语法，`level` 用职业等级）求值。
+  /// 非法的 `formula` 按未声明处理（`tryParse` 返回 null），不猜。
+  int _hitPointGrantBonus(
+    CharacterGrantLedger ledger, {
+    required int level,
+    required Map<String, int> abilities,
+  }) {
+    var total = 0;
+    for (final grant in ledger.grantsOfKind(RuleGrantKind.hitPoints)) {
+      total += grant.value?.toInt() ?? 0;
+      final formula = grant.formula;
+      if (formula == null) continue;
+      final spec = MaxSpec.tryParse(<String, Object?>{'formula': formula});
+      final resolved = spec?.resolve(level: level, abilities: abilities);
+      if (resolved != null) total += resolved;
+    }
+    return total;
   }
 
   /// 职业**自身**声明的最早 / 最高等级（§3.12 的 `{min, max}`）。

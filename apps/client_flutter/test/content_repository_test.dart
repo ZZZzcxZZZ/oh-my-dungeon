@@ -222,7 +222,7 @@ void main() {
       'rules': {
         'progression': [
           {
-            'level': 3,
+            'levels': [3],
             'choices': [
               {
                 'id': 'warlock-subclass',
@@ -619,7 +619,7 @@ void main() {
           'grants': [
             {
               'id': 'action-surge-resource',
-              'kind': 'resource',
+              'kind': 'action',
               'label': '动作如潮',
               'value': 1,
             },
@@ -647,12 +647,12 @@ void main() {
         newName: '动作如潮（家规）',
       );
 
-      expect(duplicate?.rules?.grants.single.kind.name, 'resource');
+      expect(duplicate?.rules?.grants.single.kind.name, 'action');
       expect(
         (await repository.getByKey(
           duplicate!.id,
         ))?.rules?.grants.single.kind.name,
-        'resource',
+        'action',
       );
       expect(await database.select(database.syncOutbox).get(), isEmpty);
     },

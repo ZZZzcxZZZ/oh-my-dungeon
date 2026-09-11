@@ -174,7 +174,7 @@ void main() {
           'listTags': ['spell-list:legacy'],
           'progression': [
             {
-              'level': 1,
+              'levels': [1],
               'maximumSpellLevel': 1,
               'maximumCantrips': 2,
               'maximumLeveledSpells': 3,

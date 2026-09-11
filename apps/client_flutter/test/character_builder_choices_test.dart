@@ -31,7 +31,7 @@ void main() {
               rules: const {
                 'progression': [
                   {
-                    'level': 1,
+                    'levels': [1],
                     'grants': [
                       {
                         'id': 'second-wind',
@@ -116,7 +116,7 @@ void main() {
               rules: const {
                 'progression': [
                   {
-                    'level': 1,
+                    'levels': [1],
                     'choices': [
                       {
                         'id': 'fighting-style',
@@ -211,7 +211,7 @@ void main() {
                 rules: const {
                   'progression': [
                     {
-                      'level': 3,
+                      'levels': [3],
                       'choices': [
                         {
                           'id': 'martial-archetype',
@@ -351,7 +351,7 @@ void main() {
         rules: const {
           'progression': [
             {
-              'level': 2,
+              'levels': [2],
               'choices': [
                 {
                   'id': 'style',

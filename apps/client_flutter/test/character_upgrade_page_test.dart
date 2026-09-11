@@ -18,7 +18,7 @@ void main() {
         rules: <String, Object?>{
           'progression': <Object?>[
             <String, Object?>{
-              'level': 2,
+              'levels': [2],
               'grants': <Object?>[
                 <String, Object?>{
                   'id': 'action-surge',

@@ -46,7 +46,7 @@ void main() {
       );
       expect(
         fighter.rules!.progression
-            .singleWhere((step) => step.level == 1)
+            .singleWhere((step) => step.levels.contains(1))
             .grants
             .single
             .label,
@@ -166,7 +166,7 @@ void main() {
         "name":"战士",
         "body":[],
         "revision":1,
-        "rules":{"progression":[{"level":1,"grants":[{
+        "rules":{"progression":[{"levels":[1],"grants":[{
           "id":"second-wind","kind":"feature","label":"回气"
         }]}]}
       }]
@@ -175,7 +175,7 @@ void main() {
       expect(report.valid, isTrue);
       await importer.importReport(report);
       final fighter = await repository.getByKey('example.rules:class/fighter');
-      expect(fighter?.rules?.progression.single.level, 1);
+      expect(fighter?.rules?.progression.single.levels, [1]);
       expect(
         fighter?.rules?.progression.single.grants.single.id,
         'second-wind',

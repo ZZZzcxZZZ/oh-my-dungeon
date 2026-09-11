@@ -3,14 +3,11 @@ enum RuleGrantKind {
   proficiency,
   spell,
   equipment,
-  resource,
   action,
-  conditionResistance,
   speed,
   armorClass,
   hitPoints,
-  ability,
-  note;
+  ability;
 
   static RuleGrantKind parse(String value) {
     return RuleGrantKind.values.firstWhere(
@@ -213,29 +210,53 @@ class RuleChoiceDefinition {
 
 class RuleProgressionDefinition {
   const RuleProgressionDefinition({
-    required this.level,
+    required this.levels,
     this.grants = const <RuleGrantDefinition>[],
     this.choices = const <RuleChoiceDefinition>[],
   });
 
-  final int level;
+  /// 该步生效的角色等级（1..20）。一个步骤可以一次覆盖多个等级；
+  /// 至少一项、无重复、按升序排列（[fromJson] 规范化后保证）。
+  final List<int> levels;
   final List<RuleGrantDefinition> grants;
   final List<RuleChoiceDefinition> choices;
 
   factory RuleProgressionDefinition.fromJson(Map<String, Object?> json) {
-    final level = (json['level'] as num?)?.toInt();
-    if (level == null || level < 1 || level > 20) {
-      throw FormatException('Rule progression level must be 1..20: $level');
+    if (json.containsKey('level')) {
+      throw const FormatException(
+        'Rule progression requires "levels": [..]，不再接受 "level"',
+      );
     }
+    final raw = json['levels'];
+    if (raw is! List || raw.isEmpty) {
+      throw const FormatException(
+        'Rule progression requires a non-empty "levels" array',
+      );
+    }
+    final levels = <int>[];
+    for (final item in raw) {
+      if (item is! num) {
+        throw FormatException('Rule progression level must be 1..20: $item');
+      }
+      final level = item.toInt();
+      if (level < 1 || level > 20) {
+        throw FormatException('Rule progression level must be 1..20: $level');
+      }
+      if (levels.contains(level)) {
+        throw FormatException('Rule progression levels must be unique: $level');
+      }
+      levels.add(level);
+    }
+    levels.sort();
     return RuleProgressionDefinition(
-      level: level,
+      levels: List<int>.unmodifiable(levels),
       grants: _parseList(json['grants'], RuleGrantDefinition.fromJson),
       choices: _parseList(json['choices'], RuleChoiceDefinition.fromJson),
     );
   }
 
   Map<String, Object?> toJson() => {
-    'level': level,
+    'levels': levels,
     if (grants.isNotEmpty)
       'grants': grants.map((grant) => grant.toJson()).toList(),
     if (choices.isNotEmpty)

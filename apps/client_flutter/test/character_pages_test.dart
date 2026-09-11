@@ -284,7 +284,7 @@ void main() {
       'rules': {
         'progression': [
           {
-            'level': 2,
+            'levels': [2],
             'grants': [
               {'id': 'action-surge', 'kind': 'action', 'label': '动作如潮'},
             ],
@@ -353,7 +353,7 @@ void main() {
       'rules': {
         'progression': [
           {
-            'level': 2,
+            'levels': [2],
             'choices': [
               {
                 'id': 'technique',
@@ -1512,7 +1512,9 @@ void main() {
       'wis': 8,
       'cha': 14,
     });
-    expect(submitted!.maxHp, 11);
+    // 未选职业时用档案职业兜底选项的第一个（已改为按档案 `classAliases` 派生并排序，
+    // 首个是吟游诗人 d8）：d8 + CON 13（+1）= 9；AC/先攻只看输入的 dex 12。
+    expect(submitted!.maxHp, 9);
     expect(submitted!.armorClass, 11);
     expect(submitted!.initiativeBonus, 1);
   });
@@ -1696,7 +1698,7 @@ void main() {
       'rules': {
         'progression': [
           {
-            'level': 1,
+            'levels': [1],
             'grants': [
               {'id': 'second-wind', 'kind': 'feature', 'label': '回气'},
             ],

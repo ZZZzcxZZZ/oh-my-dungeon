@@ -151,7 +151,7 @@ void main() {
       'rules': {
         'progression': [
           {
-            'level': 1,
+            'levels': [1],
             'grants': [
               {'id': 'second-wind', 'kind': 'feature', 'label': '回气'},
             ],

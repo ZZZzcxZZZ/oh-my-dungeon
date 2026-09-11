@@ -27,7 +27,7 @@ void main() {
         ],
         'progression': [
           {
-            'level': 1,
+            'levels': [1],
             'grants': [
               {
                 'id': 'second-wind',
@@ -157,7 +157,7 @@ void main() {
       rules: const {
         'progression': [
           {
-            'level': 1,
+            'levels': [1],
             'grants': [
               {'id': 'second-wind', 'kind': 'feature', 'label': '回气'},
             ],
@@ -288,13 +288,13 @@ void main() {
       rules: const {
         'progression': [
           {
-            'level': 1,
+            'levels': [1],
             'grants': [
-              // 旧契约的 resource / spellSlot 授予：任务 9 会移除这两个 kind，
-              // 这里刻意保留，证明数值已经不再由它们提供。
+              // 旧契约的 `resource` / `spellSlot:` 授予已随任务 9 移除；这里放一条
+              // 合法但不提供法术位的授予，证明数值只来自 classRules。
               {
                 'id': 'legacy-slots',
-                'kind': 'resource',
+                'kind': 'action',
                 'label': 'Legacy spell slots',
                 'target': 'spellSlot:1',
                 'value': 9,
@@ -365,7 +365,7 @@ void main() {
       },
       rules: const {
         'progression': [
-          {'level': 1, 'grants': []},
+          {'levels': [1], 'grants': []},
         ],
       },
     );
@@ -402,11 +402,11 @@ void main() {
       rules: const {
         'progression': [
           {
-            'level': 1,
+            'levels': [1],
             'grants': [
               {
                 'id': 'legacy-slots',
-                'kind': 'resource',
+                'kind': 'action',
                 'label': 'Legacy slots',
                 'target': 'spellSlot:1',
                 'value': 2,
@@ -459,7 +459,7 @@ void main() {
       },
       rules: const {
         'progression': [
-          {'level': 1, 'grants': []},
+          {'levels': [1], 'grants': []},
         ],
       },
     );

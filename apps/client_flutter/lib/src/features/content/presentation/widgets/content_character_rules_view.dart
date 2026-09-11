@@ -50,7 +50,7 @@ class ContentCharacterRulesView extends StatelessWidget {
               step.choices.isNotEmpty) ...[
             const SizedBox(height: 8),
             _RuleGroup(
-              title: '等级 ${step.level}',
+              title: _levelsLabel(step.levels),
               grants: _visibleGrants(step.grants),
               choices: step.choices,
             ),
@@ -58,6 +58,12 @@ class ContentCharacterRulesView extends StatelessWidget {
       ],
     );
   }
+
+  /// 一个步骤可覆盖多个等级（`levels`）；单等级显示 `等级 4`，
+  /// 多等级显示到达这些等级的集合 `等级 4/8/12/16`。
+  String _levelsLabel(List<int> levels) => levels.length == 1
+      ? '等级 ${levels.single}'
+      : '等级 ${levels.join('/')}';
 
   List<RuleGrantDefinition> _visibleGrants(List<RuleGrantDefinition> grants) {
     return grants
@@ -137,14 +143,11 @@ class _RuleGroup extends StatelessWidget {
       RuleGrantKind.proficiency => Icons.workspace_premium_outlined,
       RuleGrantKind.spell => Icons.auto_fix_high_outlined,
       RuleGrantKind.equipment => Icons.inventory_2_outlined,
-      RuleGrantKind.resource => Icons.battery_5_bar_outlined,
       RuleGrantKind.action => Icons.bolt_outlined,
-      RuleGrantKind.conditionResistance => Icons.health_and_safety_outlined,
       RuleGrantKind.speed => Icons.directions_run_outlined,
       RuleGrantKind.armorClass => Icons.shield_outlined,
       RuleGrantKind.hitPoints => Icons.favorite_outline,
       RuleGrantKind.ability => Icons.hexagon_outlined,
-      RuleGrantKind.note => Icons.notes_outlined,
     };
   }
 }

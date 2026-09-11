@@ -19,7 +19,7 @@ void main() {
     rules: <String, Object?>{
       'progression': <Map<String, Object?>>[
         <String, Object?>{
-          'level': 2,
+          'levels': [2],
           'grants': <Map<String, Object?>>[
             <String, Object?>{
               'id': 'action-surge',
@@ -127,7 +127,7 @@ void main() {
         rules: <String, Object?>{
           'progression': <Map<String, Object?>>[
             <String, Object?>{
-              'level': 3,
+              'levels': [3],
               'choices': <Map<String, Object?>>[
                 <String, Object?>{
                   'id': 'subclass',
@@ -151,7 +151,7 @@ void main() {
         rules: <String, Object?>{
           'progression': <Map<String, Object?>>[
             <String, Object?>{
-              'level': 3,
+              'levels': [3],
               'grants': <Map<String, Object?>>[
                 <String, Object?>{
                   'id': 'sculpt-spells',

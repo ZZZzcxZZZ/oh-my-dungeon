@@ -1869,7 +1869,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
               sourceEntryId: entry.id,
               sourceName: entry.name,
               builderStep: builderStep,
-              level: progression.level,
+              level: reachedLevel,
               definition: definition,
             ),
           );
@@ -2563,10 +2563,15 @@ class _RuleGrantPreview extends StatelessWidget {
         rules.grants.map((grant) => (entry: entry, grant: grant, level: null)),
       );
       for (final progression in rules.progression) {
-        if (progression.level > level) continue;
+        // 多等级步骤（`levels`）在预览里按"已达等级中的最高者"归组。
+        final reached = progression.levels.where(
+          (stepLevel) => stepLevel <= level,
+        );
+        if (reached.isEmpty) continue;
+        final reachedLevel = reached.last;
         grants.addAll(
           progression.grants.map(
-            (grant) => (entry: entry, grant: grant, level: progression.level),
+            (grant) => (entry: entry, grant: grant, level: reachedLevel),
           ),
         );
       }
@@ -2613,14 +2618,11 @@ class _RuleGrantPreview extends StatelessWidget {
       RuleGrantKind.proficiency => Icons.workspace_premium_outlined,
       RuleGrantKind.spell => Icons.auto_fix_high_outlined,
       RuleGrantKind.equipment => Icons.inventory_2_outlined,
-      RuleGrantKind.resource => Icons.battery_5_bar_outlined,
       RuleGrantKind.action => Icons.bolt_outlined,
-      RuleGrantKind.conditionResistance => Icons.health_and_safety_outlined,
       RuleGrantKind.speed => Icons.directions_run_outlined,
       RuleGrantKind.armorClass => Icons.shield_outlined,
       RuleGrantKind.hitPoints => Icons.favorite_outline,
       RuleGrantKind.ability => Icons.hexagon_outlined,
-      RuleGrantKind.note => Icons.notes_outlined,
     };
   }
 }

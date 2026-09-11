@@ -90,7 +90,7 @@ void main() {
       rules: CharacterRuleDefinition.fromJson({
         'progression': [
           {
-            'level': 1,
+            'levels': [1],
             'choices': [
               {
                 'id': 'class-skills',
@@ -151,7 +151,7 @@ void main() {
       rules: CharacterRuleDefinition.fromJson({
         'progression': [
           {
-            'level': 3,
+            'levels': [3],
             'choices': [
               {
                 'id': 'subclass-choice',

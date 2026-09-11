@@ -23,7 +23,7 @@ void main() {
           ],
           'progression': [
             {
-              'level': 1,
+              'levels': [1],
               'grants': [
                 {
                   'id': 'second-wind',
@@ -34,7 +34,7 @@ void main() {
               ],
             },
             {
-              'level': 2,
+              'levels': [2],
               'grants': [
                 {
                   'id': 'action-surge',
@@ -92,7 +92,7 @@ void main() {
           rules: {
             'progression': [
               {
-                'level': 1,
+                'levels': [1],
                 'choices': [
                   {
                     'id': 'weapon-mastery',
@@ -197,7 +197,7 @@ void main() {
         rules: const {
           'progression': [
             {
-              'level': 3,
+              'levels': [3],
               'choices': [
                 {
                   'id': 'subclass',
@@ -221,7 +221,7 @@ void main() {
         rules: const {
           'progression': [
             {
-              'level': 3,
+              'levels': [3],
               'grants': [
                 {
                   'id': 'sculpt-spells',

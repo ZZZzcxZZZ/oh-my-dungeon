@@ -38,7 +38,7 @@ void main() {
         rules: {
           'progression': [
             {
-              'level': 2,
+              'levels': [2],
               'grants': [
                 {
                   'id': 'action-surge',

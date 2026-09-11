@@ -151,24 +151,28 @@ class CharacterRulesEngine {
       );
 
       for (final step in rules.progression) {
-        if (step.level > build.level) continue;
-        _resolveGrants(
-          entry: entry,
-          sourceLevel: step.level,
-          definitions: step.grants,
-          target: grants,
-        );
-        _resolveChoices(
-          build: build,
-          entry: entry,
-          sourceLevel: step.level,
-          definitions: step.choices,
-          pending: pendingChoices,
-          queue: queue,
-          resolvedChoiceEntryIds: resolvedChoiceEntryIds,
-          resolvedChoices: resolvedChoices,
-          activeChoices: activeChoices,
-        );
+        // 一个步骤可覆盖多个等级（`levels`）：按每个已达等级分别展开，
+        // `sourceLevel` 因此始终是"这一步在哪个等级生效"的单值。
+        for (final stepLevel in step.levels) {
+          if (stepLevel > build.level) continue;
+          _resolveGrants(
+            entry: entry,
+            sourceLevel: stepLevel,
+            definitions: step.grants,
+            target: grants,
+          );
+          _resolveChoices(
+            build: build,
+            entry: entry,
+            sourceLevel: stepLevel,
+            definitions: step.choices,
+            pending: pendingChoices,
+            queue: queue,
+            resolvedChoiceEntryIds: resolvedChoiceEntryIds,
+            resolvedChoices: resolvedChoices,
+            activeChoices: activeChoices,
+          );
+        }
       }
     }
 

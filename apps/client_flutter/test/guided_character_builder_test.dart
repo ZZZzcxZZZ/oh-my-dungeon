@@ -222,7 +222,7 @@ void main() {
               rules: const {
                 'progression': [
                   {
-                    'level': 1,
+                    'levels': [1],
                     'choices': [
                       {
                         'id': 'fighting-style',
@@ -331,7 +331,7 @@ void main() {
               rules: const {
                 'progression': [
                   {
-                    'level': 1,
+                    'levels': [1],
                     'choices': [
                       {
                         'id': 'starting-spells',

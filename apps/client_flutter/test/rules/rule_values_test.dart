@@ -133,6 +133,17 @@ void main() {
       expect(short.resolve(level: 20, abilities: abilities), 3);
     });
 
+    test('表未声明的等级返回 null 而不是 0（§3.12）', () {
+      final sparse = MaxSpec.tryParse({'table': {'3': 1, '7': 2}})!;
+      expect(sparse.resolve(level: 2, abilities: abilities), isNull,
+          reason: '低于最早声明等级 → 未声明，不得成为 0 次');
+      expect(sparse.resolve(level: 3, abilities: abilities), 1);
+      // 显式写 0 与"未声明"语义不同：0 表示存在但上限为 0
+      final zero = MaxSpec.tryParse({'table': {'1': 0, '5': 2}})!;
+      expect(zero.resolve(level: 1, abilities: abilities), 0);
+      expect(zero.resolve(level: 4, abilities: abilities), 0);
+    });
+
     test('封闭语法之外一律拒绝', () {
       for (final bad in ['prof', 'level*2', 'ability', 'ability:luck', '1+1', '']) {
         expect(MaxSpec.tryParse({'formula': bad}), isNull, reason: bad);

@@ -161,12 +161,14 @@ class MaxSpec {
     return MaxSpec._(table: table, minimum: minimum);
   }
 
-  int resolve({required int level, required Map<String, int> abilities}) {
+  /// 返回 `int?`：表在该等级**未声明**时返回 null（调用方跳过），不静默变 0（§3.12）。
+  int? resolve({required int level, required Map<String, int> abilities}) {
     final raw = switch (this) {
       MaxSpec(value: final v?) => v,
       MaxSpec(formula: final f?) => _evaluate(f, level, abilities),
-      _ => table!.at(level) ?? 0,
+      _ => table!.at(level),
     };
+    if (raw == null) return null;
     return minimum == null || raw >= minimum! ? raw : minimum!;
   }
 }

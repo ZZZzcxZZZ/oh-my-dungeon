@@ -31,16 +31,12 @@
                 [4, 3, 3, 3, 2, 1], [4, 3, 3, 3, 2, 1], [4, 3, 3, 3, 2, 1, 1], [4, 3, 3, 3, 2, 1, 1], [4, 3, 3, 3, 2, 1, 1, 1],
                 [4, 3, 3, 3, 2, 1, 1, 1], [4, 3, 3, 3, 2, 1, 1, 1, 1], [4, 3, 3, 3, 3, 1, 1, 1, 1], [4, 3, 3, 3, 3, 2, 1, 1, 1],
                 [4, 3, 3, 3, 3, 2, 2, 1, 1]],
-      "prepared": [4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22],
-      "cantrips": [3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
       "maximumSpellLevel": [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 9, 9]
     },
     "half-caster": {
       "minimumLevel": 1,
       "slots": [[2], [2], [3], [3], [4, 2], [4, 2], [4, 3], [4, 3], [4, 3, 2], [4, 3, 2], [4, 3, 3], [4, 3, 3],
                 [4, 3, 3, 1], [4, 3, 3, 1], [4, 3, 3, 2], [4, 3, 3, 2], [4, 3, 3, 3, 1], [4, 3, 3, 3, 1], [4, 3, 3, 3, 2], [4, 3, 3, 3, 2]],
-      "prepared": [2, 3, 4, 5, 6, 6, 7, 7, 9, 9, 10, 10, 11, 11, 12, 12, 14, 14, 15, 15],
-      "cantrips": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
       "maximumSpellLevel": [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5]
     },
     "third-caster": {
@@ -52,8 +48,6 @@
       "minimumLevel": 1,
       "slots": [[1], [2], [2], [2], [2], [2], [2], [2], [2], [2], [3], [3], [3], [3], [3], [3], [4], [4], [4], [4]],
       "slotLevel": [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
-      "prepared": [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15],
-      "cantrips": [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
       "maximumSpellLevel": [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]
     }
   },
@@ -70,7 +64,13 @@
     "bard": {
       "hitDie": 8,
       "savingThrowAbilities": ["dex", "cha"],
-      "spellcasting": {"mode": "prepared", "ability": "cha", "archetype": "full-caster"},
+      "spellcasting": {
+        "mode": "prepared",
+        "ability": "cha",
+        "archetype": "full-caster",
+        "prepared": [4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22],
+        "cantrips": [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]
+      },
       "resources": [
         {"id": "bardic_inspiration", "name": "诗人激励", "startsAtLevel": 1,
          "recovery": {"table": {"1": "longRest", "5": "shortRest"}},
@@ -80,7 +80,13 @@
     "cleric": {
       "hitDie": 8,
       "savingThrowAbilities": ["wis", "cha"],
-      "spellcasting": {"mode": "prepared", "ability": "wis", "archetype": "full-caster"},
+      "spellcasting": {
+        "mode": "prepared",
+        "ability": "wis",
+        "archetype": "full-caster",
+        "prepared": [4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22],
+        "cantrips": [3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]
+      },
       "resources": [
         {"id": "channel_divinity", "name": "引导神力", "startsAtLevel": 2,
          "recovery": "shortRestOne",
@@ -90,7 +96,13 @@
     "druid": {
       "hitDie": 8,
       "savingThrowAbilities": ["int", "wis"],
-      "spellcasting": {"mode": "prepared", "ability": "wis", "archetype": "full-caster"},
+      "spellcasting": {
+        "mode": "prepared",
+        "ability": "wis",
+        "archetype": "full-caster",
+        "prepared": [4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22],
+        "cantrips": [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]
+      },
       "resources": [
         {"id": "wild_shape", "name": "野性形态", "startsAtLevel": 2,
          "recovery": "shortRestOne",
@@ -123,7 +135,13 @@
     "paladin": {
       "hitDie": 10,
       "savingThrowAbilities": ["wis", "cha"],
-      "spellcasting": {"mode": "prepared", "ability": "cha", "archetype": "half-caster"},
+      "spellcasting": {
+        "mode": "prepared",
+        "ability": "cha",
+        "archetype": "half-caster",
+        "prepared": [2, 3, 4, 5, 6, 6, 7, 7, 9, 9, 10, 10, 11, 11, 12, 12, 14, 14, 15, 15],
+        "cantrips": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      },
       "resources": [
         {"id": "channel_divinity", "name": "引导神力", "startsAtLevel": 3,
          "recovery": "shortRestOne",
@@ -136,7 +154,13 @@
     "ranger": {
       "hitDie": 10,
       "savingThrowAbilities": ["dex", "str"],
-      "spellcasting": {"mode": "prepared", "ability": "wis", "archetype": "half-caster"},
+      "spellcasting": {
+        "mode": "prepared",
+        "ability": "wis",
+        "archetype": "half-caster",
+        "prepared": [2, 3, 4, 5, 6, 6, 7, 7, 9, 9, 10, 10, 11, 11, 12, 12, 14, 14, 15, 15],
+        "cantrips": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      },
       "resources": [
         {"id": "favored_enemy", "name": "宿敌", "startsAtLevel": 1,
          "recovery": "longRest",
@@ -152,7 +176,13 @@
     "sorcerer": {
       "hitDie": 6,
       "savingThrowAbilities": ["con", "cha"],
-      "spellcasting": {"mode": "prepared", "ability": "cha", "archetype": "full-caster"},
+      "spellcasting": {
+        "mode": "prepared",
+        "ability": "cha",
+        "archetype": "full-caster",
+        "prepared": [2, 4, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22],
+        "cantrips": [4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]
+      },
       "resources": [
         {"id": "sorcery_points", "name": "术法点", "startsAtLevel": 2,
          "recovery": "longRest",
@@ -165,7 +195,13 @@
     "warlock": {
       "hitDie": 8,
       "savingThrowAbilities": ["wis", "cha"],
-      "spellcasting": {"mode": "prepared", "ability": "cha", "archetype": "pact"},
+      "spellcasting": {
+        "mode": "prepared",
+        "ability": "cha",
+        "archetype": "pact",
+        "prepared": [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15],
+        "cantrips": [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]
+      },
       "resources": [
         {"id": "magical_cunning", "name": "魔法诡计", "startsAtLevel": 2,
          "recovery": "longRest",
@@ -175,7 +211,13 @@
     "wizard": {
       "hitDie": 6,
       "savingThrowAbilities": ["int", "wis"],
-      "spellcasting": {"mode": "prepared", "ability": "int", "archetype": "full-caster"},
+      "spellcasting": {
+        "mode": "prepared",
+        "ability": "int",
+        "archetype": "full-caster",
+        "prepared": [4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 18, 19, 21, 22, 23, 24, 25],
+        "cantrips": [3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]
+      },
       "resources": []
     }
   }

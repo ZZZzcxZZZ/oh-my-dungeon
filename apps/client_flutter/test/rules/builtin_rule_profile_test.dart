@@ -235,13 +235,8 @@ void main() {
     );
     progressions.forEach((name, raw) {
       final p = raw! as Map<String, Object?>;
-      for (final key in [
-        'slots',
-        'prepared',
-        'cantrips',
-        'maximumSpellLevel',
-        'slotLevel',
-      ]) {
+      // prepared / cantrips 不在原型里（见下方契约守卫），逐职业表单独核算
+      for (final key in ['slots', 'maximumSpellLevel', 'slotLevel']) {
         final value = p[key];
         if (value == null) continue;
         // 原型内部是模板，必须写完整 20 项；`none` 原型的空表是唯一例外
@@ -298,22 +293,6 @@ void main() {
     expect((pact['slotLevel']! as List)[8], 5);
     expect((pact['slotLevel']! as List)[17], 5);
 
-    // 准备法术上限
-    expect((progression('full-caster')['prepared']! as List)[0], 4);
-    expect((progression('full-caster')['prepared']! as List)[4], 9);
-    expect((progression('full-caster')['prepared']! as List)[19], 22);
-    expect((progression('half-caster')['prepared']! as List)[0], 2);
-    expect((progression('half-caster')['prepared']! as List)[4], 6);
-    expect((progression('half-caster')['prepared']! as List)[19], 15);
-    expect((progression('pact')['prepared']! as List)[0], 2);
-    expect((progression('pact')['prepared']! as List)[19], 15);
-
-    // 戏法上限
-    expect((progression('full-caster')['cantrips']! as List)[0], 3);
-    expect((progression('full-caster')['cantrips']! as List)[9], 5);
-    expect((progression('pact')['cantrips']! as List)[0], 2);
-    expect((progression('pact')['cantrips']! as List)[19], 4);
-
     // 最高环阶
     expect((progression('full-caster')['maximumSpellLevel']! as List)[0], 1);
     expect((progression('full-caster')['maximumSpellLevel']! as List)[8], 5);
@@ -321,5 +300,108 @@ void main() {
     expect((progression('half-caster')['maximumSpellLevel']! as List)[0], 1);
     expect((progression('half-caster')['maximumSpellLevel']! as List)[16], 5);
     expect((progression('pact')['maximumSpellLevel']! as List)[16], 5);
+  });
+
+  test('契约守卫：原型只承载 slots / slotLevel / maximumSpellLevel / minimumLevel', () {
+    final progressions = archive['progressions']! as Map<String, Object?>;
+    const allowed = {'slots', 'slotLevel', 'maximumSpellLevel', 'minimumLevel'};
+    progressions.forEach((name, raw) {
+      final p = raw! as Map<String, Object?>;
+      // prepared / cantrips 永远是职业自己的字段：2024 官方表这两列逐职业不同，
+      // 塞进原型会让法师 20 级准备上限从 25 静默掉到 22、术士 1 级从 2 变 4。
+      expect(p.containsKey('prepared'), isFalse, reason: '$name 不得承载 prepared');
+      expect(p.containsKey('cantrips'), isFalse, reason: '$name 不得承载 cantrips');
+      final unexpected = p.keys.toSet().difference(allowed);
+      expect(unexpected, isEmpty, reason: '$name 出现白名单之外的键：$unexpected');
+    });
+  });
+
+  test('8 个施法职业的 prepared / cantrips 逐职业对照 SRD 5.2（完整 20 项）', () {
+    // 吟游诗人 / 牧师 / 德鲁伊共用同一张"准备法术"表
+    const divinePrepared = [
+      4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22,
+    ];
+    // 吟游诗人 / 德鲁伊 / 邪术师的戏法表（1 级 2 个）
+    const twoStartCantrips = [
+      2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    ];
+    const clericCantrips = [
+      3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+    ];
+    const wizardCantrips = clericCantrips;
+    const sorcererPrepared = [
+      2, 4, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22,
+    ];
+    const sorcererCantrips = [
+      4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+    ];
+    const wizardPrepared = [
+      4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 18, 19, 21, 22, 23, 24, 25,
+    ];
+    const halfCasterPrepared = [
+      2, 3, 4, 5, 6, 6, 7, 7, 9, 9, 10, 10, 11, 11, 12, 12, 14, 14, 15, 15,
+    ];
+    const warlockPrepared = [
+      2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15,
+    ];
+    const noCantrips = [
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+
+    const expected = <String, List<List<int>>>{
+      'bard': [divinePrepared, twoStartCantrips],
+      'cleric': [divinePrepared, clericCantrips],
+      'druid': [divinePrepared, twoStartCantrips],
+      'sorcerer': [sorcererPrepared, sorcererCantrips],
+      'wizard': [wizardPrepared, wizardCantrips],
+      'paladin': [halfCasterPrepared, noCantrips],
+      'ranger': [halfCasterPrepared, noCantrips],
+      'warlock': [warlockPrepared, twoStartCantrips],
+    };
+
+    expected.forEach((slug, tables) {
+      final spellcasting =
+          classRules(classes, slug)['spellcasting']! as Map<String, Object?>;
+      final prepared = (spellcasting['prepared']! as List).cast<int>();
+      final cantrips = (spellcasting['cantrips']! as List).cast<int>();
+      expect(prepared, hasLength(20), reason: '$slug.prepared');
+      expect(cantrips, hasLength(20), reason: '$slug.cantrips');
+      expect(prepared, tables[0], reason: '$slug.prepared');
+      expect(cantrips, tables[1], reason: '$slug.cantrips');
+    });
+
+    // 非施法者保持 {"mode":"none"}，不得凭空多出这两项
+    for (final slug in ['barbarian', 'fighter', 'monk', 'rogue']) {
+      final spellcasting =
+          classRules(classes, slug)['spellcasting']! as Map<String, Object?>;
+      expect(spellcasting, {'mode': 'none'}, reason: slug);
+    }
+  });
+
+  test('缺陷回归：职业差异不得被原型抹平（法师 25 / 术士 1 级 2 等）', () {
+    List<int> table(String slug, String key) =>
+        ((classRules(classes, slug)['spellcasting']! as Map<String, Object?>)[key]!
+                as List)
+            .cast<int>();
+
+    final wizard = table('wizard', 'prepared');
+    expect(wizard[19], 25, reason: '法师 20 级准备上限 25，不是原型共用的 22');
+    expect(wizard[0], 4, reason: '法师 1 级准备 4');
+
+    final sorcerer = table('sorcerer', 'prepared');
+    expect(sorcerer[0], 2, reason: '术士 1 级只要 2 个准备法术，不是原型的 4');
+    expect(sorcerer[19], 22);
+
+    expect(table('druid', 'cantrips')[0], 2, reason: '德鲁伊 1 级戏法 2');
+    expect(table('sorcerer', 'cantrips')[0], 4, reason: '术士 1 级戏法 4');
+    expect(table('cleric', 'cantrips')[0], 3, reason: '牧师 1 级戏法 3');
+
+    for (final slug in ['paladin', 'ranger']) {
+      expect(table(slug, 'cantrips'), everyElement(0), reason: '$slug 没有戏法');
+    }
+
+    final warlock = table('warlock', 'prepared');
+    expect(warlock[0], 2, reason: '邪术师 1 级准备 2');
+    expect(warlock[19], 15);
   });
 }

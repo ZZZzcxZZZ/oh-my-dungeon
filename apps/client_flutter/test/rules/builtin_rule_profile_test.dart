@@ -4,6 +4,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:dnd_table_client/src/features/characters/domain/dnd5e_rules.dart';
 import 'package:dnd_table_client/src/features/rules/domain/class_rule_set.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -391,6 +392,13 @@ void main() {
     }
     // 18 技能名不得重复
     expect(skills.map((skill) => skill['name']).toSet(), hasLength(18));
+  });
+
+  test('abilityLabels 的键集合与档案 abilities 一致', () {
+    // 这是**结构白名单**（键集合覆盖），不是数值 oracle：属性键由档案声明，
+    // 展示标签少一个键或多一个键都必须在测试里暴露。
+    final abilities = (archive['abilities']! as List).cast<String>().toSet();
+    expect(Dnd5eRules.abilityLabels.keys.toSet(), abilities);
   });
 
   test('18 项技能的技能名 → 属性映射对照 SRD 5.2', () {

@@ -660,7 +660,7 @@ void main() {
     });
 
     test('散文职业名只解析到母职业：不推断施法子职业，无法术位', () {
-      // 过渡 shim 的档案侧反向匹配：档案职业名/别名是该字符串的子串 → fighter。
+      // 过渡 shim 的展示名解析：`战士` + `（` 前缀 → fighter（§3.6 第 2 步）。
       expect(Dnd5eRules.hitDieFor(classSummary: '战士（奥法骑士）'), 10);
       expect(
         Dnd5eRules.classSavingThrows('战士（奥法骑士）'),
@@ -685,6 +685,27 @@ void main() {
           reason: className,
         );
       }
+    });
+  });
+
+  group('展示名 slug 解析（§3.6 第 2 步：精确相等或 <别名><分隔符> 前缀）', () {
+    test('别名 + 分隔符前缀命中母职业', () {
+      // `战士（奥法骑士）` → fighter；前缀 `战士` 后紧跟 `（`。
+      expect(Dnd5eRules.hitDieFor(classSummary: '战士（奥法骑士）'), 10);
+      expect(Dnd5eRules.classSavingThrows('战士（奥法骑士）'), {'str', 'con'});
+      // `法师 / Wizard` → wizard；前缀 `法师` 后紧跟空格。
+      expect(Dnd5eRules.hitDieFor(classSummary: '法师 / Wizard'), 6);
+      expect(Dnd5eRules.classSavingThrows('法师 / Wizard'), {'int', 'wis'});
+    });
+
+    test('禁止裸子串：星界游侠不命中游侠（ranger）', () {
+      expect(Dnd5eRules.hitDieFor(classSummary: '星界游侠'), isNull);
+      expect(Dnd5eRules.classSavingThrows('星界游侠'), isEmpty);
+    });
+
+    test('精确相等命中（别名与 slug 都可）', () {
+      expect(Dnd5eRules.hitDieFor(classSummary: '战士'), 10);
+      expect(Dnd5eRules.hitDieFor(classSummary: 'Fighter'), 10);
     });
   });
 

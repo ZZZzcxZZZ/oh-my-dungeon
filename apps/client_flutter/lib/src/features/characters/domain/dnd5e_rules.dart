@@ -11,7 +11,7 @@ import '../../rules/domain/rule_profile_resolver.dart';
 /// **所有随职业变化的数值只来自档案**：内置档案（[profile]）与角色所用条目的
 /// `structured.classRules` 做字段级合并（[resolveClassRules]），未声明即不猜。
 /// 本文件里**不存在**以职业名（中文或英文）为键的规则表，也没有任何职业名子串
-/// 匹配（契约 §10.1）。
+/// 匹配（契约 §10 第 1 条）。
 ///
 /// 纯运算（属性调整值 / 熟练加值 / 加值格式化）只有一份实现，在
 /// `features/rules/domain/rule_math.dart`；本类同名方法只是委托，避免第二份公式。
@@ -50,7 +50,9 @@ class Dnd5eRules {
   static void resetForTests() => _profile = null;
 
   /// 展示用的属性中文标签（UI 文案，不是规则数值）。
-  /// 属性键本身由档案的 `abilities` 声明；两者的键集合由测试断言一致。
+  /// 属性键本身由档案的 `abilities` 声明；两者的键集合由
+  /// `test/rules/builtin_rule_profile_test.dart` 的
+  /// 「abilityLabels 的键集合与档案 abilities 一致」断言守卫。
   static const abilityLabels = {
     'str': '力量',
     'dex': '敏捷',
@@ -201,9 +203,14 @@ class Dnd5eRules {
     );
   }
 
+  /// 档案 `classAliases` 分隔符（契约 §3.6 第 2 步）：只有"展示名"可用时，
+  /// 别名后紧跟其中之一才算前缀命中，保证 `星界游侠` 不会命中 `游侠`。
+  static const _aliasPrefixDelimiters = {'（', '(', ' ', '-', '/'};
+
   /// slug：条目 id 的最后一段（契约 §3.6 的规范对齐键）；没有条目身份时，
-  /// 用展示名归一化后精确匹配档案（含 `classAliases`），再退到"档案侧反向
-  /// 包含匹配"（候选集只有档案里的职业名/别名/slug，取最长命中，不写死任何名字）。
+  /// 用展示名归一化后按档案做**精确相等**或**`<别名><分隔符>` 前缀**匹配
+  /// （候选集只有档案里的职业名 / 别名 / slug，不写死任何名字）。**禁止裸子串
+  /// 匹配**：`星界游侠` 与任何候选都不构成前缀关系，因此不命中 `游侠`。
   static String _slugFor({required String? entryId, required String classSummary}) {
     final id = entryId?.trim() ?? '';
     if (id.isNotEmpty) {
@@ -212,7 +219,6 @@ class Dnd5eRules {
     }
     final normalized = classSummary.trim().toLowerCase();
     if (normalized.isEmpty) return '';
-    if (profile.classRules(normalized) != null) return normalized;
     final candidates = <String, String>{
       for (final entry in profile.aliases.entries)
         if (entry.key.isNotEmpty) entry.key: entry.value,
@@ -222,10 +228,17 @@ class Dnd5eRules {
     String? bestSlug;
     var bestLength = 0;
     candidates.forEach((needle, slug) {
-      if (needle.length > bestLength && normalized.contains(needle)) {
+      if (needle.length <= bestLength) return;
+      if (normalized == needle) {
         bestSlug = slug;
         bestLength = needle.length;
+        return;
       }
+      if (!normalized.startsWith(needle)) return;
+      final rest = normalized.substring(needle.length);
+      if (!_aliasPrefixDelimiters.contains(rest[0])) return;
+      bestSlug = slug;
+      bestLength = needle.length;
     });
     // 档案里没有的职业（如自制职业）保持原样：查不到数值即"未声明"，不猜。
     return bestSlug ?? normalized;

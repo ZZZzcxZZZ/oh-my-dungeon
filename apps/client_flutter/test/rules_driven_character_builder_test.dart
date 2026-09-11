@@ -1,3 +1,6 @@
+import 'package:dnd_table_client/src/features/characters/domain/character_edit_draft.dart';
+import 'package:dnd_table_client/src/features/characters/domain/declared_levels.dart';
+import 'package:dnd_table_client/src/features/characters/domain/dnd5e_rules.dart';
 import 'package:dnd_table_client/src/features/characters/domain/rules_driven_character_builder.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
 import 'package:dnd_table_client/src/features/rules/domain/character_build.dart';
@@ -444,7 +447,9 @@ void main() {
       'slug': 'barbarian',
       'name': 'Barbarian',
       'declared': true,
-      'declaredLevels': {'min': null, 'max': null},
+      // §3.12 口径 = 合并后实际生效的范围：条目只声明 1 级（progression[].levels），
+      // 档案 barbarian 的狂暴表声明到 17 级，合并后是 1–17。
+      'declaredLevels': {'min': 1, 'max': 17},
     });
     expect(draft.maxHp, 14, reason: '档案 d12 + CON 14（+2）');
   });
@@ -482,6 +487,135 @@ void main() {
         );
 
     expect(draft.data['startingEquipmentMaximum'], 5);
+  });
+
+  // §3.12：声明范围只有一种口径 = 合并后实际生效的范围。写入（Builder）与
+  // 创建向导必须同源，否则同一角色在不同界面显示不同数字。
+  group('声明范围口径：Builder 写入 = 向导读取', () {
+    CharacterEditDraft buildFor(ContentEntry classEntry) =>
+        RulesDrivenCharacterBuilder(entries: {classEntry.id: classEntry}).build(
+          name: 'Aria',
+          build: CharacterBuild(
+            level: 1,
+            selections: {'class': classEntry.id},
+          ),
+          abilities: const {
+            'str': 16,
+            'dex': 14,
+            'con': 14,
+            'int': 10,
+            'wis': 12,
+            'cha': 10,
+          },
+        );
+
+    test('条目只声明 levels 1/3/5，但 slug 命中内置职业时并上档案范围', () {
+      final classEntry = _entry(
+        id: 'test:class/fighter',
+        type: 'class',
+        name: '战士',
+        structured: const {
+          'classRules': {
+            'hitDie': 10,
+            'resources': [
+              {
+                'id': 'focus',
+                'name': '专注',
+                'recovery': 'longRest',
+                'maximum': {
+                  'table': {'1': 2, '3': 3, '5': 4},
+                },
+              },
+            ],
+          },
+        },
+        rules: const {
+          'progression': [
+            {'levels': [1, 3, 5], 'grants': []},
+          ],
+        },
+      );
+
+      final draft = buildFor(classEntry);
+      // 向导等级滑杆 / 信息条读的就是同一个函数。
+      final wizardLevels = DeclaredLevels.fromEntry(classEntry);
+
+      expect(
+        draft.data['classIdentity'],
+        containsPair('declaredLevels', wizardLevels.toData()),
+        reason: '写入口径必须与向导算出来的完全一致',
+      );
+
+      final archive = Dnd5eRules.profile.classRules('fighter')!;
+      expect(
+        archive.declaredMaxLevel,
+        greaterThan(5),
+        reason: '构造用例的前提：档案范围超出条目自身的 1–5',
+      );
+      expect(wizardLevels.min, archive.declaredMinLevel, reason: '并上档案侧 min');
+      expect(wizardLevels.max, archive.declaredMaxLevel, reason: '并上档案侧 max');
+      expect(wizardLevels.max, 17);
+    });
+
+    test('完全自制的职业只有条目范围，min/max 与条目一致', () {
+      final classEntry = _entry(
+        id: 'test:class/astral-knight',
+        type: 'class',
+        name: '星界骑士',
+        structured: const {
+          'classRules': {
+            'hitDie': 10,
+            'resources': [
+              {
+                'id': 'focus',
+                'name': '专注',
+                'recovery': 'longRest',
+                'maximum': {
+                  'table': {'3': 3},
+                },
+              },
+            ],
+          },
+        },
+        rules: const {
+          'progression': [
+            {'levels': [1, 3, 5], 'grants': []},
+          ],
+        },
+      );
+
+      expect(Dnd5eRules.profile.classRules('astral-knight'), isNull);
+      final draft = buildFor(classEntry);
+      final wizardLevels = DeclaredLevels.fromEntry(classEntry);
+
+      expect(wizardLevels.min, 1, reason: 'progression[].levels 的最早等级');
+      expect(wizardLevels.max, 5, reason: 'progression[].levels 的最后等级');
+      expect(
+        draft.data['classIdentity'],
+        containsPair('declaredLevels', wizardLevels.toData()),
+      );
+      expect(draft.data['classIdentity'], containsPair('slug', 'astral-knight'));
+    });
+
+    test('条目与档案都没有声明时 max 为 null，不写成 0 / 20', () {
+      final classEntry = _entry(
+        id: 'test:class/astral-knight',
+        type: 'class',
+        name: '星界骑士',
+        structured: const {},
+        rules: const {'grants': []},
+      );
+
+      final draft = buildFor(classEntry);
+      final wizardLevels = DeclaredLevels.fromEntry(classEntry);
+      expect(wizardLevels.max, isNull);
+      expect(wizardLevels.isEmpty, isTrue);
+      final persisted =
+          draft.data['classIdentity']! as Map<String, Object?>;
+      final declaredLevels = persisted['declaredLevels'] as Map<String, Object?>;
+      expect(declaredLevels['max'], isNull);
+      expect(declaredLevels, wizardLevels.toData());
+    });
   });
 }
 

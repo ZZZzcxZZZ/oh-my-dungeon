@@ -479,8 +479,10 @@ abstract final class RuleProfileResolver {
           const [],
       archetype: profile.progression(spellcasting?.archetype),
       fieldSources: sources,
-      declaredMaxLevel: entryRules?.declaredMaxLevel,
-      declaredMinLevel: entryRules?.declaredMinLevel,
+      // 声明范围的唯一口径在 ResolvedClassRules 里：条目各表 ∪ 档案各表（§3.12）。
+      // 此处只提供两侧的 ClassRuleSet，不再各自算一份 min/max。
+      entryRules: entryRules,
+      archiveRules: fromArchive,
     );
   }
 

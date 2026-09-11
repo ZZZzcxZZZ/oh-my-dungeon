@@ -1,4 +1,5 @@
 import '../../content/domain/content_entry.dart';
+import '../../rules/domain/character_rule_definition.dart';
 import '../../rules/domain/rule_profile.dart';
 import 'character.dart';
 import 'dnd5e_rules.dart';
@@ -9,11 +10,9 @@ import 'dnd5e_rules.dart';
 /// 等级沿用最后声明值，低于最早声明等级为"未声明"。界面由此判断"这个等级的内容
 /// 是否被声明过"，**数值型未声明不得渲染成 0**。
 ///
-/// 三种来源各有边界：
-/// - [DeclaredLevels.fromCharacter]：角色持久化的声明范围（条目自身声明，任务 8 写入）；
-/// - [DeclaredLevels.fromEntry]：条目自身声明的范围（资料库规则视图 / 导入预览用）；
-/// - [DeclaredLevels.fromResolvedClassRules]：条目 ∪ 内置档案合并后**实际生效**的
-///   范围（创建向导用：没有职业条目、只按展示名命中内置档案时也要给出真实范围）。
+/// 声明范围**只有一种口径**（§3.12）：[fromEntry] = 条目 `progression[].levels`
+/// ∪ 条目各 `Table` 的范围 ∪ 内置档案同 slug 职业的相应范围。角色 Builder 写入、
+/// 创建向导、资料库规则视图、导入预览全部走这一个入口，不得各自聚合。
 class DeclaredLevels {
   const DeclaredLevels({this.min = 1, this.max});
 
@@ -72,7 +71,13 @@ class DeclaredLevels {
     return _fromRaw(raw);
   }
 
-  /// 条目自身声明的范围（`structured.classRules`；条目为空即完全没有声明）。
+  /// 声明范围的**唯一**口径（§3.12）：条目 `progression[].levels` ∪ 条目各表范围
+  /// ∪ 内置档案同 slug 职业的相应范围。
+  ///
+  /// 这是写入（`RulesDrivenCharacterBuilder`）与全部界面（创建向导、资料库规则
+  /// 视图、导入预览）共用的入口，任何地方都不许再自己拼。只有展示名、拿不到条目
+  /// 的快速创建走 [fromResolvedClassRules]——同一个口径函数，只是没有 progression
+  /// 可并。
   static DeclaredLevels fromEntry(ContentEntry? entry) {
     if (entry == null) return const DeclaredLevels();
     final rules = Dnd5eRules.resolveClassRules(
@@ -80,33 +85,54 @@ class DeclaredLevels {
       classSummary: entry.name,
       structured: entry.structured,
     );
-    return DeclaredLevels(
-      min: rules.declaredMinLevel ?? 1,
-      max: rules.declaredMaxLevel,
+    return fromResolvedClassRules(
+      rules,
+      progressionLevels: _progressionLevels(entry),
     );
   }
 
-  /// 条目 ∪ 内置档案合并后实际生效的范围（创建向导的等级滑杆用）。
-  static DeclaredLevels fromResolvedClassRules(ResolvedClassRules rules) {
+  /// 合并后各表范围（[ResolvedClassRules.declaredMinLevel] / `declaredMaxLevel`）
+  /// ∪ [progressionLevels]（§3.12）。
+  ///
+  /// [fromEntry] 是它的唯一常规调用方（条目才有 `progression[].levels`）；只有
+  /// 展示名、拿不到条目的路径（快速创建）直接调用它，口径仍然相同。
+  static DeclaredLevels fromResolvedClassRules(
+    ResolvedClassRules rules, {
+    Iterable<int> progressionLevels = const <int>[],
+  }) {
     final maximums = <int>[
-      ...?rules.spellcasting?.declaredMaxLevels,
-      ...rules.resources
-          .map((resource) => resource.declaredMaxLevel)
-          .whereType<int>(),
+      if (rules.declaredMaxLevel case final int max) max,
+      ...progressionLevels,
     ];
     if (maximums.isEmpty) return const DeclaredLevels();
     final minimums = <int>[
-      ...?rules.spellcasting?.declaredMinLevels,
-      ...rules.resources
-          .map((resource) => resource.declaredMinLevel)
-          .whereType<int>(),
+      if (rules.declaredMinLevel case final int min) min,
+      ...progressionLevels,
     ];
     return DeclaredLevels(
-      min: minimums.isEmpty
-          ? 1
-          : minimums.reduce((a, b) => a < b ? a : b),
+      min: minimums.reduce((a, b) => a < b ? a : b),
       max: maximums.reduce((a, b) => a > b ? a : b),
     );
+  }
+
+  /// 持久化形状 `data.classIdentity.declaredLevels`。
+  ///
+  /// 完全没有声明时 min / max 都是 null（与历史数据一致，[fromCharacter] 会把
+  /// null 的 min 读回 1），而不是把"未声明"写成 0 或 1。
+  Map<String, Object?> toData() => <String, Object?>{
+    'min': isEmpty ? null : min,
+    'max': max,
+  };
+
+  /// `entry.progression[].levels`。只有 `class` 条目算"职业声明"：种族 / 背景的
+  /// 1 级步骤不是职业等级区间，不得让资料库视图凭空出现职业声明条。
+  static Iterable<int> _progressionLevels(ContentEntry entry) sync* {
+    if (entry.type != 'class') return;
+    final progression =
+        entry.rules?.progression ?? const <RuleProgressionDefinition>[];
+    for (final step in progression) {
+      yield* step.levels;
+    }
   }
 
   static DeclaredLevels _fromRaw(Map<Object?, Object?> raw) {

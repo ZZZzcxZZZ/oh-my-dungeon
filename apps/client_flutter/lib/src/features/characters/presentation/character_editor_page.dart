@@ -3033,8 +3033,9 @@ class _LevelProgressionSection extends StatelessWidget {
       level: level,
       abilities: abilities,
     );
-    // §3.12：条目 ∪ 档案合并后实际生效的声明范围；滑杆据此区分已声明 / 未声明区间。
-    final declaredLevels = DeclaredLevels.fromResolvedClassRules(classRules);
+    // §3.12：声明范围只有一种口径，与 Builder 写入值同源（[DeclaredLevels.fromEntry]）；
+    // 滑杆据此区分已声明 / 未声明区间。
+    final declaredLevels = DeclaredLevels.fromEntry(classEntry);
     final declaredColor = theme.colorScheme.primary;
     final undeclaredColor = theme.colorScheme.tertiary;
     final coversLevel = declaredLevels.covers(level);

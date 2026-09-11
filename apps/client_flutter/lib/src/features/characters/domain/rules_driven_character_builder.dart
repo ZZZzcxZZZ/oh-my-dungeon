@@ -2,12 +2,11 @@ import '../../content/domain/content_entry.dart';
 import '../../rules/domain/character_build.dart';
 import '../../rules/domain/character_rule_definition.dart';
 import '../../rules/domain/character_rules_engine.dart';
-import '../../rules/domain/class_rule_set.dart';
-import '../../rules/domain/rule_diagnostic.dart';
 import '../../rules/domain/rule_math.dart' as rule_math;
 import '../../rules/domain/rule_values.dart';
 import 'character_content_reference.dart';
 import 'character_edit_draft.dart';
+import 'declared_levels.dart';
 import 'dnd5e_rules.dart';
 import 'structured_class_rules.dart';
 
@@ -180,10 +179,9 @@ class RulesDrivenCharacterBuilder {
           // 没有职业条目即"未声明"：界面显示"未声明"而不是 0。
           'declared': classEntry != null,
           // §3.12：部分声明是一等功能，声明范围随角色持久化，供所有界面共用。
-          'declaredLevels': {
-            'min': _declaredMinLevel(classEntry),
-            'max': _declaredMaxLevel(classEntry),
-          },
+          // 唯一口径来自 [DeclaredLevels.fromEntry]（条目 progression ∪ 条目各表
+          // ∪ 内置档案同 slug 职业），与创建向导读的是同一个函数。
+          'declaredLevels': DeclaredLevels.fromEntry(classEntry).toData(),
         },
         'hitDie': classRules.hitDie,
         'savingThrowAbilities': classRules.savingThrowAbilities.toList(),
@@ -361,30 +359,6 @@ class RulesDrivenCharacterBuilder {
       if (resolved != null) total += resolved;
     }
     return total;
-  }
-
-  /// 职业**自身**声明的最早 / 最高等级（§3.12 的 `{min, max}`）。
-  ///
-  /// 只有条目**自己**的 `structured.classRules` 算"声明"：档案是补齐，不是条目
-  /// 声明的范围（两者都是 null 即"未声明该范围"，界面据此显示未声明）。
-  int? _declaredMinLevel(ContentEntry? classEntry) {
-    if (classEntry == null) return null;
-    return _entryRuleSet(classEntry)?.declaredMinLevel;
-  }
-
-  int? _declaredMaxLevel(ContentEntry? classEntry) {
-    if (classEntry == null) return null;
-    return _entryRuleSet(classEntry)?.declaredMaxLevel;
-  }
-
-  ClassRuleSet? _entryRuleSet(ContentEntry classEntry) {
-    final raw = classEntry.structured['classRules'];
-    if (raw is! Map) return null;
-    return ClassRuleSet.parse(
-      Map<String, Object?>.from(raw),
-      path: r'$.structured.classRules',
-      diagnostics: <RuleDiagnostic>[],
-    );
   }
 }
 

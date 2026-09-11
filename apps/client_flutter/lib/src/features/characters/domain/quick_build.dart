@@ -1,5 +1,6 @@
 import '../../rules/domain/rule_profile.dart';
 import 'character_edit_draft.dart';
+import 'declared_levels.dart';
 import 'dnd5e_rules.dart';
 
 class QuickBuildSelection {
@@ -112,6 +113,9 @@ class QuickBuildService {
       entryId: selection.classEntryId,
       classSummary: selection.className,
     );
+    // §3.12：声明范围与 Builder / 向导同源（快速创建拿不到条目，只有展示名，
+    // 因此没有 `progression[].levels` 可并——口径函数相同，来源就是档案侧）。
+    final declaredLevels = DeclaredLevels.fromResolvedClassRules(classRules);
 
     return CharacterEditDraft(
       name: selection.name.trim(),
@@ -160,10 +164,7 @@ class QuickBuildService {
           'name': selection.className,
           // 展示名解析不到档案 slug 即"未声明"。
           'declared': slug.isNotEmpty,
-          'declaredLevels': {
-            'min': classRules.declaredMinLevel,
-            'max': classRules.declaredMaxLevel,
-          },
+          'declaredLevels': declaredLevels.toData(),
         },
         'hitDie': classRules.hitDie,
         'savingThrowAbilities': classRules.savingThrowAbilities.toList(),

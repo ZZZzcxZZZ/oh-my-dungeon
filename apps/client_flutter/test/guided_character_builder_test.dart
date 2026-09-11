@@ -586,6 +586,97 @@ void main() {
       },
     ]);
   });
+
+  testWidgets('声明范围只有一种口径：向导显示与 Builder 写入同源（§3.12）', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    CharacterEditDraft? submitted;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          contentEntries: [
+            _entry(
+              id: 'guide:class/fighter',
+              type: 'class',
+              name: '战士',
+              revision: 1,
+              structured: const {
+                'classRules': {
+                  'hitDie': 10,
+                  // 条目自身只声明到 5 级。
+                  'resources': [
+                    {
+                      'id': 'focus',
+                      'name': '专注',
+                      'recovery': 'longRest',
+                      'maximum': {
+                        'table': {'1': 2, '3': 3, '5': 4},
+                      },
+                    },
+                  ],
+                },
+              },
+              rules: const {
+                'progression': [
+                  {'levels': [1, 3, 5], 'grants': []},
+                ],
+                'choices': <Map<String, Object?>>[],
+              },
+            ),
+            _entry(
+              id: 'guide:background/soldier',
+              type: 'background',
+              name: '士兵',
+              revision: 1,
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:species/human',
+              type: 'species',
+              name: '人类',
+              revision: 1,
+              rules: const {},
+            ),
+          ],
+          onSubmit: (draft) async {
+            submitted = draft;
+            return true;
+          },
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('standard-character-name-field')),
+      '莉安',
+    );
+    await tester.pumpAndSettle();
+    await _goToDesktopStep(tester, 0);
+
+    // 合并后实际生效的范围：条目只到 5 级，内置档案 fighter 声明到 17 级，必须并上。
+    expect(find.text('职业声明：1–17 级'), findsOneWidget);
+    expect(find.text('已声明 1–17 级 · 18–20 级未声明'), findsOneWidget);
+
+    await _goToDesktopStep(tester, 8);
+    await tester.ensureVisible(find.widgetWithText(FilledButton, '创建角色'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '创建角色'));
+    await tester.pumpAndSettle();
+
+    expect(submitted, isNotNull);
+    // 写进角色的硬性值与向导显示的完全一致（同一个函数），不得一处条目自身、
+    // 一处合并后。
+    expect(
+      submitted!.data['classIdentity'],
+      containsPair('declaredLevels', <String, Object?>{'min': 1, 'max': 17}),
+    );
+  });
 }
 
 Future<void> _goToDesktopStep(WidgetTester tester, int index) async {

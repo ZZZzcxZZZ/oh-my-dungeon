@@ -119,8 +119,8 @@ class ResolvedClassRules {
     this.resources = const [],
     this.fieldSources = const {},
     this.archetype,
-    this.declaredMaxLevel,
-    this.declaredMinLevel,
+    this.entryRules,
+    this.archiveRules,
   });
 
   final int? hitDie;
@@ -130,11 +130,36 @@ class ResolvedClassRules {
   final ClassProgression? archetype;
   final Map<String, RuleFieldSource> fieldSources;
 
-  /// 职业**自身**声明的最高等级（不含 archetype 模板，§3.12）。
-  final int? declaredMaxLevel;
+  /// 条目自身声明的规则块（`structured.classRules`；未声明为 null）。
+  final ClassRuleSet? entryRules;
 
-  /// 职业**自身**声明的最早等级（§3.12 的 `{min, max}` 里的 min）。
-  final int? declaredMinLevel;
+  /// 内置档案同 slug 职业的规则块（未命中为 null）。
+  final ClassRuleSet? archiveRules;
+
+  /// 声明范围的**唯一**口径（§3.12）：条目各表范围 ∪ 内置档案同 slug 职业的
+  /// 相应范围。条目 `progression[].levels` 由 [DeclaredLevels] 并上——只有它
+  /// 拿得到条目上下文。`max` 为 null 表示合并后仍无任何等级声明。
+  ///
+  /// 档案侧**必须**并进来（哪怕条目自己声明了同名数值字段）：界面在"条目声明
+  /// 覆盖档案"时仍应看到档案补出的等级区间，否则同一角色在不同界面数字不同。
+  int? get declaredMaxLevel => _declaredBound(
+    <int?>[entryRules?.declaredMaxLevel, archiveRules?.declaredMaxLevel],
+    (a, b) => a > b ? a : b,
+  );
+
+  /// 声明范围口径的 min（各来源最早声明等级；全部未声明为 null）。
+  int? get declaredMinLevel => _declaredBound(
+    <int?>[entryRules?.declaredMinLevel, archiveRules?.declaredMinLevel],
+    (a, b) => a < b ? a : b,
+  );
+
+  static int? _declaredBound(
+    List<int?> levels,
+    int Function(int a, int b) pick,
+  ) {
+    final declared = levels.whereType<int>();
+    return declared.isEmpty ? null : declared.reduce(pick);
+  }
 
   /// `mode == 'none'` 即"不使用施法"：无施法属性（§3.6 第 3 步）。
   String? get spellcastingAbility =>

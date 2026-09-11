@@ -1,4 +1,7 @@
+import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/domain/dnd5e_rules.dart';
+import 'package:dnd_table_client/src/features/characters/domain/weapon_attack_derivation.dart';
+import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -95,19 +98,36 @@ void main() {
         'cha': 8,
       };
 
-      final longbow = Dnd5eRules.weaponProfile('长弓');
+      // 任务 8：武器数值来自物品条目自身的声明，物品名映射表已删除。
+      final longbow = _weaponEntry(
+        id: 'guide:equipment/longbow',
+        name: '长弓',
+        structured: const {'category': '远程武器', 'damage': '1d8 穿刺'},
+      );
+      final ability = Dnd5eRules.weaponAbility(longbow.structured)!;
 
-      expect(longbow?.name, '长弓');
+      expect(longbow.name, '长弓');
+      expect(ability, 'dex');
       expect(
         Dnd5eRules.attackBonus(
           abilities: abilities,
           level: 3,
-          ability: longbow!.ability,
+          ability: ability,
         ),
         4,
       );
-      expect(Dnd5eRules.damageFormula(longbow, abilities), '1d8+2');
-      expect(Dnd5eRules.spellcastingAbility('Ranger'), 'wis');
+      expect(
+        Dnd5eRules.damageFormula(
+          Dnd5eWeaponProfile(
+            name: longbow.name,
+            ability: ability,
+            damageDie: '1d8',
+            damageType: '穿刺',
+          ),
+          abilities,
+        ),
+        '1d8+2',
+      );
       expect(
         Dnd5eRules.spellSaveDc(
           classSummary: 'Ranger',
@@ -136,5 +156,183 @@ void main() {
       expect(fighterTwo, {'second_wind': 2, 'action_surge': 1});
       expect(barbarian, {'rage': 3});
     });
+
+    test('weaponAbility 只读条目声明，不按物品名猜', () {
+      // ability 显式声明优先。
+      expect(
+        Dnd5eRules.weaponAbility(const {'ability': 'dex', 'category': '军用武器'}),
+        'dex',
+      );
+      // 灵巧（finesse 或 properties 里的「灵巧」）→ dex。
+      expect(Dnd5eRules.weaponAbility(const {'finesse': true}), 'dex');
+      expect(
+        Dnd5eRules.weaponAbility(const {
+          'category': '军用武器',
+          'properties': '灵巧，轻型',
+        }),
+        'dex',
+      );
+      // 远程类别 → dex；近战默认 str。
+      expect(Dnd5eRules.weaponAbility(const {'category': '远程武器'}), 'dex');
+      expect(Dnd5eRules.weaponAbility(const {'category': '军用武器'}), 'str');
+      expect(Dnd5eRules.weaponAbility(null), isNull);
+    });
+  });
+
+  group('WeaponAttackDerivation（物品条目声明驱动）', () {
+    final character =
+        CharacterSheet.local(
+          id: 'char-1',
+          name: 'Arannis',
+          level: 3,
+          classSummary: 'Ranger',
+        ).copyWith(
+          abilities: const <String, Object?>{
+            'str': 10,
+            'dex': 14,
+            'con': 12,
+            'int': 10,
+            'wis': 14,
+            'cha': 8,
+          },
+          inventory: const <Map<String, Object?>>[
+            <String, Object?>{
+              'entryId': 'guide:equipment/longbow',
+              'name': '长弓',
+              'quantity': 1,
+            },
+            <String, Object?>{
+              'entryId': 'guide:equipment/longsword',
+              'name': '长剑',
+              'quantity': 1,
+            },
+            <String, Object?>{
+              'entryId': 'guide:equipment/rope',
+              'name': '麻绳',
+              'quantity': 1,
+            },
+            <String, Object?>{'name': '无名物品', 'quantity': 1},
+          ],
+        );
+
+    final entries = <ContentEntry>[
+      _weaponEntry(
+        id: 'guide:equipment/longbow',
+        name: '长弓',
+        structured: const {'category': '远程武器', 'damage': '1d8 穿刺'},
+      ),
+      _weaponEntry(
+        id: 'guide:equipment/longsword',
+        name: '长剑',
+        structured: const {'category': '军用武器', 'damage': '1d8 挥砍'},
+      ),
+      _weaponEntry(
+        id: 'guide:equipment/rope',
+        name: '麻绳',
+        structured: const {'category': '冒险装备'},
+      ),
+    ];
+
+    test('按 structured.damage / category 派生攻击', () {
+      final attacks = WeaponAttackDerivation.derive(
+        character: character,
+        contentEntries: entries,
+      );
+
+      expect(attacks, hasLength(2));
+      final longbow = attacks.first;
+      expect(longbow.name, '长弓');
+      expect(longbow.bonus, 4);
+      expect(longbow.toHit, '+4 命中');
+      expect(longbow.damageFormula, '1d8+2');
+      expect(longbow.damage, '1d8+2 穿刺');
+      expect(longbow.damageType, '穿刺');
+
+      // 近战军用武器 → 力量（STR 10 → +0）。
+      final longsword = attacks.last;
+      expect(longsword.name, '长剑');
+      expect(longsword.bonus, 2, reason: '力量 +0，熟练 +2');
+      expect(longsword.damageFormula, '1d8');
+      expect(longsword.damage, '1d8 挥砍');
+      expect(longsword.damageType, '挥砍');
+    });
+
+    test('未声明伤害的物品不产出攻击（不猜）', () {
+      final attacks = WeaponAttackDerivation.derive(
+        character: character,
+        contentEntries: entries,
+      );
+      expect(attacks.map((attack) => attack.name), isNot(contains('麻绳')));
+      expect(attacks, hasLength(2));
+    });
+
+    test('灵巧武器在 str / dex 中取较高者', () {
+      final finesseCharacter = character.copyWith(
+        abilities: const <String, Object?>{
+          'str': 8,
+          'dex': 16,
+          'con': 12,
+          'int': 10,
+          'wis': 14,
+          'cha': 8,
+        },
+        inventory: const <Map<String, Object?>>[
+          <String, Object?>{
+            'entryId': 'guide:equipment/dagger',
+            'name': '匕首',
+            'quantity': 1,
+          },
+        ],
+      );
+      final attacks = WeaponAttackDerivation.derive(
+        character: finesseCharacter,
+        contentEntries: <ContentEntry>[
+          _weaponEntry(
+            id: 'guide:equipment/dagger',
+            name: '匕首',
+            // 真实 PHB 数据把"灵巧"写在 properties 里，而不是布尔字段。
+            structured: const {
+              'category': '简易武器',
+              'damage': '1d4 穿刺',
+              'properties': '灵巧，轻型，投掷（射程 20/60）',
+            },
+          ),
+        ],
+      );
+
+      expect(attacks.single.bonus, 5, reason: 'DEX 16 → +3，熟练 +2');
+      expect(attacks.single.damageFormula, '1d4+3');
+    });
+
+    test('条目不在资料库（或物品名相同但没有 entryId）时不产出攻击', () {
+      final orphan = character.copyWith(
+        inventory: const <Map<String, Object?>>[
+          <String, Object?>{'name': '长弓', 'quantity': 1},
+        ],
+      );
+      expect(
+        WeaponAttackDerivation.derive(
+          character: orphan,
+          contentEntries: entries,
+        ),
+        isEmpty,
+      );
+    });
+  });
+}
+
+ContentEntry _weaponEntry({
+  required String id,
+  required String name,
+  required Map<String, Object?> structured,
+}) {
+  return ContentEntry.fromJson({
+    'id': id,
+    'type': 'equipment',
+    'slug': id.split('/').last,
+    'name': name,
+    'body': <Map<String, Object?>>[],
+    'revision': 1,
+    'structured': structured,
   });
 }

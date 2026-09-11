@@ -264,9 +264,7 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                   TextField(
                     key: const Key('character-name'),
                     controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: '名称',
-                    ),
+                    decoration: const InputDecoration(labelText: '名称'),
                     textInputAction: TextInputAction.next,
                   ),
                   const SizedBox(height: 12),
@@ -276,9 +274,7 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                         child: TextField(
                           key: const Key('character-class-field'),
                           controller: _classController,
-                          decoration: const InputDecoration(
-                            labelText: '职业',
-                          ),
+                          decoration: const InputDecoration(labelText: '职业'),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -286,9 +282,7 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                         child: TextField(
                           key: const Key('character-race-field'),
                           controller: _raceController,
-                          decoration: const InputDecoration(
-                            labelText: '种族',
-                          ),
+                          decoration: const InputDecoration(labelText: '种族'),
                         ),
                       ),
                     ],
@@ -340,9 +334,7 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                       child: TextField(
                         key: Key('ability-${entry.key}-field'),
                         controller: _abilityControllers[entry.key],
-                        decoration: InputDecoration(
-                          labelText: entry.value,
-                        ),
+                        decoration: InputDecoration(labelText: entry.value),
                         keyboardType: TextInputType.number,
                       ),
                     ),
@@ -421,9 +413,7 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                           child: TextField(
                             key: Key('currency-$key-field'),
                             controller: _currencyControllers[key],
-                            decoration: InputDecoration(
-                              labelText: key,
-                            ),
+                            decoration: InputDecoration(labelText: key),
                             keyboardType: TextInputType.number,
                           ),
                         ),
@@ -439,9 +429,7 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
               child: TextField(
                 key: const Key('character-notes-field'),
                 controller: _notesController,
-                decoration: const InputDecoration(
-                  labelText: '背景、个性、临时说明',
-                ),
+                decoration: const InputDecoration(labelText: '背景、个性、临时说明'),
                 minLines: 3,
                 maxLines: 6,
               ),
@@ -476,9 +464,7 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
     return TextField(
       key: key,
       controller: controller,
-      decoration: InputDecoration(
-        labelText: label,
-      ),
+      decoration: InputDecoration(labelText: label),
       keyboardType: TextInputType.number,
       onChanged: onChanged,
     );
@@ -493,9 +479,7 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
           DropdownButtonFormField<String>(
             key: const Key('character-kind-field'),
             initialValue: _characterKind,
-            decoration: const InputDecoration(
-              labelText: '类型',
-            ),
+            decoration: const InputDecoration(labelText: '类型'),
             items: const [
               DropdownMenuItem(value: 'monster', child: Text('怪物')),
               DropdownMenuItem(value: 'npc', child: Text('NPC')),
@@ -528,9 +512,7 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                       width: fieldWidth,
                       child: TextField(
                         controller: _characterControllers[field.$1],
-                        decoration: InputDecoration(
-                          labelText: field.$2,
-                        ),
+                        decoration: InputDecoration(labelText: field.$2),
                       ),
                     ),
                 ],
@@ -1107,7 +1089,9 @@ class _UpgradeRuleChoiceSection extends StatelessWidget {
             if (options.isEmpty)
               Text(
                 '没有符合当前等级与资格的选项。',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.error),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.error,
+                ),
               )
             else
               Wrap(
@@ -1441,6 +1425,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         review: review,
         level: _level,
         className: _className,
+        classEntry: _entryById(_classEntryId),
         abilities: _abilityScores,
         selectedSpells: _selectedSpellRefs.length,
         selectedItems: _selectedItemRefs.length,
@@ -1565,6 +1550,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
           _LevelProgressionSection(
             level: _level,
             className: _className,
+            classEntry: _entryById(_classEntryId),
             abilities: _abilityScores,
             onChanged: (value) => setState(() {
               _level = value;
@@ -2043,19 +2029,13 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     }
   }
 
-  Map<String, int> _presetAbilitiesForClass(String className) {
-    final normalized = className.toLowerCase();
-    if (normalized.contains('法师') || normalized.contains('wizard')) {
-      return {'str': 8, 'dex': 13, 'con': 14, 'int': 15, 'wis': 12, 'cha': 10};
-    }
-    if (normalized.contains('游荡者') || normalized.contains('rogue')) {
-      return {'str': 8, 'dex': 15, 'con': 14, 'int': 12, 'wis': 10, 'cha': 13};
-    }
-    if (normalized.contains('牧师') || normalized.contains('cleric')) {
-      return {'str': 10, 'dex': 12, 'con': 14, 'int': 8, 'wis': 15, 'cha': 13};
-    }
-    return {'str': 15, 'dex': 14, 'con': 13, 'int': 10, 'wis': 12, 'cha': 8};
-  }
+  /// 推荐属性预设：**按条目身份 / 档案 slug 取键**
+  /// （[QuickBuildService.editorAbilityPresetFor]），不再写死中文职业名。
+  Map<String, int> _presetAbilitiesForClass(String className) =>
+      QuickBuildService.editorAbilityPresetFor(
+        classEntryId: _entryIdFor('class', className),
+        className: className,
+      );
 
   void _resetAbilityScoresForClass(String className) {
     final scores = _abilityMethod == AbilityScoreMethod.rolled
@@ -2232,6 +2212,7 @@ class _BuilderSummaryPanel extends StatelessWidget {
     required this.review,
     required this.level,
     required this.className,
+    required this.classEntry,
     required this.abilities,
     required this.selectedSpells,
     required this.selectedItems,
@@ -2242,6 +2223,7 @@ class _BuilderSummaryPanel extends StatelessWidget {
   final _StandardBuildReview review;
   final int level;
   final String className;
+  final ContentEntry? classEntry;
   final Map<String, int> abilities;
   final int selectedSpells;
   final int selectedItems;
@@ -2249,11 +2231,22 @@ class _BuilderSummaryPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hp = Dnd5eRules.averageHitPoints(
-      className: className,
-      level: level,
-      abilities: abilities,
+    final classRules = Dnd5eRules.resolveClassRules(
+      entryId: classEntry?.id,
+      classSummary: classEntry?.name ?? className,
+      structured: classEntry?.structured ?? const <String, Object?>{},
     );
+    final hp = classRules.hitDie == null
+        ? (Dnd5eRules.abilityModifier(
+                    Dnd5eRules.abilityScore(abilities, 'con'),
+                  ) *
+                  level.clamp(1, 20))
+              .clamp(1, 1 << 30)
+        : Dnd5eRules.averageHitPointsForHitDie(
+            hitDie: classRules.hitDie!,
+            level: level,
+            constitution: Dnd5eRules.abilityScore(abilities, 'con'),
+          );
     final armorClass = Dnd5eRules.baseArmorClass(abilities);
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -2809,7 +2802,9 @@ class _RuleChoiceSection extends StatelessWidget {
               if (options.isEmpty)
                 Text(
                   '资料库中缺少 ${definition.optionType} 选项。',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.error),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
                 )
               else
                 Wrap(
@@ -2987,31 +2982,44 @@ class _LevelProgressionSection extends StatelessWidget {
   const _LevelProgressionSection({
     required this.level,
     required this.className,
+    required this.classEntry,
     required this.abilities,
     required this.onChanged,
   });
 
   final int level;
   final String className;
+  final ContentEntry? classEntry;
   final Map<String, int> abilities;
   final ValueChanged<int> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final hp = Dnd5eRules.averageHitPoints(
-      className: className,
+    final classRules = Dnd5eRules.resolveClassRules(
+      entryId: classEntry?.id,
+      classSummary: classEntry?.name ?? className,
+      structured: classEntry?.structured ?? const <String, Object?>{},
+    );
+    final hitDie = classRules.hitDie;
+    final hp = hitDie == null
+        ? (Dnd5eRules.abilityModifier(
+                    Dnd5eRules.abilityScore(abilities, 'con'),
+                  ) *
+                  level.clamp(1, 20))
+              .clamp(1, 1 << 30)
+        : Dnd5eRules.averageHitPointsForHitDie(
+            hitDie: hitDie,
+            level: level,
+            constitution: Dnd5eRules.abilityScore(abilities, 'con'),
+          );
+    final proficiency = Dnd5eRules.proficiencyBonus(level);
+    final spellSlots = classRules.spellSlots(level);
+    // 职业资源必须带 abilities：`formula: ability:<key>` 的上限由属性决定。
+    final classResources = Dnd5eRules.classResourcesFromRules(
+      rules: classRules,
       level: level,
       abilities: abilities,
-    );
-    final proficiency = Dnd5eRules.proficiencyBonus(level);
-    final spellSlots = Dnd5eRules.spellSlotMaximums(
-      classSummary: className,
-      level: level,
-    );
-    final classResources = Dnd5eRules.classResources(
-      classSummary: className,
-      level: level,
     );
 
     return Padding(

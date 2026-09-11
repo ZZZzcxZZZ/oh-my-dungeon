@@ -139,8 +139,37 @@ class CharacterSheet {
     };
   }
 
+  /// 角色卡上的职业资源。优先级：
+  /// 1. `data.classResources`（创建时按条目规则快照写下的显式清单）；
+  /// 2. `data.classIdentity.slug` 存在时，用条目身份重新解析规则档案
+  ///    （老角色回填后也能算出资源）；
+  /// 3. 没有职业身份 / 项目器标记"未声明"（`declared == false`）→ 空列表。
+  ///
+  /// 第 2 条**必须**传 [abilityMap]：`formula: ability:<key>` 的上限由属性决定
+  /// （如 CHA 16 的诗人激励 = 3）。
   List<Dnd5eClassResource> get classResources {
-    final explicitResources = _asList(dataMap['classResources'])
+    final explicit = _explicitClassResources();
+    if (explicit.isNotEmpty) return explicit;
+    final identity = dataMap['classIdentity'];
+    if (identity is! Map || identity['declared'] == false) return const [];
+    final slug = '${identity['slug'] ?? ''}'.trim();
+    if (slug.isEmpty) return const [];
+    final rules = Dnd5eRules.resolveClassRules(
+      entryId: identity['entryId'] as String?,
+      classSummary: classSummary,
+    );
+    return Dnd5eRules.classResourcesFromRules(
+      rules: rules,
+      level: level,
+      abilities: {
+        for (final entry in abilityMap.entries)
+          entry.key: _intValue(entry.value) == 0 ? 10 : _intValue(entry.value),
+      },
+    );
+  }
+
+  List<Dnd5eClassResource> _explicitClassResources() {
+    return _asList(dataMap['classResources'])
         .map((item) => _asMap(item))
         .where((item) => item['id'] != null && item['name'] != null)
         .map(
@@ -153,8 +182,6 @@ class CharacterSheet {
         )
         .where((item) => item.maximum > 0)
         .toList(growable: false);
-    if (explicitResources.isNotEmpty) return explicitResources;
-    return Dnd5eRules.classResources(classSummary: classSummary, level: level);
   }
 
   List<String> get spellRefs {

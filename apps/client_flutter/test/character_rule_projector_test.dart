@@ -82,6 +82,109 @@ void main() {
       );
     },
   );
+
+  test('回填职业身份：展示名精确匹配档案 slug（老角色没有 build 也能回填）', () {
+    final legacy = CharacterSheet.local(
+      id: 'legacy-bard',
+      name: '旧吟游诗人',
+      level: 1,
+      classSummary: '吟游诗人',
+    );
+
+    final projected = const CharacterRuleProjector(
+      entries: <String, ContentEntry>{},
+    ).project(legacy);
+
+    expect(projected.dataMap['classIdentity'], {
+      'entryId': null,
+      'slug': 'bard',
+      'name': '吟游诗人',
+      'declaredLevels': {'min': null, 'max': null},
+      'declared': true,
+    });
+  });
+
+  test('不认识的名字标记「未声明」，禁止裸子串回填', () {
+    final astralRanger = CharacterSheet.local(
+      id: 'legacy-astral-ranger',
+      name: '星界游侠',
+      level: 3,
+      classSummary: '星界游侠',
+    );
+
+    final projected = const CharacterRuleProjector(
+      entries: <String, ContentEntry>{},
+    ).project(astralRanger);
+
+    final identity = projected.dataMap['classIdentity'] as Map;
+    expect(identity['slug'], isNull, reason: '星界游侠 不得命中 游侠（ranger）');
+    expect(identity['entryId'], isNull);
+    expect(identity['declared'], isFalse);
+    expect(identity['name'], '星界游侠');
+    expect(projected.classResources, isEmpty);
+  });
+
+  test('有 build.selections.class 条目时以条目身份为准（含声明范围）', () {
+    final classEntry = ContentEntry.fromJson({
+      'id': 'test:class/astral-knight',
+      'type': 'class',
+      'slug': 'astral-knight',
+      'name': '星界骑士',
+      'body': <Map<String, Object?>>[],
+      'revision': 1,
+      'structured': {
+        'classRules': {
+          'hitDie': 10,
+          'spellcasting': {
+            'mode': 'prepared',
+            'ability': 'cha',
+            'archetype': 'half-caster',
+            'prepared': {'3': 4, '7': 6},
+          },
+        },
+      },
+    });
+    final legacy =
+        CharacterSheet.local(
+          id: 'legacy-knight',
+          name: '旧骑士',
+          level: 3,
+          classSummary: '星界骑士',
+        ).copyWith(
+          abilities: const <String, Object?>{
+            'str': 14,
+            'dex': 12,
+            'con': 14,
+            'int': 10,
+            'wis': 10,
+            'cha': 16,
+          },
+          data: <String, Object?>{
+            'build': <String, Object?>{
+              'level': 3,
+              'selections': <String, Object?>{
+                'class': 'test:class/astral-knight',
+              },
+              'choices': <String, Object?>{},
+            },
+          },
+        );
+
+    final projected = CharacterRuleProjector(
+      entries: {classEntry.id: classEntry},
+    ).project(legacy);
+
+    final identity = projected.dataMap['classIdentity'] as Map;
+    expect(identity['entryId'], 'test:class/astral-knight');
+    expect(identity['slug'], 'astral-knight');
+    expect(identity['declared'], isTrue);
+    // 条目**自身**声明的等级范围：prepared 表 3..7。
+    expect(identity['declaredLevels'], {'min': 3, 'max': 7});
+    expect(projected.dataMap['hitDie'], 10);
+    // 3 级半施法者法术位 + prepared 上限都进 data，供详情页/编辑器共用。
+    expect(projected.dataMap['spellSlots'], {'1': 3});
+    expect(projected.dataMap['preparedSpellLimit'], 4);
+  });
 }
 
 ContentEntry _entry({

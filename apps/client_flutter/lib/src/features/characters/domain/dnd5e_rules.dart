@@ -16,10 +16,11 @@ import '../../rules/domain/rule_profile_resolver.dart';
 /// 纯运算（属性调整值 / 熟练加值 / 加值格式化）只有一份实现，在
 /// `features/rules/domain/rule_math.dart`；本类同名方法只是委托，避免第二份公式。
 ///
-/// [spellSlotMaximums] / [classResources] / [usesPactMagic] / [pactSlotMaximums] /
-/// [preparedSpellMaximums] / [spellcastingAbility] / [classSavingThrows] /
-/// [averageHitPoints] 保留旧签名作为**过渡 shim**（任务 8 迁移调用方后删除），
-/// 内部同样只查档案，因此行为会随契约收紧（例如无法解析的职业不再有法术位）。
+/// 任务 8 已删除全部过渡 shim（`spellSlotMaximums` / `classResources` /
+/// `usesPactMagic` / `pactSlotMaximums` / `preparedSpellMaximums` /
+/// `spellcastingAbility` / `classSavingThrows`）：随职业变化的数值一律经
+/// [resolveClassRules] 读取，调用方必须用条目身份（[resolveClassSlug] 只服务
+/// UI 预设，不参与规则判断）。
 class Dnd5eRules {
   const Dnd5eRules._();
 
@@ -96,7 +97,8 @@ class Dnd5eRules {
 
   static int abilityModifier(int score) => rule_math.abilityModifier(score);
 
-  static String formatModifier(int modifier) => rule_math.formatModifier(modifier);
+  static String formatModifier(int modifier) =>
+      rule_math.formatModifier(modifier);
 
   static int proficiencyBonus(int level) => rule_math.proficiencyBonus(level);
 
@@ -155,6 +157,9 @@ class Dnd5eRules {
         (proficient ? proficiencyBonus(level) : 0);
   }
 
+  /// [Dnd5eWeaponProfile] 只是伤害公式的入参载体（攻击属性 + 伤害骰 + 伤害类型），
+  /// **不是物品名 → 数值的映射表**：武器数值一律来自物品条目自身的声明
+  /// （`structured.damage` / `category` / `ability` / `finesse`）。
   static String damageFormula(
     Dnd5eWeaponProfile weapon,
     Map<String, Object?> abilities,
@@ -164,14 +169,27 @@ class Dnd5eRules {
     return '${weapon.damageDie}${formatModifier(bonus)}';
   }
 
-  /// 武器档案是**物品名 → 数值**的展示映射，不是职业表；删除它属于任务 8
-  /// （改读物品条目自身声明的 `damage` / `category` / `finesse`）。
-  static Dnd5eWeaponProfile? weaponProfile(String itemName) {
-    final normalized = itemName.toLowerCase();
-    for (final entry in _weaponProfiles.entries) {
-      if (normalized.contains(entry.key)) return entry.value;
-    }
-    return null;
+  /// 武器是否灵巧：只读条目声明（`finesse: true` 或 `properties` 含「灵巧」）。
+  static bool isFinesse(Map<String, Object?>? structured) {
+    if (structured == null) return false;
+    if (structured['finesse'] == true) return true;
+    return '${structured['properties'] ?? ''}'.contains('灵巧');
+  }
+
+  /// 武器攻击属性：**只读物品条目的声明**，不按物品名猜。
+  ///
+  /// 顺序（契约 §3.6 第 3 步的"未声明即不猜"在武器条目上的落地）：
+  /// 1. `structured.ability` ∈ {str, dex} → 用它；
+  /// 2. 否则 `structured.finesse == true` 或 `structured.properties` 含「灵巧」→ dex；
+  /// 3. 否则 `structured.category` 含「远程」→ dex；
+  /// 4. 否则 str。
+  static String? weaponAbility(Map<String, Object?>? structured) {
+    if (structured == null) return null;
+    final declared = '${structured['ability'] ?? ''}'.trim().toLowerCase();
+    if (declared == 'str' || declared == 'dex') return declared;
+    if (isFinesse(structured)) return 'dex';
+    if ('${structured['category'] ?? ''}'.contains('远程')) return 'dex';
+    return 'str';
   }
 
   // ── 职业规则解析（唯一的职业身份入口） ──
@@ -211,7 +229,14 @@ class Dnd5eRules {
   /// 用展示名归一化后按档案做**精确相等**或**`<别名><分隔符>` 前缀**匹配
   /// （候选集只有档案里的职业名 / 别名 / slug，不写死任何名字）。**禁止裸子串
   /// 匹配**：`星界游侠` 与任何候选都不构成前缀关系，因此不命中 `游侠`。
-  static String _slugFor({required String? entryId, required String classSummary}) {
+  ///
+  /// 双语展示名（`法师 / Wizard`、`战士 / Fighter`）按分隔符切成片段后逐段尝试，
+  /// 每段仍只用上面两条规则判断——这是 `startsWith(needle)` 加分隔符白名单的
+  /// 直接推论，不是放宽的子串匹配。
+  static String _slugFor({
+    required String? entryId,
+    required String classSummary,
+  }) {
     final id = entryId?.trim() ?? '';
     if (id.isNotEmpty) {
       final slug = id.split('/').last.trim().toLowerCase();
@@ -225,81 +250,68 @@ class Dnd5eRules {
       for (final slug in profile.classes.keys)
         if (slug.isNotEmpty) slug: slug,
     };
-    String? bestSlug;
-    var bestLength = 0;
-    candidates.forEach((needle, slug) {
-      if (needle.length <= bestLength) return;
-      if (normalized == needle) {
+
+    String? match(String segment) {
+      String? bestSlug;
+      var bestLength = 0;
+      candidates.forEach((needle, slug) {
+        if (needle.length <= bestLength) return;
+        if (segment == needle) {
+          bestSlug = slug;
+          bestLength = needle.length;
+          return;
+        }
+        if (!segment.startsWith(needle)) return;
+        final rest = segment.substring(needle.length);
+        if (!_aliasPrefixDelimiters.contains(rest[0])) return;
         bestSlug = slug;
         bestLength = needle.length;
-        return;
-      }
-      if (!normalized.startsWith(needle)) return;
-      final rest = normalized.substring(needle.length);
-      if (!_aliasPrefixDelimiters.contains(rest[0])) return;
-      bestSlug = slug;
-      bestLength = needle.length;
-    });
+      });
+      return bestSlug;
+    }
+
+    final first = match(normalized);
+    if (first != null) return first;
+    // 双语展示名：`法师 / Wizard` → 逐段（`法师` 已由上面的前缀规则命中，这里覆盖
+    // `英文 / 中文` 或前后带括号说明的写法）。
+    for (final segment in normalized.split(RegExp(r'[/()（）\-]'))) {
+      final trimmed = segment.trim();
+      if (trimmed.isEmpty) continue;
+      final slug = match(trimmed);
+      if (slug != null) return slug;
+    }
     // 档案里没有的职业（如自制职业）保持原样：查不到数值即"未声明"，不猜。
-    return bestSlug ?? normalized;
+    return normalized;
+  }
+
+  /// 展示名 / 条目 id → 档案 slug 的唯一入口（UI 预设按它取键，不再写死中文职业名）。
+  ///
+  /// 与 [resolveClassRules] 内部用的是同一套 [_slugFor]：精确相等或
+  /// `<别名><分隔符>` 前缀，**禁止裸子串**（`星界游侠` 不命中 `游侠`）。
+  /// - 有 [entryId] 时以条目身份为准：slug 就是 id 最后一段（自制职业同样成立）；
+  /// - 只有展示名、且档案里没有这个 slug 时返回空串，调用方据此走默认预设。
+  static String resolveClassSlug({
+    String? entryId,
+    required String classSummary,
+  }) {
+    final id = entryId?.trim() ?? '';
+    if (id.isNotEmpty) return _slugFor(entryId: id, classSummary: classSummary);
+    final slug = _slugFor(entryId: null, classSummary: classSummary);
+    return profile.classes.containsKey(slug) ? slug : '';
   }
 
   static int? hitDieFor({String? entryId, required String classSummary}) =>
       resolveClassRules(entryId: entryId, classSummary: classSummary).hitDie;
-
-  // ── 过渡 shim：签名不变，内部改为查档案（任务 8 迁移调用方后删除） ──
-
-  static Map<String, int> spellSlotMaximums({
-    required String classSummary,
-    required int level,
-  }) => spellSlotMaximumsFromRules(
-    rules: resolveClassRules(entryId: null, classSummary: classSummary),
-    level: level,
-  );
-
-  static List<Dnd5eClassResource> classResources({
-    required String classSummary,
-    required int level,
-    Map<String, Object?> abilities = const <String, Object?>{},
-  }) => classResourcesFromRules(
-    rules: resolveClassRules(entryId: null, classSummary: classSummary),
-    level: level,
-    abilities: abilities,
-  );
-
-  static bool usesPactMagic(String classSummary) =>
-      resolveClassRules(entryId: null, classSummary: classSummary).usesPactMagic;
-
-  /// 契约魔法法术位（环阶 → 数量）：由档案的 `pact` 原型提供，不再有硬编码表。
-  static Map<String, int> pactSlotMaximums(int level) {
-    final pact = profile.progression('pact');
-    if (pact == null) return const {};
-    if (level < pact.minimumLevel) return const {};
-    return pact.slots?.at(level) ?? const {};
-  }
-
-  static int? preparedSpellMaximums({
-    required String classSummary,
-    required int level,
-  }) => resolveClassRules(
-    entryId: null,
-    classSummary: classSummary,
-  ).preparedLimit(level);
-
-  /// `mode == 'none'`（含"未声明"）返回 null：不使用施法就没有施法属性（§3.6）。
-  static String? spellcastingAbility(String classSummary) =>
-      resolveClassRules(entryId: null, classSummary: classSummary).spellcastingAbility;
-
-  /// 2024 官方核心表：各职业豁免熟练（档案只按 slug 精确对齐，未声明即空集）。
-  static Set<String> classSavingThrows(String classSummary) =>
-      resolveClassRules(entryId: null, classSummary: classSummary).savingThrowAbilities;
 
   static int? spellSaveDc({
     required String classSummary,
     required Map<String, Object?> abilities,
     required int level,
   }) {
-    final ability = spellcastingAbility(classSummary);
+    final ability = resolveClassRules(
+      entryId: null,
+      classSummary: classSummary,
+    ).spellcastingAbility;
     if (ability == null) return null;
     return 8 + proficiencyBonus(level) + abilityBonus(abilities, ability);
   }
@@ -311,23 +323,28 @@ class Dnd5eRules {
     required bool longRest,
   }) {
     if (longRest) return const {};
-    if (usesPactMagic(classSummary)) return const {};
+    final rules = resolveClassRules(entryId: null, classSummary: classSummary);
+    if (rules.usesPactMagic) return const {};
     return Map<String, int>.unmodifiable(used);
   }
 
   // ── 资源 ──
 
+  /// 职业资源上限表。**必须传 [abilities]**：`formula: ability:<key>` 的上限
+  /// 由属性调整值决定（如诗人激励 = CHA 调整值），缺省 10 只是一种兜底。
   static Map<String, int> classResourceMaximums({
     required String classSummary,
     required int level,
+    Map<String, Object?> abilities = const <String, Object?>{},
   }) {
-    return {
-      for (final resource in classResources(
-        classSummary: classSummary,
-        level: level,
-      ))
-        resource.id: resource.maximum,
-    };
+    return classResourcesFromRules(
+      rules: resolveClassRules(entryId: null, classSummary: classSummary),
+      level: level,
+      abilities: abilities,
+    ).fold(<String, int>{}, (result, resource) {
+      result[resource.id] = resource.maximum;
+      return result;
+    });
   }
 
   /// 休息后的职业资源"已用次数"。规则（2024）：
@@ -410,10 +427,16 @@ class Dnd5eRules {
     required Map<String, Object?> abilities,
   }) {
     final constitution = abilityScore(abilities, 'con');
-    final die = resolveClassRules(entryId: null, classSummary: className).hitDie;
+    final die = resolveClassRules(
+      entryId: null,
+      classSummary: className,
+    ).hitDie;
     if (die == null) {
       // 未声明生命骰：不猜，只按体质调整值计，且总生命至少 1。
-      return (abilityModifier(constitution) * level.clamp(1, 20)).clamp(1, 1 << 30);
+      return (abilityModifier(constitution) * level.clamp(1, 20)).clamp(
+        1,
+        1 << 30,
+      );
     }
     return averageHitPointsForHitDie(
       hitDie: die,
@@ -465,69 +488,6 @@ class Dnd5eRules {
   /// 资源的 `formula: ability:<key>` 需要六个属性键都有值；缺省按 10（调整值 0）。
   static Map<String, int> _abilityScores(Map<String, Object?> abilities) => {
     for (final key in abilityLabels.keys) key: abilityScore(abilities, key),
-  };
-
-  static const _weaponProfiles = {
-    '长弓': Dnd5eWeaponProfile(
-      name: '长弓',
-      ability: 'dex',
-      damageDie: '1d8',
-      damageType: '穿刺',
-    ),
-    'longbow': Dnd5eWeaponProfile(
-      name: '长弓',
-      ability: 'dex',
-      damageDie: '1d8',
-      damageType: '穿刺',
-    ),
-    '短剑': Dnd5eWeaponProfile(
-      name: '短剑',
-      ability: 'dex',
-      damageDie: '1d6',
-      damageType: '穿刺',
-    ),
-    'shortsword': Dnd5eWeaponProfile(
-      name: '短剑',
-      ability: 'dex',
-      damageDie: '1d6',
-      damageType: '穿刺',
-    ),
-    '匕首': Dnd5eWeaponProfile(
-      name: '匕首',
-      ability: 'dex',
-      damageDie: '1d4',
-      damageType: '穿刺',
-    ),
-    'dagger': Dnd5eWeaponProfile(
-      name: '匕首',
-      ability: 'dex',
-      damageDie: '1d4',
-      damageType: '穿刺',
-    ),
-    '长剑': Dnd5eWeaponProfile(
-      name: '长剑',
-      ability: 'str',
-      damageDie: '1d8',
-      damageType: '挥砍',
-    ),
-    'longsword': Dnd5eWeaponProfile(
-      name: '长剑',
-      ability: 'str',
-      damageDie: '1d8',
-      damageType: '挥砍',
-    ),
-    '法杖': Dnd5eWeaponProfile(
-      name: '法杖',
-      ability: 'str',
-      damageDie: '1d6',
-      damageType: '钝击',
-    ),
-    'quarterstaff': Dnd5eWeaponProfile(
-      name: '法杖',
-      ability: 'str',
-      damageDie: '1d6',
-      damageType: '钝击',
-    ),
   };
 }
 

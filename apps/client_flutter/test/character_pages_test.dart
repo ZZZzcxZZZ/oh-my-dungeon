@@ -831,7 +831,12 @@ void main() {
     'character detail actions tab shows derived attacks and spell dc',
     (tester) async {
       await tester.pumpWidget(
-        const MaterialApp(home: CharacterDetailPage(character: _character)),
+        MaterialApp(
+          home: CharacterDetailPage(
+            character: _characterWithWeaponEntries,
+            contentEntries: const [_bowEntry],
+          ),
+        ),
       );
 
       await tester.tap(find.text('动作'));
@@ -974,7 +979,8 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: CharacterDetailPage(
-          character: _character,
+          character: _characterWithWeaponEntries,
+          contentEntries: const [_bowEntry],
           diceRoller: DiceRoller(nextInt: (_) => 19),
           onRoll: rollEvents.add,
         ),
@@ -2577,6 +2583,31 @@ const _character = CharacterSheet(
   },
   createdAt: '2026-07-09T00:00:00.000Z',
   updatedAt: '2026-07-09T00:00:00.000Z',
+);
+
+/// 与 [_character] 相同，只是长弓带上了资料条目引用（任务 8：武器攻击
+/// 只认物品条目自身的声明，没有 `entryId` 就不产出攻击）。
+final _characterWithWeaponEntries = _character.copyWith(
+  inventory: const <Map<String, Object?>>[
+    <String, Object?>{
+      'entryId': 'guide:equipment/longbow',
+      'name': '长弓',
+      'quantity': 1,
+    },
+    <String, Object?>{'name': '治疗药水', 'quantity': 2},
+  ],
+);
+
+/// 任务 8：武器攻击改读物品条目自身的 `structured.damage` / `category`，
+/// 夹具因此必须给出真实的条目，而不是只靠物品名。
+const _bowEntry = ContentEntry(
+  id: 'guide:equipment/longbow',
+  type: 'equipment',
+  slug: 'longbow',
+  name: '长弓',
+  body: [],
+  revision: 1,
+  structured: {'category': '远程武器', 'damage': '1d8 穿刺'},
 );
 
 /// Task 3.3 — 记录 dispatchRoll 调用, 用于验证角色卡检定转发到战役动作接收端.

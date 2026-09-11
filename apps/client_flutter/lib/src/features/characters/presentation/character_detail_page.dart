@@ -11,6 +11,7 @@ import '../domain/character_override_resolver.dart';
 import '../domain/character_profile.dart';
 import '../domain/character_quick_edit_service.dart';
 import '../domain/dnd5e_rules.dart';
+import '../domain/weapon_attack_derivation.dart';
 import 'widgets/character_sheet_shell.dart';
 import '../../../core/presentation/dialog_sizes.dart';
 import '../../../core/widgets/empty_state.dart';
@@ -183,6 +184,7 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
           child: _SheetTab(
             child: _ActionsPanel(
               character: _character,
+              contentEntries: effectiveContentEntries,
               diceRoller: widget.diceRoller,
               onRoll: effectiveRoll,
               onSaveCharacter: widget.onSaveCharacter == null
@@ -558,12 +560,14 @@ class _AbilityOverview extends StatelessWidget {
 class _ActionsPanel extends StatefulWidget {
   const _ActionsPanel({
     required this.character,
+    this.contentEntries = const <ContentEntry>[],
     this.diceRoller,
     this.onRoll,
     this.onSaveCharacter,
   });
 
   final CharacterSheet character;
+  final List<ContentEntry> contentEntries;
   final DiceRoller? diceRoller;
   final CharacterRollCallback? onRoll;
   final CharacterSaveCallback? onSaveCharacter;
@@ -579,7 +583,10 @@ class _ActionsPanelState extends State<_ActionsPanel> {
   @override
   Widget build(BuildContext context) {
     final character = widget.character;
-    final attacks = _deriveWeaponAttacks(character);
+    final attacks = _deriveWeaponAttacks(
+      character: character,
+      contentEntries: widget.contentEntries,
+    );
     final ruleActions = CharacterOverrideResolver.resolve(character).actions;
     final spellSaveDc = Dnd5eRules.spellSaveDc(
       classSummary: character.classSummary,
@@ -820,7 +827,7 @@ class _AttackActionLine extends StatelessWidget {
     this.onRoll,
   });
 
-  final _WeaponAttackAction attack;
+  final WeaponAttackAction attack;
   final DiceRoller diceRoller;
   final _D20RollMode rollMode;
   final CharacterRollCallback? onRoll;
@@ -863,52 +870,15 @@ class _AttackActionLine extends StatelessWidget {
   }
 }
 
-class _WeaponAttackAction {
-  const _WeaponAttackAction({
-    required this.name,
-    required this.bonus,
-    required this.toHit,
-    required this.damage,
-    required this.damageFormula,
-    required this.damageType,
-  });
-
-  final String name;
-  final int bonus;
-  final String toHit;
-  final String damage;
-  final String damageFormula;
-  final String damageType;
-}
-
-List<_WeaponAttackAction> _deriveWeaponAttacks(CharacterSheet character) {
-  final attacks = <_WeaponAttackAction>[];
-  for (final item in _normalizeInventory(character.inventoryList)) {
-    final itemName = item['name']?.toString() ?? '';
-    final weapon = Dnd5eRules.weaponProfile(itemName);
-    if (weapon == null) continue;
-    final attackBonus = Dnd5eRules.attackBonus(
-      abilities: character.abilityMap,
-      level: character.level,
-      ability: weapon.ability,
-    );
-    final damageFormula = Dnd5eRules.damageFormula(
-      weapon,
-      character.abilityMap,
-    );
-    attacks.add(
-      _WeaponAttackAction(
-        name: weapon.name,
-        bonus: attackBonus,
-        toHit: '${Dnd5eRules.formatModifier(attackBonus)} 命中',
-        damage: '$damageFormula ${weapon.damageType}',
-        damageFormula: damageFormula,
-        damageType: weapon.damageType,
-      ),
-    );
-  }
-  return attacks;
-}
+/// 武器攻击现在由物品条目自身的声明派生（[WeaponAttackDerivation]），
+/// 这里只做一次模型转换：动作页的渲染与掷骰仍用同一个 DTO。
+List<WeaponAttackAction> _deriveWeaponAttacks({
+  required CharacterSheet character,
+  required List<ContentEntry> contentEntries,
+}) => WeaponAttackDerivation.derive(
+  character: character,
+  contentEntries: contentEntries,
+);
 
 class _SpellsPanel extends StatefulWidget {
   const _SpellsPanel({
@@ -1110,6 +1080,8 @@ class _SpellsPanelState extends State<_SpellsPanel> {
     );
   }
 
+  /// 法术位上限：先看角色创建时持久化的 `data.spellSlots`（按条目规则结算过），
+  /// 否则用条目身份 / 展示名解析规则档案（"未声明"就是空表，不猜）。
   Map<String, int> _slotMaximums() {
     final derived = widget.character.dataMap['spellSlots'];
     if (derived is Map) {
@@ -1120,10 +1092,23 @@ class _SpellsPanelState extends State<_SpellsPanel> {
               : int.tryParse('${entry.value}') ?? 0,
       };
     }
-    return Dnd5eRules.spellSlotMaximums(
+    if (_classUndeclared()) return const {};
+    return Dnd5eRules.resolveClassRules(
+      entryId: _classEntryId(),
       classSummary: widget.character.classSummary,
-      level: widget.character.level,
-    );
+    ).spellSlots(widget.character.level);
+  }
+
+  /// 角色持久化的职业条目身份（老角色可能只有展示名）。
+  String? _classEntryId() {
+    final identity = widget.character.dataMap['classIdentity'];
+    return identity is Map ? identity['entryId'] as String? : null;
+  }
+
+  /// 项目器标记为"未声明"（职业名解析不到档案）：显示"未声明"，不显示 0。
+  bool _classUndeclared() {
+    final identity = widget.character.dataMap['classIdentity'];
+    return identity is Map && identity['declared'] == false;
   }
 
   String? _spellcastingAbility() {
@@ -1131,7 +1116,11 @@ class _SpellsPanelState extends State<_SpellsPanel> {
     if (derived is String && Dnd5eRules.abilityLabels.containsKey(derived)) {
       return derived;
     }
-    return Dnd5eRules.spellcastingAbility(widget.character.classSummary);
+    if (_classUndeclared()) return null;
+    return Dnd5eRules.resolveClassRules(
+      entryId: _classEntryId(),
+      classSummary: widget.character.classSummary,
+    ).spellcastingAbility;
   }
 
   Future<void> _adjustSlot(String level, int delta) async {
@@ -1381,7 +1370,9 @@ class _EquipmentPanelState extends State<_EquipmentPanel> {
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         // Text on secondaryContainer must use the matching
                         // on-* role (E2).
-                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSecondaryContainer,
                       ),
                     )
                   else
@@ -2366,7 +2357,12 @@ class _RuntimePanelState extends State<_RuntimePanel> {
   Future<void> _takeShortRest() {
     // 邪术师契约魔法在短休恢复全部法术位；其他职业短休不回法术位。
     final classSummary = widget.character.classSummary;
-    final Map<String, int>? spellSlotsUsed = Dnd5eRules.usesPactMagic(classSummary)
+    final identity = widget.character.dataMap['classIdentity'];
+    final usesPactMagic = Dnd5eRules.resolveClassRules(
+      entryId: identity is Map ? identity['entryId'] as String? : null,
+      classSummary: classSummary,
+    ).usesPactMagic;
+    final Map<String, int>? spellSlotsUsed = usesPactMagic
         ? Dnd5eRules.spellSlotsAfterRest(
             classSummary: classSummary,
             used: widget.character.spellSlotsUsed,
@@ -3138,7 +3134,10 @@ Future<ContentEntry?> _pickContentEntry(
                 const SizedBox(height: 8),
                 Expanded(
                   child: filtered.isEmpty
-                      ? const EmptyState(icon: Icons.library_add_outlined, title: '没有可添加的条目')
+                      ? const EmptyState(
+                          icon: Icons.library_add_outlined,
+                          title: '没有可添加的条目',
+                        )
                       : ListView.builder(
                           itemCount: filtered.length,
                           itemBuilder: (context, index) {
@@ -3184,18 +3183,14 @@ Future<(String, String)?> _showNameDescriptionDialog(
             TextField(
               controller: nameController,
               autofocus: true,
-              decoration: const InputDecoration(
-                labelText: '名称',
-              ),
+              decoration: const InputDecoration(labelText: '名称'),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: descriptionController,
               minLines: 3,
               maxLines: 5,
-              decoration: const InputDecoration(
-                labelText: '说明（可选）',
-              ),
+              decoration: const InputDecoration(labelText: '说明（可选）'),
             ),
           ],
         ),
@@ -3244,26 +3239,20 @@ Future<Dnd5eClassResource?> _showResourceDialog(
                 key: const Key('resource-name-field'),
                 controller: nameController,
                 autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: '资源名称',
-                ),
+                decoration: const InputDecoration(labelText: '资源名称'),
               ),
               const SizedBox(height: 12),
               TextField(
                 key: const Key('resource-maximum-field'),
                 controller: maximumController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: '最大次数',
-                ),
+                decoration: const InputDecoration(labelText: '最大次数'),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 key: const Key('resource-recovery-field'),
                 initialValue: recovery,
-                decoration: const InputDecoration(
-                  labelText: '恢复规则',
-                ),
+                decoration: const InputDecoration(labelText: '恢复规则'),
                 items: const [
                   DropdownMenuItem(value: 'shortRest', child: Text('短休恢复')),
                   DropdownMenuItem(
@@ -3595,7 +3584,9 @@ class _CurrencyControl extends StatelessWidget {
             ),
             Text(
               '$code $value',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: colors.onSecondaryContainer),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colors.onSecondaryContainer,
+              ),
             ),
             IconButton(
               tooltip: '$code +1',

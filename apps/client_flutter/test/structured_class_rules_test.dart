@@ -1,7 +1,22 @@
+import 'package:dnd_table_client/src/features/characters/domain/dnd5e_rules.dart';
 import 'package:dnd_table_client/src/features/characters/domain/structured_class_rules.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
 import 'package:dnd_table_client/src/features/rules/domain/character_rule_definition.dart';
+import 'package:dnd_table_client/src/features/rules/domain/rule_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+/// 任务 8：`savingThrowAbilities` / `hitDie` / `preparedSpellLimit` 三个旧签名
+/// 已随过渡 shim 删除，规则数值一律经条目标识走 [Dnd5eRules.resolveClassRules]。
+ResolvedClassRules _rulesFor(ContentEntry? entry) {
+  if (entry == null) {
+    return Dnd5eRules.resolveClassRules(entryId: null, classSummary: '');
+  }
+  return Dnd5eRules.resolveClassRules(
+    entryId: entry.id,
+    classSummary: entry.name,
+    structured: entry.structured,
+  );
+}
 
 void main() {
   test('savingThrowAbilities 与 hitDie 直接读 classRules', () {
@@ -20,17 +35,10 @@ void main() {
       },
     );
 
-    expect(StructuredClassRules.savingThrowAbilities(entry), {'wis', 'cha'});
-    expect(StructuredClassRules.hitDie(entry), 10);
-    expect(
-      StructuredClassRules.preparedSpellLimit(
-        entry,
-        abilities: const {},
-        level: 5,
-      ),
-      isNull,
-      reason: '未声明 prepared 表',
-    );
+    final rules = _rulesFor(entry);
+    expect(rules.savingThrowAbilities, {'wis', 'cha'});
+    expect(rules.hitDie, 10);
+    expect(rules.preparedLimit(5), isNull, reason: '未声明 prepared 表');
   });
 
   test('hitDie 未声明时为 null（不再按职业名猜）', () {
@@ -48,7 +56,7 @@ void main() {
       },
     );
 
-    expect(StructuredClassRules.hitDie(entry), isNull);
+    expect(_rulesFor(entry).hitDie, isNull);
   });
 
   test('中文散文 savingThrows / skills 不再被解析', () {
@@ -62,8 +70,8 @@ void main() {
       structured: {'savingThrows': '力量与体质', 'skills': '选择2项：运动、察觉'},
     );
 
-    expect(StructuredClassRules.savingThrowAbilities(entry), isEmpty);
-    expect(StructuredClassRules.hitDie(entry), isNull);
+    expect(_rulesFor(entry).savingThrowAbilities, isEmpty);
+    expect(_rulesFor(entry).hitDie, isNull);
     expect(StructuredClassRules.skillChoice(entry).count, 0);
     expect(StructuredClassRules.skillChoice(entry).options, isEmpty);
   });
@@ -202,40 +210,10 @@ void main() {
       },
     );
 
-    expect(
-      StructuredClassRules.preparedSpellLimit(
-        entry,
-        abilities: const {'cha': 20},
-        level: 1,
-      ),
-      3,
-    );
-    expect(
-      StructuredClassRules.preparedSpellLimit(
-        entry,
-        abilities: const {'cha': 20},
-        level: 5,
-      ),
-      5,
-    );
-    expect(
-      StructuredClassRules.preparedSpellLimit(
-        entry,
-        abilities: const {'cha': 20},
-        level: 9,
-      ),
-      5,
-      reason: '短数组向上沿用',
-    );
-    expect(
-      StructuredClassRules.preparedSpellLimit(
-        entry,
-        abilities: const {'cha': 3},
-        level: 9,
-      ),
-      5,
-      reason: '准备上限是职业级表，与属性无关',
-    );
+    final rules = _rulesFor(entry);
+    expect(rules.preparedLimit(1), 3);
+    expect(rules.preparedLimit(5), 5);
+    expect(rules.preparedLimit(9), 5, reason: '短数组向上沿用');
   });
 
   test('preparedSpellLimit 不再看 preparedSpellcasting 开关与散文', () {
@@ -254,11 +232,7 @@ void main() {
     );
 
     expect(
-      StructuredClassRules.preparedSpellLimit(
-        declared,
-        abilities: const {'wis': 20},
-        level: 1,
-      ),
+      _rulesFor(declared).preparedLimit(1),
       isNull,
       reason: '旧开关与旧显式表都不再参与计算',
     );
@@ -276,11 +250,7 @@ void main() {
     );
 
     expect(
-      StructuredClassRules.preparedSpellLimit(
-        entry,
-        abilities: const {'wis': 3},
-        level: 1,
-      ),
+      _rulesFor(entry).preparedLimit(1),
       4,
       reason: '2024 牧师 1 级准备 4 个，与感知无关',
     );

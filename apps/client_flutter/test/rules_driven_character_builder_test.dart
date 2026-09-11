@@ -256,30 +256,48 @@ void main() {
     );
   });
 
-  test('derives spell slots from resource grants instead of class names', () {
+  test('法术位与职业资源只来自条目声明的 classRules（不再读 grant）', () {
     final classEntry = _entry(
       id: 'test:class/arcanist',
       type: 'class',
       name: 'Arcanist',
-      structured: const {'spellcastingAbility': 'int'},
+      structured: const {
+        'classRules': {
+          'hitDie': 6,
+          'savingThrowAbilities': ['int', 'wis'],
+          'spellcasting': {
+            'mode': 'prepared',
+            'ability': 'int',
+            // 半施法者原型：1 级由原型补齐，5 级由条目整级替换。
+            'archetype': 'half-caster',
+            'slots': {
+              '5': {'1': 4, '2': 3},
+            },
+            'prepared': [4, 5, 6, 7, 9],
+          },
+          'resources': [
+            {
+              'id': 'arcane-recovery',
+              'name': 'Arcane Recovery',
+              'recovery': 'shortRest',
+              'maximum': 1,
+            },
+          ],
+        },
+      },
       rules: const {
         'progression': [
           {
             'level': 1,
             'grants': [
+              // 旧契约的 resource / spellSlot 授予：任务 9 会移除这两个 kind，
+              // 这里刻意保留，证明数值已经不再由它们提供。
               {
-                'id': 'first-level-slots',
+                'id': 'legacy-slots',
                 'kind': 'resource',
-                'label': 'First-level spell slots',
+                'label': 'Legacy spell slots',
                 'target': 'spellSlot:1',
-                'value': 2,
-              },
-              {
-                'id': 'arcane-recovery',
-                'kind': 'resource',
-                'label': 'Arcane Recovery',
-                'value': 1,
-                'data': {'recovery': 'shortRest'},
+                'value': 9,
               },
             ],
           },
@@ -304,8 +322,20 @@ void main() {
           },
         );
 
+    // 1 级：自身 slots 表未声明 → 回退 half-caster 原型 {'1': 2}；
+    // 旧 grant 的 value: 9 不再参与。
     expect(draft.data['spellSlots'], {'1': 2});
     expect(draft.data['spellcastingAbility'], 'int');
+    expect(draft.data['preparedSpellLimit'], 4);
+    expect(draft.data['hitDie'], 6);
+    expect(draft.data['savingThrowAbilities'], ['int', 'wis']);
+    expect(draft.data['classIdentity'], {
+      'entryId': 'test:class/arcanist',
+      'slug': 'arcanist',
+      'name': 'Arcanist',
+      'declared': true,
+      'declaredLevels': {'min': 1, 'max': 5},
+    });
     expect(draft.data['classResources'], [
       {
         'id': 'arcane-recovery',
@@ -322,23 +352,20 @@ void main() {
       type: 'class',
       name: 'Cleric',
       structured: const {
-        'spellcastingAbility': 'wis',
-        'preparedSpellcasting': true,
+        'classRules': {
+          'hitDie': 8,
+          'spellcasting': {
+            'mode': 'prepared',
+            'ability': 'wis',
+            'archetype': 'full-caster',
+            // 条目自带的 prepared 表：只看职业自身，不回退原型。
+            'prepared': [4, 5, 6],
+          },
+        },
       },
       rules: const {
         'progression': [
-          {
-            'level': 1,
-            'grants': [
-              {
-                'id': 'first-level-slots',
-                'kind': 'resource',
-                'label': 'First-level slots',
-                'target': 'spellSlot:1',
-                'value': 2,
-              },
-            ],
-          },
+          {'level': 1, 'grants': []},
         ],
       },
     );
@@ -369,8 +396,8 @@ void main() {
       id: 'test:class/barbarian',
       type: 'class',
       name: 'Barbarian',
-      // 新契约：准备上限只来自职业自身 `spellcasting.prepared` 表；内置档案里
-      // 野蛮人 `mode == "none"`，因此没有准备上限（不再看旧开关）。
+      // 新契约：准备上限只来自职业自身 `spellcasting.prepared` 表；这里既不声明
+      // prepared 表、也不是档案职业（slug 未命中），因此没有准备上限、没有法术位。
       structured: const {},
       rules: const {
         'progression': [
@@ -378,9 +405,9 @@ void main() {
             'level': 1,
             'grants': [
               {
-                'id': 'first-level-slots',
+                'id': 'legacy-slots',
                 'kind': 'resource',
-                'label': 'First-level slots',
+                'label': 'Legacy slots',
                 'target': 'spellSlot:1',
                 'value': 2,
               },
@@ -408,6 +435,18 @@ void main() {
         );
 
     expect(draft.data.containsKey('preparedSpellLimit'), isFalse);
+    expect(draft.data.containsKey('spellSlots'), isFalse);
+    expect(draft.data.containsKey('spellcastingAbility'), isFalse);
+    // 条目没有规则块 → 档案按条目 id 最后一段（barbarian）补齐。
+    expect(draft.data['hitDie'], 12);
+    expect(draft.data['classIdentity'], {
+      'entryId': 'test:class/barbarian',
+      'slug': 'barbarian',
+      'name': 'Barbarian',
+      'declared': true,
+      'declaredLevels': {'min': null, 'max': null},
+    });
+    expect(draft.maxHp, 14, reason: '档案 d12 + CON 14（+2）');
   });
 
   test('emits startingEquipmentMaximum when declared', () {

@@ -1,17 +1,75 @@
 import 'package:dnd_table_client/src/features/characters/domain/ability_score_generator.dart';
 import 'package:dnd_table_client/src/features/characters/domain/equipment_cost.dart';
 import 'package:dnd_table_client/src/features/characters/domain/dnd5e_rules.dart';
+import 'package:dnd_table_client/src/features/rules/domain/rule_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// 独立 D&D 5e/2024 规则核算：期望值来自 SRD/PHB 表格，与实现交叉验证。
 /// 任何失败都代表产品规则逻辑与规则书不一致。
+/// 本文件是**规则表核算**用例：这里统一用"展示名 → 档案"的解析入口，
+/// 任务 8 之后 [Dnd5eRules] 本身不再暴露这些旧签名（shim 已删除），
+/// 保留同名测试局部 helper 让核算表可以继续逐行对照规则书。
+ResolvedClassRules _rulesFor(String classSummary) =>
+    Dnd5eRules.resolveClassRules(entryId: null, classSummary: classSummary);
+
+Map<String, int> _spellSlots(String classSummary, int level) =>
+    _rulesFor(classSummary).spellSlots(level);
+
+int? _preparedLimit(String classSummary, int level) =>
+    _rulesFor(classSummary).preparedLimit(level);
+
+Set<String> _savingThrows(String classSummary) =>
+    _rulesFor(classSummary).savingThrowAbilities;
+
+Map<String, int> _resourceMaximums(
+  String classSummary,
+  int level, {
+  Map<String, Object?> abilities = const <String, Object?>{},
+}) => Dnd5eRules.classResourceMaximums(
+  classSummary: classSummary,
+  level: level,
+  abilities: abilities,
+);
+
+List<Dnd5eClassResource> _resources(
+  String classSummary,
+  int level, {
+  Map<String, Object?> abilities = const <String, Object?>{},
+}) => Dnd5eRules.classResourcesFromRules(
+  rules: _rulesFor(classSummary),
+  level: level,
+  abilities: abilities,
+);
+
 void main() {
   group('属性与熟练', () {
     test('属性调整值覆盖 1..30', () {
       const expected = {
-        1: -5, 2: -4, 3: -4, 4: -3, 5: -3, 6: -2, 7: -2, 8: -1, 9: -1,
-        10: 0, 11: 0, 12: 1, 13: 1, 14: 2, 15: 2, 16: 3, 17: 3, 18: 4,
-        19: 4, 20: 5, 22: 6, 24: 7, 26: 8, 28: 9, 30: 10,
+        1: -5,
+        2: -4,
+        3: -4,
+        4: -3,
+        5: -3,
+        6: -2,
+        7: -2,
+        8: -1,
+        9: -1,
+        10: 0,
+        11: 0,
+        12: 1,
+        13: 1,
+        14: 2,
+        15: 2,
+        16: 3,
+        17: 3,
+        18: 4,
+        19: 4,
+        20: 5,
+        22: 6,
+        24: 7,
+        26: 8,
+        28: 9,
+        30: 10,
       };
       expected.forEach((score, modifier) {
         expect(
@@ -34,36 +92,78 @@ void main() {
     });
 
     test('豁免与技能加值 = 属性调整值 + 熟练加值', () {
-      const abilities = {'str': 16, 'dex': 14, 'con': 15, 'int': 10, 'wis': 12, 'cha': 8};
+      const abilities = {
+        'str': 16,
+        'dex': 14,
+        'con': 15,
+        'int': 10,
+        'wis': 12,
+        'cha': 8,
+      };
       expect(
-        Dnd5eRules.saveBonus(ability: 'str', abilities: abilities, level: 5, proficient: true),
+        Dnd5eRules.saveBonus(
+          ability: 'str',
+          abilities: abilities,
+          level: 5,
+          proficient: true,
+        ),
         3 + 3,
       );
       expect(
-        Dnd5eRules.saveBonus(ability: 'cha', abilities: abilities, level: 5, proficient: false),
+        Dnd5eRules.saveBonus(
+          ability: 'cha',
+          abilities: abilities,
+          level: 5,
+          proficient: false,
+        ),
         -1,
       );
       // 运动（力量）熟练、5 级
       expect(
-        Dnd5eRules.skillBonus(skillName: '运动', abilities: abilities, level: 5, proficient: true),
+        Dnd5eRules.skillBonus(
+          skillName: '运动',
+          abilities: abilities,
+          level: 5,
+          proficient: true,
+        ),
         6,
       );
       // 隐匿（敏捷）未熟练
       expect(
-        Dnd5eRules.skillBonus(skillName: '隐匿', abilities: abilities, level: 5, proficient: false),
+        Dnd5eRules.skillBonus(
+          skillName: '隐匿',
+          abilities: abilities,
+          level: 5,
+          proficient: false,
+        ),
         2,
       );
     });
 
     test('先攻与法术豁免 DC', () {
-      const abilities = {'str': 10, 'dex': 16, 'con': 10, 'int': 18, 'wis': 10, 'cha': 10};
+      const abilities = {
+        'str': 10,
+        'dex': 16,
+        'con': 10,
+        'int': 18,
+        'wis': 10,
+        'cha': 10,
+      };
       expect(Dnd5eRules.initiativeBonus(abilities), 3);
       expect(
-        Dnd5eRules.spellSaveDc(classSummary: '法师', abilities: abilities, level: 5),
+        Dnd5eRules.spellSaveDc(
+          classSummary: '法师',
+          abilities: abilities,
+          level: 5,
+        ),
         8 + 3 + 4,
       );
       expect(
-        Dnd5eRules.spellSaveDc(classSummary: '战士', abilities: abilities, level: 5),
+        Dnd5eRules.spellSaveDc(
+          classSummary: '战士',
+          abilities: abilities,
+          level: 5,
+        ),
         isNull,
       );
     });
@@ -94,10 +194,7 @@ void main() {
     for (final className in ['法师', '牧师', '德鲁伊', '吟游诗人', '术士']) {
       test('$className 全施法者法术位 1..20', () {
         fullCaster.forEach((level, table) {
-          final actual = Dnd5eRules.spellSlotMaximums(
-            classSummary: className,
-            level: level,
-          );
+          final actual = _spellSlots(className, level);
           final expected = table.map((k, v) => MapEntry('$k', v));
           expect(actual, expected, reason: '$className $level 级');
         });
@@ -123,10 +220,7 @@ void main() {
     for (final className in ['圣武士', '游侠']) {
       test('$className 半施法者法术位', () {
         halfCaster.forEach((level, table) {
-          final actual = Dnd5eRules.spellSlotMaximums(
-            classSummary: className,
-            level: level,
-          );
+          final actual = _spellSlots(className, level);
           final expected = table.map((k, v) => MapEntry('$k', v));
           expect(actual, expected, reason: '$className $level 级');
         });
@@ -135,11 +229,7 @@ void main() {
 
     test('非施法者无法术位', () {
       for (final className in ['战士', '野蛮人', '武僧', '游荡者']) {
-        expect(
-          Dnd5eRules.spellSlotMaximums(classSummary: className, level: 10),
-          isEmpty,
-          reason: className,
-        );
+        expect(_spellSlots(className, 10), isEmpty, reason: className);
       }
     });
 
@@ -158,10 +248,7 @@ void main() {
 
     test('邪术师契约魔法（短休恢复、单环阶）', () {
       pactMagic.forEach((level, table) {
-        final actual = Dnd5eRules.spellSlotMaximums(
-          classSummary: '邪术师',
-          level: level,
-        );
+        final actual = _spellSlots('邪术师', level);
         final expected = table.map((k, v) => MapEntry('$k', v));
         expect(actual, expected, reason: '邪术师 $level 级');
       });
@@ -207,10 +294,7 @@ void main() {
         structured: const <String, Object?>{
           'classRules': <String, Object?>{
             'hitDie': 8,
-            'spellcasting': <String, Object?>{
-              'mode': 'pact',
-              'ability': 'cha',
-            },
+            'spellcasting': <String, Object?>{'mode': 'pact', 'ability': 'cha'},
           },
         },
       );
@@ -223,30 +307,41 @@ void main() {
 
   group('职业资源', () {
     test('战士：第二气息与动作如潮', () {
-      final l1 = Dnd5eRules.classResourceMaximums(classSummary: '战士', level: 1);
+      final l1 = _resourceMaximums('战士', 1);
       expect(l1['second_wind'], 2);
       expect(l1.containsKey('action_surge'), isFalse);
 
-      final l2 = Dnd5eRules.classResourceMaximums(classSummary: '战士', level: 2);
+      final l2 = _resourceMaximums('战士', 2);
       expect(l2['second_wind'], 2);
       expect(l2['action_surge'], 1);
 
-      final l4 = Dnd5eRules.classResourceMaximums(classSummary: '战士', level: 4);
+      final l4 = _resourceMaximums('战士', 4);
       expect(l4['second_wind'], 3);
 
-      final l10 = Dnd5eRules.classResourceMaximums(classSummary: '战士', level: 10);
+      final l10 = _resourceMaximums('战士', 10);
       expect(l10['second_wind'], 4);
 
       // 2024：17 级动作如潮 2 次
-      final l17 = Dnd5eRules.classResourceMaximums(classSummary: '战士', level: 17);
+      final l17 = _resourceMaximums('战士', 17);
       expect(l17['action_surge'], 2, reason: '17 级动作如潮应为 2 次');
     });
 
     test('野蛮人：狂暴次数', () {
-      const expected = {1: 2, 2: 2, 3: 3, 5: 3, 6: 4, 11: 4, 12: 5, 16: 5, 17: 6, 20: 6};
+      const expected = {
+        1: 2,
+        2: 2,
+        3: 3,
+        5: 3,
+        6: 4,
+        11: 4,
+        12: 5,
+        16: 5,
+        17: 6,
+        20: 6,
+      };
       expected.forEach((level, uses) {
         expect(
-          Dnd5eRules.classResourceMaximums(classSummary: '野蛮人', level: level)['rage'],
+          _resourceMaximums('野蛮人', level)['rage'],
           uses,
           reason: '野蛮人 $level 级狂暴',
         );
@@ -257,18 +352,60 @@ void main() {
   group('生命值', () {
     test('1 级取满骰 + CON 调整值', () {
       const abilities = {'con': 14};
-      expect(Dnd5eRules.averageHitPoints(className: '战士', level: 1, abilities: abilities), 10 + 2);
-      expect(Dnd5eRules.averageHitPoints(className: '法师', level: 1, abilities: abilities), 6 + 2);
-      expect(Dnd5eRules.averageHitPoints(className: '野蛮人', level: 1, abilities: abilities), 12 + 2);
+      expect(
+        Dnd5eRules.averageHitPoints(
+          className: '战士',
+          level: 1,
+          abilities: abilities,
+        ),
+        10 + 2,
+      );
+      expect(
+        Dnd5eRules.averageHitPoints(
+          className: '法师',
+          level: 1,
+          abilities: abilities,
+        ),
+        6 + 2,
+      );
+      expect(
+        Dnd5eRules.averageHitPoints(
+          className: '野蛮人',
+          level: 1,
+          abilities: abilities,
+        ),
+        12 + 2,
+      );
     });
 
     test('后续等级取平均值（骰面/2+1）+ CON', () {
       const abilities = {'con': 14};
       // 战士 d10：1 级 12，2 级 12+8=20，5 级 12+4*8=44
-      expect(Dnd5eRules.averageHitPoints(className: '战士', level: 2, abilities: abilities), 20);
-      expect(Dnd5eRules.averageHitPoints(className: '战士', level: 5, abilities: abilities), 44);
+      expect(
+        Dnd5eRules.averageHitPoints(
+          className: '战士',
+          level: 2,
+          abilities: abilities,
+        ),
+        20,
+      );
+      expect(
+        Dnd5eRules.averageHitPoints(
+          className: '战士',
+          level: 5,
+          abilities: abilities,
+        ),
+        44,
+      );
       // 法师 d6：1 级 8，3 级 8+2*6=20
-      expect(Dnd5eRules.averageHitPoints(className: '法师', level: 3, abilities: abilities), 20);
+      expect(
+        Dnd5eRules.averageHitPoints(
+          className: '法师',
+          level: 3,
+          abilities: abilities,
+        ),
+        20,
+      );
     });
 
     test('每级至少获得 1 点生命（负 CON 时）', () {
@@ -301,7 +438,11 @@ void main() {
     test('购点成本表与预算', () {
       const costs = {8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9};
       costs.forEach((score, cost) {
-        expect(AbilityScoreGenerator.pointBuyCost(score), cost, reason: '$score 分应花费 $cost');
+        expect(
+          AbilityScoreGenerator.pointBuyCost(score),
+          cost,
+          reason: '$score 分应花费 $cost',
+        );
       });
       expect(AbilityScoreGenerator.pointBuyBudget, 27);
       expect(AbilityScoreGenerator.standardArray, [15, 14, 13, 12, 10, 8]);
@@ -348,7 +489,9 @@ void main() {
       // nextInt(6) 返回 5,4,1,0 → 点数 6,5,2,1 → 去最低 1 → 2+5+6 = 13
       final rolls = [5, 4, 1, 0];
       var index = 0;
-      final total = AbilityScoreGenerator.rollOne(nextInt: (_) => rolls[index++]);
+      final total = AbilityScoreGenerator.rollOne(
+        nextInt: (_) => rolls[index++],
+      );
       expect(total, 13);
 
       // 全 6 → 18
@@ -416,18 +559,54 @@ void main() {
   group('职业生命骰（2024 官方核心表）', () {
     // SRD 5.2 各职业 Core Traits：Hit Point Die + 豁免熟练（独立字面量 oracle）。
     const expected = {
-      'barbarian': [12, ['str', 'con']],
-      'bard': [8, ['dex', 'cha']],
-      'cleric': [8, ['wis', 'cha']],
-      'druid': [8, ['int', 'wis']],
-      'fighter': [10, ['str', 'con']],
-      'monk': [8, ['dex', 'wis']],
-      'paladin': [10, ['wis', 'cha']],
-      'ranger': [10, ['dex', 'str']],
-      'rogue': [8, ['dex', 'int']],
-      'sorcerer': [6, ['con', 'cha']],
-      'warlock': [8, ['wis', 'cha']],
-      'wizard': [6, ['int', 'wis']],
+      'barbarian': [
+        12,
+        ['str', 'con'],
+      ],
+      'bard': [
+        8,
+        ['dex', 'cha'],
+      ],
+      'cleric': [
+        8,
+        ['wis', 'cha'],
+      ],
+      'druid': [
+        8,
+        ['int', 'wis'],
+      ],
+      'fighter': [
+        10,
+        ['str', 'con'],
+      ],
+      'monk': [
+        8,
+        ['dex', 'wis'],
+      ],
+      'paladin': [
+        10,
+        ['wis', 'cha'],
+      ],
+      'ranger': [
+        10,
+        ['dex', 'str'],
+      ],
+      'rogue': [
+        8,
+        ['dex', 'int'],
+      ],
+      'sorcerer': [
+        6,
+        ['con', 'cha'],
+      ],
+      'warlock': [
+        8,
+        ['wis', 'cha'],
+      ],
+      'wizard': [
+        6,
+        ['int', 'wis'],
+      ],
     };
 
     test('12 职业生命骰与豁免对照 SRD 5.2（直接断言档案）', () {
@@ -458,7 +637,11 @@ void main() {
         '法师': 6,
       };
       names.forEach((name, die) {
-        expect(Dnd5eRules.hitDieFor(classSummary: name), die, reason: '$name 生命骰');
+        expect(
+          Dnd5eRules.hitDieFor(classSummary: name),
+          die,
+          reason: '$name 生命骰',
+        );
       });
       expect(
         Dnd5eRules.hitDieFor(classSummary: 'Warlock'),
@@ -519,28 +702,120 @@ void main() {
   group('准备法术上限（2024 逐级表，不再叠加属性调整值）', () {
     // SRD 5.2 各类 "Prepared Spells" 列（1..20 级）
     const clericLike = [
-      4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22,
+      4,
+      5,
+      6,
+      7,
+      9,
+      10,
+      11,
+      12,
+      14,
+      15,
+      16,
+      16,
+      17,
+      17,
+      18,
+      18,
+      19,
+      20,
+      21,
+      22,
     ];
     const sorcerer = [
-      2, 4, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22,
+      2,
+      4,
+      6,
+      7,
+      9,
+      10,
+      11,
+      12,
+      14,
+      15,
+      16,
+      16,
+      17,
+      17,
+      18,
+      18,
+      19,
+      20,
+      21,
+      22,
     ];
     const wizard = [
-      4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 18, 19, 21, 22, 23, 24, 25,
+      4,
+      5,
+      6,
+      7,
+      9,
+      10,
+      11,
+      12,
+      14,
+      15,
+      16,
+      16,
+      17,
+      18,
+      19,
+      21,
+      22,
+      23,
+      24,
+      25,
     ];
     const halfCaster = [
-      2, 3, 4, 5, 6, 6, 7, 7, 9, 9, 10, 10, 11, 11, 12, 12, 14, 14, 15, 15,
+      2,
+      3,
+      4,
+      5,
+      6,
+      6,
+      7,
+      7,
+      9,
+      9,
+      10,
+      10,
+      11,
+      11,
+      12,
+      12,
+      14,
+      14,
+      15,
+      15,
     ];
     const warlock = [
-      2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      10,
+      11,
+      11,
+      12,
+      12,
+      13,
+      13,
+      14,
+      14,
+      15,
+      15,
     ];
 
     void expectTable(String className, List<int> table) {
       for (var level = 1; level <= 20; level++) {
         expect(
-          Dnd5eRules.preparedSpellMaximums(
-            classSummary: className,
-            level: level,
-          ),
+          _preparedLimit(className, level),
           table[level - 1],
           reason: '$className $level 级准备法术上限',
         );
@@ -569,40 +844,21 @@ void main() {
     });
 
     test('英文职业名同样解析', () {
-      expect(
-        Dnd5eRules.preparedSpellMaximums(classSummary: 'Wizard', level: 5),
-        9,
-      );
-      expect(
-        Dnd5eRules.preparedSpellMaximums(classSummary: 'Cleric', level: 1),
-        4,
-      );
-      expect(
-        Dnd5eRules.preparedSpellMaximums(classSummary: 'Warlock', level: 1),
-        2,
-      );
+      expect(_preparedLimit('Wizard', 5), 9);
+      expect(_preparedLimit('Cleric', 1), 4);
+      expect(_preparedLimit('Warlock', 1), 2);
     });
 
     test('非施法者没有准备法术上限', () {
       for (final className in ['战士', '野蛮人', '武僧', '游荡者']) {
-        expect(
-          Dnd5eRules.preparedSpellMaximums(classSummary: className, level: 10),
-          isNull,
-          reason: className,
-        );
+        expect(_preparedLimit(className, 10), isNull, reason: className);
       }
     });
 
     test('上限与属性无关（2024 取消“调整值 + 等级”）', () {
       // 旧公式：智力 20（+5）+ 5 级 = 10；2024 官方表为 9
-      expect(
-        Dnd5eRules.preparedSpellMaximums(classSummary: '法师', level: 5),
-        9,
-      );
-      expect(
-        Dnd5eRules.preparedSpellMaximums(classSummary: '法师', level: 20),
-        25,
-      );
+      expect(_preparedLimit('法师', 5), 9);
+      expect(_preparedLimit('法师', 20), 25);
     });
   });
 
@@ -627,11 +883,7 @@ void main() {
         classSummary: '奥法骑士',
         structured: thirdCasterEntry,
       );
-      expect(
-        rules.spellSlots(2),
-        isEmpty,
-        reason: '3 级前没有法术位',
-      );
+      expect(rules.spellSlots(2), isEmpty, reason: '3 级前没有法术位');
       const expected = {
         3: {'1': 2},
         4: {'1': 3},
@@ -662,28 +914,18 @@ void main() {
     test('散文职业名只解析到母职业：不推断施法子职业，无法术位', () {
       // 过渡 shim 的展示名解析：`战士` + `（` 前缀 → fighter（§3.6 第 2 步）。
       expect(Dnd5eRules.hitDieFor(classSummary: '战士（奥法骑士）'), 10);
-      expect(
-        Dnd5eRules.classSavingThrows('战士（奥法骑士）'),
-        {'str', 'con'},
-      );
+      expect(_savingThrows('战士（奥法骑士）'), {'str', 'con'});
       // 但 fighter 的档案声明是 mode: none，因此没有法术位、也没有施法属性。
-      expect(
-        Dnd5eRules.spellSlotMaximums(classSummary: '战士（奥法骑士）', level: 10),
-        isEmpty,
-      );
-      expect(Dnd5eRules.spellcastingAbility('战士（奥法骑士）'), isNull);
-      expect(Dnd5eRules.spellcastingAbility('Eldritch Knight'), isNull);
-      expect(Dnd5eRules.spellcastingAbility('游荡者（诡术师）'), isNull);
-      expect(Dnd5eRules.spellcastingAbility('Arcane Trickster'), isNull);
+      expect(_spellSlots('战士（奥法骑士）', 10), isEmpty);
+      expect(_rulesFor('战士（奥法骑士）').spellcastingAbility, isNull);
+      expect(_rulesFor('Eldritch Knight').spellcastingAbility, isNull);
+      expect(_rulesFor('游荡者（诡术师）').spellcastingAbility, isNull);
+      expect(_rulesFor('Arcane Trickster').spellcastingAbility, isNull);
     });
 
     test('纯战士 / 纯游荡者仍然没有法术位', () {
       for (final className in ['战士', '游荡者', 'Fighter', 'Rogue']) {
-        expect(
-          Dnd5eRules.spellSlotMaximums(classSummary: className, level: 10),
-          isEmpty,
-          reason: className,
-        );
+        expect(_spellSlots(className, 10), isEmpty, reason: className);
       }
     });
   });
@@ -692,15 +934,15 @@ void main() {
     test('别名 + 分隔符前缀命中母职业', () {
       // `战士（奥法骑士）` → fighter；前缀 `战士` 后紧跟 `（`。
       expect(Dnd5eRules.hitDieFor(classSummary: '战士（奥法骑士）'), 10);
-      expect(Dnd5eRules.classSavingThrows('战士（奥法骑士）'), {'str', 'con'});
+      expect(_savingThrows('战士（奥法骑士）'), {'str', 'con'});
       // `法师 / Wizard` → wizard；前缀 `法师` 后紧跟空格。
       expect(Dnd5eRules.hitDieFor(classSummary: '法师 / Wizard'), 6);
-      expect(Dnd5eRules.classSavingThrows('法师 / Wizard'), {'int', 'wis'});
+      expect(_savingThrows('法师 / Wizard'), {'int', 'wis'});
     });
 
     test('禁止裸子串：星界游侠不命中游侠（ranger）', () {
       expect(Dnd5eRules.hitDieFor(classSummary: '星界游侠'), isNull);
-      expect(Dnd5eRules.classSavingThrows('星界游侠'), isEmpty);
+      expect(_savingThrows('星界游侠'), isEmpty);
     });
 
     test('别名后必须紧跟白名单分隔符：无分隔符不命中，三种分隔符命中', () {
@@ -736,33 +978,32 @@ void main() {
 
     test('12 个职业的豁免熟练', () {
       savingThrows.forEach((name, expected) {
-        expect(
-          Dnd5eRules.classSavingThrows(name),
-          expected,
-          reason: '$name 豁免熟练',
-        );
+        expect(_savingThrows(name), expected, reason: '$name 豁免熟练');
       });
     });
 
     test('英文职业名同样解析', () {
-      expect(Dnd5eRules.classSavingThrows('Rogue'), {'dex', 'int'});
-      expect(Dnd5eRules.classSavingThrows('Warlock'), {'wis', 'cha'});
-      expect(Dnd5eRules.classSavingThrows('Sorcerer'), {'con', 'cha'});
+      expect(_savingThrows('Rogue'), {'dex', 'int'});
+      expect(_savingThrows('Warlock'), {'wis', 'cha'});
+      expect(_savingThrows('Sorcerer'), {'con', 'cha'});
     });
 
     test('未知职业返回空集合（不猜测）', () {
-      expect(Dnd5eRules.classSavingThrows('自定义职业'), isEmpty);
+      expect(_savingThrows('自定义职业'), isEmpty);
     });
   });
 
   group('职业资源恢复（2024 休息语义）', () {
-    Dnd5eClassResource resource(String id, String recovery, {int maximum = 3}) =>
-        Dnd5eClassResource(
-          id: id,
-          name: id,
-          maximum: maximum,
-          recovery: recovery,
-        );
+    Dnd5eClassResource resource(
+      String id,
+      String recovery, {
+      int maximum = 3,
+    }) => Dnd5eClassResource(
+      id: id,
+      name: id,
+      maximum: maximum,
+      recovery: recovery,
+    );
 
     test('短休：shortRest 清空、shortRestOne 只回 1 次、longRest 不变', () {
       final resources = [
@@ -810,15 +1051,10 @@ void main() {
     });
 
     test('野蛮人狂暴 / 战士第二气息短休恢复 1 次；动作如潮短休全部恢复', () {
+      expect(_resources('野蛮人', 3).single.recovery, 'shortRestOne');
+      final fighter = _resources('战士', 2);
       expect(
-        Dnd5eRules.classResources(classSummary: '野蛮人', level: 3).single.recovery,
-        'shortRestOne',
-      );
-      final fighter = Dnd5eRules.classResources(classSummary: '战士', level: 2);
-      expect(
-        {
-          for (final item in fighter) item.id: item.recovery,
-        },
+        {for (final item in fighter) item.id: item.recovery},
         {'second_wind': 'shortRestOne', 'action_surge': 'shortRest'},
         reason: '2024：第二气息短休只回 1 次，动作如潮短休全恢复',
       );

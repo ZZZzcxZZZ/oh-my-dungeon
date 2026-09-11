@@ -2,6 +2,9 @@ import '../../content/domain/content_entry.dart';
 import '../../rules/domain/character_build.dart';
 import '../../rules/domain/character_rule_definition.dart';
 import '../../rules/domain/character_rules_engine.dart';
+import '../../rules/domain/class_rule_set.dart';
+import '../../rules/domain/rule_diagnostic.dart';
+import '../../rules/domain/rule_math.dart' as rule_math;
 import 'character_content_reference.dart';
 import 'character_edit_draft.dart';
 import 'dnd5e_rules.dart';
@@ -27,6 +30,12 @@ class RulesDrivenCharacterBuilder {
     final classEntry = _selectedEntry(build, 'class');
     final speciesEntry = _selectedEntry(build, 'species');
     final backgroundEntry = _selectedEntry(build, 'background');
+    // 职业数值的唯一入口：条目身份优先，`structured.classRules` 覆盖档案（§3.6、§3.7）。
+    final classRules = Dnd5eRules.resolveClassRules(
+      entryId: classEntry?.id,
+      classSummary: classEntry?.name ?? '',
+      structured: classEntry?.structured ?? const <String, Object?>{},
+    );
     final ledger = _engine.evaluate(build);
     final effectiveBuild = CharacterBuild(
       level: build.level,
@@ -48,9 +57,7 @@ class RulesDrivenCharacterBuilder {
       }
     }
 
-    for (final ability in StructuredClassRules.savingThrowAbilities(
-      classEntry,
-    )) {
+    for (final ability in classRules.savingThrowAbilities) {
       if (saves.containsKey(ability)) saves[ability] = true;
     }
     for (final skill in skillProficiencies) {
@@ -70,13 +77,14 @@ class RulesDrivenCharacterBuilder {
       ..._choiceEntryRefs(ledger, const {'equipment', 'item'}),
       ...extraItemRefs.where(entries.containsKey),
     }.toList(growable: false);
-    final resources = ledger.grantsOfKind(RuleGrantKind.resource).toList();
-    final spellSlotResources = resources
-        .where((resource) => resource.target?.startsWith('spellSlot:') == true)
-        .toList(growable: false);
-    final classResources = resources
-        .where((resource) => resource.target?.startsWith('spellSlot:') != true)
-        .toList(growable: false);
+    // 法术位与职业资源一律来自新契约的职业规则（条目声明 ∪ 档案），
+    // 不再读 `spellSlot:` / `resource` 授予（任务 9 会移除这两个 grant kind）。
+    final spellSlots = classRules.spellSlots(build.level);
+    final classResources = Dnd5eRules.classResourcesFromRules(
+      rules: classRules,
+      level: build.level,
+      abilities: abilities,
+    );
     final actions = ledger.grantsOfKind(RuleGrantKind.action).toList();
     final armorBonus = ledger
         .grantsOfKind(RuleGrantKind.armorClass)
@@ -84,7 +92,7 @@ class RulesDrivenCharacterBuilder {
         .toInt();
     final speedGrant = ledger.grantsOfKind(RuleGrantKind.speed).lastOrNull;
     final maxHp = _averageHitPoints(
-      classEntry: classEntry,
+      hitDie: classRules.hitDie,
       level: build.level,
       constitution: abilities['con'] ?? 10,
     );
@@ -157,21 +165,24 @@ class RulesDrivenCharacterBuilder {
               'selected': choice.selected,
             },
         ],
-        if (spellSlotResources.isNotEmpty)
-          'spellSlots': {
-            for (final resource in spellSlotResources)
-              resource.target!.substring('spellSlot:'.length):
-                  resource.value?.toInt() ?? 0,
+        'classIdentity': {
+          'entryId': classEntry?.id,
+          'slug': classEntry?.slug,
+          'name': classEntry?.name,
+          // 没有职业条目即"未声明"：界面显示"未声明"而不是 0。
+          'declared': classEntry != null,
+          // §3.12：部分声明是一等功能，声明范围随角色持久化，供所有界面共用。
+          'declaredLevels': {
+            'min': _declaredMinLevel(classEntry),
+            'max': _declaredMaxLevel(classEntry),
           },
-        if (classEntry?.structured['spellcastingAbility']
-            case final String ability)
+        },
+        'hitDie': classRules.hitDie,
+        'savingThrowAbilities': classRules.savingThrowAbilities.toList(),
+        if (spellSlots.isNotEmpty) 'spellSlots': spellSlots,
+        if (classRules.spellcastingAbility case final String ability)
           'spellcastingAbility': ability,
-        if (StructuredClassRules.preparedSpellLimit(
-              classEntry,
-              abilities: abilities,
-              level: build.level,
-            )
-            case final int preparedLimit)
+        if (classRules.preparedLimit(build.level) case final int preparedLimit)
           'preparedSpellLimit': preparedLimit,
         if (StructuredClassRules.startingEquipmentChoice(classEntry)
             case final StartingEquipmentChoice equipmentChoice)
@@ -181,9 +192,9 @@ class RulesDrivenCharacterBuilder {
             for (final resource in classResources)
               {
                 'id': resource.id,
-                'name': resource.label,
-                'maximum': resource.value?.toInt() ?? 1,
-                'recovery': _resourceRecovery(resource.data['recovery']),
+                'name': resource.name,
+                'maximum': resource.maximum,
+                'recovery': resource.recovery,
               },
           ],
         if (actions.isNotEmpty)
@@ -286,31 +297,50 @@ class RulesDrivenCharacterBuilder {
     ...entry.toJson(),
   };
 
+  /// 生命骰来自职业规则（条目声明 ∪ 档案）。未声明生命骰（`hitDie == null`）
+  /// 不猜：只按体质调整值计，且总生命至少 1（§3.6 第 3 步）。
   int _averageHitPoints({
-    required ContentEntry? classEntry,
+    required int? hitDie,
     required int level,
     required int constitution,
   }) {
-    final rawHitDie = classEntry?.structured['hitDie'];
-    final hitDie = switch (rawHitDie) {
-      num value => value.toInt(),
-      String value =>
-        int.tryParse(value.replaceFirst(RegExp(r'^[dD]'), '')) ?? 8,
-      _ => 8,
-    };
+    final safeLevel = level.clamp(1, 20);
+    if (hitDie == null) {
+      return (rule_math.abilityModifier(constitution) * safeLevel).clamp(
+        1,
+        1 << 30,
+      );
+    }
     return Dnd5eRules.averageHitPointsForHitDie(
       hitDie: hitDie,
-      level: level,
+      level: safeLevel,
       constitution: constitution,
     );
   }
-}
 
-String _resourceRecovery(Object? value) {
-  return switch (value) {
-    'shortRest' || 'shortRestOne' || 'longRest' || 'none' => '$value',
-    _ => 'longRest',
-  };
+  /// 职业**自身**声明的最早 / 最高等级（§3.12 的 `{min, max}`）。
+  ///
+  /// 只有条目**自己**的 `structured.classRules` 算"声明"：档案是补齐，不是条目
+  /// 声明的范围（两者都是 null 即"未声明该范围"，界面据此显示未声明）。
+  int? _declaredMinLevel(ContentEntry? classEntry) {
+    if (classEntry == null) return null;
+    return _entryRuleSet(classEntry)?.declaredMinLevel;
+  }
+
+  int? _declaredMaxLevel(ContentEntry? classEntry) {
+    if (classEntry == null) return null;
+    return _entryRuleSet(classEntry)?.declaredMaxLevel;
+  }
+
+  ClassRuleSet? _entryRuleSet(ContentEntry classEntry) {
+    final raw = classEntry.structured['classRules'];
+    if (raw is! Map) return null;
+    return ClassRuleSet.parse(
+      Map<String, Object?>.from(raw),
+      path: r'$.structured.classRules',
+      diagnostics: <RuleDiagnostic>[],
+    );
+  }
 }
 
 extension<T> on Iterable<T> {

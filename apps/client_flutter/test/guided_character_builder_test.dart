@@ -477,6 +477,115 @@ void main() {
     );
     expect(refs['items'], contains('guide:equipment/book'));
   });
+
+  testWidgets('standard builder 按条目身份算职业数值（法术位 / 职业资源 / 声明范围）', (tester) async {
+    tester.view.physicalSize = const Size(1200, 1500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    CharacterEditDraft? submitted;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          contentEntries: [
+            _entry(
+              id: 'guide:class/mage',
+              type: 'class',
+              name: '星界法师',
+              revision: 1,
+              structured: const {
+                'classRules': {
+                  'hitDie': 6,
+                  'savingThrowAbilities': ['int', 'wis'],
+                  'spellcasting': {
+                    'mode': 'prepared',
+                    'ability': 'int',
+                    // 内部 slots 表（半施法者原型）与 prepared 表都随条目声明。
+                    'archetype': 'half-caster',
+                    'slots': {
+                      '3': {'1': 4, '2': 2},
+                    },
+                    'prepared': [4, 5, 6],
+                  },
+                  'resources': [
+                    {
+                      'id': 'astral-focus',
+                      'name': '星界专注',
+                      'recovery': 'shortRest',
+                      'maximum': {'formula': 'level'},
+                    },
+                  ],
+                },
+              },
+              rules: const {'choices': <Map<String, Object?>>[]},
+            ),
+            _entry(
+              id: 'guide:background/soldier',
+              type: 'background',
+              name: '士兵',
+              revision: 1,
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:species/human',
+              type: 'species',
+              name: '人类',
+              revision: 1,
+              rules: const {},
+            ),
+          ],
+          onSubmit: (draft) async {
+            submitted = draft;
+            return true;
+          },
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('standard-character-name-field')),
+      '星辉',
+    );
+    await tester.pumpAndSettle();
+
+    // 第 0 步（职业）的等级摘要：法术位与职业资源必须按条目身份算出来。
+    await _goToDesktopStep(tester, 0);
+    await tester.tap(find.byKey(const Key('standard-level-increment-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('standard-level-increment-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('当前等级 3'), findsOneWidget);
+    expect(find.text('法术位 一环 4 / 二环 2'), findsOneWidget);
+    expect(find.text('职业资源 星界专注 3'), findsOneWidget);
+
+    await _goToDesktopStep(tester, 8);
+    await tester.ensureVisible(find.widgetWithText(FilledButton, '创建角色'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '创建角色'));
+    await tester.pumpAndSettle();
+
+    expect(submitted, isNotNull);
+    expect(submitted!.data['classIdentity'], {
+      'entryId': 'guide:class/mage',
+      'slug': 'mage',
+      'name': '星界法师',
+      'declared': true,
+      // 条目自身声明到 3 级（slots 表只写 3、prepared 表 1..3）。
+      'declaredLevels': {'min': 1, 'max': 3},
+    });
+    expect(submitted!.data['spellSlots'], {'1': 4, '2': 2});
+    expect(submitted!.data['preparedSpellLimit'], 6);
+    expect(submitted!.data['classResources'], [
+      {
+        'id': 'astral-focus',
+        'name': '星界专注',
+        'maximum': 3,
+        'recovery': 'shortRest',
+      },
+    ]);
+  });
 }
 
 Future<void> _goToDesktopStep(WidgetTester tester, int index) async {

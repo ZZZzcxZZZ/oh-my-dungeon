@@ -1,3 +1,4 @@
+import '../../rules/domain/rule_profile.dart';
 import 'character_edit_draft.dart';
 import 'dnd5e_rules.dart';
 
@@ -83,15 +84,33 @@ class QuickBuildService {
   const QuickBuildService._();
 
   static CharacterEditDraft build(QuickBuildSelection selection) {
-    final abilities = selection.abilities ?? _abilities(selection.className);
-    final maxHp = Dnd5eRules.averageHitPoints(
-      className: selection.className,
+    final classRules = _classRules(
+      entryId: selection.classEntryId,
+      classSummary: selection.className,
+    );
+    final abilities =
+        selection.abilities ??
+        abilityPresetFor(
+          classEntryId: selection.classEntryId,
+          className: selection.className,
+        );
+    final maxHp = _averageHitPoints(
+      hitDie: classRules.hitDie,
       level: selection.level,
       abilities: abilities,
     );
-    final classResources = Dnd5eRules.classResources(
-      classSummary: selection.className,
+    final classResources = Dnd5eRules.classResourcesFromRules(
+      rules: classRules,
       level: selection.level,
+      abilities: abilities,
+    );
+    final saves = {for (final key in Dnd5eRules.abilityLabels.keys) key: false};
+    for (final ability in classRules.savingThrowAbilities) {
+      if (saves.containsKey(ability)) saves[ability] = true;
+    }
+    final slug = Dnd5eRules.resolveClassSlug(
+      entryId: selection.classEntryId,
+      classSummary: selection.className,
     );
 
     return CharacterEditDraft(
@@ -104,14 +123,14 @@ class QuickBuildService {
       armorClass: Dnd5eRules.baseArmorClass(abilities),
       speed: 30,
       initiativeBonus: Dnd5eRules.initiativeBonus(abilities),
-      abilities: abilities.map((key, value) => MapEntry(key, value as int)),
-      saves: _saves(selection.className),
+      abilities: Map<String, int>.from(abilities),
+      saves: saves,
       skills: _skills(
         selection.background,
         skillProficiencies: selection.skillProficiencies,
       ),
       inventory: [
-        ..._inventory(selection.className),
+        ..._inventory(slug),
         for (final item in selection.itemRefs)
           if (item.trim().isNotEmpty) {'name': item.trim(), 'quantity': 1},
       ],
@@ -134,6 +153,25 @@ class QuickBuildService {
           ],
           'features': <String>[],
         },
+        // 职业身份以条目为准；只有展示名时记下解析出的 slug，规则数值仍来自档案。
+        'classIdentity': {
+          'entryId': selection.classEntryId,
+          if (slug.isNotEmpty) 'slug': slug,
+          'name': selection.className,
+          // 展示名解析不到档案 slug 即"未声明"。
+          'declared': slug.isNotEmpty,
+          'declaredLevels': {
+            'min': classRules.declaredMinLevel,
+            'max': classRules.declaredMaxLevel,
+          },
+        },
+        'hitDie': classRules.hitDie,
+        'savingThrowAbilities': classRules.savingThrowAbilities.toList(),
+        'spellSlots': classRules.spellSlots(selection.level),
+        if (classRules.spellcastingAbility case final String ability)
+          'spellcastingAbility': ability,
+        if (classRules.preparedLimit(selection.level) case final int limit)
+          'preparedSpellLimit': limit,
         if (classResources.isNotEmpty) ...{
           'classResources': [
             for (final resource in classResources)
@@ -154,17 +192,57 @@ class QuickBuildService {
     );
   }
 
-  /// 快速创建的属性预设：按 2024 核心表的主属性给出"施法属性/主战属性 16"的
-  /// 可用数组。未识别的职业回退到力量型默认值。
-  static Map<String, Object?> _abilities(String className) {
-    final normalized = className.toLowerCase();
-    for (final preset in _classAbilityPresets.entries) {
-      if (normalized.contains(preset.key)) return preset.value;
+  /// 展示名 / 条目 id → 档案规则（唯一入口，UI 不再按职业名分支）。
+  static ResolvedClassRules _classRules({
+    required String? entryId,
+    required String classSummary,
+  }) => Dnd5eRules.resolveClassRules(
+    entryId: entryId,
+    classSummary: classSummary,
+  );
+
+  /// 未声明生命骰（自制职业）时只按体质调整值计，且总生命至少 1（§3.6 第 3 步）。
+  static int _averageHitPoints({
+    required int? hitDie,
+    required int level,
+    required Map<String, Object?> abilities,
+  }) {
+    final safeLevel = level.clamp(1, 20);
+    final constitution = Dnd5eRules.abilityScore(abilities, 'con');
+    if (hitDie == null) {
+      return (Dnd5eRules.abilityModifier(constitution) * safeLevel).clamp(
+        1,
+        1 << 30,
+      );
     }
-    return _defaultAbilities;
+    return Dnd5eRules.averageHitPointsForHitDie(
+      hitDie: hitDie,
+      level: safeLevel,
+      constitution: constitution,
+    );
   }
 
-  static const _defaultAbilities = <String, Object?>{
+  /// 快速创建的属性预设：**按档案 slug 取键**，不再写死中文职业名。
+  ///
+  /// 键就是内置档案 `classes` 的 slug（`wizard` / `rogue` / `cleric` / …），
+  /// 因此 `法师`、`法师 / Wizard`、`Wizard` 三种写法都命中同一份预设；
+  /// 未识别的职业（含自制职业）回退到力量型默认值。
+  ///
+  /// 编辑器与快速创建共用这一个入口，保证两处的"推荐属性"一致。
+  static Map<String, int> abilityPresetFor({
+    String? classEntryId,
+    required String className,
+  }) {
+    final slug = Dnd5eRules.resolveClassSlug(
+      entryId: classEntryId,
+      classSummary: className,
+    );
+    final preset = _classAbilityPresets[slug];
+    if (preset == null) return Map<String, int>.from(_defaultAbilities);
+    return Map<String, int>.from(preset);
+  }
+
+  static const _defaultAbilities = <String, int>{
     'str': 16,
     'dex': 14,
     'con': 14,
@@ -173,36 +251,72 @@ class QuickBuildService {
     'cha': 8,
   };
 
-  static const _classAbilityPresets = <String, Map<String, Object?>>{
-    '法师': {'str': 8, 'dex': 14, 'con': 14, 'int': 16, 'wis': 12, 'cha': 10},
-    'wizard': {'str': 8, 'dex': 14, 'con': 14, 'int': 16, 'wis': 12, 'cha': 10},
-    '游荡者': {'str': 8, 'dex': 16, 'con': 14, 'int': 12, 'wis': 10, 'cha': 14},
-    'rogue': {'str': 8, 'dex': 16, 'con': 14, 'int': 12, 'wis': 10, 'cha': 14},
-    '牧师': {'str': 10, 'dex': 12, 'con': 14, 'int': 8, 'wis': 16, 'cha': 14},
-    'cleric': {'str': 10, 'dex': 12, 'con': 14, 'int': 8, 'wis': 16, 'cha': 14},
-    '吟游诗人': {'str': 8, 'dex': 14, 'con': 14, 'int': 10, 'wis': 10, 'cha': 16},
-    'bard': {'str': 8, 'dex': 14, 'con': 14, 'int': 10, 'wis': 10, 'cha': 16},
-    '德鲁伊': {'str': 10, 'dex': 14, 'con': 14, 'int': 10, 'wis': 16, 'cha': 8},
-    'druid': {'str': 10, 'dex': 14, 'con': 14, 'int': 10, 'wis': 16, 'cha': 8},
-    '武僧': {'str': 10, 'dex': 16, 'con': 14, 'int': 8, 'wis': 16, 'cha': 8},
-    'monk': {'str': 10, 'dex': 16, 'con': 14, 'int': 8, 'wis': 16, 'cha': 8},
-    '圣武士': {'str': 16, 'dex': 8, 'con': 14, 'int': 10, 'wis': 10, 'cha': 16},
-    'paladin': {'str': 16, 'dex': 8, 'con': 14, 'int': 10, 'wis': 10, 'cha': 16},
-    '游侠': {'str': 12, 'dex': 16, 'con': 14, 'int': 10, 'wis': 14, 'cha': 8},
-    'ranger': {'str': 12, 'dex': 16, 'con': 14, 'int': 10, 'wis': 14, 'cha': 8},
-    '术士': {'str': 8, 'dex': 14, 'con': 14, 'int': 10, 'wis': 10, 'cha': 16},
-    'sorcerer': {'str': 8, 'dex': 14, 'con': 14, 'int': 10, 'wis': 10, 'cha': 16},
-    '邪术师': {'str': 8, 'dex': 14, 'con': 14, 'int': 10, 'wis': 10, 'cha': 16},
-    'warlock': {'str': 8, 'dex': 14, 'con': 14, 'int': 10, 'wis': 10, 'cha': 16},
+  /// 编辑器"标准数组"步骤的推荐属性（购点友好：总和正好 27 点）。
+  ///
+  /// 与 [abilityPresetFor] 分开是因为两者约束不同：快速创建直接给 16 的主属性，
+  /// 而编辑器的下一步是 27 点购点，必须给出一组**恰好用满预算**的可编辑初值。
+  /// 键同样是档案 slug，不写死职业名。
+  static Map<String, int> editorAbilityPresetFor({
+    String? classEntryId,
+    required String className,
+  }) {
+    final slug = Dnd5eRules.resolveClassSlug(
+      entryId: classEntryId,
+      classSummary: className,
+    );
+    final preset = _editorAbilityPresets[slug];
+    if (preset == null) return Map<String, int>.from(_editorDefaultAbilities);
+    return Map<String, int>.from(preset);
+  }
+
+  static const _editorDefaultAbilities = <String, int>{
+    'str': 15,
+    'dex': 14,
+    'con': 13,
+    'int': 10,
+    'wis': 12,
+    'cha': 8,
   };
 
-  static Map<String, bool> _saves(String className) {
-    final saves = {for (final key in Dnd5eRules.abilityLabels.keys) key: false};
-    for (final ability in Dnd5eRules.classSavingThrows(className)) {
-      if (saves.containsKey(ability)) saves[ability] = true;
-    }
-    return saves;
-  }
+  static const _editorAbilityPresets = <String, Map<String, int>>{
+    'wizard': {'str': 8, 'dex': 13, 'con': 14, 'int': 15, 'wis': 12, 'cha': 10},
+    'rogue': {'str': 8, 'dex': 15, 'con': 14, 'int': 12, 'wis': 10, 'cha': 13},
+    'cleric': {'str': 10, 'dex': 12, 'con': 14, 'int': 8, 'wis': 15, 'cha': 13},
+  };
+
+  static const _classAbilityPresets = <String, Map<String, int>>{
+    'wizard': {'str': 8, 'dex': 14, 'con': 14, 'int': 16, 'wis': 12, 'cha': 10},
+    'rogue': {'str': 8, 'dex': 16, 'con': 14, 'int': 12, 'wis': 10, 'cha': 14},
+    'cleric': {'str': 10, 'dex': 12, 'con': 14, 'int': 8, 'wis': 16, 'cha': 14},
+    'bard': {'str': 8, 'dex': 14, 'con': 14, 'int': 10, 'wis': 10, 'cha': 16},
+    'druid': {'str': 10, 'dex': 14, 'con': 14, 'int': 10, 'wis': 16, 'cha': 8},
+    'monk': {'str': 10, 'dex': 16, 'con': 14, 'int': 8, 'wis': 16, 'cha': 8},
+    'paladin': {
+      'str': 16,
+      'dex': 8,
+      'con': 14,
+      'int': 10,
+      'wis': 10,
+      'cha': 16,
+    },
+    'ranger': {'str': 12, 'dex': 16, 'con': 14, 'int': 10, 'wis': 14, 'cha': 8},
+    'sorcerer': {
+      'str': 8,
+      'dex': 14,
+      'con': 14,
+      'int': 10,
+      'wis': 10,
+      'cha': 16,
+    },
+    'warlock': {
+      'str': 8,
+      'dex': 14,
+      'con': 14,
+      'int': 10,
+      'wis': 10,
+      'cha': 16,
+    },
+  };
 
   static Map<String, bool> _skills(
     String background, {
@@ -239,29 +353,25 @@ class QuickBuildService {
     return skills;
   }
 
-  static List<Map<String, Object>> _inventory(String className) {
-    final normalized = className.toLowerCase();
-    if (normalized.contains('法师') || normalized.contains('wizard')) {
-      return [
+  /// 无内容资料库时的开局物品预设，同样**按 slug 取键**（不是按职业名子串）。
+  static List<Map<String, Object>> _inventory(String slug) {
+    return switch (slug) {
+      'wizard' => [
         {'name': '法术书', 'quantity': 1},
         {'name': '匕首', 'quantity': 1},
-      ];
-    }
-    if (normalized.contains('游荡者') || normalized.contains('rogue')) {
-      return [
+      ],
+      'rogue' => [
         {'name': '短剑', 'quantity': 1},
         {'name': '盗贼工具', 'quantity': 1},
-      ];
-    }
-    if (normalized.contains('牧师') || normalized.contains('cleric')) {
-      return [
+      ],
+      'cleric' => [
         {'name': '圣徽', 'quantity': 1},
         {'name': '治疗药水', 'quantity': 1},
-      ];
-    }
-    return [
-      {'name': '长剑', 'quantity': 1},
-      {'name': '盾牌', 'quantity': 1},
-    ];
+      ],
+      _ => [
+        {'name': '长剑', 'quantity': 1},
+        {'name': '盾牌', 'quantity': 1},
+      ],
+    };
   }
 }

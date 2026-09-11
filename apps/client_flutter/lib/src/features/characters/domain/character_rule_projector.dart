@@ -13,12 +13,14 @@ class CharacterRuleProjector {
 
   CharacterSheet project(CharacterSheet character) {
     final rawBuild = character.dataMap['build'];
-    if (rawBuild is! Map || entries.isEmpty) return character;
+    if (rawBuild is! Map || entries.isEmpty) {
+      return _withClassIdentity(character);
+    }
     final savedBuild = CharacterBuild.fromJson(
       Map<String, Object?>.from(rawBuild),
     );
     if (savedBuild.selections.values.every((id) => !entries.containsKey(id))) {
-      return character;
+      return _withClassIdentity(character);
     }
 
     final build = CharacterBuild(
@@ -44,6 +46,9 @@ class CharacterRuleProjector {
       'pendingChoices',
       'spellSlots',
       'spellcastingAbility',
+      'preparedSpellLimit',
+      'hitDie',
+      'savingThrowAbilities',
       'classResources',
       'actions',
     ]) {
@@ -58,6 +63,13 @@ class CharacterRuleProjector {
       derivedData['ruleSnapshots'],
     );
 
+    mergedData['classIdentity'] = _classIdentity(
+      Map<String, Object?>.from(
+        (derivedData['classIdentity'] as Map?) ?? const <String, Object?>{},
+      ),
+      character,
+    );
+
     return character.copyWith(
       data: mergedData,
       contentReferences: _mergeReferences(
@@ -65,6 +77,54 @@ class CharacterRuleProjector {
         derived.contentReferences,
       ),
     );
+  }
+
+  /// 老角色回填 `data.classIdentity`（契约 §3.12：声明范围随角色持久化）。
+  ///
+  /// - 优先用派生结果（条目身份 + 条目声明的 `declaredLevels`）；
+  /// - 派生结果里 `entryId` 为空（原始存档没有 `build.selections.class`）时，
+  ///   按 **slug / name / aliases 精确匹配**回填（[Dnd5eRules.resolveClassSlug]
+  ///   只做精确相等或 `<别名><分隔符>` 前缀，**禁止裸子串**）；
+  /// - 匹配不到就显式标记 `declared: false`（"未声明"），界面据此不显示 0。
+  Map<String, Object?> _classIdentity(
+    Map<String, Object?> derivedIdentity,
+    CharacterSheet character,
+  ) {
+    final entryId = '${derivedIdentity['entryId'] ?? ''}'.trim();
+    if (entryId.isNotEmpty) return derivedIdentity;
+
+    final slug = Dnd5eRules.resolveClassSlug(
+      classSummary: character.classSummary,
+    );
+    if (slug.isEmpty) {
+      return <String, Object?>{
+        'entryId': null,
+        'slug': null,
+        'name': character.classSummary,
+        'declaredLevels': const <String, Object?>{'min': null, 'max': null},
+        'declared': false,
+      };
+    }
+    return <String, Object?>{
+      'entryId': null,
+      'slug': slug,
+      'name': character.classSummary,
+      'declaredLevels': const <String, Object?>{'min': null, 'max': null},
+      'declared': true,
+    };
+  }
+
+  CharacterSheet _withClassIdentity(CharacterSheet character) {
+    final identity = _classIdentity(const <String, Object?>{}, character);
+    final existing = character.dataMap['classIdentity'];
+    if (existing is Map &&
+        '${existing['slug'] ?? ''}' == '${identity['slug'] ?? ''}' &&
+        existing['declared'] == identity['declared']) {
+      return character;
+    }
+    final data = Map<String, Object?>.from(character.dataMap)
+      ..['classIdentity'] = identity;
+    return character.copyWith(data: data);
   }
 
   int _abilityValue(Object? value, String key) {

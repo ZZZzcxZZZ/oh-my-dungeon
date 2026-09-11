@@ -8,7 +8,14 @@ void main() {
     id: 'class:fighter',
     type: 'class',
     name: 'Fighter',
-    structured: <String, Object?>{'hitDie': 10},
+    // 任务 8：生命骰只读 `structured.classRules`（旧的 `structured.hitDie`
+    // 是散文展示字段，不再参与规则计算）。
+    structured: <String, Object?>{
+      'classRules': <String, Object?>{
+        'hitDie': 10,
+        'savingThrowAbilities': <String>['str', 'con'],
+      },
+    },
     rules: <String, Object?>{
       'progression': <Map<String, Object?>>[
         <String, Object?>{

@@ -24,12 +24,17 @@ class IntTable {
 }
 
 /// `Table<{环阶: 数量}>`：法术位。整级替换语义 + §3.12 的两条取值规则。
+///
+/// "未声明"与"显式空"必须可区分（§3.12）：作者写了 `{}` 表示该等级有法术位表但
+/// 一个法术位也没有；完全没有给这一环阶则是**未声明**，由 archetype 回退决定。
+/// 因此未声明等级不入 [_levels]，也不进 [_byLevel]。
 class SlotTable {
   const SlotTable._(this._byLevel, this._levels, this.minLevel, this.maxLevel);
 
+  /// 仅含**已显式声明**的等级；值可以是空表（显式 `{}`）。未声明等级不在此表内。
   final Map<int, Map<String, int>> _byLevel;
 
-  /// 已声明等级，升序；构造后不再改变。
+  /// 已显式声明的等级，升序；构造后不再改变。
   final List<int> _levels;
   final int minLevel;
   final int maxLevel;
@@ -39,17 +44,19 @@ class SlotTable {
     if (raw is List) {
       if (raw.isEmpty || raw.length > 20) return null;
       for (var index = 0; index < raw.length; index++) {
-        final parsed = _slots(raw[index], index + 1);
-        if (parsed == null) return null;
-        byLevel[index + 1] = parsed;
+        final parsed = _slots(raw[index]);
+        if (parsed.invalid) return null;
+        final slots = parsed.slots;
+        if (slots != null) byLevel[index + 1] = slots; // null = 未声明
       }
     } else if (raw is Map) {
       for (final entry in raw.entries) {
         final level = int.tryParse('${entry.key}');
         if (level == null || level < 1 || level > 20) return null; // 未知键一律拒绝
-        final parsed = _slots(entry.value, level);
-        if (parsed == null) return null;
-        byLevel[level] = parsed;
+        final parsed = _slots(entry.value);
+        if (parsed.invalid) return null;
+        final slots = parsed.slots;
+        if (slots != null) byLevel[level] = slots; // null = 未声明
       }
     } else {
       return null;
@@ -59,22 +66,40 @@ class SlotTable {
     return SlotTable._(byLevel, levels, levels.first, levels.last);
   }
 
-  static Map<String, int>? _slots(Object? raw, int level) {
-    if (raw == null) return const <String, int>{};
-    if (raw is! Map) return null;
+  static _SlotsResult _slots(Object? raw) {
+    if (raw == null) return const _SlotsResult.undeclared();
+    if (raw is! Map) return const _SlotsResult.invalid();
     final slots = <String, int>{};
     for (final slot in raw.entries) {
       final slotLevel = int.tryParse('${slot.key}');
       final count = slot.value is num ? (slot.value! as num).toInt() : null;
-      if (slotLevel == null || slotLevel < 1 || slotLevel > 9) return null;
-      if (count == null || count < 0) return null;
-      if (count > 0) slots['$slotLevel'] = count;
+      if (slotLevel == null || slotLevel < 1 || slotLevel > 9) {
+        return const _SlotsResult.invalid();
+      }
+      if (count == null || count < 0) return const _SlotsResult.invalid();
+      // 显式 0 也写入：0 表示"该环阶位存在但上限为 0"，与"不写该环阶"不同（§3.12）。
+      slots['$slotLevel'] = count;
     }
-    return slots;
+    return _SlotsResult.declared(slots);
   }
 
-  /// null = 该等级未声明（低于最早声明等级），交由 archetype 回退。
+  /// null = 该等级未声明（低于最早声明等级），交由 archetype 回退；
+  /// `{}` = 该等级显式声明为空（无法术位）。两者不能混为一谈（§3.12）。
   Map<String, int>? at(int level) => _valueAt(_byLevel, _levels, level);
+}
+
+/// [`SlotTable._slots`] 的解析结果：三态必须可区分（§3.12）。
+class _SlotsResult {
+  const _SlotsResult._(this.slots, this.invalid);
+  const _SlotsResult.undeclared() : this._(null, false);
+
+  /// [slots] 可以是空表：空表表示"显式声明为空"。
+  const _SlotsResult.declared(Map<String, int> slots) : this._(slots, false);
+  const _SlotsResult.invalid() : this._(null, true);
+
+  /// null = 该等级未声明。
+  final Map<String, int>? slots;
+  final bool invalid;
 }
 
 /// `Table<String>`：与 [IntTable] 同一套"常量或表"语义，用于随等级变化的枚举值（如 `recovery`）。
@@ -146,11 +171,12 @@ class MaxSpec {
     if (raw is! Map) return null;
     final minimum = raw['minimum'] is num ? (raw['minimum']! as num).toInt() : null;
     if (minimum != null && minimum < 0) return null;
+    // 已废弃的写法：只要出现 `value` 键一律拒绝，不与 formula/table 组合放行。
+    if (raw.containsKey('value')) return null;
     final hasFormula = raw.containsKey('formula');
     final hasTable = raw.containsKey('table');
     final kinds = [hasFormula, hasTable].where((flag) => flag).length;
     if (kinds != 1) return null;
-    if (raw.containsKey('value')) return null; // 已废弃的写法，明确拒绝
     if (hasFormula) {
       final formula = raw['formula'];
       if (formula is! String || !isSupportedFormula(formula)) return null;

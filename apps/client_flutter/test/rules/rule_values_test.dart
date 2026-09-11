@@ -64,6 +64,24 @@ void main() {
       final table = SlotTable.tryParse({'2': {'1': 2}, '9': {'1': 9}})!;
       expect(table.at(7), {'1': 2}, reason: '7 级未声明，应沿用 2 级的值而不是 9 级');
     });
+
+    test('显式 0 保留：0 表示该环阶位上限为 0，与"不写该环阶"不同', () {
+      final table = SlotTable.tryParse({
+        '1': {'1': 0, '2': 2},
+      })!;
+      expect(table.at(1), {'1': 0, '2': 2}, reason: '显式 0 不得被静默丢弃');
+    });
+
+    test('显式空表 {} 与"未声明"在 at() 上可区分（§3.12）', () {
+      final empty = SlotTable.tryParse({'1': <String, int>{}, '3': {'1': 2}})!;
+      expect(empty.at(1), isEmpty, reason: '显式声明为空 → 有表但无法术位');
+      expect(empty.at(2), isEmpty, reason: '2 级未声明，沿用 1 级的显式空表');
+      final undeclared = SlotTable.tryParse({'3': {'1': 2}})!;
+      expect(undeclared.at(2), isNull, reason: '低于最早声明等级 → 未声明，不是空表');
+      expect(undeclared.at(1), isNull);
+      expect(undeclared.at(3), {'1': 2});
+      expect(undeclared.at(20), {'1': 2});
+    });
   });
 
   group('StringTable', () {
@@ -124,6 +142,12 @@ void main() {
       expect(str.resolve(level: 1, abilities: abilities), 1);
     });
 
+    test('ability 缺键时按默认 10 计算（调整值 0）', () {
+      final cha = MaxSpec.tryParse({'formula': 'ability:cha'})!;
+      expect(cha.resolve(level: 1, abilities: const {}), 0,
+          reason: '缺键 → 默认属性值 10 → 调整值 0');
+    });
+
     test('等级表：稀疏、短数组、向上沿用', () {
       final sparse = MaxSpec.tryParse({'table': {'1': 2, '17': 6}})!;
       expect(sparse.resolve(level: 10, abilities: abilities), 2);
@@ -150,6 +174,9 @@ void main() {
       }
       expect(MaxSpec.tryParse({'formula': 'level', 'table': {'1': 1}}), isNull); // 同时给两种
       expect(MaxSpec.tryParse({'formula': 'level', 'minimum': -1}), isNull);
+      expect(MaxSpec.tryParse({'formula': 'level', 'value': 3}), isNull,
+          reason: 'value 是已废弃写法，只要出现就拒绝');
+      expect(MaxSpec.tryParse({'value': 3, 'minimum': 1}), isNull);
       expect(MaxSpec.tryParse(null), isNull);
     });
   });

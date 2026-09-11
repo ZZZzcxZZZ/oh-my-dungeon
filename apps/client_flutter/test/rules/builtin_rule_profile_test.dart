@@ -4,7 +4,14 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:dnd_table_client/src/features/rules/domain/class_rule_set.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+// 边界（跨任务一致性）：**结构白名单与骰面集合**从生产常量单源化
+// （kClassRuleFields / kSpellcastingFields / kResourceFields / kStandardHitDieFaces），
+// 集合漂移只需改生产一处。**数值 oracle 一律继续用字面量** —— 生命骰的具体值、
+// prepared / cantrips 的 20 项数组、资源上限表等，都不得从生产常量或档案派生，
+// 否则测试会退化成自证循环（生产改错、测试跟着改对）。
 
 /// `flutter test` 的工作目录是包根，因此直接读文件而不用 `rootBundle`。
 Map<String, Object?> readArchive() =>
@@ -23,8 +30,10 @@ Map<String, Object?> resource(
   final list = classRules(classes, slug)['resources']! as List;
   return list
       .cast<Map<Object?, Object?>>()
-      .firstWhere((item) => item['id'] == id,
-          orElse: () => fail('缺少资源 $slug.$id'))
+      .firstWhere(
+        (item) => item['id'] == id,
+        orElse: () => fail('缺少资源 $slug.$id'),
+      )
       .cast<String, Object?>();
 }
 
@@ -69,46 +78,196 @@ class ClassExpectation {
 
 /// 吟游诗人 / 牧师 / 德鲁伊共用同一张“准备法术”表。
 const divinePrepared = [
-  4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22,
+  4,
+  5,
+  6,
+  7,
+  9,
+  10,
+  11,
+  12,
+  14,
+  15,
+  16,
+  16,
+  17,
+  17,
+  18,
+  18,
+  19,
+  20,
+  21,
+  22,
 ];
 
 /// 吟游诗人 / 德鲁伊 / 邪术师的戏法表（1 级 2 个）。
 const twoStartCantrips = [
-  2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+  2,
+  2,
+  2,
+  3,
+  3,
+  3,
+  3,
+  3,
+  3,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
 ];
 
 /// 牧师 / 法师的戏法表（1 级 3 个）。
 const clericalCantrips = [
-  3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  3,
+  3,
+  3,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  5,
+  5,
+  5,
+  5,
+  5,
+  5,
+  5,
+  5,
+  5,
+  5,
+  5,
 ];
 
 /// 术士 1 级只要 2 个准备法术（与牧师/德鲁伊的 4 不同）。
 const sorcererPrepared = [
-  2, 4, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22,
+  2,
+  4,
+  6,
+  7,
+  9,
+  10,
+  11,
+  12,
+  14,
+  15,
+  16,
+  16,
+  17,
+  17,
+  18,
+  18,
+  19,
+  20,
+  21,
+  22,
 ];
 
 const sorcererCantrips = [
-  4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+  4,
+  4,
+  4,
+  5,
+  5,
+  5,
+  5,
+  5,
+  5,
+  6,
+  6,
+  6,
+  6,
+  6,
+  6,
+  6,
+  6,
+  6,
+  6,
+  6,
 ];
 
 /// 法师 20 级要 25 个准备法术（原型共用的 22 会静默改数值）。
 const wizardPrepared = [
-  4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 18, 19, 21, 22, 23, 24, 25,
+  4,
+  5,
+  6,
+  7,
+  9,
+  10,
+  11,
+  12,
+  14,
+  15,
+  16,
+  16,
+  17,
+  18,
+  19,
+  21,
+  22,
+  23,
+  24,
+  25,
 ];
 
 /// 圣武士 / 游侠共用（半施法者）。
 const halfCasterPrepared = [
-  2, 3, 4, 5, 6, 6, 7, 7, 9, 9, 10, 10, 11, 11, 12, 12, 14, 14, 15, 15,
+  2,
+  3,
+  4,
+  5,
+  6,
+  6,
+  7,
+  7,
+  9,
+  9,
+  10,
+  10,
+  11,
+  11,
+  12,
+  12,
+  14,
+  14,
+  15,
+  15,
 ];
 
 const warlockPrepared = [
-  2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  10,
+  11,
+  11,
+  12,
+  12,
+  13,
+  13,
+  14,
+  14,
+  15,
+  15,
 ];
 
 /// 半施法者没有戏法（2024 官方表为 0）。
-const noCantrips = [
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-];
+const noCantrips = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
 /// 每职业一条：hitDie / saves / 施法模型 / prepared+cantrips / 资源 id。
 const classExpectations = <String, ClassExpectation>{
@@ -177,11 +336,7 @@ const classExpectations = <String, ClassExpectation>{
     prepared: halfCasterPrepared,
     cantrips: noCantrips,
   ),
-  'rogue': ClassExpectation(
-    hitDie: 8,
-    saves: ['dex', 'int'],
-    resourceIds: [],
-  ),
+  'rogue': ClassExpectation(hitDie: 8, saves: ['dex', 'int'], resourceIds: []),
   'sorcerer': ClassExpectation(
     hitDie: 6,
     saves: ['con', 'cha'],
@@ -281,7 +436,12 @@ void main() {
     for (final slug in classExpectations.keys) {
       final rules = classRules(classes, slug);
       expect(rules['hitDie'], isA<int>(), reason: slug);
-      expect(rules['hitDie'] as int, inInclusiveRange(4, 20), reason: slug);
+      // 骰面口径单源化（生产常量）；具体数值仍由下方「生命骰与豁免对照 SRD 5.2」的字面量 oracle 断言。
+      expect(
+        kStandardHitDieFaces.contains(rules['hitDie']),
+        isTrue,
+        reason: slug,
+      );
       final saves = rules['savingThrowAbilities']! as List;
       expect(saves, hasLength(2), reason: slug);
       expect(saves.toSet(), hasLength(2), reason: slug);
@@ -292,36 +452,26 @@ void main() {
   });
 
   test('class 对象只允许契约字段（防止混入散文/多余键）', () {
-    const allowed = {'hitDie', 'savingThrowAbilities', 'spellcasting', 'resources'};
     classes.forEach((slug, value) {
       final rules = value! as Map<String, Object?>;
-      final extra = rules.keys.toSet().difference(allowed);
+      final extra = rules.keys.toSet().difference(kClassRuleFields);
       expect(extra, isEmpty, reason: '$slug 出现契约外字段：$extra');
     });
   });
 
   test('spellcasting 对象只允许契约字段（嵌套层级也要守卫）', () {
-    const allowed = {
-      'mode',
-      'ability',
-      'archetype',
-      'listTags',
-      'slots',
-      'slotLevel',
-      'prepared',
-      'cantrips',
-      'maximumSpellLevel',
-    };
     classes.forEach((slug, value) {
       final spellcasting =
-          (value! as Map<String, Object?>)['spellcasting']! as Map<String, Object?>;
-      final extra = spellcasting.keys.toSet().difference(allowed);
+          (value! as Map<String, Object?>)['spellcasting']!
+              as Map<String, Object?>;
+      final extra = spellcasting.keys.toSet().difference(kSpellcastingFields);
       expect(extra, isEmpty, reason: '$slug.spellcasting 出现契约外字段：$extra');
     });
   });
 
   test('resources 条目只允许契约字段（内置档案不得混入 description）', () {
-    const allowed = {'id', 'name', 'maximum', 'recovery', 'startsAtLevel'};
+    // 内置档案（tier 0）只含数值：description 是契约字段，但档案里禁止出现。
+    final allowed = kResourceFields.difference({'description'});
     classes.forEach((slug, value) {
       final rules = value! as Map<String, Object?>;
       final resources = rules['resources'] as List? ?? const [];
@@ -344,7 +494,8 @@ void main() {
     // full / half / third：最高环阶就是法术位表的环阶个数
     for (final name in ['full-caster', 'half-caster', 'third-caster']) {
       final slots = (progression(name)['slots']! as List).cast<List>();
-      final maximum = (progression(name)['maximumSpellLevel']! as List).cast<int>();
+      final maximum = (progression(name)['maximumSpellLevel']! as List)
+          .cast<int>();
       expect(slots, hasLength(20), reason: '$name.slots');
       expect(maximum, hasLength(20), reason: '$name.maximumSpellLevel');
       for (var level = 1; level <= 20; level++) {
@@ -360,16 +511,13 @@ void main() {
     // 环阶由 slotLevel[L] 给出。因此「slots[L] 的唯一环阶 == slotLevel[L]」
     // 落实为：只有一个桶 + 最高环阶必须与 slotLevel 逐级绑定（契约魔法没有第二个环阶）。
     final pactSlots = (progression('pact')['slots']! as List).cast<List>();
-    final pactSlotLevel = (progression('pact')['slotLevel']! as List).cast<int>();
-    final pactMaximum =
-        (progression('pact')['maximumSpellLevel']! as List).cast<int>();
+    final pactSlotLevel = (progression('pact')['slotLevel']! as List)
+        .cast<int>();
+    final pactMaximum = (progression('pact')['maximumSpellLevel']! as List)
+        .cast<int>();
     for (var level = 1; level <= 20; level++) {
       final buckets = pactSlots[level - 1];
-      expect(
-        buckets,
-        hasLength(1),
-        reason: 'pact 等级 $level：只能有一个环阶桶（唯一环阶）',
-      );
+      expect(buckets, hasLength(1), reason: 'pact 等级 $level：只能有一个环阶桶（唯一环阶）');
       expect(
         buckets.single,
         greaterThan(0),
@@ -390,8 +538,11 @@ void main() {
 
     expect(progression('full-caster')['minimumLevel'], 1);
     expect(progression('half-caster')['minimumLevel'], 1);
-    expect(progression('third-caster')['minimumLevel'], 3,
-        reason: '1/3 施法者 3 级起才有法术位');
+    expect(
+      progression('third-caster')['minimumLevel'],
+      3,
+      reason: '1/3 施法者 3 级起才有法术位',
+    );
     expect(progression('pact')['minimumLevel'], 1);
   });
 
@@ -402,16 +553,28 @@ void main() {
       final resources = rules['resources'] as List? ?? const [];
       for (final item in resources.cast<Map<String, Object?>>()) {
         final id = item['id'];
-        expect(item.containsKey('recovery'), isTrue, reason: '$slug.$id 省略了 recovery');
-        expect(item.containsKey('startsAtLevel'), isTrue,
-            reason: '$slug.$id 省略了 startsAtLevel');
+        expect(
+          item.containsKey('recovery'),
+          isTrue,
+          reason: '$slug.$id 省略了 recovery',
+        );
+        expect(
+          item.containsKey('startsAtLevel'),
+          isTrue,
+          reason: '$slug.$id 省略了 startsAtLevel',
+        );
       }
     });
     // `none` 是「无施法」的空原型，自身不承载 minimumLevel。
     for (final name in ['full-caster', 'half-caster', 'third-caster', 'pact']) {
       final p =
-          (archive['progressions']! as Map<String, Object?>)[name]! as Map<String, Object?>;
-      expect(p.containsKey('minimumLevel'), isTrue, reason: '$name 省略了 minimumLevel');
+          (archive['progressions']! as Map<String, Object?>)[name]!
+              as Map<String, Object?>;
+      expect(
+        p.containsKey('minimumLevel'),
+        isTrue,
+        reason: '$name 省略了 minimumLevel',
+      );
     }
   });
 
@@ -444,7 +607,10 @@ void main() {
 
   test('12 职业资源池的 id 与恢复语义（四种恢复形式都要覆盖）', () {
     // shortRest / shortRestOne / longRest / 随等级变化的表，各至少一例
-    expect(resource(classes, 'fighter', 'action_surge')['recovery'], 'shortRest');
+    expect(
+      resource(classes, 'fighter', 'action_surge')['recovery'],
+      'shortRest',
+    );
     expect(resource(classes, 'barbarian', 'rage')['recovery'], 'shortRestOne');
     expect(
       resource(classes, 'cleric', 'channel_divinity')['recovery'],
@@ -460,15 +626,21 @@ void main() {
       'longRest',
       reason: '先天术法是长休恢复',
     );
-    expect(resource(classes, 'ranger', 'favored_enemy')['recovery'], 'longRest');
     expect(
-      (resource(classes, 'bard', 'bardic_inspiration')['recovery']! as Map)[
-          'table'],
+      resource(classes, 'ranger', 'favored_enemy')['recovery'],
+      'longRest',
+    );
+    expect(
+      (resource(classes, 'bard', 'bardic_inspiration')['recovery']!
+          as Map)['table'],
       {'1': 'longRest', '5': 'shortRest'},
       reason: '诗人激励 5 级激发灵感后短休也能全恢复',
     );
     expect(resource(classes, 'monk', 'focus_points')['startsAtLevel'], 2);
-    expect(resource(classes, 'paladin', 'channel_divinity')['startsAtLevel'], 3);
+    expect(
+      resource(classes, 'paladin', 'channel_divinity')['startsAtLevel'],
+      3,
+    );
     // 上限数值不在这里重复断言：见「资源池上限对照 SRD 5.2 官方表」。
   });
 
@@ -517,13 +689,15 @@ void main() {
       {'formula': 'ability:cha', 'minimum': 1},
       reason: '诗人激励 = 魅力调整值（最低 1）',
     );
-    expect(resource(classes, 'monk', 'focus_points')['maximum'], {'formula': 'level'});
-    expect(resource(classes, 'sorcerer', 'sorcery_points')['maximum'], {'formula': 'level'});
-    expect(
-      resource(classes, 'paladin', 'lay_on_hands')['maximum'],
-      {'formula': '5*level'},
-      reason: '圣疗是 5×等级的治疗池',
-    );
+    expect(resource(classes, 'monk', 'focus_points')['maximum'], {
+      'formula': 'level',
+    });
+    expect(resource(classes, 'sorcerer', 'sorcery_points')['maximum'], {
+      'formula': 'level',
+    });
+    expect(resource(classes, 'paladin', 'lay_on_hands')['maximum'], {
+      'formula': '5*level',
+    }, reason: '圣疗是 5×等级的治疗池');
     // 常量形态
     expect(resource(classes, 'sorcerer', 'innate_sorcery')['maximum'], 2);
     expect(resource(classes, 'warlock', 'magical_cunning')['maximum'], 1);
@@ -542,17 +716,23 @@ void main() {
           .toList();
       // 比较集合：资源在档案里的书写顺序不参与语义。
       expect(ids.toSet(), expected.resourceIds.toSet(), reason: '$slug 资源 id');
-      expect(ids, hasLength(expected.resourceIds.length),
-          reason: '$slug 资源数量（id 不得重复）');
+      expect(
+        ids,
+        hasLength(expected.resourceIds.length),
+        reason: '$slug 资源数量（id 不得重复）',
+      );
     });
   });
 
   test('每个原型的关键表长度都是 20 或为空', () {
     final progressions = archive['progressions']! as Map<String, Object?>;
-    expect(
-      progressions.keys.toSet(),
-      {'none', 'full-caster', 'half-caster', 'third-caster', 'pact'},
-    );
+    expect(progressions.keys.toSet(), {
+      'none',
+      'full-caster',
+      'half-caster',
+      'third-caster',
+      'pact',
+    });
     progressions.forEach((name, raw) {
       final p = raw! as Map<String, Object?>;
       // prepared / cantrips 不在原型里（见下方契约守卫），逐职业表单独核算
@@ -580,18 +760,25 @@ void main() {
       5: [4, 3, 2],
       20: [4, 3, 3, 3, 3, 2, 2, 1, 1],
     };
-    final fullSlots = (progression('full-caster')['slots']! as List).cast<List>();
+    final fullSlots = (progression('full-caster')['slots']! as List)
+        .cast<List>();
     fullCasterSlots.forEach((level, expected) {
-      expect(fullSlots[level - 1], expected, reason: 'full-caster 等级 $level 法术位');
+      expect(
+        fullSlots[level - 1],
+        expected,
+        reason: 'full-caster 等级 $level 法术位',
+      );
     });
     // 半施法者等效等级 = ceil(等级 / 2) 的内部一致性由独立用例覆盖；
     // 这里保留 1 / 5 / 20 级的 SRD 真值锚点。
-    final halfSlots = (progression('half-caster')['slots']! as List).cast<List>();
+    final halfSlots = (progression('half-caster')['slots']! as List)
+        .cast<List>();
     expect(halfSlots[0], [2], reason: '半施法者 1 级即有法术位（2024）');
     expect(halfSlots[4], [4, 2], reason: '半施法者 5 级等效 3 级');
     expect(halfSlots[19], [4, 3, 3, 3, 2], reason: '半施法者 20 级等效 10 级');
     // 1/3 施法者：3 级起才有法术位
-    final thirdSlots = (progression('third-caster')['slots']! as List).cast<List>();
+    final thirdSlots = (progression('third-caster')['slots']! as List)
+        .cast<List>();
     expect(thirdSlots[0], isEmpty);
     expect(thirdSlots[1], isEmpty);
     expect(thirdSlots[2], [2]);
@@ -625,9 +812,11 @@ void main() {
   test('内部一致性：half-caster = full-caster[ceil(L/2)]', () {
     final progressions = archive['progressions']! as Map<String, Object?>;
     final fullSlots =
-        (progressions['full-caster']! as Map<String, Object?>)['slots']! as List;
+        (progressions['full-caster']! as Map<String, Object?>)['slots']!
+            as List;
     final halfSlots =
-        (progressions['half-caster']! as Map<String, Object?>)['slots']! as List;
+        (progressions['half-caster']! as Map<String, Object?>)['slots']!
+            as List;
     // 本条只证明两条内置曲线彼此一致（半施法者等效等级 = ceil(等级 / 2)）。
     // SRD 真值由 1 / 5 / 20 级的字面量锚点覆盖（见「原型表数值对照 SRD 5.2」）。
     for (var level = 1; level <= 20; level++) {
@@ -670,9 +859,12 @@ void main() {
     }
 
     // 非施法者保持 {"mode":"none"}，不得凭空多出这两项
-    for (final entry in classExpectations.entries.where((e) => !e.value.isCaster)) {
+    for (final entry in classExpectations.entries.where(
+      (e) => !e.value.isCaster,
+    )) {
       final spellcasting =
-          classRules(classes, entry.key)['spellcasting']! as Map<String, Object?>;
+          classRules(classes, entry.key)['spellcasting']!
+              as Map<String, Object?>;
       expect(spellcasting, {'mode': 'none'}, reason: entry.key);
     }
   });

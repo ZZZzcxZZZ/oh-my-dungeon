@@ -2361,6 +2361,15 @@ git commit -m "refactor(rules): 全部消费方切换到规则档案与 classRul
    - 任务 10：提取器为武器物品**显式输出 `structured.ability`**（由规则书的属性列推导），
      让判据不再依赖文本匹配。任务 10 的验收里加一条：长弓的派生攻击必须用敏捷。
 
+## 任务 8.6：任务 8 审查观察（收尾时清）
+
+1. **`spellSlotMaximumsFromRules` 成了死代码**（`dnd5e_rules.dart`）：全仓无调用点（任务 8 把 shim 删了之后
+   没人再用它）。要么删掉，要么让详情页/编辑器真正用它；**不要留无调用的薄包装**。
+2. **`character_editor_page.dart` 的 `_defaultClassOptions = ['战士','法师','游荡者','牧师']`** 仍写死 4 个中文职业名
+   （纯 UI 兜底：资料库没有 class 条目时的快速选择项）。按"职业名只存在于档案数据"的原则，
+   改为从档案 `classAliases` 的键派生（会给出 12 项，比 4 项更完整）；若担心 UI 变长，就保留但加注释说明
+   它是"无内容时的 UI 兜底"而非规则数据。
+
 ## 任务 9：规则定义收紧（grant kind 9 项 + progression 用 `levels`）
 
 **文件：**

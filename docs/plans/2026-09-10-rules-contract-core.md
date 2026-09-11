@@ -718,6 +718,9 @@ git commit -m "feat(rules): 新增 Table/MaxSpec 值对象与纯运算模块"
 - 创建：`apps/client_flutter/lib/src/features/rules/domain/class_rule_set.dart`
 - 测试：`apps/client_flutter/test/rules/rule_profile_resolver_test.dart`（本任务先写其中的 `ClassRuleSet` 部分）
 
+> **补一条校验项（任务 9 审查发现）**：`hitPoints` / `ability` grant 的 `formula` 必须用同一套封闭语法校验，
+> 非法 formula 要在**导入期**报 `invalidMaxSpec`（error），而不是像现在这样在运行期静默跳过。
+
 - [ ] **步骤 1：写失败测试**
 
 ```dart
@@ -2362,6 +2365,12 @@ git commit -m "refactor(rules): 全部消费方切换到规则档案与 classRul
      让判据不再依赖文本匹配。任务 10 的验收里加一条：长弓的派生攻击必须用敏捷。
 
 ## 任务 8.6：任务 8 审查观察（收尾时清）
+
+> **执行后记**：本任务与任务 9 分成了两个 commit，但 `38c11d5`（8.6）单独 checkout 时分析会报错
+> （编辑器仍在读 `progression.level`，那是任务 9 才改的）。分支 tip 是绿的；若日后需要逐 commit 可编译，
+> 把这两个 commit 压成一个即可。
+> 另：编辑器"无内容时的职业兜底清单"从写死的 4 项变为档案 `classAliases` 的全部 12 项（排序后默认首个是吟游诗人），
+> 因此有一处测试期望随之变化（默认职业的 HP 由战士 d10 变吟游诗人 d8）。属有意的行为变化，已记录。
 
 1. **`spellSlotMaximumsFromRules` 成了死代码**（`dnd5e_rules.dart`）：全仓无调用点（任务 8 把 shim 删了之后
    没人再用它）。要么删掉，要么让详情页/编辑器真正用它；**不要留无调用的薄包装**。

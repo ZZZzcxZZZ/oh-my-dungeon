@@ -76,6 +76,7 @@ flutter:
   assets:
     - assets/bundled_content.json
     - assets/branding/ohmydungeon_icon.png
+    - assets/rules/dnd5e-2024.rules.json
 
   fonts:
     - family: NotoSansSC

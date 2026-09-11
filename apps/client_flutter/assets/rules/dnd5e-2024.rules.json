@@ -1,0 +1,182 @@
+{
+  "rulebookVersion": 1,
+  "system": "dnd5e-2024",
+  "abilities": ["str", "dex", "con", "int", "wis", "cha"],
+  "skills": [
+    {"name": "杂技", "ability": "dex"},
+    {"name": "驯兽", "ability": "wis"},
+    {"name": "奥秘", "ability": "int"},
+    {"name": "运动", "ability": "str"},
+    {"name": "欺瞒", "ability": "cha"},
+    {"name": "历史", "ability": "int"},
+    {"name": "洞悉", "ability": "wis"},
+    {"name": "威吓", "ability": "cha"},
+    {"name": "调查", "ability": "int"},
+    {"name": "医药", "ability": "wis"},
+    {"name": "自然", "ability": "int"},
+    {"name": "察觉", "ability": "wis"},
+    {"name": "表演", "ability": "cha"},
+    {"name": "说服", "ability": "cha"},
+    {"name": "宗教", "ability": "int"},
+    {"name": "巧手", "ability": "dex"},
+    {"name": "隐匿", "ability": "dex"},
+    {"name": "求生", "ability": "wis"}
+  ],
+  "progressions": {
+    "none": {
+      "slots": []
+    },
+    "full-caster": {
+      "slots": [[2], [3], [4, 2], [4, 3], [4, 3, 2], [4, 3, 3], [4, 3, 3, 1], [4, 3, 3, 2], [4, 3, 3, 3, 1], [4, 3, 3, 3, 2],
+                [4, 3, 3, 3, 2, 1], [4, 3, 3, 3, 2, 1], [4, 3, 3, 3, 2, 1, 1], [4, 3, 3, 3, 2, 1, 1], [4, 3, 3, 3, 2, 1, 1, 1],
+                [4, 3, 3, 3, 2, 1, 1, 1], [4, 3, 3, 3, 2, 1, 1, 1, 1], [4, 3, 3, 3, 3, 1, 1, 1, 1], [4, 3, 3, 3, 3, 2, 1, 1, 1],
+                [4, 3, 3, 3, 3, 2, 2, 1, 1]],
+      "prepared": [4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22],
+      "cantrips": [3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+      "maximumSpellLevel": [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 9, 9]
+    },
+    "half-caster": {
+      "minimumLevel": 1,
+      "slots": [[2], [2], [3], [3], [4, 2], [4, 2], [4, 3], [4, 3], [4, 3, 2], [4, 3, 2], [4, 3, 3], [4, 3, 3],
+                [4, 3, 3, 1], [4, 3, 3, 1], [4, 3, 3, 2], [4, 3, 3, 2], [4, 3, 3, 3, 1], [4, 3, 3, 3, 1], [4, 3, 3, 3, 2], [4, 3, 3, 3, 2]],
+      "prepared": [2, 3, 4, 5, 6, 6, 7, 7, 9, 9, 10, 10, 11, 11, 12, 12, 14, 14, 15, 15],
+      "cantrips": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "maximumSpellLevel": [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5]
+    },
+    "third-caster": {
+      "minimumLevel": 3,
+      "slots": [[], [], [2], [3], [3], [3], [4, 2], [4, 2], [4, 2], [4, 3], [4, 3], [4, 3], [4, 3, 2], [4, 3, 2], [4, 3, 2],
+                [4, 3, 3], [4, 3, 3], [4, 3, 3], [4, 3, 3, 1], [4, 3, 3, 1]]
+    },
+    "pact": {
+      "minimumLevel": 1,
+      "slots": [[1], [2], [2], [2], [2], [2], [2], [2], [2], [2], [3], [3], [3], [3], [3], [3], [4], [4], [4], [4]],
+      "slotLevel": [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+      "prepared": [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15],
+      "cantrips": [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+      "maximumSpellLevel": [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]
+    }
+  },
+  "classes": {
+    "barbarian": {
+      "hitDie": 12,
+      "savingThrowAbilities": ["str", "con"],
+      "spellcasting": {"mode": "none"},
+      "resources": [
+        {"id": "rage", "name": "狂暴", "recovery": "shortRestOne",
+         "maximum": {"table": {"1": 2, "3": 3, "6": 4, "12": 5, "17": 6}}}
+      ]
+    },
+    "bard": {
+      "hitDie": 8,
+      "savingThrowAbilities": ["dex", "cha"],
+      "spellcasting": {"mode": "prepared", "ability": "cha", "archetype": "full-caster"},
+      "resources": [
+        {"id": "bardic_inspiration", "name": "诗人激励", "startsAtLevel": 1,
+         "recovery": {"table": {"1": "longRest", "5": "shortRest"}},
+         "maximum": {"formula": "ability:cha", "minimum": 1}}
+      ]
+    },
+    "cleric": {
+      "hitDie": 8,
+      "savingThrowAbilities": ["wis", "cha"],
+      "spellcasting": {"mode": "prepared", "ability": "wis", "archetype": "full-caster"},
+      "resources": [
+        {"id": "channel_divinity", "name": "引导神力", "startsAtLevel": 2,
+         "recovery": "shortRestOne",
+         "maximum": {"table": {"2": 2, "6": 3, "18": 4}}}
+      ]
+    },
+    "druid": {
+      "hitDie": 8,
+      "savingThrowAbilities": ["int", "wis"],
+      "spellcasting": {"mode": "prepared", "ability": "wis", "archetype": "full-caster"},
+      "resources": [
+        {"id": "wild_shape", "name": "野性形态", "startsAtLevel": 2,
+         "recovery": "shortRestOne",
+         "maximum": {"table": {"2": 2, "6": 3, "17": 4}}}
+      ]
+    },
+    "fighter": {
+      "hitDie": 10,
+      "savingThrowAbilities": ["str", "con"],
+      "spellcasting": {"mode": "none"},
+      "resources": [
+        {"id": "second_wind", "name": "第二气息", "startsAtLevel": 1,
+         "recovery": "shortRestOne",
+         "maximum": {"table": {"1": 2, "4": 3, "10": 4}}},
+        {"id": "action_surge", "name": "动作如潮", "startsAtLevel": 2,
+         "recovery": "shortRest",
+         "maximum": {"table": {"2": 1, "17": 2}}}
+      ]
+    },
+    "monk": {
+      "hitDie": 8,
+      "savingThrowAbilities": ["dex", "wis"],
+      "spellcasting": {"mode": "none"},
+      "resources": [
+        {"id": "focus_points", "name": "专注点", "startsAtLevel": 2,
+         "recovery": "shortRest",
+         "maximum": {"formula": "level"}}
+      ]
+    },
+    "paladin": {
+      "hitDie": 10,
+      "savingThrowAbilities": ["wis", "cha"],
+      "spellcasting": {"mode": "prepared", "ability": "cha", "archetype": "half-caster"},
+      "resources": [
+        {"id": "channel_divinity", "name": "引导神力", "startsAtLevel": 3,
+         "recovery": "shortRestOne",
+         "maximum": {"table": {"3": 2, "11": 3}}},
+        {"id": "lay_on_hands", "name": "圣疗", "startsAtLevel": 1,
+         "recovery": "longRest",
+         "maximum": {"formula": "5*level"}}
+      ]
+    },
+    "ranger": {
+      "hitDie": 10,
+      "savingThrowAbilities": ["dex", "str"],
+      "spellcasting": {"mode": "prepared", "ability": "wis", "archetype": "half-caster"},
+      "resources": [
+        {"id": "favored_enemy", "name": "宿敌", "startsAtLevel": 1,
+         "recovery": "longRest",
+         "maximum": {"table": {"1": 2, "5": 3, "9": 4, "13": 5, "17": 6}}}
+      ]
+    },
+    "rogue": {
+      "hitDie": 8,
+      "savingThrowAbilities": ["dex", "int"],
+      "spellcasting": {"mode": "none"},
+      "resources": []
+    },
+    "sorcerer": {
+      "hitDie": 6,
+      "savingThrowAbilities": ["con", "cha"],
+      "spellcasting": {"mode": "prepared", "ability": "cha", "archetype": "full-caster"},
+      "resources": [
+        {"id": "sorcery_points", "name": "术法点", "startsAtLevel": 2,
+         "recovery": "longRest",
+         "maximum": {"formula": "level"}},
+        {"id": "innate_sorcery", "name": "先天术法", "startsAtLevel": 2,
+         "recovery": "longRest",
+         "maximum": 2}
+      ]
+    },
+    "warlock": {
+      "hitDie": 8,
+      "savingThrowAbilities": ["wis", "cha"],
+      "spellcasting": {"mode": "prepared", "ability": "cha", "archetype": "pact"},
+      "resources": [
+        {"id": "magical_cunning", "name": "魔法诡计", "startsAtLevel": 2,
+         "recovery": "longRest",
+         "maximum": 1}
+      ]
+    },
+    "wizard": {
+      "hitDie": 6,
+      "savingThrowAbilities": ["int", "wis"],
+      "spellcasting": {"mode": "prepared", "ability": "int", "archetype": "full-caster"},
+      "resources": []
+    }
+  }
+}

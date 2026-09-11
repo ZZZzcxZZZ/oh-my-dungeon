@@ -116,19 +116,17 @@
   ],
   "progressions": {
     "none":         { "slots": [] },
+    // 原型只承载"跨职业共享"的进阶量：slots / slotLevel / maximumSpellLevel
     "full-caster":  { "slots": [[2],[3],[4,2],"…20 行"],
-                      "prepared": [4,5,6,"…20 个数"],
-                      "cantrips": [3,3,3,"…"],
                       "maximumSpellLevel": [1,1,2,"…"] },
     "half-caster":  { "minimumLevel": 1, "slots": [[2],[2],[3],"…"],
-                      "prepared": [2,3,4,"…"], "cantrips": [0,"…"],
                       "maximumSpellLevel": [1,1,1,"…"] },
     // third-caster 省略 prepared / cantrips：2024 奥法骑士与诡术师的已知/准备
     // 上限不在职业表里，不臆造数值（见 §11）
     "third-caster": { "minimumLevel": 3, "slots": [[],[],[2],"…"] },
     "pact":         { "minimumLevel": 1, "slots": [[1],[2],[2],"…"],
                       "slotLevel": [1,1,2,2,3,"…20 个数"],
-                      "prepared": [2,3,4,"…"], "cantrips": [2,2,2,"…"] }
+                      "maximumSpellLevel": [1,1,2,"…"] }
   },
   "classes": {
     "barbarian": {
@@ -182,6 +180,11 @@
 
 （武僧/术士的上限等于职业等级；牧师引导神力、圣武士引导神力、德鲁伊野性形态都是**短休只恢复 1 次**；
 诗人激励是**魅力调整值（最低 1）且长休恢复，5 级起改为短休也能全恢复**——以上均按 SRD 5.2 原文核对。）
+
+**原型只管三件事**：`slots`、`slotLevel`（仅 `pact`）、`maximumSpellLevel`。
+**`prepared`（准备/已知法术数）与 `cantrips`（戏法数）永远是职业自己的字段**——2024 官方表里这两列逐职业不同
+（法师 20 级 25、术士 1 级 2、德鲁伊戏法 2、术士戏法 4…），只有法术位与最高环阶是原型共用的。
+把逐职业的表塞进原型会让法师从 25 掉到 22，属于会静默改数值的错误，因此契约层面禁止。
 
 **表类型 `Table<T>`**（本契约的统一约定，用于所有"随等级变化"的字段）：
 
@@ -250,19 +253,20 @@
 | `archetype` | 原型名 | 简写：从档案 `progressions` 取整套表 |
 | `slots` | `Table<{环阶: 数量}>` | 法术位表（稀疏即可，如 `{"5": {"1":4,"2":2}}`）。**优先于 `archetype`，按角色等级整级替换** |
 | `slotLevel` | `Table<int>` | 仅 `pact` 有意义：每级契约法术位的环阶 |
-| `prepared` | `Table<int>` | 每级"已准备/已知"法术数量上限 |
-| `cantrips` | `Table<int>` | 每级戏法数量上限 |
-| `maximumSpellLevel` | `Table<int>` | 每级可学/可准备的最高环阶（0..9） |
+| `prepared` | `Table<int>` | 每级"已准备/已知"法术数量上限。**职业独有**，原型不提供 |
+| `cantrips` | `Table<int>` | 每级戏法数量上限。**职业独有**，原型不提供 |
+| `maximumSpellLevel` | `Table<int>` | 每级可学/可准备的最高环阶（0..9）。原型提供，职业可覆盖 |
 
-全部为可缺省字段；缺省即"未声明"（不猜测）。四个 `Table` 字段各自独立覆盖 `archetype` 的对应表。
+全部为可缺省字段；缺省即"未声明"（不猜测）。
 
 解析（角色等级 L）：
 
 ```
 slots         = slots[L] ?? expand(archetype).slots[L] ?? {}          // pact 结果形如 {"3": 2}
-prepared      = prepared[L] ?? expand(archetype).prepared[L]          // 可能为 null
-cantrips      = cantrips[L] ?? expand(archetype).cantrips[L]
+slotLevel     = slotLevel[L] ?? expand(archetype).slotLevel[L]
 maxSpellLevel = maximumSpellLevel[L] ?? expand(archetype).maximumSpellLevel[L]
+prepared      = prepared[L]                                        // 只看职业自身，无原型回退
+cantrips      = cantrips[L]                                        // 同上
 ```
 
 `prepared` 为 `null` 表示**该职业未声明准备/已知上限**：编辑器不施加数量限制，导入时给 warning（§5.2 `missingPreparedColumn`），角色页显示"未声明"。

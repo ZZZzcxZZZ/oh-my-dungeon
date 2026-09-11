@@ -9,7 +9,7 @@
 | 契约能力 | 在包里的位置 |
 |---|---|
 | 自定义生命骰 / 豁免 | `class.structured.classRules`（`hitDie: 10`、`savingThrowAbilities: [int, wis]`） |
-| 自定义施法模型与逐级法术位 | `classRules.spellcasting`：`archetype: half-caster` **+ 稀疏覆盖** `slots`/`prepared`/`maximumSpellLevel`（5 级起比圣武士更宽，演示覆盖生效） |
+| 自定义施法模型与逐级法术位 | `classRules.spellcasting`：`archetype: half-caster` 提供 `slots` 与 `maximumSpellLevel`；**`prepared`/`cantrips` 是职业独有字段**（2024 官方表逐职业不同，原型不提供），本职业写成 20 项数组、比圣武士每级 +1；`maximumSpellLevel` 用稀疏表覆盖原型以演示覆盖生效 |
 | 逐级资源 + 恢复语义 | `classRules.resources`：星界涌动（`formula: level`、短休恢复 1 次）、星界守护（稀疏表、长休、3 级起） |
 | 逐级特性 | `rules.progression[].grants`（`kind: feature` 指向特性条目） |
 | 同一效果在多个等级重复 | `{"levels": [4, 8, 12, 16], "grants": [...]}` —— 只写一份 |

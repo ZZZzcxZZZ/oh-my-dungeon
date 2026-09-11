@@ -92,16 +92,12 @@
                 [4,3,3,3,2,1],[4,3,3,3,2,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1],[4,3,3,3,2,1,1,1],
                 [4,3,3,3,2,1,1,1],[4,3,3,3,2,1,1,1,1],[4,3,3,3,3,1,1,1,1],[4,3,3,3,3,2,1,1,1],
                 [4,3,3,3,3,2,2,1,1]],
-      "prepared":  [4,5,6,7,9,10,11,12,14,15,16,16,17,17,18,18,19,20,21,22],
-      "cantrips":  [3,3,3,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5],
       "maximumSpellLevel": [1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,9,9]
     },
     "half-caster": {
       "minimumLevel": 1,
       "slots": [[2],[2],[3],[3],[4,2],[4,2],[4,3],[4,3],[4,3,2],[4,3,2],[4,3,3],[4,3,3],
                 [4,3,3,1],[4,3,3,1],[4,3,3,2],[4,3,3,2],[4,3,3,3,1],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2]],
-      "prepared":  [2,3,4,5,6,6,7,7,9,9,10,10,11,11,12,12,14,14,15,15],
-      "cantrips":  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
       "maximumSpellLevel": [1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5]
     },
     "third-caster": {
@@ -122,7 +118,9 @@
 }
 ```
 
-> 原型内部的 `slots` 必须是**完整 20 项数组**（模板）；`prepared` / `cantrips` / `maximumSpellLevel` 同理。
+> 原型内部的 `slots` / `maximumSpellLevel` 必须是**完整 20 项数组**（模板）。
+> **原型不承载 `prepared` / `cantrips`**——这两列 2024 官方表逐职业不同（法师 20 级 25、术士 1 级 2…），
+> 必须写在各职业自己的 `spellcasting` 里；放进原型会让法师从 25 静默掉到 22。
 > 数值来源：SRD 5.2 各职业 Features 表（本轮审计已逐项核对，见 `dnd5e_rules_verification_test.dart` 现有期望值）。
 
 - [ ] **步骤 2：补全 `classes`（12 个核心 slug）**
@@ -146,18 +144,38 @@
 
 其余 10 个职业的完整数据（**资源池数值已按 SRD 5.2 原文逐条核对**，注意恢复语义有四种）：
 
-| slug | hitDie | saves | spellcasting | resources（id / name / maximum / recovery / startsAtLevel） |
-|---|---|---|---|---|
-| bard | 8 | dex, cha | prepared, cha, full-caster | `bardic_inspiration` 诗人激励 `{"formula":"ability:cha","minimum":1}` / `{"table":{"1":"longRest","5":"shortRest"}}` / 1 |
-| cleric | 8 | wis, cha | prepared, wis, full-caster | `channel_divinity` 引导神力 `{"table":{"2":2,"6":3,"18":4}}` / `shortRestOne` / 2 |
-| druid | 8 | int, wis | prepared, wis, full-caster | `wild_shape` 野性形态 `{"table":{"2":2,"6":3,"17":4}}` / `shortRestOne` / 2 |
-| monk | 8 | dex, wis | `{"mode":"none"}` | `focus_points` 专注点 `{"formula":"level"}` / `shortRest` / 2 |
-| paladin | 10 | wis, cha | prepared, cha, half-caster | `channel_divinity` 引导神力 `{"table":{"3":2,"11":3}}` / `shortRestOne` / 3；`lay_on_hands` 圣疗（治疗池）`{"formula":"5*level"}` / `longRest` / 1 |
-| ranger | 10 | dex, str | prepared, wis, half-caster | `favored_enemy` 宿敌 `{"table":{"1":2,"5":3,"9":4,"13":5,"17":6}}` / `longRest` / 1 |
-| rogue | 8 | dex, int | `{"mode":"none"}` | — |
-| sorcerer | 6 | con, cha | prepared, cha, full-caster | `sorcery_points` 术法点 `{"formula":"level"}` / `longRest` / 2；`innate_sorcery` 先天术法 `2` / `longRest` / 2 |
-| warlock | 8 | wis, cha | prepared, cha, pact | `magical_cunning` 魔法诡计 `1` / `longRest` / 2 |
-| wizard | 6 | int, wis | prepared, int, full-caster | — |
+**法术位进阶（`archetype`）**：吟游诗人/牧师/德鲁伊/术士/法师 = `full-caster`；圣武士/游侠 = `half-caster`；
+邪术师 = `pact`；野蛮人/战士/武僧/游荡者 = `{"mode":"none"}`。
+
+**`prepared` 与 `cantrips` 逐职业写在自己的 `spellcasting` 里**（下表已按 SRD 5.2 逐项核对，20 项数组）：
+
+| slug | prepared（1→20 级） | cantrips（1→20 级） |
+|---|---|---|
+| bard | 4,5,6,7,9,10,11,12,14,15,16,16,17,17,18,18,19,20,21,22 | 2,2,2,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4 |
+| cleric | 4,5,6,7,9,10,11,12,14,15,16,16,17,17,18,18,19,20,21,22 | 3,3,3,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5 |
+| druid | 4,5,6,7,9,10,11,12,14,15,16,16,17,17,18,18,19,20,21,22 | 2,2,2,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4 |
+| sorcerer | **2,4,6,7,9,10,11,12,14,15,16,16,17,17,18,18,19,20,21,22** | **4,4,4,5,5,5,5,5,5,6,6,6,6,6,6,6,6,6,6,6** |
+| wizard | **4,5,6,7,9,10,11,12,14,15,16,16,17,18,19,21,22,23,24,25** | 3,3,3,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5 |
+| paladin | 2,3,4,5,6,6,7,7,9,9,10,10,11,11,12,12,14,14,15,15 | 0 × 20 |
+| ranger | 2,3,4,5,6,6,7,7,9,9,10,10,11,11,12,12,14,14,15,15 | 0 × 20 |
+| warlock | 2,3,4,5,6,7,8,9,10,10,11,11,12,12,13,13,14,14,15,15 | 2,2,2,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4 |
+| fighter/barbarian/monk/rogue | 非施法者，不写 | — |
+
+> 加粗处就是"不能塞进原型"的证明：术士 1 级只要 2 个准备法术、法师 20 级要到 25 个。
+> `third-caster`（奥法骑士/诡术师）**没有** `prepared`/`cantrips`（2024 职业表未给出这两列，不臆造）。
+
+| slug | hitDie | saves | resources（id / name / maximum / recovery / startsAtLevel） |
+|---|---|---|---|
+| bard | 8 | dex, cha | `bardic_inspiration` 诗人激励 `{"formula":"ability:cha","minimum":1}` / `{"table":{"1":"longRest","5":"shortRest"}}` / 1 |
+| cleric | 8 | wis, cha | `channel_divinity` 引导神力 `{"table":{"2":2,"6":3,"18":4}}` / `shortRestOne` / 2 |
+| druid | 8 | int, wis | `wild_shape` 野性形态 `{"table":{"2":2,"6":3,"17":4}}` / `shortRestOne` / 2 |
+| monk | 8 | dex, wis | `focus_points` 专注点 `{"formula":"level"}` / `shortRest` / 2 |
+| paladin | 10 | wis, cha | `channel_divinity` 引导神力 `{"table":{"3":2,"11":3}}` / `shortRestOne` / 3；`lay_on_hands` 圣疗（治疗池）`{"formula":"5*level"}` / `longRest` / 1 |
+| ranger | 10 | dex, str | `favored_enemy` 宿敌 `{"table":{"1":2,"5":3,"9":4,"13":5,"17":6}}` / `longRest` / 1 |
+| rogue | 8 | dex, int | — |
+| sorcerer | 6 | con, cha | `sorcery_points` 术法点 `{"formula":"level"}` / `longRest` / 2；`innate_sorcery` 先天术法 `2` / `longRest` / 2 |
+| warlock | 8 | wis, cha | `magical_cunning` 魔法诡计 `1` / `longRest` / 2 |
+| wizard | 6 | int, wis | — |
 
 > 关键事实（易写错，已核对原文）：**诗人激励 = 魅力调整值（最低 1）且长休恢复，5 级"激发灵感"改为短休也全恢复**；
 > **引导神力（牧师/圣武士）与野性形态都是短休只恢复 1 次**；**先天术法是长休恢复**（不是短休 1 次）；

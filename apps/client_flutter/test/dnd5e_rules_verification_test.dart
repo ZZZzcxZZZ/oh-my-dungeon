@@ -361,43 +361,75 @@ void main() {
   });
 
   group('职业生命骰（2024 官方核心表）', () {
-    // SRD 5.2 各职业 Core Traits：Hit Point Die
-    const hitDice = {
-      '野蛮人': 12,
-      '战士': 10,
-      '圣武士': 10,
-      '游侠': 10,
-      '吟游诗人': 8,
-      '牧师': 8,
-      '德鲁伊': 8,
-      '武僧': 8,
-      '游荡者': 8,
-      '邪术师': 8,
-      '术士': 6,
-      '法师': 6,
+    // SRD 5.2 各职业 Core Traits：Hit Point Die + 豁免熟练（独立字面量 oracle）。
+    const expected = {
+      'barbarian': [12, ['str', 'con']],
+      'bard': [8, ['dex', 'cha']],
+      'cleric': [8, ['wis', 'cha']],
+      'druid': [8, ['int', 'wis']],
+      'fighter': [10, ['str', 'con']],
+      'monk': [8, ['dex', 'wis']],
+      'paladin': [10, ['wis', 'cha']],
+      'ranger': [10, ['dex', 'str']],
+      'rogue': [8, ['dex', 'int']],
+      'sorcerer': [6, ['con', 'cha']],
+      'warlock': [8, ['wis', 'cha']],
+      'wizard': [6, ['int', 'wis']],
     };
 
-    test('中英文职业名解析出正确生命骰', () {
-      hitDice.forEach((name, die) {
-        expect(Dnd5eRules.hitDie(name), die, reason: '$name 生命骰');
+    test('12 职业生命骰与豁免对照 SRD 5.2（直接断言档案）', () {
+      expected.forEach((slug, value) {
+        final rules = Dnd5eRules.profile.classRules(slug)!;
+        expect(rules.hitDie, value[0], reason: slug);
+        expect(
+          rules.savingThrowAbilities,
+          (value[1] as List).toSet(),
+          reason: slug,
+        );
       });
-      expect(Dnd5eRules.hitDie('Warlock'), 8, reason: '邪术师是 d8，不是 d6');
-      expect(Dnd5eRules.hitDie('Sorcerer'), 6);
-      expect(Dnd5eRules.hitDie('Wizard'), 6);
-      expect(Dnd5eRules.hitDie('Barbarian'), 12);
+    });
+
+    test('中文展示名经档案别名解析到同一职业（过渡 shim）', () {
+      const names = {
+        '野蛮人': 12,
+        '战士': 10,
+        '圣武士': 10,
+        '游侠': 10,
+        '吟游诗人': 8,
+        '牧师': 8,
+        '德鲁伊': 8,
+        '武僧': 8,
+        '游荡者': 8,
+        '邪术师': 8,
+        '术士': 6,
+        '法师': 6,
+      };
+      names.forEach((name, die) {
+        expect(Dnd5eRules.hitDieFor(classSummary: name), die, reason: '$name 生命骰');
+      });
+      expect(
+        Dnd5eRules.hitDieFor(classSummary: 'Warlock'),
+        8,
+        reason: '邪术师是 d8，不是 d6',
+      );
+      expect(Dnd5eRules.hitDieFor(classSummary: 'Sorcerer'), 6);
+      expect(Dnd5eRules.hitDieFor(classSummary: 'Wizard'), 6);
+      expect(Dnd5eRules.hitDieFor(classSummary: 'Barbarian'), 12);
+      // 未声明职业不猜：没有生命骰。
+      expect(Dnd5eRules.hitDieFor(classSummary: '自定义职业'), isNull);
     });
 
     test('1 级生命值 = 生命骰满骰 + 体质调整值', () {
       const abilities = {'con': 14};
-      hitDice.forEach((name, die) {
+      expected.forEach((slug, value) {
         expect(
           Dnd5eRules.averageHitPoints(
-            className: name,
+            className: slug,
             level: 1,
             abilities: abilities,
           ),
-          die + 2,
-          reason: name,
+          (value[0] as int) + 2,
+          reason: slug,
         );
       });
     });
@@ -407,7 +439,7 @@ void main() {
       // 1 级 8+2=10；后续每级 5+2=7 → 10 + 4*7 = 38
       expect(
         Dnd5eRules.averageHitPoints(
-          className: '邪术师',
+          className: 'warlock',
           level: 5,
           abilities: abilities,
         ),
@@ -423,7 +455,7 @@ void main() {
           constitution: 14,
         ),
         Dnd5eRules.averageHitPoints(
-          className: '战士',
+          className: 'fighter',
           level: 3,
           abilities: const {'con': 14},
         ),
@@ -521,10 +553,29 @@ void main() {
     });
   });
 
-  group('1/3 施法者（奥法骑士 / 诡术师）', () {
+  group('1/3 施法者（第三个原型由条目声明，不再按职业名推断）', () {
+    // 新契约：子职业的 1/3 施法由**条目**声明 `archetype: third-caster`
+    // （档案里没有"奥法骑士/诡术师"职业，刻意不按名字相近推断）。
+    const thirdCasterEntry = <String, Object?>{
+      'classRules': <String, Object?>{
+        'hitDie': 10,
+        'savingThrowAbilities': <String>['str', 'con'],
+        'spellcasting': <String, Object?>{
+          'mode': 'prepared',
+          'ability': 'int',
+          'archetype': 'third-caster',
+        },
+      },
+    };
+
     test('3 级起获得法术位，等效等级 = ceil(level/3)', () {
+      final rules = Dnd5eRules.resolveClassRules(
+        entryId: 'test-pack:class/eldritch-knight',
+        classSummary: '奥法骑士',
+        structured: thirdCasterEntry,
+      );
       expect(
-        Dnd5eRules.spellSlotMaximums(classSummary: '战士（奥法骑士）', level: 2),
+        rules.spellSlots(2),
         isEmpty,
         reason: '3 级前没有法术位',
       );
@@ -540,30 +591,37 @@ void main() {
         20: {'1': 4, '2': 3, '3': 3, '4': 1},
       };
       expected.forEach((level, table) {
-        expect(
-          Dnd5eRules.spellSlotMaximums(
-            classSummary: '战士（奥法骑士）',
-            level: level,
-          ),
-          table,
-          reason: '奥法骑士 $level 级',
-        );
-        expect(
-          Dnd5eRules.spellSlotMaximums(
-            classSummary: '游荡者（诡术师）',
-            level: level,
-          ),
-          table,
-          reason: '诡术师 $level 级',
-        );
+        expect(rules.spellSlots(level), table, reason: '1/3 施法者 $level 级');
       });
     });
 
-    test('施法属性为智力', () {
-      expect(Dnd5eRules.spellcastingAbility('战士（奥法骑士）'), 'int');
-      expect(Dnd5eRules.spellcastingAbility('Eldritch Knight'), 'int');
-      expect(Dnd5eRules.spellcastingAbility('游荡者（诡术师）'), 'int');
-      expect(Dnd5eRules.spellcastingAbility('Arcane Trickster'), 'int');
+    test('施法属性来自条目声明而不是职业名', () {
+      expect(
+        Dnd5eRules.resolveClassRules(
+          entryId: 'test-pack:class/eldritch-knight',
+          classSummary: '奥法骑士',
+          structured: thirdCasterEntry,
+        ).spellcastingAbility,
+        'int',
+      );
+    });
+
+    test('散文职业名只解析到母职业：不推断施法子职业，无法术位', () {
+      // 过渡 shim 的档案侧反向匹配：档案职业名/别名是该字符串的子串 → fighter。
+      expect(Dnd5eRules.hitDieFor(classSummary: '战士（奥法骑士）'), 10);
+      expect(
+        Dnd5eRules.classSavingThrows('战士（奥法骑士）'),
+        {'str', 'con'},
+      );
+      // 但 fighter 的档案声明是 mode: none，因此没有法术位、也没有施法属性。
+      expect(
+        Dnd5eRules.spellSlotMaximums(classSummary: '战士（奥法骑士）', level: 10),
+        isEmpty,
+      );
+      expect(Dnd5eRules.spellcastingAbility('战士（奥法骑士）'), isNull);
+      expect(Dnd5eRules.spellcastingAbility('Eldritch Knight'), isNull);
+      expect(Dnd5eRules.spellcastingAbility('游荡者（诡术师）'), isNull);
+      expect(Dnd5eRules.spellcastingAbility('Arcane Trickster'), isNull);
     });
 
     test('纯战士 / 纯游荡者仍然没有法术位', () {

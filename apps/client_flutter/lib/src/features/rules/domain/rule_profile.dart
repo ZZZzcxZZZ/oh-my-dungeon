@@ -16,6 +16,13 @@ const kBuiltinOriginId = 'builtin:dnd5e-2024';
 const kBuiltinTier = 0;
 const kEntryTier = 100;
 
+/// 契约法术位的原型名（§3.1、§3.3）。
+///
+/// 它是"是否使用契约魔法"的唯一判据来源：主职业可以显式写 `mode: "pact"`，也可以
+/// 写 `mode: "prepared"` + `archetype: "pact"`（内置档案的邪术师即后者）。
+/// 两条路径都由 [ResolvedClassRules.usesPactMagic] 归一。
+const kPactArchetype = 'pact';
+
 /// 某个字段最终取自哪里（§3.7）。
 class RuleFieldSource {
   const RuleFieldSource({
@@ -134,6 +141,11 @@ class ResolvedClassRules {
       spellcastingMode == 'none' ? null : spellcasting?.ability;
 
   String get spellcastingMode => spellcasting?.mode ?? 'none';
+
+  /// 是否使用契约魔法：显式 `mode: "pact"`，或所挂载的原型就是 `pact`
+  /// （内置档案里的邪术师写成 `mode: "prepared"` + `archetype: "pact"`）。
+  bool get usesPactMagic =>
+      spellcastingMode == 'pact' || archetype?.name == kPactArchetype;
 
   /// 法术位：自身 slots 表优先（**已声明**的等级整级替换，哪怕是空表 `{}`）；
   /// 自身未声明该等级（`at` 返回 null）才回退原型；原型也低于 `minimumLevel`

@@ -22,6 +22,20 @@
     {"name": "隐匿", "ability": "dex"},
     {"name": "求生", "ability": "wis"}
   ],
+  "classAliases": {
+    "野蛮人": "barbarian",
+    "吟游诗人": "bard",
+    "牧师": "cleric",
+    "德鲁伊": "druid",
+    "战士": "fighter",
+    "武僧": "monk",
+    "圣武士": "paladin",
+    "游侠": "ranger",
+    "游荡者": "rogue",
+    "术士": "sorcerer",
+    "邪术师": "warlock",
+    "法师": "wizard"
+  },
   "progressions": {
     "none": {
       "slots": []

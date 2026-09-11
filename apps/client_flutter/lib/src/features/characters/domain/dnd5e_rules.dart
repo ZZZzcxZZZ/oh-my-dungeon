@@ -1,15 +1,32 @@
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
+import '../../rules/domain/class_rule_set.dart';
+import '../../rules/domain/rule_diagnostic.dart';
+import '../../rules/domain/rule_math.dart' as rule_math;
 import '../../rules/domain/rule_profile.dart';
+import '../../rules/domain/rule_profile_resolver.dart';
 
+/// D&D 5e (2024) 规则查询门面。
+///
+/// **所有随职业变化的数值只来自档案**：内置档案（[profile]）与角色所用条目的
+/// `structured.classRules` 做字段级合并（[resolveClassRules]），未声明即不猜。
+/// 本文件里**不存在**以职业名（中文或英文）为键的规则表，也没有任何职业名子串
+/// 匹配（契约 §10.1）。
+///
+/// 纯运算（属性调整值 / 熟练加值 / 加值格式化）只有一份实现，在
+/// `features/rules/domain/rule_math.dart`；本类同名方法只是委托，避免第二份公式。
+///
+/// [spellSlotMaximums] / [classResources] / [usesPactMagic] / [pactSlotMaximums] /
+/// [preparedSpellMaximums] / [spellcastingAbility] / [classSavingThrows] /
+/// [averageHitPoints] 保留旧签名作为**过渡 shim**（任务 8 迁移调用方后删除），
+/// 内部同样只查档案，因此行为会随契约收紧（例如无法解析的职业不再有法术位）。
 class Dnd5eRules {
   const Dnd5eRules._();
 
   /// 启动时装配的内置规则档案（tier 0）。
   ///
-  /// 这里是**装配入口**，不是表查询逻辑：本步骤只把档案挂上去，具体查询迁移
-  /// 由后续任务完成。未装配时任何读取都抛错，绝不返回 null / 空档案兜底
-  /// （契约 §4.4：内置档案缺失或非法即启动 fail-fast）。
+  /// 这里是**装配入口**，不是表查询逻辑：未装配时任何读取都抛错，绝不返回
+  /// null / 空档案兜底（契约 §4.4：内置档案缺失或非法即启动 fail-fast）。
   static RuleProfile? _profile;
 
   static RuleProfile get profile {
@@ -32,6 +49,8 @@ class Dnd5eRules {
   @visibleForTesting
   static void resetForTests() => _profile = null;
 
+  /// 展示用的属性中文标签（UI 文案，不是规则数值）。
+  /// 属性键本身由档案的 `abilities` 声明；两者的键集合由测试断言一致。
   static const abilityLabels = {
     'str': '力量',
     'dex': '敏捷',
@@ -71,16 +90,13 @@ class Dnd5eRules {
     'cha': 10,
   };
 
-  static int abilityModifier(int score) => ((score - 10) / 2).floor();
+  // ── 纯运算：唯一公式来源是 rule_math.dart，这里只做委托 ──
 
-  static String formatModifier(int modifier) {
-    return modifier >= 0 ? '+$modifier' : '$modifier';
-  }
+  static int abilityModifier(int score) => rule_math.abilityModifier(score);
 
-  static int proficiencyBonus(int level) {
-    final clamped = level.clamp(1, 20);
-    return ((clamped - 1) ~/ 4) + 2;
-  }
+  static String formatModifier(int modifier) => rule_math.formatModifier(modifier);
+
+  static int proficiencyBonus(int level) => rule_math.proficiencyBonus(level);
 
   static int abilityScore(Map<String, Object?> abilities, String ability) {
     final value = abilities[ability];
@@ -146,6 +162,8 @@ class Dnd5eRules {
     return '${weapon.damageDie}${formatModifier(bonus)}';
   }
 
+  /// 武器档案是**物品名 → 数值**的展示映射，不是职业表；删除它属于任务 8
+  /// （改读物品条目自身声明的 `damage` / `category` / `finesse`）。
   static Dnd5eWeaponProfile? weaponProfile(String itemName) {
     final normalized = itemName.toLowerCase();
     for (final entry in _weaponProfiles.entries) {
@@ -154,33 +172,114 @@ class Dnd5eRules {
     return null;
   }
 
-  static String? spellcastingAbility(String classSummary) {
-    final normalized = classSummary.toLowerCase();
-    // 2024 战士/游荡者的施法子职业使用智力（奥法骑士 / 诡术师）。
-    if (_usesThirdCasterProgression(normalized)) return 'int';
-    if (normalized.contains('法师') || normalized.contains('wizard')) {
-      return 'int';
-    }
-    if (normalized.contains('牧师') ||
-        normalized.contains('德鲁伊') ||
-        normalized.contains('游侠') ||
-        normalized.contains('cleric') ||
-        normalized.contains('druid') ||
-        normalized.contains('ranger')) {
-      return 'wis';
-    }
-    if (normalized.contains('吟游诗人') ||
-        normalized.contains('圣武士') ||
-        normalized.contains('术士') ||
-        normalized.contains('邪术师') ||
-        normalized.contains('bard') ||
-        normalized.contains('paladin') ||
-        normalized.contains('sorcerer') ||
-        normalized.contains('warlock')) {
-      return 'cha';
-    }
-    return null;
+  // ── 职业规则解析（唯一的职业身份入口） ──
+
+  /// 由一个职业条目解析出的规则形态（条目声明 ∪ 内置档案，条目优先）。
+  ///
+  /// `classSummary` 只用于**过渡期**把老角色的散文展示名解析成 slug
+  /// （见 [_slugFor]）；条目身份以 [entryId] 为准，规则判断只认解析出的 slug。
+  static ResolvedClassRules resolveClassRules({
+    required String? entryId,
+    required String classSummary,
+    Map<String, Object?> structured = const <String, Object?>{},
+    List<RuleDiagnostic>? diagnostics,
+  }) {
+    final slug = _slugFor(entryId: entryId, classSummary: classSummary);
+    final rawClassRules = structured['classRules'];
+    final entryRules = rawClassRules is Map
+        ? ClassRuleSet.parse(
+            Map<String, Object?>.from(rawClassRules),
+            path: r'$.structured.classRules',
+            diagnostics: diagnostics ?? <RuleDiagnostic>[],
+          )
+        : null;
+    return RuleProfileResolver.resolveClassRules(
+      profile: profile,
+      slug: slug,
+      entryRules: entryRules,
+      entryId: entryId,
+    );
   }
+
+  /// slug：条目 id 的最后一段（契约 §3.6 的规范对齐键）；没有条目身份时，
+  /// 用展示名归一化后精确匹配档案（含 `classAliases`），再退到"档案侧反向
+  /// 包含匹配"（候选集只有档案里的职业名/别名/slug，取最长命中，不写死任何名字）。
+  static String _slugFor({required String? entryId, required String classSummary}) {
+    final id = entryId?.trim() ?? '';
+    if (id.isNotEmpty) {
+      final slug = id.split('/').last.trim().toLowerCase();
+      if (slug.isNotEmpty) return slug;
+    }
+    final normalized = classSummary.trim().toLowerCase();
+    if (normalized.isEmpty) return '';
+    if (profile.classRules(normalized) != null) return normalized;
+    final candidates = <String, String>{
+      for (final entry in profile.aliases.entries)
+        if (entry.key.isNotEmpty) entry.key: entry.value,
+      for (final slug in profile.classes.keys)
+        if (slug.isNotEmpty) slug: slug,
+    };
+    String? bestSlug;
+    var bestLength = 0;
+    candidates.forEach((needle, slug) {
+      if (needle.length > bestLength && normalized.contains(needle)) {
+        bestSlug = slug;
+        bestLength = needle.length;
+      }
+    });
+    // 档案里没有的职业（如自制职业）保持原样：查不到数值即"未声明"，不猜。
+    return bestSlug ?? normalized;
+  }
+
+  static int? hitDieFor({String? entryId, required String classSummary}) =>
+      resolveClassRules(entryId: entryId, classSummary: classSummary).hitDie;
+
+  // ── 过渡 shim：签名不变，内部改为查档案（任务 8 迁移调用方后删除） ──
+
+  static Map<String, int> spellSlotMaximums({
+    required String classSummary,
+    required int level,
+  }) => spellSlotMaximumsFromRules(
+    rules: resolveClassRules(entryId: null, classSummary: classSummary),
+    level: level,
+  );
+
+  static List<Dnd5eClassResource> classResources({
+    required String classSummary,
+    required int level,
+    Map<String, Object?> abilities = const <String, Object?>{},
+  }) => classResourcesFromRules(
+    rules: resolveClassRules(entryId: null, classSummary: classSummary),
+    level: level,
+    abilities: abilities,
+  );
+
+  static bool usesPactMagic(String classSummary) =>
+      resolveClassRules(entryId: null, classSummary: classSummary).usesPactMagic;
+
+  /// 契约魔法法术位（环阶 → 数量）：由档案的 `pact` 原型提供，不再有硬编码表。
+  static Map<String, int> pactSlotMaximums(int level) {
+    final pact = profile.progression('pact');
+    if (pact == null) return const {};
+    if (level < pact.minimumLevel) return const {};
+    return pact.slots?.at(level) ?? const {};
+  }
+
+  static int? preparedSpellMaximums({
+    required String classSummary,
+    required int level,
+  }) => resolveClassRules(
+    entryId: null,
+    classSummary: classSummary,
+  ).preparedLimit(level);
+
+  /// `mode == 'none'`（含"未声明"）返回 null：不使用施法就没有施法属性（§3.6）。
+  static String? spellcastingAbility(String classSummary) =>
+      resolveClassRules(entryId: null, classSummary: classSummary).spellcastingAbility;
+
+  /// 2024 官方核心表：各职业豁免熟练（档案只按 slug 精确对齐，未声明即空集）。
+  static Set<String> classSavingThrows(String classSummary) =>
+      resolveClassRules(entryId: null, classSummary: classSummary).savingThrowAbilities;
 
   static int? spellSaveDc({
     required String classSummary,
@@ -192,26 +291,7 @@ class Dnd5eRules {
     return 8 + proficiencyBonus(level) + abilityBonus(abilities, ability);
   }
 
-  /// 邪术师使用契约魔法：单一环阶、数量随等级、短休即恢复。
-  static bool usesPactMagic(String classSummary) {
-    final normalized = classSummary.toLowerCase();
-    return normalized.contains('邪术师') || normalized.contains('warlock');
-  }
-
-  /// 契约魔法法术位表（环阶 → 数量）。
-  static Map<String, int> pactSlotMaximums(int level) {
-    final clamped = level.clamp(1, 20);
-    if (clamped >= 17) return const {'5': 4};
-    if (clamped >= 11) return const {'5': 3};
-    if (clamped >= 9) return const {'5': 2};
-    if (clamped >= 7) return const {'4': 2};
-    if (clamped >= 5) return const {'3': 2};
-    if (clamped >= 3) return const {'2': 2};
-    if (clamped >= 2) return const {'1': 2};
-    return const {'1': 1};
-  }
-
-  /// 休息后仍处于消耗状态的法术位：长休清空；邪术师短休同样清空（契约魔法）。
+  /// 休息后仍处于消耗状态的法术位：长休清空；契约魔法短休同样清空。
   static Map<String, int> spellSlotsAfterRest({
     required String classSummary,
     required Map<String, int> used,
@@ -222,24 +302,7 @@ class Dnd5eRules {
     return Map<String, int>.unmodifiable(used);
   }
 
-  static Map<String, int> spellSlotMaximums({
-    required String classSummary,
-    required int level,
-  }) {
-    if (usesPactMagic(classSummary)) {
-      return pactSlotMaximums(level);
-    }
-    final casterProgression = _casterProgression(classSummary);
-    if (casterProgression == null) return {};
-    // 2024：奥法骑士 / 诡术师 3 级才获得法术位。
-    if (casterProgression == _CasterProgression.third && level < 3) return {};
-    final effectiveLevel = switch (casterProgression) {
-      _CasterProgression.full => level,
-      _CasterProgression.half => ((level + 1) ~/ 2),
-      _CasterProgression.third => ((level + 2) ~/ 3),
-    };
-    return _fullCasterSlots[effectiveLevel.clamp(1, 20)] ?? {};
-  }
+  // ── 资源 ──
 
   static Map<String, int> classResourceMaximums({
     required String classSummary,
@@ -287,45 +350,6 @@ class Dnd5eRules {
     };
   }
 
-  static List<Dnd5eClassResource> classResources({
-    required String classSummary,
-    required int level,
-  }) {
-    final normalized = classSummary.toLowerCase();
-    final clampedLevel = level.clamp(1, 20).toInt();
-    if (normalized.contains('战士') || normalized.contains('fighter')) {
-      return [
-        Dnd5eClassResource(
-          id: 'second_wind',
-          name: '第二气息',
-          maximum: _secondWindUses(clampedLevel),
-          // 2024：短休恢复 1 次，长休全部恢复。
-          recovery: 'shortRestOne',
-        ),
-        if (clampedLevel >= 2)
-          Dnd5eClassResource(
-            id: 'action_surge',
-            name: '动作如潮',
-            // 2024：17 级起可用两次；短休/长休后全部恢复。
-            maximum: clampedLevel >= 17 ? 2 : 1,
-            recovery: 'shortRest',
-          ),
-      ];
-    }
-    if (normalized.contains('野蛮人') || normalized.contains('barbarian')) {
-      return [
-        Dnd5eClassResource(
-          id: 'rage',
-          name: '狂暴',
-          maximum: _rageUses(clampedLevel),
-          // 2024：短休恢复 1 次，长休全部恢复。
-          recovery: 'shortRestOne',
-        ),
-      ];
-    }
-    return const [];
-  }
-
   static String spellLevelLabel(String level) {
     return switch (level) {
       '1' => '一环',
@@ -340,6 +364,8 @@ class Dnd5eRules {
       _ => '$level 环',
     };
   }
+
+  // ── 2024 生命值 ──
 
   /// 2024 伤害/治疗结算结果。
   ///
@@ -370,10 +396,16 @@ class Dnd5eRules {
     required int level,
     required Map<String, Object?> abilities,
   }) {
+    final constitution = abilityScore(abilities, 'con');
+    final die = resolveClassRules(entryId: null, classSummary: className).hitDie;
+    if (die == null) {
+      // 未声明生命骰：不猜，只按体质调整值计，且总生命至少 1。
+      return (abilityModifier(constitution) * level.clamp(1, 20)).clamp(1, 1 << 30);
+    }
     return averageHitPointsForHitDie(
-      hitDie: hitDie(className),
+      hitDie: die,
       level: level,
-      constitution: abilityScore(abilities, 'con'),
+      constitution: constitution,
     );
   }
 
@@ -394,251 +426,32 @@ class Dnd5eRules {
     return total.clamp(1, 1 << 30);
   }
 
-  /// 2024 官方核心表：各职业生命骰面数。
-  static int hitDie(String className) {
-    final normalized = className.toLowerCase();
-    for (final entry in _hitDice.entries) {
-      if (normalized.contains(entry.key)) return entry.value;
-    }
-    return 8;
-  }
+  // ── 由"已解析规则"直接取值（任务 8 迁移调用方用，避免重复解析） ──
 
-  /// 2024 官方核心表：各职业豁免熟练（无匹配时返回空集，不猜测）。
-  static Set<String> classSavingThrows(String classSummary) {
-    final normalized = classSummary.toLowerCase();
-    for (final entry in _classSavingThrows.entries) {
-      if (normalized.contains(entry.key)) return entry.value;
-    }
-    return const <String>{};
-  }
-
-  /// 2024 官方逐级"准备法术"上限（不含属性调整值）。
-  /// 返回 null 表示该职业不是准备施法者（或为非核心职业）。
-  static int? preparedSpellMaximums({
-    required String classSummary,
+  static Map<String, int> spellSlotMaximumsFromRules({
+    required ResolvedClassRules rules,
     required int level,
-  }) {
-    final table = _preparedSpellTable(classSummary);
-    if (table == null) return null;
-    return table[level.clamp(1, 20) - 1];
-  }
+  }) => rules.spellSlots(level);
 
-  static List<int>? _preparedSpellTable(String classSummary) {
-    // 契约魔法先判，避免与术士表混淆。
-    if (usesPactMagic(classSummary)) return _preparedWarlock;
-    final normalized = classSummary.toLowerCase();
-    if (normalized.contains('法师') || normalized.contains('wizard')) {
-      return _preparedWizard;
-    }
-    if (normalized.contains('术士') || normalized.contains('sorcerer')) {
-      return _preparedSorcerer;
-    }
-    if (normalized.contains('牧师') ||
-        normalized.contains('cleric') ||
-        normalized.contains('德鲁伊') ||
-        normalized.contains('druid') ||
-        normalized.contains('吟游诗人') ||
-        normalized.contains('bard')) {
-      return _preparedDivine;
-    }
-    if (normalized.contains('圣武士') ||
-        normalized.contains('paladin') ||
-        normalized.contains('游侠') ||
-        normalized.contains('ranger')) {
-      return _preparedHalfCaster;
-    }
-    return null;
-  }
+  static List<Dnd5eClassResource> classResourcesFromRules({
+    required ResolvedClassRules rules,
+    required int level,
+    Map<String, Object?> abilities = const <String, Object?>{},
+  }) => rules
+      .resourcesAt(level, _abilityScores(abilities))
+      .map(
+        (r) => Dnd5eClassResource(
+          id: r.id,
+          name: r.name,
+          maximum: r.maximum,
+          recovery: r.recovery,
+        ),
+      )
+      .toList(growable: false);
 
-  static int _secondWindUses(int level) {
-    if (level >= 10) return 4;
-    if (level >= 4) return 3;
-    return 2;
-  }
-
-  static int _rageUses(int level) {
-    if (level >= 17) return 6;
-    if (level >= 12) return 5;
-    if (level >= 6) return 4;
-    if (level >= 3) return 3;
-    return 2;
-  }
-
-  /// 2024 核心表：生命骰。邪术师为 d8。
-  static const _hitDice = {
-    '野蛮人': 12,
-    'barbarian': 12,
-    '战士': 10,
-    'fighter': 10,
-    '圣武士': 10,
-    'paladin': 10,
-    '游侠': 10,
-    'ranger': 10,
-    '吟游诗人': 8,
-    'bard': 8,
-    '牧师': 8,
-    'cleric': 8,
-    '德鲁伊': 8,
-    'druid': 8,
-    '武僧': 8,
-    'monk': 8,
-    '游荡者': 8,
-    'rogue': 8,
-    '邪术师': 8,
-    'warlock': 8,
-    '术士': 6,
-    'sorcerer': 6,
-    '法师': 6,
-    'wizard': 6,
-    // 施法子职业单独出现时也能解析到母职业生命骰。
-    '奥法骑士': 10,
-    'eldritch knight': 10,
-    '诡术师': 8,
-    'arcane trickster': 8,
-  };
-
-  /// 2024 核心表：豁免熟练。
-  static const _classSavingThrows = <String, Set<String>>{
-    '野蛮人': {'str', 'con'},
-    'barbarian': {'str', 'con'},
-    '吟游诗人': {'dex', 'cha'},
-    'bard': {'dex', 'cha'},
-    '牧师': {'wis', 'cha'},
-    'cleric': {'wis', 'cha'},
-    '德鲁伊': {'int', 'wis'},
-    'druid': {'int', 'wis'},
-    '战士': {'str', 'con'},
-    'fighter': {'str', 'con'},
-    '武僧': {'dex', 'wis'},
-    'monk': {'dex', 'wis'},
-    '圣武士': {'wis', 'cha'},
-    'paladin': {'wis', 'cha'},
-    '游侠': {'dex', 'str'},
-    'ranger': {'dex', 'str'},
-    '游荡者': {'dex', 'int'},
-    'rogue': {'dex', 'int'},
-    '术士': {'con', 'cha'},
-    'sorcerer': {'con', 'cha'},
-    '邪术师': {'wis', 'cha'},
-    'warlock': {'wis', 'cha'},
-    '法师': {'int', 'wis'},
-    'wizard': {'int', 'wis'},
-  };
-
-  // 2024 官方 "Prepared Spells" 逐级表（1..20 级）。
-  static const _preparedDivine = [
-    4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22,
-  ];
-  static const _preparedSorcerer = [
-    2, 4, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22,
-  ];
-  static const _preparedWizard = [
-    4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 18, 19, 21, 22, 23, 24, 25,
-  ];
-  static const _preparedHalfCaster = [
-    2, 3, 4, 5, 6, 6, 7, 7, 9, 9, 10, 10, 11, 11, 12, 12, 14, 14, 15, 15,
-  ];
-  static const _preparedWarlock = [
-    2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15,
-  ];
-
-  static bool _usesThirdCasterProgression(String normalized) {
-    return normalized.contains('奥法骑士') ||
-        normalized.contains('eldritch knight') ||
-        normalized.contains('诡术师') ||
-        normalized.contains('arcane trickster');
-  }
-
-  static _CasterProgression? _casterProgression(String classSummary) {
-    final normalized = classSummary.toLowerCase();
-    // 2024：奥法骑士（战士）/ 诡术师（游荡者）为 1/3 施法者。
-    if (_usesThirdCasterProgression(normalized)) {
-      return _CasterProgression.third;
-    }
-    if (normalized.contains('野蛮人') ||
-        normalized.contains('战士') ||
-        normalized.contains('武僧') ||
-        normalized.contains('游荡者') ||
-        normalized.contains('barbarian') ||
-        normalized.contains('fighter') ||
-        normalized.contains('monk') ||
-        normalized.contains('rogue')) {
-      return null;
-    }
-    // 邪术师使用契约魔法，走独立进阶，不是全施法者。
-    if (usesPactMagic(classSummary)) return null;
-    if (normalized.contains('圣武士') ||
-        normalized.contains('游侠') ||
-        normalized.contains('paladin') ||
-        normalized.contains('ranger')) {
-      return _CasterProgression.half;
-    }
-    return spellcastingAbility(classSummary) == null
-        ? null
-        : _CasterProgression.full;
-  }
-
-  static const _fullCasterSlots = {
-    1: {'1': 2},
-    2: {'1': 3},
-    3: {'1': 4, '2': 2},
-    4: {'1': 4, '2': 3},
-    5: {'1': 4, '2': 3, '3': 2},
-    6: {'1': 4, '2': 3, '3': 3},
-    7: {'1': 4, '2': 3, '3': 3, '4': 1},
-    8: {'1': 4, '2': 3, '3': 3, '4': 2},
-    9: {'1': 4, '2': 3, '3': 3, '4': 3, '5': 1},
-    10: {'1': 4, '2': 3, '3': 3, '4': 3, '5': 2},
-    11: {'1': 4, '2': 3, '3': 3, '4': 3, '5': 2, '6': 1},
-    12: {'1': 4, '2': 3, '3': 3, '4': 3, '5': 2, '6': 1},
-    13: {'1': 4, '2': 3, '3': 3, '4': 3, '5': 2, '6': 1, '7': 1},
-    14: {'1': 4, '2': 3, '3': 3, '4': 3, '5': 2, '6': 1, '7': 1},
-    15: {'1': 4, '2': 3, '3': 3, '4': 3, '5': 2, '6': 1, '7': 1, '8': 1},
-    16: {'1': 4, '2': 3, '3': 3, '4': 3, '5': 2, '6': 1, '7': 1, '8': 1},
-    17: {
-      '1': 4,
-      '2': 3,
-      '3': 3,
-      '4': 3,
-      '5': 2,
-      '6': 1,
-      '7': 1,
-      '8': 1,
-      '9': 1,
-    },
-    18: {
-      '1': 4,
-      '2': 3,
-      '3': 3,
-      '4': 3,
-      '5': 3,
-      '6': 1,
-      '7': 1,
-      '8': 1,
-      '9': 1,
-    },
-    19: {
-      '1': 4,
-      '2': 3,
-      '3': 3,
-      '4': 3,
-      '5': 3,
-      '6': 2,
-      '7': 1,
-      '8': 1,
-      '9': 1,
-    },
-    20: {
-      '1': 4,
-      '2': 3,
-      '3': 3,
-      '4': 3,
-      '5': 3,
-      '6': 2,
-      '7': 2,
-      '8': 1,
-      '9': 1,
-    },
+  /// 资源的 `formula: ability:<key>` 需要六个属性键都有值；缺省按 10（调整值 0）。
+  static Map<String, int> _abilityScores(Map<String, Object?> abilities) => {
+    for (final key in abilityLabels.keys) key: abilityScore(abilities, key),
   };
 
   static const _weaponProfiles = {
@@ -733,8 +546,6 @@ class Dnd5eClassResource {
   final int maximum;
   final String recovery;
 }
-
-enum _CasterProgression { full, half, third }
 
 class Dnd5eWeaponProfile {
   const Dnd5eWeaponProfile({

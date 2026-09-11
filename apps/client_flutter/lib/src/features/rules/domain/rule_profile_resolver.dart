@@ -41,6 +41,7 @@ abstract final class RuleProfileResolver {
     final skills = _parseSkills(raw, diagnostics);
     final progressions = _parseProgressions(raw, diagnostics);
     final classes = _parseClasses(raw, abilities, diagnostics);
+    final aliases = _parseClassAliases(raw, classes, diagnostics);
     _validateArchetypes(classes, progressions, diagnostics);
 
     if (diagnostics.any((d) => d.severity == RuleSeverity.error)) {
@@ -52,6 +53,7 @@ abstract final class RuleProfileResolver {
         skills: skills,
         progressions: progressions,
         classes: classes,
+        aliases: aliases,
       ),
       diagnostics: diagnostics,
     );
@@ -178,7 +180,7 @@ abstract final class RuleProfileResolver {
       final rows = raw as List<Object?>;
       // `slotLevel` 只有 pact 原型会写（§3.1、§3.3），原型名 `pact` 是同一回事；
       // 两者取其一即按"每级一个环阶计数"展开。
-      final isPact = name == _pactArchetype || map.containsKey('slotLevel');
+      final isPact = name == kPactArchetype || map.containsKey('slotLevel');
       if (isPact) {
         final slotLevels = IntTable.tryParse(map['slotLevel']);
         if (slotLevels == null) {
@@ -362,6 +364,49 @@ abstract final class RuleProfileResolver {
     return classes;
   }
 
+  /// 档案可选的 `classAliases`：展示名/别名（小写）→ 规范 slug，填充
+  /// [RuleProfile.aliases]。
+  ///
+  /// 契约 §3.6 的档案补齐只按 slug 查找；别名表的用途是**过渡期**解析只有散文
+  /// `classSummary` 的老角色（`Dnd5eRules` 的旧签名 shim），因此它只承载"展示名
+  /// → 规范 slug"这一件事，不含任何规则数值。
+  ///
+  /// 别名指向不存在的 slug 属于档案数据错误：报 error 并整包阻断（与
+  /// `unknownArchetype` 同类），绝不留给运行期静默失效。别名键与职业 slug 同名时
+  /// `classes` 优先（[RuleProfile.classRules] 先查 slug），因此不额外报错。
+  static Map<String, String> _parseClassAliases(
+    Map<String, Object?> raw,
+    Map<String, ClassRuleSet> classes,
+    List<RuleDiagnostic> diagnostics,
+  ) {
+    final aliases = <String, String>{};
+    final rawAliases = raw['classAliases'];
+    if (rawAliases == null) return aliases;
+    if (rawAliases is! Map) {
+      _invalidTable(
+        diagnostics,
+        r'$.classAliases',
+        'classAliases 必须是 {"别名": "slug"} 对象',
+      );
+      return aliases;
+    }
+    rawAliases.forEach((key, value) {
+      final path = '${r'$.classAliases'}.$key';
+      final alias = '$key'.trim().toLowerCase();
+      final slug = value is String ? value.trim().toLowerCase() : '';
+      if (alias.isEmpty || slug.isEmpty) {
+        _invalidTable(diagnostics, path, '别名与 slug 都必须是非空字符串');
+        return;
+      }
+      if (!classes.containsKey(slug)) {
+        _invalidTable(diagnostics, path, '别名指向不存在的职业 slug "$slug"');
+        return;
+      }
+      aliases[alias] = slug;
+    });
+    return aliases;
+  }
+
   /// 原型存在性校验（§3.3）：引用不存在的原型必须报 error，而不是静默无法术位。
   static void _validateArchetypes(
     Map<String, ClassRuleSet> classes,
@@ -503,10 +548,6 @@ void _unknownField(List<RuleDiagnostic> out, String path, String name) =>
 /// 空数组 / 空对象 = 没有声明任何档位（§3.1 的 `none` 原型就是 `[]`），不是错误。
 bool _isEmptyTable(Object? raw) =>
     (raw is List && raw.isEmpty) || (raw is Map && raw.isEmpty);
-
-/// 契约法术位的原型名（§3.1、§3.3）：它的 `slots` 行内只有计数，环阶由
-/// 同级 `slotLevel` 提供；缺 `slotLevel` 即形状非法。
-const _pactArchetype = 'pact';
 
 /// 压缩编码里的法术位计数：必须是非负整数（小数、负数、非数字一律非法）。
 int? _slotCount(Object? raw) => raw is int && raw >= 0 ? raw : null;

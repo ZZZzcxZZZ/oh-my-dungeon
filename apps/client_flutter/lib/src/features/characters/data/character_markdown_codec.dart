@@ -7,6 +7,7 @@ import 'package:yaml/yaml.dart';
 import '../domain/character.dart';
 import '../domain/character_content_reference.dart';
 import '../domain/character_document.dart';
+import '../domain/dnd5e_rules.dart';
 
 enum CharacterMarkdownMode { profile, campaignSnapshot }
 
@@ -461,7 +462,7 @@ class CharacterMarkdownCodec {
       initiativeBonus: isCharacterFormat
           ? _optionalInt(
               combat['先攻'] ?? metadata['initiativeBonus'],
-              fallback: ((resolvedAbilities['dex']! - 10) / 2).floor(),
+              fallback: Dnd5eRules.abilityModifier(resolvedAbilities['dex']!),
             )
           : _requiredInt(combat['先攻'], '先攻'),
       abilities: resolvedAbilities,

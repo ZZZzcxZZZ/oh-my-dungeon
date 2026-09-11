@@ -121,9 +121,10 @@
                       "maximumSpellLevel": [1,1,2,"…"] },
     "half-caster":  { "minimumLevel": 1, "slots": [[2],[2],[3],"…"],
                       "maximumSpellLevel": [1,1,1,"…"] },
-    // third-caster 省略 prepared / cantrips：2024 奥法骑士与诡术师的已知/准备
-    // 上限不在职业表里，不臆造数值（见 §11）
-    "third-caster": { "minimumLevel": 3, "slots": [[],[],[2],"…"] },
+    // third-caster：prepared / cantrips 省略（2024 职业表未给出这两列，不臆造，见 §11）；
+    // maximumSpellLevel 由官方法术位表推导（3–6 级 1 环、7–12 级 2 环、13–18 级 3 环、19–20 级 4 环）
+    "third-caster": { "minimumLevel": 3, "slots": [[],[],[2],"…"],
+                      "maximumSpellLevel": [0,0,1,1,1,1,2,2,2,2,2,2,3,3,3,3,3,3,4,4] },
     "pact":         { "minimumLevel": 1, "slots": [[1],[2],[2],"…"],
                       "slotLevel": [1,1,2,2,3,"…20 个数"],
                       "maximumSpellLevel": [1,1,2,"…"] }
@@ -656,7 +657,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | code | 条件 |
 |---|---|
 | `missingCoreField` | 职业条目缺 `hitDie`（或施法职业缺 `spellcasting`），角色卡对应数值将缺省 |
-| `missingPreparedColumn` | 施法职业未声明 `prepared` 且原型无该表（编辑器不限制数量） |
+| `missingPreparedColumn` | 施法职业未声明 `prepared`（原型**不提供**该列，见 §3.1/§3.3；编辑器不限制数量） |
 | `ignoredGlobalList` | 包自带了 `abilities` / `skills` 清单（内置档案为唯一权威，该清单被忽略） |
 | `unresolvedClassRule` | 条目没有任何可用规则来源（既无 `classRules` 也无档案匹配） |
 | `zeroLevelResource` | 资源的表在 `startsAtLevel` 及以上出现 0（该级上限为 0，UI 不显示） |

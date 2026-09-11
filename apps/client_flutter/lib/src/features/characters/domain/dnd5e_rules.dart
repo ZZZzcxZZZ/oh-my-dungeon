@@ -482,11 +482,6 @@ class Dnd5eRules {
 
   // ── 由"已解析规则"直接取值（任务 8 迁移调用方用，避免重复解析） ──
 
-  static Map<String, int> spellSlotMaximumsFromRules({
-    required ResolvedClassRules rules,
-    required int level,
-  }) => rules.spellSlots(level);
-
   static List<Dnd5eClassResource> classResourcesFromRules({
     required ResolvedClassRules rules,
     required int level,

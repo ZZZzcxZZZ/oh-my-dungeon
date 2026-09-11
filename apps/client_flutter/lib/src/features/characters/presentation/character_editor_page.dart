@@ -1126,7 +1126,12 @@ class _UpgradeRuleChoiceSection extends StatelessWidget {
 
 enum _CreationFlow { choose, standard, fullSheet }
 
-const _defaultClassOptions = ['战士', '法师', '游荡者', '牧师'];
+/// 无内容条目时的职业兜底选项：**从档案 `classAliases` 的键派生**
+/// （12 项展示名），不写死任何职业名；排序只为让快速选择项稳定可复现。
+/// 档案未装配即启动 fail-fast（`Dnd5eRules.profile` 抛错），不做空清单兜底。
+List<String> get _defaultClassOptions =>
+    Dnd5eRules.profile.aliases.keys.toList()..sort();
+
 const _defaultSpeciesOptions = ['人类', '精灵', '矮人', '半身人'];
 const _defaultBackgroundOptions = ['士兵', '贤者', '罪犯', '侍祭'];
 
@@ -1849,7 +1854,10 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         );
       }
       for (final progression in rules.progression) {
-        if (progression.level > _level) continue;
+        // 一个步骤可覆盖多个等级（`levels`）：取已达等级中最高的那个作为展示等级。
+        final reached = progression.levels.where((level) => level <= _level);
+        if (reached.isEmpty) continue;
+        final reachedLevel = reached.last;
         for (final definition in progression.choices) {
           final builderStep = _builderStepFor(
             definition.builderStep,

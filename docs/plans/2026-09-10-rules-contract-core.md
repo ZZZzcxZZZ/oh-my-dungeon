@@ -2007,78 +2007,123 @@ git commit -m "refactor(rules): Dnd5eRules 表查询改读内置档案，删除�
    导致公式类资源（诗人激励 = 魅力调整值）按调整值 0 算。任务 8 迁移时必须把 `abilities` 传进去，
    并在**任务 8 的验收**里显式检查一次真实数值（例如 CHA 16 的诗人激励应为 3）。
 
-## 任务 7：`structured_class_rules.dart` 只认新契约
+## 任务 7：`structured_class_rules.dart` 只认新契约（保留旧签名不破坏构建）
+
+**为什么不能直接删**：`StructuredClassRules.skillChoice` 被 `character_editor_page.dart:1537`（创建向导的技能步骤）
+使用，`startingEquipmentChoice` 被 `rules_driven_character_builder.dart:176` 与
+`character_editor_page.dart:1706` 使用。**直接删 = 构建红 + 向导功能倒退**。
+因此本任务的原则与任务 6 相同：**内部改为只读新契约，旧签名全部保留为过渡 shim**（任务 8 迁移调用方后删除）。
 
 **文件：**
 - 修改：`apps/client_flutter/lib/src/features/characters/domain/structured_class_rules.dart`
 - 修改：`apps/client_flutter/test/structured_class_rules_test.dart`
+- 修改：`apps/client_flutter/test/tooling/private_content_package_validation_test.dart`（它调用了 `skillChoice`）
 
-- [ ] **步骤 1：改测试为"新契约形状"**
+- [ ] **步骤 1：明确每个方法的去留**
 
-删除"returns modifier + level for prepared casters"与散文技能用例；改为：
+| 方法 | 处理 |
+|---|---|
+| `savingThrowAbilities` | 改为委托 `Dnd5eRules.resolveClassRules(...)`（只读 `structured.classRules`）；删掉中文散文 `savingThrows` 解析 |
+| `hitDie`（新增） | 委托 `resolveClassRules(...).hitDie` |
+| `skillChoice` | **不再解析散文**：改为从条目 `rules.choices` 里找 `optionType == "skill"` 的选择，取其 `minimum` 作 count、内联 `options` 的标签（或字符串元素）作 options；找不到就返回 `StructuredSkillChoice.empty` |
+| `startingEquipmentChoice` | 保持原样（读 `structured.startingEquipmentChoice.maximum`）——它是旧形状，等 S2 的装备选择落地后再迁移 |
+| `preparedSpellLimit` | 保留签名，内部直接 `resolveClassRules(...).preparedLimit(level)`；**删除** `preparedSpellcasting` 开关与"属性调整值 + 等级"公式（新契约里没有这两个概念） |
+| 私有 `_validSkills` / 两个中文正则 / 散文解析 | 全部删除 |
+
+- [ ] **步骤 2：重写测试（旧断言锚定的是已废弃语义）**
+
+`structured_class_rules_test.dart` 里 10+ 条 `preparedSpellLimit` 断言与 3 条散文技能断言都要重写：
 
 ```dart
-  test('savingThrowAbilities 直接读取结构化字段、技能选择不再由本类承担', () {
+  test('savingThrowAbilities 与 hitDie 直接读 classRules', () {
+    const entry = ContentEntry(
+      id: 'test:class/astral', type: 'class', slug: 'astral', name: '星界骑士',
+      body: [], revision: 1,
+      structured: {
+        'classRules': {'hitDie': 10, 'savingThrowAbilities': ['wis', 'cha']},
+      },
+    );
+    expect(StructuredClassRules.savingThrowAbilities(entry), {'wis', 'cha'});
+    expect(StructuredClassRules.hitDie(entry), 10);
+    expect(StructuredClassRules.preparedSpellLimit(
+      entry, abilities: const {}, level: 5), isNull, reason: '未声明 prepared 表');
+  });
+
+  test('中文散文 savingThrows / skills 不再被解析', () {
+    const entry = ContentEntry(
+      id: 'test:class/legacy', type: 'class', slug: 'legacy', name: '旧写法',
+      body: [], revision: 1,
+      structured: {'savingThrows': '力量与体质', 'skills': '选择2项：运动、察觉'},
+    );
+    expect(StructuredClassRules.savingThrowAbilities(entry), isEmpty);
+    expect(StructuredClassRules.skillChoice(entry).count, 0);
+    expect(StructuredClassRules.skillChoice(entry).options, isEmpty);
+  });
+
+  test('skillChoice 改为读 rules.choices 里的 optionType: "skill"', () {
+    final entry = ContentEntry(
+      id: 'test:class/astral', type: 'class', slug: 'astral', name: '星界骑士',
+      body: [], revision: 1,
+      structured: const {'classRules': {'hitDie': 10}},
+      rules: CharacterRuleDefinition.fromJson({
+        'progression': [
+          {'levels': [1], 'choices': [
+            {'id': 'class-skills', 'label': '选择两项技能熟练', 'optionType': 'skill',
+             'minimum': 2, 'maximum': 2,
+             'options': ['洞悉', '医药', '说服']},
+          ]},
+        ],
+      }),
+    );
+    expect(StructuredClassRules.skillChoice(entry).count, 2);
+    expect(StructuredClassRules.skillChoice(entry).options, ['洞悉', '医药', '说服']);
+  });
+
+  test('preparedSpellLimit 只读职业自身的 prepared 表', () {
     const entry = ContentEntry(
       id: 'test:class/astral', type: 'class', slug: 'astral', name: '星界骑士',
       body: [], revision: 1,
       structured: {
         'classRules': {
           'hitDie': 10,
-          'savingThrowAbilities': ['wis', 'cha'],
+          'spellcasting': {'mode': 'prepared', 'ability': 'cha', 'prepared': [3, 4, 5]},
         },
       },
     );
-    expect(StructuredClassRules.savingThrowAbilities(entry), {'wis', 'cha'});
-    expect(StructuredClassRules.hitDie(entry), 10);
-  });
-
-  test('中文散文 savingThrows 不再被解析', () {
-    const entry = ContentEntry(
-      id: 'test:class/legacy', type: 'class', slug: 'legacy', name: '旧写法',
-      body: [], revision: 1,
-      structured: {'savingThrows': '力量与体质'},
-    );
-    expect(StructuredClassRules.savingThrowAbilities(entry), isEmpty);
+    expect(StructuredClassRules.preparedSpellLimit(
+      entry, abilities: const {'cha': 20}, level: 1), 3);
+    expect(StructuredClassRules.preparedSpellLimit(
+      entry, abilities: const {'cha': 20}, level: 9), 5, reason: '短数组向上沿用');
   });
 ```
 
-- [ ] **步骤 2：运行确认失败**
+- [ ] **步骤 3：运行确认失败**
 
 运行：`cd apps/client_flutter && flutter test test/structured_class_rules_test.dart`
-预期：FAIL（散文仍被解析）
+预期：FAIL（散文仍被解析、`hitDie` 方法不存在）
 
-- [ ] **步骤 3：实现**
+- [ ] **步骤 4：实现**
 
-`structured_class_rules.dart` 改为薄适配器：
+`structured_class_rules.dart` 改为薄适配器，全部经 `Dnd5eRules.resolveClassRules({entryId, classSummary, structured})`
+取值（**不要**在本文件里重复解析 `classRules`，那是解析器的职责）。
+`skillChoice` 读 `entry.rules` 的 `choices`（含 `progression[].choices`），按 `optionType == 'skill'` 取第一个匹配。
 
-```dart
-  static Set<String> savingThrowAbilities(ContentEntry? entry) =>
-      _classRules(entry)?.savingThrowAbilities ??
-      ClassRuleSet.parse(_raw(entry), path: r'$.structured.classRules',
-          diagnostics: <RuleDiagnostic>[]).savingThrowAbilities;
-
-  /// 技能选择已统一由 `rules.choices`（`optionType: "skill"`）承担，本类不再提供。
-```
-
-删除 `_validSkills` 的静默过滤与两个中文正则（`任选 N 项`、`选择 N 项：`）。
-
-- [ ] **步骤 4：运行确认通过并回归**
+- [ ] **步骤 5：跑该文件 + 全量回归**
 
 运行：`cd apps/client_flutter && flutter test test/structured_class_rules_test.dart`
 预期：PASS
-运行：`cd apps/client_flutter && flutter test test/rules_driven_character_builder_test.dart test/character_builder_choices_test.dart`
-预期：可能出现失败（仍用旧字段）→ 在任务 8 一并修复；先记录失败用例名到提交信息
+运行：`cd apps/client_flutter && flutter test`
+预期：全绿。`private_content_package_validation_test.dart` 若因 `skillChoice` 语义变化失败，
+按其新语义更新断言（它读的是私有包，缺少私有包时本应跳过）。
 
-- [ ] **步骤 5：Commit**
+- [ ] **步骤 6：Commit**
 
 ```bash
 git add apps/client_flutter/lib/src/features/characters/domain/structured_class_rules.dart \
-        apps/client_flutter/test/structured_class_rules_test.dart
-git commit -m "refactor(rules): StructuredClassRules 只认 classRules 新契约"
+        apps/client_flutter/test/structured_class_rules_test.dart \
+        apps/client_flutter/test/tooling/private_content_package_validation_test.dart
+git commit -m "refactor(rules): StructuredClassRules 只读 classRules 与 rules.choices，删除散文解析"
 ```
-
----
 
 ## 任务 8：切换全部消费方（构建器 / 快速创建 / 角色卡 / 项目器 / 编辑器）
 

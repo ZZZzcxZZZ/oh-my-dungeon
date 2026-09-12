@@ -462,9 +462,25 @@ List<RuleChoiceGroup> groupRuleChoiceSections<T>(
   ];
 }
 
+/// `group` 标题的**唯一渲染点**（`DESIGN.md` 层级：`textTheme.titleSmall`，无新 token）。
+///
+/// 归组的唯一实现点是 [groupRuleChoiceSections]；标题样式的唯一实现点就是本组件：
+/// 共享容器 [RuleChoiceGroupedSections] 与创建向导的两个专用渲染器（技能网格 /
+/// 法术池，都经 [RuleChoiceGroupedSections]）全用它，不得各写第二份标题样式，
+/// 否则 `group` 的呈现会在四种渲染路径上分叉。
+class RuleChoiceGroupTitle extends StatelessWidget {
+  const RuleChoiceGroupTitle({required this.title, super.key});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) =>
+      Text(title, style: Theme.of(context).textTheme.titleSmall);
+}
+
 /// 分组容器的渲染：有 `group` 的组显示标题，无 `group` 的组不显示空标题。
 ///
-/// 标题用 `textTheme.titleSmall`（`DESIGN.md` 层级，无新 token）。
+/// 标题用 [RuleChoiceGroupTitle]（`DESIGN.md` 层级，无新 token）。
 class RuleChoiceGroupedSections extends StatelessWidget {
   const RuleChoiceGroupedSections({required this.groups, super.key});
 
@@ -477,7 +493,7 @@ class RuleChoiceGroupedSections extends StatelessWidget {
       children: [
         for (final group in groups) ...[
           if (group.title case final String title) ...[
-            Text(title, style: Theme.of(context).textTheme.titleSmall),
+            RuleChoiceGroupTitle(title: title),
             const SizedBox(height: 4),
           ],
           ...group.children,

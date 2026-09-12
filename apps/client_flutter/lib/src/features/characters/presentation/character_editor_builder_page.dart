@@ -344,7 +344,10 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
           !choice.definition.usesDedicatedOptionUi;
     });
     // `group` 相同的选择归一组（决策 D7）：组按首次声明顺序，无 group 的排最后。
-    // 归组只有 `groupRuleChoiceSections` 一处实现。
+    // 归组只有 `groupRuleChoiceSections` 一处实现；被排除在 `choicesForCurrentStep`
+    // 之外的专用渲染器（技能网格 / 法术池）也在
+    // [_skillProficiencySections] / [_spellChoicePoolSections] 里走**同一份**
+    // 归组 + 标题组件，所以 `group` 在四种渲染路径上的呈现语义一致。
     final ruleChoiceGroups = groupRuleChoiceSections<_ActiveRuleChoice>(
       choicesForCurrentStep,
       groupOf: (active) => active.definition.group,
@@ -877,6 +880,9 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
   /// 上限 = `RuleChoiceQuota.effectiveMaximum`（`countsToward` 池的有效上限，
   /// 池数值只有 `RuleChoiceQuota.limitsFor` 一处来源）；上限为 0 时给出**可见原因**
   /// 而不是让 tile 可点却无反应（P2-12）。
+  ///
+  /// `group` 与三处选择面板**同一份**语义：[groupRuleChoiceSections] 归组、
+  /// [RuleChoiceGroupedSections] 画标题（专用渲染器不再"只消费 help"）。
   List<Widget> _spellChoicePoolSections(
     List<_ActiveRuleChoice> activeRuleChoices,
   ) {
@@ -898,58 +904,67 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       level: _level,
     );
     return [
-      for (final active in spellChoices)
-        () {
-          final selected = _ruleChoices[active.key] ?? const <String>[];
-          final candidates = _candidatesFor(active);
-          final visible = visibleRuleChoiceCandidates(
-            candidates,
-            _requiresContextFor(active),
-          );
-          final maximum = RuleChoiceQuota.effectiveMaximum(
-            countsToward: active.definition.countsToward,
-            maximum: active.definition.maximum,
-            poolLimits: poolLimits,
-            usedByOthers: _poolUsageByOthers(activeRuleChoices, active),
-          );
-          return _SpellChoiceSection(
-            title: active.definition.label,
-            hint: active.definition.help,
-            blockedReason: _blockedReasonFor(active),
-            // 池额度被同池选择占满（先声明先占）时也要有可见原因：否则候选 tile
-            // 点得动却没反应（`_emit` 静默丢弃），用户看不到任何解释。
-            capExhaustedReason: maximum == 0 && selected.isEmpty
-                ? '本选择的额度已被同一数量池中声明在前面的选择占满'
-                      '（先声明先占）；请先取消同池的其它选择。'
-                : null,
-            repeatable: active.definition.repeatable,
-            entries: [
-              for (final candidate in visible)
-                if (candidate.entry != null) candidate.entry!,
-            ],
-            inlineCandidates: [
-              for (final candidate in visible)
-                if (candidate.entry == null) candidate,
-            ],
-            hiddenSelectedLabels: [
-              for (final id in selected)
-                if (!visible.any((candidate) => candidate.id == id))
-                  candidates
-                          .where((candidate) => candidate.id == id)
-                          .firstOrNull
-                          ?.label ??
-                      id,
-            ],
-            selected: selected,
-            maximum: maximum,
-            maximumSpellLevel: active.definition.maximumOptionLevel ?? 9,
-            onChanged: (next) => setState(() {
-              _ruleChoices[active.key] = next;
-              _applyRecommendedRuleChoices();
-            }),
-            onOpenEntry: _openEntry,
-          );
-        }(),
+      // `group` 的归组与标题**复用** [groupRuleChoiceSections] +
+      // [RuleChoiceGroupedSections]（与三处选择面板同一份），专用渲染器不得另写
+      // 分组循环或第二份标题样式——否则 `group` 在创建向导里"声明了却看不见"
+      // （§3.10.3-7），两种渲染器与三处界面的呈现语义就分叉了。
+      RuleChoiceGroupedSections(
+        groups: groupRuleChoiceSections<_ActiveRuleChoice>(
+          spellChoices,
+          groupOf: (active) => active.definition.group,
+          buildChoice: (active) {
+            final selected = _ruleChoices[active.key] ?? const <String>[];
+            final candidates = _candidatesFor(active);
+            final visible = visibleRuleChoiceCandidates(
+              candidates,
+              _requiresContextFor(active),
+            );
+            final maximum = RuleChoiceQuota.effectiveMaximum(
+              countsToward: active.definition.countsToward,
+              maximum: active.definition.maximum,
+              poolLimits: poolLimits,
+              usedByOthers: _poolUsageByOthers(activeRuleChoices, active),
+            );
+            return _SpellChoiceSection(
+              title: active.definition.label,
+              hint: active.definition.help,
+              blockedReason: _blockedReasonFor(active),
+              // 池额度被同池选择占满（先声明先占）时也要有可见原因：否则候选 tile
+              // 点得动却没反应（`_emit` 静默丢弃），用户看不到任何解释。
+              capExhaustedReason: maximum == 0 && selected.isEmpty
+                  ? '本选择的额度已被同一数量池中声明在前面的选择占满'
+                        '（先声明先占）；请先取消同池的其它选择。'
+                  : null,
+              repeatable: active.definition.repeatable,
+              entries: [
+                for (final candidate in visible)
+                  if (candidate.entry != null) candidate.entry!,
+              ],
+              inlineCandidates: [
+                for (final candidate in visible)
+                  if (candidate.entry == null) candidate,
+              ],
+              hiddenSelectedLabels: [
+                for (final id in selected)
+                  if (!visible.any((candidate) => candidate.id == id))
+                    candidates
+                            .where((candidate) => candidate.id == id)
+                            .firstOrNull
+                            ?.label ??
+                        id,
+              ],
+              selected: selected,
+              maximum: maximum,
+              maximumSpellLevel: active.definition.maximumOptionLevel ?? 9,
+              onChanged: (next) => setState(() {
+                _ruleChoices[active.key] = next;
+                _applyRecommendedRuleChoices();
+              }),
+              onOpenEntry: _openEntry,
+            );
+          },
+        ),
+      ),
     ];
   }
 
@@ -988,6 +1003,9 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
   /// （[blockedReason]）、候选为空（[unavailableReason]）、已选值不在候选集里
   /// （未生效清单）。
   ///
+  /// `group` 与三处选择面板**同一份**语义：[groupRuleChoiceSections] 归组、
+  /// [RuleChoiceGroupedSections] 画标题（专用渲染器不再"只消费 help"）。
+  ///
   /// 职业**没有**任何技能选择时保持既有行为：同一组件降级为"背景预设编辑"
   /// （全技能网格、写回 [_backgroundSkillProficiencies]）——这是历史 UX，不是
   /// 第二种"职业技能选择"实现（候选、交互、落库都由同一处承担）。
@@ -1009,41 +1027,48 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       ];
     }
     return [
-      for (final active in skillChoices)
-        () {
-          final candidates = visibleRuleChoiceCandidates(
-            _candidatesFor(active),
-            _requiresContextFor(active),
-          );
-          final optionNames = {
-            for (final candidate in candidates) candidate.label,
-          };
-          final selected = _ruleChoices[active.key] ?? const <String>[];
-          return _SkillProficiencySection(
-            title: active.definition.label,
-            hint: active.definition.help,
-            blockedReason: _blockedReasonFor(active),
-            unavailableReason: candidates.isEmpty
-                ? '资料库中缺少 skill 选项：该选择既没有内联 options，也没有匹配的条目。'
-                : null,
-            unavailableSelected: [
-              for (final skill in selected)
-                if (!optionNames.contains(skill)) skill,
-            ],
-            selected: selected,
-            options: [
+      // 与法术池同理：`group` 的归组与标题复用共享组件，专用渲染器不再"只消费
+      // help、丢掉 group"。
+      RuleChoiceGroupedSections(
+        groups: groupRuleChoiceSections<_ActiveRuleChoice>(
+          skillChoices,
+          groupOf: (active) => active.definition.group,
+          buildChoice: (active) {
+            final candidates = visibleRuleChoiceCandidates(
+              _candidatesFor(active),
+              _requiresContextFor(active),
+            );
+            final optionNames = {
               for (final candidate in candidates) candidate.label,
-            ],
-            minimum: active.definition.minimum,
-            maximum: active.definition.maximum,
-            repeatable: active.definition.repeatable,
-            fixed: _backgroundSkillProficiencies,
-            onChanged: (next) => setState(() {
-              _ruleChoices[active.key] = next;
-              _applyRecommendedRuleChoices();
-            }),
-          );
-        }(),
+            };
+            final selected = _ruleChoices[active.key] ?? const <String>[];
+            return _SkillProficiencySection(
+              title: active.definition.label,
+              hint: active.definition.help,
+              blockedReason: _blockedReasonFor(active),
+              unavailableReason: candidates.isEmpty
+                  ? '资料库中缺少 skill 选项：该选择既没有内联 options，也没有匹配的条目。'
+                  : null,
+              unavailableSelected: [
+                for (final skill in selected)
+                  if (!optionNames.contains(skill)) skill,
+              ],
+              selected: selected,
+              options: [
+                for (final candidate in candidates) candidate.label,
+              ],
+              minimum: active.definition.minimum,
+              maximum: active.definition.maximum,
+              repeatable: active.definition.repeatable,
+              fixed: _backgroundSkillProficiencies,
+              onChanged: (next) => setState(() {
+                _ruleChoices[active.key] = next;
+                _applyRecommendedRuleChoices();
+              }),
+            );
+          },
+        ),
+      ),
     ];
   }
 

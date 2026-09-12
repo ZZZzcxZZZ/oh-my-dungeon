@@ -15,7 +15,6 @@ import 'package:dnd_table_client/src/features/characters/presentation/widgets/ru
 import 'package:dnd_table_client/src/features/content/data/import/content_package_importer.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
 import 'package:dnd_table_client/src/features/rules/domain/character_build.dart';
-import 'package:dnd_table_client/src/features/rules/domain/character_rule_definition.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_choice_semantics.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_profile.dart';
 import 'package:flutter/material.dart';
@@ -690,50 +689,78 @@ void main() {
       );
     });
 
-    testWidgets('示例包的 group / help 落到选择面板', (tester) async {
+    testWidgets('示例包的 group / help 在真实向导的三种渲染路径上都可见', (tester) async {
+      // 这条用例是**真实路径**断言：真实导入器 + 真实 `CharacterEditorPage`，
+      // 不再手工拼 `groupRuleChoiceSections` 去渲染一个向导从不这样渲染的定义。
+      // 覆盖三条路径（§3.10.3-7）：
+      // 1. 共享选择卡片（`groupRuleChoiceSections` + `RuleChoiceGroupedSections`）；
+      // 2. 技能网格专用渲染器（`optionType: "skill"`，步骤 4）；
+      // 3. 法术池专用渲染器（`optionType: "spell"`，步骤 6）。
+      tester.view.physicalSize = const Size(1200, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
       final entries = await _importSample();
-      final skills = RuleChoiceSemantics.definitionForKey(
-        'astral-knight:class/astral-knight#class-skills',
-        entries: entries,
-      )!;
-      final invocations = RuleChoiceSemantics.definitionForKey(
-        'astral-knight:class/astral-knight#invocations',
-        entries: entries,
-      )!;
-      final defs = <({RuleChoiceDefinition definition, String sourceEntryId})>[
-        (definition: skills.definition, sourceEntryId: skills.sourceEntryId),
-        (
-          definition: invocations.definition,
-          sourceEntryId: invocations.sourceEntryId,
-        ),
-      ];
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: RuleChoiceGroupedSections(
-                groups: groupRuleChoiceSections(
-                  defs,
-                  groupOf: (def) => def.definition.group,
-                  buildChoice: (def) => RuleChoiceSection(
-                    definition: def.definition,
-                    candidates: RuleChoiceSemantics.candidatesFor(
-                      def.definition,
-                      entries: entries,
-                      sourceEntryId: def.sourceEntryId,
-                    ),
-                    selected: const <String>[],
-                    onChanged: (_) {},
-                  ),
-                ),
-              ),
-            ),
+          home: CharacterEditorPage(
+            defaultCreationMethod: 'standard',
+            contentEntries: [
+              ...entries.values,
+              _syntheticOrigin('species', 'human', '人类'),
+              _syntheticOrigin('background', 'soldier', '士兵'),
+            ],
+            onSubmit: (draft) async => true,
           ),
         ),
       );
-      expect(find.text('技能'), findsOneWidget);
-      expect(find.text('2 级祈唤'), findsOneWidget);
-      expect(find.text('同一祈唤可以重复选取，最多 2 次。'), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const Key('standard-character-name-field')),
+        '分组试炼者',
+      );
+      await tester.pumpAndSettle();
+      // 升到 3 级：2 级祈唤（步骤 0 的共享卡片）才会激活。
+      for (var i = 0; i < 2; i++) {
+        await tester.tap(
+          find.byKey(const Key('standard-level-increment-button')),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      // 路径 1：共享选择卡片。
+      await _goToDesktopStep(tester, 0);
+      expect(
+        find.widgetWithText(RuleChoiceGroupTitle, '2 级祈唤'),
+        findsOneWidget,
+        reason: '共享卡片必须把 group 渲染成组标题',
+      );
+      expect(
+        find.text('同一祈唤可以重复选取，最多 2 次。'),
+        findsOneWidget,
+        reason: '共享卡片必须渲染 help',
+      );
+
+      // 路径 2：技能网格专用渲染器（此前整批丢弃 group）。
+      await _goToDesktopStep(tester, 4);
+      expect(
+        find.widgetWithText(RuleChoiceGroupTitle, '技能'),
+        findsOneWidget,
+        reason: '技能网格专用渲染器必须把 group 渲染成组标题',
+      );
+
+      // 路径 3：法术池专用渲染器（此前只消费 help，不消费 group）。
+      await _goToDesktopStep(tester, 6);
+      expect(
+        find.widgetWithText(RuleChoiceGroupTitle, '戏法'),
+        findsOneWidget,
+        reason: '法术池专用渲染器必须把 group 渲染成组标题',
+      );
+      expect(
+        find.text('戏法自星界骑士法术列表选择，不占准备上限。'),
+        findsOneWidget,
+        reason: '法术池专用渲染器必须渲染 help',
+      );
     });
 
     testWidgets('示例包：创建向导路径能在 3 级建出角色（P0：第 6 步不再永久阻塞）', (

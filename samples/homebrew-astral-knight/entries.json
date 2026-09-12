@@ -204,7 +204,7 @@
               ],
               "maximumOptionLevel": 0,
               "builderStep": "spells",
-              "group": "1 级法术",
+              "group": "戏法",
               "help": "戏法自星界骑士法术列表选择，不占准备上限。"
             }
           ]

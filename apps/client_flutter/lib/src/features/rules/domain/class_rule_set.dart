@@ -124,6 +124,7 @@ class ClassResourceRule {
     this.recoveryTable,
     this.startsAtLevel = 1,
     this.description,
+    this.fields = const {},
   });
 
   final String id;
@@ -159,6 +160,13 @@ class ClassResourceRule {
 
   /// 资源表声明到的最早等级；只有 formula 的资源不贡献等级。
   int? get declaredMinLevel => maximum.table?.minLevel;
+
+  /// 声明过哪些列（**列级合并的唯一判据**，契约 §3.6）。
+  /// 由 [ClassRuleSet.parse] 在"键存在"时填充；缺省值不算声明，
+  /// 显式 0 / 空表算声明（"存在但为 0"与"未声明"不同，§3.12）。
+  final Set<String> fields;
+
+  bool declares(String column) => fields.contains(column);
 }
 
 /// `classRules.spellcasting`（§3.3）。只做形状校验，原型是否存在由调用方校验。
@@ -173,6 +181,7 @@ class ClassSpellcasting {
     this.prepared,
     this.cantrips,
     this.maximumSpellLevel,
+    this.fields = const {},
   });
 
   final String mode;
@@ -184,6 +193,13 @@ class ClassSpellcasting {
   final IntTable? prepared;
   final IntTable? cantrips;
   final IntTable? maximumSpellLevel;
+
+  /// 声明过哪些列（**列级合并的唯一判据**，契约 §3.6）。
+  /// 由 [ClassRuleSet.parse] 在"键存在"时填充；缺省值不算声明，
+  /// 显式 `null` 算声明（`archetype: null` = 清空该列）。
+  final Set<String> fields;
+
+  bool declares(String column) => fields.contains(column);
 
   /// 各表声明到的最高等级（供 declaredMaxLevel 汇总）。
   List<int> get declaredMaxLevels => [
@@ -438,6 +454,11 @@ ClassSpellcasting? _parseSpellcasting(
     prepared: tables.prepared,
     cantrips: tables.cantrips,
     maximumSpellLevel: tables.maximumSpellLevel,
+    // 列级声明：只记"键存在"，不记"值非 null"（显式 null 是"清空该列"）。
+    fields: {
+      for (final key in kSpellcastingFields)
+        if (value.containsKey(key)) key,
+    },
   );
 }
 
@@ -649,6 +670,11 @@ ClassResourceRule? _parseResource(
     recoveryTable: recovery.table,
     startsAtLevel: startsAt,
     description: raw['description'] == null ? null : '${raw['description']}',
+    // 列级声明：只记"键存在"（显式 0 / 空表都算声明，§3.12）。
+    fields: {
+      for (final key in kResourceFields)
+        if (raw.containsKey(key)) key,
+    },
   );
 }
 

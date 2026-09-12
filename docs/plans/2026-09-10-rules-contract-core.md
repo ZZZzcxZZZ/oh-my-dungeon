@@ -3021,3 +3021,42 @@ W3 之前派生的角色卡里，`abilities` 是**旧语义的最终值**（多�
 在"逐字不变"前提下无法再拆，仍是各自文件里最大的声明。
 
 新增逻辑仍按职责放进对应 part 文件，不要继续堆回主页面文件。
+
+---
+
+## 待办（明确不做，已与用户确认）
+
+### S4：扩展包写作 GUI
+
+**现状（2026-09-12 核对）**：
+- **导入侧完整**：`ContentPackageImporter` 支持 `.json` 与 `.dndpack`，有单文件预览、
+  批量导入向导、error/warning 报告。
+- **领域服务已具备但无 UI**：`LocalHomebrewContentService.create/update/delete` +
+  `ContentSchemaRegistry.validateForCreation` / `creatableSchemas` 有实现与单测
+  （`test/local_homebrew_content_service_test.dart`），**全仓没有任何页面/对话框调用它**——
+  这正是规格 §0 缺口表 G7 记录的状态。
+- **导出能力不存在**：`grep` 全仓只有 `.dndpack` 的**读取**，没有任何把本地自制条目
+  写回 `.dndpack` 的代码。
+- 资料包页（`content_package_settings_page.dart`）目前只有：从文件导入 / 批量导入 /
+  删除单个包 / 一键清除，**没有"新建/编辑条目"**。
+
+**规格原文**（`docs/specs/2026-09-10-rules-contract-design.md` §11）：
+> S4：作者 GUI 的**完整形态**（可视化规则表单、基于已有条目创建覆盖、`.dndpack` 导出）。
+> 本轮只保证契约与引擎支持全部能力、编辑器能渲染并应用选择结果。
+
+**用户决定（2026-09-12）**：本轮**不做**，只记录为 S4 待办。
+
+**做成时要覆盖的最小闭环**（供后续会话参考，不属于本计划范围）：
+1. 新建/编辑自制条目：`classRules` 4 个字段（`hitDie` / `savingThrowAbilities` /
+   `spellcasting` 逐级表 / `resources`）、`rules.progression[].levels` 等级步骤（**支持部分声明**，
+   不强制补满 20 级）、技能选择（`optionType: "skill"` + 内联 `options`）；
+2. 基于已有条目创建**覆盖**（依赖 S3 的 patch/replace 与来源显示，见规格 §3.7/§8）；
+3. 导出 `.dndpack`（manifest + entries，`formatVersion: 3`），与现有导入路径往返一致；
+4. GUI 必须复用 `LocalHomebrewContentService` 与 `ContentSchemaRegistry.validateForCreation`，
+   不得新开一套写入路径。
+
+### 计划 2：选择系统的运行时语义
+
+当前 `repeatable` / `countsToward` / `requires` / `group` / `help` 与内联 `options[].grants`
+是**声明即导入报错**（code `unsupportedChoiceField` / `invalidCountsToward` / `invalidRequires`），
+而不是假接受。落地它们的消费语义与对应 UI 属计划 2，见规格 §3.10 与 §11「本轮延后」。

@@ -1,7 +1,8 @@
-// 内置档案解析 + "条目声明 ∪ 档案"的字段级合并（§3.6、§3.7、§3.8）。
+// 内置档案解析 + "多条声明 ∪ 内置档案"的列级合并（§3.6、§3.7、§3.8、S3 决策 D2/D5）。
 //
-// 只有两级优先级：内置档案（tier 0）< 角色所用条目的声明（tier 100）。
-// 不做全局条目扫描、没有 priority 字段（§3.8）；未声明即不猜（§3.6 第 3 步）。
+// 优先级不是两级而是**多个 tier**：内置档案 = tier 0，包声明 = kEntryTier(100) +
+// package.priority（决策 D2）。同 tier 的确定性回退按 originId 升序取首位
+// （决策 D6，唯一实现在 `rule_override_priority.dart`）。未声明即不猜（§3.6 第 3 步）。
 //
 // 档案解析是 fail-fast（§3.1）：`abilities` / `skills` 是校验参照表，必须由档案
 // **显式声明**；`progressions` 只允许 `kProgressionFields` 里的键。任何一处缺失、
@@ -491,11 +492,15 @@ abstract final class RuleProfileResolver {
   /// 只对**条目声明**调用：内置档案自己的表由资产测试兜底，导入期的 warning
   /// 是针对第三方包的作者提示（§5.2 的 warning 语义就是"可导入，导入预览中列出"）。
   ///
-  /// [archiveRules] 是**档案侧**同 slug 职业的完整规则块：条目按字段 / 列继承档案
-  /// （§3.6），档案已提供 `spellcasting` 时"条目没写"不是缺省，不得误报；补丁资源
-  /// 是否有低 tier 可补齐也看它。**只收这一个参数**——`archiveSpellcasting` 是同一
-  /// 对象的 `spellcasting` 部分（内部派生），多一个入参就多一处"忘传 → 静默变
+  /// [archiveRules] 是**档案侧**同 slug 职业的完整规则块：`patch` 下条目按字段 /
+  /// 列继承档案（§3.6），档案已提供 `spellcasting` 时"条目没写"不是缺省，不得误报；
+  /// 补丁资源是否有低 tier 可补齐也看它。**只收这一个参数**——`archiveSpellcasting`
+  /// 是同一对象的 `spellcasting` 部分（内部派生），多一个入参就多一处"忘传 → 静默变
   /// false"的隐患。
+  ///
+  /// **可继承性必须与运行期同一口径**：`mode: replace` 的条目独占该职业，运行期
+  /// 档案不提供任何列（D4）。因此这里先把档案截断成 [inheritable]（replace → null）
+  /// 再做判断；否则会出现"导入期用档案补齐、运行期拿不到"的静默丢失。
   static void validateEntryClassRules({
     required RuleProfile profile,
     required ClassRuleSet? entryRules,
@@ -506,7 +511,11 @@ abstract final class RuleProfileResolver {
   }) {
     if (entryRules == null) return;
     final spellcasting = entryRules.spellcasting;
-    final archiveSpellcasting = archiveRules?.spellcasting;
+    // replace 独占：档案不提供任何列，因此 "档案可继承" 一律为 false。
+    final inheritable = entryRules.mode == ClassMergeMode.replace
+        ? null
+        : archiveRules;
+    final archiveSpellcasting = inheritable?.spellcasting;
     _validateArchetype(
       archetype: spellcasting?.archetype,
       path: '$path.spellcasting.archetype',
@@ -580,7 +589,8 @@ abstract final class RuleProfileResolver {
     // 否则运行期拿不到可展示的名称或上限（静默产出"未声明资源"），必须阻断。
     // 这是补丁语义的**唯一**合法性判据（列级合并的前置条件）。
     final archiveById = <String, ClassResourceRule>{
-      for (final resource in archiveRules?.resources ?? const <ClassResourceRule>[])
+      for (final resource
+          in inheritable?.resources ?? const <ClassResourceRule>[])
         resource.id: resource,
     };
     for (var index = 0; index < entryRules.resources.length; index++) {
@@ -679,6 +689,12 @@ abstract final class RuleProfileResolver {
       declarations: ordered,
       sources: sources,
     );
+    // 声明范围（§3.12）的唯一口径在 ResolvedClassRules 里：合并后实际生效的
+    // 条目各表 ∪ 档案各表。档案侧**只在合并链里确实还贡献列**时才并入——
+    // `mode: replace` 已把档案截断（D4），此时若仍并入档案的声明范围，
+    // `DeclaredLevels` 会显示"声明 1–5 级"而实际一个列都没有（违反 §3.12 规则 3）。
+    final declaredArchiveRules =
+        ordered.any((d) => d.originId == kBuiltinOriginId) ? fromArchive : null;
     return ResolvedClassRules(
       hitDie: _pickColumn<int>(
         field: RuleFieldPath.hitDie,
@@ -700,10 +716,8 @@ abstract final class RuleProfileResolver {
       resources: _mergeResources(declarations: ordered, sources: sources),
       archetype: profile.progression(spellcasting?.archetype),
       fieldSources: sources,
-      // 声明范围的唯一口径在 ResolvedClassRules 里：条目各表 ∪ 档案各表（§3.12）。
-      // 此处只提供两侧的 ClassRuleSet，不再各自算一份 min/max。
       entryRules: entryRules,
-      archiveRules: fromArchive,
+      archiveRules: declaredArchiveRules,
     );
   }
 }

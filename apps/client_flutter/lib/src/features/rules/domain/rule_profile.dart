@@ -199,6 +199,8 @@ class ResolvedClassRules {
   ///
   /// 档案侧**必须**并进来（哪怕条目自己声明了同名数值字段）：界面在"条目声明
   /// 覆盖档案"时仍应看到档案补出的等级区间，否则同一角色在不同界面数字不同。
+  /// **例外是 `mode: replace`**：档案已被 D4 截断、不贡献任何列，解析器传进来的
+  /// [archiveRules] 因此为 null——否则会出现"声明 1–5 级"而实际没有内容。
   int? get declaredMaxLevel => _declaredBound(
     <int?>[entryRules?.declaredMaxLevel, archiveRules?.declaredMaxLevel],
     (a, b) => a > b ? a : b,

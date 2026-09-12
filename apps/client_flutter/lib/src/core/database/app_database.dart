@@ -78,10 +78,13 @@ class AppDatabase extends _$AppDatabase {
       if (from < 5) {
         await m.createTable(vaultEntityRevisions);
       }
-      if (from < 6) {
+      // `from >= 2` 是必需的：`from < 2` 已按**当前** schema 建
+      // `local_content_entries`（含 rules_json / relations_json），再加一次会重复列。
+      // 同一原因，所有"补列"分支都必须以"建表分支"的 `from >=` 为守卫。
+      if (from >= 2 && from < 6) {
         await m.addColumn(localContentEntries, localContentEntries.rulesJson);
       }
-      if (from < 7) {
+      if (from >= 2 && from < 7) {
         await m.addColumn(
           localContentEntries,
           localContentEntries.relationsJson,
@@ -97,10 +100,10 @@ class AppDatabase extends _$AppDatabase {
       if (from < 9) {
         await m.addColumn(serverProfiles, serverProfiles.localAlias);
       }
-      if (from < 10) {
+      if (from >= 3 && from < 10) {
         await m.addColumn(characters, characters.markdownMirror);
       }
-      if (from < 11) {
+      if (from >= 3 && from < 11) {
         await m.addColumn(characters, characters.markdownDirty);
       }
       if (from >= 4 && from < 12) {

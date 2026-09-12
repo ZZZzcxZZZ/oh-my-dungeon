@@ -12,9 +12,10 @@ import 'rule_override_declaration.dart';
 /// 3. 同 tier 同 mode：[characterEntryId] 命中的那条优先（角色自己的职业条目）；
 /// 4. 其余同 tier：`originId` 升序。
 ///
-/// 第 4 条就是 D6 的**确定性回退**：同 tier 多来源抢同一列时，按包 id 字典序取
-/// 后者（`originId` 的前缀就是 packageId，同一对齐键下后缀相同），因此同样输入
-/// 永远得到同样结果，与 Map 迭代序无关。
+/// 第 4 条就是 D6 的**确定性回退**：同 tier 多来源抢同一列时，`originId` 升序的
+/// **首位**胜出（`originId` 的前缀就是 packageId，同一对齐键下后缀相同 ⇒ 等价于
+/// 按包 id 字典序取**最小者**；`_pickColumn` 取首个声明者），因此同样输入永远得到
+/// 同样结果，与 Map 迭代序无关。
 abstract final class RuleOverrideOrder {
   static List<RuleOverrideDeclaration> ordered(
     Iterable<RuleOverrideDeclaration> declarations, {

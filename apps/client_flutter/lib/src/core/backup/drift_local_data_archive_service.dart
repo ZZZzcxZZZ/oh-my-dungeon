@@ -172,12 +172,14 @@ class DriftLocalDataArchiveService implements LocalDataArchiveService {
             .insert(ServerProfileRow.fromJson(rowJson).toCompanion(true));
       }
       // Restore LocalContentPackages.
-      for (final rowJson
-          in (databaseJson['localContentPackages'] as List)
-              .cast<Map<String, Object?>>()) {
+      for (final rawRow in databaseJson['localContentPackages'] as List) {
         await db
             .into(db.localContentPackages)
-            .insert(LocalContentPackageRow.fromJson(rowJson).toCompanion(true));
+            .insert(
+              LocalContentPackageRow.fromJson(
+                _withPackagePriorityDefault(rawRow),
+              ).toCompanion(true),
+            );
       }
       // Restore LocalContentEntries.
       for (final rowJson
@@ -262,5 +264,20 @@ class DriftLocalDataArchiveService implements LocalDataArchiveService {
           .write(LocalContentAssetsCompanion(bytes: Value(bytes)));
     }
   }
+}
 
+/// 归档兼容：`local_content_packages.priority` 是 schemaVersion 14 才引入的
+/// **非空**列（默认 0）。v13 及更早导出的 `database.json` 没有该键，生成的
+/// `LocalContentPackageRow.fromJson` 会对缺失键执行 `null as int` 抛 `TypeError`，
+/// 让整个 restore 事务回滚 —— 升级后旧备份将无法恢复。
+///
+/// 恢复前补默认值 0（tier 仍为 100，老备份的数值语义不变）。**不把该列改可空**：
+/// 列可空会让 `packagePriorities()` / tier 计算 / 查询到处处理 null，而迁移已经
+/// 保证库内该列非空；可空等于把这个不变量扩散到整个读取链。
+Map<String, Object?> _withPackagePriorityDefault(Object? raw) {
+  final row = raw is Map
+      ? Map<String, Object?>.from(raw)
+      : <String, Object?>{};
+  row.putIfAbsent('priority', () => 0);
+  return row;
 }

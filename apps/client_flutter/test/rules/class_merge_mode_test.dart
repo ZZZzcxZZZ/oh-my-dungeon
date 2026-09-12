@@ -7,6 +7,7 @@
 // - `replace`：独占——更低 tier（含内置档案）不提供任何列，未声明即未声明；
 // - 非法值在解析期报 `invalidMergeMode`（path 精确），并提示 `spellcasting.mode`
 //   才是法术选择模型的位置。
+import 'package:dnd_table_client/src/features/characters/domain/declared_levels.dart';
 import 'package:dnd_table_client/src/features/rules/domain/class_rule_set.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_diagnostic.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_field_path.dart';
@@ -156,6 +157,31 @@ void main() {
       isEmpty,
     );
     expect(merged.resourcesAt(1, const {}), isEmpty);
+  });
+
+  test('replace：声明范围不含档案（不再显示"声明 1–5 级"而实际无内容）', () {
+    final patched = RuleProfileResolver.resolveClassRules(
+      profile: profile,
+      slug: 'wizard',
+      entryRules: entry({'hitDie': 6}),
+      entryId: _entryId,
+    );
+    // patch：档案的表仍贡献声明范围（§3.12 规则 3 的"合并后实际生效的范围"）。
+    expect(patched.declaredMinLevel, 1);
+    expect(patched.declaredMaxLevel, 5, reason: '档案 wizard 的表声明到 5 级');
+
+    final replaced = RuleProfileResolver.resolveClassRules(
+      profile: profile,
+      slug: 'wizard',
+      entryRules: entry({'mode': 'replace', 'hitDie': 6}),
+      entryId: _entryId,
+    );
+    expect(replaced.declaredMinLevel, isNull);
+    expect(replaced.declaredMaxLevel, isNull);
+    expect(
+      DeclaredLevels.fromResolvedClassRules(replaced).rangeLabel,
+      '该职业未声明任何等级内容',
+    );
   });
 
   test('未知 mode 值 → invalidMergeMode，path 精确', () {

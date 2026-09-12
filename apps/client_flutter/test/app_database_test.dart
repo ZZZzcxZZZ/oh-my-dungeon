@@ -27,6 +27,62 @@ void main() {
     await database.close();
   });
 
+  test('migrates a v1 database without duplicating columns', () async {
+    // v1 只有 serverProfiles（没有任何迁移分支 createTable 它；from < 9 会给它
+    // 加 local_alias）。从 v1 升到 v14 会依次经过 `from < 2`（建内容表）与
+    // `from < 3`（建 characters）——这两处的 `createTable` 用的是**当前** schema，
+    // 因此后面所有 `addColumn` 都必须有 `from >=` 守卫，否则重复列。
+    final sqlite = sqlite3.openInMemory();
+    sqlite
+      ..execute('''
+        CREATE TABLE server_profiles (
+          id TEXT PRIMARY KEY NOT NULL,
+          name TEXT NOT NULL,
+          base_url TEXT NOT NULL,
+          api_base_url TEXT NOT NULL,
+          websocket_url TEXT NOT NULL,
+          last_known_version TEXT NOT NULL DEFAULT '',
+          is_default INTEGER NOT NULL DEFAULT 0,
+          last_connected_at INTEGER
+        )
+      ''')
+      ..execute(
+        "INSERT INTO server_profiles VALUES "
+        "('localhost', 'Local', 'http://localhost:3000', "
+        "'http://localhost:3000/api', 'ws://localhost:3000', '', 1, NULL)",
+      )
+      ..execute('PRAGMA user_version = 1');
+
+    final database = AppDatabase.forTesting(NativeDatabase.opened(sqlite));
+
+    // v1 → v14 全链路必须成功（任何 duplicate column 都会在首次查询时抛错）。
+    final profiles = await database.select(database.serverProfiles).get();
+    expect(profiles.single.id, 'localhost');
+    expect(profiles.single.localAlias, isNull);
+
+    // `from < 2` 按当前 schema 建的 local_content_packages 已经带 priority，
+    // `from >= 2 && from < 14` 因此跳过 addColumn：建表与迁移不冲突。
+    await database
+        .into(database.localContentPackages)
+        .insert(
+          LocalContentPackagesCompanion.insert(
+            id: 'fresh',
+            formatVersion: 3,
+            name: 'Fresh',
+            version: '1.0.0',
+            locale: 'zh-CN',
+            system: 'dnd5e-2024',
+            entryCount: 0,
+            contentHash: 'hash',
+            installedAt: DateTime.utc(2026, 9, 12),
+          ),
+        );
+    final packages = await database.select(database.localContentPackages).get();
+    expect(packages.single.priority, 0);
+
+    await database.close();
+  });
+
   test('migrates legacy actor cache names without losing rows', () async {
     final sqlite = sqlite3.openInMemory();
     sqlite

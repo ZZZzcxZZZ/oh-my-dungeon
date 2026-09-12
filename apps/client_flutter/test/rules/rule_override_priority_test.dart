@@ -194,13 +194,16 @@ void main() {
       expect(index.declarationsFor('fireball'), isEmpty);
     });
 
-    test('packageIdOf 取 id 前缀（缺失时返回空串）', () {
+    test('packageIdOf 取 id 前缀（缺失时返回空串；含 `:` 的包 id 按最后一个切分）', () {
       expect(
         RuleOverrideDeclaration.packageIdOf('phb-2024:class/wizard'),
         'phb-2024',
       );
       expect(RuleOverrideDeclaration.packageIdOf('wizard'), '');
       expect(RuleOverrideDeclaration.packageIdOf(':class/wizard'), '');
+      // 包 id 允许含 `:`（导入期只校验 entry id 以 `<packageId>:` 开头）。
+      // 按第一个 `:` 切分会得到 `a` ⇒ packagePriorities 查不到键、priority 静默变 0。
+      expect(RuleOverrideDeclaration.packageIdOf('a:b:class/wizard'), 'a:b');
     });
   });
 }

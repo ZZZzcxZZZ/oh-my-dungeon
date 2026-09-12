@@ -338,6 +338,60 @@ void main() {
         reason: '${report.errors}',
       );
     });
+    test('replace 独占：档案的 spellcasting 不再算"可继承" → missingCoreField', () async {
+      // 反例一：`{"mode":"replace","spellcasting":{"prepared":…}}` + slug wizard。
+      // 旧实现拿**原始档案**判断可继承性，档案 wizard 有 spellcasting ⇒ 不报；
+      // 运行期 replace 把档案截断，mode 缺省 none ⇒ prepared 静默消失。
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'wizard',
+            structured: {
+              'classRules': {
+                'mode': 'replace',
+                'spellcasting': {
+                  'prepared': {'1': 4},
+                },
+              },
+            },
+          ),
+        ),
+      );
+      final warning = report.warnings.singleWhere(
+        (w) => w.path == r'$.entries[0].structured.classRules.spellcasting',
+      );
+      expect(warning.message, contains('missingCoreField'));
+      expect(warning.message, contains('mode'));
+    });
+
+    test('replace 独占：档案资源不再补齐 → incompleteResourcePatch', () async {
+      // 反例二：`{"mode":"replace","resources":[{"id":"rage"}]}`。旧实现用档案的
+      // rage 补齐 name / maximum 而放行；运行期 replace 下档案不参与，合并后
+      // maximum 为 null ⇒ 整条资源被跳过。
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'barbarian',
+            structured: {
+              'classRules': {
+                'mode': 'replace',
+                'resources': [
+                  {'id': 'rage'},
+                ],
+              },
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) =>
+            e.path ==
+            r'$.entries[0].structured.classRules.resources[0].id',
+      );
+      expect(error.message, contains('incompleteResourcePatch'));
+      expect(error.message, contains('rage'));
+    });
   });
 
   group('内置 slug 保护', () {

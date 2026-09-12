@@ -70,10 +70,13 @@ class RuleOverrideDeclaration {
   final String? entryId;
 
   /// 条目 id 前缀里的包 id（`<packageId>:<type>/<slug>` → `<packageId>`）；
-  /// 没有 `:` 时返回空串。**唯一实现**：索引、解析器、UI 都调这里，
-  /// 不各自 `split(':')`。
+  /// 没有 `:`、或 `:` 出现在最前时返回空串。
+  ///
+  /// **必须按最后一个 `:` 切分**：导入期只校验条目 id 以 `<packageId>:` 开头，
+  /// 包 id 因此允许含 `:`；按第一个 `:` 切分会让 `packagePriorities()` 查不到键、
+  /// priority 静默变 0。**唯一实现**：索引、解析器、UI 都调这里，不各自 `split(':')`。
   static String packageIdOf(String entryId) {
-    final index = entryId.indexOf(':');
+    final index = entryId.lastIndexOf(':');
     return index <= 0 ? '' : entryId.substring(0, index);
   }
 }

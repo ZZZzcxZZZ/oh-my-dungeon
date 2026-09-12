@@ -125,6 +125,50 @@ Future<void> seedBackupFixture(AppDatabase db) async {
       );
 }
 
+/// Rewrites a v14 export into the **v13 shape**: removes the
+/// `local_content_packages.priority` key (the column was introduced in
+/// schemaVersion 14) and recomputes the manifest sha256 so the archive still
+/// previews as valid. This is the on-disk shape a pre-v14 client exported.
+Uint8List stripPackagePriorityForLegacyArchive(Uint8List bytes) {
+  final archive = ZipDecoder().decodeBytes(bytes);
+  final databaseJson =
+      jsonDecode(
+            utf8.decode(
+              archive.findFile('database.json')!.content as List<int>,
+            ),
+          )
+          as Map<String, Object?>;
+  final packages = <Map<String, Object?>>[
+    for (final row in (databaseJson['localContentPackages'] as List))
+      Map<String, Object?>.from(row as Map)..remove('priority'),
+  ];
+  final rewritten = <String, Object?>{
+    ...databaseJson,
+    'localContentPackages': packages,
+  };
+  final databaseBytes = Uint8List.fromList(utf8.encode(jsonEncode(rewritten)));
+
+  final manifestJson =
+      jsonDecode(
+            utf8.decode(
+              archive.findFile('manifest.json')!.content as List<int>,
+            ),
+          )
+          as Map<String, Object?>;
+  manifestJson['sha256'] = sha256.convert(databaseBytes).toString();
+
+  final rebuilt = Archive();
+  rebuilt.addFile(ArchiveFile.bytes('database.json', databaseBytes));
+  rebuilt.addFile(
+    ArchiveFile.bytes('manifest.json', utf8.encode(jsonEncode(manifestJson))),
+  );
+  for (final file in archive.files) {
+    if (file.name == 'database.json' || file.name == 'manifest.json') continue;
+    rebuilt.addFile(ArchiveFile.bytes(file.name, file.content as List<int>));
+  }
+  return Uint8List.fromList(ZipEncoder().encode(rebuilt));
+}
+
 void main() {
   group('DriftLocalDataArchiveService', () {
     test(
@@ -185,6 +229,39 @@ void main() {
         await target.close();
       },
     );
+
+    test('restores a v13 archive without priority keys, defaulting to 0', () async {
+      final source = AppDatabase.forTesting(NativeDatabase.memory());
+      final target = AppDatabase.forTesting(NativeDatabase.memory());
+      final sourceService = DriftLocalDataArchiveService(source);
+      final targetService = DriftLocalDataArchiveService(target);
+      await seedBackupFixture(source);
+
+      final legacyBytes = stripPackagePriorityForLegacyArchive(
+        await sourceService.exportArchive(),
+      );
+      // The fixture really is the v13 shape: no `priority` key anywhere.
+      final decoded = ZipDecoder().decodeBytes(legacyBytes);
+      expect(
+        utf8.decode(decoded.findFile('database.json')!.content as List<int>),
+        isNot(contains('"priority"')),
+      );
+
+      final preview = await targetService.previewArchive(legacyBytes);
+      expect(preview.valid, isTrue, reason: preview.error ?? '');
+
+      // Before the fix this threw `TypeError: null is not a subtype of int`
+      // inside the restore transaction and rolled the whole restore back.
+      await targetService.restoreArchive(preview);
+
+      final packages = await target.select(target.localContentPackages).get();
+      expect(packages.single.id, 'example');
+      // Old backups keep the "priority 0 ⇒ tier 100" behavior (D2).
+      expect(packages.single.priority, 0);
+
+      await source.close();
+      await target.close();
+    });
 
     test('rejects corrupted archive preview', () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());

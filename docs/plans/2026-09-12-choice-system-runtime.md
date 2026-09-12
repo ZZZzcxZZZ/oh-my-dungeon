@@ -287,6 +287,8 @@ void main() {
         {'ability': 'cha', 'minimum': '13'},                         // 非数字
         {'choice': 5},                                               // 非字符串
         {'ability': 'cha', 'minimum': 13, 'extra': 1},               // 未定义字段
+        {'choice': 'a', 'minimum': 13},                              // choice 形态夹带 ability 字段
+        {'ability': 'cha', 'option': 'x'},                           // ability 形态夹带 choice 字段
       ]) {
         expect(
           () => RuleChoiceDefinition.fromJson(<String, Object?>{
@@ -374,7 +376,22 @@ class RuleRequiresDefinition {
     this.option,
     this.ability,
     this.minimum,
-  });
+  }) : assert(
+         (choice != null) != (ability != null),
+         'requires 必须是 {choice, option?} 或 {ability, minimum} 之一',
+       ),
+       assert(
+         ability == null || (minimum != null && minimum > 0),
+         'requires 的 ability 形态必须带正整数 minimum',
+       ),
+       assert(
+         choice == null || minimum == null,
+         'requires 的 choice 形态不允许 minimum',
+       ),
+       assert(
+         choice != null || option == null,
+         'requires 的 ability 形态不允许 option',
+       );
 
   final String? choice;
   final String? option;
@@ -389,17 +406,21 @@ class RuleRequiresDefinition {
     final option = json['option'];
     final ability = json['ability'];
     final minimum = json['minimum'];
-    final allowed = <String>{'choice', 'option', 'ability', 'minimum'};
-    final extra = json.keys.where((key) => !allowed.contains(key)).toList();
-    if (extra.isNotEmpty) {
-      throw FormatException('requires 出现未定义字段：$extra');
-    }
     final hasChoice = choice != null;
     final hasAbility = ability != null;
     if (hasChoice == hasAbility) {
       throw const FormatException(
         'requires 必须是 {choice, option?} 或 {ability, minimum} 之一',
       );
+    }
+    // XOR 判定出形态后按形态收紧字段白名单：未知字段与另一形态的字段在此都是
+    // 多余字段，一律抛 FormatException，绝不静默丢弃。
+    final allowed = hasChoice
+        ? const <String>{'choice', 'option'}
+        : const <String>{'ability', 'minimum'};
+    final extra = json.keys.where((key) => !allowed.contains(key)).toList();
+    if (extra.isNotEmpty) {
+      throw FormatException('requires 出现未定义或形态不允许的字段：$extra');
     }
     if (hasChoice) {
       if (choice is! String || choice.trim().isEmpty) {

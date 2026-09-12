@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
 import 'package:dnd_table_client/src/features/rules/domain/character_rule_definition.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_choice_semantics.dart';
@@ -164,6 +166,43 @@ void main() {
       expect(selection.selected, ['a']);
       expect(selection.invalidSelected, isEmpty);
     });
+
+    test('内联 id 与 optionTags 派生的条目候选撞名：保留内联、丢弃条目', () {
+      const definition = RuleChoiceDefinition(
+        id: 'pick',
+        label: '选一个',
+        optionType: 'feat',
+        minimum: 1,
+        maximum: 1,
+        optionTags: ['fighting-style'],
+        options: [
+          RuleChoiceOption(
+            id: 'p:feat/a',
+            label: '内联 A',
+            grants: [
+              RuleGrantDefinition(
+                id: 'inline-a-grant',
+                kind: RuleGrantKind.ability,
+                label: '内联 A 加值',
+                target: 'str',
+                value: 1,
+              ),
+            ],
+          ),
+        ],
+      );
+
+      final candidates = RuleChoiceSemantics.candidatesFor(
+        definition,
+        entries: entries,
+      );
+
+      // 撞名的 featA 条目候选被丢弃；不撞名的 featB 仍在（顺序不变）。
+      expect(candidates.map((c) => c.id), ['p:feat/a', featB.id]);
+      expect(candidates.first.isInline, isTrue);
+      expect(candidates.first.grants.single.id, 'inline-a-grant');
+      expect(candidates.last.entry, same(featB));
+    });
   });
 
   group('normalizeSelection', () {
@@ -311,7 +350,7 @@ void main() {
       expect(grants.single.id, 'skill:察觉');
     });
 
-    test('ability → ability，加值取 data[value]，缺省 1', () {
+    test('ability → ability，加值取 data[value]，缺省或 null 为 1', () {
       final def = RuleChoiceSemantics.autoGrantsFor(
         optionType: 'ability',
         optionId: 'cha',
@@ -327,14 +366,26 @@ void main() {
       )!;
       expect(plusTwo.single.value, 2);
 
-      // 非正数 / 非数字都退化为缺省 1（不臆造负加值）。
-      for (final bad in <Object?>[0, -1, '2', null]) {
-        final grants = RuleChoiceSemantics.autoGrantsFor(
-          optionType: 'ability',
-          optionId: 'cha',
-          data: {'value': bad},
-        )!;
-        expect(grants.single.value, 1, reason: '$bad');
+      // 值为 null 仍算"没写"，缺省为 1（<choice.value ?? 1>）。
+      final nullValue = RuleChoiceSemantics.autoGrantsFor(
+        optionType: 'ability',
+        optionId: 'cha',
+        data: const {'value': null},
+      )!;
+      expect(nullValue.single.value, 1);
+    });
+
+    test('ability 的 data[value] 显式非法 → 无法推断（null），不静默改写成 1', () {
+      for (final bad in <Object?>[0, -1, '2', 2.5, double.nan]) {
+        expect(
+          RuleChoiceSemantics.autoGrantsFor(
+            optionType: 'ability',
+            optionId: 'cha',
+            data: {'value': bad},
+          ),
+          isNull,
+          reason: '$bad',
+        );
       }
     });
 
@@ -349,7 +400,7 @@ void main() {
       }
     });
 
-    test('kAutoGrantOptionTypes 的每一项都有显式分支（集合与 switch 不分叉）', () {
+    test('kAutoGrantOptionTypes 与 autoGrantsFor 的 switch 双向一致', () {
       expect(kAutoGrantOptionTypes, {
         'skill',
         'ability',
@@ -358,6 +409,7 @@ void main() {
         'weaponMastery',
         'value',
       });
+      // 正方向：集合里每个类型都能推出结果（非 null；空列表 = 只记录选择）。
       for (final type in kAutoGrantOptionTypes) {
         final grants = RuleChoiceSemantics.autoGrantsFor(
           optionType: type,
@@ -365,6 +417,15 @@ void main() {
         );
         expect(grants, isNotNull, reason: type);
       }
+      // 反方向：switch 里出现的每个 case 字面量都在集合里。集合与 switch 是两份
+      // 字面量，只有读源码才能双向锁定；在 switch 里新增 case 却忘记加入集合时，
+      // 本条断言会红。
+      final switchBody = _autoGrantsSwitchBody();
+      final caseLabels = RegExp(r"case '([^']+)':")
+          .allMatches(switchBody)
+          .map((match) => match.group(1)!)
+          .toSet();
+      expect(caseLabels, kAutoGrantOptionTypes);
     });
 
     test('条目类型无法推断 → null（导入期据此报 invalidAutoGrant）', () {
@@ -508,6 +569,46 @@ void main() {
         ),
         isEmpty,
       );
+    });
+
+    test('内联 id 与条目候选撞名时，内联 grants 仍然生效（不被静默丢弃）', () {
+      final feat = _entry(
+        id: 'p:feat/a',
+        type: 'feat',
+        name: 'A 专长',
+        tags: const ['fighting-style'],
+      );
+      const definition = RuleChoiceDefinition(
+        id: 'pick',
+        label: '选一个',
+        optionType: 'feat',
+        minimum: 1,
+        maximum: 1,
+        optionTags: ['fighting-style'],
+        options: [
+          RuleChoiceOption(
+            id: 'p:feat/a',
+            label: '内联 A',
+            grants: [
+              RuleGrantDefinition(
+                id: 'inline-a-grant',
+                kind: RuleGrantKind.ability,
+                label: '内联 A 加值',
+                target: 'str',
+                value: 1,
+              ),
+            ],
+          ),
+        ],
+      );
+
+      final grants = RuleChoiceSemantics.grantsForSelection(
+        definition,
+        const ['p:feat/a'],
+        entries: {feat.id: feat},
+      );
+
+      expect(grants.map((grant) => grant.id), ['inline-a-grant']);
     });
   });
 
@@ -1017,3 +1118,24 @@ ContentEntry _entry({
   ],
   if (rules != null) 'rules': rules.toJson(),
 });
+
+/// `rule_choice_semantics.dart` 里 `autoGrantsFor` 的 `switch (optionType)` 正文
+/// （到 `default:` 为止）。用于把 switch 的 case 字面量与 [kAutoGrantOptionTypes]
+/// 双向锁定：两份字面量不能只在运行时"碰巧"一致。
+String _autoGrantsSwitchBody() {
+  final file = File(
+    'lib/src/features/rules/domain/rule_choice_semantics.dart',
+  );
+  if (!file.existsSync()) {
+    throw StateError(
+      '找不到 rule_choice_semantics.dart（cwd=${Directory.current.path}）',
+    );
+  }
+  final source = file.readAsStringSync();
+  final start = source.indexOf('switch (optionType)');
+  final end = start < 0 ? -1 : source.indexOf('default:', start);
+  if (start < 0 || end < 0) {
+    throw StateError('autoGrantsFor 的 switch 结构已变，守护测试需要同步');
+  }
+  return source.substring(start, end);
+}

@@ -172,8 +172,9 @@ class RuleGrantDefinition {
 
 /// `countsToward` 的合法取值（契约 §3.10.2 表）。
 ///
-/// 这是取值集合的**唯一实现点**：解析层用它抛 [FormatException]，导入器用它报
-/// 精确到字段的 `invalidCountsToward`。两处不得各写一份白名单。
+/// 这是取值集合的**唯一实现点**：解析层用它抛 [FormatException]。导入期据它报
+/// 精确到字段的 `invalidCountsToward` 属于**计划任务 10 接线**；接线前导入器仍对
+/// `countsToward` 一律拒收，也不引用本集合。两处不得各写一份白名单。
 const kCountsTowardPools = <String>{'spellbook', 'known', 'prepared'};
 
 /// `null`（省略 = 不占上限）与三个池名合法；其它（含非字符串）非法。
@@ -184,9 +185,10 @@ bool isCountsTowardPool(Object? value) =>
 /// `skill` / `ability` 产出 grants；`language` / `damageType` / `weaponMastery` /
 /// `value` 只记录选择（产出空 grants，不算"无法推断"）。
 ///
-/// `RuleChoiceSemantics.autoGrantsFor` 的 `switch` 与它必须一一对应：导入期用它
-/// 判断"字符串简写能否推断 grants"（不能则报 `invalidAutoGrant`），运行期由
-/// `autoGrantsFor` 真正产出。两处用同一个集合，避免"导入放行、运行期推断不出"。
+/// `RuleChoiceSemantics.autoGrantsFor` 的 `switch` 与它必须一一对应：运行期由
+/// `autoGrantsFor` 真正产出。导入期据它判断"字符串简写能否推断 grants"（不能则报
+/// `invalidAutoGrant`）属于**计划任务 10 接线**，接线前导入器不引用本集合。
+/// 两处用同一个集合，避免"导入放行、运行期推断不出"。
 const kAutoGrantOptionTypes = <String>{
   'skill',
   'ability',
@@ -199,15 +201,32 @@ const kAutoGrantOptionTypes = <String>{
 /// 一条前置依赖（契约 §3.10.2）：`{choice, option?}` 或 `{ability, minimum}`。
 ///
 /// **形状的唯一入口**是 [RuleRequiresDefinition.fromJson]：两种形态混写、字段
-/// 缺失、取值非法一律抛 [FormatException]，绝不留给运行期猜测。本批次（计划 2
-/// 任务 1–2）只解析与提供判定纯函数；引擎/UI 的消费在任务 3–6。
+/// 缺失、**按形态收紧白名单后的多余字段**（含另一形态的字段）、取值非法一律抛
+/// [FormatException]，绝不静默丢弃或留给运行期猜测。const 构造器带 assert，
+/// debug 下同样拒绝这些非法形状。本批次（计划 2 任务 1–2）只解析与提供判定纯
+/// 函数；引擎/UI 的消费在任务 3–6。
 class RuleRequiresDefinition {
   const RuleRequiresDefinition({
     this.choice,
     this.option,
     this.ability,
     this.minimum,
-  });
+  }) : assert(
+         (choice != null) != (ability != null),
+         'requires 必须是 {choice, option?} 或 {ability, minimum} 之一',
+       ),
+       assert(
+         ability == null || (minimum != null && minimum > 0),
+         'requires 的 ability 形态必须带正整数 minimum',
+       ),
+       assert(
+         choice == null || minimum == null,
+         'requires 的 choice 形态不允许 minimum',
+       ),
+       assert(
+         choice != null || option == null,
+         'requires 的 ability 形态不允许 option',
+       );
 
   final String? choice;
   final String? option;
@@ -222,17 +241,22 @@ class RuleRequiresDefinition {
     final option = json['option'];
     final ability = json['ability'];
     final minimum = json['minimum'];
-    final allowed = <String>{'choice', 'option', 'ability', 'minimum'};
-    final extra = json.keys.where((key) => !allowed.contains(key)).toList();
-    if (extra.isNotEmpty) {
-      throw FormatException('requires 出现未定义字段：$extra');
-    }
     final hasChoice = choice != null;
     final hasAbility = ability != null;
     if (hasChoice == hasAbility) {
       throw const FormatException(
         'requires 必须是 {choice, option?} 或 {ability, minimum} 之一',
       );
+    }
+    // XOR 判定出形态后按形态收紧字段白名单：未知字段与另一形态的字段在此都是
+    // 多余字段，一律抛 FormatException（§3.10.3-7「声明了但无效必须报错」），
+    // 绝不静默丢弃 —— 静默丢弃会让 toJson 往返丢字段，也让下游把脏输入当可信。
+    final allowed = hasChoice
+        ? const <String>{'choice', 'option'}
+        : const <String>{'ability', 'minimum'};
+    final extra = json.keys.where((key) => !allowed.contains(key)).toList();
+    if (extra.isNotEmpty) {
+      throw FormatException('requires 出现未定义或形态不允许的字段：$extra');
     }
     if (hasChoice) {
       if (choice is! String || choice.trim().isEmpty) {

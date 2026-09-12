@@ -117,6 +117,8 @@ void main() {
         {'ability': 'cha', 'minimum': 0}, // 非正
         {'ability': 'cha', 'minimum': '13'}, // 非数字
         {'ability': 'cha', 'minimum': 13, 'extra': 1}, // 未定义字段
+        {'choice': 'a', 'minimum': 13}, // choice 形态夹带 ability 形态字段
+        {'ability': 'cha', 'option': 'x'}, // ability 形态夹带 choice 形态字段
         {'choice': 5}, // 非字符串
         {'choice': '   '}, // 空白 choice
         {'choice': 'a', 'option': ''}, // 空白 option
@@ -146,6 +148,88 @@ void main() {
           'requires': <Object?>[5],
         }),
         throwsFormatException,
+      );
+    });
+
+    test('合法形态不因白名单收紧而回归：两种形态各自只带自己的字段', () {
+      const choiceForm = <String, Object?>{
+        'choice': 'spellbook',
+        'option': 'spell-a',
+      };
+      final parsedChoice = RuleRequiresDefinition.fromJson(choiceForm);
+      expect(parsedChoice.choice, 'spellbook');
+      expect(parsedChoice.option, 'spell-a');
+      expect(parsedChoice.toJson(), choiceForm);
+
+      // 省略 option 仍合法（不写回 null）。
+      final parsedBare = RuleRequiresDefinition.fromJson(const {
+        'choice': 'pact',
+      });
+      expect(parsedBare.option, isNull);
+      expect(parsedBare.toJson(), {'choice': 'pact'});
+
+      const abilityForm = <String, Object?>{'ability': 'cha', 'minimum': 13};
+      final parsedAbility = RuleRequiresDefinition.fromJson(abilityForm);
+      expect(parsedAbility.ability, 'cha');
+      expect(parsedAbility.minimum, 13);
+      expect(parsedAbility.toJson(), abilityForm);
+    });
+
+    test('requires 非法形状的异常类型与信息片段固定', () {
+      expect(
+        () => RuleRequiresDefinition.fromJson(const {
+          'choice': 'a',
+          'ability': 'cha',
+          'minimum': 13,
+        }),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('必须是 {choice, option?} 或 {ability, minimum} 之一'),
+          ),
+        ),
+      );
+      for (final crossForm in <Map<String, Object?>>[
+        {'choice': 'a', 'minimum': 13},
+        {'ability': 'cha', 'option': 'x'},
+      ]) {
+        expect(
+          () => RuleRequiresDefinition.fromJson(crossForm),
+          throwsA(
+            isA<FormatException>().having(
+              (error) => error.message,
+              'message',
+              contains('未定义或形态不允许的字段'),
+            ),
+          ),
+          reason: '$crossForm',
+        );
+      }
+    });
+
+    test('const 构造器拒绝 fromJson 会拒绝的非法形状（自洽）', () {
+      final ability = 'cha';
+      final choice = 'a';
+      expect(
+        () => RuleRequiresDefinition(ability: ability), // 缺 minimum
+        throwsA(isA<AssertionError>()),
+      );
+      expect(
+        () => RuleRequiresDefinition(ability: ability, minimum: 0),
+        throwsA(isA<AssertionError>()),
+      );
+      expect(
+        () => RuleRequiresDefinition(choice: choice, ability: ability),
+        throwsA(isA<AssertionError>()),
+      );
+      expect(
+        () => RuleRequiresDefinition(choice: choice, minimum: 13),
+        throwsA(isA<AssertionError>()),
+      );
+      expect(
+        () => RuleRequiresDefinition(ability: ability, option: 'x'),
+        throwsA(isA<AssertionError>()),
       );
     });
 

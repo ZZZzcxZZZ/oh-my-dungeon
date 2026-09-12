@@ -523,7 +523,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `recommendedEntryIds` | string[] | 推荐项，UI 预选 |
 | `repeatable` | bool，默认 `false` | 同一 option id 可被选多次（上限仍由 `maximum` 约束） |
 | `countsToward` | string? 或 `null` | 法术选择计入哪个数量池（`spellbook`/`known`/`prepared`）；`null` = 不占上限 |
-| `requires` | object[] | 前置依赖：`{choice, option}` 或 `{ability, minimum}`；不满足时**隐藏**该选择或选项 |
+| `requires` | object[] | 前置依赖：`{choice, option}` 或 `{ability, minimum}`；两种形态字段互斥，混写或多余字段一律报错；不满足时**隐藏**该选择或选项 |
 | `group` / `help` | string? | 分组标题与帮助文案（呈现用，无规则语义） |
 | `builderStep` | string | 归属创建向导步骤（沿用 `allowedBuilderSteps`） |
 

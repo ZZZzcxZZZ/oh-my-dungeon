@@ -53,8 +53,14 @@ class RuleChoiceSelection {
 
 /// 选择系统**纯函数语义层**：候选、选中值规范化、自动授予、前置条件、键解析。
 ///
+/// **唯一实现点（目标态）**：本层目前只被测试调用；引擎与三处选择 UI（创建向导 /
+/// 编辑器升级队列 / 独立升级页）的直接调用在**计划任务 3–6 迁移**，迁移完成后
+/// 调用方不得再写第二套候选 / 规范化 / 授予判断。
+///
 /// 唯一实现点约定（规格 §3.10；本计划的「唯一实现点总表」）：
-/// - 候选枚举只有 [candidatesFor] 一处（内联在前、条目在后，顺序稳定）；
+/// - 候选枚举只有 [candidatesFor] 一处（内联候选固定排在条目候选之前；条目候选
+///   内部顺序由 `RuleChoiceResolver.optionsFor` 决定，其 `List.sort` 非稳定排序，
+///   本层不承诺条目之间的顺序稳定）；
 ///   条目侧**复用** `RuleChoiceResolver.optionsFor`，不复制过滤逻辑；
 /// - 选中值合法性只有 [normalizeSelection] 一处；
 /// - 字符串简写自动授予只有 [autoGrantsFor] 一处（导入器与运行时共用）；
@@ -65,6 +71,14 @@ class RuleChoiceSelection {
 abstract final class RuleChoiceSemantics {
   /// 候选枚举：内联 `options`（声明顺序）在前，条目候选（
   /// `RuleChoiceResolver.optionsFor` 的过滤与排序）在后。
+  ///
+  /// **唯一实现点（目标态）**：引擎与三处 UI 的直接调用在计划任务 3–6 迁移。
+  ///
+  /// 末尾按 id 去重：内联候选与 `optionTags` / `optionEntryIds` 派生的条目候选同
+  /// id 时**保留内联候选**（内联 `grants` 是作者显式写的），丢弃同 id 的条目候选；
+  /// 否则 [grantsForSelection] 的 id→候选 map 会被排在后面的条目候选覆盖，内联
+  /// grants 被静默丢弃。重复声明的内联 id 仍按声明顺序原样保留（由导入期
+  /// `duplicateOptionId` 报错），不在这里折叠，以免改变既有选择语义。
   static List<RuleChoiceCandidate> candidatesFor(
     RuleChoiceDefinition definition, {
     required Map<String, ContentEntry> entries,
@@ -92,10 +106,16 @@ abstract final class RuleChoiceSemantics {
           ),
         )
         .toList(growable: false);
-    return List<RuleChoiceCandidate>.unmodifiable([...inline, ...entryOptions]);
+    final inlineIds = <String>{for (final candidate in inline) candidate.id};
+    return List<RuleChoiceCandidate>.unmodifiable([
+      ...inline,
+      ...entryOptions.where((candidate) => !inlineIds.contains(candidate.id)),
+    ]);
   }
 
   /// 把请求的选中值规范化为"合法选中 + 被拒值 + 违规类型"。
+  ///
+  /// **唯一实现点（目标态）**：引擎与三处 UI 的直接调用在计划任务 3–6 迁移。
   ///
   /// 规则（顺序即用户选择顺序，**不排序**）：
   /// 1. 不在候选集（[candidatesFor]）里的值 → `notACandidate`；
@@ -152,10 +172,12 @@ abstract final class RuleChoiceSemantics {
   /// - 非空列表 = 该选项自动授予的 grants；
   /// - 空列表 = "只记录选择、不产出 grants"的值类型
   ///   （`damageType` / `weaponMastery` / `value` / `language`）；
-  /// - `null` = **无法推断**（条目类型的字符串元素），导入期据此报
-  ///   `invalidAutoGrant`（决策 D1）。
+  /// - `null` = **无法推断**（条目类型的字符串元素，或 `ability` 显式写了非正整数
+  ///   的 `data['value']`），导入期据此报 `invalidAutoGrant`（决策 D1）。
   ///
-  /// `ability` 的加值取 `data['value']`（决策 D2），非正数 / 非数字缺省为 1。
+  /// `ability` 的加值取 `data['value']`（决策 D2）：**缺省**（无 `value` 键或值为
+  /// `null`）为 1（规格 §3.10.2 `<choice.value ?? 1>`）；显式写了但不是正整数时
+  /// **不猜**，返回 `null` 交给导入期报 `invalidAutoGrant`。
   static List<RuleGrantDefinition>? autoGrantsFor({
     required String optionType,
     required String optionId,
@@ -173,7 +195,15 @@ abstract final class RuleChoiceSemantics {
         ];
       case 'ability':
         final raw = data['value'];
-        final value = raw is num && raw > 0 ? raw.toInt() : 1;
+        final int value;
+        if (raw == null) {
+          value = 1;
+        } else if (raw is num && raw.isFinite && raw > 0 && raw == raw.toInt()) {
+          value = raw.toInt();
+        } else {
+          // 显式写了 0 / 负数 / 非数字 / 非整数：不静默改写成 1，走"无法推断"。
+          return null;
+        }
         return [
           RuleGrantDefinition(
             id: 'ability:$optionId',
@@ -320,6 +350,10 @@ abstract final class RuleChoiceSemantics {
   ///
   /// 公开实现点：运行期 [requiresSatisfied] 与导入期 `requires` 引用校验都调它，
   /// 导入器**不得**自己再写一遍关系链遍历。
+  ///
+  /// 返回**不可变副本**（`Set.unmodifiable`，调用方只读，不提供可变更改入口）；
+  /// 迭代顺序 = 从 `sourceEntryId` 出发的**发现顺序**（BFS：自身 → 一跳祖先 →
+  /// 两跳祖先…），调用方不应依赖更具体的顺序。
   static Set<String> scopeEntryIdsFor(
     String sourceEntryId,
     Map<String, ContentEntry> entries,
@@ -340,7 +374,7 @@ abstract final class RuleChoiceSemantics {
       }
       pending = next;
     }
-    return scope;
+    return Set<String>.unmodifiable(scope);
   }
 
   static List<String> _selectedOptions(

@@ -67,6 +67,7 @@ class CharacterUpgradePlanner {
       level: targetLevel,
       selections: savedBuild.selections,
       choices: savedBuild.choices,
+      abilities: _baseAbilities(character, savedBuild),
     );
     return _evaluate(
       character.level,
@@ -91,6 +92,9 @@ class CharacterUpgradePlanner {
         level: plan.targetLevel,
         selections: plan.build.selections,
         choices: choices,
+        // `requires` 的能力门槛读**同一份基础属性**（决策 D4）：换选择不改属性，
+        // 沿用计划里的那份即可（[plan] 由 `plan()` 用 `_baseAbilities` 建出）。
+        abilities: plan.build.abilities,
       ),
       declaredLevels: plan.declaredLevels,
     );
@@ -178,6 +182,7 @@ class CharacterUpgradePlanner {
         level: build.level,
         selections: build.selections,
         choices: ledger.resolvedChoices,
+        abilities: build.abilities,
       ),
       newGrants: ledger.grants
           .where((grant) => grant.sourceLevel == build.level)
@@ -206,8 +211,23 @@ class CharacterUpgradePlanner {
       level: character.level,
       selections: saved.selections,
       choices: saved.choices,
+      abilities: saved.abilities,
     );
   }
+
+  /// `requires` 门槛要用的**基础属性**（决策 D4）。
+  ///
+  /// 优先读存档里的 `build.abilities`；旧存档没有它时用
+  /// [RulesDrivenCharacterBuilder.baseAbilitiesFrom] 现算一次（与项目器同一个
+  /// 唯一实现点，不另写减法）。缺属性时返回空 map = "未记录"：能力型
+  /// `requires` 会判为不满足并进 pending，绝不猜成 10。
+  Map<String, int> _baseAbilities(CharacterSheet character, CharacterBuild build) {
+    if (build.abilities.isNotEmpty) return build.abilities;
+    return RulesDrivenCharacterBuilder(
+      entries: entries,
+    ).baseAbilitiesFrom(character.abilityMap, build);
+  }
+
 }
 
 Map<String, Object?> _mergeMaps(Object? current, Object? derived) => {

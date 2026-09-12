@@ -24,19 +24,35 @@ class CharacterRuleProjector {
       return _withClassIdentity(character);
     }
 
-    final build = CharacterBuild(
+    final builder = RulesDrivenCharacterBuilder(entries: entries);
+    // 再派生必须用**基础属性**：角色卡上的 `abilities` 已含生效中的
+    // `kind: ability` 加值，直接回传会每次派生都再叠加一遍（缺陷 4）。
+    // 减加值的唯一实现在 [RulesDrivenCharacterBuilder.baseAbilitiesFrom]。
+    // 反推的参照是"当前等级 + 存档里的选择"，与下面重派生用的构建只差 `abilities`。
+    final stateBuild = CharacterBuild(
       level: character.level,
       selections: savedBuild.selections,
       choices: savedBuild.choices,
     );
-    final builder = RulesDrivenCharacterBuilder(entries: entries);
+    final baseAbilities = builder.baseAbilitiesFrom(
+      character.abilityMap,
+      stateBuild,
+    );
+    final build = CharacterBuild(
+      level: character.level,
+      selections: savedBuild.selections,
+      choices: savedBuild.choices,
+      // 旧存档没有 `data['build']['abilities']`：这次派生**自愈**回填基础属性，
+      // 否则能力型 `requires` 会永远判为不满足（决策 D4 的可见 pending）。
+      // 回填的是基础值（入参），不是角色卡上的最终值——`requires` 的口径如此。
+      abilities: savedBuild.abilities.isEmpty
+          ? baseAbilities
+          : savedBuild.abilities,
+    );
     final derived = builder.build(
       name: character.name,
       build: build,
-      // 再派生必须用**基础属性**：角色卡上的 `abilities` 已含生效中的
-      // `kind: ability` 加值，直接回传会每次派生都再叠加一遍（缺陷 4）。
-      // 减加值的唯一实现在 [RulesDrivenCharacterBuilder.baseAbilitiesFrom]。
-      abilities: builder.baseAbilitiesFrom(character.abilityMap, build),
+      abilities: baseAbilities,
       notes: character.notes,
     );
     final oldData = character.dataMap;

@@ -413,6 +413,102 @@ void main() {
       }
     });
   });
+
+  // 决策 D4：`requires` 的能力门槛读**基础属性**（`build.abilities`），不是角色卡
+  // 上的最终值。升级规划器必须与引擎同口径，否则门槛其实满足的选择会被判为不可选。
+  group('升级规划的 requires 能力门槛读基础属性', () {
+    final pact = _entry(
+      id: 'class:pact-bound',
+      type: 'class',
+      name: 'Pact Bound',
+      structured: const <String, Object?>{
+        'classRules': <String, Object?>{
+          'hitDie': 8,
+          'savingThrowAbilities': <String>['cha', 'wis'],
+        },
+      },
+      rules: const <String, Object?>{
+        'progression': <Map<String, Object?>>[
+          <String, Object?>{
+            'levels': <int>[2],
+            'choices': <Map<String, Object?>>[
+              <String, Object?>{
+                'id': 'invocation',
+                'label': 'Invocation',
+                'optionType': 'classFeature',
+                'minimum': 1,
+                'maximum': 1,
+                'optionTags': <String>['invocation'],
+                'requires': <Map<String, Object?>>[
+                  <String, Object?>{'ability': 'cha', 'minimum': 13},
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    );
+    final invocation = _entry(
+      id: 'feature:agonizing',
+      type: 'classFeature',
+      name: 'Agonizing Blast',
+      tags: const <String>['invocation'],
+    );
+    final entries5 = <String, ContentEntry>{
+      pact.id: pact,
+      invocation.id: invocation,
+    };
+
+    CharacterSheet pactCharacter({required bool recordAbilities}) {
+      final base = _character();
+      return base.copyWith(
+        level: 1,
+        classSummary: 'Pact Bound',
+        abilities: const <String, Object?>{'cha': 15},
+        data: <String, Object?>{
+          ...base.dataMap,
+          'build': <String, Object?>{
+            'level': 1,
+            'selections': <String, Object?>{'class': 'class:pact-bound'},
+            'choices': <String, Object?>{},
+            if (recordAbilities) 'abilities': <String, Object?>{'cha': 15},
+          },
+        },
+      );
+    }
+
+    test('存档已记录基础属性：门槛满足，选择可完成', () {
+      final planner = CharacterUpgradePlanner(entries: entries5);
+      final plan = planner.plan(pactCharacter(recordAbilities: true));
+
+      expect(plan.choices, hasLength(1));
+      expect(
+        plan.choices.single.requiresSatisfied,
+        isTrue,
+        reason: 'cha 基础 15 ≥ 13；门槛读的就是 build.abilities',
+      );
+
+      final selected = planner.select(
+        pactCharacter(recordAbilities: true),
+        plan,
+        plan.choices.single.key,
+        <String>[invocation.id],
+      );
+      expect(selected.isComplete, isTrue);
+    });
+
+    test('旧存档缺 build.abilities：用角色卡最终值反推基础属性后仍可完成', () {
+      final planner = CharacterUpgradePlanner(entries: entries5);
+      // 角色卡最终 cha = 15，本职业没有 ability 加值 → 基础值也是 15。
+      final plan = planner.plan(pactCharacter(recordAbilities: false));
+
+      expect(
+        plan.choices.single.requiresSatisfied,
+        isTrue,
+        reason: '缺记录时用 baseAbilitiesFrom 现算（与项目器同一个唯一实现点）',
+      );
+    });
+  });
 }
 
 CharacterSheet _character() {
@@ -457,6 +553,7 @@ ContentEntry _entry({
   required String id,
   required String type,
   required String name,
+  List<String> tags = const <String>[],
   Map<String, Object?> structured = const <String, Object?>{},
   List<Map<String, Object?>> relations = const <Map<String, Object?>>[],
   Map<String, Object?>? rules,
@@ -468,6 +565,7 @@ ContentEntry _entry({
     'name': name,
     'body': <Object?>[],
     'revision': 1,
+    'tags': tags,
     'structured': structured,
     'relations': relations,
     'rules': ?rules,

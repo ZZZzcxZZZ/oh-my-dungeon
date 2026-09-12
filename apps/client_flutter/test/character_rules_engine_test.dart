@@ -853,6 +853,148 @@ void main() {
     });
   });
 
+  group('requires（契约 §3.10.2 / §3.10.3-5）', () {
+    final plan = _entry(
+      id: 'test:class/warlockish',
+      type: 'class',
+      name: '契术师',
+      rules: const {
+        'choices': [
+          {
+            'id': 'spellbook',
+            'label': '法术书',
+            'optionType': 'feat',
+            'minimum': 1,
+            'maximum': 1,
+            'optionTags': ['grimoire'],
+          },
+          {
+            'id': 'invocations',
+            'label': '祈唤',
+            'optionType': 'classFeature',
+            'minimum': 1,
+            'maximum': 1,
+            'optionTags': ['invocation'],
+            'requires': [
+              {'ability': 'cha', 'minimum': 13},
+              {'choice': 'spellbook', 'option': 'test:feat/grimoire'},
+            ],
+          },
+        ],
+      },
+    );
+    final grimoire = _entry(
+      id: 'test:feat/grimoire',
+      type: 'feat',
+      name: '魔典',
+      tags: const ['grimoire'],
+      rules: const {},
+    );
+    final invocation = _entry(
+      id: 'test:class-feature/agonizing',
+      type: 'classFeature',
+      name: '苦痛祈唤',
+      tags: const ['invocation'],
+      rules: const {},
+    );
+    final engine = CharacterRulesEngine(
+      entries: {
+        plan.id: plan,
+        grimoire.id: grimoire,
+        invocation.id: invocation,
+      },
+    );
+
+    CharacterGrantLedger evaluate({
+      required int cha,
+      required List<String> book,
+    }) => engine.evaluate(
+      CharacterBuild(
+        level: 1,
+        abilities: {'cha': cha},
+        selections: {'class': plan.id},
+        choices: {
+          'test:class/warlockish#spellbook': book,
+          'test:class/warlockish#invocations': [invocation.id],
+        },
+      ),
+    );
+
+    test('能力门槛不满足 → requiresSatisfied=false 且进 pending', () {
+      final ledger = evaluate(cha: 12, book: [grimoire.id]);
+      final active = ledger.activeChoices.singleWhere(
+        (c) => c.definition.id == 'invocations',
+      );
+      expect(active.requiresSatisfied, isFalse);
+      expect(active.isValid, isFalse);
+      expect(
+        ledger.pendingChoices
+            .firstWhere((p) => p.choiceId == 'invocations')
+            .reason,
+        RuleChoicePendingReason.requiresUnsatisfied,
+      );
+      expect(
+        active.selected,
+        [invocation.id],
+        reason: '前置不满足不得静默丢弃选中值（§3.10.3-5）',
+      );
+    });
+
+    test('引用的选择未满足 → 不可选；两项都满足 → 生效', () {
+      expect(
+        evaluate(cha: 13, book: const [])
+            .pendingChoices
+            .firstWhere((p) => p.choiceId == 'invocations')
+            .reason,
+        RuleChoicePendingReason.requiresUnsatisfied,
+      );
+      expect(evaluate(cha: 13, book: [grimoire.id]).pendingChoices, isEmpty);
+    });
+
+    test('未记录属性（空 abilities）≠ 属性为 0：一律判不满足', () {
+      final ledger = engine.evaluate(
+        const CharacterBuild(
+          level: 1,
+          selections: {'class': 'test:class/warlockish'},
+          choices: {
+            'test:class/warlockish#spellbook': ['test:feat/grimoire'],
+            'test:class/warlockish#invocations': [
+              'test:class-feature/agonizing',
+            ],
+          },
+        ),
+      );
+
+      expect(
+        ledger.activeChoices
+            .singleWhere((c) => c.definition.id == 'invocations')
+            .requiresSatisfied,
+        isFalse,
+        reason: '缺 build.abilities = "未记录"，不猜成 10（决策 D4）',
+      );
+    });
+
+    test('CharacterBuild.abilities JSON 往返，缺省为空 map', () {
+      const build = CharacterBuild(level: 3, abilities: {'cha': 15});
+      expect(CharacterBuild.fromJson(build.toJson()).abilities, {'cha': 15});
+      expect(const CharacterBuild(level: 1).abilities, isEmpty);
+      expect(CharacterBuild.fromJson(const {'level': 1}).abilities, isEmpty);
+      expect(
+        CharacterBuild.fromJson(const {
+          'level': 1,
+          'abilities': {'cha': '15'},
+        }).abilities,
+        isEmpty,
+        reason: '非数值条目视为未记录，不猜',
+      );
+      expect(
+        const CharacterBuild(level: 1).toJson().containsKey('abilities'),
+        isFalse,
+        reason: '空 map 不写进 JSON（旧存档形状不膨胀）',
+      );
+    });
+  });
+
   group('RuleChoiceDefinition.options（内联选项解析与序列化）', () {
     test('字符串简写展开为 id == label', () {
       final choice = RuleChoiceDefinition.fromJson(const {

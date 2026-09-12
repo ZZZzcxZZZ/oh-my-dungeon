@@ -223,17 +223,10 @@ class CharacterRulesEngine {
       final rules = entry.rules;
       if (rules == null) continue;
 
-      _resolveGrants(
-        entry: entry,
-        sourceLevel: null,
-        definitions: rules.grants,
-        target: grants,
-      );
-      _resolveChoices(
+      _resolveEntryChoices(
         build: build,
         entry: entry,
-        sourceLevel: null,
-        definitions: rules.choices,
+        rules: rules,
         pending: pendingChoices,
         queue: queue,
         resolvedChoiceEntryIds: resolvedChoiceEntryIds,
@@ -276,6 +269,41 @@ class CharacterRulesEngine {
       resolvedChoiceEntryIds: resolvedChoiceEntryIds.toList(growable: false),
       resolvedChoices: resolvedChoices,
       activeChoices: activeChoices,
+    );
+  }
+
+  /// 条目级选择（`rules.choices`）与条目级授予（`rules.grants`）。
+  ///
+  /// 条目级 `grants` 与 `choices` 的**相对顺序**沿用旧引擎的"先授予、后选择"
+  /// （`evaluate` 里两个调用点的顺序不变），选择之间则严格按声明顺序处理。
+  void _resolveEntryChoices({
+    required CharacterBuild build,
+    required ContentEntry entry,
+    required CharacterRuleDefinition rules,
+    required List<PendingRuleChoice> pending,
+    required List<String> queue,
+    required Set<String> resolvedChoiceEntryIds,
+    required Map<String, List<String>> resolvedChoices,
+    required List<ActiveRuleChoice> activeChoices,
+    required Map<String, ResolvedRuleGrant> target,
+  }) {
+    _resolveGrants(
+      entry: entry,
+      sourceLevel: null,
+      definitions: rules.grants,
+      target: target,
+    );
+    _resolveChoices(
+      build: build,
+      entry: entry,
+      sourceLevel: null,
+      definitions: rules.choices,
+      pending: pending,
+      queue: queue,
+      resolvedChoiceEntryIds: resolvedChoiceEntryIds,
+      resolvedChoices: resolvedChoices,
+      activeChoices: activeChoices,
+      target: target,
     );
   }
 
@@ -337,6 +365,17 @@ class CharacterRulesEngine {
         sourceEntryId: entry.id,
       );
       final selection = normalized.selected;
+      // `requires` 判定只有 `RuleChoiceSemantics.requiresSatisfied` 一处（唯一实现
+      // 点）：能力门槛读 `build.abilities`（**基础属性**，决策 D4），选择引用读
+      // `build.choices` 的选中值。不满足时选中值**不丢弃**（§3.10.3-5），只是该
+      // 选择不生效并进 pending。
+      final requiresSatisfied = RuleChoiceSemantics.requiresSatisfied(
+        definition.requires,
+        sourceEntryId: entry.id,
+        selectedByKey: build.choices,
+        abilities: build.abilities,
+        entries: entries,
+      );
       // 内联选项的 grants 进同一本账：每次出现都是一个独立生效单元
       // （`repeatable` 选两次"力量 +1"就要累计 +2），键带出现序号。展开只有
       // `RuleChoiceSemantics.grantsForSelection` 一处（唯一实现点），引擎里不再
@@ -381,11 +420,13 @@ class CharacterRulesEngine {
           sourceEntryName: entry.name,
           sourceLevel: sourceLevel,
           repeatable: definition.repeatable,
+          requiresSatisfied: requiresSatisfied,
           group: definition.group,
           help: definition.help,
         ),
       );
-      if (selection.length < definition.minimum ||
+      if (!requiresSatisfied ||
+          selection.length < definition.minimum ||
           normalized.invalidSelected.isNotEmpty) {
         pending.add(
           PendingRuleChoice(
@@ -400,6 +441,7 @@ class CharacterRulesEngine {
             sourceLevel: sourceLevel,
             invalidSelected: normalized.invalidSelected,
             reason: _pendingReason(
+              requiresSatisfied: requiresSatisfied,
               selected: selection,
               violations: normalized.violations,
               minimum: definition.minimum,
@@ -418,18 +460,19 @@ class CharacterRulesEngine {
     }
   }
 
-  /// `pending` 的原因，按计划任务 3 的优先级：
+  /// `pending` 的原因，按计划任务 3/4 的优先级：
   /// `requiresUnsatisfied` > `notACandidate` > `notRepeatable` > `aboveMaximum`
-  /// > `belowMinimum`（任务 4 起 `requiresUnsatisfied` 真实可达；任务 5 会把池
-  /// 超额细化为 `poolExceeded`）。
+  /// > `belowMinimum`（任务 5 会把池超额细化为 `poolExceeded`）。
   ///
   /// 只有"确实进了 pending"的选择才调它：选中数够、无违规时返回 null 表示"原因
   /// 不在此枚举"，绝不拿 [RuleChoicePendingReason.belowMinimum] 冒充。
   static RuleChoicePendingReason? _pendingReason({
+    required bool requiresSatisfied,
     required List<String> selected,
     required Set<RuleChoiceViolation> violations,
     required int minimum,
   }) {
+    if (!requiresSatisfied) return RuleChoicePendingReason.requiresUnsatisfied;
     if (violations.contains(RuleChoiceViolation.notACandidate)) {
       return RuleChoicePendingReason.notACandidate;
     }

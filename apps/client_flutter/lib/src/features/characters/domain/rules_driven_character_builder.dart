@@ -37,10 +37,14 @@ class RulesDrivenCharacterBuilder {
       structured: classEntry?.structured ?? const <String, Object?>{},
     );
     final ledger = _engine.evaluate(build);
+    // `abilities` 是**入参基础属性**（决策 D4），原样持久化：结算后的
+    // [effectiveAbilities] 绝不回写，否则下次再派生会把 `kind: ability` 加值
+    // 当成基础值再叠加一遍（缺陷 4）。
     final effectiveBuild = CharacterBuild(
       level: build.level,
       selections: build.selections,
       choices: ledger.resolvedChoices,
+      abilities: build.abilities,
     );
     // 属性加值（`kind: ability`）必须在**任何派生之前**叠加：HP / AC / 豁免 /
     // 技能 / 法术 DC 全部读 [effectiveAbilities]，不再读入参 [abilities]。

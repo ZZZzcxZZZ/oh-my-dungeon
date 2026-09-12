@@ -225,6 +225,106 @@ void main() {
     expect(projected.dataMap['spellSlots'], {'1': 3});
     expect(projected.dataMap['preparedSpellLimit'], 4);
   });
+
+  test('项目器回填 build.abilities，使 requires 不因旧存档永远 pending', () {
+    final fighter = _entry(
+      id: 'test:class/fighter',
+      type: 'class',
+      name: '战士',
+    );
+    final legacy =
+        CharacterSheet.local(
+          id: 'legacy-abilities',
+          name: '旧角色',
+          level: 2,
+          classSummary: '战士',
+        ).copyWith(
+          abilities: const <String, Object?>{
+            'str': 16,
+            'dex': 12,
+            'con': 14,
+            'int': 10,
+            'wis': 10,
+            'cha': 15,
+          },
+          // 旧存档的 `build` 没有 `abilities` 键（本次新增的数据形状）。
+          data: <String, Object?>{
+            'build': <String, Object?>{
+              'level': 2,
+              'selections': <String, Object?>{'class': 'test:class/fighter'},
+              'choices': <String, Object?>{},
+            },
+          },
+        );
+
+    final projected = CharacterRuleProjector(
+      entries: {fighter.id: fighter},
+    ).project(legacy);
+
+    expect(
+      (projected.dataMap['build']! as Map)['abilities'],
+      {
+        'str': 16,
+        'dex': 12,
+        'con': 14,
+        'int': 10,
+        'wis': 10,
+        'cha': 15,
+      },
+      reason: '回填的是基础属性（本例无 ability 加值，基础值 = 最终值）',
+    );
+  });
+
+  test('项目器保留已有的 build.abilities，不被角色卡最终值覆盖', () {
+    final ascendant = _entry(
+      id: 'test:class/ascendant-abilities',
+      type: 'class',
+      name: '晋升者',
+      rules: const {
+        'grants': [
+          {
+            'id': 'asi-cha',
+            'kind': 'ability',
+            'label': '魅力提升',
+            'target': 'cha',
+            'value': 2,
+          },
+        ],
+      },
+    );
+    final legacy =
+        CharacterSheet.local(
+          id: 'legacy-abilities-kept',
+          name: '旧角色',
+          level: 1,
+          classSummary: '晋升者',
+        ).copyWith(
+          // 角色卡上是**最终值**：`kind: ability` 给 cha +2，而未记录的 int 用属性
+          // 硬上限 30——两者都与存档里的基础值（cha 15 / 无 int）不同，因此本用例
+          // 能区分"信任存档的基础值"与"每次都用最终值重算"。
+          abilities: const <String, Object?>{'cha': 17, 'int': 30},
+          data: <String, Object?>{
+            'build': <String, Object?>{
+              'level': 1,
+              'selections': <String, Object?>{
+                'class': 'test:class/ascendant-abilities',
+              },
+              'choices': <String, Object?>{},
+              'abilities': <String, Object?>{'cha': 15},
+            },
+          },
+        );
+
+    final projected = CharacterRuleProjector(
+      entries: {ascendant.id: ascendant},
+    ).project(legacy);
+
+    expect(
+      (projected.dataMap['build']! as Map)['abilities'],
+      {'cha': 15},
+      reason: '已记录的基础值不被最终值覆盖，否则每次派生都会再减一份加值',
+    );
+  });
 }
 
 ContentEntry _entry({

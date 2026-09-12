@@ -3,21 +3,32 @@ class CharacterBuild {
     required this.level,
     this.selections = const <String, String>{},
     this.choices = const <String, List<String>>{},
+    this.abilities = const <String, int>{},
   });
 
   final int level;
   final Map<String, String> selections;
   final Map<String, List<String>> choices;
 
+  /// `requires: {ability, minimum}` 的**唯一数据源**（决策 D4/D2）：入参基础属性，
+  /// 不是结算后的有效属性——`kind: ability` 加值由选择产生，用结算值会让
+  /// `requires` 与选择互相引用（求值不成不动点）。缺省空 map = "未记录属性"，
+  /// 能力型 `requires` 一律判定为不满足（可见的 pending），绝不猜成 10。
+  ///
+  /// 只进 `data['build']` 的 JSON，不改 Drift 表结构（`schemaVersion` 保持 13）。
+  final Map<String, int> abilities;
+
   Map<String, Object?> toJson() => {
     'level': level,
     'selections': selections,
     'choices': choices,
+    if (abilities.isNotEmpty) 'abilities': abilities,
   };
 
   factory CharacterBuild.fromJson(Map<String, Object?> json) {
     final selections = json['selections'];
     final choices = json['choices'];
+    final abilities = json['abilities'];
     return CharacterBuild(
       level: (json['level'] as num?)?.toInt() ?? 1,
       selections: selections is Map
@@ -33,6 +44,13 @@ class CharacterBuild {
               ),
             )
           : const <String, List<String>>{},
+      abilities: abilities is Map
+          ? {
+              for (final entry in abilities.entries)
+                if (entry.value is num)
+                  '${entry.key}': (entry.value as num).toInt(),
+            }
+          : const <String, int>{},
     );
   }
 }

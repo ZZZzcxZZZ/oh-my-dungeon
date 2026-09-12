@@ -590,6 +590,10 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
         for (final entry in _upgradeRuleChoices.entries)
           entry.key: entry.value.toList(growable: false),
       },
+      // `requires` 的能力门槛读**基础属性**（决策 D4），不是 `_abilityControllers`
+      // 里的最终值：升级预览必须与引擎同口径，否则"门槛其实满足"的选择会被
+      // 预览误判为不满足。
+      abilities: previousBuild.abilities,
     );
     final engine = CharacterRulesEngine(
       entries: {for (final entry in widget.contentEntries) entry.id: entry},
@@ -819,6 +823,9 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
       final hasStructuredRules = selectedEntryIds.any(
         (entryId) => entries[entryId]?.rules != null,
       );
+      // 同一份基础属性既进 `CharacterBuild.abilities`（`requires` 的门槛数据源，
+      // 决策 D4），也作为派生的入参——两处必须是同一份，否则门槛与结算不同口径。
+      final quickAbilities = quickDraft.abilities ?? Dnd5eRules.defaultAbilities;
       final baseDraft = hasStructuredRules
           ? RulesDrivenCharacterBuilder(entries: entries).build(
               name: name,
@@ -833,8 +840,9 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                     'background': quickDraft.backgroundEntryId!,
                 },
                 choices: quickDraft.ruleChoices,
+                abilities: quickAbilities,
               ),
-              abilities: quickDraft.abilities ?? Dnd5eRules.defaultAbilities,
+              abilities: quickAbilities,
               avatarUrl: quickDraft.avatarUrl ?? _effectiveAvatarUrl,
               extraSpellRefs: quickDraft.spellRefs,
               extraItemRefs: quickDraft.itemRefs,

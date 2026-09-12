@@ -107,11 +107,28 @@ def _archive_skill_names(archive: dict) -> list[str]:
     return [str(skill["name"]) for skill in archive["skills"]]
 
 
+PHB_BUNDLE_PATH = REPO_ROOT / "private-imports" / "phb-2024-v2-bundle.json"
+
+
+def _require_private_phb_source() -> None:
+    """私有 PHB 源（`private-imports/`，被 gitignore）缺失时跳过提取测试。
+
+    公开 CI 不携带商业规则书内容，所以提取类测试在 CI 上**跳过**而不是失败；
+    本地有私有源时必须照常运行并照常报错——跳过条件只看目录是否存在，
+    不看任何"能否跑通"的迹象，避免把真实故障掩盖成跳过。
+    """
+    if not extractor.PHB_ROOT.exists():
+        raise unittest.SkipTest(
+            f"私有 PHB 2024 源不存在，跳过提取测试：{extractor.PHB_ROOT}"
+        )
+
+
 class Phb2024V2ToolsTest(unittest.TestCase):
     def setUp(self) -> None:
         extractor.MANUAL_REVIEW.clear()
 
     def _extract_all_classes(self) -> dict[str, dict]:
+        _require_private_phb_source()
         # extract_class 用全局 SLUG_SEEN 做 slug 去重，逐职业提取前必须清空。
         extractor.SLUG_SEEN.clear()
         extractor.CLASS_ENTRY_SLUGS.clear()
@@ -225,6 +242,7 @@ class Phb2024V2ToolsTest(unittest.TestCase):
         self.assertEqual(extractor.parse_saving_throws("魅力与力量"), ["cha", "str"])
 
     def test_weapon_entries_declare_ability_and_finesse(self) -> None:
+        _require_private_phb_source()
         weapons = {
             entry["name"]: entry["structured"]
             for entry in extractor.extract_equipment()
@@ -238,6 +256,7 @@ class Phb2024V2ToolsTest(unittest.TestCase):
         self.assertNotIn("finesse", weapons["手斧"])
 
     def test_real_wizard_entry_declares_spell_selection_progression(self) -> None:
+        _require_private_phb_source()
         extractor.SLUG_SEEN.clear()
         extractor.CLASS_ENTRY_SLUGS.clear()
 
@@ -352,6 +371,7 @@ class Phb2024V2ToolsTest(unittest.TestCase):
         )
 
     def test_sorcerer_subclass_titles_are_not_extracted_from_whole_page_text(self) -> None:
+        _require_private_phb_source()
         extractor.SLUG_SEEN.clear()
         _, _, subclasses = extractor.extract_class("术士")
 
@@ -371,6 +391,7 @@ class Phb2024V2ToolsTest(unittest.TestCase):
         `structured.featureOf` / `classSlug` / `subclassName` / `levelLabel` 在客户端
         没有任何读者，属"同一概念的第二种形状"，提取器不得再输出。
         """
+        _require_private_phb_source()
         dead_keys = {"featureOf", "classSlug", "subclassName", "levelLabel"}
         # extract_class 用全局 SLUG_SEEN 做 slug 去重，逐职业提取前必须清空。
         extractor.SLUG_SEEN.clear()
@@ -429,6 +450,8 @@ class Phb2024V2ToolsTest(unittest.TestCase):
         )
 
     def test_validator_passes_with_gbk_console_encoding(self) -> None:
+        if not PHB_BUNDLE_PATH.exists():
+            self.skipTest(f"私有 bundle 不存在，跳过校验器端到端测试：{PHB_BUNDLE_PATH}")
         environment = os.environ.copy()
         environment["PYTHONIOENCODING"] = "gbk"
         result = subprocess.run(

@@ -51,6 +51,21 @@ jobs:
       # DESIGN.md 契约 lint：token 引用、章节顺序、组件对比度（WCAG AA）。
       - run: npm run lint:design
 
+  # 脚本层门禁：drift worker 产物清单校验、`.ps1` 的 UTF-8 BOM 守卫、
+  # 发布打包脚本断言、私有提取器工具测试。
+  # 依赖商业规则书内容（`private-imports/`，被 gitignore）的用例会自行 skip，
+  # 公开 CI 不提供私有内容也能跑通。
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # setup-python 同时提供 `python` 与 `python3`：`test:scripts` 用前者，
+      # `check:drift-worker` 用后者，两个命令名都要存在。
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm run test:scripts
+
   golden:
     runs-on: ubuntu-latest
     defaults:

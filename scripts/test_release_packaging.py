@@ -247,6 +247,18 @@ class ReleasePackagingTest(unittest.TestCase):
         # 完整校验（drift 版本、体积下限、worker 标记）由检查脚本负责。
         self.assertEqual([], verify_drift_worker())
 
+    def test_ci_runs_the_script_layer_gate(self):
+        """CI 必须有一个跑 `npm run test:scripts` 的 job。
+
+        脚本层门禁（drift worker 产物清单、`.ps1` BOM 守卫、发布打包断言）只在
+        `test:scripts` 里执行；CI 漏掉这个 job 会让它们变成"只有本地才跑"的摆设。
+        """
+        workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("npm run test:scripts", workflow)
+        self.assertIn("actions/setup-python@", workflow)
+
     def test_powershell_scripts_with_chinese_text_keep_the_utf8_bom(self):
         """含中文的 `.ps1` 必须带 UTF-8 BOM（见 docs/README.md §14.3）。
 

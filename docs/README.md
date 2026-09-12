@@ -1147,10 +1147,11 @@ python3 scripts/check_drift_worker.py     # 退出码非 0 即已漂移
 `scripts/test_release_packaging.py::test_drift_worker_manifest_matches_the_committed_artifact`
 存在，所以任何运行脚本测试的地方都会一并校验。
 
-> CI 现状：`.github/workflows/ci.yml` 只有 `server` / `client` / `design` / `golden` /
-> `docker` 五个 job，**没有 scripts job**，因此上述检查目前在 CI 不会自动执行。提交前
-> 必须本地跑 `npm run test:scripts`（或直接跑上面的校验命令）。若将来新增 scripts job，
-> 跑 `npm run test:scripts` 即可覆盖本项（ubuntu runner 自带 `python3`）。
+> CI 现状：`.github/workflows/ci.yml` 现在有 `server` / `client` / `design` / `golden` /
+> `docker` / `scripts` 六个 job，其中 `scripts` 跑 `npm run test:scripts`（含上面这项校验），
+> 用 `actions/setup-python@v5` 安装 Python 3.12（同时提供 `python` 与 `python3` 两个命令名）。
+> 依赖商业规则书内容的提取类用例在 CI 上会自行 `skip`（`private-imports/` 不进公开 CI），
+> 本地有私有源时必须照常运行、照常报错。
 
 ---
 
@@ -1186,7 +1187,7 @@ git diff --check
 
 ## 16. 当前状态与验收基线
 
-**版本** `0.1` · **更新时间** `2026-09-10`
+**版本** `0.1` · **更新时间** `2026-09-12`
 
 ### 已完成能力
 
@@ -1197,16 +1198,27 @@ git diff --check
 Material 3 设计系统契约（`DESIGN.md` 与契约测试/golden）；自托管 Docker 部署
 （离线 Prisma 引擎 + 部署包脚本）。
 
-### 实测基线（2026-09-10）
+**规则契约（2026-09-10 ~ 09-12 新增）**：内置规则档案（`assets/rules/dnd5e-2024.rules.json`）+
+条目声明两级解析（无 priority、无全局扫描）、资料包格式唯一版本 `formatVersion: 3`、
+职业规则 4 字段（`hitDie` / `savingThrowAbilities` / `spellcasting` / `resources`）、
+`rules.progression[].levels` 多等级步骤、声明范围（部分声明为一等公民）在全部相关 GUI 可见、
+导入期规则诊断（error 阻断整包 / warning 只提示）、PHB 2024 私有包按新契约重提取。
+**未完成**：选择系统运行时语义（计划 2）、`patch`/`replace` 与来源显示（S3）、
+作者 GUI 与 `.dndpack` 导出（S4）——见 §7.7 与
+`docs/plans/2026-09-10-rules-contract-core.md` 的「待办」段。
+
+### 实测基线（2026-09-12）
 
 | 项 | 结果 |
 |---|---|
 | `flutter analyze` | 0 问题 |
-| `flutter test` | 923 通过 / 5 跳过（含 49 项 D&D 2024 规则独立核算；3 golden 默认跳过 + 2 私有路径） |
+| `flutter test` | **1237 通过 / 6 跳过**（3 条 golden 默认跳过 + 3 条依赖 `--dart-define` 私有包路径的用例） |
 | 服务端 `npm run lint` + `npm test` | 24 套件 / 355 测试通过，0 跳过 |
-| `npm run test:scripts` | 27 通过（4 个脚本测试套件） |
+| `npm run test:scripts` | **37 通过**（4 个脚本测试套件 + drift worker 产物清单校验；本地有 `private-imports/` 时 0 跳过，公开 CI 上 9 条提取类用例自行 skip） |
 | `npm run lint:design` | 0 error / 0 warning（1 条 token 统计 info） |
-| 自托管部署 | Docker Compose 下 `/health` 与 `/.well-known/dnd-tool-server` 验证通过 |
+| `npm run validate:phb-private` | 通过（校验器 + 真实导入器 3 个用例） |
+| CI | 6 个 job：`server` / `client` / `design` / `golden` / `docker` / `scripts` |
+| 自托管部署 | Docker Compose 下 `/health` 与 `/.well-known/dnd-tool-server` 验证通过（2026-09-12 重新部署，外部可达 HTTP 200） |
 
 ### 下一步
 

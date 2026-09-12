@@ -638,6 +638,221 @@ void main() {
     });
   });
 
+  group('内联选项与 repeatable（契约 §3.10.2 / §3.10.3）', () {
+    final plan = _entry(
+      id: 'test:class/ascendant-choices',
+      type: 'class',
+      name: '晋升者',
+      rules: const {
+        'choices': [
+          {
+            'id': 'asi',
+            'label': '属性提升',
+            'optionType': 'ability',
+            'minimum': 1,
+            'maximum': 2,
+            'repeatable': true,
+            'options': [
+              {
+                'id': 'str',
+                'label': '力量 +1',
+                'grants': [
+                  {
+                    'id': 'asi-str',
+                    'kind': 'ability',
+                    'label': '力量提升',
+                    'target': 'str',
+                    'value': 1,
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            'id': 'training',
+            'label': '技能训练',
+            'optionType': 'skill',
+            'minimum': 1,
+            'maximum': 1,
+            'options': ['察觉'],
+          },
+        ],
+      },
+    );
+    final engine = CharacterRulesEngine(entries: {plan.id: plan});
+
+    test('内联 grants 选中即进 ledger；option id 不被当条目排进 missing', () {
+      final ledger = engine.evaluate(
+        const CharacterBuild(
+          level: 1,
+          selections: {'class': 'test:class/ascendant-choices'},
+          choices: {'test:class/ascendant-choices#asi': ['str']},
+        ),
+      );
+
+      expect(ledger.missingEntryIds, isEmpty, reason: 'str 是内联选项，不是条目 id');
+      expect(ledger.resolvedChoiceEntryIds, isEmpty);
+      expect(
+        ledger.resolvedChoices['test:class/ascendant-choices#asi'],
+        ['str'],
+        reason: '内联选中值同样落进 resolvedChoices（§3.10.3-4 的落库形状）',
+      );
+      final grant = ledger.grants.singleWhere((grant) => grant.id == 'asi-str');
+      expect(grant.kind, RuleGrantKind.ability);
+      expect(grant.target, 'str');
+      expect(grant.value, 1);
+    });
+
+    test('repeatable: true 同一选项选两次 → 两份生效单元；resolvedChoices 保留重复', () {
+      final ledger = engine.evaluate(
+        const CharacterBuild(
+          level: 1,
+          selections: {'class': 'test:class/ascendant-choices'},
+          choices: {
+            'test:class/ascendant-choices#asi': ['str', 'str'],
+            'test:class/ascendant-choices#training': ['察觉'],
+          },
+        ),
+      );
+
+      expect(ledger.grants.where((grant) => grant.id == 'asi-str'), hasLength(2));
+      expect(
+        ledger.resolvedChoices['test:class/ascendant-choices#asi'],
+        ['str', 'str'],
+      );
+      expect(ledger.pendingChoices, isEmpty);
+      expect(
+        ledger.grants.map((grant) => grant.value).whereType<num>().fold<num>(
+          0,
+          (sum, value) => sum + value,
+        ),
+        2,
+        reason: '选两次"力量 +1"必须累计 +2，而不是被去重成 +1',
+      );
+    });
+
+    test('repeatable: false 的重复选中进 invalidSelected，且不重复结算', () {
+      final ledger = engine.evaluate(
+        const CharacterBuild(
+          level: 1,
+          selections: {'class': 'test:class/ascendant-choices'},
+          choices: {
+            'test:class/ascendant-choices#asi': ['str'],
+            'test:class/ascendant-choices#training': ['察觉', '察觉'],
+          },
+        ),
+      );
+
+      final pending = ledger.pendingChoices.singleWhere(
+        (choice) => choice.choiceId == 'training',
+      );
+      expect(pending.selected, ['察觉']);
+      expect(pending.invalidSelected, ['察觉']);
+      expect(pending.reason, RuleChoicePendingReason.notRepeatable);
+      expect(
+        ledger.grants.where((grant) => grant.kind == RuleGrantKind.proficiency),
+        hasLength(1),
+      );
+    });
+
+    test('字符串简写 skill 选项自动授予熟练（无需显式 grants）', () {
+      final ledger = engine.evaluate(
+        const CharacterBuild(
+          level: 1,
+          selections: {'class': 'test:class/ascendant-choices'},
+          choices: {'test:class/ascendant-choices#training': ['察觉']},
+        ),
+      );
+
+      final grant = ledger.grants.singleWhere(
+        (grant) => grant.kind == RuleGrantKind.proficiency,
+      );
+      expect(grant.target, 'skill:察觉');
+    });
+
+    test('非候选值进 invalidSelected，原值不被静默丢弃', () {
+      final ledger = engine.evaluate(
+        const CharacterBuild(
+          level: 1,
+          selections: {'class': 'test:class/ascendant-choices'},
+          choices: {
+            'test:class/ascendant-choices#training': ['test:feat/不存在'],
+          },
+        ),
+      );
+
+      final pending = ledger.pendingChoices.singleWhere(
+        (choice) => choice.choiceId == 'training',
+      );
+      expect(pending.selected, isEmpty);
+      expect(pending.invalidSelected, ['test:feat/不存在']);
+      expect(pending.reason, RuleChoicePendingReason.notACandidate);
+      expect(ledger.grants, isEmpty);
+    });
+
+    test('多等级步骤的内联选择每个已达等级各生效一次（§3.5）', () {
+      final multiLevel = _entry(
+        id: 'test:class/ascendant-inline-multilevel',
+        type: 'class',
+        name: '晋升者（多级内联）',
+        rules: const {
+          'progression': [
+            {
+              'levels': [4, 8],
+              'choices': [
+                {
+                  'id': 'asi',
+                  'label': '属性提升',
+                  'optionType': 'ability',
+                  'minimum': 1,
+                  'maximum': 1,
+                  'repeatable': true,
+                  'options': [
+                    {
+                      'id': 'str',
+                      'label': '力量 +1',
+                      'grants': [
+                        {
+                          'id': 'asi-str',
+                          'kind': 'ability',
+                          'label': '力量提升',
+                          'target': 'str',
+                          'value': 1,
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      );
+      final multiEngine = CharacterRulesEngine(entries: {multiLevel.id: multiLevel});
+
+      final ledger = multiEngine.evaluate(
+        const CharacterBuild(
+          level: 8,
+          selections: {'class': 'test:class/ascendant-inline-multilevel'},
+          choices: {
+            'test:class/ascendant-inline-multilevel#asi#4': ['str'],
+            'test:class/ascendant-inline-multilevel#asi#8': ['str'],
+          },
+        ),
+      );
+
+      expect(ledger.pendingChoices, isEmpty);
+      final strGrants = ledger.grants
+          .where((grant) => grant.id == 'asi-str')
+          .toList(growable: false);
+      expect(strGrants, hasLength(2), reason: '4 级与 8 级各是一个独立生效单元');
+      expect(
+        strGrants.map((grant) => grant.sourceLevel).toList()..sort(),
+        [4, 8],
+      );
+    });
+  });
+
   group('RuleChoiceDefinition.options（内联选项解析与序列化）', () {
     test('字符串简写展开为 id == label', () {
       final choice = RuleChoiceDefinition.fromJson(const {

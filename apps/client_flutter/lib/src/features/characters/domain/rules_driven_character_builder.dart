@@ -429,8 +429,9 @@ class RulesDrivenCharacterBuilder {
     return bundles;
   }
 
-  /// 货币合计：初始值 0 的币种清单来自 [EquipmentBundleItems.currencyKeys]
-  /// （**唯一**硬编码点），本方法只做累加。
+  /// 货币合计：币种键的**唯一**来源是 [EquipmentBundleItems.currencyKeys]
+  /// （`lib` 内不再有任何 `'cp'` / `'pp'` 之类的字面量清单；编辑器面板、快速创建
+  /// 与怪物模板的初始货币都读它），本方法只做累加。
   Map<String, int> _currencyTotals(List<EquipmentBundleItems> bundles) {
     final totals = <String, int>{
       for (final key in EquipmentBundleItems.currencyKeys) key: 0,

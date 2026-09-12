@@ -1231,7 +1231,8 @@ void main() {
     expect(draft.skills['求生'], isFalse);
   });
 
-  test('语言选项记录到 data.profile.languages，不做数值派生', () {    final ranger = _entry(
+  test('语言选项记录到 data.profile.languages，不做数值派生', () {
+    final ranger = _entry(
       id: 'test:class/ranger',
       type: 'class',
       name: '游侠',

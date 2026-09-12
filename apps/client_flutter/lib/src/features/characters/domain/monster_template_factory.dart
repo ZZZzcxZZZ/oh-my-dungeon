@@ -1,3 +1,4 @@
+import 'equipment_bundle_items.dart';
 import '../../content/domain/content_entry.dart';
 import 'character_content_reference.dart';
 import 'character_edit_draft.dart';
@@ -69,7 +70,10 @@ class MonsterTemplateFactory {
       saves: {for (final key in Dnd5eRules.abilityLabels.keys) key: false},
       skills: {for (final skill in Dnd5eRules.skills) skill.name: false},
       inventory: const [],
-      currency: const {'cp': 0, 'sp': 0, 'ep': 0, 'gp': 0, 'pp': 0},
+      // 币种键的唯一实现点是 `EquipmentBundleItems.currencyKeys`。
+      currency: {
+        for (final key in EquipmentBundleItems.currencyKeys) key: 0,
+      },
       notes: '',
       data: {
         'templateRef': templateRef,

@@ -1,3 +1,4 @@
+import '../domain/equipment_bundle_items.dart';
 import 'dart:convert';
 import 'dart:math';
 
@@ -196,7 +197,8 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
         ),
     };
     _currencyControllers = {
-      for (final key in ['cp', 'sp', 'ep', 'gp', 'pp'])
+      // 币种键的唯一实现点是 `EquipmentBundleItems.currencyKeys`。
+      for (final key in EquipmentBundleItems.currencyKeys)
         key: TextEditingController(text: '${character?.currencyMap[key] ?? 0}'),
     };
     _saves = {
@@ -425,7 +427,8 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      for (final key in ['cp', 'sp', 'ep', 'gp', 'pp']) ...[
+                      for (final key
+                          in EquipmentBundleItems.currencyKeys) ...[
                         Expanded(
                           child: TextField(
                             key: Key('currency-$key-field'),
@@ -434,7 +437,8 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                             keyboardType: TextInputType.number,
                           ),
                         ),
-                        if (key != 'pp') const SizedBox(width: 8),
+                        if (key != EquipmentBundleItems.currencyKeys.last)
+                          const SizedBox(width: 8),
                       ],
                     ],
                   ),

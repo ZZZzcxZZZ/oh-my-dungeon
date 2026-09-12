@@ -192,10 +192,13 @@ void main() {
     );
   });
 
-  // 阻塞项 1：§3.10.3-2 明确允许「条目引用 + 内联 `options`」并存。混合选择必须继续
-  // 走通用条目卡片：`usesDedicatedOptionUi` 只在**内联选项是唯一候选载体**时成立。
-  // 判据过宽会让整条选择从渲染、`ruleChoicesAreValid`、`pendingChoices` 里消失，
-  // 于是候选不可见、不选也能创建（§3.10.3-7 的静默失效）。
+  // 阻塞项 1：§3.10.3-2 明确允许「条目引用 + 内联 `options`」并存。混合选择继续走
+  // 通用条目卡片，因为它的 `optionType` 是**条目类型**（`feat`）——专用 UI 的判据是
+  // `RuleChoiceDefinition.usesDedicatedOptionUi`（= `optionType` ∈
+  // `dedicatedOptionSteps`，只有 skill / spell），与"内联选项是不是唯一候选载体"
+  // 无关。判据过宽（例如按"有内联 options"就免检）会让整条选择从渲染、
+  // `ruleChoicesAreValid`、`pendingChoices` 里消失，于是候选不可见、不选也能创建
+  // （§3.10.3-7 的静默失效）。
   testWidgets(
     'mixed entry+inline choice keeps its entry candidate and stays required',
     (tester) async {

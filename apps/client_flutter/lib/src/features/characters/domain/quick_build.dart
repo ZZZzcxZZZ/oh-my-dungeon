@@ -1,3 +1,4 @@
+import 'equipment_bundle_items.dart';
 import '../../content/domain/content_entry.dart';
 import '../../rules/domain/rule_profile.dart';
 import 'character_edit_draft.dart';
@@ -155,7 +156,12 @@ class QuickBuildService {
         for (final item in selection.itemRefs)
           if (item.trim().isNotEmpty) {'name': item.trim(), 'quantity': 1},
       ],
-      currency: const {'cp': 0, 'sp': 0, 'ep': 0, 'gp': 10, 'pp': 0},
+      // 币种键的唯一实现点是 `EquipmentBundleItems.currencyKeys`；初始货币只有
+      // 这里的 gp 10（快速创建的历史行为）。
+      currency: {
+        for (final key in EquipmentBundleItems.currencyKeys)
+          key: key == 'gp' ? 10 : 0,
+      },
       notes:
           'D&D 2024 快速创建：${selection.species} / ${selection.background} / ${selection.className}。',
       avatarUrl: selection.avatarUrl,

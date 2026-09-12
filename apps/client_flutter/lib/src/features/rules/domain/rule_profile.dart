@@ -228,17 +228,28 @@ class ResolvedClassRules {
   /// 该等级真实存在的资源。`startsAtLevel` 之前的等级整条跳过；
   /// 上限表在该等级**未声明**（[MaxSpec.resolve] 返回 null）的资源也跳过，
   /// 绝不产出"上限 0"的假资源（§3.12）。表里显式写 0 才是"存在但上限 0"。
+  ///
+  /// 补丁资源（S3）：合并后 `name` / `maximum` 仍可能为 null——导入期已用
+  /// `incompleteResourcePatch` 拦住，档案侧由 `_validateArchiveResources` fail-fast；
+  /// 手工构造的坏数据按 [MaxSpec] 的"未声明"处理**跳过**，`name` 退回资源 id。
   List<ResolvedResource> resourcesAt(int level, Map<String, int> abilities) {
     final result = <ResolvedResource>[];
     for (final rule in resources) {
       if (level < rule.startsAtLevel) continue;
-      final maximum = rule.maximum.resolve(level: level, abilities: abilities);
-      if (maximum == null) continue;
+      final maximum = rule.maximum;
+      if (maximum == null) {
+        // 合并后仍无上限：导入期 `incompleteResourcePatch` 已拦住条目补丁，
+        // 档案侧 `_validateArchiveResources` fail-fast；手工构造的坏数据按
+        // "该等级未声明"处理**跳过**，绝不产出"上限 0"的假资源（§3.12）。
+        continue;
+      }
+      final value = maximum.resolve(level: level, abilities: abilities);
+      if (value == null) continue;
       result.add(
         ResolvedResource(
           id: rule.id,
-          name: rule.name,
-          maximum: maximum,
+          name: rule.name ?? rule.id,
+          maximum: value,
           recovery: rule.recoveryAt(level),
         ),
       );

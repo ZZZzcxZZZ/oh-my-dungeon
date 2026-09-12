@@ -52,7 +52,7 @@ void main() {
       expect(rules.spellcasting!.slots!.at(5), {'1': 4, '2': 2});
       expect(rules.resources.single.recovery, 'shortRestOne');
       expect(
-        rules.resources.single.maximum.resolve(
+        rules.resources.single.maximum!.resolve(
           level: 7,
           abilities: const {'cha': 16},
         ),
@@ -543,9 +543,11 @@ void main() {
           diagnostics: diagnostics,
         );
         expect(diagnostics.map((d) => d.code).toSet(), {'invalidMaxSpec'});
+        // 缺 id 精确到资源项；name 缺省是合法补丁（S3），但"写了空 name"
+        // 精确到 name 列。
         expect(diagnostics.map((d) => d.path).toList(), [
           '$_path.resources[0]',
-          '$_path.resources[1]',
+          '$_path.resources[1].name',
         ]);
       });
 

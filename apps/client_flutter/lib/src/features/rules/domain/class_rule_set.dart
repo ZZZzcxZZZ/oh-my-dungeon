@@ -115,11 +115,14 @@ void _reportUnknownFields(
 }
 
 /// `classRules.resources[]` 的一条资源（§3.4）。
+///
+/// S3 起支持**补丁声明**：条目侧的 `name` / `maximum` 可以省略，由低 tier（内置
+/// 档案）同 `id` 资源补齐（§3.4、§3.6 列级合并）。`id` 永远是必填合键。
 class ClassResourceRule {
   const ClassResourceRule({
     required this.id,
-    required this.name,
-    required this.maximum,
+    this.name,
+    this.maximum,
     required this.recovery,
     this.recoveryTable,
     this.startsAtLevel = 1,
@@ -128,12 +131,15 @@ class ClassResourceRule {
   });
 
   final String id;
-  final String name;
+
+  /// 展示名；补丁声明可省略（合并时由低 tier 同 id 补齐）。
+  final String? name;
 
   /// 可选的一句话说明（**档案里禁止出现**，见 §3.1；第三方包可用）。
   final String? description;
 
-  final MaxSpec maximum;
+  /// 上限；补丁声明可省略（合并时由低 tier 同 id 补齐）。
+  final MaxSpec? maximum;
 
   /// 常量恢复语义（未随等级变化时）。
   ///
@@ -155,11 +161,11 @@ class ClassResourceRule {
     return table.at(level) ?? 'longRest';
   }
 
-  /// 资源表声明到的最高等级；只有 formula 的资源不贡献等级。
-  int? get declaredMaxLevel => maximum.table?.maxLevel;
+  /// 资源表声明到的最高等级；只有 formula / 补丁（无 maximum）的资源不贡献等级。
+  int? get declaredMaxLevel => maximum?.table?.maxLevel;
 
-  /// 资源表声明到的最早等级；只有 formula 的资源不贡献等级。
-  int? get declaredMinLevel => maximum.table?.minLevel;
+  /// 资源表声明到的最早等级；只有 formula / 补丁（无 maximum）的资源不贡献等级。
+  int? get declaredMinLevel => maximum?.table?.minLevel;
 
   /// 声明过哪些列（**列级合并的唯一判据**，契约 §3.6）。
   /// 由 [ClassRuleSet.parse] 在"键存在"时填充；缺省值不算声明，
@@ -616,34 +622,60 @@ ClassResourceRule? _parseResource(
   // 顺序约定：进入子结构前先报该层未知键。
   _reportUnknownFields(raw, kResourceFields, itemPath, diagnostics);
 
-  final identity = _parseResourceIdentity(
-    raw,
-    itemPath: itemPath,
-    seen: seen,
-    diagnostics: diagnostics,
-  );
-  if (identity == null) return null;
+  // `id` 永远是必填的合键；`name` / `maximum` 是列，补丁声明可以省略（由低 tier
+  // 同 id 补齐，§3.4、§3.6）。**类型错误仍然报错**，绝不静默。
+  final id = '${raw['id'] ?? ''}'.trim();
+  if (id.isEmpty) {
+    _addError(diagnostics, itemPath, 'invalidMaxSpec', '资源缺少 id');
+    return null;
+  }
+  if (!seen.add(id)) {
+    _addError(
+      diagnostics,
+      '$itemPath.id',
+      'duplicateResourceId',
+      '资源 id "$id" 重复',
+    );
+    return null;
+  }
+  String? name;
+  if (raw.containsKey('name')) {
+    final rawName = raw['name'];
+    if (rawName is! String || rawName.trim().isEmpty) {
+      _addError(
+        diagnostics,
+        '$itemPath.name',
+        'invalidMaxSpec',
+        'name 必须是非空字符串',
+      );
+      return null;
+    }
+    name = rawName.trim();
+  }
+  MaxSpec? maximum;
+  if (raw.containsKey('maximum')) {
+    maximum = MaxSpec.tryParse(raw['maximum']);
+    if (maximum == null) {
+      _addError(
+        diagnostics,
+        '$itemPath.maximum',
+        'invalidMaxSpec',
+        'maximum 必须且只能使用 value / formula / table 之一',
+      );
+      return null;
+    }
+  }
   final recovery = _parseRecovery(
     raw,
     itemPath: itemPath,
     diagnostics: diagnostics,
   );
   if (recovery == null) return null;
-  final maximum = MaxSpec.tryParse(raw['maximum']);
-  if (maximum == null) {
-    _addError(
-      diagnostics,
-      '$itemPath.maximum',
-      'invalidMaxSpec',
-      'maximum 必须且只能使用 value / formula / table 之一',
-    );
-    return null;
-  }
   // `formula: "ability:<键>"` 的键必须在档案 `abilities` 内（§3.4、§3.12）。
   // `isSupportedFormula` 只校验形状（三个小写字母），"wiz" 这种笔误会通过；
   // 运行期 `MaxSpec.resolve` 会拿 `abilities[key] ?? 10` 算出调整值 0，资源上限
   // 静默变 0。判据与 grant formula 共用 [abilityKeyInFormula]，不复制第二份。
-  final formula = maximum.formula;
+  final formula = maximum?.formula;
   if (formula != null) {
     final abilityKey = abilityKeyInFormula(formula);
     if (abilityKey != null && !abilities.contains(abilityKey)) {
@@ -663,8 +695,8 @@ ClassResourceRule? _parseResource(
   );
   if (startsAt == null) return null;
   return ClassResourceRule(
-    id: identity.id,
-    name: identity.name,
+    id: id,
+    name: name,
     maximum: maximum,
     recovery: recovery.recovery,
     recoveryTable: recovery.table,
@@ -676,38 +708,6 @@ ClassResourceRule? _parseResource(
         if (raw.containsKey(key)) key,
     },
   );
-}
-
-class _ResourceIdentity {
-  const _ResourceIdentity(this.id, this.name);
-
-  final String id;
-  final String name;
-}
-
-/// 校验资源对象缺一不可的 `id` / `name`，并把 [seen] 用作职业内唯一性判重。
-_ResourceIdentity? _parseResourceIdentity(
-  Map<Object?, Object?> raw, {
-  required String itemPath,
-  required Set<String> seen,
-  required List<RuleDiagnostic> diagnostics,
-}) {
-  final id = '${raw['id'] ?? ''}'.trim();
-  final name = '${raw['name'] ?? ''}'.trim();
-  if (id.isEmpty || name.isEmpty) {
-    _addError(diagnostics, itemPath, 'invalidMaxSpec', '资源缺少 id 或 name');
-    return null;
-  }
-  if (!seen.add(id)) {
-    _addError(
-      diagnostics,
-      '$itemPath.id',
-      'duplicateResourceId',
-      '资源 id "$id" 重复',
-    );
-    return null;
-  }
-  return _ResourceIdentity(id, name);
 }
 
 /// 解析 `recovery`：常量形态返回 `(recovery: 常量, table: null)`；

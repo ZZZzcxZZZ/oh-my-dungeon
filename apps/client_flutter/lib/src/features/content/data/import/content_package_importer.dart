@@ -709,6 +709,9 @@ class ContentPackageImporter {
             entryRuleDefinition?.declaresChoiceOfType('spell') ?? false,
         // 档案侧已提供 `spellcasting` 时条目不写它不是缺省（字段级继承，§3.6）。
         archiveSpellcasting: archiveRules?.spellcasting,
+        // 补丁资源（S3）：条目缺 name / maximum 时必须有档案同 id 可补齐，
+        // 否则运行期拿不到可展示的名称或上限。
+        archiveRules: archiveRules,
         path: path,
         diagnostics: diagnostics,
       );

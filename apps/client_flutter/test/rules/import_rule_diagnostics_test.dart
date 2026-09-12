@@ -200,6 +200,53 @@ void main() {
       expect(report.valid, isTrue);
       expect(report.warnings, isEmpty);
     });
+
+    test('补丁资源缺 name / maximum 且档案没有同 id → incompleteResourcePatch', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'fighter', // 命中内置 slug，必须显式 classRules
+            structured: {
+              'classRules': {
+                'resources': [
+                  {'id': 'unknown-resource', 'recovery': 'shortRest'},
+                ],
+              },
+            },
+          ),
+          id: 'patch-pack',
+        ),
+      );
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.path == r'$.entries[0].structured.classRules.resources[0].id',
+      );
+      expect(error.message, contains('incompleteResourcePatch'));
+      expect(error.message, contains('unknown-resource'));
+    });
+
+    test('补丁资源缺 name / maximum 但档案有同 id → 放行，不报 incompleteResourcePatch', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'fighter',
+            structured: {
+              'classRules': {
+                'resources': [
+                  {'id': 'second_wind', 'maximum': 4},
+                ],
+              },
+            },
+          ),
+          id: 'patch-pack',
+        ),
+      );
+      expect(
+        report.errors.any((e) => e.message.contains('incompleteResourcePatch')),
+        isFalse,
+        reason: '${report.errors}',
+      );
+    });
   });
 
   group('内置 slug 保护', () {

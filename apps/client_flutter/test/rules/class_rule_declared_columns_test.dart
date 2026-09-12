@@ -111,9 +111,9 @@ void main() {
       expect(rules.resources, hasLength(2));
       final rage = rules.resources[0];
       expect(rage.declares('maximum'), isTrue);
-      expect(rage.maximum.resolve(level: 1, abilities: const {}), 0);
+      expect(rage.maximum!.resolve(level: 1, abilities: const {}), 0);
       expect(rage.declares('startsAtLevel'), isTrue);
-      expect(rules.resources[1].maximum.resolve(level: 1, abilities: const {}), 0);
+      expect(rules.resources[1].maximum!.resolve(level: 1, abilities: const {}), 0);
     });
   });
 

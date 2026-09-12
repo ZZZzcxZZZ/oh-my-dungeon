@@ -44,6 +44,7 @@ abstract final class RuleProfileResolver {
     final classes = _parseClasses(raw, abilities, diagnostics);
     final aliases = _parseClassAliases(raw, classes, diagnostics);
     _validateArchetypes(classes, progressions, diagnostics);
+    _validateArchiveResources(classes, diagnostics);
 
     if (diagnostics.any((d) => d.severity == RuleSeverity.error)) {
       return RuleProfileResolution(profile: null, diagnostics: diagnostics);
@@ -444,6 +445,27 @@ abstract final class RuleProfileResolver {
     );
   }
 
+  /// 档案资源必须自带 `name` 与 `maximum`（§3.1、§3.4）：内置档案不是补丁，
+  /// 没有"低 tier 可补齐"这回事，缺一列就整包失败（fail-fast）。报错码沿用
+  /// `invalidMaxSpec`，path 精确到列。
+  static void _validateArchiveResources(
+    Map<String, ClassRuleSet> classes,
+    List<RuleDiagnostic> diagnostics,
+  ) {
+    classes.forEach((slug, rules) {
+      for (var index = 0; index < rules.resources.length; index++) {
+        final resource = rules.resources[index];
+        final path = '\$.classes.$slug.resources[$index]';
+        if (resource.name == null) {
+          _invalidTable(diagnostics, '$path.name', '档案资源必须声明 name');
+        }
+        if (resource.maximum == null) {
+          _invalidTable(diagnostics, '$path.maximum', '档案资源必须声明 maximum');
+        }
+      }
+    });
+  }
+
   /// 条目 `structured.classRules` 的**档案侧**校验（§4.2/§4.3、§5.1、§5.2）。
   ///
   /// 导入期唯一入口：形状/类型问题由 [ClassRuleSet.parse]（`abilities` 传档案的）
@@ -465,6 +487,9 @@ abstract final class RuleProfileResolver {
   ///
   /// [archiveSpellcasting] 是**档案侧**同 slug 职业的 `spellcasting`：条目按字段
   /// 继承档案（§3.6），档案已提供时"条目没写 `spellcasting`"不是缺省，不得误报。
+  ///
+  /// [archiveRules] 是**档案侧**同 slug 职业的完整规则块，用于判定补丁资源是否有
+  /// 低 tier 可补齐（见下方 `incompleteResourcePatch`）。
   static void validateEntryClassRules({
     required RuleProfile profile,
     required ClassRuleSet? entryRules,
@@ -472,6 +497,7 @@ abstract final class RuleProfileResolver {
     required List<RuleDiagnostic> diagnostics,
     bool hasSpellChoiceIntent = false,
     ClassSpellcasting? archiveSpellcasting,
+    ClassRuleSet? archiveRules,
   }) {
     if (entryRules == null) return;
     final spellcasting = entryRules.spellcasting;
@@ -527,6 +553,32 @@ abstract final class RuleProfileResolver {
         diagnostics,
       );
     }
+    // 补丁资源：条目资源的 id 必须在档案里有同 id 资源，或自带 name + maximum。
+    // 否则运行期拿不到可展示的名称或上限（静默产出"未声明资源"），必须阻断。
+    // 这是补丁语义的**唯一**合法性判据（列级合并的前置条件）。
+    final archiveById = <String, ClassResourceRule>{
+      for (final resource in archiveRules?.resources ?? const <ClassResourceRule>[])
+        resource.id: resource,
+    };
+    for (var index = 0; index < entryRules.resources.length; index++) {
+      final resource = entryRules.resources[index];
+      final base = archiveById[resource.id];
+      final name = resource.name ?? base?.name;
+      final maximum = resource.maximum ?? base?.maximum;
+      if (name != null && maximum != null) continue;
+      diagnostics.add(
+        RuleDiagnostic(
+          path: '$path.resources[$index].id',
+          severity: RuleSeverity.error,
+          code: 'incompleteResourcePatch',
+          message:
+              '资源 "${resource.id}" 是补丁声明（缺 ${[
+                if (name == null) 'name',
+                if (maximum == null) 'maximum',
+              ].join(' / ')}），但内置档案没有同 id 资源可补齐',
+        ),
+      );
+    }
   }
 
   /// 资源上限表在 `startsAtLevel` 及以上为 0 的档位（§5.2 `zeroLevelResource`）。
@@ -544,7 +596,7 @@ abstract final class RuleProfileResolver {
     String path,
     List<RuleDiagnostic> diagnostics,
   ) {
-    final table = resource.maximum.table;
+    final table = resource.maximum?.table;
     if (table == null) return;
     final zeroLevels = <int>[
       for (var level = table.minLevel; level <= table.maxLevel; level++)
@@ -621,17 +673,7 @@ abstract final class RuleProfileResolver {
           ).value ??
           const {},
       spellcasting: spellcasting,
-      // resources 仍是"整块替换"：任务 3 换成按 id 的列级合并，本任务刻意不动它，
-      // 保证每个任务的失败测试集合最小。
-      resources:
-          _pickColumn<List<ClassResourceRule>>(
-            field: 'resources',
-            declarations: ordered,
-            declares: (rules) => rules.declares('resources'),
-            read: (rules) => rules.resources,
-            sources: sources,
-          ).value ??
-          const [],
+      resources: _mergeResources(declarations: ordered, sources: sources),
       archetype: profile.progression(spellcasting?.archetype),
       fieldSources: sources,
       // 声明范围的唯一口径在 ResolvedClassRules 里：条目各表 ∪ 档案各表（§3.12）。
@@ -795,6 +837,132 @@ ClassSpellcasting? _mergeSpellcasting({
         ...?spellcastingOf(declaration.rules)?.fields,
     },
   );
+}
+
+/// tier 之间（条目 vs 档案）的 `resources` 合并（§3.4、§3.6 + 决策 D5）：
+/// **按 `id` 合**，同 `id` 再按列。
+///
+/// - `id` 的出现顺序按"优先级从高到低"稳定排列（高 tier 新增的资源排在前面）；
+/// - 每条资源的每个标量列（`name` / `recovery` / `startsAtLevel`）取"高优先级且
+///   声明过该列"的一侧；
+/// - `recovery` 的常量形态与 `{"table": …}` 形态是**同一条来源路径**（§3.4 的双
+///   表示歧义），两者整体取同一侧，不拆开；
+/// - `maximum` 是列：最高 tier 的声明者胜出；若胜出者是**表**形态，则与更低 tier
+///   的表形态按等级合并（[mergeRuleTableLevels]），所以"勘误只改 20 级的上限"不必
+///   重述整表。胜出者是整数 / formula 形态时整列由它负责（常量 / 公式没有等级维度）；
+/// - 合并后 `name` / `maximum` 仍可能为 null：导入期已用 `incompleteResourcePatch`
+///   拦住条目补丁，档案侧由 `_validateArchiveResources` fail-fast。运行期
+///   [ResolvedClassRules.resourcesAt] 对 null 采取"跳过"，避免产出没有上限的假资源；
+/// - `description` 没有数值语义：取最高 tier 声明的非空值，**不记来源**；
+/// - 合并结果的 `fields` 是**声明列的并集**，供下游判断"该列是否未声明"。
+List<ClassResourceRule> _mergeResources({
+  required List<_OrderedDeclaration> declarations,
+  required Map<String, RuleFieldSource> sources,
+}) {
+  final ids = <String>[];
+  for (final declaration in declarations) {
+    for (final resource in declaration.rules.resources) {
+      if (!ids.contains(resource.id)) ids.add(resource.id);
+    }
+  }
+
+  final merged = <ClassResourceRule>[];
+  for (final id in ids) {
+    bool declares(ClassRuleSet rules, String column) =>
+        _resourceOf(rules, id)?.declares(column) ?? false;
+
+    T? column<T>(String name, T? Function(ClassResourceRule) read) =>
+        _pickColumn<T>(
+          field: RuleFieldPath.resource(id, name),
+          declarations: declarations,
+          declares: (rules) => declares(rules, name),
+          read: (rules) => read(_resourceOf(rules, id)!),
+          sources: sources,
+        ).value;
+
+    // 常量形态与表形态是**同一条来源路径**（§3.4 的双表示歧义）：两者必须
+    // 整体取同一侧，不能"常量取条目、表取档案"。
+    final recovery = _pickColumn<({String? constant, StringTable? table})>(
+      field: RuleFieldPath.resource(id, 'recovery'),
+      declarations: declarations,
+      declares: (rules) => declares(rules, 'recovery'),
+      read: (rules) {
+        final rule = _resourceOf(rules, id)!;
+        return (constant: rule.recovery, table: rule.recoveryTable);
+      },
+      sources: sources,
+    ).value;
+
+    // `description` 没有数值语义：取最高 tier 声明的非空值，**不记来源**。
+    String? description;
+    for (final declaration in declarations) {
+      final value = _resourceOf(declaration.rules, id)?.description;
+      if (value != null) {
+        description = value;
+        break;
+      }
+    }
+
+    merged.add(
+      ClassResourceRule(
+        id: id,
+        name: column<String>('name', (r) => r.name),
+        maximum: _mergeResourceMaximum(
+          id: id,
+          declarations: declarations,
+          sources: sources,
+        ),
+        recovery: recovery?.constant,
+        recoveryTable: recovery?.table,
+        startsAtLevel:
+            column<int>('startsAtLevel', (r) => r.startsAtLevel) ?? 1,
+        description: description,
+        fields: <String>{
+          for (final declaration in declarations)
+            ...?_resourceOf(declaration.rules, id)?.fields,
+        },
+      ),
+    );
+  }
+  return merged;
+}
+
+/// 按 `id` 找资源；没有同 id 时返回 null（`id` 是合键，S3 起跨 tier 对齐）。
+ClassResourceRule? _resourceOf(ClassRuleSet rules, String id) {
+  for (final resource in rules.resources) {
+    if (resource.id == id) return resource;
+  }
+  return null;
+}
+
+/// `resources.<id>.maximum` 的列级 + 表列逐级合并（决策 D5）。
+///
+/// 最高 tier 的声明者决定形态：整数 / 公式形态整列由它负责（没有等级维度）；
+/// **表**形态则把各 tier 的表按等级合并（[mergeRuleTableLevels]），
+/// `minimum` 取胜出者的（`max(结算结果, minimum)` 的语义不变）。
+MaxSpec? _mergeResourceMaximum({
+  required String id,
+  required List<_OrderedDeclaration> declarations,
+  required Map<String, RuleFieldSource> sources,
+}) {
+  final field = RuleFieldPath.resource(id, 'maximum');
+  final contributors = <_OrderedDeclaration>[];
+  for (final declaration in declarations) {
+    final rule = _resourceOf(declaration.rules, id);
+    if (rule == null || !rule.declares('maximum')) continue;
+    contributors.add(declaration);
+  }
+  if (contributors.isEmpty) return null;
+  final owner = contributors.first;
+  _writeSource(sources, field, owner.originId, owner.tier);
+
+  final ownerSpec = _resourceOf(owner.rules, id)!.maximum;
+  if (ownerSpec == null || ownerSpec.table == null) return ownerSpec;
+  final mergedLevels = mergeRuleTableLevels<int>([
+    for (final declaration in contributors)
+      (level) => _resourceOf(declaration.rules, id)!.maximum?.table?.at(level),
+  ]);
+  return MaxSpec.fromLevels(mergedLevels, minimum: ownerSpec.minimum);
 }
 
 /// 档案形状/类型错误一律 error（§3.1、§5.2）。

@@ -216,6 +216,14 @@ class MaxSpec {
     return MaxSpec._(table: table, minimum: minimum);
   }
 
+  /// 从"等级 → 值"构造**表形态**的合并结果（[mergeRuleTableLevels] 的唯一下游）；
+  /// 空表 → null（所有 tier 都没声明 → 未声明）。`minimum` 与整数 / 公式形态同义。
+  static MaxSpec? fromLevels(Map<int, int> byLevel, {int? minimum}) {
+    final table = IntTable.fromLevels(byLevel);
+    if (table == null) return null;
+    return MaxSpec._(table: table, minimum: minimum);
+  }
+
   /// 返回 `int?`：表在该等级**未声明**时返回 null（调用方跳过），不静默变 0（§3.12）。
   int? resolve({required int level, required Map<String, int> abilities}) {
     final raw = switch (this) {

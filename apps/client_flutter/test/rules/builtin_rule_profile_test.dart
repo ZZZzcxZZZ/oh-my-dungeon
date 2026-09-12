@@ -314,7 +314,7 @@ const classExpectations = <String, ClassExpectation>{
   ),
   'monk': ClassExpectation(
     hitDie: 8,
-    saves: ['dex', 'wis'],
+    saves: ['str', 'dex'],
     resourceIds: ['focus_points'],
   ),
   'paladin': ClassExpectation(

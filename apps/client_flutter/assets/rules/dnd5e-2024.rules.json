@@ -140,7 +140,7 @@
     },
     "monk": {
       "hitDie": 8,
-      "savingThrowAbilities": ["dex", "wis"],
+      "savingThrowAbilities": ["str", "dex"],
       "spellcasting": {"mode": "none"},
       "resources": [
         {"id": "focus_points", "name": "专注点", "startsAtLevel": 2,

@@ -350,10 +350,23 @@ def parse_table_rows(soup: BeautifulSoup | Tag) -> list[list[str]]:
 ABILITY_KEYS = {"力量": "str", "敏捷": "dex", "体质": "con",
                 "智力": "int", "感知": "wis", "魅力": "cha"}
 
-# PHB 2024 中文技能名（18 项，按书里第一章的顺序）
-ALL_SKILLS = ["特技", "驯兽", "奥秘", "运动", "欺瞒", "历史", "洞悉", "威吓",
-              "调查", "医药", "自然", "察觉", "表演", "游说", "宗教", "巧手",
+# 输出用的规范名清单：18 项技能，逐字采用内置档案
+# `apps/client_flutter/assets/rules/dnd5e-2024.rules.json` 的 `skills[].name`
+# （顺序仍保持书里第一章的顺序）。客户端角色卡按档案 skills 的名字渲染技能行
+# 并据此判定熟练，输出源 PDF 的译名（如「特技」「游说」）会选不中角色卡技能行，
+# 导致熟练静默丢失。来源译名与档案译名的差异由 SKILL_NAME_ALIASES 收敛。
+ALL_SKILLS = ["杂技", "驯兽", "奥秘", "运动", "欺瞒", "历史", "洞悉", "威吓",
+              "调查", "医药", "自然", "察觉", "表演", "说服", "宗教", "巧手",
               "隐匿", "求生"]
+
+# 源文译名 → 档案规范名。只收敛同一技能的不同中文译名，不做模糊匹配。
+# 「医疗」是源文里对 Medicine 的另一处译法（法师/圣武士/德鲁伊），档案统一叫
+# 「医药」（牧师页源文也写「医药」），必须一并收敛，否则同样选不中角色卡技能行。
+SKILL_NAME_ALIASES = {
+    "特技": "杂技",
+    "游说": "说服",
+    "医疗": "医药",
+}
 
 
 def parse_saving_throws(value: str) -> list[str]:
@@ -369,7 +382,10 @@ def parse_saving_throws(value: str) -> list[str]:
 
 def parse_skill_choice(value: str) -> dict[str, Any] | None:
     """'选择2项：驯兽、运动、威吓' → {'count':2,'options':[...]}
-       '任选3项（见第一章）'      → {'count':3,'options':ALL_SKILLS}"""
+       '任选3项（见第一章）'      → {'count':3,'options':ALL_SKILLS}
+
+    选项逐项过 SKILL_NAME_ALIASES 收敛到档案规范名；映射后仍不在 ALL_SKILLS
+    里的名字不静默保留：记入 MANUAL_REVIEW 并原样输出（不丢数据）。"""
     match = re.search(r"(\d+)\s*项", value)
     if not match:
         return None
@@ -377,11 +393,22 @@ def parse_skill_choice(value: str) -> dict[str, Any] | None:
     if "见" in value:
         return {"count": count, "options": list(ALL_SKILLS)}
     after = value.split("：", 1)[1] if "：" in value else ""
-    options = [
-        item.strip()
-        for item in re.split(r"[、,，]|或", after)
-        if item.strip()
-    ]
+    options: list[str] = []
+    for raw in re.split(r"[、,，]|或", after):
+        raw = raw.strip()
+        if not raw:
+            continue
+        mapped = SKILL_NAME_ALIASES.get(raw, raw)
+        if mapped not in ALL_SKILLS:
+            MANUAL_REVIEW.append({
+                "type": "unknown-skill-name",
+                "raw": raw,
+                "mapped": mapped,
+                "reason": "skill name not in canonical archive skill list",
+            })
+            options.append(raw)
+        else:
+            options.append(mapped)
     if not options:
         return None
     return {"count": count, "options": options}

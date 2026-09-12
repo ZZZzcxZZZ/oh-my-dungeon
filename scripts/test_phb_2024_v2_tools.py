@@ -54,20 +54,32 @@ SKILL_CHOICE_TEXTS = {
     "武僧": "选择2项：特技、运动、历史、洞悉、宗教、隐匿",
 }
 
+# 期望值是**档案规范名**（不是源文译名）：解析结果必须已过 SKILL_NAME_ALIASES。
 EXPECTED_SKILL_CHOICES = {
-    "战士": (2, ["特技", "驯兽", "运动", "历史", "洞悉", "威吓", "游说", "察觉", "求生"]),
-    "法师": (2, ["奥秘", "历史", "洞悉", "调查", "医疗", "自然", "宗教"]),
+    "战士": (2, ["杂技", "驯兽", "运动", "历史", "洞悉", "威吓", "说服", "察觉", "求生"]),
+    "法师": (2, ["奥秘", "历史", "洞悉", "调查", "医药", "自然", "宗教"]),
     "魔契师": (2, ["奥秘", "欺瞒", "历史", "威吓", "调查", "自然", "宗教"]),
     "游侠": (3, ["驯兽", "运动", "洞悉", "调查", "自然", "察觉", "隐匿", "求生"]),
-    "圣武士": (2, ["运动", "洞悉", "威吓", "医疗", "游说", "宗教"]),
-    "术士": (2, ["奥秘", "欺瞒", "洞悉", "威吓", "游说", "宗教"]),
+    "圣武士": (2, ["运动", "洞悉", "威吓", "医药", "说服", "宗教"]),
+    "术士": (2, ["奥秘", "欺瞒", "洞悉", "威吓", "说服", "宗教"]),
     "吟游诗人": (3, list(extractor.ALL_SKILLS)),
-    "德鲁伊": (2, ["奥秘", "驯兽", "洞悉", "医疗", "自然", "察觉", "宗教", "求生"]),
-    "牧师": (2, ["历史", "洞悉", "医药", "游说", "宗教"]),
-    "游荡者": (4, ["特技", "运动", "欺瞒", "洞悉", "威吓", "调查", "察觉", "游说", "巧手", "隐匿"]),
+    "德鲁伊": (2, ["奥秘", "驯兽", "洞悉", "医药", "自然", "察觉", "宗教", "求生"]),
+    "牧师": (2, ["历史", "洞悉", "医药", "说服", "宗教"]),
+    "游荡者": (4, ["杂技", "运动", "欺瞒", "洞悉", "威吓", "调查", "察觉", "说服", "巧手", "隐匿"]),
     "野蛮人": (2, ["驯兽", "运动", "威吓", "自然", "察觉", "求生"]),
-    "武僧": (2, ["特技", "运动", "历史", "洞悉", "宗教", "隐匿"]),
+    "武僧": (2, ["杂技", "运动", "历史", "洞悉", "宗教", "隐匿"]),
 }
+
+
+def _read_archive() -> dict | None:
+    """读内置档案；裸检出（无资产）时返回 None，由调用方 skipTest。"""
+    if not ARCHIVE_PATH.exists():
+        return None
+    return json.loads(ARCHIVE_PATH.read_text(encoding="utf-8"))
+
+
+def _archive_skill_names(archive: dict) -> list[str]:
+    return [str(skill["name"]) for skill in archive["skills"]]
 
 
 class Phb2024V2ToolsTest(unittest.TestCase):
@@ -95,6 +107,13 @@ class Phb2024V2ToolsTest(unittest.TestCase):
         )
 
     def test_parse_skill_choice_reads_all_twelve_classes(self) -> None:
+        archive = _read_archive()
+        if archive is None:
+            self.skipTest(f"builtin archive not found: {ARCHIVE_PATH}")
+        canonical = _archive_skill_names(archive)
+        self.assertEqual(len(canonical), 18)
+        canonical_set = set(canonical)
+
         self.assertEqual(set(SKILL_CHOICE_TEXTS), set(EXPECTED_SKILL_CHOICES))
         for cls_name, text in SKILL_CHOICE_TEXTS.items():
             with self.subTest(cls=cls_name):
@@ -103,15 +122,59 @@ class Phb2024V2ToolsTest(unittest.TestCase):
                 self.assertIsNotNone(parsed, text)
                 self.assertEqual(parsed["count"], expected_count)
                 self.assertEqual(parsed["options"], expected_options)
-        # 吟游诗人「任选3项（见第一章）」= 任意 3 项技能。
+                # 逐条对齐档案规范名集合（集合从资产文件读出，不写死副本）。
+                for option in parsed["options"]:
+                    self.assertIn(option, canonical_set, f"{cls_name}: {option}")
+        # 吟游诗人「任选3项（见第一章）」= 恰好 18 个档案规范名。
         bard = extractor.parse_skill_choice(SKILL_CHOICE_TEXTS["吟游诗人"])
-        self.assertEqual(bard["options"], extractor.ALL_SKILLS)
+        self.assertEqual(len(bard["options"]), 18)
+        self.assertEqual(sorted(bard["options"]), sorted(canonical))
+        # 源文译名必须收敛到档案规范名。
+        self.assertEqual(
+            extractor.parse_skill_choice("选择1项：特技")["options"], ["杂技"]
+        )
+        self.assertEqual(
+            extractor.parse_skill_choice("选择1项：游说")["options"], ["说服"]
+        )
+        self.assertEqual(
+            extractor.parse_skill_choice("选择1项：医疗")["options"], ["医药"]
+        )
         # 魔契师「自然或宗教」必须切成两项，不得残留原文。
         warlock = extractor.parse_skill_choice(SKILL_CHOICE_TEXTS["魔契师"])
         self.assertIn("宗教", warlock["options"])
         self.assertNotIn("自然或宗教", warlock["options"])
         # 解析不出 N 项时返回 None，不造占位。
         self.assertIsNone(extractor.parse_skill_choice("任意技能"))
+
+    def test_unknown_skill_name_is_recorded_and_preserved(self) -> None:
+        """映射后仍不在规范清单里的名字不静默保留：记 MANUAL_REVIEW 且原样输出。"""
+        parsed = extractor.parse_skill_choice("选择2项：杂技、不存在技能")
+        self.assertEqual(parsed["options"], ["杂技", "不存在技能"])
+        self.assertEqual(len(extractor.MANUAL_REVIEW), 1)
+        self.assertEqual(extractor.MANUAL_REVIEW[0]["raw"], "不存在技能")
+
+    def test_class_core_rules_match_builtin_archive(self) -> None:
+        """12 职业的 hitDie / 豁免熟练必须与内置档案逐项一致。
+
+        档案是 tier 0 规范值；提取器与档案任一侧改错（例如武僧豁免曾是
+        dex/wis，源文与 SRD 5.2 都是 str/dex）都必须被这条检查发现。
+        """
+        archive = _read_archive()
+        if archive is None:
+            self.skipTest(f"builtin archive not found: {ARCHIVE_PATH}")
+        classes = self._extract_all_classes()
+        self.assertEqual(len(classes), len(extractor.CLASS_DIRS))
+        for cls_name, entry in classes.items():
+            slug = entry["slug"]
+            with self.subTest(cls=cls_name):
+                archive_class = archive["classes"][slug]
+                class_rules = entry["structured"]["classRules"]
+                self.assertEqual(class_rules["hitDie"], archive_class["hitDie"], slug)
+                self.assertEqual(
+                    class_rules["savingThrowAbilities"],
+                    archive_class["savingThrowAbilities"],
+                    slug,
+                )
 
     def test_parse_saving_throws_keeps_source_order(self) -> None:
         self.assertEqual(extractor.parse_saving_throws("力量与体质"), ["str", "con"])

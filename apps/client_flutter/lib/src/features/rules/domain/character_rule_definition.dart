@@ -351,9 +351,8 @@ bool isValueOptionType(Object? optionType) =>
 
 /// `rules.choices[]` / `rules.progression[].choices[]` 的一条选择（契约 §3.10）。
 ///
-/// 本批次（计划 2 任务 1–2）只把这些字段**解析成形状**并提供判定纯函数；运行期与
-/// UI 的消费在任务 3–6，导入期放行在任务 10（此前 `ContentPackageImporter` 仍对
-/// 它们报 error 拒收，因此不存在"导入放行、运行期无效"的窗口）。
+/// 本类只把这些字段**解析成形状**并提供判定纯函数；运行期与 UI 的消费在
+/// `RuleChoiceSemantics` / 创建向导 / 升级面（导入期放行见 §5.1）。
 class RuleChoiceDefinition {
   static const allowedBuilderSteps = {
     'class',
@@ -363,6 +362,28 @@ class RuleChoiceDefinition {
     'equipment',
     'spells',
     'details',
+  };
+
+  /// `optionType: "skill"`：值类型选择，由「熟练」步骤的技能网格渲染。
+  static const skillOptionType = 'skill';
+
+  /// `optionType: "spell"`：由「法术」步骤的法术池渲染。
+  static const spellOptionType = 'spell';
+
+  /// 专用渲染器承担的 `optionType` → 创建向导步骤索引。
+  ///
+  /// **唯一实现点**：`skill` → 「熟练」步骤（4），`spell` → 「法术」步骤（6）。
+  /// 专用 UI 选择的界面位置**只由 `optionType` 决定**（契约 §3.10.2）：声明里的
+  /// `builderStep` 对它们只是提示并被**忽略**，写什么值（或干脆省略）都不改变
+  /// 位置，也不会变成"第二种语义"。
+  ///
+  /// 位置一旦被 `builderStep` 改写，PHB 私有包的 `phb-2024:class/fighter` 技能选择
+  /// （`optionType: "skill"` 且**不带** `builderStep`）就会落到步骤 0：通用卡片因
+  /// [usesDedicatedOptionUi] 排除它、专用渲染器又按 4/6 过滤 → 哪里都不渲染却仍然
+  /// 阻塞创建（"看不见却阻塞创建"的死锁，决策 D7 的同类缺陷）。
+  static const dedicatedOptionSteps = <String, int>{
+    skillOptionType: 4,
+    spellOptionType: 6,
   };
 
   const RuleChoiceDefinition({
@@ -397,54 +418,68 @@ class RuleChoiceDefinition {
 
   final int? maximumOptionLevel;
   final List<String> recommendedEntryIds;
+
+  /// 创建向导里的步骤提示（[allowedBuilderSteps]）。
+  ///
+  /// 对**专用 UI 选择**（`optionType` ∈ [dedicatedOptionSteps]）**不参与**位置计算：
+  /// 那是 [dedicatedOptionStep] 的职责，这里写的值被忽略（只是作者意图的提示）。
+  /// 其余选择的位置由 `ruleChoiceBuilderStep` 映射到这里声明的名字。
   final String? builderStep;
 
   /// 同一选项是否可重复选取（契约 §3.10.2）。`true` 时 [maximum] 是**次数上限**。
   ///
-  /// 本批次只解析；消费（选中规范化 / 生效单元序号）在任务 2–3。
+  /// 消费：选中值规范化（`RuleChoiceSemantics.normalizeSelection`）、生效单元序号
+  /// （`RuleChoiceGrantKey` 的 occurrence）、共享组件的"加一次 / 减一次"交互。
   final bool repeatable;
 
   /// 计入哪个数量池（契约 §3.10.2；合法值见 [kCountsTowardPools]）。
   ///
-  /// `null` = 不占池，只受 [maximum] 约束。本批次只解析；额度计算在任务 5。
+  /// `null` = 不占池，只受 [maximum] 约束。额度计算的唯一实现点是
+  /// `RuleChoiceQuota.effectiveMaximum`。
   final String? countsToward;
 
   /// 该选择的前置依赖（契约 §3.10.2）。空列表 = 无前置。
   ///
-  /// 本批次只解析；判定纯函数在 `RuleChoiceSemantics.requiresSatisfied`，
-  /// 引擎/UI 接线在任务 4、6。
+  /// 判定纯函数是 `RuleChoiceSemantics.requiresSatisfied`（唯一实现点），引擎与
+  /// 三处选择界面都调它；呈现层的原因文案由 `ruleChoiceBlockedReason` 一处产出。
   final List<RuleRequiresDefinition> requires;
 
   /// 选择面板里的分组标题（契约 §3.10.2）。`null` = 不分组。
   ///
-  /// 本批次只解析；呈现（按首次声明顺序分组）在任务 6b。
+  /// 归组的唯一实现点是 `groupRuleChoiceSections`（按首次声明顺序，无 group 的
+  /// 排最后）；创建向导、编辑器升级队列与独立升级页三处都调它。
   final String? group;
 
   /// 选择面板里的帮助小字（契约 §3.10.2）。`null` = 无帮助文案。
   ///
-  /// 本批次只解析；呈现在任务 6b。
+  /// 由共享组件 `RuleChoiceSection` 与法术池渲染成标题下的小字。
   final String? help;
 
   /// 该选择是否由**专门渲染器**承担，因此不出现在通用选择卡片里。
   ///
-  /// 判据（唯一实现点）：`skill` 由创建向导「熟练」步骤的技能选择器承担，
-  /// `spell` 由「法术」步骤的法术池承担（[isSpellChoice]）。
+  /// 判据（唯一实现点）：[dedicatedOptionSteps] 是否含 [optionType]——`skill` 由
+  /// 创建向导「熟练」步骤的技能网格承担，`spell` 由「法术」步骤的法术池承担。
   ///
   /// 这是**渲染判据**，不是"免检"判据：候选合并
   /// （`RuleChoiceSemantics.candidatesFor`）让内联 `options` 与条目候选对通用卡片
   /// 同样可见后，选中值一律进 `build.choices`，校验 / 额度 / 升级判定都按普通选择
   /// 处理，不再有"值写在别处所以免检"的例外。
   ///
-  /// `spell` 必须在专门渲染器**存在**之后才并入本判据：先并入会让显式法术选择在
-  /// 向导里不可见却仍被校验（§3.10.3-7 的静默失效，与决策 D7 同一类缺陷）。
-  /// 创建向导的法术步骤（`_spellChoicePoolSections`）、编辑器升级队列与独立升级页
-  /// 都已渲染 `spell` 选择，故并入是安全的。
-  bool get usesDedicatedOptionUi => optionType == 'skill' || isSpellChoice;
+  /// **只决定"由谁画"，不决定"画在哪个步骤"**：步骤归 [dedicatedOptionStep]。
+  bool get usesDedicatedOptionUi => dedicatedOptionStep != null;
+
+  /// 该选择在创建向导里由专用渲染器认领的步骤（[dedicatedOptionSteps]）。
+  ///
+  /// `null` = 非专用选择，位置按 [builderStep] 走（`ruleChoiceBuilderStep`）。
+  int? get dedicatedOptionStep => dedicatedOptionSteps[optionType];
+
+  /// 技能值类型选择：由「熟练」步骤的技能网格渲染（[dedicatedOptionStep] == 4）。
+  bool get isSkillChoice => optionType == skillOptionType;
 
   /// 显式法术选择（契约 §3.10.2）：由法术池渲染，候选经
   /// `RuleChoiceSemantics.candidatesFor`（`maximumOptionLevel` / `optionTags`），
   /// 上限经 `RuleChoiceQuota.effectiveMaximum`。
-  bool get isSpellChoice => optionType == 'spell';
+  bool get isSpellChoice => optionType == spellOptionType;
 
   /// 值类型选择的判据入口（实现点在 [isValueOptionType]）。
   bool get isValueTypeChoice => isValueOptionType(optionType);

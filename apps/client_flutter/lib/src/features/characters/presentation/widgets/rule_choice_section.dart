@@ -60,7 +60,11 @@ class RuleChoiceSection extends StatelessWidget {
     final counts = _countsById(selected);
     final visible = blocked
         ? const <RuleChoiceCandidate>[]
-        : _visibleCandidates(requiresContext);
+        : visibleRuleChoiceCandidates(candidates, requiresContext);
+    final hiddenSelected = <String>[
+      for (final id in selected)
+        if (!visible.any((candidate) => candidate.id == id)) id,
+    ];
     final valid =
         !blocked &&
         selected.length >= definition.minimum &&
@@ -142,7 +146,13 @@ class RuleChoiceSection extends StatelessWidget {
                 const SizedBox(height: 12),
                 if (visible.isEmpty)
                   Text(
-                    '资料库中缺少 ${definition.optionType} 选项。',
+                    // 两种"空候选"必须区分（不误导）：资料库缺料 vs 选项级前置
+                    // 未满足把候选全隐藏了。判定只用 `candidates.isEmpty`，
+                    // 因为过滤的唯一实现点是 `visibleRuleChoiceCandidates`。
+                    candidates.isEmpty
+                        ? '资料库中缺少 ${definition.optionType} 选项。'
+                        : '当前条件下没有可选的 ${definition.optionType} 选项'
+                              '（候选的选项级 requires 均未满足）。',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.error,
                     ),
@@ -200,31 +210,23 @@ class RuleChoiceSection extends StatelessWidget {
                         ),
                     ],
                   ),
+                // 已选但**选项级** `requires` 不满足的值：候选被隐藏，值却还在草稿
+                // 里。不静默丢弃，也不让它冒充"生效"——列出来（决策 D6）。
+                if (hiddenSelected.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    '已选但未生效：${_labelsFor(hiddenSelected, candidates)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.error,
+                    ),
+                  ),
+                ],
               ],
             ],
           ),
         ),
       ),
     );
-  }
-
-  /// 选项级 `requires` 不满足的候选**不出现**（决策 D6）。判定的唯一实现点是
-  /// `RuleChoiceSemantics.candidateRequiresSatisfied`，本方法只做过滤。
-  List<RuleChoiceCandidate> _visibleCandidates(
-    RuleChoiceRequiresContext? context,
-  ) {
-    if (context == null) return candidates;
-    return candidates
-        .where(
-          (candidate) => RuleChoiceSemantics.candidateRequiresSatisfied(
-            candidate,
-            sourceEntryId: context.sourceEntryId,
-            selectedByKey: context.selectedByKey,
-            abilities: context.abilities,
-            entries: context.entries,
-          ),
-        )
-        .toList(growable: false);
   }
 
   /// 选中 / 取消的唯一交互实现：算法本体是顶层函数
@@ -288,6 +290,30 @@ int ruleChoiceBuilderStep(String? declaredStep, {required int inheritedStep}) {
     'details' => 7,
     _ => inheritedStep,
   };
+}
+
+/// 选项级 `requires`（`options[].requires`，决策 D6）不满足的候选**不出现**。
+///
+/// **唯一实现点**（候选过滤）：判定本体是
+/// `RuleChoiceSemantics.candidateRequiresSatisfied`，本函数只做过滤。共享组件
+/// [RuleChoiceSection] 与法术池（创建向导 `_spellChoicePoolSections`）都调它，
+/// 不得各自再写一份过滤，否则两处口径分叉 = "界面上看得见、引擎判不在候选集"。
+List<RuleChoiceCandidate> visibleRuleChoiceCandidates(
+  List<RuleChoiceCandidate> candidates,
+  RuleChoiceRequiresContext? context,
+) {
+  if (context == null) return candidates;
+  return candidates
+      .where(
+        (candidate) => RuleChoiceSemantics.candidateRequiresSatisfied(
+          candidate,
+          sourceEntryId: context.sourceEntryId,
+          selectedByKey: context.selectedByKey,
+          abilities: context.abilities,
+          entries: context.entries,
+        ),
+      )
+      .toList(growable: false);
 }
 
 /// 选择 chip 的**唯一**选中 / 取消算法（契约 §3.10.2、§3.10.3-4）。

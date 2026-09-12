@@ -525,7 +525,13 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `countsToward` | string? 或 `null` | 法术选择计入哪个数量池（`spellbook`/`known`/`prepared`）；`null` = 不占上限 |
 | `requires` | object[] | 前置依赖：`{choice, option}` 或 `{ability, minimum}`；两种形态字段互斥，混写或多余字段一律报错；不满足时**隐藏**该选择或选项 |
 | `group` / `help` | string? | 分组标题与帮助文案（呈现用，无规则语义） |
-| `builderStep` | string | 归属创建向导步骤（沿用 `allowedBuilderSteps`） |
+| `builderStep` | string | 归属创建向导步骤（沿用 `allowedBuilderSteps`）。**值类型 / 专用 UI 选择例外**：见下 |
+
+**值类型选择的界面位置由 `optionType` 决定，`builderStep` 不参与**：`optionType: "skill"` 恒由「熟练」步骤的
+技能网格渲染，`optionType: "spell"` 恒由「法术」步骤的法术池渲染。对这两者，`builderStep` 只是作者意图的
+**提示**并被忽略（省略也一样），不构成第二种位置语义；实现上位置只由 `RuleChoiceDefinition.dedicatedOptionSteps`
+一处决定。理由：通用选择卡片按 `optionType` 排除专用 UI 的选择，若专用渲染器再按 `builderStep` 认领，作者省略
+`builderStep` 时该选择就会"哪里都不渲染、却仍然阻塞创建"（决策 D7 同类缺陷）。
 
 **自动授予**：当 `optionType` 是值类型时，字符串元素会自动生成 grants（写成对象可覆盖）：
 

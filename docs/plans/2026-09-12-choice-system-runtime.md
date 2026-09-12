@@ -2278,12 +2278,17 @@ List<RuleChoiceGroup> groupRuleChoiceSections(Iterable<...> choices) { ... }
 testWidgets('每个 allowedBuilderSteps 的取值都有渲染位置', (tester) async {
   // 对 RuleChoiceDefinition.allowedBuilderSteps 的每一项构造一条**本级新增**、
   // minimum 1 / maximum 1 的选择，进入创建向导后断言：
-  //   1) 该选择标题可见（或由专门界面承担：skill/spell）；
+  //   1) 该选择标题可见（专门渲染器承担的选择也**不豁免**：skill 在家步骤 4、
+  //      spell 在家步骤 6 渲染）；
   //   2) 不选它时 canCreate 为 false（不能"看不见却要求选"）。
 });
 ```
 
-> 这条测试的意义：`allowedBuilderSteps` 是契约白名单，导入期放行它；任何一项没有渲染位置就是静默失效。专门渲染器（技能 / 法术）用 `usesDedicatedOptionUi` 白名单豁免第 1 条，但第 2 条仍然必须成立。
+> 这条测试的意义：`allowedBuilderSteps` 是契约白名单，导入期放行它；任何一项没有渲染位置就是静默失效。
+> **专门渲染器（技能 / 法术）不得豁免第 1 条**：值类型 / 专用 UI 选择的界面位置由 `optionType` 唯一决定
+> （`skill` → 「熟练」步骤 4，`spell` → 「法术」步骤 6），`builderStep` 只是提示并被忽略。若专用渲染器按
+> `builderStep` 认领，作者省略它（PHB 私有包的 `skill-choice` 就是）时该选择就会"哪里都不渲染、却仍然
+> 阻塞创建"——第 2 条恰恰会因此变成用户可见的死锁。
 
 - [ ] **步骤 4：更新升级死锁测试与新语义对齐**
 

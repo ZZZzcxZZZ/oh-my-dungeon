@@ -195,10 +195,14 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       4,
       if (itemOptions.isNotEmpty ||
           hasStructuredStartingEquipment ||
-          activeRuleChoices.any((choice) => choice.builderStep == 5))
+          activeRuleChoices.any((choice) => choice.renderStep == 5))
         5,
+      // 「法术」步骤必须对**任何**落在步骤 6 的选择可见：显式法术选择（家步骤
+      // 由 `RuleChoiceDefinition.dedicatedOptionSteps` 定为 6，可能省略
+      // `builderStep`）与通用条目选择（`builderStep: "spells"`）都算。否则选择区
+      // 无处渲染却仍然阻塞创建。
       if (_hasContentChoices('spell') ||
-          activeRuleChoices.any((choice) => choice.builderStep == 6))
+          activeRuleChoices.any((choice) => choice.renderStep == 6))
         6,
       7,
       8,
@@ -321,11 +325,12 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     required _StandardBuildReview review,
     required String summary,
   }) {
-    // `skill` 选择由「熟练」步骤的技能选择器承担（任务 7 起选中值也写进
-    // `_ruleChoices`），其余选择一律由共享组件渲染；判据的唯一实现点是
+    // `skill` / `spell` 由专用渲染器承担，位置由 `optionType` 唯一决定
+    // （`_ActiveRuleChoice.renderStep`，见 `RuleChoiceDefinition.dedicatedOptionSteps`），
+    // 其余选择一律由共享组件渲染；判据的唯一实现点是
     // [RuleChoiceDefinition.usesDedicatedOptionUi]（**渲染**判据，不再是免检）。
     final choicesForCurrentStep = activeRuleChoices.where((choice) {
-      return choice.builderStep == _currentStep &&
+      return choice.renderStep == _currentStep &&
           !choice.definition.usesDedicatedOptionUi;
     });
     // `group` 相同的选择归一组（决策 D7）：组按首次声明顺序，无 group 的排最后。
@@ -754,7 +759,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       if (step == 2 && _speciesEntryId != null) _speciesEntryId!,
       if (step == 1 && _backgroundEntryId != null) _backgroundEntryId!,
       for (final choice in activeChoices.where(
-        (candidate) => candidate.builderStep == step,
+        (candidate) => candidate.renderStep == step,
       ))
         ...?_ruleChoices[choice.key],
     };
@@ -848,6 +853,10 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
 
   /// 显式法术选择（`optionType: "spell"`）的法术池**专门渲染器**。
   ///
+  /// 认领**只看 `optionType`**（[RuleChoiceDefinition.isSpellChoice]），不看
+  /// `builderStep`：家步骤由 `RuleChoiceDefinition.dedicatedOptionSteps` 唯一决定
+  /// （`spell` → 「法术」步骤 6），声明里的 `builderStep` 只是提示。
+  ///
   /// 候选 = `RuleChoiceSemantics.candidatesFor` 的条目候选：`maximumOptionLevel`
   /// 与 `optionTags`（法术列表）的过滤**只在** `RuleChoiceResolver.optionsFor`
   /// 一处（与引擎 `normalizeSelection` 同一份候选）；这里不再写第二套按环阶 /
@@ -859,10 +868,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     List<_ActiveRuleChoice> activeRuleChoices,
   ) {
     final spellChoices = activeRuleChoices
-        .where(
-          (active) =>
-              active.builderStep == 6 && active.definition.isSpellChoice,
-        )
+        .where((active) => active.definition.isSpellChoice)
         .toList(growable: false);
     if (spellChoices.isEmpty) return const <Widget>[];
     final poolLimits = RuleChoiceQuota.limitsFor(
@@ -919,19 +925,24 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     return used;
   }
 
-  /// 「熟练」步骤的专门渲染器（`usesDedicatedOptionUi` 的选择 = `optionType:
-  /// "skill"`）：每条技能选择一组技能网格，候选与共享组件同源
-  /// （`RuleChoiceSemantics.candidatesFor`），选中值写进 `_ruleChoices`。
+  /// 「熟练」步骤的专门渲染器（`optionType: "skill"` 的值类型选择）。
+  ///
+  /// 认领**只看 `optionType`**（[RuleChoiceDefinition.isSkillChoice]），不看
+  /// `builderStep`：家步骤由 `RuleChoiceDefinition.dedicatedOptionSteps` 唯一决定，
+  /// 声明里的 `builderStep` 只是提示。每条技能选择一组技能网格，候选与共享组件
+  /// 同源（`RuleChoiceSemantics.candidatesFor` + 选项级 `requires` 过滤），选中值
+  /// 写进 `_ruleChoices`。
+  ///
+  /// 三种"不能选"的原因都必须可见（不静默失败）：选择级 `requires` 不满足
+  /// （[blockedReason]）、候选为空（[unavailableReason]）、已选值不在候选集里
+  /// （未生效清单）。
   ///
   /// 职业**没有**任何技能选择时保持既有行为：同一组件降级为"背景预设编辑"
   /// （全技能网格、写回 [_backgroundSkillProficiencies]）——这是历史 UX，不是
   /// 第二种"职业技能选择"实现（候选、交互、落库都由同一处承担）。
   List<Widget> _skillProficiencySections() {
     final skillChoices = _activeRuleChoices()
-        .where(
-          (active) =>
-              active.builderStep == 4 && active.definition.usesDedicatedOptionUi,
-        )
+        .where((active) => active.definition.isSkillChoice)
         .toList(growable: false);
     if (skillChoices.isEmpty) {
       return [
@@ -944,20 +955,40 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     }
     return [
       for (final active in skillChoices)
-        _SkillProficiencySection(
-          selected: _ruleChoices[active.key] ?? const <String>[],
-          options: _candidatesFor(
-            active,
-          ).map((candidate) => candidate.label).toList(growable: false),
-          minimum: active.definition.minimum,
-          maximum: active.definition.maximum,
-          repeatable: active.definition.repeatable,
-          fixed: _backgroundSkillProficiencies,
-          onChanged: (next) => setState(() {
-            _ruleChoices[active.key] = next;
-            _applyRecommendedRuleChoices();
-          }),
-        ),
+        () {
+          final candidates = visibleRuleChoiceCandidates(
+            _candidatesFor(active),
+            _requiresContextFor(active),
+          );
+          final optionNames = {
+            for (final candidate in candidates) candidate.label,
+          };
+          final selected = _ruleChoices[active.key] ?? const <String>[];
+          return _SkillProficiencySection(
+            title: active.definition.label,
+            hint: active.definition.help,
+            blockedReason: _blockedReasonFor(active),
+            unavailableReason: candidates.isEmpty
+                ? '资料库中缺少 skill 选项：该选择既没有内联 options，也没有匹配的条目。'
+                : null,
+            unavailableSelected: [
+              for (final skill in selected)
+                if (!optionNames.contains(skill)) skill,
+            ],
+            selected: selected,
+            options: [
+              for (final candidate in candidates) candidate.label,
+            ],
+            minimum: active.definition.minimum,
+            maximum: active.definition.maximum,
+            repeatable: active.definition.repeatable,
+            fixed: _backgroundSkillProficiencies,
+            onChanged: (next) => setState(() {
+              _ruleChoices[active.key] = next;
+              _applyRecommendedRuleChoices();
+            }),
+          );
+        }(),
     ];
   }
 

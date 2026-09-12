@@ -797,12 +797,35 @@ void main() {
     );
   });
 
-  // 任务 6b（决策 D7）：`allowedBuilderSteps` 是导入期放行的契约白名单。
+  // 任务 6b（决策 D7）+ P0-1：`allowedBuilderSteps` 是导入期放行的契约白名单。
   // 只要有一项没有渲染位置，就会出现"看不见却阻塞创建"的静默失效——示例包里
-  // `builderStep: "details"` 的 `asi-or-feat` 正是这个缺陷。
+  // `builderStep: "details"` 的 `asi-or-feat`、以及 PHB 私有包里**省略
+  // `builderStep`** 的 `optionType: "skill"` 技能选择都是这个缺陷。
+  //
+  // 期望的"声明 → 步骤"表**硬编码**在测试里：由被测函数现算的期望会随缺陷一起
+  // 漂移（现算等于没有断言）。表必须与白名单逐项对齐。
   group('结构守卫：每个 allowedBuilderSteps 都有渲染位置（决策 D7）', () {
-    for (final declaredStep in RuleChoiceDefinition.allowedBuilderSteps) {
-      testWidgets('builderStep=$declaredStep 的选择可见，且未选时阻塞创建', (
+    // 夹具把选择声明在**职业**条目的 `progression[].choices` 里，因此 `origin`
+    // 继承的是职业步骤 0（不是背景步骤 1）。
+    const declaredStepTable = <String, int>{
+      'class': 0,
+      'origin': 0,
+      'abilities': 3,
+      'proficiencies': 4,
+      'equipment': 5,
+      'spells': 6,
+      'details': 7,
+    };
+
+    test('期望表与 allowedBuilderSteps 白名单逐项对齐', () {
+      expect(
+        declaredStepTable.keys.toSet(),
+        RuleChoiceDefinition.allowedBuilderSteps,
+      );
+    });
+
+    for (final expected in declaredStepTable.entries) {
+      testWidgets('builderStep=${expected.key} 的选择可见，且未选时阻塞创建', (
         tester,
       ) async {
         tester.view.physicalSize = const Size(1200, 1500);
@@ -810,78 +833,165 @@ void main() {
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
 
-        final label = '守卫选择-$declaredStep';
-        await tester.pumpWidget(
-          MaterialApp(
-            home: CharacterEditorPage(
-              defaultCreationMethod: 'standard',
-              contentEntries: [
-                _entry(
-                  id: 'guide:class/guardian',
-                  type: 'class',
-                  name: '守卫者',
-                  rules: {
-                    'progression': [
-                      {
-                        'levels': [1],
-                        'choices': [
-                          {
-                            'id': 'guard',
-                            'label': label,
-                            'optionType': 'feat',
-                            'minimum': 1,
-                            'maximum': 1,
-                            'optionEntryIds': ['guide:feat/defense'],
-                            'builderStep': declaredStep,
-                          },
-                        ],
-                      },
-                    ],
-                  },
-                ),
-                _entry(
-                  id: 'guide:background/soldier',
-                  type: 'background',
-                  name: '士兵',
-                  rules: const {},
-                ),
-                _entry(
-                  id: 'guide:species/human',
-                  type: 'species',
-                  name: '人类',
-                  rules: const {},
-                ),
-                _entry(id: 'guide:feat/defense', type: 'feat', name: '防御'),
-              ],
-              onSubmit: (draft) async => true,
-            ),
-          ),
+        final label = '守卫选择-${expected.key}';
+        await _pumpGuardBuilder(
+          tester,
+          choice: {
+            'id': 'guard',
+            'label': label,
+            'optionType': 'feat',
+            'minimum': 1,
+            'maximum': 1,
+            'optionEntryIds': ['guide:feat/defense'],
+            'builderStep': expected.key,
+          },
+          extraEntries: [
+            _entry(id: 'guide:feat/defense', type: 'feat', name: '防御'),
+          ],
         );
-        await tester.enterText(
-          find.byKey(const Key('standard-character-name-field')),
-          '布伦',
-        );
-        await tester.pumpAndSettle();
 
-        final step = ruleChoiceBuilderStep(
-          declaredStep,
-          inheritedStep: 0,
+        expect(
+          ruleChoiceBuilderStep(expected.key, inheritedStep: 0),
+          expected.value,
+          reason: '声明 → 步骤的映射必须落在硬编码的期望步骤上',
         );
-        await _goToDesktopStep(tester, step);
+        await _goToDesktopStep(tester, expected.value);
         expect(
           find.text(label),
           findsOneWidget,
-          reason: 'builderStep=$declaredStep 必须在步骤 $step 真的渲染选择区',
+          reason:
+              'builderStep=${expected.key} 必须在步骤 ${expected.value} 真的渲染选择区',
         );
 
         // 不选它时不能创建：可见 + 阻塞，而不是"看不见却阻塞"。
         await _goToDesktopStep(tester, 8);
         expect(
-          tester
-              .widget<FilledButton>(find.widgetWithText(FilledButton, '创建角色'))
-              .onPressed,
+          _createButton(tester).onPressed,
           isNull,
-          reason: 'builderStep=$declaredStep 的选择未完成时必须阻塞创建',
+          reason: 'builderStep=${expected.key} 的选择未完成时必须阻塞创建',
+        );
+      });
+    }
+
+    // P0-1：`skill` / `spell` 是**专用渲染器**承担的选择，界面位置由 `optionType`
+    // 唯一决定——`skill` → 「熟练」步骤 4、`spell` → 「法术」步骤 6。声明里的
+    // `builderStep` 只是提示并被忽略：省略、或写一个与家步骤冲突的值，都必须落在
+    // 同一个「家」步骤。位置一旦被 `builderStep` 改写，PHB 私有包
+    // （`phb-2024:class/fighter#skill-choice` **不带** `builderStep`）就会
+    // "哪里都不渲染、却仍然阻塞创建"（本组守卫就是它的回归保护）。
+    for (final omittedBuilderStep in <bool>[true, false]) {
+      final declaration = omittedBuilderStep ? '省略' : '写冲突值 equipment';
+      testWidgets('skill 选择$declaration：仍在「熟练」步骤可见，且未选阻塞创建', (
+        tester,
+      ) async {
+        tester.view.physicalSize = const Size(1200, 1500);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        await _pumpGuardBuilder(
+          tester,
+          choice: {
+            'id': 'skill-choice',
+            'label': '技能熟练',
+            'optionType': 'skill',
+            'minimum': 2,
+            'maximum': 2,
+            // PHB 私有包 `phb-2024:class/fighter` 的真实形状：内联技能名候选。
+            'options': <Object?>['杂技', '运动', '历史', '洞悉'],
+            if (!omittedBuilderStep) 'builderStep': 'equipment',
+          },
+        );
+
+        await _goToDesktopStep(tester, 4);
+        expect(
+          find.text('技能熟练'),
+          findsOneWidget,
+          reason: '专用渲染器必须按 optionType 在步骤 4 认领，不看 builderStep',
+        );
+        expect(find.byKey(const Key('standard-skill-杂技-chip')), findsOneWidget);
+        await _goToDesktopStep(tester, 8);
+        expect(
+          _createButton(tester).onPressed,
+          isNull,
+          reason: '技能选择未完成时必须阻塞创建',
+        );
+
+        // 选满 2 项（避开背景预设「士兵」锁定的 运动 / 威吓）→ 必须可以创建。
+        await _goToDesktopStep(tester, 4);
+        await tester.ensureVisible(find.byKey(const Key('standard-skill-杂技-chip')));
+        await tester.tap(find.byKey(const Key('standard-skill-杂技-chip')));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.byKey(const Key('standard-skill-洞悉-chip')));
+        await tester.tap(find.byKey(const Key('standard-skill-洞悉-chip')));
+        await tester.pumpAndSettle();
+        await _goToDesktopStep(tester, 8);
+        expect(
+          _createButton(tester).onPressed,
+          isNotNull,
+          reason: '在「熟练」步骤选满后必须可以创建，否则就是"选不动却阻塞"的死锁',
+        );
+      });
+
+      testWidgets('spell 选择$declaration：仍在「法术」步骤可见，且未选阻塞创建', (
+        tester,
+      ) async {
+        tester.view.physicalSize = const Size(1200, 1500);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        await _pumpGuardBuilder(
+          tester,
+          choice: {
+            'id': 'spell-choice',
+            'label': '法术选择',
+            'optionType': 'spell',
+            'minimum': 1,
+            'maximum': 1,
+            'optionTags': <Object?>['spell-list:guardian'],
+            'maximumOptionLevel': 1,
+            if (!omittedBuilderStep) 'builderStep': 'equipment',
+          },
+          extraEntries: [
+            _entry(
+              id: 'guide:spell/spark',
+              type: 'spell',
+              name: '电火花',
+              tags: const ['spell-list:guardian'],
+              structured: const {'level': 0},
+            ),
+          ],
+        );
+
+        await _goToDesktopStep(tester, 6);
+        expect(
+          find.text('法术选择'),
+          findsOneWidget,
+          reason: '专用渲染器必须按 optionType 在步骤 6 认领，不看 builderStep',
+        );
+        expect(
+          find.byKey(const Key('spell-choice-guide:spell/spark')),
+          findsOneWidget,
+        );
+        await _goToDesktopStep(tester, 8);
+        expect(
+          _createButton(tester).onPressed,
+          isNull,
+          reason: '法术选择未完成时必须阻塞创建',
+        );
+
+        await _goToDesktopStep(tester, 6);
+        await tester.ensureVisible(
+          find.byKey(const Key('spell-choice-guide:spell/spark')),
+        );
+        await tester.tap(find.byKey(const Key('spell-choice-guide:spell/spark')));
+        await tester.pumpAndSettle();
+        await _goToDesktopStep(tester, 8);
+        expect(
+          _createButton(tester).onPressed,
+          isNotNull,
+          reason: '在「法术」步骤选中 1 项后必须可以创建，否则就是"选不动却阻塞"的死锁',
         );
       });
     }
@@ -1467,6 +1577,60 @@ void main() {
     }
   });
 }
+
+/// 结构守卫夹具：一条职业 `progression[].choices` 选择 + 固定的士兵 / 人类起源。
+///
+/// 只有名字被填好，因此"创建角色"是否可用只取决于规则选择是否完成。
+Future<void> _pumpGuardBuilder(
+  WidgetTester tester, {
+  required Map<String, Object?> choice,
+  List<ContentEntry> extraEntries = const <ContentEntry>[],
+}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: CharacterEditorPage(
+        defaultCreationMethod: 'standard',
+        contentEntries: [
+          _entry(
+            id: 'guide:class/guardian',
+            type: 'class',
+            name: '守卫者',
+            rules: {
+              'progression': [
+                {
+                  'levels': [1],
+                  'choices': [choice],
+                },
+              ],
+            },
+          ),
+          _entry(
+            id: 'guide:background/soldier',
+            type: 'background',
+            name: '士兵',
+            rules: const {},
+          ),
+          _entry(
+            id: 'guide:species/human',
+            type: 'species',
+            name: '人类',
+            rules: const {},
+          ),
+          ...extraEntries,
+        ],
+        onSubmit: (draft) async => true,
+      ),
+    ),
+  );
+  await tester.enterText(
+    find.byKey(const Key('standard-character-name-field')),
+    '布伦',
+  );
+  await tester.pumpAndSettle();
+}
+
+FilledButton _createButton(WidgetTester tester) =>
+    tester.widget<FilledButton>(find.widgetWithText(FilledButton, '创建角色'));
 
 Future<void> _goToDesktopStep(WidgetTester tester, int index) async {
   final unselected = find.byKey(Key('builder-step-$index'));

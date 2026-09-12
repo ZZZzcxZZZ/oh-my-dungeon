@@ -394,9 +394,20 @@ class _ActiveRuleChoice {
   final String key;
   final String sourceEntryId;
   final String sourceName;
+
+  /// 声明/继承来的步骤（`ruleChoiceBuilderStep` 的结果）。对专用 UI 选择只是
+  /// 提示：**位置看 [renderStep]**。
   final int builderStep;
   final int? level;
   final RuleChoiceDefinition definition;
+
+  /// 该选择在创建向导里的**渲染步骤**。
+  ///
+  /// 专用渲染器承担的选择（`skill` / `spell`）由 `optionType` **唯一**决定位置
+  /// （`RuleChoiceDefinition.dedicatedOptionSteps`），[builderStep] 不参与；其余
+  /// 选择按声明的 `builderStep` 走。位置计算与渲染判据都读这一处，避免
+  /// "通用卡片排除它、专用渲染器又按别的步骤找它"造成的死锁。
+  int get renderStep => definition.dedicatedOptionStep ?? builderStep;
 }
 
 class _StandardBuildReview {

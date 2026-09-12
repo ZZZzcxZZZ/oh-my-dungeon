@@ -469,17 +469,32 @@ class _PointBuyAbilityTile extends StatelessWidget {
 /// - 选中值是有序 `List<String>`，顺序 = 点击顺序（即 `build.choices` 落库顺序）；
 /// - 选中 / 取消算法只有 [toggleRuleChoiceSelection] 一处（共享组件同款）；
 /// - [fixed]（背景预设）只展示、不可点：它是**背景**的身份，不进 `build.choices`。
+///
+/// 认领哪一步由 `RuleChoiceDefinition.dedicatedOptionSteps` 决定（`skill` → 4），
+/// 本组件只负责"画哪一步被认领的那条选择"，不判断步骤。
+///
+/// 三种"不能选"的原因都在这里**可见**（不静默失败）：[blockedReason]（选择级
+/// `requires` 不满足）、[unavailableReason]（候选为空 = 声明缺料）、
+/// [unavailableSelected]（已选值不在候选集里 = 不会生效）。
 class _SkillProficiencySection extends StatelessWidget {
   const _SkillProficiencySection({
     required this.selected,
     required this.onChanged,
+    this.title = '熟练',
     this.options = const <String>[],
     this.fixed = const <String>{},
     this.minimum,
     this.maximum,
     this.repeatable = false,
+    this.hint,
+    this.blockedReason,
+    this.unavailableReason,
+    this.unavailableSelected = const <String>[],
   });
 
+  /// 选择标题：规则驱动时是选择声明的 `label`（让用户看到"哪条选择"在问），
+  /// 背景预设降级模式下是默认的「熟练」。
+  final String title;
   final List<String> selected;
   final List<String> options;
   final Set<String> fixed;
@@ -489,12 +504,30 @@ class _SkillProficiencySection extends StatelessWidget {
   final int? minimum;
   final int? maximum;
   final bool repeatable;
+
+  /// 选择声明的 `help` 小字。
+  final String? hint;
+
+  /// 选择级 `requires` 不满足时的原因（`null` = 满足）：不满足时不渲染技能网格
+  /// （选了也不生效），只显示原因。
+  final String? blockedReason;
+
+  /// 候选为空（声明里既没有 `options` 也没有匹配条目）时的原因：不能退化成
+  /// "全技能随便选"——那些值不在候选集里，引擎会判 `notACandidate` 而不生效。
+  final String? unavailableReason;
+
+  /// 已选值里不在候选集内的项（引擎会判 `notACandidate`）：列出来，不静默丢弃。
+  final List<String> unavailableSelected;
+
   final ValueChanged<List<String>> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final constrained = maximum != null && options.isNotEmpty;
+    // 规则驱动的技能选择一定有 `minimum`/`maximum`；背景预设降级模式两者都为
+    // `null`（可自由编辑的既有行为）。不用 `options.isNotEmpty` 当判据：候选为空
+    // 是"声明缺料"的错误状态，不能让它退化成"全技能随便选"。
+    final constrained = maximum != null;
     final optionNames = options.toSet();
     final chosen = selected
         .where((skill) => optionNames.contains(skill) && !fixed.contains(skill))
@@ -509,6 +542,7 @@ class _SkillProficiencySection extends StatelessWidget {
     // 需要一个具体上限，但不能凭空捏造一个比"全部技能"更小的数。
     final toggleMaximum = maximum ?? Dnd5eRules.skills.length;
     final missing = minimum == null ? 0 : (minimum! - chosen.length);
+    final blocked = blockedReason != null;
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
@@ -516,7 +550,7 @@ class _SkillProficiencySection extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text('熟练', style: theme.textTheme.titleMedium)),
+              Expanded(child: Text(title, style: theme.textTheme.titleMedium)),
               InputChip(
                 avatar: const Icon(Icons.workspace_premium_outlined),
                 label: Text(
@@ -527,51 +561,95 @@ class _SkillProficiencySection extends StatelessWidget {
               ),
             ],
           ),
-          if (missing > 0) ...[
+          if (hint != null) ...[
             const SizedBox(height: 4),
             Text(
-              '还需选择 $missing 项技能',
+              hint!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+          if (blocked || unavailableReason != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.block_outlined,
+                  size: 18,
+                  color: theme.colorScheme.error,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    // 选择级 `requires` 不满足优先：它是既有选中值"不生效"的真因。
+                    blockedReason ?? unavailableReason!,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ] else ...[
+            if (missing > 0) ...[
+              const SizedBox(height: 4),
+              Text(
+                '还需选择 $missing 项技能',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final skill in displayedSkills)
+                  Builder(
+                    builder: (context) {
+                      final isFixed = constrained && fixed.contains(skill.name);
+                      final isSelected = selected.contains(skill.name);
+                      final atLimit =
+                          constrained && chosen.length >= (maximum ?? 0);
+                      return FilterChip(
+                        key: Key('standard-skill-${skill.name}-chip'),
+                        avatar: isFixed
+                            ? const Icon(Icons.lock_outline, size: 16)
+                            : null,
+                        label: Text(
+                          '${skill.name} · ${Dnd5eRules.abilityLabels[skill.ability]}',
+                        ),
+                        selected: isSelected,
+                        onSelected: isFixed || (!isSelected && atLimit)
+                            ? null
+                            : (_) => onChanged(
+                                toggleRuleChoiceSelection(
+                                  selected: selected,
+                                  id: skill.name,
+                                  repeatable: repeatable,
+                                  maximum: toggleMaximum,
+                                ),
+                              ),
+                      );
+                    },
+                  ),
+              ],
+            ),
+          ],
+          // 已选值不在候选集（技能声明改了 / 键来自旧存档）：引擎会判
+          // `notACandidate` 而不生效。列出来，不静默丢弃也不冒充"已生效"。
+          if (unavailableSelected.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              '已选但未生效：${unavailableSelected.join('、')}',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.error,
               ),
             ),
           ],
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final skill in displayedSkills)
-                Builder(
-                  builder: (context) {
-                    final isFixed = constrained && fixed.contains(skill.name);
-                    final isSelected = selected.contains(skill.name);
-                    final atLimit =
-                        constrained && chosen.length >= (maximum ?? 0);
-                    return FilterChip(
-                      key: Key('standard-skill-${skill.name}-chip'),
-                      avatar: isFixed
-                          ? const Icon(Icons.lock_outline, size: 16)
-                          : null,
-                      label: Text(
-                        '${skill.name} · ${Dnd5eRules.abilityLabels[skill.ability]}',
-                      ),
-                      selected: isSelected,
-                      onSelected: isFixed || (!isSelected && atLimit)
-                          ? null
-                          : (_) => onChanged(
-                              toggleRuleChoiceSelection(
-                                selected: selected,
-                                id: skill.name,
-                                repeatable: repeatable,
-                                maximum: toggleMaximum,
-                              ),
-                            ),
-                    );
-                  },
-                ),
-            ],
-          ),
         ],
       ),
     );

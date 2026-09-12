@@ -5,7 +5,7 @@
 - 验收场景：A（2024 补充包）、B（全新自制职业）、D（覆盖与勘误，仅打地基）
 - 明确不做：C（自定义技能/属性、自定义 AC 公式、自定义休息语义）、S3（patch/replace 声明与冲突 UI）、S4（作者 GUI 与 `.dndpack` 导出）
 
-> 本文是实现规格。面向使用者的契约说明在实现完成后写入 `docs/README.md` §9.1；
+> 本文是实现规格。面向使用者的契约说明在实现完成后写入 `docs/README.md` §9.2「规则与内容契约」；
 > 本文不替代 `docs/README.md` 作为项目唯一事实来源的地位。
 
 ## 0. 用户补充的关键需求（2026-09-10，优先级最高）
@@ -171,7 +171,7 @@
 
 **两份参照清单**：`abilities` 与 `skills` 是**校验参照表**（场景 C 已排除扩展），以**内置档案**为唯一权威；包若自带同名清单，解析器忽略它并给出 warning（§5.2 `ignoredGlobalList`）。因此第三方的豁免键、技能名、`formula ability:<key>` 都必须落在内置清单内。
 
-**档案键即职业对齐键**：`classes` 的键是 12 个核心职业的规范英文 slug（`barbarian`、`bard`…）。条目要继承内置数值，其 `slug` 必须等于其中之一；用中文名或其它 slug 的自制职业不会命中内置数值（这是刻意的：不猜）。
+**档案键即职业对齐键**：`classes` 的键是 12 个核心职业的规范英文 slug（`barbarian`、`bard`…）。条目要继承内置数值，其**对齐键**（条目 id 的最后一段，见 §3.6 第 2 步）必须等于其中之一；用中文名或其它 slug 的自制职业不会命中内置数值（这是刻意的：不猜）。
 
 **`classAliases`（展示名 → slug）**：键与值都非空，值必须存在于 `classes`（否则 `invalidTable` 且 `profile == null`）。
 它只用于"解析期把展示名对齐到 slug"，是**过渡期**设施（老角色卡与快速创建只有散文 `classSummary`）。
@@ -372,7 +372,9 @@ cantrips      = cantrips[L]                                        // 同上
 输入：角色所选职业的 `ContentEntry`（来自 `build.selections['class']`，或老角色 `data.classIdentity`）。
 
 1. **条目自身声明**：该条目 `structured.classRules`（规范化后的字段）。
-2. **档案补齐**：对仍缺失的字段，按该条目的 `slug`（规范化：`trim().toLowerCase()`）查询内置档案；
+2. **档案补齐**：对仍缺失的字段，按该条目的**对齐键**查询内置档案。对齐键的规范口径是
+   **条目 id 的最后一段**（`<packageId>:class/<slug>` → `<slug>`，规范化 `trim().toLowerCase()`；
+   唯一实现点 `Dnd5eRules.resolveClassSlug`，条目里的展示字段 `slug` **不**参与数值继承）。
    只有"展示名"可用时（老角色卡/快速创建），允许按 `classAliases` **精确相等**或
    **`<别名><分隔符>` 前缀**（分隔符限 `（` `(` 空格 `-` `/`）匹配，例如 `战士（奥法骑士）` → `fighter`。
    **禁止裸子串匹配**（`星界游侠` 不得命中 `游侠`）。字段级合并。
@@ -383,11 +385,11 @@ cantrips      = cantrips[L]                                        // 同上
    - `resources` 缺失 → 无职业资源；
    - 绝不回退到"名字相近的职业"。
 
-老角色（无 `classIdentity`、仅有 `classSummary` 散文）的兼容：`CharacterRuleProjector` 用**精确匹配**（条目 `name` / `slug` / `aliases` 全等，非子串）补写一次 `data.classIdentity`；匹配不到则视为未声明并提示。
+老角色（无 `classIdentity`、仅有 `classSummary` 散文）的兼容：`CharacterRuleProjector` 经 `Dnd5eRules.resolveClassSlug` 做**精确相等或「别名 + 分隔符」前缀**匹配（`classAliases` / 档案 slug 为候选集，**禁止裸子串**），据此补写一次 `data.classIdentity`（含 `declaredLevels`）；匹配不到则视为未声明并提示。
 
 ### 3.7 来源可追溯
 
-`RuleProfile` 为每个职业的每个字段记录来源：
+`ResolvedClassRules`（字段级合并的产物）为每个职业的每个字段记录来源：
 
 ```dart
 class RuleFieldSource {
@@ -401,8 +403,9 @@ class RuleFieldSource {
 整 `spellcasting` 替换，因此列级来源在本契约下无法产生。S3 若要"只覆盖 prepared、保留档案 slots"，
 必须先把合并粒度改到列级——这是一条**已知限制**，S3 之前必须决策。
 
-本次只在角色页与导入报告的诊断信息中显示来源（"该数值来自内置档案"还是"来自本职业条目"）；
-S3 用它实现"被哪个包覆盖 / 关掉覆盖回退"。
+本次只在**数据层**记录来源（`ResolvedClassRules.fieldSources`），角色页与导入报告**尚未消费**
+（"该数值来自内置档案"还是"来自本职业条目"的显示留待后续计划）；S3 用它实现"被哪个包覆盖 /
+关掉覆盖回退"。
 
 ### 3.8 优先级（本次范围）
 
@@ -567,7 +570,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | # | 结论 |
 |---|---|
 | B1 | **单一格式版本**：只接受 `formatVersion: 3`；`1` / `2` 整包拒绝并提示重新生成；删除 `1` 的只读兼容分支（§3.9） |
-| B2 | **静默继承改为 error**：`type: "class"` 的条目其 `slug` 命中 12 个内置 slug 时，**必须显式声明 `classRules`**（视为有意的房规覆盖）；未声明则报 `builtinSlugRequiresExplicitRules`，杜绝"误写 slug 就悄悄拿到别的职业数值" |
+| B2 | **静默继承改为 error**：`type: "class"` 的条目其**对齐键**（条目 id 末段，§3.6 第 2 步）命中 12 个内置 slug 时，**必须显式声明 `classRules`**（视为有意的房规覆盖）；未声明则报 `builtinSlugRequiresExplicitRules`，杜绝"误写 slug 就悄悄拿到别的职业数值" |
 | B3 | **不做第二个写法**：`rules.progression[]` 统一用 `levels` 数组（`level` 字段删除），既能写一个也能写多个，不存在"两种声明方式" |
 
 **同时清除的其余"多写法"**（本次一并收敛，见 §3.2–§3.4、§3.10）：
@@ -630,11 +633,11 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 
 | 组件 | 文件 | 职责 |
 |---|---|---|
-| `RuleProfile` | `features/rules/domain/rule_profile.dart` | 不可变；`abilities`、`skills`、`progressions`、`classes(slug→ClassRuleSet)`、`fieldSources`；纯查询（`hitDie(slug)`、`savingThrows(slug)`、`spellSlots(slug, level)`、`pactSlotLevel(slug, level)`、`preparedLimit(slug, level)`、`classResources(slug, level)`、`spellcastingAbility(slug)`、`isPact(slug)`）与 `merge` |
+| `RuleProfile` | `features/rules/domain/rule_profile.dart` | 不可变；`abilities`、`skills`、`progressions`、`classes(slug → ClassRuleSet)`、`aliases`；纯查询（档案侧 `classRules(key)` / `progression(name)`）。解析后的职业查询在 `ResolvedClassRules`：`hitDie`、`savingThrowAbilities`、`spellcasting`、`resources`、`fieldSources` 与 `spellSlots(level)`、`pactSlotLevel(level)`、`preparedLimit(level)`、`cantripLimit(level)`、`maxSpellLevel(level)`、`resourcesAt(level, abilities)`、`spellcastingAbility`、`usesPactMagic`、`declaredMinLevel` / `declaredMaxLevel` |
 | `ClassRuleSet` / `ClassSpellcasting` / `ClassResourceRule` / `MaxSpec` | 同上 | 值对象，含 `fromJson`/校验钩子 |
-| `RuleProfileResolver` | `features/rules/domain/rule_profile_resolver.dart` | 纯函数：内置档案 JSON + 条目集合 + tier 表 → `RuleProfile` + `RuleDiagnostics` |
+| `RuleProfileResolver` | `features/rules/domain/rule_profile_resolver.dart` | 纯函数：`resolveBuiltin(档案 JSON)`、`resolveClassRules(profile, slug, entryRules, entryId)`、`validateEntryClassRules(...)` → `RuleProfile` / `ResolvedClassRules` + `RuleDiagnostic` |
 | `RuleDiagnostic` | 同上 | `{path, severity, code, message}`；导入器把它翻译成 `ContentValidationError`（error）或导入警告（warning） |
-| `RuleProfileStore` | `features/rules/data/rule_profile_store.dart` | **只读内置档案资产**（`AssetBundle` 可注入）→ 调 Resolver → `Dnd5eRules.configure(profile)`。**不依赖内容仓库**：包里的职业声明在用到该条目时（建角色/升级/编辑/项目器）与档案做字段级合并 |
+| `RuleProfileStore` | `features/rules/data/rule_profile_store.dart` | **只读内置档案资产**（资产读取可注入：`loadBuiltin({readAsset})`，默认走 `rootBundle`）→ 调 Resolver → 由调用方 `Dnd5eRules.configure(profile)`。**不依赖内容仓库**：包里的职业声明在用到该条目时（建角色/升级/编辑/项目器）与档案做字段级合并 |
 
 ### 4.2 改造
 
@@ -658,15 +661,15 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `assets/rules/dnd5e-2024.rules.json` | 新增（**仅数值**，随公开构建发布） |
 | `pubspec.yaml` | 必须新增一行 `- assets/rules/dnd5e-2024.rules.json`（现有 assets 是逐条声明，不是目录整体声明）；该文件是被 git 跟踪的普通资产，`scripts/build_private_client.ps1` 只改动 `bundled_content.json`，不冲突 |
 
-**不改 `content_schema_registry.dart`**：`ContentFieldSchema.kind` 目前只有 text/integer/decimal/boolean/stringList，无法描述嵌套对象。`classRules` 的校验完全由 `RuleProfileResolver` 负责（导入期），而 `normalizeStructured` 对未知键本就原样透传、`validateForCreation` 本就忽略未知键，因此不需要也不应该为它伪造一个字段类型。给自制内容做嵌套表单编辑属于 S4。
+**`content_schema_registry.dart` 只改一处（任务 10.5）**：`ContentFieldSchema.kind` 目前只有 text/integer/decimal/boolean/stringList，**仍不**为 `classRules` 这类嵌套对象伪造字段类型——`classRules` 的校验完全由 `RuleProfileResolver` 负责（导入期），`normalizeStructured` 对未知键原样透传、`validateForCreation` 忽略未知键，这两条不变。任务 10.5 实际改动的是**生命骰 facet 的派生**：展示层改读 `classRules` 后不再读顶层 `structured.hitDie`，因此 `ContentSchemaRegistry.normalizeFacetValues`（facet 计数与筛选共用的唯一 choke point）在 `type == 'class' && field == 'hitDie'` 时改为经 `ClassRuleSummary.of(entry).hitDie` 从规则值派生 `d<N>`，未声明时返回空集、**绝不回退** raw。给自制内容做嵌套表单编辑仍属于 S4。
 
 ### 4.3 数据流
 
 ```
-启动：main() → await RuleProfileStore.initialize()
-   ├─ AssetBundle 读 assets/rules/dnd5e-2024.rules.json（只含数值，约 12 个职业）
+启动：main() → await Dnd5eRules.configure(await RuleProfileStore.loadBuiltin())
+   ├─ 读 assets/rules/dnd5e-2024.rules.json（只含数值，约 12 个职业）
    ├─ RuleProfileResolver.resolveBuiltin(json) → RuleProfile + diagnostics
-   └─ Dnd5eRules.configure(profile)     // 失败则 fail-fast 并给出明确错误
+   └─ 失败则 fail-fast 并给出明确错误
 
 建角色/升级/编辑/项目器（有条目在手，无全局扫描）：
    entry.structured.classRules ∪ entry.rules.choices
@@ -674,7 +677,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
    ClassRuleSet + 规范选择 → 派生 HP/AC/豁免/技能/法术位/资源/准备上限
         ↓ 结果写入 character.data（classIdentity / classResources / spellSlots / …）
 
-导入包：previewJson → 解析条目 → RuleProfileResolver.validateEntry(...) → diagnostics → error/warning
+导入包：previewJson → 解析条目 → RuleProfileResolver.validateEntryClassRules(...) → diagnostics → error/warning
 ```
 
 ### 4.4 失败处理
@@ -705,7 +708,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `unknownGrantKind` | `kind` 不在 9 项枚举（含被移除的 `resource` / `conditionResistance` / `note`） | `未知 grant kind "resource"，职业资源请改用 classRules.resources` |
 | `unknownOptionType` | `optionType` 既不是已知条目类型也不是已知值类型 | `未知选项类型 "savingThrow"` |
 | `unsupportedFormatVersion` | `formatVersion != 3` | `只支持 formatVersion 3；这是旧格式，请用新版工具重新生成` |
-| `builtinSlugRequiresExplicitRules` | `class` 条目 slug 命中内置 12 slug 却未声明 `classRules` | `slug "fighter" 属于内置职业：要覆盖其数值必须显式声明 classRules` |
+| `builtinSlugRequiresExplicitRules` | `class` 条目的**对齐键**（条目 id 末段）命中内置 12 slug 却未声明 `classRules` | `slug "fighter" 属于内置职业：要覆盖其数值必须显式声明 classRules` |
 | `invalidChoiceRange` | `minimum`/`maximum` 为负或 `maximum < minimum` | `maximum 不能小于 minimum` |
 | `invalidOptionRef` | 条目选项引用不存在、或未通过 `optionType`/`optionTags`/`maximumOptionLevel` 过滤、或 `recommendedEntryIds` 不合法 | `选项 "x:feat/a" 不满足本选择的类型/标签/等级过滤` |
 | `duplicateOptionId` | 同一选择内 inline 选项 id 重复，或 id 与条目选项冲突 | `选项 id "asi" 重复` |
@@ -713,6 +716,13 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `invalidRequires` | `requires` 引用了不存在的 `choice`/`option`，或 `ability` 非法、`minimum` 非正 | `requires 引用的选择 "spellbook-x" 不存在` |
 | `invalidCountsToward` | `countsToward` 不在 `spellbook`/`known`/`prepared`/`null` | `countsToward 必须是 spellbook / known / prepared 或省略` |
 | `invalidAutoGrant` | 字符串简写无法为该 `optionType` 推断 grants，且未显式写 `grants` | `optionType "value" 的选项 "x" 缺少 grants，且无法自动推断` |
+| `unsupportedChoiceField` | 选择对象或内联选项里出现**本轮尚无运行时消费**的字段：`repeatable` / `group` / `help`，以及内联选项对象的 `grants` | `选择系统的「repeatable」尚未实现（计划 2 落地前一律拒收）` |
+
+> `unsupportedChoiceField` 是"不接受声明了但用不了"（§3.10.3 第 7 条）的落点：本轮选择系统的
+> 运行时语义由计划 2 承接（§11），在此之前这些字段**导入即拒收**，而不是静默忽略。
+> `countsToward` / `requires` 同理，但按字段语义各用自己的 code 报出
+> （`invalidCountsToward` / `invalidRequires`，见上表；计划 2 把它们收窄为真正的取值校验）。
+> 计划 2 实现后这些字段改为被真正消费，对应的拒收分支随之退场。
 
 ### 5.2 Warning（可导入，导入预览中列出）
 
@@ -776,7 +786,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 - **内容**：全部**重新提取**（P0 重写提取器）。旧形状的包在导入时报 error 并提示重新提取，
   **不提供**读取旧格式的回退路径（§0 需求二）。
 - **用户数据**：唯一保留的迁移是老角色卡的 `data.classIdentity` 一次性回填——
-  由 `CharacterRuleProjector` 按条目 `slug`/`name`/`aliases` **精确匹配**（不做子串猜测）写入；
+  由 `CharacterRuleProjector` 经 `Dnd5eRules.resolveClassSlug` 做**精确相等或「别名 + 分隔符」前缀**匹配（不做子串猜测）写入；
   匹配不到则标记"该职业未声明规则"，数值按未声明处理。理由：内容可以重提取，玩家的角色卡不能重来。
 - **行为变化清单**（必须写入 `docs/README.md` §7.7 与提交说明）：
   1. 旧契约形状（散文 `savingThrows`/`skills`、`preparedSpellcasting`、`spellSlot:`/`classResource:` grant）不再被解析，导入报 error。
@@ -787,8 +797,10 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
   6. 职业数值改为"条目声明优先于内置档案"，本地自制职业条目可覆盖同 slug 的内置数值。
   7. 自制职业可以只靠 `classRules` 声明规则；未声明字段显示"未声明"而非猜测。
   8. 法术选择与技能选择改为走统一的选择模型与同一套 UI。
-  9. **新增 11 个职业的资源池追踪**（诗人激励/引导神力/野性形态/专注点/圣疗/宿敌/术法点/先天术法/魔法诡计等）——这是能力增加，不是回归；老角色首次打开时会由项目器补齐。
+  9. **新增 8 个职业的资源池追踪**（诗人激励/引导神力/野性形态/专注点/圣疗/宿敌/术法点/先天术法/魔法诡计等；连同原有的战士、野蛮人共 **10 个职业、13 项资源**，法师与游荡者没有职业资源）——这是能力增加，不是回归；老角色首次打开时会由项目器补齐。
   10. 武器攻击不再按名字匹配硬编码的 5 把武器，改为读取物品条目自身的 `structured`（`damage`（如 `"1d8 挥砍"`）/`category`/`finesse`）；未声明伤害的物品不再产出攻击行动，**不猜**。
+  11. **武僧的豁免熟练由 `["dex","wis"]` 更正为 `["str","dex"]`**（SRD 5.2.1 官方值：力量与敏捷；旧档案写成敏捷与感知，属错误）。
+  12. **1/3 施法者（奥法骑士 / 诡术师这类子职）不再按"子职名"推导法术位**：展示名解析只做"精确相等或『别名 + 分隔符』前缀"（§3.6 第 2 步），因此 `战士（奥法骑士）` 只对齐到**母职业** `fighter`；母职业档案声明 `spellcasting.mode: "none"`，于是法术位为空、无施法属性。老存档里由旧"按名推导"得到的既有数据会表现为**消失**（不是 0，是"未声明"）。要让子职施法，必须由**条目**显式声明 `spellcasting`（`mode` + `ability` + `archetype: "third-caster"`）；档案里没有奥法骑士/诡术师职业，刻意不做名字相近推断。
 
 ---
 
@@ -796,13 +808,13 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 
 | 文件 | 更新 |
 |---|---|
-| `docs/README.md` §9.1 | 重写为现行契约：档案格式、`classRules` 字段全集、`Table` 与 3 种 `maximum`、**选择系统全字段**、解析链与优先级、error/warning 全清单、完整自制职业示例（含选择与法术选择）、"旧契约不读取"说明 |
+| `docs/README.md` §9.2 | 重写为现行契约：档案格式、`classRules` 字段全集、`Table` 与 3 种 `maximum`、**选择系统全字段**、解析链与优先级、error/warning 全清单、完整自制职业示例（含选择与法术选择）、"旧契约不读取"说明。本轮只落契约节与最小示例，**完整示例与"示例可被合成包复用"由计划 3 承接**（§10.7、§11） |
 | `docs/README.md` §7.7 | 删除"代码内置职业表"表述；记录来源可追溯语义、行为变化清单、抗性/备注仍未实现 |
 | `docs/README.md` §2 / §16 | 快速事实与验收基线更新（测试数量、档案路径） |
 | `docs/README.md` §13.6 | 合规清单新增一项：内置规则档案只含数值，不含规则书正文 |
-| `README.md` | 使用教程新增"导入并使用自定义职业包"一节 |
+| `README.md` | 使用教程新增"导入并使用自定义职业包"一节（计划 3；本轮核对后**无冲突表述，未改**） |
 | `DESIGN.md` | 若新增"未声明字段"提示 UI，需按设计契约使用既有组件（无新 token 预期） |
-| `AGENTS.md` | 必读顺序中补充：涉及规则/内容契约时必须读 `docs/README.md` §9.1 |
+| `AGENTS.md` | 必读顺序中补充：涉及规则/内容契约时必须读 `docs/README.md` §9.2（计划 3；本轮核对后**无冲突表述，未改**） |
 
 ---
 
@@ -824,17 +836,47 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 ## 10. 验收标准
 
 1. 客户端**代码**中**不存在**任何以职业名（中文或英文）为键的规则表或 `contains` 职业匹配（`grep` 可验证；内置档案里的 `classes.<slug>` 键属于数据，不计入）。
+   **状态：本轮达成**（计划收尾检查的 `grep -rn "contains('战士')\|_fullCasterSlots\|_preparedDivine\|_hitDice = " apps/client_flutter/lib/` 无输出）。
 2. 内置档案通过 §6.1 的官方表核算与 schema 自检。
+   **状态：本轮达成**（`builtin_rule_profile_test.dart` 的官方表核算 + 档案 schema 自检）。
 3. §6.2 重提取金的标数值与改造前相等；产物不含任何旧契约形状；邪术师双重表示消失。
+   **状态：本轮达成**（`reextracted_bundle_golden_test.dart`；缺私有包时只注册显式 skip 占位）。
+   注意：§7 第 11 条（武僧豁免）是**有意的数值更正**，不在"与改造前相等"的字面范围内。
 4. §6.3 合成自制职业包端到端通过（含升级与选择系统专项）。
+   **状态：本轮部分达成**——职业数值端到端由 `homebrew_class_end_to_end_test.dart` 覆盖；
+   **选择系统专项由计划 2 承接**。
 5. §5.1 / §5.2 每条诊断都有对应测试，`path` 精确。
+   **状态：本轮达成（一处例外）**——§5.1 的 error 与 §5.2 的全部 warning 均由
+   `import_rule_diagnostics_test.dart` 覆盖；唯一未实现的 code 是 `invalidAutoGrant`
+   （**由计划 2 承接**：字符串简写自动授予属选择系统运行时，本轮无法触发）。
 6. `npm run check`、`npm run test:scripts`、`npm run lint:design` 全绿。
-7. `docs/README.md` §9.1 含完整自制职业示例（含选择与法术选择），且示例可被测试中的合成包复用（文档与实现不脱节）。
+   **状态：本轮达成**（`npm run lint:design` 已复跑；其余属阶段门）。
+7. `docs/README.md` §9.2 含完整自制职业示例（含选择与法术选择），且示例可被测试中的合成包复用（文档与实现不脱节）。
+   **状态：由计划 3 承接**（本轮只落 `docs/README.md` §9.2「规则与内容契约」与最小示例；
+   "完整示例 + 与合成包复用"未达成）。
 8. **选择系统（§3.10）**：字符串简写自动授予且选中生效；内联选项的 `ability`/`hitPoints` 改变派生结果；`optionType: "spell"` + `countsToward` 受 `prepared` 约束；`repeatable` 行为正确；`requires` 隐藏语义正确；`group`/`help` 呈现；装备 A/B 方案写入 `inventory`；技能选择与法术选择都只由 `optionType: "skill"` / `"spell"` 的选择定义承担（`classRules` 不再派生选择）。
+   **状态：由计划 2 承接**（本轮只做"声明了但用不了 → 导入期拒收"，见 §11）。
 
 ---
 
 ## 11. 明确不在本次范围
+
+**本轮延后（由后续计划承接）**：
+
+- **选择系统的运行时语义 —— 计划 2 承接**：`options[].grants` 的消费（含字符串简写自动授予）、
+  `repeatable`、`countsToward`、`requires`、`group` / `help` 的呈现，以及对应的编辑器选择面板
+  改造（值类型与条目选项分组、选择状态 `Set` → 有序 `List`、`optionType: "spell"` 的法术池、
+  装备 A/B 写入 `inventory`）。**本轮这些字段一导入就被拒收**，不再"声明了但静默无效"：
+  `repeatable` / `group` / `help` / 内联选项的 `grants` → `unsupportedChoiceField`；
+  `countsToward` → `invalidCountsToward`；`requires` → `invalidRequires`
+  （后两者本轮只做"存在即拒收"，计划 2 落地后收窄为真正的取值/引用校验）。
+- **§5.1 中唯一仍未实现的 code —— 计划 2 承接**：`invalidAutoGrant`（字符串简写自动推断
+  grants 的失败信号；自动授予本身是选择系统运行时，本轮无法触发）。**其余 §5.1 的 error 与
+  §5.2 的全部 warning 本轮已实现**，逐条有测试（`import_rule_diagnostics_test.dart`）。
+- **文档收口 —— 计划 3 承接**：`docs/README.md` §9.2 的**完整**自制职业示例（含选择与法术选择）
+  与"示例可被合成包复用"（§10.7）。本轮只落事实来源里的契约节与最小示例。
+
+**其余不在本次范围**：
 
 - **S3**：`mode: "patch" | "replace"` 声明、可配置 `priority` 字段（含 Drift 迁移）、覆盖冲突 UI、关闭覆盖回退内置。
 - **S4**：作者 GUI 的**完整形态**（可视化规则表单、基于已有条目创建覆盖、`.dndpack` 导出）。本轮只保证

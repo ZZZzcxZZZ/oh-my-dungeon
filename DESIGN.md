@@ -100,6 +100,8 @@ OhMyDungeon 是离线优先的 D&D 跑团辅助工具，界面语言是"安静�
 
 所有颜色由 `ColorScheme.fromSeed` 派生，**禁止硬编码字面颜色**（唯一例外：seed 选择器中的预设
 色）。文字必须使用与背景匹配的 `on-*` 角色。`outline` 仅用于描边与图标，不得作为正文文字色。
+`outlineVariant` 用于分隔线、1px 描边，以及"**未声明 / 禁用**"状态的轨道底色
+（如创建向导等级滑杆的未声明区间，见 `DeclaredLevelTrackShape`）。
 `secondary` 为保留角色，当前仅经 secondaryContainer 参与组件；`tertiary` 用于头像生命环"受伤"档。
 
 ## Typography

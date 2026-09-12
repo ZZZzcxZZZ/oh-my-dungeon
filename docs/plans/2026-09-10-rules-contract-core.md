@@ -49,7 +49,7 @@
 | `apps/client_flutter/lib/src/features/characters/presentation/character_detail_page.dart` | `_slotMaximums()` 兜底读档案 |
 | `apps/client_flutter/lib/src/features/characters/presentation/character_editor_page.dart` | 法术/资源摘要读档案 |
 | `apps/client_flutter/lib/src/features/rules/domain/character_rule_definition.dart` | `RuleGrantKind` 收敛为 9 项（移除 `resource` / `conditionResistance` / `note`） |
-| `apps/client_flutter/lib/src/features/content/data/import/content_package_importer.dart` | 接入 `RuleProfileResolver.validateEntry` |
+| `apps/client_flutter/lib/src/features/content/data/import/content_package_importer.dart` | 接入 `RuleProfileResolver.validateEntryClassRules` |
 | `apps/client_flutter/lib/src/features/content/domain/content_import_report.dart` | 新增 `warnings` |
 | `apps/client_flutter/lib/src/features/content/presentation/content_import_preview_dialog.dart` | 次级样式展示 warnings |
 | `scripts/extract_phb_2024_v2.py` | 输出新契约形状；删除脚本内重复的法术位表 |
@@ -2961,7 +2961,7 @@ W3 之前派生的角色卡里，`abilities` 是**旧语义的最终值**（多�
 | 计划 | 内容 |
 |---|---|
 | 计划 2 | P5 选择系统（§3.10 全部：值选项 + 内联 grants + 自动授予、显式 `optionType: "spell"` 法术选择 + `countsToward`、`repeatable`、`requires`、`group`/`help`、装备 A/B、`progression[].levels` 数组，以及编辑器选择面板改造） |
-| 计划 3 | P6 文档（§9.1 重写、§7.7 行为变化清单、§2/§16 基线、README 教程、AGENTS.md、§13.6 合规项） |
+| 计划 3 | P6 文档（§9.2「规则与内容契约」完整示例、§7.7 行为变化清单、§2/§16 基线、README 教程、AGENTS.md、§13.6 合规项）。本轮已先行落地 §9.2 的契约正文与最小示例、§7.7/§2/§13.6；剩余部分（完整示例与文档化教程）仍属计划 3 |
 
 > 规格里的 P3（校验）与 P4（grant kind 收紧）已并入本计划（任务 9 与任务 11），
 > 因此本计划完成后只剩选择系统与文档两块。

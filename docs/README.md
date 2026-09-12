@@ -59,6 +59,8 @@
 | API 前缀 | `/api`（`/health` 与 `.well-known` 除外） |
 | WebSocket | namespace `campaigns`（客户端拼 `${origin}/campaigns`） |
 | 契约文档 | 本文件；**无 Swagger/OpenAPI**（全仓 0 命中） |
+| 内容包格式 | **只有 `formatVersion: 3`**（`1` / `2` 一律整包拒收）；规则契约见 §9.2 |
+| 规则档案 | `apps/client_flutter/assets/rules/dnd5e-2024.rules.json`（`rulebookVersion: 1`，**只含数值与枚举**，随公开构建发布） |
 | 代码生成 | 仅 Drift（`build_runner` + `drift_dev`）；**未引入 freezed / json_serializable / go_router** |
 | 阶段门 | `npm run check`（= `lint:server` + `analyze:client` + `test`） |
 
@@ -343,11 +345,17 @@ canBindCharacter   canManageMembershipBinding  canSpeakAsCharacter
 
 ### 7.7 规则覆盖与已知限制
 
-**规则入口**：所有 D&D 2024 规则常量集中在
-`apps/client_flutter/lib/src/features/characters/domain/dnd5e_rules.dart`（职业生命骰、
-豁免熟练、施法进阶、法术位、契约魔法、准备法术上限、职业资源与休息语义），
-内容包结构化规则解析在 `structured_class_rules.dart`，快速创建预设与内容无关的
-派生值在 `quick_build.dart`。UI 不得自行复刻规则运算。
+**规则入口**：内置规则档案 `apps/client_flutter/assets/rules/dnd5e-2024.rules.json`
+（`rulebookVersion: 1`，**只含数值与枚举**）在启动时由 `RuleProfileStore` 读取、
+`RuleProfileResolver.resolveBuiltin` 解析，再经 `Dnd5eRules.configure(profile)` 一次性装配
+（失败即 fail-fast）。规则运算（属性调整值、熟练加值、豁免/技能加值、先攻、法术 DC、
+HP/AC、资源与休息语义）仍在
+`apps/client_flutter/lib/src/features/characters/domain/dnd5e_rules.dart`；
+内容条目的规则值经 `structured_class_rules.dart`（只读过渡适配器）与
+`Dnd5eRules.resolveClassRules` 做「条目声明 ∪ 档案」的**字段级合并**
+（条目优先，tier 100 > tier 0），派生在 `rules_driven_character_builder.dart` /
+`quick_build.dart`。UI 不得自行复刻规则运算。对外契约见 §9.2，实现规格见
+[`specs/2026-09-10-rules-contract-design.md`](specs/2026-09-10-rules-contract-design.md)。
 
 **已实现并经独立规则核算**（核算见
 `apps/client_flutter/test/dnd5e_rules_verification_test.dart`，期望值取自 SRD 5.2 /
@@ -355,24 +363,31 @@ PHB 2024 官方表格）：
 
 - 属性调整值、熟练加值（1–20 级）、豁免/技能加值、先攻、法术豁免 DC；
 - **职业生命骰**：2024 官方 12 职业核心表（**邪术师 d8**，野蛮人 d12，战士/圣武士/
-  游侠 d10，其余 d8/d6）；中英文职业名与施法子职业名均可解析；
+  游侠 d10，其余 d8/d6），数值来自内置档案；职业条目的 `structured.classRules.hitDie`
+  优先于档案；
 - 生命值：1 级取满骰 + 体质、后续取平均（骰面/2+1）+ 体质、**每级至少 1 点**；
-  内容包给出 `structured.hitDie` 时以内容包为准，两条路径共用同一算法；
+  职业条目的 `classRules.hitDie` 优先于内置档案，两条路径共用同一算法；
 - 法术位：
   - 全施法者（吟游诗人/牧师/德鲁伊/术士/法师）1–20 级完整表；
   - 半施法者（圣武士/游侠）**1 级即有法术位**，等效等级 = ceil(等级/2)；
-  - **1/3 施法者**（战士·奥法骑士 / 游荡者·诡术师）**3 级起**获得法术位，
-    等效等级 = ceil(等级/3)，施法属性为智力；
+  - **1/3 施法者**（奥法骑士 / 诡术师这类子职）由**条目**声明
+    `spellcasting.archetype: "third-caster"`：**3 级起**获得法术位，等效等级 = ceil(等级/3)。
+    档案里没有这两个子职，**不按子职名推断**——展示名 `战士（奥法骑士）` 只按前缀解析到
+    母职业 `fighter`，而母职业 `mode: "none"`，所以法术位为空（§9.2.1、§9.2.3）；
   - 非施法者无法术位；
   - **邪术师契约魔法**（单环阶、数量随等级、短休恢复）；
 - **准备法术上限**：2024 官方逐级表（牧师/德鲁伊/吟游诗人、术士、法师、
-  圣武士/游侠、邪术师各自一列，**不再叠加属性调整值**）；内容包可用
-  `structured.preparedSpells`（等级→数量 或 数组）显式覆盖；未知自制职业回退到
-  旧公式"施法属性调整值 + 等级（最低 1）"；
-- **职业豁免熟练**：2024 官方 12 职业表（如游荡者 敏捷/智力、邪术师 感知/魅力）；
-- 职业资源：战士第二气息（2/3/4，**短休恢复 1 次、长休全部恢复**）与
-  动作如潮（2 级 1 次、**17 级 2 次**，**短休/长休全部恢复**）、
-  野蛮人狂暴（2/3/4/5/6，**短休恢复 1 次、长休全部恢复**）；
+  圣武士/游侠、邪术师各自一列，**不再叠加属性调整值**），唯一来源是职业自身的
+  `classRules.spellcasting.prepared` 逐级表（**原型不提供该列**）；未声明时编辑器不限制
+  数量、导入给 `missingPreparedColumn` warning、角色页显示"未声明"，**不再回退旧公式**；
+- **职业豁免熟练**：全部来自内置档案的 12 职业表（如游荡者 敏捷/智力、邪术师 感知/魅力；
+  武僧 力量/敏捷——武僧是 SRD 5.2.1 的更正项，旧档案误写为敏捷/感知）；
+- **职业资源**：内置档案为 10 个职业声明了 13 项资源（法师与游荡者没有），上限与恢复语义
+  逐项照官方表：战士第二气息（2/3/4，**短休恢复 1 次、长休全部恢复**）与动作如潮
+  （2 级 1 次、**17 级 2 次**，**短休/长休全部恢复**）、野蛮人狂暴（2/3/4/5/6，
+  **短休恢复 1 次、长休全部恢复**）、诗人激励（魅力调整值最低 1；1 级长休恢复，
+  5 级起短休也能全恢复）、引导神力、野性形态、专注点、圣疗治疗池、宿敌、术法点、
+  先天术法、魔法诡计；老角色首次打开时由 `CharacterRuleProjector` 按条目身份补齐；
 - 休息语义统一由 `Dnd5eRules.classResourcesAfterRest` 计算
   （`shortRest` 全恢复 / `shortRestOne` 恢复 1 次 / `longRest` 仅长休 / `none` 不自动恢复），
   详情页与资源面板共用，不再各自实现；
@@ -391,6 +406,38 @@ PHB 2024 官方表格）：
 - 战役：邀请码过期/次数/幂等校验、公开邀请固定加入为 `player`、
   检定请求只能由目标角色响应、角色发布与绑定权限、档案创建者权限。
 
+**本轮行为变化（规则契约重构，必须知悉）**：
+
+1. 旧契约形状（散文 `savingThrows` / `skills`、`preparedSpellcasting` 开关、
+   `spellSlot:` / `classResource:` grant）**不再被解析**，导入报 error；`formatVersion`
+   只接受 `3`，`1` / `2` 整包拒收并提示用新版工具重新生成/重新提取（§9.1、§9.2.5）。
+2. 邪术师契约法术位不再作为 `classResources` 条目出现（改由法术位承担，消除双重表示）。
+3. 准备法术上限不再需要独立开关（由 `spellcasting.mode` + `prepared` 表决定）。
+4. 未知技能名不再静默丢弃（现在在导入期被拒绝并指出位置）。
+5. `resource` / `conditionResistance` / `note` grant 会被拒绝（导入报 error）：职业资源改用
+   `classRules.resources`，抗性/免疫结算暂未建模，角色备注由 `notes` 字段承担。
+6. 职业数值改为"**条目声明优先于内置档案**"；对齐键（条目 id 末段）命中内置职业的条目
+   **必须显式声明 `classRules`**（`builtinSlugRequiresExplicitRules`），杜绝"误写 id
+   末段就悄悄继承内置数值"。
+7. 自制职业可以只靠 `classRules` 声明规则；未声明字段显示"未声明"而非猜测。
+8. 技能选择与法术选择收敛到同一套声明（`rules.choices` / `rules.progression[].choices`）；
+   完整的选择系统运行时语义属计划 2，本轮尚未支持的选择字段导入即拒收
+   （`unsupportedChoiceField` / `invalidCountsToward` / `invalidRequires`，§9.2.3）。
+9. **新增 8 个职业的资源池追踪**（连同原有的战士、野蛮人共 10 个职业、13 项资源）——
+   能力增加，不是回归；老角色首次打开时由项目器补齐。
+10. 武器攻击改为读取物品条目自身的 `structured`（`damage` / `category` / `finesse`），
+    不再有按武器名的硬编码表；未声明伤害的物品不再产出攻击行动，**不猜**。
+11. **武僧豁免熟练由 `["dex","wis"]` 更正为 `["str","dex"]`**（SRD 5.2.1 官方值：
+    力量与敏捷；旧档案写成敏捷与感知，属错误）。
+12. **1/3 施法者不再按子职名推导法术位**：`战士（奥法骑士）` 只解析到母职业 `fighter`，
+    法术位为空；子职施法必须由**条目**显式声明 `archetype: "third-caster"`。老存档里由旧
+    推导得到的既有数据会表现为"消失"（未声明，不是 `0`）。
+
+**来源可追溯**：`ResolvedClassRules.fieldSources` 为每个职业的每个顶层规则字段记录来源
+（`RuleFieldSource{field, originId, tier}`：`builtin:dnd5e-2024` = tier 0，条目 id = tier 100）。
+本轮**只在数据层记录**（字段级合并的产物），角色页与导入报告**尚未消费**它；
+后续计划（S3）用它实现"被哪个包覆盖 / 关掉覆盖回退"。
+
 **已知限制（当前未实现，按设计取舍记录）**：
 
 | 项 | 说明 |
@@ -399,9 +446,11 @@ PHB 2024 官方表格）：
 | 力竭等级语义 | 力竭为普通条件计数，不自动施加 −2×等级（d20）与 −5×等级尺速度惩罚 |
 | 专注机制 | 仅有 `concentrating` 条件预设，不校验"同时只维持一个"、不自动做受伤检定 |
 | 护甲与 AC | AC = 10 + 敏捷 + 内容包扁平加值；未建模轻/中/重甲敏捷上限（中甲 +2、重甲不加敏）与无甲防御（野蛮人 +体质、武僧 +感知） |
-| 武器与熟练 | 命中恒按"熟练"计算；武器档案只覆盖长弓/短弓类 5 种常见武器；灵巧武器固定按敏捷；未建模双手/versatile 变化伤害骰与 2024 武器精通（Mastery） |
+| 武器与熟练 | 命中恒按"熟练"计算；武器数值与攻击属性**一律读物品条目自身的 `structured`**（`damage`（如 `"1d8 挥砍"`）/ `category` / `finesse` / `properties`），未声明伤害的物品**不产出攻击行动**（不猜，也没有按武器名的硬编码表）；未建模双手/versatile 变化伤害骰与 2024 武器精通（Mastery） |
 | 骰子细节 | 优势/劣势只允许二选一，未实现"同时存在即抵消"；攻击掷出天然 20 不自动重击翻倍伤害 |
-| 其他职业资源 | 仅战士与野蛮人有资源池；引导神力、野性形态、专注点、术法点、诗人激励、宿敌、圣疗、魔法诡计、先天术法等**未建模** |
+| 职业资源的效果 | 只追踪"用了几次 / 怎么恢复"（10 个职业 13 项资源的上限与恢复语义**已建模**）；资源池的**具体效果未结算**：引导神力选项、野性形态数据与形态切换、术法点转换法术位、圣疗治疗结算、魔法诡计恢复法术位、诗人激励骰的授予与消耗 |
+| 伤害抗性与免疫 | `conditionResistance` grant 已从契约移除，抗性/免疫结算**未建模** |
+| 选择系统（计划 2） | `repeatable` / `countsToward` / `requires` / `group` / `help` 与内联选项的 `grants` 尚无运行时消费；本轮在导入期以 `unsupportedChoiceField` / `invalidCountsToward` / `invalidRequires` 拒收（§9.2.3） |
 | 专精（Expertise） | 技能加值只有熟练/非熟练两档，无 ×2 专精 |
 | 多职业 | 不支持多职业等级与法术位合并 |
 | XP 与升级 | 无经验值系统；等级由用户维护，升级按 +1 级规划（内容包驱动可选内容） |
@@ -454,20 +503,25 @@ PHB 2024 官方表格）：
 
 ## 9. 内容体系
 
-### 9.1 内容包格式 v2
+### 9.1 内容包格式（`formatVersion: 3`）
 
-**聚合包 / 内置包**（JSON，用于 `bundled_content.json` 或私有聚合）：
+**只有一个包格式版本：`formatVersion: 3`。** 聚合包（JSON，用于 `bundled_content.json` 或私有聚合）
+与可分发包 `.dndpack` 的 `manifest.json` 都必须写 `3`；缺省、非数字、`1`、`2` 或其它取值一律
+**整包拒绝**（`unsupportedFormatVersion`），提示"这是旧格式，请用新版工具重新生成/重新提取资料包"。
+不存在 v1 / v2 的兼容读取分支。
+
+**聚合包 / 内置包**：
 
 ```jsonc
 {
-  "formatVersion": 2,
+  "formatVersion": 3,
   "id": "core-2024-private-test",
   "name": "…", "version": "0.1.1", "locale": "zh-CN", "system": "dnd5e-2024",
   "entryCount": 1880,
   "entries": [
     { "id": "…", "name": "…", "slug": "…", "type": "spell|monster|item|class|…",
       "source": "…", "revision": 1, "summary": "…", "tags": [], "aliases": [],
-      "structured": { }, "body": "…" }
+      "structured": { }, "body": [ { "type": "paragraph", "text": "…" } ] }
   ]
 }
 ```
@@ -478,18 +532,17 @@ PHB 2024 官方表格）：
 
 **校验规则（任一失败整包不写）**：
 
-- `manifest.json` 必填 `formatVersion`（新包用 `2`，`1` 仅兼容读取）、
-  `id`、`name`、`version`、`locale`、`system`（白名单 `dnd5e-2024`）、`entryCount`；
-  `entryCount` 必须等于 `entries.length`。
+- `manifest.json` 必填 `formatVersion`（**只接受 `3`**）、`id`、`name`、`version`、`locale`、
+  `system`（白名单 `dnd5e-2024`）、`entryCount`；`entryCount` 必须等于 `entries.length`。
 - entry 必填 `id`（须以 `<packageId>:` 开头且不可重复）、`type`、`slug`、`name`、`body`、
-  `revision`；结构化字段放 `structured`。
+  `revision`；`body` 是区块数组；结构化字段放 `structured`。
 - `relations` 枚举：`subclassOf` / `featureOf` / `spellOf` / `requires` / `replaces` /
   `related`，目标必须存在于同包。
-- `rules.progression` 等级 1–20；选择键为 `{sourceEntryId}#{choiceId}`；非法或被篡改的
-  选择进入 pending；规则应用递归且带环检测。
-- `grant.kind` 枚举 12 项：`feature`、`proficiency`、`spell`、`equipment`、`resource`、
-  `action`、`conditionResistance`、`speed`、`armorClass`、`hitPoints`、`ability`、`note`；
-  `id` + `kind` 必填；`formula` 仅存储、不在客户端求值。
+- `rules.progression[]` 的每一步用 **`levels` 数组**声明生效等级（1–20，非空、无重复）；
+  选择键为 `{sourceEntryId}#{choiceId}`；非法或被篡改的选择进入 pending；规则应用递归且带环检测。
+- `grant.kind` 枚举 **9 项**：`feature`、`proficiency`、`spell`、`equipment`、`action`、
+  `speed`、`armorClass`、`hitPoints`、`ability`；`id` + `kind` 必填；`hitPoints` 的
+  `value` / `formula` 二选一，`ability` 只接受 `value`。
 - `choice`：`id` + `optionType` 必填，`minimum` 默认 1、`maximum` 默认等于 `minimum`；
   `maximumOptionLevel` 0–9；`builderStep` ∈ `class` / `origin` / `abilities` /
   `proficiencies` / `equipment` / `spells` / `details`。
@@ -499,11 +552,218 @@ PHB 2024 官方表格）：
 
 > `structured.itemTemplate` 只由私有提取脚本产出（**客户端不消费**）；客户端物品实例使用
 > `id / templateRef / name / quantity / equipped / attuned / instanceData`。
-> 规则声明的完整字段清单（含 `startingEquipmentChoice.maximum`、`preparedSpellcasting`、
-> `structured.spellcasting`、classFeature 的 `classSlug`/`featureOf`/`subclassName`）见归档的
-> v2 格式文档（`archive/content/`）。
 
-### 9.2 自制内容与检索
+### 9.2 规则与内容契约
+
+本节是内容作者与客户端之间的**规则契约**：第三方职业如何声明规则数值、客户端如何在
+"内置档案 + 条目声明"之间解析、导入时如何校验。实现规格见
+[`specs/2026-09-10-rules-contract-design.md`](specs/2026-09-10-rules-contract-design.md)。
+
+格式版本只有 `formatVersion: 3`（见 §9.1）；旧形状（散文 `savingThrows` / `skills`、
+`preparedSpellcasting` 开关、`spellSlot:<n>` / `classResource:<id>` grant、已移除的
+`resource` / `conditionResistance` / `note` grant）**不再有读取路径**，导入即报 error。
+
+#### 9.2.1 规则解析只有两级
+
+| tier | 来源 | 说明 |
+|---|---|---|
+| 0 | 内置档案 `apps/client_flutter/assets/rules/dnd5e-2024.rules.json`（`rulebookVersion: 1`） | 随客户端发布，**只含数值与枚举**，不含规则书正文 |
+| 100 | 角色所用职业条目的 `structured.classRules` | 条目声明，字段级覆盖档案 |
+
+- **没有 `priority` 字段，也没有全局条目扫描。** 一个角色只引用它自己的那一个职业条目
+  （`data.classIdentity.entryId`），本阶段不存在"包与包抢同一个职业"的冲突。
+- 解析 = 「条目声明 ∪ 档案同对齐键职业」的**字段级合并**，条目声明优先；来源粒度是
+  顶层字段（`hitDie` / `savingThrowAbilities` / `spellcasting` / `resources`），
+  `spellcasting` 是**整字段替换**。
+- 档案按条目 **id 末段**命中 12 个核心英文 slug（`<packageId>:class/<slug>` 的最后一段，
+  规范化 `trim().toLowerCase()`；条目里的 `slug` 展示字段不参与数值继承，规范见
+  `Dnd5eRules.resolveClassSlug`）。只有展示名时按 `classAliases` **精确相等**或
+  「别名 + 分隔符」前缀对齐，分隔符限 `（` / `(` / 空格 / `-` / `/`：
+  `战士（奥法骑士）` → `fighter`。**禁止裸子串匹配**（`星界游侠` 不会命中游侠）。
+- **未声明即不猜**：缺 `hitDie` 只按体质调整值算 HP；缺 `savingThrowAbilities` 就没有豁免熟练；
+  `spellcasting` 缺失或 `mode: "none"` 就没有法术位与施法属性；缺 `resources` 就没有职业资源。
+- 老角色仅有散文 `classSummary` 时，由 `CharacterRuleProjector` 经
+  `Dnd5eRules.resolveClassSlug` 把展示名对齐到档案职业（`classAliases` / 档案 slug 的
+  精确相等或「别名 + 分隔符」前缀，**禁止裸子串**），补写一次 `data.classIdentity`
+  （含 `declaredLevels`）；匹配不到就标记未声明并提示。
+
+#### 9.2.2 `classRules`：职业只有 4 个数值字段
+
+| 字段 | 类型 | 语义 |
+|---|---|---|
+| `hitDie` | int | 生命骰面数，只写整数且必须是 `4` / `6` / `8` / `10` / `12`（`d10` 写作 `10`） |
+| `savingThrowAbilities` | string[] | 豁免熟练，元素 ∈ `str` / `dex` / `con` / `int` / `wis` / `cha` |
+| `spellcasting` | object | 见下表 |
+| `resources` | object[] | 见下表 |
+
+`spellcasting` 的字段（全部可缺省；缺省即"未声明"，不猜测）：
+
+| 字段 | 语义 |
+|---|---|
+| `mode` | `"prepared"` / `"known"` / `"none"`（默认 `none`）：法术选择模型 |
+| `ability` | 施法属性键；`mode != "none"` 时必填 |
+| `listTags` | 法术列表过滤标签，透传给法术选择 |
+| `archetype` | 进阶原型：`full-caster` / `half-caster` / `third-caster` / `pact` / `none` |
+| `slots` | 法术位表，如 `{"5": {"1": 4, "2": 2}}`；**优先于 `archetype`，按角色等级整级替换** |
+| `slotLevel` | 仅 `pact` 有意义：每级契约法术位的环阶 |
+| `prepared` | 每级"已准备/已知"法术数上限；**职业独有，原型不提供** |
+| `cantrips` | 每级戏法数上限；**职业独有，原型不提供** |
+| `maximumSpellLevel` | 每级可学/可准备的最高环阶（0–9）；原型提供，职业可覆盖 |
+
+`resources[]` 的字段：
+
+| 字段 | 语义 |
+|---|---|
+| `id` / `name` | 必填；`id` 在同一职业内唯一 |
+| `maximum` | 三选一：整数（与等级无关）／`{"formula": "level" \| "ability:cha" \| "2*level" \| "7", "minimum": 1}`／`{"table": <Table<int>>}` |
+| `recovery` | `"shortRest"` / `"shortRestOne"` / `"longRest"` / `"none"`（默认 `longRest`），也可以写成随等级变化的表 |
+| `startsAtLevel` | 可选，默认 1；低于它的等级**不存在**该资源 |
+| `description` | 可选，一句话说明（不得放规则书正文） |
+
+技能选择、法术选择、特性、熟练、装备，以及"按等级生效的效果"（`hitPoints` / `ability`）
+**都不在 `classRules` 里**，只有一种写法：`rules`（见 §9.2.3）。
+
+#### 9.2.3 `rules`：步骤用 `levels` 数组
+
+- `rules.progression[]` 的每一步用 **`levels` 数组**声明生效等级，没有单数字段 `level`：
+  `{"levels": [1], "grants": [ … ]}`，或 `{"levels": [4, 8, 12, 16], "grants": [ … ]}`
+  ——同一批效果在多个等级各生效一次。
+- `grant.kind` 收敛为 **9 项**：`feature`、`proficiency`、`spell`、`equipment`、`action`、
+  `speed`、`armorClass`、`hitPoints`、`ability`。`hitPoints` 的 `value` / `formula` 二选一；
+  `ability` 只接受 `value`，并在**派生之前**施加（影响 HP / AC / 豁免 / 技能 / 法术 DC）。
+- 选择（`choices`）写在 `rules.choices` 或 `rules.progression[].choices`，选择键为
+  `{sourceEntryId}#{choiceId}`。本轮选择**只承载形状与参照**；完整的选择系统运行时语义属计划 2，
+  声明了但还无法消费的字段一律在导入期拒收：`repeatable` / `group` / `help` 与内联选项的
+  `grants` → `unsupportedChoiceField`；`countsToward` → `invalidCountsToward`；
+  `requires` → `invalidRequires`（后两者本轮"存在即拒收"，计划 2 收窄为真正的取值校验）。
+
+#### 9.2.4 `Table<T>` 取值语义与声明范围
+
+```jsonc
+[20 个值]                        // 完整表
+[3, 4, 5]                        // 短数组 = 只声明 1–3 级
+{"1": 2, "3": 3, "6": 4}         // 稀疏表，键 1..20
+```
+
+- 取值 = **不超过当前等级的最大已声明档位**；
+- **高于最后声明等级 → 沿用最后声明值**（`prepared: [3, 4, 5]` 在 12 级仍是 `5`）；
+- **低于最早声明等级 → 未声明**（`null` / 空，**绝不借用**更高档位的值；例如
+  `slots: {"5": { … }}` 在 1–4 级没有法术位，按优先级回退到 `archetype`）。
+
+**声明范围（`declaredLevels`）是一等公民，且只有一种口径**：合并后实际生效的范围——
+条目 `progression[].levels` 与各 `Table` 的声明范围，并上内置档案同对齐键职业的相应范围，
+写入 `data.classIdentity.declaredLevels = {min, max}`（`max` 为 `null` 表示无任何等级声明）。
+**所有界面读同一口径**：导入预览显示"职业声明：1–5 级"（信息样式）、创建向导把已声明区间画成
+主题色、未声明区间用 `outlineVariant` 并给出信息条、升级页对超出范围的目标等级显示同一信息条、
+角色卡对未声明等级显示"该职业未声明该等级的内容"而不是 `0`。
+自制职业**不必写完 1–20 级**：只声明设计过的部分既不报错也不警告。
+
+#### 9.2.5 导入诊断：error 阻断整包，warning 只提示
+
+| 严重度 | 行为 | 主要 code |
+|---|---|---|
+| error | **阻断整包**、不写入本地库，`path` 精确到字段 | 格式与档案：`unsupportedFormatVersion`、`unknownField`、`invalidHitDie`、`unknownAbility`、`invalidSpellcastingMode`、`unknownArchetype`、`invalidTable`、`invalidMaxSpec`、`duplicateResourceId`、`invalidRecovery`、`unknownGrantKind`、`builtinSlugRequiresExplicitRules`；选择：`unknownOptionType`、`invalidChoiceRange`、`invalidOptionRef`、`duplicateOptionId`、`invalidValueOption`、`unknownSkill`、`invalidSkillCount`、`unsupportedChoiceField`、`invalidCountsToward`、`invalidRequires` |
+| warning | 在导入预览中以次级样式列出，**不阻断确认** | `missingCoreField`、`missingPreparedColumn`、`ignoredGlobalList`、`unresolvedClassRule`、`zeroLevelResource` |
+
+- 旧格式一律按 error 处理并提示用新版工具重新生成/重新提取；包自带的 `abilities` / `skills`
+  清单被忽略（内置档案是唯一权威），只给 `ignoredGlobalList` warning。
+- 命中内置 12 slug 的 `class` 条目**必须显式声明 `classRules`**，否则报
+  `builtinSlugRequiresExplicitRules`（对齐键是**条目 id 末段**，与运行期同源；
+  杜绝"误写 id 末段就悄悄拿到内置数值"）。
+- "职业只声明到 N 级"是合法状态，**不产生任何 error/warning**。
+
+#### 9.2.6 最小完整示例（可直接复制导入）
+
+下面是一个聚合包的最小完整示例：一个只声明 1 / 3 / 5 级的自制职业，含稀疏表与一条技能选择。
+
+```jsonc
+{
+  "formatVersion": 3,
+  "id": "wayfinder-demo",
+  "name": "引路者（示例）",
+  "version": "1.0.0",
+  "locale": "zh-CN",
+  "system": "dnd5e-2024",
+  "entryCount": 1,
+  "entries": [
+    {
+      "id": "wayfinder-demo:class/wayfinder",
+      "type": "class",
+      "slug": "wayfinder",
+      "name": "引路者",
+      "revision": 1,
+      "body": [ { "type": "paragraph", "text": "把队伍带出荒野的示例职业。" } ],
+      "tags": ["class"],
+      "structured": {
+        "primaryAbility": "感知",
+        "classRules": {
+          "hitDie": 8,
+          "savingThrowAbilities": ["dex", "wis"],
+          "spellcasting": {
+            "mode": "prepared",
+            "ability": "wis",
+            "listTags": ["spell-list:wayfinder"],
+            "slots": { "1": { "1": 2 }, "3": { "1": 3, "2": 2 } },
+            "prepared": [2, 3, 4, 5, 6],
+            "cantrips": [2, 2, 2, 2, 3],
+            "maximumSpellLevel": [1, 1, 1, 2, 2]
+          },
+          "resources": [
+            {
+              "id": "waymark",
+              "name": "路标",
+              "maximum": { "table": [1, 1, 2, 2, 3] },
+              "recovery": "shortRest"
+            }
+          ]
+        }
+      },
+      "rules": {
+        "progression": [
+          {
+            "levels": [1],
+            "choices": [
+              {
+                "id": "skills",
+                "label": "选择两项技能熟练",
+                "optionType": "skill",
+                "minimum": 2,
+                "maximum": 2,
+                "options": ["洞悉", "自然", "察觉", "求生", "隐匿"],
+                "builderStep": "proficiencies"
+              }
+            ]
+          },
+          {
+            "levels": [1, 3, 5],
+            "grants": [
+              { "id": "wayfarer-vigor", "kind": "hitPoints", "label": "引路者体魄", "value": 1 }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+这个示例覆盖了本轮的契约要点：
+
+| 要点 | 在示例里的位置 |
+|---|---|
+| 只有一个格式版本 | `"formatVersion": 3` |
+| 职业只有 4 个数值字段 | `classRules` 只有 `hitDie` / `savingThrowAbilities` / `spellcasting` / `resources` |
+| 按等级重复生效的步骤 | `"levels": [1, 3, 5]` 的 `hitPoints` grant 在 1 / 3 / 5 级各加 1 |
+| 部分声明（只到 5 级） | `progression` 只到 5 级；`prepared` / `cantrips` / `maximumSpellLevel` 是 5 项短数组 |
+| `Table` 的两种部分写法 | 稀疏：`slots: { "1": …, "3": … }`；短数组：`maximum: { "table": [1, 1, 2, 2, 3] }` |
+| 一条技能选择 | `optionType: "skill"` + `options` + `builderStep: "proficiencies"` |
+
+把上面的对象保存为 `entries.json`，再写一个只含包级字段的 `manifest.json`
+（`formatVersion` / `id` / `name` / `version` / `locale` / `system` / `entryCount`，且
+`entryCount` 与 entries 数量一致），两者一起压缩成 `.dndpack` 即可导入。仓库里有一份同样形状、
+可直接导入的完整示例：[`samples/homebrew-partial-class/`](../samples/homebrew-partial-class/README.md)。
+
+### 9.3 自制内容与检索
 
 - 客户端：自制内容与导入包**共用同一套类型注册与校验**（`ContentSchemaRegistry`，
   含类型/必填/数据类型/范围/枚举校验）。
@@ -512,7 +772,7 @@ PHB 2024 官方表格）：
 - 检索支持类型、来源、标签、收藏等筛选；条目详情由区块渲染器呈现
   （标题/段落/列表/表格/引用/提示框/骰式/图片/关联条目）。
 
-### 9.3 内置资料注入
+### 9.4 内置资料注入
 
 - 公开构建 `apps/client_flutter/assets/bundled_content.json` 恒为 `{}`。
 - 私有构建由脚本临时注入，构建后恢复（见 §13）。
@@ -799,6 +1059,8 @@ Copy-Item node_modules\@prisma\engines\libquery_engine-linux-musl-openssl-3.0.x.
 
 - [ ] `private-imports/`、`dist/` 未出现在 `git status`
 - [ ] 构建后 `assets/bundled_content.json` 为 `{}`
+- [ ] 内置规则档案 `apps/client_flutter/assets/rules/dnd5e-2024.rules.json` **只含数值与枚举**
+      （无规则书正文、法术描述或散文段落）
 - [ ] 私有产物未上传公开 Release / 镜像仓库 / 网盘
 - [ ] 分享任何构建产物前确认不含规则正文
 

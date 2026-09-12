@@ -121,6 +121,15 @@ String ruleUnitKey(String entryId, String definitionId, int? sourceLevel) {
       : '$entryId#$definitionId#$sourceLevel';
 }
 
+/// `kind: action` 的**动作身份**键：`<条目 id>#<定义 id>`，**不带等级**。
+///
+/// 动作没有随等级变化的语义（同一个动作不会因为步骤覆盖 3 个等级就变成 3 个动作），
+/// 而多等级步骤（§3.5）会把同一份动作定义逐级展开成 N 个生效单元。需要"每个动作只
+/// 出现一次"的消费方（`data['actions']`、编辑器「自动获得」预览）都必须经过这里，
+/// 否则两处会各自拼键、去重口径不一致。
+String ruleActionKey(String entryId, String definitionId) =>
+    '$entryId#$definitionId';
+
 class CharacterRulesEngine {
   const CharacterRulesEngine({required this.entries});
 

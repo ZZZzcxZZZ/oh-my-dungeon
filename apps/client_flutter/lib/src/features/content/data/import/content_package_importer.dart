@@ -428,12 +428,35 @@ class ContentPackageImporter {
           entries.add(entry);
           parsedEntryJson = normalizedJson;
         } catch (e) {
-          errors.add(
-            ContentValidationError(
-              path: entryPath,
-              message: 'invalid entry: $e',
-            ),
-          );
+          // `value` + `formula` 同时声明由解析层拒绝（[RuleGrantDefinition.fromJson]），
+          // 抛出的 [FormatException] 不带位置。契约要求 path 精确到 `[i].formula`，
+          // 所以在原始 JSON 上重新定位一次；定位成功就只报那条精确 error，
+          // 不再追加笼统的 "invalid entry"（避免同一条输入报两次）。
+          final precisePath = e is FormatException
+              ? ruleGrantValueAndFormulaPath(
+                  entryJson['rules'] is Map
+                      ? Map<String, Object?>.from(entryJson['rules'] as Map)
+                      : const <String, Object?>{},
+                  '$entryPath.rules',
+                )
+              : null;
+          if (precisePath != null) {
+            errors.add(
+              ContentValidationError(
+                path: precisePath,
+                message:
+                    'hitPoints / ability 授予的 value 与 formula 只能二选一，'
+                    '不能同时声明（invalidMaxSpec）',
+              ),
+            );
+          } else {
+            errors.add(
+              ContentValidationError(
+                path: entryPath,
+                message: 'invalid entry: $e',
+              ),
+            );
+          }
         }
         if (parsedEntryJson == null) continue;
 
@@ -795,17 +818,16 @@ class ContentPackageImporter {
     }
   }
 
-  /// `hitPoints` / `ability` grant 的 `formula` 必须过 [MaxSpec] 的同一套封闭语法，
-  /// 且 `kind: ability` 的 `target` 与 `formula: ability:<key>` 的键必须落在档案
-  /// `abilities` 内（§5.1 `unknownAbility`）。
+  /// `hitPoints` grant 的 `formula` 必须过 [MaxSpec] 的同一套封闭语法；`kind:
+  /// ability` 只接受 `value`（`formula` 与自引用一律拒绝）；两种授予的 `value` /
+  /// `formula` 都必须二选一。
   ///
-  /// 契约：非法 formula 在**导入期**就报 `invalidMaxSpec`，不能只在运行期静默跳过
-  /// （运行期 [MaxSpec.tryParse] 返回 null 会让加值悄悄消失）。其它 grant kind 的
+  /// 契约：非法声明在**导入期**就报 error，不能只在运行期静默跳过（运行期
+  /// [MaxSpec.tryParse] 返回 null 会让加值悄悄消失）。其它 grant kind 的
   /// `formula` 语义不同（如伤害骰），不受该封闭语法约束。
   ///
-  /// 属性键同理：`MaxSpec` 的正则只保证 `ability:[a-z]{3}` 的**形状**，运行期
-  /// [RulesDrivenCharacterBuilder] 对不在档案里的键是跳过（加值消失），所以键是否
-  /// 存在必须在导入期报出来。属性键的唯一权威是档案 `abilities`。
+  /// 属性键同理：`kind: ability` 的 `target` 与 `formula: ability:<键>` 的键必须
+  /// 落在档案 `abilities` 内（`unknownAbility`）；属性键的唯一权威是档案。
   void _validateGrantFormulas(
     CharacterRuleDefinition rules,
     String rulesPath,
@@ -835,9 +857,15 @@ class ContentPackageImporter {
           );
         }
         final formula = grant.formula;
-        // §3.5：`hitPoints` / `ability` 的 `value` 与 `formula` 是**二选一**，
-        // 同时写会让"到底按哪个结算"变成运行期猜测，导入期直接报 error。
-        if (formula != null && grant.value != null) {
+        // §3.5：`hitPoints` / `ability` 的 `value` 与 `formula` 是**二选一**
+        // （判据的唯一实现是 [rejectsValueAndFormula]）。解析层已在
+        // [RuleGrantDefinition.fromJson] 抛错；这里是纵深防御，覆盖"绕过解析层
+        // 直接构造 CharacterRuleDefinition"的调用方。
+        if (rejectsValueAndFormula(
+          grant.kind,
+          value: grant.value,
+          formula: grant.formula,
+        )) {
           errors.add(
             ContentValidationError(
               path: '$grantsPath[$i].formula',
@@ -849,6 +877,35 @@ class ContentPackageImporter {
           continue;
         }
         if (formula == null) continue;
+        // §3.5：`kind: ability` **只接受 `value`**。`formula` 会让
+        // `baseAbilitiesFrom` 的减法没有精确逆：自引用（`ability:int` 授予 int）
+        // 每次再派生都把属性抬高一份，链式引用（A 引用 B、B 引用 A）也不保证
+        // 不动点。两条都在导入期拒绝，避免"文档允许、运行期算错"。
+        if (grant.kind == RuleGrantKind.ability) {
+          final target = grant.target;
+          if (target != null &&
+              (formula == target || formula == 'ability:$target')) {
+            errors.add(
+              ContentValidationError(
+                path: '$grantsPath[$i].formula',
+                message:
+                    'ability 授予不得自引用：formula "$formula" 读的是本授予的 '
+                    'target "$target"（invalidMaxSpec）',
+              ),
+            );
+          } else {
+            errors.add(
+              ContentValidationError(
+                path: '$grantsPath[$i].formula',
+                message:
+                    'ability 授予只接受 value，不接受 formula（"$formula"）：'
+                    'formula 型属性加值没有精确逆运算，再派生会重复叠加'
+                    '（invalidMaxSpec）',
+              ),
+            );
+          }
+          continue;
+        }
         if (formula.startsWith('ability:') &&
             !abilities.contains(formula.substring('ability:'.length))) {
           errors.add(

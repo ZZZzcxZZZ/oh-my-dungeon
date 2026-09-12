@@ -120,4 +120,93 @@ void main() {
 
     expect(entries.where((entry) => entry.type == 'classFeature'), hasLength(2));
   });
+
+  // 应修项：两个既有步骤共享同一等级时，旧实现"先占先得"会把后者整步丢弃
+  // （`kept.isEmpty` 时连 grants 一起丢）——静默丢内容。
+  test('两个既有步骤共享同一等级 → grants/choices 合并到同一步，不丢内容', () {
+    final overlapping = ContentEntry.fromJson(<String, Object?>{
+      'id': 'legacy:class/overlap',
+      'type': 'class',
+      'slug': 'overlap',
+      'name': '重叠者',
+      'body': <Object?>[],
+      'revision': 1,
+      'structured': <String, Object?>{
+        'classRules': <String, Object?>{'hitDie': 8},
+        'features': <String>['3级：旧版特性 说明。'],
+      },
+      'rules': <String, Object?>{
+        'progression': <Map<String, Object?>>[
+          <String, Object?>{
+            'levels': <int>[3],
+            'grants': <Map<String, Object?>>[
+              <String, Object?>{'id': 'g-a', 'kind': 'feature', 'label': '甲'},
+            ],
+          },
+          <String, Object?>{
+            'levels': <int>[3],
+            'grants': <Map<String, Object?>>[
+              <String, Object?>{'id': 'g-b', 'kind': 'feature', 'label': '乙'},
+            ],
+            'choices': <Map<String, Object?>>[
+              <String, Object?>{
+                'id': 'choice-b',
+                'label': '乙的选择',
+                'optionType': 'feat',
+                'minimum': 1,
+                'maximum': 1,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    final migrated = const LegacyClassFeatureRulesMigrator()
+        .migrate([overlapping])
+        .singleWhere((entry) => entry.type == 'class');
+    final progression = migrated.rules!.progression;
+
+    expect(progression, hasLength(1));
+    final levelThree = progression.single;
+    expect(levelThree.levels, <int>[3]);
+    expect(
+      levelThree.grants.map((grant) => grant.id),
+      containsAll(<String>['g-a', 'g-b']),
+      reason: '两个步骤的授予都要保留，后者不能被丢弃',
+    );
+    expect(
+      levelThree.choices.map((choice) => choice.id),
+      containsAll(<String>['choice-b']),
+      reason: '后者的选择也不能丢',
+    );
+    expect(
+      levelThree.grants.where((grant) => grant.id == 'feature-3-1'),
+      hasLength(1),
+      reason: '旧版逐级特性的授予并入同一步',
+    );
+  });
+
+  test('migrate 幂等：连续迁移两次结果完全相同', () {
+    final migrator = const LegacyClassFeatureRulesMigrator();
+    // 独立构造条目：migrator 会把 `structured.features` 摘掉后再产出，
+    // 复用同一实例会让"第二次迁移"的输入带上前一次的副作用。
+    final first = migrator.migrate([classEntry()]);
+    final second = migrator.migrate(first);
+
+    String signature(List<ContentEntry> entries) => entries
+        .map(
+          (entry) =>
+              '${entry.id}|${entry.type}|'
+              '${entry.rules?.progression.map((step) => step.levels.join('.')).join(',') ?? ''}',
+        )
+        .join('\n');
+
+    expect(second.map((entry) => entry.id).toList(), first.map((entry) => entry.id).toList());
+    expect(
+      signature(second),
+      signature(first),
+      reason: '把迁移结果再迁移一次不得改变条目集合与 progression 形状',
+    );
+  });
 }

@@ -30,6 +30,9 @@ class Dnd5eRules {
   /// null / 空档案兜底（契约 §4.4：内置档案缺失或非法即启动 fail-fast）。
   static RuleProfile? _profile;
 
+  /// 由 [_profile] 派生的技能清单缓存，只在 [configure] 时填一次。
+  static List<Dnd5eSkill>? _skills;
+
   static RuleProfile get profile {
     final profile = _profile;
     if (profile == null) {
@@ -45,10 +48,18 @@ class Dnd5eRules {
       throw StateError('规则档案已配置，重复 configure 被拒绝');
     }
     _profile = profile;
+    _skills = List<Dnd5eSkill>.unmodifiable(
+      profile.skills.entries.map(
+        (entry) => Dnd5eSkill(name: entry.key, ability: entry.value),
+      ),
+    );
   }
 
   @visibleForTesting
-  static void resetForTests() => _profile = null;
+  static void resetForTests() {
+    _profile = null;
+    _skills = null;
+  }
 
   /// 展示用的属性中文标签（UI 文案，不是规则数值）。
   /// 属性键本身由档案的 `abilities` 声明；两者的键集合由
@@ -63,26 +74,23 @@ class Dnd5eRules {
     'cha': '魅力',
   };
 
-  static const skills = [
-    Dnd5eSkill(name: '杂技', ability: 'dex'),
-    Dnd5eSkill(name: '驯兽', ability: 'wis'),
-    Dnd5eSkill(name: '奥秘', ability: 'int'),
-    Dnd5eSkill(name: '运动', ability: 'str'),
-    Dnd5eSkill(name: '欺瞒', ability: 'cha'),
-    Dnd5eSkill(name: '历史', ability: 'int'),
-    Dnd5eSkill(name: '洞悉', ability: 'wis'),
-    Dnd5eSkill(name: '威吓', ability: 'cha'),
-    Dnd5eSkill(name: '调查', ability: 'int'),
-    Dnd5eSkill(name: '医药', ability: 'wis'),
-    Dnd5eSkill(name: '自然', ability: 'int'),
-    Dnd5eSkill(name: '察觉', ability: 'wis'),
-    Dnd5eSkill(name: '表演', ability: 'cha'),
-    Dnd5eSkill(name: '说服', ability: 'cha'),
-    Dnd5eSkill(name: '宗教', ability: 'int'),
-    Dnd5eSkill(name: '巧手', ability: 'dex'),
-    Dnd5eSkill(name: '隐匿', ability: 'dex'),
-    Dnd5eSkill(name: '求生', ability: 'wis'),
-  ];
+  /// 技能清单（名字 → 属性键）的**唯一权威是档案** `skills`（§3.1 参照清单）：
+  /// 顺序即档案数组顺序（Dart 的 `Map` 保持插入顺序），数值与档案逐项一致。
+  ///
+  /// 角色卡 / 编辑器 / 快速创建 / 检定请求都读这里，不再有第二份硬编码的 18 项。
+  /// 由 `test/rules/builtin_rule_profile_test.dart` 的「技能名按顺序等于档案
+  /// skills[].name」断言守卫，避免清单与档案漂移后**静默丢熟练**。
+  ///
+  /// 与 [profile] 同口径：未配置档案即抛 [StateError]，绝不返回空清单兜底。
+  static List<Dnd5eSkill> get skills {
+    final skills = _skills;
+    if (skills == null) {
+      throw StateError(
+        'Dnd5eRules 尚未配置规则档案：请在启动时 await Dnd5eRules.configure(...)',
+      );
+    }
+    return skills;
+  }
 
   static const defaultAbilities = {
     'str': 10,

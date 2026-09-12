@@ -2630,6 +2630,51 @@ git commit -m "feat(content): 提取器输出新契约形状，删除脚本内�
 
 ---
 
+## 任务 10.5：职业规则展示层改读 `classRules`（**执行任务 10 时发现的缺口**）
+
+**为什么必须做**：任务 10 让提取器不再写顶层 `structured.hitDie`（字符串，旧）/
+`structured.savingThrows`（散文）/ `structured.skills`（散文）——它们是 `classRules.hitDie` /
+`classRules.savingThrowAbilities` / `rules.choices` 的**旧形状副本**，留着就是"一个概念两种形状"。
+但展示层仍在读那三个旧键，内容迁移后会**静默丢行**：
+
+- `character_editor_page.dart` 的 `_StructuredRuleSummary`（`fields: ['primaryAbility','hitDie']`
+  与 `fields: ['savingThrows','skills','weaponProficiency','armorProficiency']`）；
+- `content_type_registry.dart` 的 `_ClassDefinition.searchableFields` / `buildMetadata`（资料库卡片）；
+- `content_library_controller.dart` + `content_repository.dart` 的**生命骰 facet**
+  （facet 计数与筛选共用 `normalizedContentFacetValues` 这个唯一 choke point）。
+
+**口径**：规则值一律经 `Dnd5eRules.resolveClassRules` / `StructuredClassRules`（条目 ∪ 档案），
+展示元数据（`primaryAbility` / `weaponProficiency` / `armorProficiency` / `startingEquipment`）
+继续读 `structured`。**未声明即不显示该行**，不显示 `0`、不猜、不回退散文。
+
+**文件：**
+- 创建：`apps/client_flutter/lib/src/features/characters/domain/class_rule_summary.dart`
+- 修改：`apps/client_flutter/lib/src/features/characters/presentation/character_editor_page.dart`
+- 修改：`apps/client_flutter/lib/src/features/content/presentation/content_type_registry.dart`
+- 修改：`apps/client_flutter/lib/src/features/content/domain/content_schema_registry.dart`
+- 测试：`apps/client_flutter/test/class_rule_summary_display_test.dart`
+
+**步骤：**
+
+1. 新增 `ClassRuleSummary.of(ContentEntry?)` → `({String? hitDie, String? savingThrows, String? skillChoice})`：
+   `hitDie` → `d${resolved.hitDie}`；`savingThrows` → `resolved.savingThrowAbilities` 经
+   `Dnd5eRules.abilityLabels` 映射后按 `、` 连接；`skillChoice` → `StructuredClassRules.skillChoice`
+   的 `选择N项：…` / `任选N项（任意技能）`。三者在"未声明/空"时返回 null。
+2. `_StructuredRuleSummary` 不再接收裸 `fields`，改为接收算好的 `(label, icon, value)` 条目；
+   两个调用点合成"展示元数据（`structured`）+ 规则值（`ClassRuleSummary`）"两个来源。
+3. `_ClassDefinition.buildMetadata` 渲染 主属性 / 生命骰 / 豁免熟练 / 技能选择；
+4. 生命骰 facet：在 `ContentSchemaRegistry.normalizeFacetValues` 里，`type == 'class'` 且
+   `field == 'hitDie'` 且 `value == null` 时从 `classRules.hitDie` 派生（**唯一**派生点，facet 计数
+   与筛选共用）；值用 `d<N>` 字符串与旧数据保持一致。
+5. 按新契约改写测试夹具（`_fighterRulesContent` 等）：删掉顶层 `hitDie`/`savingThrows`/`skills`，
+   改成 `classRules: {hitDie: 10, savingThrowAbilities: ['str','con'], spellcasting: …}`；
+   **断言不变**（`find.text('d10')` / `find.text('力量与体质')` 必须仍然通过）。
+6. 新增测试：只有 `classRules`、没有旧键的职业条目在编辑器摘要卡与资料库卡片上都显示
+   生命骰 d10 / 豁免熟练 力量与体质 / 技能选择 选择2项…；facet 计数与筛选生效；
+   **完全未声明时该行不出现**。
+
+---
+
 ## 任务 11：导入器接入规则诊断
 
 **文件：**
@@ -2896,6 +2941,18 @@ git commit -m "feat(ui): 职业声明范围（部分声明）在全部相关界�
 - [ ] `npm run test:scripts` → 27+ 通过
 - [ ] `npm run lint:server` → 0 问题（未改服务端，作为回归）
 - [ ] 用私有包做一次手工冒烟：建一个 5 级吟游诗人 → 法术位 4/3/2、准备上限 9、HP 与改造前一致
+
+---
+
+## 收尾说明：老角色的属性 base 不回填（W6 结论，只记录不实现）
+
+W3 之前派生的角色卡里，`abilities` 是**旧语义的最终值**（多等级 `ability` 授予只算 1 次）。
+新语义按每个已达等级各生效一次，因此 `baseAbilitiesFrom` 从这些最终值反推出的 base 会**偏低**；
+但派生出的最终值**稳定不变**（`base − N×bonus` 再加回 `N×bonus` 仍是原值），
+所以用户看到的数值不会漂移，只是 base 与"新语义下重新建号"的角色不同。
+当前是 `0.1.0` 预发布、内置档案不含 `ability` grant（只有示例包用到），
+一次性迁移的收益不足以抵消改存档的风险，故**不做迁移**；等选择系统（计划 2）落定后如仍需
+统一 base 口径，再单独评估。
 
 ---
 

@@ -17,6 +17,94 @@ enum RuleGrantKind {
   }
 }
 
+/// `value` 与 `formula` **二选一**的判据（契约 §3.5）：只有 `hitPoints` /
+/// `ability` 两种授予在同一份定义里同时声明两者才是非法——其它 kind 的
+/// `formula` 语义不同（如伤害骰），不受这条约束。
+///
+/// 这是该判据的**唯一实现点**：[RuleGrantDefinition.fromJson] 用它抛
+/// [FormatException]，`ContentPackageImporter` 也用它（连同
+/// [ruleGrantValueAndFormulaPath]）把同一份输入报成带精确 path 的整包 error。
+/// 两处不得各写一份判据，否则"解析拒绝、导入放行"会再次分叉。
+bool rejectsValueAndFormula(
+  RuleGrantKind kind, {
+  required Object? value,
+  required Object? formula,
+}) {
+  return (kind == RuleGrantKind.hitPoints || kind == RuleGrantKind.ability) &&
+      value != null &&
+      formula != null;
+}
+
+/// 在条目原始 JSON 里定位第一处 `value` + `formula` 同时声明，返回精确到
+/// `<rulesPath>[.progression[i].grants[j]]` 的路径；没有则返回 null。
+///
+/// 导入器需要这个路径，是因为解析层只能抛一条没有位置的 [FormatException]，
+/// 而契约要求 error 的 path 精确到 `[i].formula`。判据仍只有
+/// [rejectsValueAndFormula] 一份。
+String? ruleGrantValueAndFormulaPath(
+  Map<String, Object?> rulesJson,
+  String rulesPath,
+) {
+  String? checkList(Object? raw, String path) {
+    if (raw is! List) return null;
+    for (var i = 0; i < raw.length; i++) {
+      final item = raw[i];
+      if (item is! Map) continue;
+      final map = Map<String, Object?>.from(item);
+      final kindValue = map['kind'];
+      // 只比对两个受约束 kind 的字面名：非法 kind 由解析层用另一条 error 报出，
+      // 这里不需要（也不应该）先解析再吞掉它的失败。
+      if ((kindValue == 'hitPoints' || kindValue == 'ability') &&
+          rejectsValueAndFormula(
+            kindValue == 'ability'
+                ? RuleGrantKind.ability
+                : RuleGrantKind.hitPoints,
+            value: map['value'],
+            formula: map['formula'],
+          )) {
+        return '$path[$i].formula';
+      }
+      // 内联选项里的 grants 也带同一种定义（§3.10.2）。
+      final options = map['options'];
+      if (options is List) {
+        for (var j = 0; j < options.length; j++) {
+          final option = options[j];
+          if (option is! Map) continue;
+          final nested = checkList(
+            option['grants'],
+            '$path[$i].options[$j].grants',
+          );
+          if (nested != null) return nested;
+        }
+      }
+    }
+    return null;
+  }
+
+  final topLevel = checkList(rulesJson['grants'], '$rulesPath.grants');
+  if (topLevel != null) return topLevel;
+  final choices = checkList(rulesJson['choices'], '$rulesPath.choices');
+  if (choices != null) return choices;
+  final progression = rulesJson['progression'];
+  if (progression is List) {
+    for (var i = 0; i < progression.length; i++) {
+      final step = progression[i];
+      if (step is! Map) continue;
+      final grants = checkList(
+        step['grants'],
+        '$rulesPath.progression[$i].grants',
+      );
+      if (grants != null) return grants;
+      final stepChoices = checkList(
+        step['choices'],
+        '$rulesPath.progression[$i].choices',
+      );
+      if (stepChoices != null) return stepChoices;
+    }
+  }
+  return null;
+}
+
 class RuleGrantDefinition {
   const RuleGrantDefinition({
     required this.id,
@@ -44,14 +132,26 @@ class RuleGrantDefinition {
     if (id is! String || id.trim().isEmpty || kind is! String) {
       throw const FormatException('Rule grant requires id and kind');
     }
+    final parsedKind = RuleGrantKind.parse(kind);
+    final value = json['value'];
+    final formula = json['formula'];
+    // §3.5：`hitPoints` / `ability` 的 `value` 与 `formula` 是**二选一**。
+    // 解析层直接拒绝，而不是留给运行期把两者相加：内置档案、程序化构造和
+    // 导入路径都必须受同一条约束，否则"到底按哪个结算"会退化成运行期猜测。
+    if (rejectsValueAndFormula(parsedKind, value: value, formula: formula)) {
+      throw FormatException(
+        'Rule grant "$id"（kind: ${parsedKind.name}）的 value 与 formula '
+        '只能二选一，不能同时声明（invalidMaxSpec）',
+      );
+    }
     return RuleGrantDefinition(
       id: id,
-      kind: RuleGrantKind.parse(kind),
+      kind: parsedKind,
       label: json['label'] as String? ?? id,
       target: json['target'] as String?,
       entryId: json['entryId'] as String?,
-      value: json['value'] as num?,
-      formula: json['formula'] as String?,
+      value: value as num?,
+      formula: formula as String?,
       data: json['data'] is Map
           ? Map<String, Object?>.from(json['data'] as Map)
           : const <String, Object?>{},

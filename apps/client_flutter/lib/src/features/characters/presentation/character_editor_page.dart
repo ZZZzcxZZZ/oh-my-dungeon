@@ -654,10 +654,16 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
     );
     // 再派生必须用**基础属性**：`_abilityControllers` 里是已含生效加值的最终值，
     // 直接回传会让同一份 `kind: ability` 授予再叠加一次（缺陷 4）。减加值的唯一
-    // 实现在 builder；减的是角色卡**当前等级**那份构建的加值。
-    final currentBuild = CharacterBuild.fromJson(
-      Map<String, Object?>.from(character.dataMap['build']! as Map),
-    );
+    // 实现在 builder；参照必须是**最近一次已应用**的 build（[`_appliedRulesData`]），
+    // 因为应用后 controllers 已被写成**目标等级**的最终值。继续用存档里"升级前"
+    // 的 `character.dataMap['build']` 会在第二次应用时减错区间的加值，每次多叠一份
+    // `(旧等级, 目标等级]`；按钮在应用后禁用，这里仍是纵深防御（setState 之外
+    // 的程序化调用）。
+    final appliedData = _appliedRulesData ?? character.dataMap;
+    final appliedBuildJson = appliedData['build'];
+    final currentBuild = appliedBuildJson is Map
+        ? CharacterBuild.fromJson(Map<String, Object?>.from(appliedBuildJson))
+        : CharacterBuild(level: character.level);
     final generated = builder.build(
       name: _nameController.text,
       build: preview.build,
@@ -2587,6 +2593,59 @@ class _StructuredRuleSummary extends StatelessWidget {
   };
 }
 
+/// 「自动获得」预览的一行：授予定义 + 来源条目 + 生效等级
+/// （`null` = 条目级 `rules.grants`，与等级无关）。
+typedef RuleGrantPreviewRow = ({
+  ContentEntry entry,
+  RuleGrantDefinition grant,
+  int? sourceLevel,
+});
+
+/// 「自动获得」预览的行集合（纯函数，可独立测试）。
+///
+/// 与引擎 [CharacterRulesEngine.evaluate] **同源**：多等级步骤（`levels`）按
+/// **每个已达等级**各展开一次（§3.5"同一批效果在多个等级重复生效"），不是只取
+/// `reached.last`。引擎按 `ruleUnitKey(entry, id, level)` 产出 N 个生效单元，
+/// 这里也必须产 N 行，否则预览与运行期数值不同源。
+///
+/// 两类重复在"每行一次"的展示里必须去掉，否则同一件东西会重复列出：
+/// 1. 同一生效单元被两个条目重复覆盖（迁移期允许步骤重叠）→ 按生效单元键去重；
+/// 2. `kind: action` 逐级展开会产生 N 条**内容完全相同**的动作行（动作身份是
+///    `entryId + grant.id`，没有随等级变化的语义），运行期 `data['actions']`
+///    也只认一条 → 按动作身份只保留最早生效的那条。
+List<RuleGrantPreviewRow> ruleGrantPreviewRows(
+  List<ContentEntry> entries,
+  int level,
+) {
+  final rows = <RuleGrantPreviewRow>[];
+  final seen = <String>{};
+  for (final entry in entries) {
+    final rules = entry.rules;
+    if (rules == null) continue;
+
+    void add(RuleGrantDefinition grant, int? sourceLevel) {
+      final identity = grant.kind == RuleGrantKind.action
+          ? ruleActionKey(entry.id, grant.id)
+          : ruleUnitKey(entry.id, grant.id, sourceLevel);
+      if (!seen.add(identity)) return;
+      rows.add((entry: entry, grant: grant, sourceLevel: sourceLevel));
+    }
+
+    for (final grant in rules.grants) {
+      add(grant, null);
+    }
+    for (final progression in rules.progression) {
+      for (final stepLevel in progression.levels) {
+        if (stepLevel > level) continue;
+        for (final grant in progression.grants) {
+          add(grant, stepLevel);
+        }
+      }
+    }
+  }
+  return rows;
+}
+
 class _RuleGrantPreview extends StatelessWidget {
   const _RuleGrantPreview({required this.entries, required this.level});
 
@@ -2595,28 +2654,7 @@ class _RuleGrantPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final grants =
-        <({ContentEntry entry, RuleGrantDefinition grant, int? level})>[];
-    for (final entry in entries) {
-      final rules = entry.rules;
-      if (rules == null) continue;
-      grants.addAll(
-        rules.grants.map((grant) => (entry: entry, grant: grant, level: null)),
-      );
-      for (final progression in rules.progression) {
-        // 多等级步骤（`levels`）在预览里按"已达等级中的最高者"归组。
-        final reached = progression.levels.where(
-          (stepLevel) => stepLevel <= level,
-        );
-        if (reached.isEmpty) continue;
-        final reachedLevel = reached.last;
-        grants.addAll(
-          progression.grants.map(
-            (grant) => (entry: entry, grant: grant, level: reachedLevel),
-          ),
-        );
-      }
-    }
+    final grants = ruleGrantPreviewRows(entries, level);
     if (grants.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -2641,9 +2679,9 @@ class _RuleGrantPreview extends StatelessWidget {
                   leading: Icon(_grantIcon(item.grant.kind)),
                   title: Text(item.grant.label),
                   subtitle: Text(
-                    item.level == null
+                    item.sourceLevel == null
                         ? item.entry.name
-                        : '${item.entry.name} · 等级 ${item.level}',
+                        : '${item.entry.name} · 等级 ${item.sourceLevel}',
                   ),
                 ),
             ],

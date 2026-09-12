@@ -62,7 +62,29 @@ EXPECTED_SKILL_CHOICES = {
     "游侠": (3, ["驯兽", "运动", "洞悉", "调查", "自然", "察觉", "隐匿", "求生"]),
     "圣武士": (2, ["运动", "洞悉", "威吓", "医药", "说服", "宗教"]),
     "术士": (2, ["奥秘", "欺瞒", "洞悉", "威吓", "说服", "宗教"]),
-    "吟游诗人": (3, list(extractor.ALL_SKILLS)),
+    "吟游诗人": (
+        3,
+        [
+            "杂技",
+            "驯兽",
+            "奥秘",
+            "运动",
+            "欺瞒",
+            "历史",
+            "洞悉",
+            "威吓",
+            "调查",
+            "医药",
+            "自然",
+            "察觉",
+            "表演",
+            "说服",
+            "宗教",
+            "巧手",
+            "隐匿",
+            "求生",
+        ],
+    ),
     "德鲁伊": (2, ["奥秘", "驯兽", "洞悉", "医药", "自然", "察觉", "宗教", "求生"]),
     "牧师": (2, ["历史", "洞悉", "医药", "说服", "宗教"]),
     "游荡者": (4, ["杂技", "运动", "欺瞒", "洞悉", "威吓", "调查", "察觉", "说服", "巧手", "隐匿"]),
@@ -71,10 +93,13 @@ EXPECTED_SKILL_CHOICES = {
 }
 
 
-def _read_archive() -> dict | None:
-    """读内置档案；裸检出（无资产）时返回 None，由调用方 skipTest。"""
-    if not ARCHIVE_PATH.exists():
-        return None
+def _read_archive() -> dict:
+    """读内置档案。
+
+    档案资产被 git 跟踪、也在 `pubspec.yaml` 的 assets 里，**不存在**"裸检出无资产"
+    的正常场景，因此这里不返回 None、调用方也不 skip：文件缺失就是要报的真实失败
+    （此前 `skipTest` 会把提取器与档案的漂移静默掩盖成"跳过"）。
+    """
     return json.loads(ARCHIVE_PATH.read_text(encoding="utf-8"))
 
 
@@ -108,8 +133,6 @@ class Phb2024V2ToolsTest(unittest.TestCase):
 
     def test_parse_skill_choice_reads_all_twelve_classes(self) -> None:
         archive = _read_archive()
-        if archive is None:
-            self.skipTest(f"builtin archive not found: {ARCHIVE_PATH}")
         canonical = _archive_skill_names(archive)
         self.assertEqual(len(canonical), 18)
         canonical_set = set(canonical)
@@ -160,8 +183,6 @@ class Phb2024V2ToolsTest(unittest.TestCase):
         dex/wis，源文与 SRD 5.2 都是 str/dex）都必须被这条检查发现。
         """
         archive = _read_archive()
-        if archive is None:
-            self.skipTest(f"builtin archive not found: {ARCHIVE_PATH}")
         classes = self._extract_all_classes()
         self.assertEqual(len(classes), len(extractor.CLASS_DIRS))
         for cls_name, entry in classes.items():
@@ -170,11 +191,31 @@ class Phb2024V2ToolsTest(unittest.TestCase):
                 archive_class = archive["classes"][slug]
                 class_rules = entry["structured"]["classRules"]
                 self.assertEqual(class_rules["hitDie"], archive_class["hitDie"], slug)
+                # §3.2 未定义 `savingThrowAbilities` 的顺序：Dart 侧按集合比，
+                # 这里也必须按集合比，否则提取器换个书写顺序就会被误判成失败。
                 self.assertEqual(
-                    class_rules["savingThrowAbilities"],
-                    archive_class["savingThrowAbilities"],
+                    set(class_rules["savingThrowAbilities"]),
+                    set(archive_class["savingThrowAbilities"]),
                     slug,
                 )
+
+    def test_real_corpus_leaves_manual_review_empty(self) -> None:
+        """真实语料跑完 12 职业后 `MANUAL_REVIEW` 必须为空。
+
+        这是「未映射技能名不静默保留」的出口：`parse_skill_choice` 对不在规范清单里
+        的名字既记 MANUAL_REVIEW 又原样输出，如果只断言"记录了"而不检查真实语料跑完
+        之后的清单，译名漂移会一直留在 MANUAL_REVIEW 里没人处理。
+        """
+        classes = self._extract_all_classes()
+        self.assertEqual(len(classes), len(extractor.CLASS_DIRS))
+        for cls_name, text in SKILL_CHOICE_TEXTS.items():
+            with self.subTest(cls=cls_name):
+                extractor.parse_skill_choice(text)
+        self.assertEqual(
+            extractor.MANUAL_REVIEW,
+            [],
+            f"真实语料仍有未映射技能名：{extractor.MANUAL_REVIEW}",
+        )
 
     def test_parse_saving_throws_keeps_source_order(self) -> None:
         self.assertEqual(extractor.parse_saving_throws("力量与体质"), ["str", "con"])

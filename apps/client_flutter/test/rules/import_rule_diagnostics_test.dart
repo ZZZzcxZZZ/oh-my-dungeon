@@ -424,6 +424,8 @@ void main() {
               'classRules': {'hitDie': 10},
             },
             rules: {
+              // `hitPoints` 是四种合法 formula 的载体；`ability` 只接受 `value`
+              // （它自己的拒绝用例见下一条）。
               'grants': [
                 {
                   'id': 'a',
@@ -433,7 +435,7 @@ void main() {
                 },
                 {
                   'id': 'b',
-                  'kind': 'ability',
+                  'kind': 'hitPoints',
                   'label': 'B',
                   'formula': 'ability:cha',
                 },
@@ -450,7 +452,7 @@ void main() {
                     },
                     {
                       'id': 'd',
-                      'kind': 'ability',
+                      'kind': 'hitPoints',
                       'label': 'D',
                       'formula': '7',
                     },
@@ -462,6 +464,100 @@ void main() {
         ),
       );
       expect(report.valid, isTrue, reason: report.errors.toString());
+    });
+
+    test('ability grant 的 formula 一律拒绝：没有精确逆，再派生会重复叠加', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {'hitDie': 10},
+            },
+            rules: {
+              'grants': [
+                {
+                  'id': 'b',
+                  'kind': 'ability',
+                  'label': 'B',
+                  'target': 'cha',
+                  'formula': 'ability:str',
+                },
+              ],
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.message.contains('invalidMaxSpec'),
+      );
+      expect(error.path, r'$.entries[0].rules.grants[0].formula');
+      expect(error.message, contains('只接受 value'));
+    });
+
+    test('ability grant 自引用 formula（ability:<自身 target>）→ invalidMaxSpec', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {'hitDie': 10},
+            },
+            rules: {
+              'progression': [
+                {
+                  'levels': [4],
+                  'grants': [
+                    {
+                      'id': 'asi-int',
+                      'kind': 'ability',
+                      'label': '属性提升：智力',
+                      'target': 'int',
+                      'formula': 'ability:int',
+                    },
+                  ],
+                },
+              ],
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.path == r'$.entries[0].rules.progression[0].grants[0].formula',
+      );
+      expect(error.message, contains('不得自引用'));
+    });
+
+    test('hitPoints 同时写 value 与 formula → 导入期报 invalidMaxSpec', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {'hitDie': 10},
+            },
+            rules: {
+              'grants': [
+                {
+                  'id': 'hp',
+                  'kind': 'hitPoints',
+                  'label': '额外生命',
+                  'value': 2,
+                  'formula': 'level',
+                },
+              ],
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.message.contains('invalidMaxSpec'),
+      );
+      expect(error.path, r'$.entries[0].rules.grants[0].formula');
+      expect(error.message, contains('二选一'));
     });
 
     test('其它 grant kind 的 formula 不受该封闭语法约束', () async {

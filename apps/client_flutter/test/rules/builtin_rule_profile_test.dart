@@ -401,6 +401,31 @@ void main() {
     expect(Dnd5eRules.abilityLabels.keys.toSet(), abilities);
   });
 
+  test('Dnd5eRules.skills 的名字按顺序等于档案 skills[].name', () {
+    // 技能清单的**唯一权威是档案**：断言"派生确实发生且顺序一致"，不是数值
+    // oracle（名字 → 属性键的独立期望表见下一个用例）。清单少一项、多一项或
+    // 顺序漂移，都会让角色卡技能行与档案 skill 选项对不上。
+    final archiveSkills = (archive['skills']! as List)
+        .cast<Map<String, Object?>>();
+    final expectedNames = archiveSkills
+        .map((skill) => skill['name']! as String)
+        .toList(growable: false);
+    expect(expectedNames, hasLength(18));
+    expect(
+      Dnd5eRules.skills.map((skill) => skill.name).toList(growable: false),
+      expectedNames,
+      reason: 'Dnd5eRules.skills 必须按档案顺序派生，不得有第二份硬编码清单',
+    );
+    expect(
+      {for (final skill in Dnd5eRules.skills) skill.name: skill.ability},
+      {
+        for (final skill in archiveSkills)
+          skill['name']! as String: skill['ability']! as String,
+      },
+      reason: '名字 → 属性键必须与档案逐项一致',
+    );
+  });
+
   test('18 项技能的技能名 → 属性映射对照 SRD 5.2', () {
     // 独立的期望表：不从档案取值再断言（那就是自证循环）。
     const expected = <String, String>{

@@ -404,8 +404,9 @@ void main() {
         expect(sheet.armorClass, upgraded.armorClass);
         expect(sheet.maxHp, upgraded.maxHp);
         expect(sheet.initiativeBonus, upgraded.initiativeBonus);
-        // classResources 的 `formula: ability:cha` 也必须按基础属性结算：
-        // cha 18 → +4；把最终值再叠加一次会变成 22 → +6。
+        // classResources 的 `formula: ability:cha` 按**含加值的有效属性**结算
+        // （与 spellSaveDc 等派生同源）：cha 基础 14、1/4 级各 +2 → 有效 18
+        // → 调整值 +4。若错用基础值 14，这里会算出 +2。
         final resources = (sheet.dataMap['classResources']! as List)
             .cast<Map<Object?, Object?>>();
         expect(resources.single['maximum'], 4);

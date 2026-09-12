@@ -18,11 +18,15 @@ class LegacyClassFeatureRulesMigrator {
   }
 
   _MigratedClass _migrateClass(ContentEntry entry, Set<String> reservedIds) {
-    if (entry.type != 'class' || _hasFeatureProgression(entry.rules)) {
-      return _MigratedClass(classEntry: entry);
-    }
+    if (entry.type != 'class') return _MigratedClass(classEntry: entry);
     final rawFeatures = entry.structured['features'];
     if (rawFeatures is! List) return _MigratedClass(classEntry: entry);
+    // 已经迁移过的条目（progression 里带 feature 授予）且**没有**待迁移的
+    // `structured.features` 时原样放行。反过来：只要还有待迁移的旧版特性，
+    // 即使 progression 里已有 feature 授予也要继续，否则重叠等级永远修不掉。
+    if (_hasFeatureProgression(entry.rules) && rawFeatures.isEmpty) {
+      return _MigratedClass(classEntry: entry);
+    }
 
     final parsed = rawFeatures
         .whereType<String>()
@@ -85,46 +89,87 @@ class LegacyClassFeatureRulesMigrator {
       stepsByIdentity.putIfAbsent(step, () => <int>{}).addAll(step.levels);
     }
 
-    // 旧版 `structured.features` 声明的等级要由"逐级特性步骤"接管：必须把这些等级
-    // 从原步骤的 `levels` 里**摘掉**，只去重而不摘会让同一等级被两个步骤同时覆盖。
-    final replacedLevels = grantsByLevel.keys.toSet();
-    // 每个等级只能被一个步骤覆盖：先占先得，保证输出无重叠区间。
-    final claimed = <int>{};
-    final keptSteps = <_ProgressionStep>[];
+    // 旧版 `structured.features` 的等级：即使没有任何既有步骤覆盖，也要各自成一步。
+    final featureLevels = grantsByLevel.keys.toSet();
 
-    for (final entry in stepsByIdentity.entries) {
-      final levels = entry.value
-          .where((level) => !replacedLevels.contains(level))
+    // 输出规则：每个等级**只产出一条步骤**，它的 grants / choices 是"所有来源"的
+    // 并集（既有步骤的 grants/choices + 该等级的旧版逐级特性授予）。旧实现是
+    // "先占先得"——两个既有步骤共享同一等级时后者整步被丢弃（`kept.isEmpty` 时连
+    // grants 一起丢），属静默丢内容。
+    //
+    // 形状规则：**没有任何等级要单独成步的步骤保持原 `levels` 形状**
+    // （`[4,8,12,16]` 里 8 被旧版特性接管后仍是 `[4,12,16]` 一条）；一旦步骤里有
+    // 等级被旧版特性接管、或与别的步骤重叠，就退化成逐级输出，该等级的所有来源
+    // 再并起来。
+    final coverageByLevel = <int, int>{};
+    for (final levels in stepsByIdentity.values) {
+      for (final level in levels) {
+        if (featureLevels.contains(level)) continue;
+        coverageByLevel[level] = (coverageByLevel[level] ?? 0) + 1;
+      }
+    }
+
+    final standalone = <_ProgressionStep>[];
+    // 逐级输出：等级 → 该等级全部来源的 grants / choices 并集（含旧版逐级特性）。
+    final grantsByOutputLevel = <int, List<RuleGrantDefinition>>{};
+    final choicesByOutputLevel = <int, List<RuleChoiceDefinition>>{};
+    for (final step in stepsByIdentity.entries) {
+      final splitLevels = step.value
+          .where(
+            (level) =>
+                featureLevels.contains(level) ||
+                coverageByLevel[level]! > 1,
+          )
           .toList()
         ..sort();
-      final kept = <int>[];
-      for (final level in levels) {
-        if (claimed.add(level)) kept.add(level);
+      if (splitLevels.isEmpty) {
+        standalone.add(
+          _ProgressionStep(
+            levels: step.value.toList()..sort(),
+            grants: step.key.grants,
+            choices: step.key.choices,
+          ),
+        );
+        continue;
       }
-      if (kept.isEmpty) continue;
-      keptSteps.add(
-        _ProgressionStep(
-          levels: kept,
-          grants: entry.key.grants,
-          choices: entry.key.choices,
-        ),
-      );
+      for (final level in splitLevels) {
+        grantsByOutputLevel.putIfAbsent(level, () => []).addAll(step.key.grants);
+        choicesByOutputLevel
+            .putIfAbsent(level, () => [])
+            .addAll(step.key.choices);
+      }
+      // 没被拆分的等级保持原步骤形状：多等级语义（§3.5）不能莫名退化成逐级。
+      final keptLevels = (step.value.toList()..sort())
+          .where((level) => !splitLevels.contains(level))
+          .toList(growable: false);
+      if (keptLevels.isNotEmpty) {
+        standalone.add(
+          _ProgressionStep(
+            levels: keptLevels,
+            grants: step.key.grants,
+            choices: step.key.choices,
+          ),
+        );
+      }
+    }
+    for (final level in featureLevels) {
+      grantsByOutputLevel.putIfAbsent(level, () => []);
+      choicesByOutputLevel.putIfAbsent(level, () => []);
     }
 
-    for (final level in grantsByLevel.keys.toList()..sort()) {
-      if (!claimed.add(level)) continue;
-      final grants = <RuleGrantDefinition>[];
-      final choices = <RuleChoiceDefinition>[];
-      for (final entry in stepsByIdentity.entries) {
-        if (!entry.value.contains(level)) continue;
-        grants.addAll(entry.key.grants);
-        choices.addAll(entry.key.choices);
-      }
-      grants.addAll(grantsByLevel[level]!);
-      keptSteps.add(
-        _ProgressionStep(levels: <int>[level], grants: grants, choices: choices),
-      );
-    }
+    final keptSteps = <_ProgressionStep>[
+      ...standalone,
+      for (final level in grantsByOutputLevel.keys.toList()..sort())
+        _ProgressionStep(
+          levels: <int>[level],
+          grants: <RuleGrantDefinition>[
+            ...grantsByOutputLevel[level]!,
+            // 旧版逐级特性的授予并进同一步（每级只加一次）。
+            ...?grantsByLevel[level],
+          ],
+          choices: choicesByOutputLevel[level] ?? const <RuleChoiceDefinition>[],
+        ),
+    ];
 
     final sortedProgression = <RuleProgressionDefinition>[
       for (final step in keptSteps)
@@ -145,7 +190,10 @@ class LegacyClassFeatureRulesMigrator {
         revision: entry.revision,
         aliases: entry.aliases,
         summary: entry.summary,
-        structured: entry.structured,
+        // 旧版 `structured.features` 已经被消费掉：从结构化字段里摘掉，
+        // 否则同一份特性会被重复迁移出新的 `feature-<等级>-<序号>` 授予
+        // （`_migrateClass` 每次都会重新解析并再加一遍）。
+        structured: {...entry.structured}..remove('features'),
         tags: entry.tags,
         source: entry.source,
         origin: entry.origin,

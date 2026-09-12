@@ -6,28 +6,10 @@ import 'rule_values.dart';
 
 const kDefaultAbilities = {'str', 'dex', 'con', 'int', 'wis', 'cha'};
 
-/// 18 项技能名（§3.1）。**为后续校验保留**：任务 5/11 会用它校验
-/// `optionType: "skill"` 的选项；当前尚无引用，删掉会让后续任务无锚点。
-const kDefaultSkills = {
-  '杂技',
-  '驯兽',
-  '奥秘',
-  '运动',
-  '欺瞒',
-  '历史',
-  '洞悉',
-  '威吓',
-  '调查',
-  '医药',
-  '自然',
-  '察觉',
-  '表演',
-  '说服',
-  '宗教',
-  '巧手',
-  '隐匿',
-  '求生',
-};
+// 技能清单**没有**生产常量：唯一权威是档案 `skills`（§3.1），运行期经
+// `Dnd5eRules.skills` 派生（名字 + 属性键）。这里刻意不留第二份名字表，
+// 否则清单会与档案漂移，`optionType: "skill"` 的选项与角色卡技能行对不上，
+// 熟练会被静默丢弃。
 
 /// `classRules.<slug>` 顶层允许的字段（§3.2）。
 const kClassRuleFields = {

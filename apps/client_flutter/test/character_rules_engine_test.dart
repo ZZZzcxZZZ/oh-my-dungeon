@@ -580,6 +580,62 @@ void main() {
         reason: '解析结果写回带等级的键，下次派生即可自愈',
       );
     });
+
+    test('兼容旧存档：裸键在 levels:[4,8,12,16] 的 16 级 fan-out 全部命中', () {
+      // 旧存档只有一条不带等级的键，但多等级步骤在 16 级会产生 4 个独立生效
+      // 单元（键各带等级）。裸键必须对**每一个**都生效，而不是只命中第一个。
+      final plan = _entry(
+        id: 'test:class/ascendant-16',
+        type: 'class',
+        name: '晋升者（四级提升）',
+        rules: const {
+          'progression': [
+            {
+              'levels': [4, 8, 12, 16],
+              'choices': [
+                {
+                  'id': 'asi-or-feat',
+                  'label': '属性提升或专长',
+                  'optionType': 'feat',
+                  'minimum': 1,
+                  'maximum': 1,
+                },
+              ],
+            },
+          ],
+        },
+      );
+      final legacyEngine = CharacterRulesEngine(
+        entries: {plan.id: plan, gift.id: gift},
+      );
+      const bareKey = 'test:class/ascendant-16#asi-or-feat';
+
+      final ledger = legacyEngine.evaluate(
+        const CharacterBuild(
+          level: 16,
+          selections: {'class': 'test:class/ascendant-16'},
+          choices: {
+            'test:class/ascendant-16#asi-or-feat': ['test:feat/gift'],
+          },
+        ),
+      );
+
+      expect(ledger.pendingChoices, isEmpty);
+      expect(
+        ledger.resolvedChoices.keys,
+        containsAll(<String>[
+          '$bareKey#4',
+          '$bareKey#8',
+          '$bareKey#12',
+          '$bareKey#16',
+        ]),
+        reason: '16 级的 4 个生效单元都必须从裸键解析出来',
+      );
+      expect(
+        ledger.resolvedChoices.values.every((ids) => ids.length == 1),
+        isTrue,
+      );
+    });
   });
 
   group('RuleChoiceDefinition.options（内联选项解析与序列化）', () {

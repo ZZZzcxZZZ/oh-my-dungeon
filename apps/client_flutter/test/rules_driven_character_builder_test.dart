@@ -700,6 +700,90 @@ void main() {
       expect(second.abilities, first.abilities);
       expect(second.level, first.level);
     });
+
+    test('真往返：final → baseAbilitiesFrom → build 得到同一份最终值', () {
+      // 不是"同一纯函数调两次"的重言式：真的把派生结果喂回再派生的入口
+      // （`CharacterRuleProjector` / 升级规划器 / 编辑器都这么用）。
+      final entries = {'test:class/ascendant': classEntry(withGrants: true)};
+      final builder = RulesDrivenCharacterBuilder(entries: entries);
+      final derived = derive(withGrants: true);
+      expect(derived.abilities['int'], 13, reason: '10 + 1×3');
+
+      final base = builder.baseAbilitiesFrom(derived.abilities, build);
+      expect(base['int'], 10, reason: '逆运算必须精确回到基础值');
+      final rebuilt = builder.build(
+        name: 'Aria',
+        build: build,
+        abilities: base,
+      );
+      expect(rebuilt.abilities, derived.abilities);
+      expect(rebuilt.maxHp, derived.maxHp);
+      expect(rebuilt.armorClass, derived.armorClass);
+    });
+
+    test('_subtract 下限：最终值低于授予加值 → 基础值 clamp 到 0，不是负数', () {
+      final builder = RulesDrivenCharacterBuilder(
+        entries: {'test:class/ascendant': classEntry(withGrants: true)},
+      );
+      // 脏数据：最终 int 只有 1，而 1/2/3 级共授予 +3。
+      final base = builder.baseAbilitiesFrom(
+        const {'int': 1, 'str': 16},
+        build,
+      );
+      expect(base['int'], 0, reason: '负基础值会把调整值带到 -1 以下');
+      expect(base['str'], 16, reason: '未受授予影响的属性原样保留');
+    });
+  });
+
+  // §3.5 与 `character_rules_engine.dart`：多等级展开是"每个等级一个生效单元"，
+  // 但 `kind: action` 的动作身份与等级无关——运行期只应有一行动作。
+  group('多等级 kind: action 不产出重复动作行', () {
+    final classEntry = _entry(
+      id: 'test:class/ascendant',
+      type: 'class',
+      name: 'Ascendant',
+      structured: const {
+        'classRules': {'hitDie': 10},
+      },
+      rules: {
+        'progression': [
+          {
+            'levels': [1, 2, 3],
+            'grants': const [
+              {
+                'id': 'action-surge',
+                'kind': 'action',
+                'label': '动作如潮',
+                'entryId': 'test:class-feature/action-surge',
+              },
+            ],
+          },
+        ],
+      },
+    );
+
+    test('3 级派生出的 actions 只有一条（不是逐级 3 条）', () {
+      final draft = RulesDrivenCharacterBuilder(
+        entries: {'test:class/ascendant': classEntry},
+      ).build(
+        name: 'Aria',
+        build: const CharacterBuild(
+          level: 3,
+          selections: {'class': 'test:class/ascendant'},
+        ),
+        abilities: const {'str': 16},
+      );
+
+      final actions = (draft.data['actions']! as List)
+          .cast<Map<Object?, Object?>>();
+      expect(
+        actions,
+        hasLength(1),
+        reason: '动作行未去重会让角色卡重复显示同一动作',
+      );
+      expect(actions.single['id'], 'action-surge');
+      expect(actions.single['name'], '动作如潮');
+    });
   });
 }
 

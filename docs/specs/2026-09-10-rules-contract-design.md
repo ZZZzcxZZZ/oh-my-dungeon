@@ -350,10 +350,12 @@ cantrips      = cantrips[L]                                        // 同上
 | 处置 | kind | 说明 |
 |---|---|---|
 | **实现** | `hitPoints` | 累加进 HP 上限；`value`（固定）或 `formula`（同一封闭语法，按职业等级结算）二选一 |
-| **实现** | `ability` | 属性加值，**在派生之前**施加（影响 HP/AC/豁免/技能/法术 DC）；`target` 为属性键，`value` 为加值 |
+| **实现** | `ability` | 属性加值，**在派生之前**施加（影响 HP/AC/豁免/技能/法术 DC）；`target` 为属性键，`value` 为加值；**只接受 `value`**（见下） |
 | **移除** | `resource` | 资源是**职业级静态事实**，改由 `classRules.resources`（§3.4）统一声明；旧包里的 `resource` grant 按未知 kind 报错 |
 | **移除** | `conditionResistance` | 无消费方、真实包未使用。移除后误用会在导入时报错，而不是静默无效；抗性/免疫结算记入 §11 待办 |
 | **移除** | `note` | 同上；角色卡备注由 `notes` 字段承担 |
+
+**`ability` 不接受 `formula`**（导入期报 `invalidMaxSpec`）：`formula` 型属性加值的求值入参是属性本身，自引用（`target: "int"` + `formula: "ability:int"`）与链式引用（A 引用 B、B 引用 A）都会让"最终值 → 基础值"的减法没有精确逆，每次再派生都把属性抬高一份。`hitPoints` 不受此限（它读的是已结算的有效属性，不参与逆向换算）。
 
 `rules.progression[]` 的每一步**只用一个 `levels` 数组**声明生效等级（不再有单个 `level` 字段）：
 
@@ -363,7 +365,7 @@ cantrips      = cantrips[L]                                        // 同上
 ```
 
 这样"属性提升在 4/8/12/16 级各来一次"只写一份，不需要第二套语法。
-`hitPoints` / `ability` 的 `formula` 与 `resource.maximum` 共用同一封闭语法与同一求值器。
+`hitPoints` 的 `formula` 与 `resource.maximum` 共用同一封闭语法与同一求值器；`ability` 只接受 `value`（理由见上表）。
 
 ### 3.6 解析链（字段级）
 
@@ -427,7 +429,7 @@ S3 的 patch/replace 才需要跨包优先级与冲突 UI（届时一条 errata 
 | `structured.spellcasting.progression[]` 四列行数组 | `archetype` + `slots` / `prepared` / `cantrips` / `maximumSpellLevel` 表 |
 | `rules.progression[].grants` 的 `spellSlot:<n>` | `classRules.spellcasting.slots` |
 | `rules.progression[].grants` 的 `classResource:<id>`（含 `data.spellLevel`） | `classRules.resources`（配 `startsAtLevel` + `table`），这类资源**不再**与法术位双重表示 |
-| grant `formula` 只存储不求值 | `hitPoints` / `ability` / `resource.maximum` 求值（封闭语法）；其他 kind 不接受 `formula` |
+| grant `formula` 只存储不求值 | `hitPoints` / `resource.maximum` 求值（封闭语法）；`ability` 只接受 `value`；其他 kind 不接受 `formula` |
 
 配套动作：
 
@@ -697,7 +699,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `invalidSpellcastingMode` | `mode` 不在枚举 | `spellcasting.mode 必须是 prepared / known / none` |
 | `unknownArchetype` | `archetype` 不在 `progressions` | `未知原型 "three-quarter-caster"` |
 | `invalidTable` | `Table<T>` 键不在 1..20、数组长度为 0 或 >20、值类型不符或为负；`resources[].startsAtLevel` 不在 1..20（沿用本 code，不新增） | `prepared["21"] 的键必须为 1..20`（**短数组合法**，见 §3.12） |
-| `invalidMaxSpec` | 三种写法全缺或同时出现多种、`minimum` 为负、`formula` 不在封闭语法 | `maximum 必须且只能使用 value / formula / table 之一` |
+| `invalidMaxSpec` | 三种写法全缺或同时出现多种、`minimum` 为负、`formula` 不在封闭语法；`hitPoints` / `ability` 的 `value` 与 `formula` 同时声明；`ability` 带 `formula`（含自引用） | `maximum 必须且只能使用 value / formula / table 之一` |
 | `duplicateResourceId` | 同职业内 `resources[].id` 重复 | `资源 id "rage" 重复` |
 | `invalidRecovery` | `recovery` 不在枚举 | `recovery 必须是 shortRest / shortRestOne / longRest / none` |
 | `unknownGrantKind` | `kind` 不在 9 项枚举（含被移除的 `resource` / `conditionResistance` / `note`） | `未知 grant kind "resource"，职业资源请改用 classRules.resources` |

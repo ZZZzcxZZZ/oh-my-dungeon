@@ -44,13 +44,13 @@ class RulesDrivenCharacterBuilder {
     );
     // 属性加值（`kind: ability`）必须在**任何派生之前**叠加：HP / AC / 豁免 /
     // 技能 / 法术 DC 全部读 [effectiveAbilities]，不再读入参 [abilities]。
-    // `formula` 的求值入参是**基础属性**（入参本身），不是叠加后的值，避免自引用。
+    // `kind: ability` **只接受 `value`**（导入期拒绝 `formula`，见契约 §3.5），
+    // 因此叠加只依赖 [abilities] 本身，`baseAbilitiesFrom` 的逆运算精确。
+    // `kind: hitPoints` / `classResources` 的 `formula` 则拿**叠加后**的
+    // [effectiveAbilities] 求值（下面 `_hitPointGrantBonus` 与
+    // `classResourcesFromRules` 传入的正是这份值）。
     final effectiveAbilities = <String, int>{...abilities};
-    _abilityGrantBonuses(
-      ledger,
-      level: build.level,
-      abilities: abilities,
-    ).forEach((key, value) {
+    _abilityGrantBonuses(ledger).forEach((key, value) {
       effectiveAbilities[key] = (effectiveAbilities[key] ?? 10) + value;
     });
     final saves = {for (final key in Dnd5eRules.abilityLabels.keys) key: false};
@@ -96,7 +96,7 @@ class RulesDrivenCharacterBuilder {
       level: build.level,
       abilities: effectiveAbilities,
     );
-    final actions = ledger.grantsOfKind(RuleGrantKind.action).toList();
+    final actions = _actionRows(ledger);
     final armorBonus = ledger
         .grantsOfKind(RuleGrantKind.armorClass)
         .fold<num>(0, (sum, grant) => sum + (grant.value ?? 0))
@@ -235,6 +235,11 @@ class RulesDrivenCharacterBuilder {
   /// `character_upgrade_planner` / `character_rule_projector` / 编辑器在选择
   /// "再次派生"时必须调用这里，**不要**各自再写一遍减法（缺陷 4）。
   ///
+  /// 精确性依赖 §3.5 的约束：`kind: ability` 只接受 `value`（导入期拒绝
+  /// `formula`）。加值因此与 [finalAbilities] 无关，一遍减法就是精确逆；
+  /// 自引用 / 链式 `formula` 不再是可达状态（此前两遍求值不是不动点，会把属性
+  /// 每次再派生都抬高一份）。
+  ///
   /// [finalAbilities] 通常是 `CharacterSheet.abilityMap`；[build] 必须是**角色卡上
   /// 那份已经生效的构建**（等级 = `character.level`），否则会把"本等级新增的加值"
   /// 也当成已含的值减掉。
@@ -247,23 +252,36 @@ class RulesDrivenCharacterBuilder {
         key: Dnd5eRules.abilityScore(finalAbilities, key),
     };
     final ledger = _engine.evaluate(build);
-    // 先用传入值求一次；再用其反推的基础值复核一次（两次都确定性），
-    // 这样 `formula: ability:<键>` 也以基础值结算，不会自引用。
-    final provisional = _subtract(
-      normalized,
-      _abilityGrantBonuses(ledger, level: build.level, abilities: normalized),
-    );
-    return _subtract(
-      normalized,
-      _abilityGrantBonuses(ledger, level: build.level, abilities: provisional),
-    );
+    return _subtract(normalized, _abilityGrantBonuses(ledger));
   }
 
+  /// 基础属性 = 最终值 − 加值。**下限 0 / 上限 30**：脏存档（最终值低于授予
+  /// 加值，或高于属性硬上限）不得反推出负基础值——负值会在下一次 `build` 里
+  /// 变成 `abilityModifier` 的负调整值，把 AC / HP / 豁免一起带偏。上限取 30 是
+  /// D&D 5e 属性值的绝对上限（魔法/传奇恩惠也只到这个数），下限取 0 是因为属性
+  /// 没有合法负值；`_abilityGrantBonuses` 只累加正值授予，合法输入永不触界。
   Map<String, int> _subtract(Map<String, int> values, Map<String, int> bonuses) {
     return <String, int>{
       for (final entry in values.entries)
-        entry.key: entry.value - (bonuses[entry.key] ?? 0),
+        entry.key: (entry.value - (bonuses[entry.key] ?? 0)).clamp(0, 30),
     };
+  }
+
+  /// `kind: action` 的运行时行：动作身份是 `entryId + grant.id`，**没有随等级
+  /// 变化的语义**，而多等级步骤（`levels`）会把同一份动作定义逐级展开成 N 个
+  /// 生效单元。这里按身份只保留最早生效的那条，避免 `data['actions']` 出现 N 条
+  /// 完全相同的动作行（`speed` 走 `lastOrNull` 已是单条，两者的"一条"口径在此统一）。
+  ///
+  /// 顺序保持 ledger 的产出顺序（选择遍历顺序稳定），不额外排序。
+  List<ResolvedRuleGrant> _actionRows(CharacterGrantLedger ledger) {
+    final rows = <String, ResolvedRuleGrant>{};
+    for (final grant in ledger.grantsOfKind(RuleGrantKind.action)) {
+      rows.putIfAbsent(
+        ruleActionKey(grant.sourceEntryId, grant.id),
+        () => grant,
+      );
+    }
+    return rows.values.toList(growable: false);
   }
 
   ContentEntry? _selectedEntry(CharacterBuild build, String slot) {
@@ -369,29 +387,22 @@ class RulesDrivenCharacterBuilder {
   }
 
   /// `kind: ability` 授予的属性加值：`target` 是属性键（档案 `abilities` 之一），
-  /// `value` 累加；`formula` 走与 `hitPoints` 相同的封闭语法（§3.9），按职业等级与
-  /// [abilities] 求值。无 `target` 或非档案属性的授予被跳过（不是属性加值）。
+  /// `value` 累加。无 `target` 或非档案属性的授予被跳过（不是属性加值）。
   ///
-  /// [abilities] 必须是**基础属性**（叠加之前的入参）：`formula: ability:<键>`
-  /// 若读叠加后的值会自引用（§3.10.3.7"声明了就必须生效"）。
-  Map<String, int> _abilityGrantBonuses(
-    CharacterGrantLedger ledger, {
-    required int level,
-    required Map<String, int> abilities,
-  }) {
+  /// `formula` **不被读取**：§3.5 规定 `kind: ability` 只接受 `value`，
+  /// [`ContentPackageImporter`] 在导入期就拒绝 `formula`（含自引用 `ability:<自身
+  /// target>` 与链式引用），因为它们让 `baseAbilitiesFrom` 的减法没有精确逆、
+  /// 每次再派生都会把属性抬高一份。这里因此不存在"非法 formula 静默按 0"的分支：
+  /// 导入拦不住的（程序化构造）走 `RuleGrantDefinition.fromJson` 的二选一拒绝；
+  /// 两者都绕过的极少数情况按 0 处理，与 `_hitPointGrantBonus` 的"不猜"一致。
+  Map<String, int> _abilityGrantBonuses(CharacterGrantLedger ledger) {
     final bonuses = <String, int>{};
     for (final grant in ledger.grantsOfKind(RuleGrantKind.ability)) {
       final target = grant.target;
       if (target == null || !Dnd5eRules.abilityLabels.containsKey(target)) {
         continue;
       }
-      var value = grant.value?.toInt() ?? 0;
-      final formula = grant.formula;
-      if (formula != null) {
-        final spec = MaxSpec.tryParse(<String, Object?>{'formula': formula});
-        final resolved = spec?.resolve(level: level, abilities: abilities);
-        if (resolved != null) value += resolved;
-      }
+      final value = grant.value?.toInt() ?? 0;
       if (value == 0) continue;
       bonuses[target] = (bonuses[target] ?? 0) + value;
     }

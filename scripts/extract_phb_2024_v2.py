@@ -57,7 +57,7 @@ CLASS_DIRS = [
     "牧师", "野蛮人", "魔契师", "圣武士", "德鲁伊", "吟游诗人",
 ]
 
-# 施法职业及其施法属性（用于 rules.spellcastingAbility 和法术位声明）
+# 施法职业及其施法属性（写入 classRules.spellcasting.ability；法术位数值只在客户端内置档案）
 CASTING_CLASSES = {
     "法师": "int",
     "术士": "cha",
@@ -347,8 +347,55 @@ def parse_table_rows(soup: BeautifulSoup | Tag) -> list[list[str]]:
 # --------------------------------------------------------------------------- #
 # 职业核心特质表提取
 # --------------------------------------------------------------------------- #
-def parse_class_core_table(soup: BeautifulSoup) -> dict[str, Any]:
-    structured: dict[str, Any] = {}
+ABILITY_KEYS = {"力量": "str", "敏捷": "dex", "体质": "con",
+                "智力": "int", "感知": "wis", "魅力": "cha"}
+
+# PHB 2024 中文技能名（18 项，按书里第一章的顺序）
+ALL_SKILLS = ["特技", "驯兽", "奥秘", "运动", "欺瞒", "历史", "洞悉", "威吓",
+              "调查", "医药", "自然", "察觉", "表演", "游说", "宗教", "巧手",
+              "隐匿", "求生"]
+
+
+def parse_saving_throws(value: str) -> list[str]:
+    """'力量与体质' → ['str','con']；顺序按中文在原字符串里出现的先后。"""
+    found: list[tuple[int, str]] = []
+    for cn, key in ABILITY_KEYS.items():
+        position = value.find(cn)
+        if position >= 0:
+            found.append((position, key))
+    found.sort(key=lambda item: item[0])
+    return [key for _, key in found]
+
+
+def parse_skill_choice(value: str) -> dict[str, Any] | None:
+    """'选择2项：驯兽、运动、威吓' → {'count':2,'options':[...]}
+       '任选3项（见第一章）'      → {'count':3,'options':ALL_SKILLS}"""
+    match = re.search(r"(\d+)\s*项", value)
+    if not match:
+        return None
+    count = int(match.group(1))
+    if "见" in value:
+        return {"count": count, "options": list(ALL_SKILLS)}
+    after = value.split("：", 1)[1] if "：" in value else ""
+    options = [
+        item.strip()
+        for item in re.split(r"[、,，]|或", after)
+        if item.strip()
+    ]
+    if not options:
+        return None
+    return {"count": count, "options": options}
+
+
+def parse_class_core_table(
+    soup: BeautifulSoup,
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """返回 (structured, raw_fields)。
+
+    structured 只承载展示元数据 + classRules（数值事实）；raw_fields 是原始
+    「标签 → 文本」字典，供 extract_class 读取技能选择原文。
+    """
+    raw_fields: dict[str, str] = {}
     for table in soup.find_all("table"):
         text = clean_text(table.get_text())
         if "主要属性" not in text and "生命值骰" not in text:
@@ -368,24 +415,30 @@ def parse_class_core_table(soup: BeautifulSoup) -> dict[str, Any]:
                 ("spellcasting", "施法属性"),
                 ("startingEquipment", "起始装备"),
             ]:
-                if cn in label and key not in structured:
-                    structured[key] = value
+                if cn in label and key not in raw_fields:
+                    raw_fields[key] = value
         break
-    # 从 hitDie 提取骰子面：'每战士等级D10' → 'd10'
-    if "hitDie" in structured:
-        m = re.search(r"[Dd](\d+)", structured["hitDie"])
-        if m:
-            structured["hitDie"] = f"d{m.group(1)}"
-    # 施法属性映射
-    if "spellcasting" in structured:
-        sc = structured["spellcasting"]
-        ability_map = {"力量": "str", "体质": "con", "敏捷": "dex",
-                       "智力": "int", "感知": "wis", "魅力": "cha"}
-        for cn, ab in ability_map.items():
-            if cn in sc:
-                structured["spellcastingAbility"] = ab
-                break
-    return structured
+
+    structured: dict[str, Any] = {}
+    for display_key in (
+        "primaryAbility",
+        "weaponProficiency",
+        "armorProficiency",
+        "startingEquipment",
+    ):
+        if display_key in raw_fields:
+            structured[display_key] = raw_fields[display_key]
+
+    class_rules: dict[str, Any] = {}
+    # '每战士等级D10' → 10；抽不到就整键不写（客户端报 missingCoreField warning）。
+    match = re.search(r"[Dd](\d+)", raw_fields.get("hitDie", ""))
+    if match:
+        class_rules["hitDie"] = int(match.group(1))
+    saving_throws = parse_saving_throws(raw_fields.get("savingThrows", ""))
+    if saving_throws:
+        class_rules["savingThrowAbilities"] = saving_throws
+    structured["classRules"] = class_rules
+    return structured, raw_fields
 
 
 SPELL_LEVEL_LABELS = {
@@ -400,6 +453,32 @@ SPELL_LEVEL_LABELS = {
     "八环": 8,
     "九环": 9,
 }
+
+# 施法原型（spellcasting.archetype）。值必须与内置档案
+# `progressions` 的键完全一致（none/full-caster/half-caster/third-caster/pact）。
+# 契约魔法的唯一信号是 archetype == "pact"，mode 仍写 "prepared"。
+# 法术位数值只存在于客户端内置档案，提取器不再生成。
+ARCHETYPE_BY_CLASS = {
+    "bard": "full-caster",
+    "cleric": "full-caster",
+    "druid": "full-caster",
+    "sorcerer": "full-caster",
+    "wizard": "full-caster",
+    "paladin": "half-caster",
+    "ranger": "half-caster",
+    "warlock": "pact",
+}
+
+
+def _sparse_table(
+    progression: list[dict[str, Any]], key: str
+) -> dict[str, int]:
+    """把逐级行数组压成稀疏表 {'<等级>': 值}；未解析出的等级不写。"""
+    return {
+        str(row["level"]): row[key]
+        for row in progression
+        if row[key] is not None
+    }
 
 
 def parse_spell_selection_table(
@@ -476,6 +555,15 @@ def parse_spell_selection_table(
             })
 
         if progression:
+            # 圣武士/游侠的表没有「戏法」列：稀疏表声明 1 级为 0 并向上沿用，
+            # 正好等价于 20 级全 0（内置档案写的就是 [0]*20）。
+            cantrips = (
+                _sparse_table(progression, "maximumCantrips")
+                if cantrip_column is not None
+                else {}
+            )
+            if not cantrips:
+                cantrips = {"1": 0}
             return {
                 "mode": (
                     "prepared"
@@ -484,7 +572,12 @@ def parse_spell_selection_table(
                 ),
                 "ability": ability,
                 "listTags": [f"spell-list:{class_slug}"],
-                "progression": progression,
+                "archetype": ARCHETYPE_BY_CLASS[class_slug],
+                "prepared": _sparse_table(progression, "maximumLeveledSpells"),
+                "cantrips": cantrips,
+                "maximumSpellLevel": _sparse_table(
+                    progression, "maximumSpellLevel"
+                ),
             }
     return None
 
@@ -556,7 +649,7 @@ def parse_progression_table(soup: BeautifulSoup, class_slug: str,
                         "featureName": feat_name,
                         "reason": "feature name not found in classFeature slug map",
                     })
-            prog_entry: dict[str, Any] = {"level": level}
+            prog_entry: dict[str, Any] = {"levels": [level]}
             if grants:
                 prog_entry["grants"] = grants
             progression.append(prog_entry)
@@ -603,17 +696,18 @@ def extract_class(cls_name: str) -> tuple[dict[str, Any] | None,
 
     slug = slugify(name, en_name)
     CLASS_ENTRY_SLUGS[cls_name] = slug
-    structured = parse_class_core_table(soup)
+    structured, raw_fields = parse_class_core_table(soup)
+    # 技能熟练原文转成 1 级步骤上的一条 optionType: "skill" choice（见下方 progression）。
+    skill_choice = parse_skill_choice(raw_fields.get("skills", ""))
     casting_ability = CASTING_CLASSES.get(cls_name)
     if casting_ability:
-        structured["spellcastingAbility"] = casting_ability
         spellcasting = parse_spell_selection_table(
             soup,
             class_slug=slug,
             ability=casting_ability,
         )
         if spellcasting:
-            structured["spellcasting"] = spellcasting
+            structured.setdefault("classRules", {})["spellcasting"] = spellcasting
 
     # 提取职业特性段落 "N级：特性名 EnglishName"
     feature_paragraphs: list[tuple[int, str, str, str]] = []  # (level, cn_name, en_name, desc)
@@ -658,8 +752,23 @@ def extract_class(cls_name: str) -> tuple[dict[str, Any] | None,
     # 生成 progression
     progression = parse_progression_table(soup, slug, feature_slug_map)
 
+    # 技能选择作为一条 choice 挂到 1 级步骤上
+    if skill_choice:
+        level1 = next((p for p in progression if 1 in p["levels"]), None)
+        if level1 is None:
+            level1 = {"levels": [1]}
+            progression.append(level1)
+            progression.sort(key=lambda p: p["levels"][0])
+        level1.setdefault("choices", []).append({
+            "id": "skill-choice",
+            "label": "技能熟练",
+            "optionType": "skill",
+            "minimum": skill_choice["count"],
+            "maximum": skill_choice["count"],
+            "options": skill_choice["options"],
+        })
+
     # 3 级子职业选择
-    choices: list[dict[str, Any]] = []
     subclass_dir = PHB_ROOT / "角色职业" / cls_name
     subclass_slugs: list[str] = []
     for sub_path in sorted(subclass_dir.glob("*.htm")):
@@ -671,10 +780,11 @@ def extract_class(cls_name: str) -> tuple[dict[str, Any] | None,
 
     if subclass_slugs and progression:
         # 找到 level 3 的 progression 项（或创建）
-        level3 = next((p for p in progression if p["level"] == 3), None)
+        level3 = next((p for p in progression if 3 in p["levels"]), None)
         if level3 is None:
-            level3 = {"level": 3}
+            level3 = {"levels": [3]}
             progression.append(level3)
+            progression.sort(key=lambda p: p["levels"][0])
         level3.setdefault("choices", []).append({
             "id": "subclass-choice",
             "label": f"选择{name}子职业",
@@ -683,18 +793,10 @@ def extract_class(cls_name: str) -> tuple[dict[str, Any] | None,
             "maximum": 1,
         })
 
-    # 施法属性和法术位
+    # 法术位数值只存在于客户端内置档案；条目只声明类规则与 progression。
     rules: dict[str, Any] = {}
-    casting_ability = structured.get("spellcastingAbility")
-    if casting_ability:
-        rules_data = _build_spell_slot_progression(cls_name, slug, progression)
-        if rules_data:
-            rules.update(rules_data)
-
     if progression:
         rules["progression"] = progression
-    if choices:
-        rules["choices"] = choices
 
     # 背景描述
     desc_text = ""
@@ -752,96 +854,6 @@ def extract_class(cls_name: str) -> tuple[dict[str, Any] | None,
 def _is_non_subclass_reference_page(file_stem: str) -> bool:
     """Skip class-directory reference pages that are not subclasses."""
     return "法术列表" in file_stem or "选项" in file_stem
-
-
-def _build_spell_slot_progression(cls_name: str, class_slug: str,
-                                   progression: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """为施法职业生成法术位 resource grant。基于 PHB 2024 通用施法表。"""
-    # PHB 2024 通用法术位表（1-20 级，1-9 环）
-    # 简化版：使用标准施法进度。游侠和圣武士是半施法者，延迟进度。
-    full_caster_slots = {
-        1: {1: 2},
-        2: {1: 3},
-        3: {1: 4, 2: 2},
-        4: {1: 4, 2: 3},
-        5: {1: 4, 2: 3, 3: 2},
-        6: {1: 4, 2: 3, 3: 3},
-        7: {1: 4, 2: 3, 3: 3, 4: 1},
-        8: {1: 4, 2: 3, 3: 3, 4: 2},
-        9: {1: 4, 2: 3, 3: 3, 4: 3, 5: 1},
-        10: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2},
-        11: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1},
-        12: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1},
-        13: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1},
-        14: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1},
-        15: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1, 8: 1},
-        16: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1, 8: 1},
-        17: {1: 4, 2: 3, 3: 3, 4: 3, 5: 3, 6: 1, 7: 1, 8: 1, 9: 1},
-        18: {1: 4, 2: 3, 3: 3, 4: 3, 5: 3, 6: 1, 7: 1, 8: 1, 9: 1},
-        19: {1: 4, 2: 3, 3: 3, 4: 3, 5: 3, 6: 2, 7: 1, 8: 1, 9: 1},
-        20: {1: 4, 2: 3, 3: 3, 4: 3, 5: 3, 6: 2, 7: 2, 8: 1, 9: 1},
-    }
-    # 半施法者（游侠、圣武士）：等级减半向上取整
-    half_caster_slots: dict[int, dict[int, int]] = {}
-    for lvl in range(1, 21):
-        effective = max(1, (lvl + 1) // 2)
-        half_caster_slots[lvl] = full_caster_slots.get(effective, {})
-    # 魔契师使用同环阶、短休恢复的契约法术位，不能混入标准法术位。
-    if cls_name == "魔契师":
-        pact_magic_slots = {
-            1: (1, 1),
-            2: (2, 1),
-            3: (2, 2),
-            4: (2, 2),
-            5: (2, 3),
-            6: (2, 3),
-            7: (2, 4),
-            8: (2, 4),
-            9: (2, 5),
-            10: (2, 5),
-            11: (3, 5),
-            12: (3, 5),
-            13: (3, 5),
-            14: (3, 5),
-            15: (3, 5),
-            16: (3, 5),
-            17: (4, 5),
-            18: (4, 5),
-            19: (4, 5),
-            20: (4, 5),
-        }
-        for prog in progression:
-            count, spell_level = pact_magic_slots[prog["level"]]
-            prog.setdefault("grants", []).append({
-                "id": "pact-magic-slots",
-                "kind": "resource",
-                "label": f"契约魔法位（{spell_level}环）",
-                "target": "classResource:pactMagicSlots",
-                "value": count,
-                "data": {
-                    "recovery": "shortRest",
-                    "spellLevel": spell_level,
-                },
-            })
-        return {}
-
-    is_half = cls_name in ("游侠", "圣武士")
-    slot_table = half_caster_slots if is_half else full_caster_slots
-
-    # 把法术位 grant 注入到 progression 对应等级
-    for prog in progression:
-        level = prog["level"]
-        slots = slot_table.get(level, {})
-        grants = prog.setdefault("grants", [])
-        for slot_level, count in slots.items():
-            grants.append({
-                "id": f"spell-slot-{slot_level}",
-                "kind": "resource",
-                "label": f"{slot_level}环法术位",
-                "target": f"spellSlot:{slot_level}",
-                "value": count,
-            })
-    return {}  # progression 已就地修改
 
 
 def extract_subclass(sub_path: Path, parent_class_slug: str,
@@ -935,7 +947,7 @@ def extract_subclass(sub_path: Path, parent_class_slug: str,
                 "label": feat_name,
                 "entryId": entry_id("classFeature", feat_slug),
             })
-        prog_entry: dict[str, Any] = {"level": level}
+        prog_entry: dict[str, Any] = {"levels": [level]}
         if grants:
             prog_entry["grants"] = grants
         progression.append(prog_entry)
@@ -1421,6 +1433,12 @@ def extract_equipment() -> list[dict[str, Any]]:
                     "weight": weight,
                     "price": price,
                 }
+                # 武器攻击属性：客户端 weaponAbility 的判据真源。远程/弹药武器
+                # 显式写死 dex；灵巧武器写 finesse: true，由客户端取 STR/DEX 较优。
+                if "弹药" in props or "远程" in props:
+                    structured["ability"] = "dex"
+                if "灵巧" in props:
+                    structured["finesse"] = True
                 stat_fields = {
                     "类别": current_category or "武器",
                     "伤害": damage,
@@ -1614,7 +1632,7 @@ def main() -> int:
 
     # 写入 manifest
     manifest = {
-        "formatVersion": 2,
+        "formatVersion": 3,
         "id": PACKAGE_ID,
         "name": "玩家手册 2024 私有资料包",
         "version": PACKAGE_VERSION,

@@ -19,7 +19,7 @@ class ReleasePackagingTest(unittest.TestCase):
             first.write_text(
                 json.dumps(
                     {
-                        "formatVersion": 2,
+                        "formatVersion": 3,
                         "id": "legacy-a",
                         "name": "A",
                         "version": "1",
@@ -54,7 +54,7 @@ class ReleasePackagingTest(unittest.TestCase):
             second.write_text(
                 json.dumps(
                     {
-                        "formatVersion": 2,
+                        "formatVersion": 3,
                         "id": "legacy-b",
                         "name": "B",
                         "version": "1",

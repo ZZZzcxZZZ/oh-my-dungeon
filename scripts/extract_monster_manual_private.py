@@ -739,7 +739,7 @@ def write_outputs(records: list[MonsterRecord]) -> None:
             encoding="utf-8",
         )
     manifest = {
-        "formatVersion": 2,
+        "formatVersion": 3,
         "id": PACKAGE_ID,
         "name": "私有怪物图鉴模板",
         "version": "1.0.0",

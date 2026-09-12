@@ -32,6 +32,20 @@ VALID_BUILDER_STEPS = {
 VALID_CHOICE_OPTION_TYPES = {"subclass", "feat", "spell", "equipment", "skill", "tool", "language"}
 
 
+def _progression_levels(step: object) -> list[int]:
+    """progression 步骤的生效等级：新契约只写 `levels` 数组。
+
+    旧 `level` 单值形状不再接受（客户端 `RuleProgressionDefinition.fromJson`
+    会抛 FormatException），这里只读 `levels` 供汇总/完整性检查使用。
+    """
+    if not isinstance(step, dict):
+        return []
+    raw = step.get("levels")
+    if not isinstance(raw, list):
+        return []
+    return [item for item in raw if isinstance(item, int)]
+
+
 def main() -> int:
     if not BUNDLE_PATH.exists():
         print(f"ERROR: Bundle not found: {BUNDLE_PATH}")
@@ -60,8 +74,8 @@ def main() -> int:
         elif isinstance(val, str) and not val.strip():
             errors.append(f"$.{field}: must be non-empty string")
 
-    if bundle.get("formatVersion") not in (1, 2):
-        errors.append(f"$.formatVersion: must be 1 or 2, got {bundle.get('formatVersion')}")
+    if bundle.get("formatVersion") != 3:
+        errors.append(f"$.formatVersion: must be 3, got {bundle.get('formatVersion')}")
 
     if bundle.get("system") != "dnd5e-2024":
         errors.append(f"$.system: must be 'dnd5e-2024', got '{bundle.get('system')}'")
@@ -199,9 +213,9 @@ def main() -> int:
         entry_id = entry.get("id", "")
         progression = entry.get("rules", {}).get("progression", [])
         levels = {
-            step.get("level")
+            level
             for step in progression
-            if isinstance(step, dict)
+            for level in _progression_levels(step)
         }
         missing_levels = [level for level in range(1, 21) if level not in levels]
         if missing_levels:
@@ -212,7 +226,7 @@ def main() -> int:
             (
                 step
                 for step in progression
-                if isinstance(step, dict) and step.get("level") == 3
+                if 3 in _progression_levels(step)
             ),
             None,
         )
@@ -314,7 +328,9 @@ def main() -> int:
         if isinstance(entry, dict) and entry.get("type") == "class":
             rules = entry.get("rules", {})
             prog = rules.get("progression", [])
-            levels = [p.get("level") for p in prog if isinstance(p, dict)]
+            levels = [
+                level for p in prog for level in _progression_levels(p)
+            ]
             missing = [l for l in range(1, 21) if l not in levels]
             cls_name = entry.get("name", "?")
             if missing:
@@ -335,7 +351,7 @@ def main() -> int:
             rules = entry.get("rules", {})
             prog = rules.get("progression", [])
             for p in prog:
-                if isinstance(p, dict) and p.get("level") == 3:
+                if isinstance(p, dict) and 3 in _progression_levels(p):
                     choices = p.get("choices", [])
                     subclass_choices = [
                         c for c in choices
@@ -420,9 +436,23 @@ def _validate_rules(
         if not isinstance(step, dict):
             errors.append(f"{spath}: progression step must be an object")
             continue
-        level = step.get("level")
-        if level is None or not isinstance(level, int) or level < 1 or level > 20:
-            errors.append(f"{spath}.level: must be 1-20, got {level}")
+        raw_levels = step.get("levels")
+        if "level" in step:
+            errors.append(
+                f'{spath}.level: 旧形状 "level" 已废弃，必须写 "levels": [..]'
+            )
+        if (
+            not isinstance(raw_levels, list)
+            or not raw_levels
+            or any(
+                not isinstance(level, int) or level < 1 or level > 20
+                for level in raw_levels
+            )
+        ):
+            errors.append(
+                f"{spath}.levels: must be a non-empty 1-20 int array, "
+                f"got {raw_levels}"
+            )
         # 递归校验 progression 内的 grants 和 choices
         for j, grant in enumerate(step.get("grants", [])):
             gpath = f"{spath}.grants[{j}]"

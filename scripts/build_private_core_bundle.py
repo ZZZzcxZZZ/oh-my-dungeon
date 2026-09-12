@@ -47,7 +47,7 @@ def merge_private_bundles(
             entries.append(entry)
 
     bundle = {
-        "formatVersion": 2,
+        "formatVersion": 3,
         "id": CORE_PACKAGE_ID,
         "name": "2024 核心测试包",
         "version": "0.1.1",

@@ -169,7 +169,7 @@ def write_outputs(records: list[MagicItemRecord]) -> None:
             encoding="utf-8",
         )
     manifest = {
-        "formatVersion": 2,
+        "formatVersion": 3,
         "id": PACKAGE_ID,
         "name": "城主指南 2024 私有魔法物品",
         "version": "1.0.0",

@@ -273,16 +273,22 @@ class RuleChoiceDefinition {
 
   /// 该选择是否由**通用条目选项卡片之外**的 UI 承担。
   ///
-  /// 判据（唯一实现点）：
+  /// 判据（唯一实现点）：只有当内联 `options` 是**唯一候选载体**时才成立。
   /// - 值类型（[kValueOptionTypes]）只允许内联 `options`（§3.10.3-2），由专门 UI
   ///   （技能选择器等）承担；
-  /// - 任何以**内联 `options`** 表达候选的选择同理：通用卡片只解析**条目引用**
-  ///   （`RuleChoiceResolver.optionsFor` 按条目 id/标签匹配），内联选项对它完全
-  ///   不可见，渲染出来就是"资料库中缺少 X 选项"的假错误。
+  /// - 条目类型选择写内联 `options` 时，只要还声明了 `optionEntryIds` 或
+  ///   `optionTags`（§3.10.3-2 明确允许"条目引用 + 内联 `options`"并存），通用卡片
+  ///   就能按条目引用/标签解析出候选，必须继续走通用卡片。把它们整条排除会同时
+  ///   从渲染、`ruleChoicesAreValid`、`pendingChoices` 里消失：候选不可见、不选也
+  ///   能创建（§3.10.3-7 的静默失效）。
   ///
-  /// 选择系统的完整语义（含内联选项的合并展示）延后到计划 2；在此之前这些选择
-  /// 一律不进通用卡片，避免用**红色错误**描述一个正常声明。
-  bool get usesDedicatedOptionUi => isValueTypeChoice || options.isNotEmpty;
+  /// 通用卡片只解析**条目引用**（`RuleChoiceResolver.optionsFor` 按条目 id/标签
+  /// 匹配），内联选项对它完全不可见，只有内联选项时渲染出来就是"资料库中缺少 X
+  /// 选项"的假错误。选择系统的完整语义（含内联选项的合并展示）延后到计划 2；
+  /// 在此之前只有"内联选项是唯一候选载体"的选择不进通用卡片。
+  bool get usesDedicatedOptionUi =>
+      isValueTypeChoice ||
+      (options.isNotEmpty && optionEntryIds.isEmpty && optionTags.isEmpty);
 
   /// 值类型选择的判据入口（实现点在 [isValueOptionType]）。
   bool get isValueTypeChoice => isValueOptionType(optionType);

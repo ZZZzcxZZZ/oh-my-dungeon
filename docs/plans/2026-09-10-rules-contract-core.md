@@ -1352,6 +1352,7 @@ class ResolvedClassRules {
     return progression.slots?.at(level) ?? const {};
   }
 
+  // （已删除，见执行后记）
   int? pactSlotLevel(int level) =>
       spellcasting?.slotLevel?.at(level) ?? archetype?.slotLevel?.at(level);
 
@@ -1549,7 +1550,7 @@ git commit -m "feat(rules): RuleProfile 与字段级合并解析器"
 
 1. **`pactSlotLevel` 绕过统一守卫**（`rule_profile.dart`）：它无 `mode == 'none'` 早退、无 `archetype.minimumLevel`、
    手写两级回退，且零测试。改为走已有的 `_pick`：
-   `int? pactSlotLevel(int level) => _pick(level, (c) => c.slotLevel, (p) => p.slotLevel);`
+   `int? pactSlotLevel(int level) => _pick(level, (c) => c.slotLevel, (p) => p.slotLevel);`（已删除，见执行后记）
 2. **`spellcastingAbility` 未按 `mode` 门控**：`mode == 'none'` 时仍返回 ability。
    改为 `spellcastingMode == 'none' ? null : spellcasting?.ability`（与 §3.6 第 3 步一致）。
 3. **`resolveBuiltin` 94 行、≥4 职责**：拆成 `_parseSkills` / `_parseProgressions` / `_parseClasses` /
@@ -2030,7 +2031,7 @@ git commit -m "refactor(rules): Dnd5eRules 表查询改读内置档案，删除�
 | `hitDie`（新增） | 委托 `resolveClassRules(...).hitDie` |
 | `skillChoice` | **不再解析散文**：改为从条目 `rules.choices` 里找 `optionType == "skill"` 的选择，取其 `minimum` 作 count、内联 `options` 的标签（或字符串元素）作 options；找不到就返回 `StructuredSkillChoice.empty` |
 | `startingEquipmentChoice` | 保持原样（读 `structured.startingEquipmentChoice.maximum`）——它是旧形状，等 S2 的装备选择落地后再迁移 |
-| `preparedSpellLimit` | 保留签名，内部直接 `resolveClassRules(...).preparedLimit(level)`；**删除** `preparedSpellcasting` 开关与"属性调整值 + 等级"公式（新契约里没有这两个概念） |
+| `preparedSpellLimit` | 保留签名，内部直接 `resolveClassRules(...).preparedLimit(level)`；**删除** `preparedSpellcasting` 开关与"属性调整值 + 等级"公式（新契约里没有这两个概念）（已删除，见执行后记） |
 | 私有 `_validSkills` / 两个中文正则 / 散文解析 | 全部删除 |
 
 > **执行后记（W11）**：任务 8 完成后 `preparedSpellLimit` 已无生产调用点（只有测试在用），
@@ -2053,6 +2054,7 @@ git commit -m "refactor(rules): Dnd5eRules 表查询改读内置档案，删除�
     );
     expect(StructuredClassRules.savingThrowAbilities(entry), {'wis', 'cha'});
     expect(StructuredClassRules.hitDie(entry), 10);
+    // （已删除，见执行后记）
     expect(StructuredClassRules.preparedSpellLimit(
       entry, abilities: const {}, level: 5), isNull, reason: '未声明 prepared 表');
   });
@@ -2087,6 +2089,7 @@ git commit -m "refactor(rules): Dnd5eRules 表查询改读内置档案，删除�
     expect(StructuredClassRules.skillChoice(entry).options, ['洞悉', '医药', '说服']);
   });
 
+  // （已删除，见执行后记）
   test('preparedSpellLimit 只读职业自身的 prepared 表', () {
     const entry = ContentEntry(
       id: 'test:class/astral', type: 'class', slug: 'astral', name: '星界骑士',

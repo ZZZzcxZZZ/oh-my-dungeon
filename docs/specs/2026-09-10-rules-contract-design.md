@@ -712,7 +712,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `invalidChoiceRange` | `minimum`/`maximum` 为负或 `maximum < minimum` | `maximum 不能小于 minimum` |
 | `invalidOptionRef` | 条目选项引用不存在、或未通过 `optionType`/`optionTags`/`maximumOptionLevel` 过滤、或 `recommendedEntryIds` 不合法 | `选项 "x:feat/a" 不满足本选择的类型/标签/等级过滤` |
 | `duplicateOptionId` | 同一选择内 inline 选项 id 重复，或 id 与条目选项冲突 | `选项 id "asi" 重复` |
-| `invalidValueOption` | 值类型选择里出现条目选项字段（`optionEntryIds`/`optionTags`），或条目类型选择里 `options` 与 `optionEntryIds` 同时为空 | `值类型选择不允许 optionEntryIds` |
+| `invalidValueOption` | 值类型选择里出现条目选项字段（`optionEntryIds`/`optionTags`），或值类型选择未写内联 `options` | `值类型选择不允许 optionEntryIds` |
 | `invalidRequires` | `requires` 引用了不存在的 `choice`/`option`，或 `ability` 非法、`minimum` 非正 | `requires 引用的选择 "spellbook-x" 不存在` |
 | `invalidCountsToward` | `countsToward` 不在 `spellbook`/`known`/`prepared`/`null` | `countsToward 必须是 spellbook / known / prepared 或省略` |
 | `invalidAutoGrant` | 字符串简写无法为该 `optionType` 推断 grants，且未显式写 `grants` | `optionType "value" 的选项 "x" 缺少 grants，且无法自动推断` |

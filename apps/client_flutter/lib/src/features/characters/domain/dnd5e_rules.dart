@@ -286,6 +286,9 @@ class Dnd5eRules {
             Map<String, Object?>.from(rawClassRules),
             path: r'$.structured.classRules',
             diagnostics: diagnostics ?? <RuleDiagnostic>[],
+            // 属性键的唯一权威是档案：显式传入，避免落到 [kDefaultAbilities] 这份
+            // 只为"档案不可用时的诊断噪音抑制"存在的第二名单。
+            abilities: profile.abilities,
           )
         : null;
     return RuleProfileResolver.resolveClassRules(

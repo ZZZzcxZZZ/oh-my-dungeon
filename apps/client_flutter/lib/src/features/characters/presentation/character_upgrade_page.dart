@@ -208,6 +208,13 @@ class _ChoiceOptions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 值类型 / 仅内联候选的选择由专门 UI（技能选择器等）承担，通用条目选项卡片
+    // 解析不到任何条目候选；这里给中性文案，而不是把正常声明渲染成"没有符合条件
+    // 的资料条目"的红色缺料错误。判据的唯一实现点是
+    // `RuleChoiceDefinition.usesDedicatedOptionUi`。
+    if (choice.definition.usesDedicatedOptionUi) {
+      return const Text('该选择由对应界面选择。');
+    }
     final options = RuleChoiceResolver(
       entries: entries,
     ).optionsFor(choice.definition, sourceEntryId: choice.sourceEntryId);

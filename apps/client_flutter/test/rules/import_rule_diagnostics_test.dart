@@ -1712,6 +1712,33 @@ void main() {
       expect(error.path, r'$.entries[0].rules.choices[0].maximum');
     });
 
+    // 阻塞项 2：非数字的 `minimum` / `maximum` 曾在原始 JSON 校验里用
+    // `as num?` 强转，畸形输入直接抛 `_TypeError`；该调用点在任何 `try` 之外，
+    // UI 只接 `FormatException`，于是导入变成未捕获异常。必须降级为**精确 path**
+    // 的诊断，绝不抛异常。
+    for (final malformed in <Map<String, Object?>>[
+      {'minimum': '2'},
+      {'maximum': '2'},
+      {'minimum': null},
+      {'maximum': <String, Object?>{}},
+    ]) {
+      final field = malformed.keys.single;
+      test('非数字 $field 不抛异常且 path 精确到该字段', () async {
+        // 未捕获异常会让这一行直接让用例失败（不再需要 catch 兜底）。
+        final report = await reportForChoice({
+          'optionType': 'feat',
+          'optionTags': ['x'],
+          ...malformed,
+        });
+        expect(report.valid, isFalse, reason: 'malformed=$malformed');
+        expect(
+          report.errors.map((e) => e.path),
+          contains(r'$.entries[0].rules.choices[0].' + field),
+          reason: 'malformed=$malformed 的 error：${report.errors}',
+        );
+      });
+    }
+
     test('duplicateOptionId：内联选项 id 重复 → path 到第二个选项', () async {
       final report = await reportForChoice({
         'optionType': 'feat',

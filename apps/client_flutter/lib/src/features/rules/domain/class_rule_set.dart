@@ -4,6 +4,11 @@
 import 'rule_diagnostic.dart';
 import 'rule_values.dart';
 
+/// 属性键的**诊断噪音抑制默认值**：只在档案 `abilities` 不可用（档案缺失本身已经
+/// 报过 `invalidTable`）时兜底，避免"每个豁免键都再报一次未知属性"的连锁噪音。
+///
+/// 运行期的唯一权威是档案 `Dnd5eRules.profile.abilities`；生产调用点必须显式传它
+/// （`Dnd5eRules.resolveClassRules` 与 `RuleProfileResolver` 的档案解析）。
 const kDefaultAbilities = {'str', 'dex', 'con', 'int', 'wis', 'cha'};
 
 // 技能清单**没有**生产常量：唯一权威是档案 `skills`（§3.1），运行期经

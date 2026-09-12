@@ -932,8 +932,29 @@ class ContentPackageImporter {
       );
     }
 
-    final minimum = (choice['minimum'] as num?)?.toInt() ?? 1;
-    final maximum = (choice['maximum'] as num?)?.toInt() ?? minimum;
+    // 畸形输入（`"minimum": "2"` / `{}` / 显式 `null`）不得让这里抛 `_TypeError`：
+    // `_validateRawEntryRules` 的调用点在解析 `try` 之外，UI 只接 `FormatException`，
+    // 一次强转就会把导入变成未捕获异常。改为安全取值 + 精确到字段的诊断。
+    final rawMinimum = choice['minimum'];
+    final rawMaximum = choice['maximum'];
+    if (choice.containsKey('minimum') && rawMinimum is! num) {
+      errors.add(
+        ContentValidationError(
+          path: '$path.minimum',
+          message: 'minimum 必须是数字：$rawMinimum（invalidChoiceRange）',
+        ),
+      );
+    }
+    if (choice.containsKey('maximum') && rawMaximum is! num) {
+      errors.add(
+        ContentValidationError(
+          path: '$path.maximum',
+          message: 'maximum 必须是数字：$rawMaximum（invalidChoiceRange）',
+        ),
+      );
+    }
+    final minimum = rawMinimum is num ? rawMinimum.toInt() : 1;
+    final maximum = rawMaximum is num ? rawMaximum.toInt() : minimum;
     if (maximum < minimum) {
       errors.add(
         ContentValidationError(

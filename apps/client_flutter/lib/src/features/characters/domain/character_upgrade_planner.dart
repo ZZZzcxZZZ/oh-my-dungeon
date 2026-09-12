@@ -1,5 +1,6 @@
 import '../../content/domain/content_entry.dart';
 import '../../rules/domain/character_build.dart';
+import '../../rules/domain/character_rule_definition.dart';
 import '../../rules/domain/character_rules_engine.dart';
 import 'character.dart';
 import 'character_content_reference.dart';
@@ -38,8 +39,15 @@ class CharacterUpgradePlan {
       declaredLevels.isBeyond(targetLevel) ||
       declaredLevels.isBelow(targetLevel);
 
+  /// 专门 UI 承担的选择（值类型 / 内联候选，见
+  /// [RuleChoiceDefinition.usesDedicatedOptionUi]）由升级页的中性文案提示，
+  /// **不**参与完成判定：它的选中值不进 `build.choices`，拿它当门禁会让确认按钮
+  /// 永久禁用（升级死锁）。
   bool get isComplete =>
-      missingEntryIds.isEmpty && choices.every((choice) => choice.isValid);
+      missingEntryIds.isEmpty &&
+      choices.every(
+        (choice) => choice.definition.usesDedicatedOptionUi || choice.isValid,
+      );
 }
 
 class CharacterUpgradePlanner {

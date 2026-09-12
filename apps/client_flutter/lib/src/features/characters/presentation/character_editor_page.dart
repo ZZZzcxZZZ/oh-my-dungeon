@@ -602,7 +602,16 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
     final previousChoiceKeys = {
       for (final choice in previousLedger.activeChoices) choice.key,
     };
+    // 专门 UI 承担的选择（值类型 / 内联候选）选中值不进 `build.choices`（技能写进
+    // 草稿 `skills`），引擎的 `pendingChoices` 因此永远非空。升级预览必须按**同一个**
+    // 判据 [RuleChoiceDefinition.usesDedicatedOptionUi] 把它们剔除，否则升级面板的
+    // `canApply` 恒为 false——「应用等级规则」永久禁用（升级死锁）。
+    final dedicatedChoiceKeys = {
+      for (final choice in nextLedger.activeChoices)
+        if (choice.definition.usesDedicatedOptionUi) choice.key,
+    };
     final upgradeChoices = nextLedger.activeChoices
+        .where((choice) => !choice.definition.usesDedicatedOptionUi)
         .where(
           (choice) =>
               !previousChoiceKeys.contains(choice.key) || !choice.isValid,
@@ -612,7 +621,9 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
       build: nextBuild,
       newGrants: newGrants,
       ruleChoices: upgradeChoices,
-      pendingChoices: nextLedger.pendingChoices,
+      pendingChoices: nextLedger.pendingChoices
+          .where((pending) => !dedicatedChoiceKeys.contains(pending.key))
+          .toList(growable: false),
       missingEntryIds: nextLedger.missingEntryIds,
     );
   }

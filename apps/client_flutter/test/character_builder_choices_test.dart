@@ -187,6 +187,109 @@ void main() {
     );
   });
 
+  // 阻塞项 1：§3.10.3-2 明确允许「条目引用 + 内联 `options`」并存。混合选择必须继续
+  // 走通用条目卡片：`usesDedicatedOptionUi` 只在**内联选项是唯一候选载体**时成立。
+  // 判据过宽会让整条选择从渲染、`ruleChoicesAreValid`、`pendingChoices` 里消失，
+  // 于是候选不可见、不选也能创建（§3.10.3-7 的静默失效）。
+  testWidgets(
+    'mixed entry+inline choice keeps its entry candidate and stays required',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 1500);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterEditorPage(
+            defaultCreationMethod: 'standard',
+            contentEntries: [
+              _entry(
+                id: 'guide:class/astral',
+                type: 'class',
+                name: '星界骑士',
+                rules: const {
+                  'progression': [
+                    {
+                      'levels': [1],
+                      'choices': [
+                        {
+                          'id': 'fighting-style',
+                          'label': '选择战斗风格',
+                          'optionType': 'feat',
+                          'minimum': 1,
+                          'maximum': 1,
+                          'optionTags': ['fighting-style'],
+                          'options': <Object?>[
+                            {'id': 'astral-poise', 'label': '星界之势（内联）'},
+                          ],
+                          'builderStep': 'class',
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ),
+              _entry(
+                id: 'guide:background/soldier',
+                type: 'background',
+                name: '士兵',
+                rules: const {},
+              ),
+              _entry(
+                id: 'guide:species/human',
+                type: 'species',
+                name: '人类',
+                rules: const {},
+              ),
+              _entry(
+                id: 'guide:feat/fighting-style-astral-poise',
+                type: 'feat',
+                name: '星界之势',
+                tags: const ['fighting-style'],
+                rules: const {},
+              ),
+            ],
+            onSubmit: (draft) async => true,
+          ),
+        ),
+      );
+
+      await tester.enterText(
+        find.byKey(const Key('standard-character-name-field')),
+        '布伦',
+      );
+      await tester.pumpAndSettle();
+
+      // 通用卡片渲染了这条混合选择，并列出它的条目候选（内联选项对通用卡片不可见）。
+      expect(find.text('选择战斗风格'), findsOneWidget);
+      expect(find.text('星界之势'), findsOneWidget);
+
+      // 计入 `ruleChoicesAreValid`：未选时不能创建。
+      await _goToDesktopStep(tester, 8);
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, '创建角色'))
+            .onPressed,
+        isNull,
+      );
+
+      await _goToDesktopStep(tester, 0);
+      await tester.ensureVisible(find.text('星界之势'));
+      await tester.tap(find.text('星界之势'));
+      await tester.pumpAndSettle();
+
+      // 选中条目候选后创建按钮启用。
+      await _goToDesktopStep(tester, 8);
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, '创建角色'))
+            .onPressed,
+        isNotNull,
+      );
+    },
+  );
+
   testWidgets(
     'subclasses load via progression choice and subclassOf relation',
     (tester) async {

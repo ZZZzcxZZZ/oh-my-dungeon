@@ -1,0 +1,554 @@
+// character_editor_page.dart 的 part：等级进度、声明等级控件与属性/技能区。
+part of 'character_editor_page.dart';
+
+class _LevelProgressionSection extends StatelessWidget {
+  const _LevelProgressionSection({
+    required this.level,
+    required this.className,
+    required this.classEntry,
+    required this.abilities,
+    required this.onChanged,
+  });
+
+  final int level;
+  final String className;
+  final ContentEntry? classEntry;
+  final Map<String, int> abilities;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final classRules = Dnd5eRules.resolveClassRules(
+      entryId: classEntry?.id,
+      classSummary: classEntry?.name ?? className,
+      structured: classEntry?.structured ?? const <String, Object?>{},
+    );
+    // §3.12：声明范围只有一种口径，与 Builder 写入值同源（[DeclaredLevels.fromEntry]）；
+    // 滑杆据此区分已声明 / 未声明区间。
+    final declaredLevels = DeclaredLevels.fromEntry(classEntry);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DeclaredLevelBanner(
+            levels: declaredLevels,
+            currentLevel: level,
+          ),
+          const SizedBox(height: 8),
+          Card.outlined(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _LevelSectionHeader(level: level),
+                  const SizedBox(height: 8),
+                  _DeclaredLevelSlider(
+                    level: level,
+                    declaredLevels: declaredLevels,
+                    onChanged: onChanged,
+                  ),
+                  const SizedBox(height: 4),
+                  _DeclaredRangeCaption(
+                    levels: declaredLevels,
+                    level: level,
+                  ),
+                  const SizedBox(height: 8),
+                  _LevelSummaryChips(
+                    rules: classRules,
+                    level: level,
+                    abilities: abilities,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 等级卡片标题行：左"等级"、右"当前等级 N"。
+class _LevelSectionHeader extends StatelessWidget {
+  const _LevelSectionHeader({required this.level});
+
+  final int level;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text('等级', style: Theme.of(context).textTheme.titleMedium),
+        ),
+        InputChip(
+          avatar: const Icon(Icons.trending_up_outlined),
+          label: Text('当前等级 $level'),
+        ),
+      ],
+    );
+  }
+}
+
+/// 等级滑杆 + 两侧加减按钮。
+///
+/// §3.12：轨道按"已声明 / 未声明"**双色**（已声明 = 主题色，未声明 =
+/// `outlineVariant`，唯一实现见 [DeclaredLevelTrackShape]），并把刻度提示画出来。
+/// 滑块本身保持主题色：它是"当前等级"的抓手，不是区间标记——区间由轨道和下方
+/// 文案表达，滑到未声明等级时另有 [DeclaredLevelBanner] 信息条。
+class _DeclaredLevelSlider extends StatelessWidget {
+  const _DeclaredLevelSlider({
+    required this.level,
+    required this.declaredLevels,
+    required this.onChanged,
+  });
+
+  final int level;
+  final DeclaredLevels declaredLevels;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final declaredColor = theme.colorScheme.primary;
+    return Row(
+      children: [
+        IconButton.filledTonal(
+          key: const Key('standard-level-decrement-button'),
+          tooltip: '降低等级',
+          onPressed: level <= 1 ? null : () => onChanged(level - 1),
+          icon: const Icon(Icons.remove),
+        ),
+        Expanded(
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              activeTrackColor: declaredColor,
+              inactiveTrackColor: theme.colorScheme.outlineVariant,
+              thumbColor: declaredColor,
+              trackShape: DeclaredLevelTrackShape(
+                levels: declaredLevels,
+                min: 1,
+                max: kMaxCharacterLevel.toDouble(),
+              ),
+            ),
+            child: Slider(
+              value: level.toDouble(),
+              min: 1,
+              max: kMaxCharacterLevel.toDouble(),
+              divisions: kMaxCharacterLevel - 1,
+              label: '$level',
+              semanticFormatterCallback: (value) =>
+                  declaredLevels.covers(value.round())
+                  ? '第 ${value.round()} 级（已声明）'
+                  : '第 ${value.round()} 级（该职业未声明）',
+              onChanged: (value) => onChanged(value.round()),
+            ),
+          ),
+        ),
+        IconButton.filledTonal(
+          key: const Key('standard-level-increment-button'),
+          tooltip: '提高等级',
+          onPressed: level >= kMaxCharacterLevel
+              ? null
+              : () => onChanged(level + 1),
+          icon: const Icon(Icons.add),
+        ),
+      ],
+    );
+  }
+}
+
+/// 滑杆下方的区间说明；文案口径只有一处（[DeclaredLevels.declaredRangeCaption]）。
+class _DeclaredRangeCaption extends StatelessWidget {
+  const _DeclaredRangeCaption({required this.levels, required this.level});
+
+  final DeclaredLevels levels;
+
+  /// 当前等级：只为着色（当前等级不在声明范围内时用信息色）。
+  final int level;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final covered = levels.covers(level);
+    return Text(
+      levels.declaredRangeCaption,
+      key: const Key('standard-level-declared-range'),
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: covered
+            ? theme.colorScheme.onSurfaceVariant
+            : theme.colorScheme.tertiary,
+      ),
+    );
+  }
+}
+
+/// HP / 熟练加值 / 法术位 / 职业资源摘要。数值口径全部来自同一个 `classRules`
+/// （条目声明 ∪ 内置档案），并带 `abilities` 以便 `formula: ability:<key>` 结算。
+class _LevelSummaryChips extends StatelessWidget {
+  const _LevelSummaryChips({
+    required this.rules,
+    required this.level,
+    required this.abilities,
+  });
+
+  final ResolvedClassRules rules;
+  final int level;
+  final Map<String, int> abilities;
+
+  @override
+  Widget build(BuildContext context) {
+    final hitDie = rules.hitDie;
+    final hp = hitDie == null
+        ? (Dnd5eRules.abilityModifier(
+                    Dnd5eRules.abilityScore(abilities, 'con'),
+                  ) *
+                  level.clamp(1, 20))
+              .clamp(1, 1 << 30)
+        : Dnd5eRules.averageHitPointsForHitDie(
+            hitDie: hitDie,
+            level: level,
+            constitution: Dnd5eRules.abilityScore(abilities, 'con'),
+          );
+    final spellSlots = rules.spellSlots(level);
+    final classResources = Dnd5eRules.classResourcesFromRules(
+      rules: rules,
+      level: level,
+      abilities: abilities,
+    );
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        Chip(label: Text('HP $hp')),
+        Chip(label: Text('熟练 +${Dnd5eRules.proficiencyBonus(level)}')),
+        if (spellSlots.isNotEmpty)
+          Chip(label: Text('法术位 ${_formatSpellSlots(spellSlots)}')),
+        if (classResources.isNotEmpty)
+          Chip(
+            label: Text('职业资源 ${_formatClassResources(classResources)}'),
+          ),
+      ],
+    );
+  }
+
+  static String _formatSpellSlots(Map<String, int> slots) {
+    final entries = slots.entries.toList()
+      ..sort((a, b) => int.parse(a.key).compareTo(int.parse(b.key)));
+    return entries
+        .map(
+          (entry) => '${Dnd5eRules.spellLevelLabel(entry.key)} ${entry.value}',
+        )
+        .join(' / ');
+  }
+
+  static String _formatClassResources(List<Dnd5eClassResource> resources) {
+    return resources.map((item) => '${item.name} ${item.maximum}').join(' / ');
+  }
+}
+
+class _AbilityScoreSection extends StatelessWidget {
+  const _AbilityScoreSection({
+    required this.method,
+    required this.scores,
+    required this.controllers,
+    required this.onMethodChanged,
+    required this.onApplyRecommended,
+    required this.onRoll,
+    required this.onChanged,
+  });
+
+  final AbilityScoreMethod method;
+  final Map<String, int> scores;
+  final Map<String, TextEditingController> controllers;
+  final ValueChanged<AbilityScoreMethod> onMethodChanged;
+  final VoidCallback onApplyRecommended;
+  final VoidCallback onRoll;
+  final void Function(String ability, int value) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isComplete = Dnd5eRules.abilityLabels.keys.every((ability) {
+      final score = scores[ability];
+      return score != null && score >= 3 && score <= 20;
+    });
+    final remaining = AbilityScoreGenerator.pointBuyRemaining(scores);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text('属性', style: theme.textTheme.titleMedium)),
+              InputChip(
+                avatar: Icon(
+                  isComplete ? Icons.check_circle_outline : Icons.error_outline,
+                ),
+                label: Text(isComplete ? '属性已完成' : '属性需调整'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SegmentedButton<AbilityScoreMethod>(
+            segments: const [
+              ButtonSegment(
+                value: AbilityScoreMethod.standardArray,
+                icon: Icon(Icons.view_array_outlined),
+                label: Text('标准数组', key: Key('ability-method-standard')),
+              ),
+              ButtonSegment(
+                value: AbilityScoreMethod.pointBuy,
+                icon: Icon(Icons.calculate_outlined),
+                label: Text('27 点购点', key: Key('ability-method-point-buy')),
+              ),
+              ButtonSegment(
+                value: AbilityScoreMethod.rolled,
+                icon: Icon(Icons.casino_outlined),
+                label: Text('随机', key: Key('ability-method-rolled')),
+              ),
+            ],
+            selected: {method},
+            showSelectedIcon: false,
+            onSelectionChanged: (selection) =>
+                onMethodChanged(selection.single),
+          ),
+          const SizedBox(height: 12),
+          if (method == AbilityScoreMethod.pointBuy)
+            Row(
+              children: [
+                Icon(
+                  remaining < 0 ? Icons.error_outline : Icons.toll_outlined,
+                  color: remaining < 0 ? theme.colorScheme.error : null,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '剩余 $remaining / ${AbilityScoreGenerator.pointBuyBudget} 点',
+                  key: const Key('point-buy-remaining'),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: remaining < 0 ? theme.colorScheme.error : null,
+                  ),
+                ),
+              ],
+            )
+          else
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.tonalIcon(
+                key: Key(
+                  method == AbilityScoreMethod.rolled
+                      ? 'reroll-ability-scores'
+                      : 'apply-recommended-ability-array',
+                ),
+                onPressed: method == AbilityScoreMethod.rolled
+                    ? onRoll
+                    : onApplyRecommended,
+                icon: Icon(
+                  method == AbilityScoreMethod.rolled
+                      ? Icons.casino_outlined
+                      : Icons.auto_fix_high_outlined,
+                ),
+                label: Text(
+                  method == AbilityScoreMethod.rolled ? '重新掷骰' : '按职业推荐分配',
+                ),
+              ),
+            ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 560;
+              return GridView.count(
+                crossAxisCount: compact ? 2 : 3,
+                childAspectRatio: compact ? 1.7 : 2.2,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  for (final entry in Dnd5eRules.abilityLabels.entries)
+                    method == AbilityScoreMethod.pointBuy
+                        ? _PointBuyAbilityTile(
+                            ability: entry.key,
+                            label: entry.value,
+                            scores: scores,
+                            onChanged: (value) {
+                              controllers[entry.key]?.text = '$value';
+                              onChanged(entry.key, value);
+                            },
+                          )
+                        : TextField(
+                            key: Key('standard-ability-${entry.key}-field'),
+                            controller: controllers[entry.key],
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: entry.value,
+                              helperText:
+                                  '调整值 ${Dnd5eRules.formatModifier(Dnd5eRules.abilityModifier(scores[entry.key] ?? 10))}',
+                            ),
+                            onChanged: (value) =>
+                                onChanged(entry.key, int.tryParse(value) ?? 0),
+                          ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PointBuyAbilityTile extends StatelessWidget {
+  const _PointBuyAbilityTile({
+    required this.ability,
+    required this.label,
+    required this.scores,
+    required this.onChanged,
+  });
+
+  final String ability;
+  final String label;
+  final Map<String, int> scores;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final score = scores[ability] ?? 8;
+    final canIncrease = AbilityScoreGenerator.canSetPointBuyScore(
+      scores,
+      ability,
+      score + 1,
+    );
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: Theme.of(context).textTheme.labelLarge),
+                  Text(
+                    '$score  ${Dnd5eRules.formatModifier(Dnd5eRules.abilityModifier(score))}',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              key: Key('point-buy-$ability-decrease'),
+              tooltip: '降低$label',
+              onPressed: score > 8 ? () => onChanged(score - 1) : null,
+              icon: const Icon(Icons.remove),
+            ),
+            IconButton(
+              key: Key('point-buy-$ability-increase'),
+              tooltip: '提高$label',
+              onPressed: canIncrease ? () => onChanged(score + 1) : null,
+              icon: const Icon(Icons.add),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SkillProficiencySection extends StatelessWidget {
+  const _SkillProficiencySection({
+    required this.selected,
+    required this.onChanged,
+    this.options = const <String>[],
+    this.fixed = const <String>{},
+    this.maximum,
+  });
+
+  final Set<String> selected;
+  final List<String> options;
+  final Set<String> fixed;
+  final int? maximum;
+  final ValueChanged<Set<String>> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final constrained = maximum != null && options.isNotEmpty;
+    final optionNames = options.toSet();
+    final chosen = selected
+        .where((skill) => optionNames.contains(skill) && !fixed.contains(skill))
+        .toSet();
+    final displayedNames = constrained
+        ? <String>{...fixed, ...optionNames}
+        : Dnd5eRules.skills.map((skill) => skill.name).toSet();
+    final displayedSkills = Dnd5eRules.skills
+        .where((skill) => displayedNames.contains(skill.name))
+        .toList(growable: false);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text('熟练', style: theme.textTheme.titleMedium)),
+              InputChip(
+                avatar: const Icon(Icons.workspace_premium_outlined),
+                label: Text(
+                  constrained
+                      ? '职业技能 ${chosen.length}/$maximum · 背景 ${fixed.length}'
+                      : '熟练 ${selected.length} 项',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final skill in displayedSkills)
+                Builder(
+                  builder: (context) {
+                    final isFixed = constrained && fixed.contains(skill.name);
+                    final isSelected = selected.contains(skill.name);
+                    final atLimit =
+                        constrained && chosen.length >= (maximum ?? 0);
+                    return FilterChip(
+                      key: Key('standard-skill-${skill.name}-chip'),
+                      avatar: isFixed
+                          ? const Icon(Icons.lock_outline, size: 16)
+                          : null,
+                      label: Text(
+                        '${skill.name} · ${Dnd5eRules.abilityLabels[skill.ability]}',
+                      ),
+                      selected: isSelected,
+                      onSelected: isFixed || (!isSelected && atLimit)
+                          ? null
+                          : (nextSelected) {
+                              final next = {...selected};
+                              if (nextSelected) {
+                                next.add(skill.name);
+                              } else {
+                                next.remove(skill.name);
+                              }
+                              onChanged(next);
+                            },
+                    );
+                  },
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}

@@ -2974,16 +2974,50 @@ W3 之前派生的角色卡里，`abilities` 是**旧语义的最终值**（多�
 > 规格里的 P3（校验）与 P4（grant kind 收紧）已并入本计划（任务 9 与任务 11），
 > 因此本计划完成后只剩选择系统与文档两块。
 
-### 欠账：两个角色页面单文件过长（W8 记录，**本轮不拆分**）
+### 已拆分：两个角色页面单文件过长（W8 记录欠账，已还）
 
 `docs/archive/superpowers/specs/2026-07-16-character-experience-redesign.md` 提过
-"角色详情拆分为头部、导航和六个栏目文件，避免继续扩大现有单文件"。现状（W8 实测）：
+"角色详情拆分为头部、导航和六个栏目文件，避免继续扩大现有单文件"。
+拆分前（W8 实测）两个页面分别为 4251 / 3720 行；本次拆分时基线为：
 
-| 文件 | 行数 |
+| 文件 | 拆分前行数 |
 |---|---|
-| `apps/client_flutter/lib/src/features/characters/presentation/character_editor_page.dart` | 4251 |
-| `apps/client_flutter/lib/src/features/characters/presentation/character_detail_page.dart` | 3720 |
+| `apps/client_flutter/lib/src/features/characters/presentation/character_editor_page.dart` | 4282 |
+| `apps/client_flutter/lib/src/features/characters/presentation/character_detail_page.dart` | 3714 |
 
-规则契约这一轮**不做拆分**：它在本计划目标之外，且这两个页面是角色创建 / 详情的唯一入口
-（创建向导、声明范围、职业资源与法术位都挂在上面），拆分风险远大于收益。
-**另立任务拆分**，并在此之前不要再把新逻辑塞进这两个文件；不要顺手夹带进规则契约的收尾提交。
+**拆分已完成**：声明按职责原样搬到同目录的 `part` 文件（同一 library，保持私有可见性，
+零改名、零行为变化）。主页面文件只保留页面生命周期、状态与协调逻辑。
+目录前缀统一为 `.../characters/presentation/`。
+
+编辑器（`character_editor_page.dart` 963 行 + 8 个 part）：
+
+| part 文件 | 行数 | 职责 |
+|---|---|---|
+| `character_editor_builder_page.dart` | 913 | 完整角色卡构建页 `_StandardBuildPage` 及其 State |
+| `character_editor_level_sections.dart` | 554 | 等级进度、声明等级控件与属性 / 技能区 |
+| `character_editor_builder_chrome.dart` | 463 | 构建器步骤骨架、页脚、摘要与审阅区 |
+| `character_editor_spell_sections.dart` | 449 | 法术选择、自定义法术对话框与装备预算摘要 |
+| `character_editor_details_summary.dart` | 339 | 详情步骤、职业摘要与规则授予预览 |
+| `character_editor_rule_choices.dart` | 273 | 规则选项、单项与多项选择区 |
+| `character_editor_creation_flow.dart` | 269 | 创建流程选择、职业 / 种族 / 背景选项与升级预览区 |
+| `character_editor_shared_widgets.dart` | 83 | 共享分区容器与数值 / 物品解析工具 |
+
+详情（`character_detail_page.dart` 369 行 + 9 个 part）：
+
+| part 文件 | 行数 | 职责 |
+|---|---|---|
+| `character_detail_runtime_panel.dart` | 580 | 运行期状态面板与状态网格 |
+| `character_detail_features_panel.dart` | 503 | 特性、参考资料与档案页签 |
+| `character_detail_resources_panel.dart` | 479 | 职业资源区与 HP / 资源调整表单 |
+| `character_detail_equipment_panel.dart` | 477 | 装备 / 物品 / 货币区与库存归一化工具 |
+| `character_detail_spells_panel.dart` | 435 | 法术面板与法术位行 |
+| `character_detail_actions_panel.dart` | 348 | 动作面板、d20 投掷与武器攻击行 |
+| `character_detail_dialogs.dart` | 216 | 内容条目 / 名称描述 / 资源选择对话框 |
+| `character_detail_header_nav.dart` | 202 | 角色卡头部、页签与属性总览 |
+| `character_detail_shared_widgets.dart` | 132 | 共享分区容器、空态、投掷胶囊与属性块 |
+
+拆分只做搬运：`dart analyze lib test` 0 问题，`flutter test` 1237 通过 / 6 跳过，与拆分前完全一致。
+`_CharacterEditorPageState`（903 行）与 `_StandardBuildPageState`（893 行）是单个类声明，
+在"逐字不变"前提下无法再拆，仍是各自文件里最大的声明。
+
+新增逻辑仍按职责放进对应 part 文件，不要继续堆回主页面文件。

@@ -204,10 +204,24 @@ const _formulaPattern = r'^(level|ability:[a-z]{3}|(\d+)\*level|(\d+))$';
 bool isSupportedFormula(String formula) =>
     RegExp(_formulaPattern).hasMatch(formula);
 
+/// 从 `formula: "ability:<key>"` 里取出属性键；不是 ability 公式时返回 null。
+///
+/// 属性键是否**落在档案 `abilities` 内**的判据在导入期有两处调用：grant 的
+/// `formula` 与 `classRules.resources[].maximum.formula`（§3.4、§3.12）。
+/// 这是"从 formula 里取键"的**唯一实现点**：两处都读它，不得各写一份
+/// `substring('ability:'.length)`，否则两种 formula 的位置口径会分叉。
+String? abilityKeyInFormula(String formula) {
+  const prefix = 'ability:';
+  if (!formula.startsWith(prefix)) return null;
+  return formula.substring(prefix.length);
+}
+
 int _evaluate(String formula, int level, Map<String, int> abilities) {
   if (formula == 'level') return level;
-  if (formula.startsWith('ability:')) {
-    return abilityModifier(abilities[formula.substring(8)] ?? 10);
+  // 取键走同一个 [abilityKeyInFormula]，不在运行期再写一份 substring。
+  final abilityKey = abilityKeyInFormula(formula);
+  if (abilityKey != null) {
+    return abilityModifier(abilities[abilityKey] ?? 10);
   }
   if (formula.endsWith('*level')) {
     return int.parse(formula.substring(0, formula.length - 6)) * level;

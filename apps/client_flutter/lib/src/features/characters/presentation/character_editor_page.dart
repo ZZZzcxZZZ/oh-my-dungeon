@@ -1409,11 +1409,18 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       8,
     ];
     final visibleStep = visibleStepIndexes.indexOf(_currentStep);
-    final ruleChoicesAreValid = activeRuleChoices.every((active) {
-      final selected = _ruleChoices[active.key] ?? const <String>{};
-      return selected.length >= active.definition.minimum &&
-          selected.length <= active.definition.maximum;
-    });
+    // 由专门 UI 承担的选择（技能选择器等）不在通用卡片里，选中值也不写进
+    // `_ruleChoices`（技能写进 `_selectedSkillProficiencies`）。若把它们算进来，
+    // 一个 `optionType: "skill"` 的选择会永远显示"未选够"，`canCreate` 恒为
+    // false——正是"排除渲染"必须一并处理的另一半。判据同为
+    // [RuleChoiceDefinition.usesDedicatedOptionUi]。
+    final ruleChoicesAreValid = activeRuleChoices
+        .where((active) => !active.definition.usesDedicatedOptionUi)
+        .every((active) {
+          final selected = _ruleChoices[active.key] ?? const <String>{};
+          return selected.length >= active.definition.minimum &&
+              selected.length <= active.definition.maximum;
+        });
     final stepContent = _buildStepContent(
       context: context,
       classOptions: classOptions,
@@ -1457,11 +1464,14 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         abilities: _abilityScores,
         selectedSpells: _selectedSpellRefs.length,
         selectedItems: _selectedItemRefs.length,
-        pendingChoices: activeRuleChoices.where((active) {
-          final selected = _ruleChoices[active.key] ?? const <String>{};
-          return selected.length < active.definition.minimum ||
-              selected.length > active.definition.maximum;
-        }).length,
+        pendingChoices: activeRuleChoices
+            .where((active) => !active.definition.usesDedicatedOptionUi)
+            .where((active) {
+              final selected = _ruleChoices[active.key] ?? const <String>{};
+              return selected.length < active.definition.minimum ||
+                  selected.length > active.definition.maximum;
+            })
+            .length,
       ),
       bottomBar: SafeArea(
         child: _BuilderFooter(
@@ -1529,8 +1539,13 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     required _StandardBuildReview review,
     required String summary,
   }) {
+    // 值类型选择与以内联 `options` 表达候选的选择由**专门 UI** 承担（技能选择
+    // 在「熟练」步骤由 `_SkillProficiencySection` 承担），通用条目选项卡片对它
+    // 只会渲染"资料库中缺少 X 选项"的假错误。判据的唯一实现点是
+    // [RuleChoiceDefinition.usesDedicatedOptionUi]。
     final choicesForCurrentStep = activeRuleChoices.where((choice) {
-      return choice.builderStep == _currentStep;
+      return choice.builderStep == _currentStep &&
+          !choice.definition.usesDedicatedOptionUi;
     });
     final ruleChoiceWidgets = [
       for (final active in choicesForCurrentStep)

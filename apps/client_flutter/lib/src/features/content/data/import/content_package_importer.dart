@@ -25,6 +25,20 @@ class ContentPackageImporter {
   static const _maxSingleFileBytes = 20 * 1024 * 1024;
   static const _maxUncompressedBytes = 200 * 1024 * 1024;
 
+  /// `optionType` 的合法取值 = 内容 schema 的**条目类型** ∪ 值类型
+  /// （[kValueOptionTypes]，契约 §3.10.2）。
+  ///
+  /// 不能拿 `ContentSchemaRegistry.normalizeType` 判断"是否已知"——它把任何未知
+  /// 类型都降级成 `custom`，永远返回一个合法类型。schema 的类型集合是唯一权威。
+  static final Set<String> _knownOptionTypes = {
+    for (final schema in ContentSchemaRegistry.defaults.schemas) schema.type,
+    ...kValueOptionTypes,
+  };
+
+  /// `repeatable` / `group` / `help` 在计划 2 之前没有运行时语义，但没有专属的
+  /// §5.1 code；导入期统一用这个新 code 拒收（不静默接受）。
+  static const _unsupportedChoiceFields = {'repeatable', 'group', 'help'};
+
   ContentPackageImporter(this._repository);
   final ContentRepository _repository;
 
@@ -404,6 +418,15 @@ class ContentPackageImporter {
           }
         }
 
+        // 解析前先在**原始 JSON** 上做一遍形状/参照校验：解析层只有一条没有
+        // 位置的 [FormatException]，作者拿到 `$.entries[i]` 找不到字段（§5.1、
+        // §10 第 5 条要求 path 精确到字段）。
+        final preciseRuleErrors = _validateRawEntryRules(
+          entryJson,
+          entryPath,
+          errors,
+        );
+
         // Parse the entry：这里只放"纯内容解析"。规则诊断在 try 之外运行，
         // 因为 `structured.classRules` 的档案校验要读 `Dnd5eRules.profile`——
         // 未装配档案是**启动装配错误**，不能被 `catch (e)` 降级成
@@ -454,7 +477,9 @@ class ContentPackageImporter {
                     '不能同时声明（invalidMaxSpec）',
               ),
             );
-          } else {
+          } else if (!preciseRuleErrors) {
+            // 上面的原始 JSON 校验已经给出精确 path 时不再追加笼统的
+            // "invalid entry"——同一条输入报两次只会淹没真正的出错字段。
             errors.add(
               ContentValidationError(
                 path: entryPath,
@@ -678,7 +703,9 @@ class ContentPackageImporter {
             errors.add(
               ContentValidationError(
                 path: '$choicesPath[$i].optionEntryIds[$j]',
-                message: 'rule choice option "$entryId" does not exist',
+                message:
+                    'rule choice option "$entryId" does not exist'
+                    '（invalidOptionRef）',
               ),
             );
           } else if (!resolver.allows(
@@ -690,7 +717,8 @@ class ContentPackageImporter {
               ContentValidationError(
                 path: '$choicesPath[$i].optionEntryIds[$j]',
                 message:
-                    'rule choice option "$entryId" does not satisfy its type, tag, or level filters',
+                    'rule choice option "$entryId" does not satisfy its type, '
+                    'tag, or level filters（invalidOptionRef）',
               ),
             );
           }
@@ -701,7 +729,9 @@ class ContentPackageImporter {
             errors.add(
               ContentValidationError(
                 path: '$choicesPath[$i].recommendedEntryIds[$j]',
-                message: 'recommended rule choice "$entryId" does not exist',
+                message:
+                    'recommended rule choice "$entryId" does not exist'
+                    '（invalidOptionRef）',
               ),
             );
           } else if (!resolver.allows(
@@ -713,7 +743,8 @@ class ContentPackageImporter {
               ContentValidationError(
                 path: '$choicesPath[$i].recommendedEntryIds[$j]',
                 message:
-                    'recommended rule choice "$entryId" does not satisfy its type, tag, or level filters',
+                    'recommended rule choice "$entryId" does not satisfy its '
+                    'type, tag, or level filters（invalidOptionRef）',
               ),
             );
           }
@@ -727,6 +758,413 @@ class ContentPackageImporter {
       final step = rules.progression[i];
       validateGrants(step.grants, '$path.progression[$i].grants');
       validateChoices(step.choices, '$path.progression[$i].choices');
+    }
+  }
+
+  /// 在解析 [ContentEntry] **之前**对条目原始 `rules` JSON 做形状/参照校验，
+  /// 返回本条目是否已经产出**精确到字段**的 error。
+  ///
+  /// 为什么要有这一遍：解析层
+  /// （[RuleGrantDefinition.fromJson] / [RuleChoiceDefinition.fromJson] /
+  /// [RuleProgressionDefinition.fromJson]）只抛一条**没有位置**的
+  /// [FormatException]；若原样降级成 `invalid entry: …`（path 只到条目），作者
+  /// 拿不到出错字段，违反 §5.1 与 §10 第 5 条。这里的每条 error 都指向原始 JSON
+  /// 的具体字段。
+  ///
+  /// 返回值的用途：调用方在 `catch` 里据此**不再**追加笼统的 `invalid entry`，
+  /// 避免同一条输入报两次、淹没精确位置。
+  ///
+  /// 覆盖范围（§5.1）：`unknownGrantKind`、`unknownOptionType`、
+  /// `invalidChoiceRange`、`duplicateOptionId`、`invalidValueOption`、
+  /// `unknownSkill`、`invalidSkillCount`、`invalidOptionRef`（引用存在性仍在
+  /// [_validateRuleReferences]），以及 §3.10.3-7 的"声明了但用不了"字段
+  /// （`repeatable` / `countsToward` / `requires` / `group` / `help` /
+  /// 内联选项 `grants`）。
+  ///
+  /// **不覆盖**（仍走解析层笼统的 `invalid entry`，因为 §5.1 没有对应 code、
+  /// 或属于"列表本身不是数组 / 元素不是对象"这类结构错误）：`rules.grants` /
+  /// `rules.choices` / `progression[].grants` / `progression[].choices` 不是数组、
+  /// grant 项不是对象或缺 `id`、`maximumOptionLevel` 越界（0..9）、未知
+  /// `builderStep`。计划 2 若需要逐字段定位，可在这里继续加。
+  bool _validateRawEntryRules(
+    Map<String, Object?> entryJson,
+    String entryPath,
+    List<ContentValidationError> errors,
+  ) {
+    final rawRules = entryJson['rules'];
+    if (rawRules is! Map) return false;
+    final rules = Map<String, Object?>.from(rawRules);
+    final rulesPath = '$entryPath.rules';
+    final before = errors.length;
+
+    void checkChoices(Object? raw, String path) {
+      if (raw is! List) return;
+      for (var index = 0; index < raw.length; index++) {
+        final item = raw[index];
+        if (item is! Map) continue;
+        _validateRawChoice(
+          Map<String, Object?>.from(item),
+          '$path[$index]',
+          errors,
+        );
+      }
+    }
+
+    _validateRawGrantKinds(rules['grants'], '$rulesPath.grants', errors);
+    checkChoices(rules['choices'], '$rulesPath.choices');
+
+    final progression = rules['progression'];
+    if (progression == null) return errors.length > before;
+    if (progression is! List) {
+      errors.add(
+        ContentValidationError(
+          path: '$rulesPath.progression',
+          message: 'progression 必须是数组（invalidTable）',
+        ),
+      );
+      return errors.length > before;
+    }
+    for (var index = 0; index < progression.length; index++) {
+      final step = progression[index];
+      if (step is! Map) continue;
+      final stepPath = '$rulesPath.progression[$index]';
+      if (step.containsKey('level')) {
+        errors.add(
+          ContentValidationError(
+            path: '$stepPath.level',
+            message:
+                'progression 统一用 levels 数组声明等级，不再接受 level'
+                '（unknownField）',
+          ),
+        );
+      }
+      _validateRawProgressionLevels(step['levels'], '$stepPath.levels', errors);
+      _validateRawGrantKinds(step['grants'], '$stepPath.grants', errors);
+      checkChoices(step['choices'], '$stepPath.choices');
+    }
+    return errors.length > before;
+  }
+
+  /// 所有 grants 的 `kind` 必须在 [RuleGrantKind] 枚举内（§3.5、§5.1
+  /// `unknownGrantKind`），path 精确到出错的 `kind` 字段。
+  void _validateRawGrantKinds(
+    Object? raw,
+    String path,
+    List<ContentValidationError> errors,
+  ) {
+    if (raw is! List) return;
+    final allowed = RuleGrantKind.values.map((kind) => kind.name).toList();
+    for (var index = 0; index < raw.length; index++) {
+      final item = raw[index];
+      if (item is! Map) continue;
+      final kind = item['kind'];
+      if (kind is String &&
+          RuleGrantKind.values.any((candidate) => candidate.name == kind)) {
+        continue;
+      }
+      final hint = kind == 'resource' ? '，职业资源请改用 classRules.resources' : '';
+      errors.add(
+        ContentValidationError(
+          path: '$path[$index].kind',
+          message:
+              '未知 grant kind "$kind"$hint，合法值：${allowed.join(' / ')}'
+              '（unknownGrantKind）',
+        ),
+      );
+    }
+  }
+
+  /// `progression[].levels` 的形状（§5.1 `invalidTable`：1..20、非空、不重复）。
+  void _validateRawProgressionLevels(
+    Object? raw,
+    String path,
+    List<ContentValidationError> errors,
+  ) {
+    if (raw is! List || raw.isEmpty) {
+      errors.add(
+        ContentValidationError(
+          path: path,
+          message: 'progression.levels 必须是非空数组，元素为 1..20 的整数（invalidTable）',
+        ),
+      );
+      return;
+    }
+    final seen = <int>{};
+    for (var index = 0; index < raw.length; index++) {
+      final item = raw[index];
+      final level = item is num ? item.toInt() : null;
+      if (level == null || level < 1 || level > 20) {
+        errors.add(
+          ContentValidationError(
+            path: '$path[$index]',
+            message: 'progression 等级必须是 1..20 的整数：$item（invalidTable）',
+          ),
+        );
+      } else if (!seen.add(level)) {
+        errors.add(
+          ContentValidationError(
+            path: '$path[$index]',
+            message: 'progression 等级不能重复：$level（invalidTable）',
+          ),
+        );
+      }
+    }
+  }
+
+  /// 一条选择的形状/参照校验（§5.1）。选择系统的**运行时语义**延后到计划 2，
+  /// 因此 `repeatable` / `countsToward` / `requires` / `group` / `help` /
+  /// 内联选项 `grants` 现在一律拒收（§3.10.3-7），而不是静默接受。
+  void _validateRawChoice(
+    Map<String, Object?> choice,
+    String path,
+    List<ContentValidationError> errors,
+  ) {
+    final optionType = choice['optionType'];
+    final isValueType = isValueOptionType(optionType);
+    if (optionType is! String || !_knownOptionTypes.contains(optionType)) {
+      errors.add(
+        ContentValidationError(
+          path: '$path.optionType',
+          message:
+              '未知选项类型 "$optionType"，条目类型见内容 schema，值类型：'
+              '${kValueOptionTypes.join(' / ')}（unknownOptionType）',
+        ),
+      );
+    }
+
+    final minimum = (choice['minimum'] as num?)?.toInt() ?? 1;
+    final maximum = (choice['maximum'] as num?)?.toInt() ?? minimum;
+    if (maximum < minimum) {
+      errors.add(
+        ContentValidationError(
+          path: '$path.maximum',
+          message: 'maximum 不能小于 minimum（invalidChoiceRange）',
+        ),
+      );
+    } else if (minimum < 0) {
+      errors.add(
+        ContentValidationError(
+          path: '$path.minimum',
+          message: 'minimum 不能为负（invalidChoiceRange）',
+        ),
+      );
+    }
+
+    final rawEntryIds = choice['optionEntryIds'];
+    final entryIds = rawEntryIds is List
+        ? rawEntryIds.map((item) => '$item').toSet()
+        : const <String>{};
+    final rawTags = choice['optionTags'];
+    final tags = rawTags is List
+        ? rawTags.map((item) => '$item').toList(growable: false)
+        : const <String>[];
+    // §5.1 `invalidValueOption` 的两个方向里，这里只实现**值类型侧**：值类型
+    // 只允许内联 `options`（§3.10.3-2），写 `optionEntryIds` / `optionTags` 或
+    // 干脆没有 `options` 都算"声明了用不了"。
+    //
+    // **不**把"条目类型选择 `options` 与 `optionEntryIds` 同时为空"一律判错：
+    // 条目类型可以靠 `optionTags`（法术选择）或 `relations`（子职选择，见
+    // `RuleChoiceResolver._isSubclassOf`）拿候选，契约 §3.10.2 的
+    // `equipmentBundle` 示例本身也没有任何候选载体——按字面实现会拒绝内置
+    // 包里的 12 条子职选择。
+    if (isValueType) {
+      if (entryIds.isNotEmpty) {
+        errors.add(
+          ContentValidationError(
+            path: '$path.optionEntryIds',
+            message:
+                '值类型选择不允许 optionEntryIds，候选必须写在 options'
+                '（invalidValueOption）',
+          ),
+        );
+      }
+      if (tags.isNotEmpty) {
+        errors.add(
+          ContentValidationError(
+            path: '$path.optionTags',
+            message:
+                '值类型选择不允许 optionTags，候选必须写在 options'
+                '（invalidValueOption）',
+          ),
+        );
+      }
+      if (choice['options'] == null) {
+        errors.add(
+          ContentValidationError(
+            path: '$path.options',
+            message: '值类型选择必须用内联 options 声明候选（invalidValueOption）',
+          ),
+        );
+      }
+    }
+
+    final skillNames = optionType == 'skill'
+        ? Dnd5eRules.skills.map((skill) => skill.name).toSet()
+        : const <String>{};
+    final rawOptions = choice['options'];
+    var candidateCount = 0;
+    if (rawOptions != null) {
+      if (rawOptions is! List) {
+        errors.add(
+          ContentValidationError(
+            path: '$path.options',
+            message: 'options 必须是数组（invalidValueOption）',
+          ),
+        );
+      } else {
+        candidateCount = rawOptions.length;
+        final seenIds = <String>{};
+        for (var index = 0; index < rawOptions.length; index++) {
+          final item = rawOptions[index];
+          final itemPath = '$path.options[$index]';
+          String? id;
+          String? name;
+          var namePath = itemPath;
+          var idPath = itemPath;
+          if (item is String) {
+            final text = item.trim();
+            if (text.isEmpty) {
+              errors.add(
+                ContentValidationError(
+                  path: itemPath,
+                  message: '选项不能为空（invalidValueOption）',
+                ),
+              );
+              continue;
+            }
+            id = text;
+            name = text;
+          } else if (item is Map) {
+            final option = Map<String, Object?>.from(item);
+            final rawId = option['id'];
+            idPath = '$itemPath.id';
+            if (rawId is! String || rawId.trim().isEmpty) {
+              errors.add(
+                ContentValidationError(
+                  path: idPath,
+                  message: '选项必须有非空 id（invalidValueOption）',
+                ),
+              );
+            } else {
+              id = rawId.trim();
+            }
+            final rawLabel = option['label'];
+            if (rawLabel is String && rawLabel.trim().isNotEmpty) {
+              name = rawLabel.trim();
+              namePath = '$itemPath.label';
+            } else {
+              name = id;
+            }
+            if (option.containsKey('grants')) {
+              errors.add(
+                ContentValidationError(
+                  path: '$itemPath.grants',
+                  message:
+                      '内联选项的 grants 在选择系统（计划 2）落地前没有消费方，'
+                      '现在一律拒收（unsupportedChoiceField）',
+                ),
+              );
+              _validateRawGrantKinds(
+                option['grants'],
+                '$itemPath.grants',
+                errors,
+              );
+            }
+          } else {
+            errors.add(
+              ContentValidationError(
+                path: itemPath,
+                message: '选项必须是字符串或对象（invalidValueOption）',
+              ),
+            );
+            continue;
+          }
+          if (id != null) {
+            if (!seenIds.add(id)) {
+              errors.add(
+                ContentValidationError(
+                  path: idPath,
+                  message: '选项 id "$id" 重复（duplicateOptionId）',
+                ),
+              );
+            } else if (entryIds.contains(id)) {
+              errors.add(
+                ContentValidationError(
+                  path: idPath,
+                  message:
+                      '选项 id "$id" 与 optionEntryIds 冲突'
+                      '（duplicateOptionId）',
+                ),
+              );
+            }
+          }
+          if (optionType == 'skill' &&
+              name != null &&
+              !skillNames.contains(name)) {
+            errors.add(
+              ContentValidationError(
+                path: namePath,
+                message: '未知技能 "$name"（unknownSkill）',
+              ),
+            );
+          }
+        }
+      }
+    }
+    if (optionType == 'skill') {
+      // §5.1：技能选择的 minimum/maximum 必须在 0..候选数内。
+      // 候选来自内联 options；optionEntryIds/optionTags 已被上面的
+      // `invalidValueOption` 拒绝。
+      if (minimum > candidateCount) {
+        errors.add(
+          ContentValidationError(
+            path: '$path.minimum',
+            message: '技能选择的数量必须为 0..$candidateCount（invalidSkillCount）',
+          ),
+        );
+      }
+      if (maximum > candidateCount) {
+        errors.add(
+          ContentValidationError(
+            path: '$path.maximum',
+            message: '技能选择的数量必须为 0..$candidateCount（invalidSkillCount）',
+          ),
+        );
+      }
+    }
+
+    // §3.10.3-7：这些字段的运行时语义在计划 2 之前不存在，**声明了就必须报
+    // error**，不得静默接受（落地后改为实现而不是拒绝）。
+    for (final field in _unsupportedChoiceFields) {
+      if (!choice.containsKey(field)) continue;
+      errors.add(
+        ContentValidationError(
+          path: '$path.$field',
+          message:
+              '选择系统的「$field」尚未实现（计划 2 落地前一律拒收）'
+              '（unsupportedChoiceField）',
+        ),
+      );
+    }
+    if (choice.containsKey('countsToward')) {
+      errors.add(
+        ContentValidationError(
+          path: '$path.countsToward',
+          message:
+              'countsToward 的选择系统语义尚未实现（计划 2 落地前一律拒收）'
+              '（invalidCountsToward）',
+        ),
+      );
+    }
+    if (choice.containsKey('requires')) {
+      errors.add(
+        ContentValidationError(
+          path: '$path.requires',
+          message:
+              'requires 的选择系统语义尚未实现（计划 2 落地前一律拒收）'
+              '（invalidRequires）',
+        ),
+      );
     }
   }
 
@@ -920,8 +1358,10 @@ class ContentPackageImporter {
           }
           continue;
         }
-        if (formula.startsWith('ability:') &&
-            !abilities.contains(formula.substring('ability:'.length))) {
+        // 属性键判据与 `classRules.resources[].maximum.formula` 共用
+        // [abilityKeyInFormula]（唯一实现点），两处不得各写一份 substring。
+        final abilityKey = abilityKeyInFormula(formula);
+        if (abilityKey != null && !abilities.contains(abilityKey)) {
           errors.add(
             ContentValidationError(
               path: '$grantsPath[$i].formula',

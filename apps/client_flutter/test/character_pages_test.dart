@@ -1835,6 +1835,86 @@ void main() {
     await _goToBuilderStep(tester, 5, '装备');
     expect(find.textContaining('链甲、巨剑'), findsOneWidget);
   });
+
+  // 阻塞项 2：`optionType: "skill"` 的内联选择由专门的技能选择器承担，通用条目
+  // 选项卡片不得把它渲染成"资料库中缺少 skill 选项。"的红色假错误；同时技能仍然
+  // 可选、仍然写进草稿。
+  testWidgets(
+    'standard build renders skill choices with the picker, not a missing-option error',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 1500);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final sage = ContentEntry.fromJson({
+        'id': 'test:class/battle-sage',
+        'type': 'class',
+        'slug': 'battle-sage',
+        'name': '战贤',
+        'body': <Map<String, Object?>>[],
+        'revision': 1,
+        'structured': {
+          'classRules': {
+            'hitDie': 10,
+            'savingThrowAbilities': ['int', 'wis'],
+          },
+        },
+        'rules': {
+          'choices': [
+            {
+              'id': 'class-skills',
+              'label': '选择两项技能熟练',
+              'optionType': 'skill',
+              'minimum': 2,
+              'maximum': 2,
+              'builderStep': 'proficiencies',
+              'options': <Object?>['洞悉', '医药', '说服', '宗教'],
+            },
+          ],
+        },
+      });
+      CharacterEditDraft? submitted;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterEditorPage(
+            defaultCreationMethod: 'standard',
+            contentEntries: [sage],
+            onSubmit: (draft) async {
+              submitted = draft;
+              return true;
+            },
+          ),
+        ),
+      );
+      await tester.enterText(
+        find.byKey(const Key('standard-character-name-field')),
+        'Nia',
+      );
+      await _goToBuilderStep(tester, 4, '熟练');
+
+      expect(find.text('资料库中缺少 skill 选项。'), findsNothing);
+      expect(find.byKey(const Key('standard-skill-洞悉-chip')), findsOneWidget);
+      expect(find.byKey(const Key('standard-skill-宗教-chip')), findsOneWidget);
+      // 技能选择器仍然受 `minimum` 约束（战贤只有这 4 项候选）。
+      expect(find.textContaining('职业技能 0/2'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('standard-skill-洞悉-chip')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('standard-skill-宗教-chip')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('职业技能 2/2'), findsOneWidget);
+
+      await _goToBuilderStep(tester, 8, '审核');
+      await tester.tap(find.widgetWithText(FilledButton, '创建角色'));
+      await tester.pumpAndSettle();
+
+      expect(submitted, isNotNull);
+      expect(submitted!.skills['洞悉'], isTrue);
+      expect(submitted!.skills['宗教'], isTrue);
+    },
+  );
   testWidgets('standard build can add library spells and equipment', (
     tester,
   ) async {

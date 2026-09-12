@@ -201,6 +201,36 @@ class RuleChoiceOption {
   };
 }
 
+/// **值类型**的 `optionType`（契约 §3.10.2）。另一半是"条目类型"
+/// （`subclass` / `feat` / `spell` / `item` / `classFeature` / …，见内容 schema）。
+///
+/// 这是"值类型 vs 条目类型"判据的**唯一实现点**：导入期校验（值类型不得带
+/// `optionEntryIds` / `optionTags`）与展示层（专门的技能选择器 vs 通用条目选项
+/// 卡片）都必须读它，不得各自写一份中文字符串列表。
+const kValueOptionTypes = <String>{
+  'value',
+  'skill',
+  'ability',
+  'language',
+  'damageType',
+  'weaponMastery',
+};
+
+/// 一个（可能是原始 JSON 值的）`optionType` 是否为**值类型**。
+///
+/// 这是该判据的**唯一实现点**：[RuleChoiceDefinition.isValueTypeChoice] 与导入器
+/// 在原始 JSON 上的校验都调它，避免"解析后的对象"与"原始 map"两套写法分叉。
+bool isValueOptionType(Object? optionType) =>
+    optionType is String && kValueOptionTypes.contains(optionType);
+
+/// `rules.choices[]` / `rules.progression[].choices[]` 的一条选择（契约 §3.10）。
+///
+/// 本轮只承载**形状与参照**：`repeatable` / `countsToward` / `requires` /
+/// `group` / `help` 以及内联选项的 `grants` 的选择系统语义明确延后到计划 2，
+/// 解析层不把它们变成"看似生效"的字段；导入期由
+/// `ContentPackageImporter._validateRawEntryRules` 对原始 JSON 一律报 error
+/// 拒收（§3.10.3-7：声明了但运行期用不了必须报错）。**计划 2 落地后，这些字段
+/// 改为在此解析并实现，而不是继续拒绝**。
 class RuleChoiceDefinition {
   static const allowedBuilderSteps = {
     'class',
@@ -240,6 +270,22 @@ class RuleChoiceDefinition {
   final int? maximumOptionLevel;
   final List<String> recommendedEntryIds;
   final String? builderStep;
+
+  /// 该选择是否由**通用条目选项卡片之外**的 UI 承担。
+  ///
+  /// 判据（唯一实现点）：
+  /// - 值类型（[kValueOptionTypes]）只允许内联 `options`（§3.10.3-2），由专门 UI
+  ///   （技能选择器等）承担；
+  /// - 任何以**内联 `options`** 表达候选的选择同理：通用卡片只解析**条目引用**
+  ///   （`RuleChoiceResolver.optionsFor` 按条目 id/标签匹配），内联选项对它完全
+  ///   不可见，渲染出来就是"资料库中缺少 X 选项"的假错误。
+  ///
+  /// 选择系统的完整语义（含内联选项的合并展示）延后到计划 2；在此之前这些选择
+  /// 一律不进通用卡片，避免用**红色错误**描述一个正常声明。
+  bool get usesDedicatedOptionUi => isValueTypeChoice || options.isNotEmpty;
+
+  /// 值类型选择的判据入口（实现点在 [isValueOptionType]）。
+  bool get isValueTypeChoice => isValueOptionType(optionType);
 
   factory RuleChoiceDefinition.fromJson(Map<String, Object?> json) {
     final id = json['id'];

@@ -1168,7 +1168,15 @@ void main() {
             },
             rules: {
               'choices': [
-                {'id': 'skills', 'optionType': 'skill', 'minimum': 2, 'maximum': 2},
+                {
+                  'id': 'skills',
+                  'optionType': 'skill',
+                  'minimum': 2,
+                  'maximum': 2,
+                  // §5.1 invalidSkillCount：技能选择的候选必须由内联 options
+                  // 给出且数量覆盖 minimum/maximum（判据在导入期）。
+                  'options': <Object?>['洞悉', '医药', '说服'],
+                },
               ],
             },
           ),
@@ -1324,6 +1332,473 @@ void main() {
         contentHash: 'h',
       );
       expect(report.warnings, isEmpty);
+    });
+  });
+
+  // ── 阻塞项 1：`resources[].maximum.formula = "ability:<键>"` 的属性键 ──
+  group('资源 maximum.formula 的属性键（§3.12、§5.1 unknownAbility）', () {
+    Map<String, Object?> classRulesWithResource(String formula) => {
+      'classRules': {
+        'hitDie': 10,
+        'resources': <Object?>[
+          {
+            'id': 'surge',
+            'name': '星界涌动',
+            'recovery': 'longRest',
+            'maximum': {'formula': formula},
+          },
+        ],
+      },
+    };
+
+    test('ability:wiz（三字母笔误）→ unknownAbility，path 到 maximum.formula', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: classRulesWithResource('ability:wiz'),
+          ),
+        ),
+      );
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.message.contains('unknownAbility'),
+      );
+      expect(
+        error.path,
+        r'$.entries[0].structured.classRules.resources[0].maximum.formula',
+      );
+      expect(error.message, contains('ability:wiz'));
+    });
+
+    test('ability:wis 落在档案 abilities 内 → 放行', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: classRulesWithResource('ability:wis'),
+          ),
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+      expect(
+        report.errors.where((e) => e.message.contains('unknownAbility')),
+        isEmpty,
+      );
+    });
+  });
+
+  // ── 阻塞项 3：未知 grant kind 的 path 精确到 kind 字段 ──
+  group('未知 grant kind：path 精确到 kind 字段（§5.1 unknownGrantKind）', () {
+    Future<ContentImportReport> reportFor(Map<String, Object?> rules) =>
+        importer.previewJson(
+          packageJson(
+            entry: classEntry(
+              slug: 'homebrew-sage',
+              structured: {
+                'classRules': {'hitDie': 10},
+              },
+              rules: rules,
+            ),
+          ),
+        );
+
+    Map<String, Object?> grant(String kind) => {
+      'id': 'res',
+      'kind': kind,
+      'label': '资源',
+    };
+
+    final cases = <String, (Map<String, Object?>, String)>{
+      'rules.grants[k].kind': (
+        {
+          'grants': [grant('resource')],
+        },
+        r'$.entries[0].rules.grants[0].kind',
+      ),
+      'rules.progression[j].grants[k].kind': (
+        {
+          'progression': [
+            {
+              'levels': [1],
+              'grants': [grant('conditionResistance')],
+            },
+          ],
+        },
+        r'$.entries[0].rules.progression[0].grants[0].kind',
+      ),
+      'rules.choices[c].options[o].grants[k].kind': (
+        {
+          'choices': [
+            {
+              'id': 'pick',
+              'label': '选择',
+              'optionType': 'feat',
+              'minimum': 1,
+              'maximum': 1,
+              'options': [
+                {
+                  'id': 'vigor',
+                  'label': '活力',
+                  'grants': [grant('note')],
+                },
+              ],
+            },
+          ],
+        },
+        r'$.entries[0].rules.choices[0].options[0].grants[0].kind',
+      ),
+      'rules.progression[j].choices[c].options[o].grants[k].kind': (
+        {
+          'progression': [
+            {
+              'levels': [1],
+              'choices': [
+                {
+                  'id': 'pick',
+                  'label': '选择',
+                  'optionType': 'feat',
+                  'minimum': 1,
+                  'maximum': 1,
+                  'options': [
+                    {
+                      'id': 'vigor',
+                      'label': '活力',
+                      'grants': [grant('resource')],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        r'$.entries[0].rules.progression[0].choices[0].options[0].grants[0].kind',
+      ),
+    };
+
+    cases.forEach((label, testCase) {
+      final (rules, expectedPath) = testCase;
+      test('$label → path 精确，且不降级成 invalid entry', () async {
+        final report = await reportFor(rules);
+        expect(report.valid, isFalse);
+        expect(
+          report.errors.map((e) => e.path),
+          contains(expectedPath),
+          reason: report.errors.toString(),
+        );
+        expect(
+          report.errors
+              .firstWhere((e) => e.path == expectedPath)
+              .message,
+          contains('unknownGrantKind'),
+        );
+        expect(
+          report.errors.any((e) => e.message.contains('invalid entry')),
+          isFalse,
+          reason: report.errors.toString(),
+        );
+      });
+    });
+
+    test('kind: "resource" 的消息指向替代写法 classRules.resources', () async {
+      final report = await reportFor({
+        'grants': [grant('resource')],
+      });
+      expect(report.errors.single.message, contains('classRules.resources'));
+    });
+
+    test('合法 kind 仍然放行', () async {
+      final report = await reportFor({
+        'grants': [grant('feature')],
+      });
+      expect(report.valid, isTrue, reason: report.errors.toString());
+    });
+  });
+
+  // ── 阻塞项 3 附带：progression 的形状也走精确 path ──
+  group('progression 形状：path 精确到字段', () {
+    Future<ContentImportReport> reportFor(Map<String, Object?> progression) =>
+        importer.previewJson(
+          packageJson(
+            entry: classEntry(
+              slug: 'homebrew-sage',
+              structured: {
+                'classRules': {'hitDie': 10},
+              },
+              rules: {
+                'progression': [progression],
+              },
+            ),
+          ),
+        );
+
+    test('旧的 level 键 → unknownField，path 到 progression[0].level', () async {
+      final report = await reportFor({
+        'level': 1,
+        'grants': <Object?>[],
+      });
+      expect(report.valid, isFalse);
+      expect(
+        report.errors.map((e) => e.path),
+        contains(r'$.entries[0].rules.progression[0].level'),
+      );
+      expect(
+        report.errors.any((e) => e.message.contains('invalid entry')),
+        isFalse,
+        reason: report.errors.toString(),
+      );
+    });
+
+    test('levels 越界 → invalidTable，path 到具体元素', () async {
+      final report = await reportFor({'levels': [21]});
+      expect(report.valid, isFalse);
+      expect(
+        report.errors.map((e) => e.path),
+        contains(r'$.entries[0].rules.progression[0].levels[0]'),
+      );
+      expect(
+        report.errors.any((e) => e.message.contains('invalid entry')),
+        isFalse,
+        reason: report.errors.toString(),
+      );
+    });
+  });
+
+  // ── 阻塞项 4：选择系统"声明了但用不了"的字段一律拒收（§3.10.3-7）──
+  group('§3.10.3-7：选择系统字段声明了但用不了必须报 error', () {
+    Future<ContentImportReport> reportFor(Map<String, Object?> extra) =>
+        importer.previewJson(
+          packageJson(
+            entry: classEntry(
+              slug: 'homebrew-sage',
+              structured: {
+                'classRules': {'hitDie': 10},
+              },
+              rules: {
+                'choices': [
+                  {
+                    'id': 'pick',
+                    'label': '选择',
+                    'optionType': 'feat',
+                    'minimum': 1,
+                    'maximum': 1,
+                    'optionTags': ['fighting-style'],
+                    ...extra,
+                  },
+                ],
+              },
+            ),
+          ),
+        );
+
+    test('repeatable → unsupportedChoiceField，path 到字段', () async {
+      final report = await reportFor({'repeatable': true});
+      expect(report.valid, isFalse);
+      final error = report.errors.single;
+      expect(error.path, r'$.entries[0].rules.choices[0].repeatable');
+      expect(error.message, contains('unsupportedChoiceField'));
+    });
+
+    test('group / help → unsupportedChoiceField，各有自己的 path', () async {
+      final report = await reportFor({'group': '1 级', 'help': '说明'});
+      expect(report.valid, isFalse);
+      expect(
+        report.errors.map((e) => e.path),
+        containsAll(<String>[
+          r'$.entries[0].rules.choices[0].group',
+          r'$.entries[0].rules.choices[0].help',
+        ]),
+      );
+      expect(
+        report.errors.every((e) => e.message.contains('unsupportedChoiceField')),
+        isTrue,
+      );
+    });
+
+    test('countsToward → invalidCountsToward，path 到字段', () async {
+      final report = await reportFor({'countsToward': 'prepared'});
+      expect(report.valid, isFalse);
+      final error = report.errors.single;
+      expect(error.path, r'$.entries[0].rules.choices[0].countsToward');
+      expect(error.message, contains('invalidCountsToward'));
+    });
+
+    test('requires → invalidRequires，path 到字段', () async {
+      final report = await reportFor({
+        'requires': [
+          {'ability': 'cha', 'minimum': 13},
+        ],
+      });
+      expect(report.valid, isFalse);
+      final error = report.errors.single;
+      expect(error.path, r'$.entries[0].rules.choices[0].requires');
+      expect(error.message, contains('invalidRequires'));
+    });
+
+    test('内联选项 grants → unsupportedChoiceField，path 到 grants', () async {
+      final report = await reportFor({
+        'options': <Object?>[
+          {
+            'id': 'poise',
+            'label': '星界之势',
+            'grants': <Object?>[
+              {'id': 'g', 'kind': 'feature', 'label': '星界之势'},
+            ],
+          },
+        ],
+      });
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.message.contains('unsupportedChoiceField'),
+      );
+      expect(error.path, r'$.entries[0].rules.choices[0].options[0].grants');
+    });
+
+    test('都不带 → 放行（拒收只针对这批字段，不是拒绝整个选择模型）', () async {
+      final report = await reportFor(const <String, Object?>{});
+      expect(report.valid, isTrue, reason: report.errors.toString());
+    });
+  });
+
+  // ── 阻塞项 5：§5.1 形状/参照 code 精确 path ──
+  group('§5.1 形状/参照 code', () {
+    Future<ContentImportReport> reportForChoice(Map<String, Object?> choice) =>
+        importer.previewJson(
+          packageJson(
+            entry: classEntry(
+              slug: 'homebrew-sage',
+              structured: {
+                'classRules': {'hitDie': 10},
+              },
+              rules: {
+                'choices': [
+                  {
+                    'id': 'pick',
+                    'label': '选择',
+                    'minimum': 1,
+                    'maximum': 1,
+                    ...choice,
+                  },
+                ],
+              },
+            ),
+          ),
+        );
+
+    test('unknownOptionType → path 到 optionType', () async {
+      final report = await reportForChoice({
+        'optionType': 'savingThrow',
+        'optionTags': ['x'],
+      });
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.message.contains('unknownOptionType'),
+      );
+      expect(error.path, r'$.entries[0].rules.choices[0].optionType');
+      expect(error.message, contains('savingThrow'));
+    });
+
+    test('invalidChoiceRange（maximum < minimum）→ path 到 maximum', () async {
+      final report = await reportForChoice({
+        'optionType': 'feat',
+        'optionTags': ['x'],
+        'minimum': 2,
+        'maximum': 1,
+      });
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.message.contains('invalidChoiceRange'),
+      );
+      expect(error.path, r'$.entries[0].rules.choices[0].maximum');
+    });
+
+    test('duplicateOptionId：内联选项 id 重复 → path 到第二个选项', () async {
+      final report = await reportForChoice({
+        'optionType': 'feat',
+        'options': <Object?>['决斗', '决斗'],
+      });
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.message.contains('duplicateOptionId'),
+      );
+      expect(error.path, r'$.entries[0].rules.choices[0].options[1]');
+    });
+
+    test('duplicateOptionId：内联 id 与 optionEntryIds 冲突', () async {
+      final report = await reportForChoice({
+        'optionType': 'feat',
+        'optionEntryIds': <Object?>['diag-pack:feat/a'],
+        'options': <Object?>[
+          {'id': 'diag-pack:feat/a', 'label': 'A'},
+        ],
+      });
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.message.contains('duplicateOptionId'),
+      );
+      expect(error.path, r'$.entries[0].rules.choices[0].options[0].id');
+    });
+
+    test('invalidValueOption：值类型带 optionEntryIds', () async {
+      final report = await reportForChoice({
+        'optionType': 'skill',
+        'optionEntryIds': <Object?>['diag-pack:skill/stealth'],
+        'options': <Object?>['隐匿'],
+      });
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.message.contains('invalidValueOption'),
+      );
+      expect(error.path, r'$.entries[0].rules.choices[0].optionEntryIds');
+    });
+
+    test('invalidValueOption：值类型没有内联 options', () async {
+      final report = await reportForChoice({'optionType': 'skill'});
+      expect(report.valid, isFalse);
+      expect(
+        report.errors.map((e) => e.path),
+        contains(r'$.entries[0].rules.choices[0].options'),
+      );
+    });
+
+    test('unknownSkill → path 到具体选项', () async {
+      final report = await reportForChoice({
+        'optionType': 'skill',
+        'options': <Object?>['特技'],
+      });
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.message.contains('unknownSkill'),
+      );
+      expect(error.path, r'$.entries[0].rules.choices[0].options[0]');
+      expect(error.message, contains('特技'));
+    });
+
+    test('invalidSkillCount：minimum 大于候选数 → path 到 minimum', () async {
+      final report = await reportForChoice({
+        'optionType': 'skill',
+        'minimum': 3,
+        'maximum': 3,
+        'options': <Object?>['洞悉', '医药'],
+      });
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.path == r'$.entries[0].rules.choices[0].minimum',
+      );
+      expect(error.message, contains('invalidSkillCount'));
+    });
+
+    test('invalidOptionRef：optionEntryIds 不存在 → error 带 code', () async {
+      final report = await reportForChoice({
+        'optionType': 'feat',
+        'optionEntryIds': <Object?>['diag-pack:feat/missing'],
+      });
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.path == r'$.entries[0].rules.choices[0].optionEntryIds[0]',
+      );
+      expect(error.message, contains('invalidOptionRef'));
+      expect(error.message, contains('does not exist'));
     });
   });
 }

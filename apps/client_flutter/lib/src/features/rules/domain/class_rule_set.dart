@@ -284,6 +284,7 @@ class ClassRuleSet {
       raw,
       path: path,
       fields: fields,
+      abilities: abilities,
       diagnostics: diagnostics,
     );
 
@@ -550,6 +551,7 @@ List<ClassResourceRule> _parseResources(
   Map<String, Object?> raw, {
   required String path,
   required Set<String> fields,
+  required Set<String> abilities,
   required List<RuleDiagnostic> diagnostics,
 }) {
   final resources = <ClassResourceRule>[];
@@ -565,6 +567,7 @@ List<ClassResourceRule> _parseResources(
     final parsed = _parseResource(
       value[index],
       itemPath: '$path.resources[$index]',
+      abilities: abilities,
       seen: seen,
       diagnostics: diagnostics,
     );
@@ -576,6 +579,7 @@ List<ClassResourceRule> _parseResources(
 ClassResourceRule? _parseResource(
   Object? raw, {
   required String itemPath,
+  required Set<String> abilities,
   required Set<String> seen,
   required List<RuleDiagnostic> diagnostics,
 }) {
@@ -608,6 +612,23 @@ ClassResourceRule? _parseResource(
       'maximum 必须且只能使用 value / formula / table 之一',
     );
     return null;
+  }
+  // `formula: "ability:<键>"` 的键必须在档案 `abilities` 内（§3.4、§3.12）。
+  // `isSupportedFormula` 只校验形状（三个小写字母），"wiz" 这种笔误会通过；
+  // 运行期 `MaxSpec.resolve` 会拿 `abilities[key] ?? 10` 算出调整值 0，资源上限
+  // 静默变 0。判据与 grant formula 共用 [abilityKeyInFormula]，不复制第二份。
+  final formula = maximum.formula;
+  if (formula != null) {
+    final abilityKey = abilityKeyInFormula(formula);
+    if (abilityKey != null && !abilities.contains(abilityKey)) {
+      _addError(
+        diagnostics,
+        '$itemPath.maximum.formula',
+        'unknownAbility',
+        'formula "$formula" 的属性键不在档案 abilities 内，'
+            '可用：${abilities.join(', ')}',
+      );
+    }
   }
   final startsAt = _parseStartsAtLevel(
     raw,

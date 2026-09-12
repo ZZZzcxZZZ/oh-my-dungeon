@@ -170,12 +170,105 @@ class RuleGrantDefinition {
   };
 }
 
+/// `countsToward` 的合法取值（契约 §3.10.2 表）。
+///
+/// 这是取值集合的**唯一实现点**：解析层用它抛 [FormatException]，导入器用它报
+/// 精确到字段的 `invalidCountsToward`。两处不得各写一份白名单。
+const kCountsTowardPools = <String>{'spellbook', 'known', 'prepared'};
+
+/// `null`（省略 = 不占上限）与三个池名合法；其它（含非字符串）非法。
+bool isCountsTowardPool(Object? value) =>
+    value == null || (value is String && kCountsTowardPools.contains(value));
+
+/// 字符串简写**能推断** grants 的 `optionType`（契约 §3.10.2 的自动授予表）。
+/// `skill` / `ability` 产出 grants；`language` / `damageType` / `weaponMastery` /
+/// `value` 只记录选择（产出空 grants，不算"无法推断"）。
+///
+/// `RuleChoiceSemantics.autoGrantsFor` 的 `switch` 与它必须一一对应：导入期用它
+/// 判断"字符串简写能否推断 grants"（不能则报 `invalidAutoGrant`），运行期由
+/// `autoGrantsFor` 真正产出。两处用同一个集合，避免"导入放行、运行期推断不出"。
+const kAutoGrantOptionTypes = <String>{
+  'skill',
+  'ability',
+  'language',
+  'damageType',
+  'weaponMastery',
+  'value',
+};
+
+/// 一条前置依赖（契约 §3.10.2）：`{choice, option?}` 或 `{ability, minimum}`。
+///
+/// **形状的唯一入口**是 [RuleRequiresDefinition.fromJson]：两种形态混写、字段
+/// 缺失、取值非法一律抛 [FormatException]，绝不留给运行期猜测。本批次（计划 2
+/// 任务 1–2）只解析与提供判定纯函数；引擎/UI 的消费在任务 3–6。
+class RuleRequiresDefinition {
+  const RuleRequiresDefinition({
+    this.choice,
+    this.option,
+    this.ability,
+    this.minimum,
+  });
+
+  final String? choice;
+  final String? option;
+  final String? ability;
+  final int? minimum;
+
+  bool get isChoiceForm => choice != null;
+  bool get isAbilityForm => ability != null;
+
+  factory RuleRequiresDefinition.fromJson(Map<String, Object?> json) {
+    final choice = json['choice'];
+    final option = json['option'];
+    final ability = json['ability'];
+    final minimum = json['minimum'];
+    final allowed = <String>{'choice', 'option', 'ability', 'minimum'};
+    final extra = json.keys.where((key) => !allowed.contains(key)).toList();
+    if (extra.isNotEmpty) {
+      throw FormatException('requires 出现未定义字段：$extra');
+    }
+    final hasChoice = choice != null;
+    final hasAbility = ability != null;
+    if (hasChoice == hasAbility) {
+      throw const FormatException(
+        'requires 必须是 {choice, option?} 或 {ability, minimum} 之一',
+      );
+    }
+    if (hasChoice) {
+      if (choice is! String || choice.trim().isEmpty) {
+        throw const FormatException('requires.choice 必须是非空字符串');
+      }
+      if (option != null && (option is! String || option.trim().isEmpty)) {
+        throw const FormatException('requires.option 必须是非空字符串');
+      }
+      return RuleRequiresDefinition(
+        choice: choice.trim(),
+        option: option is String ? option.trim() : null,
+      );
+    }
+    if (ability is! String || ability.trim().isEmpty) {
+      throw const FormatException('requires.ability 必须是非空字符串');
+    }
+    if (minimum is! num || minimum.toInt() <= 0) {
+      throw const FormatException('requires.minimum 必须是正整数');
+    }
+    return RuleRequiresDefinition(
+      ability: ability.trim(),
+      minimum: minimum.toInt(),
+    );
+  }
+
+  Map<String, Object?> toJson() => isChoiceForm
+      ? {'choice': choice, if (option != null) 'option': option}
+      : {'ability': ability, 'minimum': minimum};
+}
+
 /// `rules.choices[].options` 的内联选项（契约 §3.10.2）。
 ///
 /// 字符串简写 `"察觉"` 等价于 `{id: "察觉", label: "察觉"}`（见
-/// [_parseChoiceOptions]）；对象形态可另带 `description` / `data` / `grants`。
-/// 字符串元素按 `optionType` 自动补 grants 属于**选择系统**的行为（计划 2），
-/// 不在解析层推断。
+/// [_parseChoiceOptions]）；对象形态可另带 `description` / `data` / `grants` /
+/// `requires`。字符串元素按 `optionType` 自动补 grants 属于**选择系统**的行为
+/// （计划 2），不在解析层推断。
 class RuleChoiceOption {
   const RuleChoiceOption({
     required this.id,
@@ -183,6 +276,7 @@ class RuleChoiceOption {
     this.description,
     this.data = const <String, Object?>{},
     this.grants = const <RuleGrantDefinition>[],
+    this.requires = const <RuleRequiresDefinition>[],
   });
 
   final String id;
@@ -191,6 +285,12 @@ class RuleChoiceOption {
   final Map<String, Object?> data;
   final List<RuleGrantDefinition> grants;
 
+  /// 该选项自身的前置依赖（决策 D6，契约 §3.10.2"隐藏该选择**或选项**"）。
+  ///
+  /// 本批次（计划 2 任务 1–2）只解析；判定走
+  /// `RuleChoiceSemantics.candidateRequiresSatisfied`，UI 隐藏的消费在后续任务。
+  final List<RuleRequiresDefinition> requires;
+
   Map<String, Object?> toJson() => {
     'id': id,
     'label': label,
@@ -198,6 +298,8 @@ class RuleChoiceOption {
     if (data.isNotEmpty) 'data': data,
     if (grants.isNotEmpty)
       'grants': grants.map((grant) => grant.toJson()).toList(),
+    if (requires.isNotEmpty)
+      'requires': requires.map((requirement) => requirement.toJson()).toList(),
   };
 }
 
@@ -225,12 +327,9 @@ bool isValueOptionType(Object? optionType) =>
 
 /// `rules.choices[]` / `rules.progression[].choices[]` 的一条选择（契约 §3.10）。
 ///
-/// 本轮只承载**形状与参照**：`repeatable` / `countsToward` / `requires` /
-/// `group` / `help` 以及内联选项的 `grants` 的选择系统语义明确延后到计划 2，
-/// 解析层不把它们变成"看似生效"的字段；导入期由
-/// `ContentPackageImporter._validateRawEntryRules` 对原始 JSON 一律报 error
-/// 拒收（§3.10.3-7：声明了但运行期用不了必须报错）。**计划 2 落地后，这些字段
-/// 改为在此解析并实现，而不是继续拒绝**。
+/// 本批次（计划 2 任务 1–2）只把这些字段**解析成形状**并提供判定纯函数；运行期与
+/// UI 的消费在任务 3–6，导入期放行在任务 10（此前 `ContentPackageImporter` 仍对
+/// 它们报 error 拒收，因此不存在"导入放行、运行期无效"的窗口）。
 class RuleChoiceDefinition {
   static const allowedBuilderSteps = {
     'class',
@@ -254,6 +353,11 @@ class RuleChoiceDefinition {
     this.maximumOptionLevel,
     this.recommendedEntryIds = const <String>[],
     this.builderStep,
+    this.repeatable = false,
+    this.countsToward,
+    this.requires = const <RuleRequiresDefinition>[],
+    this.group,
+    this.help,
   });
 
   final String id;
@@ -271,6 +375,32 @@ class RuleChoiceDefinition {
   final List<String> recommendedEntryIds;
   final String? builderStep;
 
+  /// 同一选项是否可重复选取（契约 §3.10.2）。`true` 时 [maximum] 是**次数上限**。
+  ///
+  /// 本批次只解析；消费（选中规范化 / 生效单元序号）在任务 2–3。
+  final bool repeatable;
+
+  /// 计入哪个数量池（契约 §3.10.2；合法值见 [kCountsTowardPools]）。
+  ///
+  /// `null` = 不占池，只受 [maximum] 约束。本批次只解析；额度计算在任务 5。
+  final String? countsToward;
+
+  /// 该选择的前置依赖（契约 §3.10.2）。空列表 = 无前置。
+  ///
+  /// 本批次只解析；判定纯函数在 `RuleChoiceSemantics.requiresSatisfied`，
+  /// 引擎/UI 接线在任务 4、6。
+  final List<RuleRequiresDefinition> requires;
+
+  /// 选择面板里的分组标题（契约 §3.10.2）。`null` = 不分组。
+  ///
+  /// 本批次只解析；呈现（按首次声明顺序分组）在任务 6b。
+  final String? group;
+
+  /// 选择面板里的帮助小字（契约 §3.10.2）。`null` = 无帮助文案。
+  ///
+  /// 本批次只解析；呈现在任务 6b。
+  final String? help;
+
   /// 该选择是否由**通用条目选项卡片之外**的 UI 承担。
   ///
   /// 判据（唯一实现点）：只有当内联 `options` 是**唯一候选载体**时才成立。
@@ -282,10 +412,10 @@ class RuleChoiceDefinition {
   ///   从渲染、`ruleChoicesAreValid`、`pendingChoices` 里消失：候选不可见、不选也
   ///   能创建（§3.10.3-7 的静默失效）。
   ///
-  /// 通用卡片只解析**条目引用**（`RuleChoiceResolver.optionsFor` 按条目 id/标签
-  /// 匹配），内联选项对它完全不可见，只有内联选项时渲染出来就是"资料库中缺少 X
-  /// 选项"的假错误。选择系统的完整语义（含内联选项的合并展示）延后到计划 2；
-  /// 在此之前只有"内联选项是唯一候选载体"的选择不进通用卡片。
+  /// **语义将在任务 6b 收窄**为"有专门渲染器"（`optionType == 'skill' ||
+  /// isSpellChoice`），因为候选合并（`RuleChoiceSemantics.candidatesFor`）让内联
+  /// 选项对通用卡片可见后，本判据的多载语义（校验 vs 渲染）会分叉。本任务只改
+  /// 注释并保持**行为等价**，调用方在任务 6b 同步迁移。
   bool get usesDedicatedOptionUi =>
       isValueTypeChoice ||
       (options.isNotEmpty && optionEntryIds.isEmpty && optionTags.isEmpty);
@@ -322,6 +452,24 @@ class RuleChoiceDefinition {
     if (builderStep != null && !allowedBuilderSteps.contains(builderStep)) {
       throw FormatException('Unknown builderStep: $builderStep');
     }
+    final repeatable = json['repeatable'];
+    if (repeatable != null && repeatable is! bool) {
+      throw const FormatException('choice.repeatable must be a boolean');
+    }
+    final countsToward = json['countsToward'];
+    if (!isCountsTowardPool(countsToward)) {
+      throw FormatException(
+        'countsToward 必须是 ${kCountsTowardPools.join(' / ')} 或省略：$countsToward',
+      );
+    }
+    String? nonEmptyText(Object? raw, String field) {
+      if (raw == null) return null;
+      if (raw is! String || raw.trim().isEmpty) {
+        throw FormatException('choice.$field must be a non-empty string');
+      }
+      return raw;
+    }
+
     return RuleChoiceDefinition(
       id: id,
       label: json['label'] as String? ?? id,
@@ -340,6 +488,11 @@ class RuleChoiceDefinition {
           ? recommended.map((item) => '$item').toList(growable: false)
           : const <String>[],
       builderStep: builderStep,
+      repeatable: repeatable as bool? ?? false,
+      countsToward: countsToward as String?,
+      requires: _parseRequires(json['requires'], 'choice.requires'),
+      group: nonEmptyText(json['group'], 'group'),
+      help: nonEmptyText(json['help'], 'help'),
     );
   }
 
@@ -357,6 +510,12 @@ class RuleChoiceDefinition {
     if (recommendedEntryIds.isNotEmpty)
       'recommendedEntryIds': recommendedEntryIds,
     if (builderStep != null) 'builderStep': builderStep,
+    if (repeatable) 'repeatable': repeatable,
+    if (countsToward != null) 'countsToward': countsToward,
+    if (requires.isNotEmpty)
+      'requires': requires.map((requirement) => requirement.toJson()).toList(),
+    if (group != null) 'group': group,
+    if (help != null) 'help': help,
   };
 }
 
@@ -524,6 +683,29 @@ List<RuleChoiceOption> _parseChoiceOptions(Object? value) {
           grants: grants is List
               ? _parseList(grants, RuleGrantDefinition.fromJson)
               : const <RuleGrantDefinition>[],
+          requires: _parseRequires(
+            json['requires'],
+            'choice.options[].requires',
+          ),
+        );
+      })
+      .toList(growable: false);
+}
+
+/// `requires` 数组的唯一形状入口（[RuleRequiresDefinition.fromJson] 的批量包装）：
+/// 非列表、元素非对象、元素形状非法一律抛 [FormatException]。
+List<RuleRequiresDefinition> _parseRequires(Object? value, String path) {
+  if (value == null) return const <RuleRequiresDefinition>[];
+  if (value is! List) {
+    throw FormatException('$path must be a list');
+  }
+  return value
+      .map((item) {
+        if (item is! Map) {
+          throw FormatException('$path item must be an object');
+        }
+        return RuleRequiresDefinition.fromJson(
+          Map<String, Object?>.from(item),
         );
       })
       .toList(growable: false);

@@ -182,6 +182,32 @@ class ReleasePackagingTest(unittest.TestCase):
         self.assertIn('[Alias("d")]', script)
         self.assertIn('$ComposeArgs += "--detach"', script)
 
+    def test_server_image_npm_registry_is_overridable(self):
+        """`npm ci` 必须走可覆盖的 registry。
+
+        国内服务器直连 registry.npmjs.org 会长时间卡在 `npm ci`（实测 17 分钟无进展），
+        所以 Dockerfile 的**两个阶段**都要接受 `NPM_REGISTRY` 构建参数，
+        compose 要从 `.env` 注入，`.env.example` 要写明怎么改。
+        """
+        dockerfile = (ROOT / "apps" / "server_nest" / "Dockerfile").read_text(
+            encoding="utf-8"
+        )
+        compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+        env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
+
+        self.assertEqual(
+            dockerfile.count("ARG NPM_REGISTRY="),
+            2,
+            "Dockerfile 的 build 与 runtime 两个阶段都要声明 NPM_REGISTRY",
+        )
+        self.assertEqual(
+            dockerfile.count('npm config set registry "$NPM_REGISTRY" && npm ci'),
+            2,
+            "两处 npm ci 都必须先设置 registry",
+        )
+        self.assertIn("NPM_REGISTRY: ${NPM_REGISTRY:-", compose)
+        self.assertIn("NPM_REGISTRY=", env_example)
+
     def test_drift_worker_manifest_matches_the_committed_artifact(self):
         """提交的 drift worker 产物必须与清单一致（见 docs/README.md §14.5）。
 

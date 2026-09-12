@@ -41,6 +41,7 @@ docker compose down -v           # ⚠️ 停止并删除所有数据（数据�
 | `REGISTRATION_ENABLED` | 是否开放注册 | true |
 | `DEFAULT_LOCALE` | 默认语言 | zh-CN |
 | `MAX_UPLOAD_SIZE_MB` | 上传文件大小上限（MB） | 20 |
+| `NPM_REGISTRY` | 构建镜像时使用的 npm registry（国内建议 `https://registry.npmmirror.com`） | `https://registry.npmjs.org` |
 
 > 改完 `.env` 后需重新运行 `./start.sh` 使其生效。
 

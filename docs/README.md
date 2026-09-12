@@ -914,6 +914,7 @@ curl http://127.0.0.1:3000/health
 | 服务端日志正常但客户端连不上 | `PUBLIC_BASE_URL` 不是客户端可达地址；改 `.env` 后重跑 `./start.sh` |
 | 镜像构建失败于 `npm ci` | 服务器访问不到 npm 官方源；给 Dockerfile 的 `npm ci` 加镜像参数（`--registry=https://registry.npmmirror.com --replace-registry-host=always`） |
 | 镜像构建失败于 `prisma generate` | 部署包缺 `apps/server_nest/engines/`；重新打包（脚本会提前报错） |
+| 镜像构建长时间卡在 `npm ci` | 服务器到 `registry.npmjs.org` 慢/不通；在 `.env` 设 `NPM_REGISTRY="https://registry.npmmirror.com"` 后重跑 `./start.sh`（Dockerfile 两处 `npm ci` 都会走该 registry） |
 | 容器反复重启 | `docker compose logs --tail=200 server`；常见为数据库未就绪或 `.env` 缺密钥 |
 
 ### 11.6 反向代理

@@ -21,6 +21,10 @@ services:
     build:
       context: .
       dockerfile: apps/server_nest/Dockerfile
+      # 国内服务器可把 .env 的 NPM_REGISTRY 改成 https://registry.npmmirror.com，
+      # 否则镜像构建可能长时间卡在 `npm ci`。
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
     restart: unless-stopped
     environment:
       SERVER_NAME: ${SERVER_NAME:-OhMyDungeon}

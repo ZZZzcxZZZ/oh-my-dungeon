@@ -1,9 +1,13 @@
 FROM node:22-alpine AS build
 
+# npm registry 可覆盖：国内服务器直连 registry.npmjs.org 会长时间卡在 `npm ci`。
+# 由 docker-compose.yml 的 build.args 从 .env 的 NPM_REGISTRY 注入。
+ARG NPM_REGISTRY=https://registry.npmjs.org
+
 WORKDIR /app/apps/server_nest
 
 COPY apps/server_nest/package.json apps/server_nest/package-lock.json ./
-RUN npm ci --ignore-scripts
+RUN npm config set registry "$NPM_REGISTRY" && npm ci --ignore-scripts
 
 COPY apps/server_nest ./
 # 离线引擎: Windows 上打包会丢失执行位, 必须显式恢复.
@@ -15,13 +19,16 @@ RUN npx prisma generate && npm run build
 
 FROM node:22-alpine AS runtime
 
+# 同上：runtime 阶段的 `npm ci` 也必须走可覆盖的 registry。
+ARG NPM_REGISTRY=https://registry.npmjs.org
+
 WORKDIR /app/apps/server_nest
 ENV NODE_ENV=production
 
 # 复制 package 元数据并安装生产依赖, 排除 devDependencies (eslint/jest/ts-jest 等).
 COPY --from=build /app/apps/server_nest/package.json ./
 COPY --from=build /app/apps/server_nest/package-lock.json ./
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+RUN npm config set registry "$NPM_REGISTRY" && npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 # 复制 Prisma 资源 (含 prisma.config.ts) 与编译产物.
 COPY --from=build /app/apps/server_nest/prisma ./prisma

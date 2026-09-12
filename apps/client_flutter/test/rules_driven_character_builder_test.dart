@@ -525,6 +525,94 @@ void main() {
     expect(draft.maxHp, 14, reason: '档案 d12 + CON 14（+2）');
   });
 
+  test('countsToward 的池上限进派生：准备表 2 → 只落库 2 个，其余进 pending（决策 D3）', () {
+    final classEntry = _entry(
+      id: 'test:class/keeper',
+      type: 'class',
+      name: 'Keeper',
+      structured: const {
+        'classRules': {
+          'hitDie': 6,
+          'spellcasting': {
+            'mode': 'prepared',
+            'ability': 'int',
+            'archetype': 'full-caster',
+            // 条目自身的 prepared 表：1 级 2 个 → `RuleChoiceQuota.limitsFor`
+            // 就是唯一的池上限来源。
+            'prepared': [2],
+          },
+        },
+      },
+      rules: const {
+        'choices': [
+          {
+            'id': 'book',
+            'label': '法术书',
+            'optionType': 'spell',
+            'minimum': 0,
+            'maximum': 4,
+            'countsToward': 'prepared',
+            'optionTags': ['spell-list:mage'],
+          },
+        ],
+      },
+    );
+    final spells = [
+      for (final suffix in const ['a', 'b', 'c'])
+        _entry(
+          id: 'test:spell/$suffix',
+          type: 'spell',
+          name: '法术 $suffix',
+          tags: const ['spell-list:mage'],
+          rules: const {},
+        ),
+    ];
+    final entries = <String, ContentEntry>{
+      classEntry.id: classEntry,
+      for (final spell in spells) spell.id: spell,
+    };
+
+    final draft = RulesDrivenCharacterBuilder(entries: entries).build(
+      name: 'Mira',
+      build: const CharacterBuild(
+        level: 1,
+        selections: {'class': 'test:class/keeper'},
+        choices: {
+          'test:class/keeper#book': [
+            'test:spell/a',
+            'test:spell/b',
+            'test:spell/c',
+          ],
+        },
+      ),
+      abilities: const {
+        'str': 8,
+        'dex': 14,
+        'con': 14,
+        'int': 16,
+        'wis': 12,
+        'cha': 10,
+      },
+    );
+
+    final build = draft.data['build']! as Map;
+    expect(
+      (build['choices']! as Map)['test:class/keeper#book'],
+      ['test:spell/a', 'test:spell/b'],
+      reason: 'prepared 表 1 级只有 2 个额度',
+    );
+    expect(
+      draft.data['pendingChoices'],
+      contains(
+        allOf(
+          containsPair('key', 'test:class/keeper#book'),
+          containsPair('maximum', 4),
+        ),
+      ),
+      reason: '超出池额度的选择必须可见（不静默丢弃）',
+    );
+  });
+
   test('emits startingEquipmentMaximum when declared', () {
     final classEntry = _entry(
       id: 'test:class/fighter',

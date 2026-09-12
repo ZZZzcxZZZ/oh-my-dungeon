@@ -1,6 +1,7 @@
 import '../../content/domain/content_entry.dart';
 import 'character_build.dart';
 import 'character_rule_definition.dart';
+import 'rule_choice_quota.dart';
 import 'rule_choice_semantics.dart';
 
 class ResolvedRuleGrant {
@@ -202,13 +203,19 @@ class CharacterRulesEngine {
 
   final Map<String, ContentEntry> entries;
 
-  CharacterGrantLedger evaluate(CharacterBuild build) {
+  CharacterGrantLedger evaluate(
+    CharacterBuild build, {
+    Map<String, int> poolLimits = const <String, int>{},
+  }) {
     final grants = <String, ResolvedRuleGrant>{};
     final pendingChoices = <PendingRuleChoice>[];
     final missingEntryIds = <String>[];
     final resolvedChoiceEntryIds = <String>{};
     final resolvedChoices = <String, List<String>>{};
     final activeChoices = <ActiveRuleChoice>[];
+    // `countsToward` 池是**角色级**共享的：池占用必须在整次求值内跨条目、跨等级
+    // 累加（决策 D8 的"先声明先占"要求确定遍历顺序，本 map 就是那个顺序的状态）。
+    final poolUsage = <String, int>{};
     final queue = build.selections.values.toList(growable: true);
     final visited = <String>{};
 
@@ -233,6 +240,8 @@ class CharacterRulesEngine {
         resolvedChoices: resolvedChoices,
         activeChoices: activeChoices,
         target: grants,
+        poolLimits: poolLimits,
+        poolUsage: poolUsage,
       );
 
       for (final step in rules.progression) {
@@ -257,6 +266,8 @@ class CharacterRulesEngine {
             resolvedChoices: resolvedChoices,
             activeChoices: activeChoices,
             target: grants,
+            poolLimits: poolLimits,
+            poolUsage: poolUsage,
           );
         }
       }
@@ -286,6 +297,8 @@ class CharacterRulesEngine {
     required Map<String, List<String>> resolvedChoices,
     required List<ActiveRuleChoice> activeChoices,
     required Map<String, ResolvedRuleGrant> target,
+    required Map<String, int> poolLimits,
+    required Map<String, int> poolUsage,
   }) {
     _resolveGrants(
       entry: entry,
@@ -304,6 +317,8 @@ class CharacterRulesEngine {
       resolvedChoices: resolvedChoices,
       activeChoices: activeChoices,
       target: target,
+      poolLimits: poolLimits,
+      poolUsage: poolUsage,
     );
   }
 
@@ -344,6 +359,8 @@ class CharacterRulesEngine {
     required Map<String, List<String>> resolvedChoices,
     required List<ActiveRuleChoice> activeChoices,
     required Map<String, ResolvedRuleGrant> target,
+    required Map<String, int> poolLimits,
+    required Map<String, int> poolUsage,
   }) {
     for (final definition in definitions) {
       // 选择与授予共用同一种多等级语义（§3.5）：每个已达等级都是一次独立的
@@ -356,6 +373,18 @@ class CharacterRulesEngine {
               ? const <String>[]
               : build.choices[ruleUnitKey(entry.id, definition.id, null)] ??
                     const <String>[]);
+      // `countsToward` 的额度只有 `RuleChoiceQuota.effectiveMaximum` 一处
+      // （唯一实现点）：与 `definition.maximum` 取小、池占满取 0（决策 D8：
+      // 先声明先占——`poolUsage` 由调用方按确定遍历顺序累加）。
+      final countsToward = definition.countsToward;
+      final poolCap = countsToward == null
+          ? null
+          : RuleChoiceQuota.effectiveMaximum(
+              countsToward: countsToward,
+              maximum: definition.maximum,
+              poolLimits: poolLimits,
+              usedByOthers: poolUsage[countsToward] ?? 0,
+            );
       // 选中值规范化只有 `RuleChoiceSemantics.normalizeSelection` 一处
       // （唯一实现点）：候选成员过滤、`repeatable`、`maximum` 超额都在那里判。
       final normalized = RuleChoiceSemantics.normalizeSelection(
@@ -363,6 +392,7 @@ class CharacterRulesEngine {
         requested,
         entries: entries,
         sourceEntryId: entry.id,
+        effectiveMaximum: poolCap ?? definition.maximum,
       );
       final selection = normalized.selected;
       // `requires` 判定只有 `RuleChoiceSemantics.requiresSatisfied` 一处（唯一实现
@@ -423,6 +453,8 @@ class CharacterRulesEngine {
           requiresSatisfied: requiresSatisfied,
           group: definition.group,
           help: definition.help,
+          pool: countsToward,
+          poolCap: poolCap,
         ),
       );
       if (!requiresSatisfied ||
@@ -445,9 +477,15 @@ class CharacterRulesEngine {
               selected: selection,
               violations: normalized.violations,
               minimum: definition.minimum,
+              countsToward: countsToward,
             ),
           ),
         );
+      }
+      // 本选择占用的额度累加进池：后续选择按声明顺序看到更小的剩余额度。
+      if (countsToward != null) {
+        poolUsage[countsToward] =
+            (poolUsage[countsToward] ?? 0) + selection.length;
       }
       resolvedChoices[key] = selection;
       // 只把**条目**候选排进队列：内联 id 不是条目，入队只会污染 missingEntryIds。
@@ -460,9 +498,16 @@ class CharacterRulesEngine {
     }
   }
 
-  /// `pending` 的原因，按计划任务 3/4 的优先级：
-  /// `requiresUnsatisfied` > `notACandidate` > `notRepeatable` > `aboveMaximum`
-  /// > `belowMinimum`（任务 5 会把池超额细化为 `poolExceeded`）。
+  /// `pending` 的原因，按计划任务 3/5 的优先级：
+  /// `requiresUnsatisfied` > `notACandidate` > `notRepeatable` > `poolExceeded` /
+  /// `aboveMaximum` > `belowMinimum`。
+  ///
+  /// `aboveMaximum` 与 `poolExceeded` 的分工：该选择**声明了** `countsToward` 时记
+  /// `poolExceeded`——这个超额是"计入数量池"带来的；否则记 `aboveMaximum`（只与
+  /// 自身 `maximum` 有关）。池**没有声明上限**（决策 D3：例如 `spellbook`）同样是
+  /// 池语义，仍记 `poolExceeded`；"有没有上限"由
+  /// [RuleChoiceQuota.effectiveMaximum] 决定，`ActiveRuleChoice.poolCap` 会显示
+  /// 有效上限，两条信息互不冒充。
   ///
   /// 只有"确实进了 pending"的选择才调它：选中数够、无违规时返回 null 表示"原因
   /// 不在此枚举"，绝不拿 [RuleChoicePendingReason.belowMinimum] 冒充。
@@ -471,6 +516,7 @@ class CharacterRulesEngine {
     required List<String> selected,
     required Set<RuleChoiceViolation> violations,
     required int minimum,
+    required String? countsToward,
   }) {
     if (!requiresSatisfied) return RuleChoicePendingReason.requiresUnsatisfied;
     if (violations.contains(RuleChoiceViolation.notACandidate)) {
@@ -480,7 +526,9 @@ class CharacterRulesEngine {
       return RuleChoicePendingReason.notRepeatable;
     }
     if (violations.contains(RuleChoiceViolation.aboveMaximum)) {
-      return RuleChoicePendingReason.aboveMaximum;
+      return countsToward != null
+          ? RuleChoicePendingReason.poolExceeded
+          : RuleChoicePendingReason.aboveMaximum;
     }
     if (selected.length < minimum) {
       return RuleChoicePendingReason.belowMinimum;

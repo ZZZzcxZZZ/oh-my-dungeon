@@ -21,6 +21,7 @@ import '../../campaigns/presentation/widgets/avatar_picker.dart';
 import '../../rules/domain/character_build.dart';
 import '../../rules/domain/character_rule_definition.dart';
 import '../../rules/domain/character_rules_engine.dart';
+import '../../rules/domain/rule_choice_quota.dart';
 import '../../rules/domain/rule_choice_resolver.dart';
 import '../../rules/domain/rule_profile.dart';
 import 'widgets/character_builder_shell.dart';
@@ -569,6 +570,25 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
     );
   }
 
+  /// 升级预览用的职业规则解析（条目身份优先，§3.6）。选中条目不在内容仓库里
+  /// （被删除等）时退回"仅按展示名对齐档案"，与 [Dnd5eRules.resolveClassRules]
+  /// 的语义一致；不猜职业。
+  ResolvedClassRules _resolveClassRules(String? entryId) {
+    final entry = entryId == null ? null : _entryById(entryId);
+    return Dnd5eRules.resolveClassRules(
+      entryId: entry?.id ?? entryId,
+      classSummary: entry?.name ?? '',
+      structured: entry?.structured ?? const <String, Object?>{},
+    );
+  }
+
+  ContentEntry? _entryById(String entryId) {
+    for (final entry in widget.contentEntries) {
+      if (entry.id == entryId) return entry;
+    }
+    return null;
+  }
+
   _CharacterUpgradePreview? _upgradePreview() {
     final character = widget.initialCharacter;
     final buildJson = character?.dataMap['build'];
@@ -598,8 +618,21 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
     final engine = CharacterRulesEngine(
       entries: {for (final entry in widget.contentEntries) entry.id: entry},
     );
-    final previousLedger = engine.evaluate(previousBuild);
-    final nextLedger = engine.evaluate(nextBuild);
+    // 池上限与引擎**同口径**（决策 D3）：数值只有 `RuleChoiceQuota.limitsFor`
+    // 一处；否则预览会把其实超额的选择当成有效。
+    final nextPoolLimits = RuleChoiceQuota.limitsFor(
+      rules: _resolveClassRules(nextBuild.selections['class']),
+      level: nextBuild.level,
+    );
+    final previousPoolLimits = RuleChoiceQuota.limitsFor(
+      rules: _resolveClassRules(previousBuild.selections['class']),
+      level: previousBuild.level,
+    );
+    final previousLedger = engine.evaluate(
+      previousBuild,
+      poolLimits: previousPoolLimits,
+    );
+    final nextLedger = engine.evaluate(nextBuild, poolLimits: nextPoolLimits);
     final previousKeys = {
       for (final grant in previousLedger.grants)
         ruleUnitKey(grant.sourceEntryId, grant.id, grant.sourceLevel),

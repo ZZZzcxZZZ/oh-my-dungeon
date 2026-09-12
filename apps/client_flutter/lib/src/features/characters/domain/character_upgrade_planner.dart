@@ -2,9 +2,11 @@ import '../../content/domain/content_entry.dart';
 import '../../rules/domain/character_build.dart';
 import '../../rules/domain/character_rule_definition.dart';
 import '../../rules/domain/character_rules_engine.dart';
+import '../../rules/domain/rule_choice_quota.dart';
 import 'character.dart';
 import 'character_content_reference.dart';
 import 'declared_levels.dart';
+import 'dnd5e_rules.dart';
 import 'rules_driven_character_builder.dart';
 
 class CharacterUpgradePlan {
@@ -174,7 +176,7 @@ class CharacterUpgradePlanner {
     CharacterBuild build, {
     required DeclaredLevels declaredLevels,
   }) {
-    final ledger = _engine.evaluate(build);
+    final ledger = _engine.evaluate(build, poolLimits: _poolLimits(build));
     return CharacterUpgradePlan(
       currentLevel: currentLevel,
       targetLevel: build.level,
@@ -228,6 +230,19 @@ class CharacterUpgradePlanner {
     ).baseAbilitiesFrom(character.abilityMap, build);
   }
 
+  /// `countsToward` 的池上限（决策 D3）：数值来源只有
+  /// [RuleChoiceQuota.limitsFor] 一处；这里负责把 [build] 所选职业解析出来。
+  Map<String, int> _poolLimits(CharacterBuild build) {
+    final classEntry = entries[build.selections['class']];
+    return RuleChoiceQuota.limitsFor(
+      rules: Dnd5eRules.resolveClassRules(
+        entryId: classEntry?.id,
+        classSummary: classEntry?.name ?? '',
+        structured: classEntry?.structured ?? const <String, Object?>{},
+      ),
+      level: build.level,
+    );
+  }
 }
 
 Map<String, Object?> _mergeMaps(Object? current, Object? derived) => {

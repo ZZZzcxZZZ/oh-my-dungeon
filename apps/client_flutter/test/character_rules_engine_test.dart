@@ -1,3 +1,4 @@
+import 'package:dnd_table_client/src/features/content/domain/content_block.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
 import 'package:dnd_table_client/src/features/rules/domain/character_build.dart';
 import 'package:dnd_table_client/src/features/rules/domain/character_rule_definition.dart';
@@ -992,6 +993,245 @@ void main() {
         isFalse,
         reason: '空 map 不写进 JSON（旧存档形状不膨胀）',
       );
+    });
+  });
+
+  group('countsToward 额度池（契约 §3.10.2 / 决策 D8）', () {
+    final plan = _entry(
+      id: 'test:class/spellkeeper',
+      type: 'class',
+      name: '持法者',
+      rules: const {
+        'choices': [
+          {
+            'id': 'book',
+            'label': '法术书',
+            'optionType': 'spell',
+            'minimum': 0,
+            'maximum': 3,
+            'countsToward': 'prepared',
+            'optionTags': ['spell-list:mage'],
+          },
+          {
+            'id': 'extra',
+            'label': '额外法术',
+            'optionType': 'spell',
+            'minimum': 0,
+            'maximum': 2,
+            'countsToward': 'prepared',
+            'optionTags': ['spell-list:mage'],
+          },
+          {
+            'id': 'free',
+            'label': '额外戏法',
+            'optionType': 'spell',
+            'minimum': 0,
+            'maximum': 2,
+            'optionTags': ['spell-list:mage'],
+          },
+        ],
+      },
+    );
+    final spells = [
+      for (final suffix in const ['a', 'b', 'c', 'd'])
+        _entry(
+          id: 'test:spell/$suffix',
+          type: 'spell',
+          name: '法术 $suffix',
+          tags: const ['spell-list:mage'],
+          rules: const {},
+        ),
+    ];
+    final engine = CharacterRulesEngine(
+      entries: {
+        plan.id: plan,
+        for (final spell in spells) spell.id: spell,
+      },
+    );
+
+    test('两个选择共享 prepared 池：先声明先占，超出部分进 pending（poolExceeded）', () {
+      final ledger = engine.evaluate(
+        const CharacterBuild(
+          level: 1,
+          selections: {'class': 'test:class/spellkeeper'},
+          choices: {
+            'test:class/spellkeeper#book': [
+              'test:spell/a',
+              'test:spell/b',
+              'test:spell/c',
+            ],
+            'test:class/spellkeeper#extra': ['test:spell/d'],
+          },
+        ),
+        poolLimits: const {'prepared': 3},
+      );
+
+      expect(
+        ledger.resolvedChoices['test:class/spellkeeper#book'],
+        hasLength(3),
+      );
+      expect(ledger.resolvedChoices['test:class/spellkeeper#extra'], isEmpty);
+      expect(
+        ledger.pendingChoices.single.reason,
+        RuleChoicePendingReason.poolExceeded,
+      );
+      expect(ledger.pendingChoices.single.invalidSelected, ['test:spell/d']);
+      final book = ledger.activeChoices.singleWhere(
+        (choice) => choice.definition.id == 'book',
+      );
+      expect(book.poolCap, 3);
+      expect(book.pool, 'prepared');
+    });
+
+    test('池额度按声明顺序扣减：前者少占，后者就能多占', () {
+      final ledger = engine.evaluate(
+        const CharacterBuild(
+          level: 1,
+          selections: {'class': 'test:class/spellkeeper'},
+          choices: {
+            'test:class/spellkeeper#book': ['test:spell/a'],
+            'test:class/spellkeeper#extra': ['test:spell/b', 'test:spell/c'],
+          },
+        ),
+        poolLimits: const {'prepared': 3},
+      );
+
+      expect(ledger.resolvedChoices['test:class/spellkeeper#book'], [
+        'test:spell/a',
+      ]);
+      expect(ledger.resolvedChoices['test:class/spellkeeper#extra'], [
+        'test:spell/b',
+        'test:spell/c',
+      ]);
+      expect(ledger.pendingChoices, isEmpty);
+    });
+
+    test('未声明 countsToward 的选择不受池限制，只受自身 maximum', () {
+      final ledger = engine.evaluate(
+        const CharacterBuild(
+          level: 1,
+          selections: {'class': 'test:class/spellkeeper'},
+          choices: {
+            'test:class/spellkeeper#free': ['test:spell/a', 'test:spell/b'],
+          },
+        ),
+        // 池已被占满，但 `free` 不占池。
+        poolLimits: const {'prepared': 0},
+      );
+
+      expect(ledger.resolvedChoices['test:class/spellkeeper#free'], [
+        'test:spell/a',
+        'test:spell/b',
+      ]);
+      expect(ledger.pendingChoices, isEmpty);
+      final free = ledger.activeChoices.singleWhere(
+        (choice) => choice.definition.id == 'free',
+      );
+      expect(free.pool, isNull);
+      expect(free.poolCap, isNull);
+    });
+
+    test('声明了 countsToward 但池无上限（spellbook）→ 有效上限是 maximum，原因仍归因于池', () {
+      final bookPlan = _entry(
+        id: 'test:class/spellbook-keeper',
+        type: 'class',
+        name: '法术书持用者',
+        rules: const {
+          'choices': [
+            {
+              'id': 'book',
+              'label': '法术书',
+              'optionType': 'spell',
+              'minimum': 0,
+              'maximum': 2,
+              'countsToward': 'spellbook',
+              'optionTags': ['spell-list:mage'],
+            },
+          ],
+        },
+      );
+      final bookEngine = CharacterRulesEngine(
+        entries: {
+          bookPlan.id: bookPlan,
+          for (final spell in spells) spell.id: spell,
+        },
+      );
+
+      final ledger = bookEngine.evaluate(
+        const CharacterBuild(
+          level: 1,
+          selections: {'class': 'test:class/spellbook-keeper'},
+          choices: {
+            'test:class/spellbook-keeper#book': [
+              'test:spell/a',
+              'test:spell/b',
+              'test:spell/c',
+            ],
+          },
+        ),
+        // 只声明了 prepared，法术书池没有上限（决策 D3：没声明上限 = 不限）。
+        poolLimits: const {'prepared': 1},
+      );
+
+      expect(
+        ledger.resolvedChoices['test:class/spellbook-keeper#book'],
+        hasLength(2),
+        reason: '仍受自身 maximum = 2，不被 prepared 列反向限制',
+      );
+      expect(
+        ledger.pendingChoices.single.reason,
+        RuleChoicePendingReason.poolExceeded,
+        reason: '声明了 countsToward → 超额归因于池语义（池无上限由 poolCap 表达）',
+      );
+      final book = ledger.activeChoices.single;
+      expect(book.pool, 'spellbook');
+      expect(book.poolCap, 2, reason: '池没声明上限 → 有效上限就是 maximum');
+    });
+
+    test('未知池名（程序化构造绕过解析层）按不占池处理，不抛异常', () {
+      // 解析层把非法池名挡在门外（`kCountsTowardPools`），因此这个输入只可能来自
+      // 直接构造的 `ContentEntry`（程序化构造）；引擎必须按"不占池"处理而不是崩。
+      const oddPlan = ContentEntry(
+        id: 'test:class/odd-keeper',
+        type: 'class',
+        slug: 'odd-keeper',
+        name: '异池持用者',
+        body: <ContentBlock>[],
+        revision: 1,
+        rules: CharacterRuleDefinition(
+          choices: <RuleChoiceDefinition>[
+            RuleChoiceDefinition(
+              id: 'odd',
+              label: '异池',
+              optionType: 'spell',
+              minimum: 0,
+              maximum: 2,
+              countsToward: 'rituals',
+              optionTags: <String>['spell-list:mage'],
+            ),
+          ],
+        ),
+      );
+      final oddEngine = CharacterRulesEngine(
+        entries: {
+          oddPlan.id: oddPlan,
+          for (final spell in spells) spell.id: spell,
+        },
+      );
+
+      final ledger = oddEngine.evaluate(
+        const CharacterBuild(
+          level: 1,
+          selections: {'class': 'test:class/odd-keeper'},
+          choices: {
+            'test:class/odd-keeper#odd': ['test:spell/a'],
+          },
+        ),
+      );
+
+      expect(ledger.pendingChoices, isEmpty);
+      expect(ledger.activeChoices.single.pool, 'rituals');
+      expect(ledger.activeChoices.single.poolCap, 2);
     });
   });
 

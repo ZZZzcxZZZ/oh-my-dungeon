@@ -2,7 +2,9 @@ import '../../content/domain/content_entry.dart';
 import '../../rules/domain/character_build.dart';
 import '../../rules/domain/character_rule_definition.dart';
 import '../../rules/domain/character_rules_engine.dart';
+import '../../rules/domain/rule_choice_quota.dart';
 import '../../rules/domain/rule_math.dart' as rule_math;
+import '../../rules/domain/rule_profile.dart';
 import '../../rules/domain/rule_values.dart';
 import 'character_content_reference.dart';
 import 'character_edit_draft.dart';
@@ -36,7 +38,13 @@ class RulesDrivenCharacterBuilder {
       classSummary: classEntry?.name ?? '',
       structured: classEntry?.structured ?? const <String, Object?>{},
     );
-    final ledger = _engine.evaluate(build);
+    final ledger = _engine.evaluate(
+      build,
+      poolLimits: RuleChoiceQuota.limitsFor(
+        rules: classRules,
+        level: build.level,
+      ),
+    );
     // `abilities` 是**入参基础属性**（决策 D4），原样持久化：结算后的
     // [effectiveAbilities] 绝不回写，否则下次再派生会把 `kind: ability` 加值
     // 当成基础值再叠加一遍（缺陷 4）。
@@ -265,8 +273,29 @@ class RulesDrivenCharacterBuilder {
       for (final key in Dnd5eRules.defaultAbilities.keys)
         key: Dnd5eRules.abilityScore(finalAbilities, key),
     };
-    final ledger = _engine.evaluate(build);
+    // `countsToward` 的池上限与 [build] **同口径**：池被占满时进 `invalidSelected`
+    // 的选择同样不产出 grants，减加值必须看到同一份账，否则减法不是精确逆。
+    final classRules = _classRulesFor(build);
+    final ledger = _engine.evaluate(
+      build,
+      poolLimits: RuleChoiceQuota.limitsFor(
+        rules: classRules,
+        level: build.level,
+      ),
+    );
     return _subtract(normalized, _abilityGrantBonuses(ledger));
+  }
+
+  /// [build] 所选职业的解析后职业规则（条目声明 ∪ 档案），供额度池等数值使用。
+  /// 唯一入口仍是 [Dnd5eRules.resolveClassRules]；本方法只是把同一份三参数调用
+  /// 收口，避免 `build` / `baseAbilitiesFrom` 各写一遍。
+  ResolvedClassRules _classRulesFor(CharacterBuild build) {
+    final classEntry = _selectedEntry(build, 'class');
+    return Dnd5eRules.resolveClassRules(
+      entryId: classEntry?.id,
+      classSummary: classEntry?.name ?? '',
+      structured: classEntry?.structured ?? const <String, Object?>{},
+    );
   }
 
   /// 基础属性 = 最终值 − 加值。**下限 0 / 上限 30**：脏存档（最终值低于授予

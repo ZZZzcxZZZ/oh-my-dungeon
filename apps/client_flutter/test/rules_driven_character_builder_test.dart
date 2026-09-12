@@ -1070,6 +1070,13 @@ void main() {
       );
       final pending = blocked.data['pendingChoices'] as List;
       expect(pending, hasLength(1), reason: '保留在 pendingChoices 供 UI 显示');
+      // 落库必须带原因：`reason == null`（旧存档/未给原因）与"某个具体原因"必须
+      // 可区分，重新载入的角色卡才能说明"已选但未生效"的原因。
+      expect(
+        (pending.single as Map)['reason'],
+        'requiresUnsatisfied',
+        reason: 'requires 前置不满足的原因必须随 pendingChoices 落库',
+      );
 
       final allowed = derive(13);
       expect(allowed.abilities['str'], baseAbilities['str']! + 1);

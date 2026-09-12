@@ -1,17 +1,28 @@
-// 阻塞项 3：`optionType: "skill"` 的选择由专门 UI（技能选择器）承担，选中值写进
-// 草稿 `skills` 而**永不**进 `build.choices`。升级面若把它计入 `pendingChoices` /
-// `canApply`，就会出现「应用等级规则」永久禁用的死锁，并渲染"没有符合条件的资料
-// 条目"的红色假错误。专门 UI 选择必须用同一个 `usesDedicatedOptionUi` 判据从升级
-// 预览里剔除；降级到条目选项卡片的位置只给中性文案。
+// 阻塞项 3（计划任务 6b 后的新语义）：`optionType: "skill"` 的选中值在任务 7
+// 之前仍写进草稿 `skills`，但任务 7 起会写进 `build.choices`。升级面**不再**用
+// `usesDedicatedOptionUi` 免检：
+//   - **上一级**未完成的专门 UI 选择不阻塞升级（只统计本级新增的选择）；
+//   - **本级新增**的选择必须由共享组件真的渲染出来（否则是"看不见却阻塞"），
+//     未完成就阻塞，完成后即可应用；
+//   - 任何情况下都不得再渲染"没有符合条件的资料条目"的红色假错误。
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_editor_page.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_upgrade_page.dart';
+import 'package:dnd_table_client/src/features/characters/presentation/widgets/rule_choice_section.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+/// 选择区里的候选 chip（编辑器页面同时渲染角色卡的技能网格，需按组件限定）。
+Finder _choiceChip(String label) => find.descendant(
+  of: find.byType(RuleChoiceSection),
+  matching: find.widgetWithText(FilterChip, label),
+);
+
 void main() {
-  testWidgets('编辑器升级预览不把专门 UI 选择算作待办（无死锁）', (tester) async {
+  testWidgets('编辑器升级队列渲染本级新增的技能选择，完成后可应用（不再免检）', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1200, 2000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -33,22 +44,33 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('升级队列'), findsOneWidget);
-    // 专门 UI 选择不出现在升级预览里（它由技能选择器承担）。
-    expect(find.text('选择两项技能熟练'), findsNothing);
+    // 本级新增的技能选择**必须可见**（这是修复"看不见却阻塞"的那一半）。
+    expect(find.text('选择两项技能熟练'), findsOneWidget);
     expect(find.textContaining('没有符合'), findsNothing);
 
-    // `canApply` 为 true：未选任何东西也能应用等级规则。
     final applyButton = find.widgetWithText(FilledButton, '应用等级规则');
     expect(applyButton, findsOneWidget);
     expect(
       tester.widget<FilledButton>(applyButton).onPressed,
+      isNull,
+      reason: '本级新增的未完成选择必须阻塞，且已在界面上可见',
+    );
+
+    // 选中两项技能 → 本级选择完成 → 可应用。
+    await tester.tap(_choiceChip('洞悉'));
+    await tester.pumpAndSettle();
+    await tester.tap(_choiceChip('医药'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<FilledButton>(applyButton).onPressed,
       isNotNull,
-      reason: '专门 UI 选择不得堵塞 canApply（升级死锁）',
+      reason: '本级选择完成后必须可应用（无死锁）',
     );
     expect(find.text('请完成本级新增选择，或恢复缺失的资料条目。'), findsNothing);
   });
 
-  testWidgets('独立升级页对专门 UI 选择给中性文案且不阻断确认', (tester) async {
+  testWidgets('独立升级页渲染本级新增的技能选择，完成后可确认', (tester) async {
     tester.view.physicalSize = const Size(900, 1400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -65,15 +87,27 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 不再渲染"没有符合条件的资料条目"的红色假错误，改为中性文案。
+    // 不再渲染"没有符合条件的资料条目"的红色假错误，而是渲染内联候选。
     expect(find.text('没有符合条件的资料条目'), findsNothing);
-    expect(find.text('该选择由对应界面选择。'), findsOneWidget);
+    expect(find.text('选择两项技能熟练'), findsOneWidget);
+    expect(_choiceChip('洞悉'), findsOneWidget);
+
+    final applyButton = find.byKey(const Key('apply-upgrade'));
     expect(
-      tester
-          .widget<FilledButton>(find.byKey(const Key('apply-upgrade')))
-          .onPressed,
+      tester.widget<FilledButton>(applyButton).onPressed,
+      isNull,
+      reason: '本级新增的未完成选择必须阻塞',
+    );
+
+    await tester.tap(_choiceChip('洞悉'));
+    await tester.pumpAndSettle();
+    await tester.tap(_choiceChip('医药'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<FilledButton>(applyButton).onPressed,
       isNotNull,
-      reason: '专门 UI 选择不得堵塞升级确认',
+      reason: '本级选择完成后必须可确认（无死锁）',
     );
   });
 }

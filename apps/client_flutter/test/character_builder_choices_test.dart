@@ -2,7 +2,9 @@ import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character_edit_draft.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_editor_page.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_upgrade_page.dart';
+import 'package:dnd_table_client/src/features/characters/presentation/widgets/rule_choice_section.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
+import 'package:dnd_table_client/src/features/rules/domain/character_rule_definition.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -790,6 +792,313 @@ void main() {
       (build['choices']! as Map)['guide:class/fighter#style#1'],
       ['guide:feat/defense', 'guide:feat/duel'],
       reason: '顺序即点击顺序，不被排序改写',
+    );
+  });
+
+  // 任务 6b（决策 D7）：`allowedBuilderSteps` 是导入期放行的契约白名单。
+  // 只要有一项没有渲染位置，就会出现"看不见却阻塞创建"的静默失效——示例包里
+  // `builderStep: "details"` 的 `asi-or-feat` 正是这个缺陷。
+  group('结构守卫：每个 allowedBuilderSteps 都有渲染位置（决策 D7）', () {
+    for (final declaredStep in RuleChoiceDefinition.allowedBuilderSteps) {
+      testWidgets('builderStep=$declaredStep 的选择可见，且未选时阻塞创建', (
+        tester,
+      ) async {
+        tester.view.physicalSize = const Size(1200, 1500);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        final label = '守卫选择-$declaredStep';
+        await tester.pumpWidget(
+          MaterialApp(
+            home: CharacterEditorPage(
+              defaultCreationMethod: 'standard',
+              contentEntries: [
+                _entry(
+                  id: 'guide:class/guardian',
+                  type: 'class',
+                  name: '守卫者',
+                  rules: {
+                    'progression': [
+                      {
+                        'levels': [1],
+                        'choices': [
+                          {
+                            'id': 'guard',
+                            'label': label,
+                            'optionType': 'feat',
+                            'minimum': 1,
+                            'maximum': 1,
+                            'optionEntryIds': ['guide:feat/defense'],
+                            'builderStep': declaredStep,
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ),
+                _entry(
+                  id: 'guide:background/soldier',
+                  type: 'background',
+                  name: '士兵',
+                  rules: const {},
+                ),
+                _entry(
+                  id: 'guide:species/human',
+                  type: 'species',
+                  name: '人类',
+                  rules: const {},
+                ),
+                _entry(id: 'guide:feat/defense', type: 'feat', name: '防御'),
+              ],
+              onSubmit: (draft) async => true,
+            ),
+          ),
+        );
+        await tester.enterText(
+          find.byKey(const Key('standard-character-name-field')),
+          '布伦',
+        );
+        await tester.pumpAndSettle();
+
+        final step = ruleChoiceBuilderStep(
+          declaredStep,
+          inheritedStep: 0,
+        );
+        await _goToDesktopStep(tester, step);
+        expect(
+          find.text(label),
+          findsOneWidget,
+          reason: 'builderStep=$declaredStep 必须在步骤 $step 真的渲染选择区',
+        );
+
+        // 不选它时不能创建：可见 + 阻塞，而不是"看不见却阻塞"。
+        await _goToDesktopStep(tester, 8);
+        expect(
+          tester
+              .widget<FilledButton>(find.widgetWithText(FilledButton, '创建角色'))
+              .onPressed,
+          isNull,
+          reason: 'builderStep=$declaredStep 的选择未完成时必须阻塞创建',
+        );
+      });
+    }
+  });
+
+  testWidgets('选择级 requires 不满足：显示原因、隐藏候选、阻塞创建；属性到位后解除', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          contentEntries: [
+            _entry(
+              id: 'guide:class/warlock',
+              type: 'class',
+              name: '邪术师',
+              rules: const {
+                'progression': [
+                  {
+                    'levels': [1],
+                    'choices': [
+                      {
+                        'id': 'invocations',
+                        'label': '祈唤',
+                        'optionType': 'feat',
+                        'minimum': 1,
+                        'maximum': 1,
+                        'optionEntryIds': ['guide:feat/defense'],
+                        'requires': [
+                          {'ability': 'cha', 'minimum': 13},
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ),
+            _entry(
+              id: 'guide:background/soldier',
+              type: 'background',
+              name: '士兵',
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:species/human',
+              type: 'species',
+              name: '人类',
+              rules: const {},
+            ),
+            _entry(id: 'guide:feat/defense', type: 'feat', name: '防御'),
+          ],
+          onSubmit: (draft) async => true,
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const Key('standard-character-name-field')),
+      '布伦',
+    );
+    await tester.pumpAndSettle();
+
+    // 默认魅力 8 < 13：原因可见、候选隐藏、创建被阻塞（不是静默跳过）。
+    expect(find.text('需要魅力 13'), findsOneWidget);
+    expect(find.text('防御'), findsNothing);
+    await _goToDesktopStep(tester, 8);
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, '创建角色'))
+          .onPressed,
+      isNull,
+    );
+
+    // 把魅力改到 13 → 前置满足：候选出现，原因消失。
+    await _goToDesktopStep(tester, 3);
+    await tester.enterText(
+      find.byKey(const Key('standard-ability-cha-field')),
+      '13',
+    );
+    await tester.pumpAndSettle();
+    await _goToDesktopStep(tester, 0);
+    expect(find.text('需要魅力 13'), findsNothing);
+    expect(find.text('防御'), findsOneWidget);
+
+    // 仍然必须真的选它才能创建。
+    await _goToDesktopStep(tester, 8);
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, '创建角色'))
+          .onPressed,
+      isNull,
+    );
+    await _goToDesktopStep(tester, 0);
+    await tester.tap(find.widgetWithText(FilterChip, '防御'));
+    await tester.pumpAndSettle();
+    await _goToDesktopStep(tester, 8);
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, '创建角色'))
+          .onPressed,
+      isNotNull,
+    );
+
+    // 再把魅力调回 8 → 已选值变成"已选但未生效"：原因可见、选中值不丢、创建重新被阻塞。
+    await _goToDesktopStep(tester, 3);
+    await tester.enterText(
+      find.byKey(const Key('standard-ability-cha-field')),
+      '8',
+    );
+    await tester.pumpAndSettle();
+    await _goToDesktopStep(tester, 0);
+    expect(find.text('需要魅力 13'), findsOneWidget);
+    expect(
+      find.text('已选但未生效：防御'),
+      findsOneWidget,
+      reason: '前置不满足不得静默丢弃已选值（§3.10.3-5）',
+    );
+    await _goToDesktopStep(tester, 8);
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, '创建角色'))
+          .onPressed,
+      isNull,
+      reason: '本已选值不生效时同样不得创建',
+    );
+  });
+
+  testWidgets('repeatable：同一选项点两次，草稿里真的有两份', (tester) async {
+    tester.view.physicalSize = const Size(1200, 1500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    CharacterEditDraft? submitted;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          contentEntries: [
+            _entry(
+              id: 'guide:class/warlock',
+              type: 'class',
+              name: '邪术师',
+              rules: const {
+                'progression': [
+                  {
+                    'levels': [1],
+                    'choices': [
+                      {
+                        'id': 'invocations',
+                        'label': '祈唤',
+                        'optionType': 'classFeature',
+                        'minimum': 1,
+                        'maximum': 2,
+                        'repeatable': true,
+                        'options': <Object?>[
+                          {'id': 'agonizing-blast', 'label': '苦痛魔爆'},
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ),
+            _entry(
+              id: 'guide:background/soldier',
+              type: 'background',
+              name: '士兵',
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:species/human',
+              type: 'species',
+              name: '人类',
+              rules: const {},
+            ),
+          ],
+          onSubmit: (draft) async {
+            submitted = draft;
+            return true;
+          },
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const Key('standard-character-name-field')),
+      '布伦',
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilterChip, '苦痛魔爆'));
+    await tester.pumpAndSettle();
+    expect(find.text('苦痛魔爆'), findsOneWidget, reason: '×1 不显示重复计数');
+    await tester.tap(find.widgetWithText(FilterChip, '苦痛魔爆'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('苦痛魔爆 ×2'), findsOneWidget, reason: '两次选取显示 ×2');
+    expect(
+      tester
+          .widget<FilterChip>(find.widgetWithText(FilterChip, '苦痛魔爆 ×2'))
+          .selected,
+      isTrue,
+    );
+
+    await _goToDesktopStep(tester, 8);
+    await tester.tap(find.widgetWithText(FilledButton, '创建角色'));
+    await tester.pumpAndSettle();
+
+    expect(submitted, isNotNull);
+    final build = submitted!.data['build']! as Map;
+    expect(
+      (build['choices']! as Map)['guide:class/warlock#invocations#1'],
+      ['agonizing-blast', 'agonizing-blast'],
+      reason: 'repeatable 的两次选取必须落库两份（有序 List 的语义）',
     );
   });
 }

@@ -288,6 +288,25 @@ class RuleChoiceSection extends StatelessWidget {
   }
 }
 
+/// 选择声明里的 `builderStep` → 创建向导步骤索引的**唯一映射**。
+///
+/// `origin` 继承来源条目的步骤（背景条目声明 `origin` 就落在背景步骤），
+/// `null` / 未知取值同样继承来源步骤。创建向导与结构守卫测试都读它：白名单
+/// `RuleChoiceDefinition.allowedBuilderSteps` 放行的每一项都必须在这个映射的
+/// 目标步骤真的渲染出选择区，否则就是"看不见却阻塞创建"（决策 D7）。
+int ruleChoiceBuilderStep(String? declaredStep, {required int inheritedStep}) {
+  return switch (declaredStep) {
+    'class' => 0,
+    'origin' => inheritedStep,
+    'abilities' => 3,
+    'proficiencies' => 4,
+    'equipment' => 5,
+    'spells' => 6,
+    'details' => 7,
+    _ => inheritedStep,
+  };
+}
+
 /// 一组 `group` 相同的选择（`group == null` = 无标题组）。
 class RuleChoiceGroup {
   const RuleChoiceGroup({this.title, required this.children});

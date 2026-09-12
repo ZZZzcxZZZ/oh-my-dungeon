@@ -1,6 +1,5 @@
 import '../../content/domain/content_entry.dart';
 import '../../rules/domain/character_build.dart';
-import '../../rules/domain/character_rule_definition.dart';
 import '../../rules/domain/character_rules_engine.dart';
 import '../../rules/domain/rule_choice_quota.dart';
 import 'character.dart';
@@ -41,15 +40,13 @@ class CharacterUpgradePlan {
       declaredLevels.isBeyond(targetLevel) ||
       declaredLevels.isBelow(targetLevel);
 
-  /// 专门 UI 承担的选择（值类型 / 内联候选，见
-  /// [RuleChoiceDefinition.usesDedicatedOptionUi]）由升级页的中性文案提示，
-  /// **不**参与完成判定：它的选中值不进 `build.choices`，拿它当门禁会让确认按钮
-  /// 永久禁用（升级死锁）。
+  /// 本级选择必须**真的完成**（数量 + `requires`，见 [ActiveRuleChoice.isValid]）。
+  ///
+  /// `usesDedicatedOptionUi` 只决定渲染位置（渲染判据），不再是"免检"例外：升级页
+  /// 用共享组件渲染本级新增的每一条选择，所以"要求完成"不会变成死锁——反而是
+  /// 免检会让本级新增的专门 UI 选择被静默跳过（§3.10.3-7）。
   bool get isComplete =>
-      missingEntryIds.isEmpty &&
-      choices.every(
-        (choice) => choice.definition.usesDedicatedOptionUi || choice.isValid,
-      );
+      missingEntryIds.isEmpty && choices.every((choice) => choice.isValid);
 }
 
 class CharacterUpgradePlanner {

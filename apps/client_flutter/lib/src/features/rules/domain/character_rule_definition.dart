@@ -425,24 +425,24 @@ class RuleChoiceDefinition {
   /// 本批次只解析；呈现在任务 6b。
   final String? help;
 
-  /// 该选择是否由**通用条目选项卡片之外**的 UI 承担。
+  /// 该选择是否由**专门渲染器**承担，因此不出现在通用选择卡片里。
   ///
-  /// 判据（唯一实现点）：只有当内联 `options` 是**唯一候选载体**时才成立。
-  /// - 值类型（[kValueOptionTypes]）只允许内联 `options`（§3.10.3-2），由专门 UI
-  ///   （技能选择器等）承担；
-  /// - 条目类型选择写内联 `options` 时，只要还声明了 `optionEntryIds` 或
-  ///   `optionTags`（§3.10.3-2 明确允许"条目引用 + 内联 `options`"并存），通用卡片
-  ///   就能按条目引用/标签解析出候选，必须继续走通用卡片。把它们整条排除会同时
-  ///   从渲染、`ruleChoicesAreValid`、`pendingChoices` 里消失：候选不可见、不选也
-  ///   能创建（§3.10.3-7 的静默失效）。
+  /// 判据（唯一实现点）：`skill` 由创建向导「熟练」步骤的技能选择器承担。
   ///
-  /// **语义将在任务 6b 收窄**为"有专门渲染器"（`optionType == 'skill' ||
-  /// isSpellChoice`），因为候选合并（`RuleChoiceSemantics.candidatesFor`）让内联
-  /// 选项对通用卡片可见后，本判据的多载语义（校验 vs 渲染）会分叉。本任务只改
-  /// 注释并保持**行为等价**，调用方在任务 6b 同步迁移。
-  bool get usesDedicatedOptionUi =>
-      isValueTypeChoice ||
-      (options.isNotEmpty && optionEntryIds.isEmpty && optionTags.isEmpty);
+  /// 这是**渲染判据**，不是"免检"判据：候选合并
+  /// （`RuleChoiceSemantics.candidatesFor`）让内联 `options` 与条目候选对通用卡片
+  /// 同样可见后，选中值一律进 `build.choices`，校验 / 额度 / 升级判定都按普通选择
+  /// 处理，不再有"值写在别处所以免检"的例外。
+  ///
+  /// `optionType: "spell"` 的专用渲染器（法术池）属于计划任务 9；在它落地前把
+  /// `spell` 也算作"专门渲染"会让显式法术选择在向导里**不可见**却仍被校验
+  /// （§3.10.3-7 的静默失效，与决策 D7 同一类缺陷），因此本任务只并入 `skill`，
+  /// [isSpellChoice] 先作为判据落地，由任务 9 在加入法术池渲染后并入本判据。
+  bool get usesDedicatedOptionUi => optionType == 'skill';
+
+  /// 显式法术选择（契约 §3.10.2）。计划任务 9 的专用渲染器接入后它才成为
+  /// "专门 UI"（见 [usesDedicatedOptionUi]）。
+  bool get isSpellChoice => optionType == 'spell';
 
   /// 值类型选择的判据入口（实现点在 [isValueOptionType]）。
   bool get isValueTypeChoice => isValueOptionType(optionType);

@@ -187,6 +187,10 @@ class RulesDrivenCharacterBuilder {
               'minimum': choice.minimum,
               'maximum': choice.maximum,
               'selected': choice.selected,
+              // "为什么没生效"的唯一枚举（`RuleChoicePendingReason`）。落库时
+              // **不丢原因**：重新载入的角色卡也必须能说明"已选但未生效"的原因，
+              // 否则 `reason == null` 与"某个具体原因"无法区分。
+              'reason': choice.reason?.name,
             },
         ],
         'classIdentity': {

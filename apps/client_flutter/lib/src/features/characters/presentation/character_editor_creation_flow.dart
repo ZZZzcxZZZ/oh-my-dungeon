@@ -80,6 +80,12 @@ class _CharacterUpgradeSection extends StatelessWidget {
                 _UpgradeRuleChoiceSection(
                   choice: choice,
                   entries: entries,
+                  requiresContext: RuleChoiceRequiresContext(
+                    sourceEntryId: choice.sourceEntryId,
+                    selectedByKey: preview.build.choices,
+                    abilities: preview.build.abilities,
+                    entries: {for (final entry in entries) entry.id: entry},
+                  ),
                   onChanged: (selected) =>
                       onChoiceChanged(choice.key, selected),
                 ),
@@ -126,27 +132,40 @@ class _UpgradeRuleChoiceSection extends StatelessWidget {
   const _UpgradeRuleChoiceSection({
     required this.choice,
     required this.entries,
+    required this.requiresContext,
     required this.onChanged,
   });
 
   final ActiveRuleChoice choice;
   final List<ContentEntry> entries;
+  final RuleChoiceRequiresContext requiresContext;
   final ValueChanged<List<String>> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final entriesById = {for (final entry in entries) entry.id: entry};
+    // `requires` 是否满足以**引擎**的判定为准（[ActiveRuleChoice.requiresSatisfied]）；
+    // 原因文案由 `ruleChoiceBlockedReason` 一处产出。前置不满足时不渲染候选，
+    // 只显示原因与"已选但未生效"，且该选择仍留在升级队列里（不静默跳过）。
+    final blockedReason = choice.requiresSatisfied
+        ? null
+        : ruleChoiceBlockedReason(
+                choice.definition.requires,
+                context: requiresContext,
+              ) ??
+              '前置条件不满足';
     return RuleChoiceSection(
       definition: choice.definition,
       candidates: RuleChoiceSemantics.candidatesFor(
         choice.definition,
-        entries: entriesById,
+        entries: requiresContext.entries,
         sourceEntryId: choice.sourceEntryId,
       ),
       selected: choice.selected,
       sourceLabel: choice.sourceLevel == null
           ? choice.sourceEntryName
           : '${choice.sourceEntryName} · 等级 ${choice.sourceLevel}',
+      blockedReason: blockedReason,
+      requiresContext: requiresContext,
       onOpenEntry: (entry) => showContentEntryPreviewDialog(
         context,
         entry: entry,

@@ -200,18 +200,12 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       8,
     ];
     final visibleStep = visibleStepIndexes.indexOf(_currentStep);
-    // 由专门 UI 承担的选择（技能选择器等）不在通用卡片里，选中值也不写进
-    // `_ruleChoices`（技能写进 `_selectedSkillProficiencies`）。若把它们算进来，
-    // 一个 `optionType: "skill"` 的选择会永远显示"未选够"，`canCreate` 恒为
-    // false——正是"排除渲染"必须一并处理的另一半。判据同为
-    // [RuleChoiceDefinition.usesDedicatedOptionUi]。
+    // `skill` 选择由「熟练」步骤的技能选择器承担（选中值在任务 7 之前仍写进
+    // `_selectedSkillProficiencies`），其余选择一律按普通选择校验：数量、以及
+    // `requires` 前置（前置不满足 = 未完成，且由选择区显示原因，不静默跳过）。
     final ruleChoicesAreValid = activeRuleChoices
         .where((active) => !active.definition.usesDedicatedOptionUi)
-        .every((active) {
-          final selected = _ruleChoices[active.key] ?? const <String>[];
-          return selected.length >= active.definition.minimum &&
-              selected.length <= active.definition.maximum;
-        });
+        .every(_ruleChoiceIsComplete);
     final stepContent = _buildStepContent(
       context: context,
       classOptions: classOptions,
@@ -257,11 +251,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         selectedItems: _selectedItemRefs.length,
         pendingChoices: activeRuleChoices
             .where((active) => !active.definition.usesDedicatedOptionUi)
-            .where((active) {
-              final selected = _ruleChoices[active.key] ?? const <String>[];
-              return selected.length < active.definition.minimum ||
-                  selected.length > active.definition.maximum;
-            })
+            .where((active) => !_ruleChoiceIsComplete(active))
             .length,
       ),
       bottomBar: SafeArea(
@@ -330,28 +320,35 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     required _StandardBuildReview review,
     required String summary,
   }) {
-    // 值类型选择与以内联 `options` 表达候选的选择由**专门 UI** 承担（技能选择
-    // 在「熟练」步骤由 `_SkillProficiencySection` 承担），通用条目选项卡片对它
-    // 只会渲染"资料库中缺少 X 选项"的假错误。判据的唯一实现点是
-    // [RuleChoiceDefinition.usesDedicatedOptionUi]。
+    // `skill` 选择由「熟练」步骤的技能选择器承担（任务 7 起选中值也写进
+    // `_ruleChoices`），其余选择一律由共享组件渲染；判据的唯一实现点是
+    // [RuleChoiceDefinition.usesDedicatedOptionUi]（**渲染**判据，不再是免检）。
     final choicesForCurrentStep = activeRuleChoices.where((choice) {
       return choice.builderStep == _currentStep &&
           !choice.definition.usesDedicatedOptionUi;
     });
-    final ruleChoiceWidgets = [
-      for (final active in choicesForCurrentStep)
-        RuleChoiceSection(
-          definition: active.definition,
-          candidates: _candidatesFor(active),
-          selected: _ruleChoices[active.key] ?? const <String>[],
-          sourceLabel: _choiceSourceLabel(active),
-          onOpenEntry: _openEntry,
-          onChanged: (next) => setState(() {
-            _ruleChoices[active.key] = next;
-            _applyRecommendedRuleChoices();
-          }),
-        ),
-    ];
+    // `group` 相同的选择归一组（决策 D7）：组按首次声明顺序，无 group 的排最后。
+    // 归组只有 `groupRuleChoiceSections` 一处实现。
+    final ruleChoiceGroups = groupRuleChoiceSections<_ActiveRuleChoice>(
+      choicesForCurrentStep,
+      groupOf: (active) => active.definition.group,
+      buildChoice: (active) => RuleChoiceSection(
+        definition: active.definition,
+        candidates: _candidatesFor(active),
+        selected: _ruleChoices[active.key] ?? const <String>[],
+        sourceLabel: _choiceSourceLabel(active),
+        blockedReason: _blockedReasonFor(active),
+        requiresContext: _requiresContextFor(active),
+        onOpenEntry: _openEntry,
+        onChanged: (next) => setState(() {
+          _ruleChoices[active.key] = next;
+          _applyRecommendedRuleChoices();
+        }),
+      ),
+    );
+    final ruleChoiceWidgets = RuleChoiceGroupedSections(
+      groups: ruleChoiceGroups,
+    );
     final classSkillChoice = StructuredClassRules.skillChoice(
       _entryById(_classEntryId),
     );
@@ -392,7 +389,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
               _applyRecommendedRuleChoices();
             }),
           ),
-          ...ruleChoiceWidgets,
+          ruleChoiceWidgets,
           _RuleGrantPreview(
             entries: _ruleEntriesForStep(0, activeRuleChoices),
             level: _level,
@@ -415,7 +412,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
               _applyRecommendedRuleChoices();
             }),
           ),
-          ...ruleChoiceWidgets,
+          ruleChoiceWidgets,
           _RuleGrantPreview(
             entries: _ruleEntriesForStep(1, activeRuleChoices),
             level: _level,
@@ -437,7 +434,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
               _applyRecommendedRuleChoices();
             }),
           ),
-          ...ruleChoiceWidgets,
+          ruleChoiceWidgets,
           _RuleGrantPreview(
             entries: _ruleEntriesForStep(2, activeRuleChoices),
             level: _level,
@@ -461,6 +458,9 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
             onChanged: (ability, value) =>
                 setState(() => _abilityScores[ability] = value),
           ),
+          // 决策 D7：`builderStep: "abilities"` 也必须有渲染位置，否则
+          // `allowedBuilderSteps` 放行的选择会"看不见却阻塞创建"。
+          ruleChoiceWidgets,
         ],
       ),
       4 => Column(
@@ -475,7 +475,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
               'armorProficiency',
             ]),
           ),
-          ...ruleChoiceWidgets,
+          ruleChoiceWidgets,
           _SkillProficiencySection(
             selected: _selectedSkillProficiencies,
             options: classSkillChoice.options,
@@ -499,8 +499,8 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
               'startingEquipment',
             ]),
           ),
-          ...ruleChoiceWidgets,
-          if (ruleChoiceWidgets.isEmpty) ...[
+          ruleChoiceWidgets,
+          if (ruleChoiceGroups.isEmpty) ...[
             _EquipmentBudgetSummary(
               startingEquipment: startingEquipment,
               selectedNames: _selectedItemRefs,
@@ -534,8 +534,8 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       6 => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ...ruleChoiceWidgets,
-          if (ruleChoiceWidgets.isEmpty)
+          ruleChoiceWidgets,
+          if (ruleChoiceGroups.isEmpty)
             _SpellChoiceSection(
               entries: spellEntries,
               selected: _selectedSpellRefs,
@@ -553,30 +553,35 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
             ),
         ],
       ),
-      7 => _DetailsStep(
-        name: _nameController.text,
-        avatarBytes: _avatarBytes,
-        isPickingAvatar: _pickingAvatar,
-        avatarPickError: _avatarPickError,
-        onPickAvatar: _pickAvatarImage,
-        appearanceController: _appearanceController,
-        personalityController: _personalityController,
-        idealsController: _idealsController,
-        bondsController: _bondsController,
-        flawsController: _flawsController,
-        backstoryController: _backstoryController,
-        privateNotesController: _privateNotesController,
+      // 决策 D7：`builderStep: "details"` 也必须有渲染位置（示例包
+      // `asi-or-feat` 就是这一类），否则选择区不可见却仍阻塞创建。
+      7 => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ruleChoiceWidgets,
+          _DetailsStep(
+            name: _nameController.text,
+            avatarBytes: _avatarBytes,
+            isPickingAvatar: _pickingAvatar,
+            avatarPickError: _avatarPickError,
+            onPickAvatar: _pickAvatarImage,
+            appearanceController: _appearanceController,
+            personalityController: _personalityController,
+            idealsController: _idealsController,
+            bondsController: _bondsController,
+            flawsController: _flawsController,
+            backstoryController: _backstoryController,
+            privateNotesController: _privateNotesController,
+          ),
+        ],
       ),
       8 => _BuilderReviewStep(
         summary: summary,
         review: review,
         abilityMethodLabel: _abilityMethodLabel(_abilityMethod),
         pendingRuleChoices: activeRuleChoices
-            .where((active) {
-              final selected = _ruleChoices[active.key] ?? const <String>[];
-              return selected.length < active.definition.minimum ||
-                  selected.length > active.definition.maximum;
-            })
+            .where((active) => !active.definition.usesDedicatedOptionUi)
+            .where((active) => !_ruleChoiceIsComplete(active))
             .toList(growable: false),
       ),
       _ => const SizedBox.shrink(),
@@ -668,9 +673,9 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       final rules = entry?.rules;
       if (entry == null || rules == null) continue;
       for (final definition in rules.choices) {
-        final builderStep = _builderStepFor(
+        final builderStep = ruleChoiceBuilderStep(
           definition.builderStep,
-          current.builderStep,
+          inheritedStep: current.builderStep,
         );
         result.add(
           _ActiveRuleChoice(
@@ -691,9 +696,9 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
             .toList(growable: false);
         for (final reachedLevel in reachedLevels) {
           for (final definition in progression.choices) {
-            final builderStep = _builderStepFor(
+            final builderStep = ruleChoiceBuilderStep(
               definition.builderStep,
-              current.builderStep,
+              inheritedStep: current.builderStep,
             );
             result.add(
               _ActiveRuleChoice(
@@ -797,17 +802,30 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     for (final entry in widget.contentEntries) entry.id: entry,
   };
 
-  int _builderStepFor(String? declaredStep, int inheritedStep) {
-    return switch (declaredStep) {
-      'class' => 0,
-      'origin' => inheritedStep,
-      'abilities' => 3,
-      'proficiencies' => 4,
-      'equipment' => 5,
-      'spells' => 6,
-      'details' => 7,
-      _ => inheritedStep,
-    };
+  RuleChoiceRequiresContext _requiresContextFor(_ActiveRuleChoice active) =>
+      RuleChoiceRequiresContext(
+        sourceEntryId: active.sourceEntryId,
+        selectedByKey: _ruleChoices,
+        abilities: _abilityScores,
+        entries: _entriesById,
+      );
+
+  /// 选择级 `requires` 不满足时的原因文案；满足时为 `null`。判定与文案的唯一
+  /// 实现点是 `ruleChoiceBlockedReason`（`RuleChoiceSemantics.requiresSatisfied`）。
+  String? _blockedReasonFor(_ActiveRuleChoice active) => ruleChoiceBlockedReason(
+    active.definition.requires,
+    context: _requiresContextFor(active),
+  );
+
+  /// 一条选择是否**真的完成**：前置满足 + 数量在 `minimum`–`maximum` 之间。
+  ///
+  /// `ruleChoicesAreValid` / 摘要的 pending 计数 / 审核页清单共用它一处，
+  /// 不得各自再写一套判断。
+  bool _ruleChoiceIsComplete(_ActiveRuleChoice active) {
+    final selected = _ruleChoices[active.key] ?? const <String>[];
+    return _blockedReasonFor(active) == null &&
+        selected.length >= active.definition.minimum &&
+        selected.length <= active.definition.maximum;
   }
 
   void _applyRecommendedRuleChoices() {
@@ -818,10 +836,10 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     while (changed) {
       changed = false;
       for (final active in _activeRuleChoices()) {
-        // 值类型 / 内联候选的选择由专门 UI 承担（
-        // [RuleChoiceDefinition.usesDedicatedOptionUi]，唯一判据）：
-        // `recommendedEntryIds` 只可能指向条目，写进 `_ruleChoices` 会以
-        // 条目 id 冒充值类型候选，泄漏进值类型/混合选择的答案里。
+        // `recommendedEntryIds` 只指向**条目**，而 `skill` 选择由技能选择器承担
+        // （[RuleChoiceDefinition.usesDedicatedOptionUi]，纯渲染判据）：把条目 id
+        // 写进 `_ruleChoices` 会让它对不上候选。其余选择（含内联值类型）的推荐
+        // 一律经 `recommendedFor` 的候选过滤，解析不到条目候选时自然为空。
         if (active.definition.usesDedicatedOptionUi) continue;
         if ((_ruleChoices[active.key] ?? const <String>[]).isNotEmpty) continue;
         final recommended = resolver.recommendedFor(

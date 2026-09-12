@@ -104,6 +104,12 @@ class _CharacterUpgradePageState extends State<CharacterUpgradePage> {
                           child: _ChoiceOptions(
                             choice: choice,
                             entries: _entries,
+                            requiresContext: RuleChoiceRequiresContext(
+                              sourceEntryId: choice.sourceEntryId,
+                              selectedByKey: plan.build.choices,
+                              abilities: plan.build.abilities,
+                              entries: _entries,
+                            ),
                             onChanged: (selected) =>
                                 _select(choice.key, selected),
                           ),
@@ -200,22 +206,27 @@ class _ChoiceOptions extends StatelessWidget {
   const _ChoiceOptions({
     required this.choice,
     required this.entries,
+    required this.requiresContext,
     required this.onChanged,
   });
 
   final ActiveRuleChoice choice;
   final Map<String, ContentEntry> entries;
+  final RuleChoiceRequiresContext requiresContext;
   final ValueChanged<List<String>> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    // `usesDedicatedOptionUi` 是**渲染判据**：技能选择由角色卡上的技能选择器
-    // 承担，独立升级页没有该选择器，给中性文案而不是把正常声明渲染成"没有符合
-    // 条件的资料条目"的红色缺料错误（判据的唯一实现在
-    // `RuleChoiceDefinition.usesDedicatedOptionUi`）。
-    if (choice.definition.usesDedicatedOptionUi) {
-      return const Text('该选择由对应界面选择。');
-    }
+    // 候选一律经 `RuleChoiceSemantics.candidatesFor`（内联 `options` + 条目候选
+    // 合并），共享组件是唯一的渲染器；`requires` 的判定与原因文案同样只有
+    // `RuleChoiceSemantics.requiresSatisfied` / `ruleChoiceBlockedReason` 两处。
+    final blockedReason = choice.requiresSatisfied
+        ? null
+        : ruleChoiceBlockedReason(
+                choice.definition.requires,
+                context: requiresContext,
+              ) ??
+              '前置条件不满足';
     return RuleChoiceSection(
       definition: choice.definition,
       candidates: RuleChoiceSemantics.candidatesFor(
@@ -225,6 +236,8 @@ class _ChoiceOptions extends StatelessWidget {
       ),
       selected: choice.selected,
       showTitle: false,
+      blockedReason: blockedReason,
+      requiresContext: requiresContext,
       onOpenEntry: (entry) => showContentEntryPreviewDialog(
         context,
         entry: entry,

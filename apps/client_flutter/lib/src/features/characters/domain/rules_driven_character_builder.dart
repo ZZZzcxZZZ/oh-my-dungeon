@@ -127,23 +127,28 @@ class RulesDrivenCharacterBuilder {
       ledger,
       extraEntryIds: {...extraSpellRefs, ...extraItemRefs},
     );
-    // 记录型选择（`language` / `damageType` / `weaponMastery` / `value`）的落库
-    // 镜像：与 `build.choices` 同形（键 = 生效单元键），便于内容显示按 key 读取；
-    // **不做数值派生**。
+    // **全部**规则选择的落库镜像：与 `build.choices` 同形（键 = 生效单元键），
+    // 含条目选择与记录型值类型选择；**不做数值派生**。
+    //
+    // 注意：`data['choices']` 目前在 `lib` 内**没有读取方**（角色卡读
+    // `data['build']['choices']` / `data['resolvedGrants']`）——读取方待接入
+    // （计划 2 批次 E 之后的内容显示），这里先保证"每个生效单元都有落库记录"。
     final recordedChoices = <String, List<String>>{
       for (final entry in ledger.resolvedChoices.entries) entry.key: entry.value,
     };
     // 语言落到**既有存储** `data['profile']['languages']`（决策 D6）：
     // `CharacterProfile.fromCharacter` 读的就是它，`data['languages']` 没有读取方。
+    // 再派生只**嵌套合并**这一个键（`CharacterProfile.mergeLanguages`），不得整份
+    // 覆盖 `profile`——那会删掉同 map 的 appearance / backstory。
     final languagePicks = _languagePicks(ledger);
     // 装备方案 A/B（`optionType: "equipmentBundle"` 的选中值）：物品与货币的解析
     // 只有 `EquipmentBundleItems.from` 一处，`inventory` / `currency` 都读它。
     final equipmentBundles = _equipmentBundles(ledger);
     // 显式法术选择的镜像（契约 §3.11 A3）：选中的法术**全部**进
-    // `preparedEntryIds`；`countsToward == null` 的那些额外记
-    // `alwaysPreparedEntryIds`（仅用于展示"始终准备"标记）。判定与去重只有
-    // `_spellChoicePicks` 一处。
-    final spellPicks = _spellChoicePicks(ledger);
+    // `alwaysPreparedEntryIds`（选择派生的"自动准备"）；`preparedEntryIds` 是
+    // **用户手动准备**的专属存储，派生一律不写（否则再派生会覆盖用户操作）。
+    // 判定与去重只有 `_spellChoicePreparedPicks` 一处。
+    final spellPicks = _spellChoicePreparedPicks(ledger);
 
     return CharacterEditDraft(
       name: name.trim(),
@@ -169,14 +174,12 @@ class RulesDrivenCharacterBuilder {
         'build': effectiveBuild.toJson(),
         'choices': recordedChoices,
         if (languagePicks.isNotEmpty) 'profile': {'languages': languagePicks},
-        if (spellPicks.prepared.isNotEmpty)
-          'manualOverrides': {
-            'spells': {
-              'preparedEntryIds': spellPicks.prepared,
-              if (spellPicks.alwaysPrepared.isNotEmpty)
-                'alwaysPreparedEntryIds': spellPicks.alwaysPrepared,
-            },
-          },
+        // **无条件**写法术镜像（P2-11）：只在非空时写会让"取消全部法术选择后再
+        // 派生"永远清不掉旧镜像。镜像只有 `alwaysPreparedEntryIds` 一份
+        // （`preparedEntryIds` 属用户手动存储，派生不碰）。
+        'manualOverrides': {
+          'spells': {'alwaysPreparedEntryIds': spellPicks},
+        },
         'contentRefs': {
           'features': featureRefs,
           'spells': spellRefs,
@@ -386,26 +389,25 @@ class RulesDrivenCharacterBuilder {
   /// `spell` 分支）；两份镜像都在这里生成，
   /// **不得**再有第二个合并点。两份都是**去重**集合（决策 D9）：重复选取的次数
   /// 只保留在有序的 `build.choices` 里。
-  ({List<String> prepared, List<String> alwaysPrepared}) _spellChoicePicks(
-    CharacterGrantLedger ledger,
-  ) {
+  /// 显式法术选择（`optionType: "spell"`）的**自动准备**镜像（契约 §3.11 A3）。
+  ///
+  /// 选中的法术**全部**进 `alwaysPreparedEntryIds`，按首次出现顺序去重（决策 D9：
+  /// 重复选取的**次数**只保留在有序的 `build.choices` 里）；
+  /// `preparedSpellEntryIds` 是**用户手动准备**的存储，这里**不产出**它。
+  /// 判定与去重只有本方法一处。
+  List<String> _spellChoicePreparedPicks(CharacterGrantLedger ledger) {
     final prepared = <String>[];
-    final alwaysPrepared = <String>[];
     for (final choice in ledger.resolvedChoices.entries) {
       final resolved = RuleChoiceSemantics.definitionForKey(
         choice.key,
         entries: entries,
       );
       if (resolved == null || !resolved.definition.isSpellChoice) continue;
-      final countsToward = resolved.definition.countsToward;
       for (final id in choice.value) {
         if (!prepared.contains(id)) prepared.add(id);
-        if (countsToward == null && !alwaysPrepared.contains(id)) {
-          alwaysPrepared.add(id);
-        }
       }
     }
-    return (prepared: prepared, alwaysPrepared: alwaysPrepared);
+    return prepared;
   }
 
   /// 装备方案 A/B：`optionType: "equipmentBundle"` 选择的选中值 → 逐条

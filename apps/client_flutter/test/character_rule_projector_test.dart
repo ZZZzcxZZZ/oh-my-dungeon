@@ -325,6 +325,64 @@ void main() {
       reason: '已记录的基础值不被最终值覆盖，否则每次派生都会再减一份加值',
     );
   });
+  // P1-2 反向回归：再派生必须把派生出的语言**嵌套合并**进 `data['profile']`
+  // （角色卡读 `profile.languages`），且只改 `languages` 一个键——整份覆盖会删掉
+  // 同 map 的 appearance / backstory。
+  test('再派生合并语言进 profile.languages，不删 appearance/backstory', () {
+    final classEntry = _entry(
+      id: 'test:class/scholar',
+      type: 'class',
+      name: '学者',
+      rules: const {
+        'choices': [
+          {
+            'id': 'extra-language',
+            'label': '额外语言',
+            'optionType': 'language',
+            'minimum': 1,
+            'maximum': 1,
+            'options': ['龙语', '精灵语'],
+          },
+        ],
+      },
+    );
+    final legacy =
+        CharacterSheet.local(
+          id: 'legacy-scholar',
+          name: '旧学者',
+          level: 1,
+          classSummary: '学者',
+        ).copyWith(
+          data: <String, Object?>{
+            'build': <String, Object?>{
+              'level': 1,
+              'selections': <String, Object?>{
+                'class': 'test:class/scholar',
+              },
+              'choices': <String, Object?>{
+                'test:class/scholar#extra-language': <String>['龙语'],
+              },
+            },
+            'profile': <String, Object?>{
+              'backstory': '老兵',
+              'appearance': '高个',
+            },
+          },
+        );
+
+    final projected = CharacterRuleProjector(
+      entries: {classEntry.id: classEntry},
+    ).project(legacy);
+
+    final profile = projected.dataMap['profile']! as Map;
+    expect(
+      profile['languages'],
+      <String>['龙语'],
+      reason: '语言选择必须落到角色卡读取的 profile.languages（静默丢弃是 P1-2）',
+    );
+    expect(profile['backstory'], '老兵', reason: '嵌套合并只改 languages');
+    expect(profile['appearance'], '高个', reason: '嵌套合并只改 languages');
+  });
 }
 
 ContentEntry _entry({

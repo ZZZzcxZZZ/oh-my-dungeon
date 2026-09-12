@@ -166,14 +166,15 @@ class _SpellsPanelState extends State<_SpellsPanel> {
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text(
-                            resolved.preparedSpellEntryIds.contains(spell)
+                            resolved.effectivePreparedSpellEntryIds.contains(spell)
                                 ? '已准备'
                                 : '未准备',
                           ),
-                          // 契约 §3.11 A3：`countsToward == null` 的显式法术选择
-                          // （不占数量池）额外记 `alwaysPreparedEntryIds`，这里给出
-                          // "始终准备"标记（secondaryContainer / onSecondaryContainer，
-                          // 无新 token）。
+                          // 契约 §3.11 A3：显式法术选择的选中值由规则派生成
+                          // `alwaysPreparedEntryIds`（"自动准备"，用户不能手动取消），
+                          // 这里给出标记（secondaryContainer / onSecondaryContainer，
+                          // 无新 token）。手动准备的存储是 preparedEntryIds；"已准备"
+                          // 判定读两者的并集（`effectivePreparedSpellEntryIds`）。
                           if (resolved.alwaysPreparedSpellEntryIds.contains(spell))
                             Chip(
                               key: Key('always-prepared-$spell'),
@@ -203,15 +204,15 @@ class _SpellsPanelState extends State<_SpellsPanel> {
                           if (widget.onSaveCharacter != null)
                             IconButton(
                               tooltip:
-                                  resolved.preparedSpellEntryIds.contains(spell)
+                                  resolved.effectivePreparedSpellEntryIds.contains(spell)
                                   ? '取消准备${_entryName(spell)}'
                                   : '准备${_entryName(spell)}',
                               onPressed: () => _setPrepared(
                                 spell,
-                                !resolved.preparedSpellEntryIds.contains(spell),
+                                !resolved.effectivePreparedSpellEntryIds.contains(spell),
                               ),
                               icon: Icon(
-                                resolved.preparedSpellEntryIds.contains(spell)
+                                resolved.effectivePreparedSpellEntryIds.contains(spell)
                                     ? Icons.check_circle
                                     : Icons.check_circle_outline,
                               ),

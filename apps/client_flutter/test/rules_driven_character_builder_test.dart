@@ -1456,10 +1456,11 @@ void main() {
     });
   });
 
-  // 任务 9 / 契约 §3.11 A3：显式法术选择的选中法术**全部**进
-  // `manualOverrides.spells.preparedEntryIds`；`countsToward == null` 的那些
-  // **额外**进 `alwaysPreparedEntryIds`。
-  test('countsToward == null 的显式法术选择额外记 alwaysPreparedEntryIds', () {
+  // 任务 9 / 契约 §3.11 A3（P1-1 修订）：显式法术选择的选中值**全部**进
+  // `manualOverrides.spells.alwaysPreparedEntryIds`（选择派生的自动准备镜像）；
+  // `preparedEntryIds` 是**用户手动准备**的专属存储，派生一律不产出——是否
+  // `countsToward` 不再影响镜像口径。
+  test('显式法术选择全部记 alwaysPreparedEntryIds，不写 preparedEntryIds', () {
     final wizard = _entry(
       id: 'test:class/wizard',
       type: 'class',
@@ -1522,10 +1523,12 @@ void main() {
       abilities: const {'int': 16},
     );
 
-    final overrides = draft.data['manualOverrides']! as Map;
-    expect(overrides['spells'], {
-      'preparedEntryIds': ['test:spell/ward', 'test:spell/spark'],
-      'alwaysPreparedEntryIds': ['test:spell/ward'],
+    // 逐字相等：既断言两份选中值都进了自动准备镜像，也断言 `preparedEntryIds`
+    // **没有**被派生写入（写了就不再相等）。
+    expect(draft.data['manualOverrides'], {
+      'spells': {
+        'alwaysPreparedEntryIds': ['test:spell/ward', 'test:spell/spark'],
+      },
     });
   });
 
@@ -1584,7 +1587,6 @@ void main() {
       ],
     });
     expect((draft.data['manualOverrides']! as Map)['spells'], {
-      'preparedEntryIds': ['test:spell/spark'],
       'alwaysPreparedEntryIds': ['test:spell/spark'],
     });
   });

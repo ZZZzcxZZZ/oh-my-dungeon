@@ -2648,18 +2648,22 @@ test('countsToward: null 的法术选择额外记 alwaysPreparedEntryIds', () { 
 2) `RulesDrivenCharacterBuilder.build` 增：
 
 ```dart
+        // 无条件写：取消全部法术选择后再派生必须能清空旧镜像（P2-11）。
         'manualOverrides': {
           'spells': {
-            'preparedEntryIds': _preparedSpellIds(ledger),
-            if (_alwaysPreparedSpellIds(ledger).isNotEmpty)
-              'alwaysPreparedEntryIds': _alwaysPreparedSpellIds(ledger),
+            'alwaysPreparedEntryIds': _spellChoicePreparedPicks(ledger),
           },
         },
 ```
 
-语义（契约 §3.11 A3）：**所有** `optionType == 'spell'` 选择选中的法术都进 `preparedEntryIds`（不论 `countsToward`）；`countsToward == null` 的那些**额外**记 `alwaysPreparedEntryIds`（仅用于展示"始终准备"标记）。判定用 `RuleChoiceSemantics.definitionForKey` + `RuleChoiceSemantics.candidatesFor`（唯一实现点），不得自己 split 键或读 `entry.type`。
+语义（契约 §3.11 A3，**批次 C+D 审查后修订**）：**所有** `optionType == 'spell'` 选择选中的法术都进
+`alwaysPreparedEntryIds`（选择派生的"自动准备"镜像，与 `countsToward` 无关，按首次出现顺序去重）；
+`preparedEntryIds` 是**用户手动准备**的专属存储，规则派生一律不写、不覆盖（原先"派生结果覆盖 preparedEntryIds"
+会让"打开详情页自动再派生 → 保存"把用户的手动准备持久化丢掉）。界面判定"已准备"读两者的并集
+（`ResolvedCharacterOverrides.effectivePreparedSpellEntryIds`）。判定用 `RuleChoiceSemantics.definitionForKey`
+（唯一实现点），不得自己 split 键或读 `entry.type`。
 
-3) `character_editor_page._submitQuickBuild`（第 866–873 行，现在只在有自定义法术时**覆盖**写 `manualOverrides`）：改为**合并**——保留 builder 产出的 `preparedEntryIds` / `alwaysPreparedEntryIds`，只补 `customSpells`（`CharacterManualOverrides.copyWith` 已支持）：
+3) `character_editor_page._submitQuickBuild`（现在只在有自定义法术时**覆盖**写 `manualOverrides`）：改为**合并**——保留 builder 产出的 `alwaysPreparedEntryIds`（选择派生的自动准备镜像），只补 `customSpells`，不得把镜像整段丢掉：
 
 ```dart
       final mergedOverrides = CharacterManualOverrides.fromJson(
@@ -3217,5 +3221,5 @@ git commit -m "docs: 同步选择系统运行时语义的契约与行为变化"
 | **D6** | **扩契约**：给 `options[]` 增加 `requires`（`RuleChoiceOption.requires`），因为规格 §3.10.2 明说 `requires` 既能隐藏"该选择"也能隐藏"该选项"，而现有字段集没有载体。这是**加法**，规格 §3.10.2 补一行说明。 |
 | **D7** | **必修**：`builderStep: "abilities"`(步骤 3) 与 `"details"`(步骤 7) 当前没有 `ruleChoiceWidgets`，示例包的 `asi-or-feat` 在创建向导里根本不显示；摘掉"专门 UI 免检"后会变成"看不见却阻塞创建"。任务 6b 必须修掉，并加结构守卫测试（每个允许的 `builderStep` 都必须真的渲染选择区）。 |
 | **D8** | **降范围**：`optionType: "spell"` 的**运行时支持**照计划实现（法术池、`alwaysPreparedEntryIds`）；但**改提取器让它产出 `optionType:"spell"` 选择**不在本轮——PHB 包的法术选择现在由 `classRules.spellcasting` 正确承担，改提取器是另一大块且不影响正确性。规格 §11 明确记为延后（并说明"运行时已支持、只是 PHB 提取器未产出"）。 |
-| **D9** | 采纳计划：`manualOverrides.spells.preparedEntryIds` 仍是**去重集合**（语义是"常备"），重复选取的**次数**只保留在有序的 `build.choices` 里。规格补一句说明两者分工。 |
+| **D9** | 采纳计划：`manualOverrides.spells.preparedEntryIds`（用户手动准备）与 `alwaysPreparedEntryIds`（选择派生的自动准备）都是**去重集合**，重复选取的**次数**只保留在有序的 `build.choices` 里。批次 C+D 审查后修订：派生只写 `alwaysPreparedEntryIds`，读取侧按**并集**判定"已准备"（规格 §3.11 A3 已同步）。 |
 | **D10** | **不在本轮**：背景技能仍由 `_presetSkillsForBackground` 的中文名预设提供（不走背景条目的 `rules`）。列入 §11 延后项，注明"背景条目驱动技能授予"属后续工作。 |

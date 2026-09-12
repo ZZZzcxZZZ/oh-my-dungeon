@@ -1525,7 +1525,11 @@ void main() {
     );
     final overrideSpells =
         (submitted!.data['manualOverrides']! as Map)['spells']! as Map;
-    expect(overrideSpells['preparedEntryIds'], ['guide:spell/spark']);
+    // P1-1 反向回归：选择派生的自动准备镜像只写 `alwaysPreparedEntryIds`；
+    // `preparedEntryIds` 是用户手动准备的专属存储，向导不得写入（写了会在
+    // 再派生时覆盖用户的手动准备）。
+    expect(overrideSpells['alwaysPreparedEntryIds'], ['guide:spell/spark']);
+    expect(overrideSpells['preparedEntryIds'], isNot(contains('guide:spell/spark')));
     expect(
       overrideSpells['custom'],
       hasLength(1),

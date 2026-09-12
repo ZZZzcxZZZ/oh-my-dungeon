@@ -909,8 +909,8 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
               ),
             );
       // 手动覆盖**合并**而非覆盖（契约 §3.11 A3）：builder 已经写入了显式法术
-      // 选择的 `preparedEntryIds` / `alwaysPreparedEntryIds`，这里只补自定义法术，
-      // 不得把它们整段丢掉。解析与序列化只有 `CharacterManualOverrides` 一处。
+      // 选择的 `alwaysPreparedEntryIds`（自动准备镜像），这里只补自定义法术，
+      // 不得把它整段丢掉。解析与序列化只有 `CharacterManualOverrides` 一处。
       final mergedOverrides = CharacterManualOverrides.fromJson(
         Map<String, Object?>.from(
           (baseDraft.data['manualOverrides'] as Map?) ??

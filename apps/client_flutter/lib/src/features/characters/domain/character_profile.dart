@@ -84,6 +84,26 @@ class CharacterProfile {
     'privateNotes': privateNotes,
   };
 
+  /// 把一次规则派生产出的 `profile.languages` 镜像**嵌套合并**进旧 `data['profile']`。
+  ///
+  /// **唯一实现点**（再派生的 profile 合并）：projector 与 upgrade planner 都调它。
+  /// 只改 `languages` 一个键：
+  /// - 派生结果没写 `profile`（本次派生没有语言选择）→ 原样返回旧值，**不清空**
+  ///   已有语言；
+  /// - 整份覆盖会删掉同 map 的 `appearance` / `backstory` 等字段（P1-2）。
+  static Map<String, Object?> mergeLanguages(
+    Object? oldProfile,
+    Object? derivedProfile,
+  ) {
+    final oldMap = oldProfile is Map
+        ? Map<String, Object?>.from(oldProfile)
+        : <String, Object?>{};
+    if (derivedProfile is! Map) return oldMap;
+    final derivedLanguages = derivedProfile['languages'];
+    if (derivedLanguages is! List) return oldMap;
+    return <String, Object?>{...oldMap, 'languages': derivedLanguages};
+  }
+
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||

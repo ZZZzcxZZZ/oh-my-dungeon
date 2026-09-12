@@ -44,11 +44,12 @@ class CharacterManualOverrides {
   final List<String> removedSpellEntryIds;
   final List<String> preparedSpellEntryIds;
 
-  /// `countsToward == null` 的**显式法术选择**（`optionType: "spell"`）选中的法术：
-  /// 它们不占数量池，额外记一份用于展示"始终准备"标记（契约 §3.11 A3）。
+  /// **选择派生**的"自动准备"法术（契约 §3.11 A3）：显式法术选择（`optionType:
+  /// "spell"`）的选中值，由 `RulesDrivenCharacterBuilder` 产出、经
+  /// `copyWithSpellPicksFrom` 合并。界面把它与 [preparedSpellEntryIds] 的并集当作
+  /// "已准备"（并集只有 `ResolvedCharacterOverrides` 一处实现）。
   ///
-  /// 与 [preparedSpellEntryIds] 一样是**去重集合**（决策 D9）：重复选取的**次数**
-  /// 只保留在有序的 `build.choices` 里。
+  /// 是**去重集合**（决策 D9）：重复选取的**次数**只保留在有序的 `build.choices` 里。
   final List<String> alwaysPreparedEntryIds;
 
   final List<Map<String, Object?>> customSpells;
@@ -80,19 +81,22 @@ class CharacterManualOverrides {
     );
   }
 
-  /// 用一次规则派生产出的**显式法术选择镜像**更新准备状态（契约 §3.11 A3）。
+  /// 用一次规则派生产出的**显式法术选择镜像**更新"自动准备"标记（契约 §3.11 A3）。
   ///
-  /// **唯一合并点**：只改 `preparedSpellEntryIds` / `alwaysPreparedEntryIds`
-  /// （builder 的 `data['manualOverrides']` 就带这两份），其余字段——自定义法术、
-  /// 手动添加 / 移除的法术、隐藏的授予——一律原样保留。升级与再派生都必须走它，
-  /// 不得各自写一份"覆盖式"合并。
+  /// **唯一合并点**，且**只写 [alwaysPreparedEntryIds]**：
+  /// - [preparedSpellEntryIds] 是**用户手动准备**的专属存储
+  ///   （`CharacterQuickEditService.setSpellPrepared`）——派生覆盖它会让
+  ///   "打开详情页自动再派生 → 保存"把用户的操作持久化丢掉，因此派生结果里的
+  ///   `preparedEntryIds` 一律**忽略**；
+  /// - 读取侧判定"已准备"读两者的**并集**
+  ///   （`ResolvedCharacterOverrides.effectivePreparedSpellEntryIds`，唯一实现点）。
+  ///
+  /// 其余字段——自定义法术、手动添加 / 移除的法术、隐藏的授予——一律原样保留。
+  /// 升级与再派生都必须走它，不得各自写一份"覆盖式"合并。
   CharacterManualOverrides copyWithSpellPicksFrom(
     CharacterManualOverrides picks,
   ) {
-    return copyWith(
-      preparedSpellEntryIds: picks.preparedSpellEntryIds,
-      alwaysPreparedEntryIds: picks.alwaysPreparedEntryIds,
-    );
+    return copyWith(alwaysPreparedEntryIds: picks.alwaysPreparedEntryIds);
   }
 
   Map<String, Object?> toJson() => <String, Object?>{

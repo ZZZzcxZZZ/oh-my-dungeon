@@ -14,11 +14,24 @@ class ResolvedCharacterOverrides {
 
   final List<String> featureEntryIds;
   final List<String> spellEntryIds;
+
+  /// **用户手动准备**的法术（只保留当前确实存在的法术）。
   final List<String> preparedSpellEntryIds;
 
-  /// `countsToward == null` 的显式法术选择选中的法术（契约 §3.11 A3），
-  /// 与 [preparedSpellEntryIds] 一样只保留**当前确实存在的法术**。
+  /// 显式法术选择派生出的**自动准备**法术（契约 §3.11 A3），同样只保留当前确实
+  /// 存在的法术。
   final List<String> alwaysPreparedSpellEntryIds;
+
+  /// 界面判定"已准备"的唯一入口：**手动准备 ∪ 选择派生的自动准备**。
+  ///
+  /// 两条来源分属两个存储（`preparedEntryIds` / `alwaysPreparedEntryIds`），
+  /// 任何读取方都不得只看其中一条——只看 `preparedSpellEntryIds` 会让派生的法术
+  /// 显示成"未准备"，只看 `alwaysPreparedSpellEntryIds` 会漏掉用户的手动操作。
+  List<String> get effectivePreparedSpellEntryIds => <String>[
+    ...preparedSpellEntryIds,
+    for (final entryId in alwaysPreparedSpellEntryIds)
+      if (!preparedSpellEntryIds.contains(entryId)) entryId,
+  ];
 
   final List<Map<String, Object?>> customFeatures;
   final List<Map<String, Object?>> customSpells;

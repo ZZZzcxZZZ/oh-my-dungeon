@@ -568,7 +568,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 |---|---|---|
 | A1 | 内联特性/内联选项的**描述文字**没有字段 | 约定 `data.description`（字符串），界面在特性/选项行下方以小字展示；`RuleGrantDefinition.data` 保持自由字典 |
 | A2 | **装备方案 A/B 的条目结构未定义** | `equipmentBundle` 条目的 `structured.items` = `[{name, quantity}]`，`structured.currency` = `{cp,sp,ep,gp,pp}`；选中后按此写入 `inventory` 与 `currency`，并忽略 `structured.itemTemplate` |
-| A3 | **`countsToward: null`（不占上限）与现有"已准备"存储的关系未定义** | `countsToward` 只决定**是否计入数量上限**；无论取值如何，选中的法术都写入 `manualOverrides.spells.preparedEntryIds`（`null` 时额外记 `alwaysPreparedEntryIds`，仅用于展示"始终准备"标记） |
+| A3 | **`countsToward: null`（不占上限）与现有"已准备"存储的关系未定义** | `countsToward` 只决定**是否计入数量上限**；显式法术选择的选中值**全部**写入 `manualOverrides.spells.alwaysPreparedEntryIds`（选择派生的"自动准备"镜像，与 `countsToward` 无关）。`preparedEntryIds` 是**用户手动准备**的专属存储，规则派生一律不写、不覆盖；界面判定"已准备"读两者的**并集**（`ResolvedCharacterOverrides.effectivePreparedSpellEntryIds`，唯一实现点）。镜像**无条件**写（取消全部选择后必须能清空旧镜像） |
 | A4 | **`requires` 的 `choice` 引用作用域未定义** | 可引用"同一 `sourceEntryId`"，或沿 `relations` 的 `featureOf` / `subclassOf` 链向上找到的祖先条目；导入期按该链校验引用存在性 |
 
 **B 类：用户已拍板——"包格式最后统一到只有一个；一定要干净稳定强大"**

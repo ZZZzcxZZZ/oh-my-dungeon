@@ -3,6 +3,7 @@ import '../../rules/domain/character_build.dart';
 import 'character.dart';
 import 'character_content_reference.dart';
 import 'character_manual_overrides.dart';
+import 'character_profile.dart';
 import 'declared_levels.dart';
 import 'dnd5e_rules.dart';
 import 'rules_driven_character_builder.dart';
@@ -94,9 +95,16 @@ class CharacterRuleProjector {
       oldData['contentRefs'],
       derivedData['contentRefs'],
     );
+    // 语言选择派生的 `profile.languages` 单独**嵌套合并**（P1-2）：只改这一个键，
+    // `appearance` / `backstory` 等同 map 字段原样保留。合并实现只有
+    // `CharacterProfile.mergeLanguages` 一处。
+    mergedData['profile'] = CharacterProfile.mergeLanguages(
+      oldData['profile'],
+      derivedData['profile'],
+    );
     // 显式法术选择的"已准备 / 始终准备"镜像同样由派生更新（§3.11 A3）：
-    // **合并**（只改这两份镜像），用户的手动法术编辑原样保留。合并实现只有
-    // `CharacterManualOverrides.copyWithSpellPicksFrom` 一处。
+    // **合并**（只改自动准备镜像），用户手动准备 / 自定义法术原样保留。合并实现
+    // 只有 `CharacterManualOverrides.copyWithSpellPicksFrom` 一处。
     if (derivedData['manualOverrides'] case final Map derivedOverrides) {
       mergedData['manualOverrides'] = CharacterManualOverrides.fromJson(
         Map<String, Object?>.from(

@@ -89,9 +89,26 @@ void main() {
       expect(upgraded.currentHp, greaterThan(initial.currentHp));
       expect(upgraded.inventory, initial.inventory);
       expect(upgraded.runtimeMap['temporaryHp'], 3);
+      // P1-1/P2-11 之后派生**无条件**写法术自动准备镜像（否则取消全部选择后
+      // 清不掉旧镜像），所以不再与旧 map 逐字相等；这里按载荷逐项断言：手动覆盖
+      // 原样保留、手动专属的 preparedEntryIds 不被派生写入、镜像为空。
+      final overrides = upgraded.dataMap['manualOverrides']! as Map;
       expect(
-        upgraded.dataMap['manualOverrides'],
-        initial.dataMap['manualOverrides'],
+        (overrides['features']! as Map)['addedEntryIds'],
+        <String>['feature:homebrew'],
+        reason: '手动覆盖必须原样保留（apply 只负责合并派生镜像）',
+      );
+      expect(
+        (overrides['spells']! as Map)['preparedEntryIds'],
+        isEmpty,
+        reason:
+            'preparedEntryIds 是用户手动准备的专属存储（本夹具没有手动准备，'
+            '`toJson` 把缺省序列化为空列表）；派生不覆盖它由专门的反向回归断言',
+      );
+      expect(
+        (overrides['spells']! as Map)['alwaysPreparedEntryIds'],
+        isEmpty,
+        reason: '本角色没有显式法术选择：自动准备镜像被无条件清空',
       );
       expect(upgraded.dataMap['profile'], initial.dataMap['profile']);
       expect(
@@ -510,9 +527,10 @@ void main() {
     });
   });
 
-  // 任务 9 / 契约 §3.11 A3：升级派生出的"已准备法术"镜像必须**合并**进既有
-  // 手动覆盖（只改这两份），用户的手动覆盖原样保留。
-  test('升级合并显式法术选择镜像，不覆盖手动覆盖（§3.11 A3）', () {
+  // 任务 9 / 契约 §3.11 A3（P1-1 修订）：升级派生出的自动准备镜像写
+  // `alwaysPreparedEntryIds`；`preparedSpellEntryIds` 是**用户手动准备**的专属存储，
+  // 派生一律不覆盖——否则"升级一次 = 用户手动准备丢失"。
+  test('升级只更新自动准备镜像，手动准备的法术不被覆盖（§3.11 A3）', () {
     final mage = _entry(
       id: 'class:mage',
       type: 'class',
@@ -558,6 +576,15 @@ void main() {
           'selections': <String, String>{'class': 'class:mage'},
           'choices': <String, List<String>>{},
         },
+        // 用户手动准备了一个**非选择来源**的法术。
+        'manualOverrides': <String, Object?>{
+          'features': <String, Object?>{
+            'addedEntryIds': <String>['feature:homebrew'],
+          },
+          'spells': <String, Object?>{
+            'preparedEntryIds': <String>['spell:manual'],
+          },
+        },
       },
     );
 
@@ -571,14 +598,85 @@ void main() {
     final upgraded = planner.apply(initial, completed);
 
     final overrides = upgraded.dataMap['manualOverrides']! as Map;
+    final spells = overrides['spells']! as Map;
     expect(
-      (overrides['spells']! as Map)['preparedEntryIds'],
+      spells['alwaysPreparedEntryIds'],
       <String>['spell:spark'],
+      reason: '选择派生的自动准备镜像照常更新（读取侧按并集判定已准备）',
+    );
+    expect(
+      spells['preparedEntryIds'],
+      <String>['spell:manual'],
+      reason: '手动准备的法术必须原样保留，派生不得覆盖（反向回归）',
     );
     expect(
       (overrides['features']! as Map)['addedEntryIds'],
       <String>['feature:homebrew'],
-      reason: '合并只改法术准备镜像，手动覆盖必须保留',
+      reason: '合并只改法术镜像，手动覆盖必须保留',
+    );
+  });
+
+  // P1-2 反向回归：语言选择的选中值必须进 `data['profile']['languages']`
+  // （角色卡读的就是它），且**嵌套合并**不得删掉同 map 的 backstory 等字段。
+  test('升级把派生语言合并进 profile.languages，不删 profile 其它字段', () {
+    final sage = _entry(
+      id: 'class:sage',
+      type: 'class',
+      name: 'Sage',
+      structured: const {
+        'classRules': {'hitDie': 6},
+      },
+      rules: const {
+        'progression': [
+          {
+            'levels': [2],
+            'choices': [
+              {
+                'id': 'extra-language',
+                'label': '额外语言',
+                'optionType': 'language',
+                'minimum': 1,
+                'maximum': 1,
+                'options': ['龙语', '精灵语'],
+              },
+            ],
+          },
+        ],
+      },
+    );
+    final planner = CharacterUpgradePlanner(entries: {sage.id: sage});
+    final base = _character();
+    final initial = base.copyWith(
+      data: <String, Object?>{
+        ...base.dataMap,
+        'build': <String, Object?>{
+          'level': 1,
+          'selections': <String, String>{'class': 'class:sage'},
+          'choices': <String, List<String>>{},
+        },
+      },
+    );
+
+    final plan = planner.plan(initial);
+    expect(plan.choices.single.definition.optionType, 'language');
+    final completed = planner.select(
+      initial,
+      plan,
+      plan.choices.single.key,
+      <String>['龙语'],
+    );
+    final upgraded = planner.apply(initial, completed);
+
+    final profile = upgraded.dataMap['profile']! as Map;
+    expect(
+      profile['languages'],
+      <String>['龙语'],
+      reason: '语言选择必须落到角色卡读取的 profile.languages，而不是只进 build.choices',
+    );
+    expect(
+      profile['backstory'],
+      'Veteran',
+      reason: '嵌套合并只改 languages，profile 的其它字段必须保留',
     );
   });
 }

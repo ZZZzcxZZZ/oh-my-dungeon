@@ -78,7 +78,10 @@ void main() {
     expect(restored, overrides);
   });
 
-  test('copyWith 保留 alwaysPreparedEntryIds；copyWithSpellPicksFrom 是唯一合并点', () {
+  // P1-1 反向回归：`preparedSpellEntryIds` 是**用户手动准备**的专属存储。选择派生
+  // （`copyWithSpellPicksFrom`）只允许写 `alwaysPreparedEntryIds`——派生覆盖手动
+  // 准备会让"打开详情页自动再派生 → 保存"把用户的操作持久化丢掉。
+  test('copyWithSpellPicksFrom 只更新自动准备镜像，手动准备原样保留', () {
     const existing = CharacterManualOverrides(
       addedSpellEntryIds: ['manual-add'],
       preparedSpellEntryIds: ['old'],
@@ -87,8 +90,10 @@ void main() {
         {'id': 'custom', 'name': '星火束'},
       ],
     );
+    // 派生结果里仍带旧口径的 `preparedEntryIds`（与 alwaysPrepared 不同）：
+    // 合并必须**完全忽略**它，只取 alwaysPrepared。
     const picks = CharacterManualOverrides(
-      preparedSpellEntryIds: ['spark'],
+      preparedSpellEntryIds: ['legacy-derived-pick'],
       alwaysPreparedEntryIds: ['spark'],
     );
 
@@ -97,11 +102,48 @@ void main() {
     expect(withCustom.preparedSpellEntryIds, ['old']);
 
     final merged = existing.copyWithSpellPicksFrom(picks);
-    expect(merged.preparedSpellEntryIds, ['spark']);
-    expect(merged.alwaysPreparedEntryIds, ['spark']);
+    expect(
+      merged.preparedSpellEntryIds,
+      ['old'],
+      reason: '手动准备的法术必须原样保留，派生不得覆盖（反向回归）',
+    );
+    expect(
+      merged.alwaysPreparedEntryIds,
+      ['spark'],
+      reason: '选择派生的自动准备镜像照常更新',
+    );
+    expect(
+      merged.preparedSpellEntryIds,
+      isNot(contains('legacy-derived-pick')),
+      reason: '派生结果里的旧口径 preparedEntryIds 不得写进手动存储',
+    );
     // 其它字段（手动添加的法术、自定义法术）原样保留，不被"覆盖式合并"丢掉。
     expect(merged.addedSpellEntryIds, ['manual-add']);
     expect(merged.customSpells, hasLength(1));
+  });
+
+  // P1-1 读取侧：界面判定"已准备"读**并集**（手动准备 + 选择派生的自动准备）。
+  // 并集的唯一实现点是 `ResolvedCharacterOverrides.effectivePreparedSpellEntryIds`。
+  test('已准备判定 = 手动准备 ∪ 选择派生的自动准备（只保留存在的法术）', () {
+    final character = CharacterSheet.local(id: 'hero', name: 'Hero', level: 2)
+        .copyWith(
+          data: <String, Object?>{
+            'contentRefs': <String, Object?>{
+              'spells': <String>['spell:spark', 'spell:ward'],
+            },
+            'manualOverrides': const CharacterManualOverrides(
+              preparedSpellEntryIds: ['spell:ward'],
+              alwaysPreparedEntryIds: ['spell:spark', 'spell:gone'],
+            ).toJson(),
+          },
+        );
+
+    final resolved = CharacterOverrideResolver.resolve(character);
+    expect(
+      resolved.effectivePreparedSpellEntryIds,
+      unorderedEquals(<String>['spell:ward', 'spell:spark']),
+      reason: '两条来源都要算"已准备"；指向不存在法术的标记不算',
+    );
   });
 
   test('resolver 只保留当前存在的法术上的 alwaysPrepared 标记', () {

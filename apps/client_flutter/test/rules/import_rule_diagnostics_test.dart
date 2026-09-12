@@ -1564,8 +1564,8 @@ void main() {
     });
   });
 
-  // ── 阻塞项 4：选择系统"声明了但用不了"的字段一律拒收（§3.10.3-7）──
-  group('§3.10.3-7：选择系统字段声明了但用不了必须报 error', () {
+  // ── 选择系统字段（§3.10）：放行 + 真正的取值/引用校验（§5.1）──
+  group('选择系统字段（§3.10）：放行 + 真正的取值/引用校验', () {
     Future<ContentImportReport> reportFor(Map<String, Object?> extra) =>
         importer.previewJson(
           packageJson(
@@ -1591,52 +1591,17 @@ void main() {
           ),
         );
 
-    test('repeatable → unsupportedChoiceField，path 到字段', () async {
-      final report = await reportFor({'repeatable': true});
-      expect(report.valid, isFalse);
-      final error = report.errors.single;
-      expect(error.path, r'$.entries[0].rules.choices[0].repeatable');
-      expect(error.message, contains('unsupportedChoiceField'));
-    });
-
-    test('group / help → unsupportedChoiceField，各有自己的 path', () async {
-      final report = await reportFor({'group': '1 级', 'help': '说明'});
-      expect(report.valid, isFalse);
-      expect(
-        report.errors.map((e) => e.path),
-        containsAll(<String>[
-          r'$.entries[0].rules.choices[0].group',
-          r'$.entries[0].rules.choices[0].help',
-        ]),
-      );
-      expect(
-        report.errors.every((e) => e.message.contains('unsupportedChoiceField')),
-        isTrue,
-      );
-    });
-
-    test('countsToward → invalidCountsToward，path 到字段', () async {
-      final report = await reportFor({'countsToward': 'prepared'});
-      expect(report.valid, isFalse);
-      final error = report.errors.single;
-      expect(error.path, r'$.entries[0].rules.choices[0].countsToward');
-      expect(error.message, contains('invalidCountsToward'));
-    });
-
-    test('requires → invalidRequires，path 到字段', () async {
+    test('repeatable / group / help 放行', () async {
       final report = await reportFor({
-        'requires': [
-          {'ability': 'cha', 'minimum': 13},
-        ],
+        'repeatable': true,
+        'group': '1 级',
+        'help': '说明',
       });
-      expect(report.valid, isFalse);
-      final error = report.errors.single;
-      expect(error.path, r'$.entries[0].rules.choices[0].requires');
-      expect(error.message, contains('invalidRequires'));
+      expect(report.valid, isTrue, reason: report.errors.toString());
     });
 
-    test('内联选项 grants → unsupportedChoiceField，path 到 grants', () async {
-      final report = await reportFor({
+    test('内联选项的 grants 放行，且仍做 kind 校验', () async {
+      final ok = await reportFor({
         'options': <Object?>[
           {
             'id': 'poise',
@@ -1647,16 +1612,165 @@ void main() {
           },
         ],
       });
-      expect(report.valid, isFalse);
-      final error = report.errors.singleWhere(
-        (e) => e.message.contains('unsupportedChoiceField'),
+      expect(ok.valid, isTrue, reason: ok.errors.toString());
+
+      final bad = await reportFor({
+        'options': <Object?>[
+          {
+            'id': 'poise',
+            'label': '星界之势',
+            'grants': <Object?>[
+              {'id': 'g', 'kind': 'resource', 'label': '旧写法'},
+            ],
+          },
+        ],
+      });
+      expect(bad.valid, isFalse);
+      expect(
+        bad.errors.single.path,
+        r'$.entries[0].rules.choices[0].options[0].grants[0].kind',
       );
-      expect(error.path, r'$.entries[0].rules.choices[0].options[0].grants');
+      expect(bad.errors.single.message, contains('unknownGrantKind'));
     });
 
-    test('都不带 → 放行（拒收只针对这批字段，不是拒绝整个选择模型）', () async {
-      final report = await reportFor(const <String, Object?>{});
-      expect(report.valid, isTrue, reason: report.errors.toString());
+    test('countsToward：合法值放行，非法值报 invalidCountsToward', () async {
+      expect((await reportFor({'countsToward': 'prepared'})).valid, isTrue);
+      expect((await reportFor({'countsToward': 'spellbook'})).valid, isTrue);
+      expect((await reportFor({'countsToward': 'known'})).valid, isTrue);
+      expect((await reportFor({})).valid, isTrue, reason: '省略合法');
+
+      final bad = await reportFor({'countsToward': 'rituals'});
+      expect(bad.valid, isFalse);
+      final error = bad.errors.single;
+      expect(error.path, r'$.entries[0].rules.choices[0].countsToward');
+      expect(error.message, contains('invalidCountsToward'));
+    });
+
+    test('requires：合法形态放行；引用不存在 / 能力非法 / minimum 非正报 invalidRequires', () async {
+      expect(
+        (await reportFor({
+          'optionType': 'classFeature',
+          'optionTags': ['x'],
+          'requires': [
+            {'ability': 'cha', 'minimum': 13},
+          ],
+        })).valid,
+        isTrue,
+      );
+
+      for (final (bad, path) in <(Map<String, Object?>, String)>[
+        (
+          {
+            'requires': [
+              {'choice': 'missing-choice', 'option': 'x'},
+            ],
+          },
+          r'$.entries[0].rules.choices[0].requires[0].choice',
+        ),
+        (
+          {
+            'requires': [
+              {'ability': 'luck', 'minimum': 13},
+            ],
+          },
+          r'$.entries[0].rules.choices[0].requires[0].ability',
+        ),
+        (
+          {
+            'requires': [
+              {'ability': 'cha', 'minimum': 0},
+            ],
+          },
+          r'$.entries[0].rules.choices[0].requires[0].minimum',
+        ),
+      ]) {
+        final report = await reportFor(bad);
+        expect(report.valid, isFalse, reason: '$bad');
+        expect(
+          report.errors.map((e) => e.path),
+          contains(path),
+          reason: '$bad → ${report.errors}',
+        );
+        expect(
+          report.errors.firstWhere((e) => e.path == path).message,
+          contains('invalidRequires'),
+        );
+      }
+    });
+
+    test('invalidAutoGrant：条目类型的字符串选项无法推断 grants', () async {
+      final report = await reportFor({
+        'optionType': 'classFeature',
+        'optionTags': ['x'],
+        'options': <Object?>['星界之势'],
+      });
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.message.contains('invalidAutoGrant'),
+      );
+      expect(error.path, r'$.entries[0].rules.choices[0].options[0]');
+      expect(error.message, contains('星界之势'));
+    });
+
+    test('invalidAutoGrant 不适用于只记录选择的值类型与显式 grants 的对象选项', () async {
+      // skill / ability / language / damageType / weaponMastery / value 的字符串元素
+      for (final type in [
+        'skill',
+        'ability',
+        'language',
+        'damageType',
+        'weaponMastery',
+        'value',
+      ]) {
+        final report = await reportFor({
+          'optionType': type,
+          // 值类型选择的候选只允许内联 `options`（`invalidValueOption`），
+          // 因此必须显式清掉夹具默认的条目标签。
+          'optionTags': <Object?>[],
+          'options': <Object?>[type == 'skill' ? '察觉' : 'cha'],
+        });
+        expect(report.valid, isTrue, reason: '$type → ${report.errors}');
+      }
+      // 条目类型的**对象**选项（显式给 id/label）不需要 grants
+      final object = await reportFor({
+        'optionType': 'classFeature',
+        'optionTags': ['x'],
+        'options': <Object?>[
+          {'id': 'poise', 'label': '星界之势'},
+        ],
+      });
+      expect(object.valid, isTrue, reason: object.errors.toString());
+    });
+
+    test('字符串简写的 ability 候选必须是档案属性键（unknownAbility）', () async {
+      final report = await reportFor({
+        'optionType': 'ability',
+        'optionTags': <Object?>[],
+        'options': <Object?>['luck'],
+      });
+      expect(report.valid, isFalse);
+      final error = report.errors.single;
+      expect(error.message, contains('unknownAbility'));
+      expect(error.path, r'$.entries[0].rules.choices[0].options[0]');
+      expect(error.message, contains('luck'));
+    });
+
+    test('invalidAutoGrant：值类型的 ability 选项 data.value 非正整数', () async {
+      final report = await reportFor({
+        'optionType': 'ability',
+        'optionTags': <Object?>[],
+        'options': <Object?>[
+          {
+            'id': 'str',
+            'label': '力量',
+            'data': {'value': 0},
+          },
+        ],
+      });
+      expect(report.valid, isFalse);
+      final error = report.errors.single;
+      expect(error.path, r'$.entries[0].rules.choices[0].options[0]');
+      expect(error.message, contains('invalidAutoGrant'));
     });
   });
 

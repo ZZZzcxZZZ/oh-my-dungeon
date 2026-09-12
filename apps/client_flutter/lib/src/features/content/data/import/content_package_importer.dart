@@ -13,6 +13,7 @@ import '../../../characters/domain/dnd5e_rules.dart';
 import '../../../rules/domain/character_rule_definition.dart';
 import '../../../rules/domain/class_rule_set.dart';
 import '../../../rules/domain/rule_choice_resolver.dart';
+import '../../../rules/domain/rule_choice_semantics.dart';
 import '../../../rules/domain/rule_diagnostic.dart';
 import '../../../rules/domain/rule_profile_resolver.dart';
 import '../../../rules/domain/rule_values.dart';
@@ -34,10 +35,6 @@ class ContentPackageImporter {
     for (final schema in ContentSchemaRegistry.defaults.schemas) schema.type,
     ...kValueOptionTypes,
   };
-
-  /// `repeatable` / `group` / `help` 在计划 2 之前没有运行时语义，但没有专属的
-  /// §5.1 code；导入期统一用这个新 code 拒收（不静默接受）。
-  static const _unsupportedChoiceFields = {'repeatable', 'group', 'help'};
 
   ContentPackageImporter(this._repository);
   final ContentRepository _repository;
@@ -691,6 +688,170 @@ class ContentPackageImporter {
       }
     }
 
+    // 档案是属性键 / 技能名的**唯一权威**（与运行期 `skills.containsKey` 同源）。
+    // `late` 让没有值类型选择、没有 `requires` 的条目完全不付这份代价。
+    late final Set<String> abilityKeys = Dnd5eRules.profile.abilities;
+    late final Set<String> skillNames = Dnd5eRules.skills
+        .map((skill) => skill.name)
+        .toSet();
+
+    /// `requires` 的**引用/取值语义**校验（§5.1 `invalidRequires`）。
+    ///
+    /// 作用域链的遍历**唯一**走 [RuleChoiceSemantics.scopeEntryIdsFor]（与运行期
+    /// 同源，导入器不得自己重写一遍 `relations` 遍历）；`option` 的存在性判定 =
+    /// 该选择的候选集（[RuleChoiceSemantics.candidatesFor]，决策 D3/D5：`option`
+    /// 指的是**选中值**，内联选项 id 与条目 id 都算）。
+    void validateRequires(
+      List<RuleRequiresDefinition> requires,
+      String requiresPath,
+    ) {
+      for (var index = 0; index < requires.length; index++) {
+        final requirement = requires[index];
+        final itemPath = '$requiresPath[$index]';
+        if (requirement.isAbilityForm) {
+          final ability = requirement.ability;
+          if (ability != null && !abilityKeys.contains(ability)) {
+            errors.add(
+              ContentValidationError(
+                path: '$itemPath.ability',
+                message:
+                    'requires 引用的属性键 "$ability" 不在档案 abilities 内'
+                    '（invalidRequires）',
+              ),
+            );
+          }
+          continue;
+        }
+        final choiceId = requirement.choice;
+        if (choiceId == null) continue;
+        ({RuleChoiceDefinition definition, String sourceEntryId, int? level})?
+        found;
+        for (final scopeId in RuleChoiceSemantics.scopeEntryIdsFor(
+          sourceEntryId,
+          entries,
+        )) {
+          found ??= RuleChoiceSemantics.definitionForKey(
+            '$scopeId#$choiceId',
+            entries: entries,
+          );
+        }
+        if (found == null) {
+          errors.add(
+            ContentValidationError(
+              path: '$itemPath.choice',
+              message:
+                  'requires 引用的选择 "$choiceId" 不存在于本条目及其祖先'
+                  '（invalidRequires）',
+            ),
+          );
+          continue;
+        }
+        final option = requirement.option;
+        if (option == null) continue;
+        final candidateIds = RuleChoiceSemantics.candidatesFor(
+          found.definition,
+          entries: entries,
+          sourceEntryId: found.sourceEntryId,
+        ).map((candidate) => candidate.id).toSet();
+        if (!candidateIds.contains(option)) {
+          errors.add(
+            ContentValidationError(
+              path: '$itemPath.option',
+              message:
+                  'requires 引用的选项 "$option" 不在选择 "$choiceId" 的候选集内'
+                  '（invalidRequires）',
+            ),
+          );
+        }
+      }
+    }
+
+    /// **值类型选择候选校验的唯一实现点**（§5.1 `unknownSkill` /
+    /// `unknownAbility` / `invalidSkillCount` / `invalidAutoGrant`）。
+    ///
+    /// 候选枚举只走 [RuleChoiceSemantics.candidatesFor]，自动授予只走
+    /// [RuleChoiceSemantics.autoGrantsFor]——与 UI、引擎同一份判据。这样"导入期
+    /// 校验 label、运行期使用 id"的分叉不会再让"声明了但静默无效"通过：运行期
+    /// 由自动授予把 `candidate.id` 变成 `skill:<id>` / `ability:<id>`，所以只有
+    /// `id` 落在档案 `skills` / `abilities` 内才算真的可用。
+    ///
+    /// 显式写了 `grants` 的候选不在这里校验（`_validateGrantFormulas` 管它们的
+    /// formula / 属性键），因为它不经过自动推断路径。
+    void validateValueChoiceCandidates(
+      RuleChoiceDefinition choice,
+      String choicePath,
+    ) {
+      if (!choice.isValueTypeChoice) return;
+      final candidates = RuleChoiceSemantics.candidatesFor(
+        choice,
+        entries: entries,
+        sourceEntryId: sourceEntryId,
+      );
+      for (final candidate in candidates) {
+        final optionIndex = choice.options.indexWhere(
+          (option) => option.id == candidate.id,
+        );
+        if (optionIndex < 0) continue;
+        final optionPath = '$choicePath.options[$optionIndex]';
+        if (candidate.grants.isNotEmpty) continue;
+        final inferred = _autoGrantsForOption(
+          optionType: choice.optionType,
+          optionId: candidate.id,
+          data: candidate.data,
+          path: optionPath,
+        );
+        if (inferred.error != null) {
+          errors.add(inferred.error!);
+          continue;
+        }
+        for (final grant in inferred.grants!) {
+          final target = grant.target;
+          if (target == null) continue;
+          if (grant.kind == RuleGrantKind.proficiency &&
+              target.startsWith('skill:') &&
+              !skillNames.contains(target.substring('skill:'.length))) {
+            errors.add(
+              ContentValidationError(
+                path: optionPath,
+                message: '未知技能 "${candidate.id}"（unknownSkill）',
+              ),
+            );
+          } else if (grant.kind == RuleGrantKind.ability &&
+              !abilityKeys.contains(target)) {
+            errors.add(
+              ContentValidationError(
+                path: optionPath,
+                message:
+                    '未知属性键 "${candidate.id}"，可用：'
+                    '${abilityKeys.join(', ')}（unknownAbility）',
+              ),
+            );
+          }
+        }
+      }
+      if (choice.optionType == RuleChoiceDefinition.skillOptionType) {
+        final candidateCount = candidates.length;
+        if (choice.minimum > candidateCount) {
+          errors.add(
+            ContentValidationError(
+              path: '$choicePath.minimum',
+              message:
+                  '技能选择的数量必须为 0..$candidateCount（invalidSkillCount）',
+            ),
+          );
+        }
+        if (choice.maximum > candidateCount) {
+          errors.add(
+            ContentValidationError(
+              path: '$choicePath.maximum',
+              message:
+                  '技能选择的数量必须为 0..$candidateCount（invalidSkillCount）',
+            ),
+          );
+        }
+      }
+    }
+
     void validateChoices(
       List<RuleChoiceDefinition> choices,
       String choicesPath,
@@ -749,6 +910,17 @@ class ContentPackageImporter {
             );
           }
         }
+        // §3.10 选择系统的取值/引用语义：值类型候选（skill / ability / …）与
+        // `requires` 的引用，一律在这里按**解析后的定义**校验（值类型候选的
+        // 唯一口径是解析层导出的 `RuleChoiceSemantics.candidatesFor`）。
+        validateValueChoiceCandidates(choices[i], '$choicesPath[$i]');
+        validateRequires(choices[i].requires, '$choicesPath[$i].requires');
+        for (var j = 0; j < choices[i].options.length; j++) {
+          validateRequires(
+            choices[i].options[j].requires,
+            '$choicesPath[$i].options[$j].requires',
+          );
+        }
       }
     }
 
@@ -776,16 +948,20 @@ class ContentPackageImporter {
   ///
   /// 覆盖范围（§5.1）：`unknownGrantKind`、`unknownOptionType`、
   /// `invalidChoiceRange`、`duplicateOptionId`、`invalidValueOption`、
-  /// `unknownSkill`、`invalidSkillCount`、`invalidOptionRef`（引用存在性仍在
-  /// [_validateRuleReferences]），以及 §3.10.3-7 的"声明了但用不了"字段
-  /// （`repeatable` / `countsToward` / `requires` / `group` / `help` /
-  /// 内联选项 `grants`）。
+  /// `invalidAutoGrant`（条目类型的字符串元素）、`countsToward` 取值
+  /// （`invalidCountsToward`）、`requires` 的形状/取值（`invalidRequires`）。
   ///
   /// **不覆盖**（仍走解析层笼统的 `invalid entry`，因为 §5.1 没有对应 code、
   /// 或属于"列表本身不是数组 / 元素不是对象"这类结构错误）：`rules.grants` /
   /// `rules.choices` / `progression[].grants` / `progression[].choices` 不是数组、
   /// grant 项不是对象或缺 `id`、`maximumOptionLevel` 越界（0..9）、未知
-  /// `builderStep`。计划 2 若需要逐字段定位，可在这里继续加。
+  /// `builderStep`、`repeatable` 非布尔、`group`/`help` 非非空字符串。
+  ///
+  /// **值类型候选的语义校验**（`unknownSkill` / `invalidSkillCount` /
+  /// `unknownAbility` / `invalidAutoGrant`）不在这一遍：它们必须按
+  /// [RuleChoiceSemantics.candidatesFor]（UI 与引擎的**唯一候选枚举点**）判定，
+  /// 因此放在解析成功之后的 [_validateRuleReferences]（见
+  /// [_validateValueChoiceCandidates]）。
   bool _validateRawEntryRules(
     Map<String, Object?> entryJson,
     String entryPath,
@@ -911,9 +1087,45 @@ class ContentPackageImporter {
     }
   }
 
-  /// 一条选择的形状/参照校验（§5.1）。选择系统的**运行时语义**延后到计划 2，
-  /// 因此 `repeatable` / `countsToward` / `requires` / `group` / `help` /
-  /// 内联选项 `grants` 现在一律拒收（§3.10.3-7），而不是静默接受。
+  /// `invalidAutoGrant` 的**唯一产生点**（§5.1，决策 D1）。
+  ///
+  /// 判据与运行时**同源**：字符串简写能否推断 grants 完全由
+  /// [RuleChoiceSemantics.autoGrantsFor] 决定（返回 `null` = 无法推断）。调用方
+  /// 有两处，但都只是"哪个 optionType/选项要走这条路"的入口，判据与错误构造
+  /// 只有这里一份：
+  /// - `_validateRawChoice`：**条目类型**的字符串元素（决策 D1 的落点）；
+  /// - `_validateValueChoiceCandidates`：值类型候选**没有显式 grants** 时（例如
+  ///   `ability` 选项写了非正整数的 `data.value`）。
+  ({List<RuleGrantDefinition>? grants, ContentValidationError? error})
+  _autoGrantsForOption({
+    required String optionType,
+    required String optionId,
+    required Map<String, Object?> data,
+    required String path,
+  }) {
+    final grants = RuleChoiceSemantics.autoGrantsFor(
+      optionType: optionType,
+      optionId: optionId,
+      data: data,
+    );
+    if (grants != null) return (grants: grants, error: null);
+    return (
+      grants: null,
+      error: ContentValidationError(
+        path: path,
+        message:
+            'optionType "$optionType" 的选项 "$optionId" 缺少 grants，'
+            '且无法自动推断（invalidAutoGrant）',
+      ),
+    );
+  }
+
+  /// 一条选择的形状/取值校验（§5.1），在**解析之前**对原始 JSON 执行，因此
+  /// `repeatable` / `group` / `help` / 内联选项 `grants` 一律放行（它们已有真实
+  /// 运行时语义）；这里只保留"声明了但取值/形状无效"的精确诊断：
+  /// `unknownOptionType`、`invalidChoiceRange`、`invalidValueOption`、
+  /// `duplicateOptionId`、`invalidAutoGrant`、`invalidCountsToward`、
+  /// `invalidRequires`（形状/取值）。
   void _validateRawChoice(
     Map<String, Object?> choice,
     String path,
@@ -1019,11 +1231,7 @@ class ContentPackageImporter {
       }
     }
 
-    final skillNames = optionType == 'skill'
-        ? Dnd5eRules.skills.map((skill) => skill.name).toSet()
-        : const <String>{};
     final rawOptions = choice['options'];
-    var candidateCount = 0;
     if (rawOptions != null) {
       if (rawOptions is! List) {
         errors.add(
@@ -1033,14 +1241,11 @@ class ContentPackageImporter {
           ),
         );
       } else {
-        candidateCount = rawOptions.length;
         final seenIds = <String>{};
         for (var index = 0; index < rawOptions.length; index++) {
           final item = rawOptions[index];
           final itemPath = '$path.options[$index]';
           String? id;
-          String? name;
-          var namePath = itemPath;
           var idPath = itemPath;
           if (item is String) {
             final text = item.trim();
@@ -1054,7 +1259,20 @@ class ContentPackageImporter {
               continue;
             }
             id = text;
-            name = text;
+            // §5.1 `invalidAutoGrant`（决策 D1）：**条目类型**的字符串元素没有
+            // 可推断的 grants，作者必须写成对象显式给 grants。判据与运行时同源
+            // （[RuleChoiceSemantics.autoGrantsFor] 返回 null）；值类型永远能推断
+            // （`language` / `damageType` / `weaponMastery` / `value` 返回空列表，
+            // 属"只记录选择"，不算无法推断）。
+            if (optionType is String) {
+              final inferred = _autoGrantsForOption(
+                optionType: optionType,
+                optionId: text,
+                data: const <String, Object?>{},
+                path: itemPath,
+              );
+              if (inferred.error != null) errors.add(inferred.error!);
+            }
           } else if (item is Map) {
             final option = Map<String, Object?>.from(item);
             final rawId = option['id'];
@@ -1069,22 +1287,10 @@ class ContentPackageImporter {
             } else {
               id = rawId.trim();
             }
-            final rawLabel = option['label'];
-            if (rawLabel is String && rawLabel.trim().isNotEmpty) {
-              name = rawLabel.trim();
-              namePath = '$itemPath.label';
-            } else {
-              name = id;
-            }
             if (option.containsKey('grants')) {
-              errors.add(
-                ContentValidationError(
-                  path: '$itemPath.grants',
-                  message:
-                      '内联选项的 grants 在选择系统（计划 2）落地前没有消费方，'
-                      '现在一律拒收（unsupportedChoiceField）',
-                ),
-              );
+              // §3.10.2 内联选项的 grants 是**真实生效**的授予来源（
+              // `RuleChoiceSemantics.grantsForSelection` 展开）；这里只做 kind 枚举
+              // 校验，formula/属性键的校验在 `_validateGrantFormulas`。
               _validateRawGrantKinds(
                 option['grants'],
                 '$itemPath.grants',
@@ -1119,73 +1325,91 @@ class ContentPackageImporter {
               );
             }
           }
-          if (optionType == 'skill' &&
-              name != null &&
-              !skillNames.contains(name)) {
+        }
+      }
+    }
+
+    // `countsToward` 的取值校验（§5.1 `invalidCountsToward`）：合法值是具名额度池
+    // 或省略。判据的唯一实现点是 [isCountsTowardPool]（解析层同源）。
+    final countsToward = choice['countsToward'];
+    if (!isCountsTowardPool(countsToward)) {
+      errors.add(
+        ContentValidationError(
+          path: '$path.countsToward',
+          message:
+              'countsToward 必须是 ${kCountsTowardPools.join(' / ')} 或省略'
+              '（invalidCountsToward）',
+        ),
+      );
+    }
+
+    // `requires` 的**形状/取值**校验（§5.1 `invalidRequires`）。解析层
+    // （[RuleRequiresDefinition.fromJson]）对非法形状一律抛 `FormatException`，
+    // 但那条诊断没有字段位置；这里在任何解析之前先给出精确 path。**引用**
+    // （`choice` / `option` 是否存在、`ability` 键是否在档案内）在第二遍
+    // [_validateRuleReferences] 里校验，那里有全部条目与 `relations` 祖先链。
+    if (choice.containsKey('requires')) {
+      final rawRequires = choice['requires'];
+      if (rawRequires is! List) {
+        errors.add(
+          ContentValidationError(
+            path: '$path.requires',
+            message: 'requires 必须是数组（invalidRequires）',
+          ),
+        );
+      } else {
+        for (var index = 0; index < rawRequires.length; index++) {
+          final item = rawRequires[index];
+          final itemPath = '$path.requires[$index]';
+          if (item is! Map) {
             errors.add(
               ContentValidationError(
-                path: namePath,
-                message: '未知技能 "$name"（unknownSkill）',
+                path: itemPath,
+                message: 'requires 的元素必须是对象（invalidRequires）',
+              ),
+            );
+            continue;
+          }
+          final map = Map<String, Object?>.from(item);
+          final ability = map['ability'];
+          final choiceId = map['choice'];
+          final minimum = map['minimum'];
+          if ((choiceId == null) == (ability == null)) {
+            errors.add(
+              ContentValidationError(
+                path: itemPath,
+                message:
+                    'requires 必须是 {choice, option?} 或 {ability, minimum} '
+                    '之一（invalidRequires）',
+              ),
+            );
+          }
+          if (ability != null && ability is! String) {
+            errors.add(
+              ContentValidationError(
+                path: '$itemPath.ability',
+                message: 'requires.ability 必须是字符串（invalidRequires）',
+              ),
+            );
+          }
+          if (choiceId != null && (choiceId is! String || choiceId.trim().isEmpty)) {
+            errors.add(
+              ContentValidationError(
+                path: '$itemPath.choice',
+                message: 'requires.choice 必须是非空字符串（invalidRequires）',
+              ),
+            );
+          }
+          if (minimum != null && (minimum is! num || minimum.toInt() <= 0)) {
+            errors.add(
+              ContentValidationError(
+                path: '$itemPath.minimum',
+                message: 'requires.minimum 必须是正整数（invalidRequires）',
               ),
             );
           }
         }
       }
-    }
-    if (optionType == 'skill') {
-      // §5.1：技能选择的 minimum/maximum 必须在 0..候选数内。
-      // 候选来自内联 options；optionEntryIds/optionTags 已被上面的
-      // `invalidValueOption` 拒绝。
-      if (minimum > candidateCount) {
-        errors.add(
-          ContentValidationError(
-            path: '$path.minimum',
-            message: '技能选择的数量必须为 0..$candidateCount（invalidSkillCount）',
-          ),
-        );
-      }
-      if (maximum > candidateCount) {
-        errors.add(
-          ContentValidationError(
-            path: '$path.maximum',
-            message: '技能选择的数量必须为 0..$candidateCount（invalidSkillCount）',
-          ),
-        );
-      }
-    }
-
-    // §3.10.3-7：这些字段的运行时语义在计划 2 之前不存在，**声明了就必须报
-    // error**，不得静默接受（落地后改为实现而不是拒绝）。
-    for (final field in _unsupportedChoiceFields) {
-      if (!choice.containsKey(field)) continue;
-      errors.add(
-        ContentValidationError(
-          path: '$path.$field',
-          message:
-              '选择系统的「$field」尚未实现（计划 2 落地前一律拒收）'
-              '（unsupportedChoiceField）',
-        ),
-      );
-    }
-    if (choice.containsKey('countsToward')) {
-      errors.add(
-        ContentValidationError(
-          path: '$path.countsToward',
-          message:
-              'countsToward 的选择系统语义尚未实现（计划 2 落地前一律拒收）'
-              '（invalidCountsToward）',
-        ),
-      );
-    }
-    if (choice.containsKey('requires')) {
-      errors.add(
-        ContentValidationError(
-          path: '$path.requires',
-          message:
-              'requires 的选择系统语义尚未实现（计划 2 落地前一律拒收）'
-              '（invalidRequires）',
-        ),
-      );
     }
   }
 

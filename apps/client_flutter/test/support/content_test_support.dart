@@ -203,6 +203,7 @@ class MemoryContentRepository implements ContentRepository {
       locale: manifest.locale,
       system: manifest.system,
       entryCount: 0,
+      priority: manifest.priority,
       contentHash: manifest.contentHash,
     );
     _enabled[manifest.id] = true;
@@ -218,6 +219,7 @@ class MemoryContentRepository implements ContentRepository {
       locale: manifest.locale,
       system: manifest.system,
       entryCount: count,
+      priority: manifest.priority,
       contentHash: 'local-$count',
     );
     _emit();
@@ -245,6 +247,7 @@ class MemoryContentRepository implements ContentRepository {
         locale: package.locale,
         system: package.system,
         entryCount: count,
+        priority: package.priority,
         contentHash: 'local-$count',
       );
     }
@@ -260,6 +263,13 @@ class MemoryContentRepository implements ContentRepository {
   @override
   Future<bool> isPackageEnabled(String packageId) async =>
       _enabled[packageId] ?? false;
+
+  /// 测试替身：从内存 manifest 投影（与真实仓库的 `packagePriorities()` 同义），
+  /// 不另存一份 priority。
+  @override
+  Future<Map<String, int>> packagePriorities() async => {
+    for (final package in _packages.values) package.id: package.priority,
+  };
 
   @override
   Future<ContentDeletionImpact> deletionImpact(String packageId) async {

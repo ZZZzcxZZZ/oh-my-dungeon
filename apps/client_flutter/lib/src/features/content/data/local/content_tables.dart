@@ -12,6 +12,12 @@ class LocalContentPackages extends Table {
   IntColumn get entryCount => integer()();
   TextColumn get contentHash => text()();
   BoolColumn get enabled => boolean().withDefault(const Constant(true))();
+
+  /// 规则声明的优先级（S3 决策 D2）：0..1000，缺省 0。
+  ///
+  /// 生效 tier = `kEntryTier`(100) + priority；缺省 0 ⇒ 与引入 priority 之前
+  /// "包声明固定 tier 100"完全一致（老包行为不变）。
+  IntColumn get priority => integer().withDefault(const Constant(0))();
   DateTimeColumn get installedAt => dateTime()();
 
   @override

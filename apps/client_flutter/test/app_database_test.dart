@@ -4,9 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 void main() {
-  test('opens an empty schema at version thirteen', () async {
+  test('opens an empty schema at version fourteen', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
-    expect(database.schemaVersion, 13);
+    expect(database.schemaVersion, 14);
     expect(await database.select(database.serverProfiles).get(), isEmpty);
     expect(await database.select(database.syncOutbox).get(), isEmpty);
     expect(await database.select(database.localContentPackages).get(), isEmpty);
@@ -82,6 +82,28 @@ void main() {
           updated_at INTEGER NOT NULL
         )
       ''')
+      // v11 的真实存档一定有 local_content_packages（v2 引入）；迁移链里
+      // `from < 14` 会 ADD COLUMN priority，因此这份最小 fixture 也必须带上它，
+      // 否则测的是"表不存在"而不是迁移本身。
+      ..execute('''
+        CREATE TABLE local_content_packages (
+          id TEXT PRIMARY KEY NOT NULL,
+          format_version INTEGER NOT NULL,
+          name TEXT NOT NULL,
+          version TEXT NOT NULL,
+          locale TEXT NOT NULL,
+          system TEXT NOT NULL,
+          entry_count INTEGER NOT NULL,
+          content_hash TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          installed_at INTEGER NOT NULL
+        )
+      ''')
+      ..execute(
+        "INSERT INTO local_content_packages VALUES "
+        "('legacy-pack', 3, 'Legacy', '1.0.0', 'zh-CN', 'dnd5e-2024', 1, "
+        "'hash', 1, 0)",
+      )
       ..execute(
         "INSERT INTO campaign_actors_cache VALUES "
         "('character-1', 'campaign-1', NULL, NULL, 'npc', 'active', '{}', "
@@ -94,6 +116,9 @@ void main() {
 
     expect(rows.single.id, 'character-1');
     expect(rows.single.characterType, 'npc');
+    // v11 → v14 迁移后老包的 priority 取默认 0（tier 仍为 100，数值不变）。
+    final packages = await database.select(database.localContentPackages).get();
+    expect(packages.single.priority, 0);
     await database.close();
   });
 }

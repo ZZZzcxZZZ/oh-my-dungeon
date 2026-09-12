@@ -51,7 +51,7 @@
 | 版本 | `0.1.0`（pubspec `0.1.0+1`；仅此一条版本线） |
 | 客户端 | Flutter `3.41.4` / Dart `3.11.1`，Material 3，`http`（**未使用 Dio**） |
 | 服务端 | NestJS + Prisma `6.19.3` + PostgreSQL 16 |
-| 客户端本地库 | Drift `2.34.1`，`schemaVersion = 13`，19 张表 |
+| 客户端本地库 | Drift `2.34.1`，`schemaVersion = 14`，19 张表 |
 | 服务端端口 | `3000`（REST + Socket.IO） |
 | 数据库 | `dnd_table` / 用户 `dnd`；端口仅绑定 `127.0.0.1:5432` |
 | 健康检查 | `GET /health`（一次 `SELECT 1`） |
@@ -154,7 +154,7 @@ Flutter 客户端 ──HTTP(/api)──▶ NestJS 服务端 ──Prisma──�
 
 ## 5. 数据模型
 
-### 5.1 客户端本地库（Drift，`schemaVersion = 13`，19 张表）
+### 5.1 客户端本地库（Drift，`schemaVersion = 14`，19 张表）
 
 | 分组 | 表 |
 |---|---|

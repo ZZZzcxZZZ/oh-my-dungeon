@@ -2063,6 +2063,18 @@ class $LocalContentPackagesTable extends LocalContentPackages
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _priorityMeta = const VerificationMeta(
+    'priority',
+  );
+  @override
+  late final GeneratedColumn<int> priority = GeneratedColumn<int>(
+    'priority',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _installedAtMeta = const VerificationMeta(
     'installedAt',
   );
@@ -2085,6 +2097,7 @@ class $LocalContentPackagesTable extends LocalContentPackages
     entryCount,
     contentHash,
     enabled,
+    priority,
     installedAt,
   ];
   @override
@@ -2172,6 +2185,12 @@ class $LocalContentPackagesTable extends LocalContentPackages
         enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
       );
     }
+    if (data.containsKey('priority')) {
+      context.handle(
+        _priorityMeta,
+        priority.isAcceptableOrUnknown(data['priority']!, _priorityMeta),
+      );
+    }
     if (data.containsKey('installed_at')) {
       context.handle(
         _installedAtMeta,
@@ -2228,6 +2247,10 @@ class $LocalContentPackagesTable extends LocalContentPackages
         DriftSqlType.bool,
         data['${effectivePrefix}enabled'],
       )!,
+      priority: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}priority'],
+      )!,
       installedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}installed_at'],
@@ -2252,6 +2275,12 @@ class LocalContentPackageRow extends DataClass
   final int entryCount;
   final String contentHash;
   final bool enabled;
+
+  /// 规则声明的优先级（S3 决策 D2）：0..1000，缺省 0。
+  ///
+  /// 生效 tier = `kEntryTier`(100) + priority；缺省 0 ⇒ 与引入 priority 之前
+  /// "包声明固定 tier 100"完全一致（老包行为不变）。
+  final int priority;
   final DateTime installedAt;
   const LocalContentPackageRow({
     required this.id,
@@ -2263,6 +2292,7 @@ class LocalContentPackageRow extends DataClass
     required this.entryCount,
     required this.contentHash,
     required this.enabled,
+    required this.priority,
     required this.installedAt,
   });
   @override
@@ -2277,6 +2307,7 @@ class LocalContentPackageRow extends DataClass
     map['entry_count'] = Variable<int>(entryCount);
     map['content_hash'] = Variable<String>(contentHash);
     map['enabled'] = Variable<bool>(enabled);
+    map['priority'] = Variable<int>(priority);
     map['installed_at'] = Variable<DateTime>(installedAt);
     return map;
   }
@@ -2292,6 +2323,7 @@ class LocalContentPackageRow extends DataClass
       entryCount: Value(entryCount),
       contentHash: Value(contentHash),
       enabled: Value(enabled),
+      priority: Value(priority),
       installedAt: Value(installedAt),
     );
   }
@@ -2311,6 +2343,7 @@ class LocalContentPackageRow extends DataClass
       entryCount: serializer.fromJson<int>(json['entryCount']),
       contentHash: serializer.fromJson<String>(json['contentHash']),
       enabled: serializer.fromJson<bool>(json['enabled']),
+      priority: serializer.fromJson<int>(json['priority']),
       installedAt: serializer.fromJson<DateTime>(json['installedAt']),
     );
   }
@@ -2327,6 +2360,7 @@ class LocalContentPackageRow extends DataClass
       'entryCount': serializer.toJson<int>(entryCount),
       'contentHash': serializer.toJson<String>(contentHash),
       'enabled': serializer.toJson<bool>(enabled),
+      'priority': serializer.toJson<int>(priority),
       'installedAt': serializer.toJson<DateTime>(installedAt),
     };
   }
@@ -2341,6 +2375,7 @@ class LocalContentPackageRow extends DataClass
     int? entryCount,
     String? contentHash,
     bool? enabled,
+    int? priority,
     DateTime? installedAt,
   }) => LocalContentPackageRow(
     id: id ?? this.id,
@@ -2352,6 +2387,7 @@ class LocalContentPackageRow extends DataClass
     entryCount: entryCount ?? this.entryCount,
     contentHash: contentHash ?? this.contentHash,
     enabled: enabled ?? this.enabled,
+    priority: priority ?? this.priority,
     installedAt: installedAt ?? this.installedAt,
   );
   LocalContentPackageRow copyWithCompanion(LocalContentPackagesCompanion data) {
@@ -2371,6 +2407,7 @@ class LocalContentPackageRow extends DataClass
           ? data.contentHash.value
           : this.contentHash,
       enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      priority: data.priority.present ? data.priority.value : this.priority,
       installedAt: data.installedAt.present
           ? data.installedAt.value
           : this.installedAt,
@@ -2389,6 +2426,7 @@ class LocalContentPackageRow extends DataClass
           ..write('entryCount: $entryCount, ')
           ..write('contentHash: $contentHash, ')
           ..write('enabled: $enabled, ')
+          ..write('priority: $priority, ')
           ..write('installedAt: $installedAt')
           ..write(')'))
         .toString();
@@ -2405,6 +2443,7 @@ class LocalContentPackageRow extends DataClass
     entryCount,
     contentHash,
     enabled,
+    priority,
     installedAt,
   );
   @override
@@ -2420,6 +2459,7 @@ class LocalContentPackageRow extends DataClass
           other.entryCount == this.entryCount &&
           other.contentHash == this.contentHash &&
           other.enabled == this.enabled &&
+          other.priority == this.priority &&
           other.installedAt == this.installedAt);
 }
 
@@ -2434,6 +2474,7 @@ class LocalContentPackagesCompanion
   final Value<int> entryCount;
   final Value<String> contentHash;
   final Value<bool> enabled;
+  final Value<int> priority;
   final Value<DateTime> installedAt;
   final Value<int> rowid;
   const LocalContentPackagesCompanion({
@@ -2446,6 +2487,7 @@ class LocalContentPackagesCompanion
     this.entryCount = const Value.absent(),
     this.contentHash = const Value.absent(),
     this.enabled = const Value.absent(),
+    this.priority = const Value.absent(),
     this.installedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -2459,6 +2501,7 @@ class LocalContentPackagesCompanion
     required int entryCount,
     required String contentHash,
     this.enabled = const Value.absent(),
+    this.priority = const Value.absent(),
     required DateTime installedAt,
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -2480,6 +2523,7 @@ class LocalContentPackagesCompanion
     Expression<int>? entryCount,
     Expression<String>? contentHash,
     Expression<bool>? enabled,
+    Expression<int>? priority,
     Expression<DateTime>? installedAt,
     Expression<int>? rowid,
   }) {
@@ -2493,6 +2537,7 @@ class LocalContentPackagesCompanion
       if (entryCount != null) 'entry_count': entryCount,
       if (contentHash != null) 'content_hash': contentHash,
       if (enabled != null) 'enabled': enabled,
+      if (priority != null) 'priority': priority,
       if (installedAt != null) 'installed_at': installedAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -2508,6 +2553,7 @@ class LocalContentPackagesCompanion
     Value<int>? entryCount,
     Value<String>? contentHash,
     Value<bool>? enabled,
+    Value<int>? priority,
     Value<DateTime>? installedAt,
     Value<int>? rowid,
   }) {
@@ -2521,6 +2567,7 @@ class LocalContentPackagesCompanion
       entryCount: entryCount ?? this.entryCount,
       contentHash: contentHash ?? this.contentHash,
       enabled: enabled ?? this.enabled,
+      priority: priority ?? this.priority,
       installedAt: installedAt ?? this.installedAt,
       rowid: rowid ?? this.rowid,
     );
@@ -2556,6 +2603,9 @@ class LocalContentPackagesCompanion
     if (enabled.present) {
       map['enabled'] = Variable<bool>(enabled.value);
     }
+    if (priority.present) {
+      map['priority'] = Variable<int>(priority.value);
+    }
     if (installedAt.present) {
       map['installed_at'] = Variable<DateTime>(installedAt.value);
     }
@@ -2577,6 +2627,7 @@ class LocalContentPackagesCompanion
           ..write('entryCount: $entryCount, ')
           ..write('contentHash: $contentHash, ')
           ..write('enabled: $enabled, ')
+          ..write('priority: $priority, ')
           ..write('installedAt: $installedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -9609,6 +9660,7 @@ typedef $$LocalContentPackagesTableCreateCompanionBuilder =
       required int entryCount,
       required String contentHash,
       Value<bool> enabled,
+      Value<int> priority,
       required DateTime installedAt,
       Value<int> rowid,
     });
@@ -9623,6 +9675,7 @@ typedef $$LocalContentPackagesTableUpdateCompanionBuilder =
       Value<int> entryCount,
       Value<String> contentHash,
       Value<bool> enabled,
+      Value<int> priority,
       Value<DateTime> installedAt,
       Value<int> rowid,
     });
@@ -9678,6 +9731,11 @@ class $$LocalContentPackagesTableFilterComposer
 
   ColumnFilters<bool> get enabled => $composableBuilder(
     column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get priority => $composableBuilder(
+    column: $table.priority,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9741,6 +9799,11 @@ class $$LocalContentPackagesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get priority => $composableBuilder(
+    column: $table.priority,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get installedAt => $composableBuilder(
     column: $table.installedAt,
     builder: (column) => ColumnOrderings(column),
@@ -9788,6 +9851,9 @@ class $$LocalContentPackagesTableAnnotationComposer
 
   GeneratedColumn<bool> get enabled =>
       $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<int> get priority =>
+      $composableBuilder(column: $table.priority, builder: (column) => column);
 
   GeneratedColumn<DateTime> get installedAt => $composableBuilder(
     column: $table.installedAt,
@@ -9847,6 +9913,7 @@ class $$LocalContentPackagesTableTableManager
                 Value<int> entryCount = const Value.absent(),
                 Value<String> contentHash = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
+                Value<int> priority = const Value.absent(),
                 Value<DateTime> installedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => LocalContentPackagesCompanion(
@@ -9859,6 +9926,7 @@ class $$LocalContentPackagesTableTableManager
                 entryCount: entryCount,
                 contentHash: contentHash,
                 enabled: enabled,
+                priority: priority,
                 installedAt: installedAt,
                 rowid: rowid,
               ),
@@ -9873,6 +9941,7 @@ class $$LocalContentPackagesTableTableManager
                 required int entryCount,
                 required String contentHash,
                 Value<bool> enabled = const Value.absent(),
+                Value<int> priority = const Value.absent(),
                 required DateTime installedAt,
                 Value<int> rowid = const Value.absent(),
               }) => LocalContentPackagesCompanion.insert(
@@ -9885,6 +9954,7 @@ class $$LocalContentPackagesTableTableManager
                 entryCount: entryCount,
                 contentHash: contentHash,
                 enabled: enabled,
+                priority: priority,
                 installedAt: installedAt,
                 rowid: rowid,
               ),

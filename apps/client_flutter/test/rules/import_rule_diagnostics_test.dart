@@ -21,6 +21,7 @@ String packageJson({
   String id = 'diag-pack',
   Object? globalAbilities,
   Object? globalSkills,
+  Object? priority,
 }) => jsonEncode({
   'formatVersion': formatVersion,
   'id': id,
@@ -29,6 +30,7 @@ String packageJson({
   'locale': 'zh-CN',
   'system': 'dnd5e-2024',
   'entryCount': 1,
+  'priority': ?priority,
   'abilities': ?globalAbilities,
   'skills': ?globalSkills,
   'entries': [entry],
@@ -93,6 +95,74 @@ void main() {
       );
       expect(report.valid, isTrue);
       expect(report.formatVersion, 3);
+    });
+  });
+
+  group('priority（S3 决策 D2）', () {
+    test('缺省 0（旧包行为不变），合法整数透传到 report', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(structured: {'classRules': {'hitDie': 8}}),
+          priority: 30,
+        ),
+      );
+      expect(report.valid, isTrue, reason: '${report.errors}');
+      expect(report.priority, 30);
+
+      final absent = await importer.previewJson(
+        packageJson(
+          entry: classEntry(structured: {'classRules': {'hitDie': 8}}),
+        ),
+      );
+      expect(absent.valid, isTrue);
+      expect(absent.priority, 0);
+      // 0 也要显式接受（不是"没写"的特例）。
+      final zero = await importer.previewJson(
+        packageJson(
+          entry: classEntry(structured: {'classRules': {'hitDie': 8}}),
+          priority: 0,
+        ),
+      );
+      expect(zero.valid, isTrue);
+      expect(zero.priority, 0);
+    });
+
+    test('非整数 / 负数 / 越界 → invalidPriority，path 精确到顶层 priority 字段', () async {
+      for (final bad in <Object?>['30', -1, 1.5, 1001]) {
+        final report = await importer.previewJson(
+          packageJson(
+            entry: classEntry(structured: {'classRules': {'hitDie': 8}}),
+            priority: bad,
+          ),
+        );
+        expect(report.valid, isFalse, reason: '$bad');
+        final error = report.errors.singleWhere(
+          (e) => e.path == r'$.priority',
+        );
+        expect(error.message, contains('invalidPriority'), reason: '$bad');
+        expect(report.priority, 0, reason: '非法值不落库，保持缺省 0');
+      }
+    });
+
+    test('importReport 从 report 重建 manifest 时带上 priority', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {'classRules': {'hitDie': 8}},
+          ),
+          priority: 40,
+        ),
+      );
+      expect(report.valid, isTrue);
+      await importer.importReport(report);
+      final packages = await repository.watchPackages().first;
+      expect(packages.single.priority, 40);
+      expect(
+        await repository.packagePriorities(),
+        {'diag-pack': 40},
+        reason: 'packagePriorities() 投影与落库值一致',
+      );
     });
   });
 

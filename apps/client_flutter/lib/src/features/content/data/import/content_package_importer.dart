@@ -191,6 +191,7 @@ class ContentPackageImporter {
       locale: parsedReport.locale,
       system: parsedReport.system,
       entryCount: parsedReport.entryCount,
+      priority: parsedReport.priority,
       entries: parsedReport.entries,
       assets: assets,
     );
@@ -242,6 +243,7 @@ class ContentPackageImporter {
         locale: '',
         system: '',
         entryCount: 0,
+        priority: 0,
         entries: const [],
         assets: assets,
       );
@@ -284,6 +286,23 @@ class ContentPackageImporter {
       );
     } else {
       formatVersion = 3;
+    }
+
+    // 规则覆盖优先级（S3 决策 D2）：整数 0..1000，缺省 0。非整数不静默取默认值——
+    // 那会让"写了 '30' 的包"以为自己的勘误生效了，实际排在内置档案之后。
+    final rawPriority = json['priority'];
+    var priority = 0;
+    if (rawPriority != null) {
+      if (rawPriority is! int || rawPriority < 0 || rawPriority > 1000) {
+        errors.add(
+          const ContentValidationError(
+            path: r'$.priority',
+            message: 'priority 必须是 0..1000 的整数，缺省为 0（invalidPriority）',
+          ),
+        );
+      } else {
+        priority = rawPriority;
+      }
     }
 
     // 内置档案是 abilities / skills 的**唯一权威**（§3.1、§5.2）：包自带同名清单
@@ -552,6 +571,7 @@ class ContentPackageImporter {
       locale: locale,
       system: system,
       entryCount: migratedEntries.length,
+      priority: priority,
       entries: migratedEntries,
       assets: assets,
     );
@@ -570,6 +590,9 @@ class ContentPackageImporter {
         locale: report.locale,
         system: report.system,
         entryCount: report.entryCount,
+        // 从 report 重建 manifest 必须带上 priority：否则导入预览里显示的优先级
+        // 与落库值不一致，"预览 40 实际 0"会让勘误静默排在档案之后。
+        priority: report.priority,
       ),
       entries: report.entries,
       contentHash: report.contentHash,
@@ -634,6 +657,7 @@ class ContentPackageImporter {
     locale: '',
     system: '',
     entryCount: 0,
+    priority: 0,
     entries: const [],
     assets: const {},
   );
@@ -912,6 +936,7 @@ class ContentPackageImporter {
     required String locale,
     required String system,
     required int entryCount,
+    required int priority,
     required List<ContentEntry> entries,
     required Map<String, Uint8List> assets,
   }) {
@@ -924,6 +949,7 @@ class ContentPackageImporter {
       locale: locale,
       system: system,
       entryCount: entryCount,
+      priority: priority,
       entries: entries,
       errors: errors,
       warnings: warnings,

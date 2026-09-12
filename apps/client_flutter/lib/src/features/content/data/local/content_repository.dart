@@ -105,6 +105,10 @@ abstract interface class ContentRepository {
   Future<void> deletePackageEntry(String entryKey);
   Future<void> setPackageEnabled(String packageId, bool enabled);
   Future<bool> isPackageEnabled(String packageId);
+
+  /// 每个已安装包的规则覆盖优先级（S3 决策 D2）。键 = packageId，缺省 0。
+  /// 只读投影，供 `RuleOverrideIndex` 构建使用；UI 不直接查库。
+  Future<Map<String, int>> packagePriorities();
   Future<ContentDeletionImpact> deletionImpact(String packageId);
   Future<void> deletePackage(String packageId);
 
@@ -289,6 +293,7 @@ class DriftContentRepository implements ContentRepository {
               entryCount: manifest.entryCount,
               contentHash: contentHash,
               enabled: const Value(true),
+              priority: Value(manifest.priority),
               installedAt: DateTime.now(),
             ),
           );
@@ -395,6 +400,7 @@ class DriftContentRepository implements ContentRepository {
                 system: manifest.system,
                 entryCount: 0,
                 contentHash: manifest.contentHash,
+                priority: Value(manifest.priority),
                 installedAt: DateTime.now(),
               ),
             );
@@ -511,6 +517,13 @@ class DriftContentRepository implements ContentRepository {
       db.localContentPackages,
     )..where((t) => t.id.equals(packageId))).getSingleOrNull();
     return row?.enabled ?? false;
+  }
+
+  @override
+  Future<Map<String, int>> packagePriorities() async {
+    final db = _database;
+    final rows = await db.select(db.localContentPackages).get();
+    return {for (final row in rows) row.id: row.priority};
   }
 
   @override
@@ -892,6 +905,7 @@ class DriftContentRepository implements ContentRepository {
       locale: row.locale,
       system: row.system,
       entryCount: row.entryCount,
+      priority: row.priority,
       contentHash: row.contentHash,
     );
   }
@@ -957,6 +971,9 @@ class EmptyContentRepository implements ContentRepository {
 
   @override
   Future<bool> isPackageEnabled(String packageId) async => false;
+
+  @override
+  Future<Map<String, int>> packagePriorities() async => const {};
 
   @override
   Future<ContentDeletionImpact> deletionImpact(String packageId) async =>

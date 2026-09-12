@@ -20,6 +20,12 @@ class ContentImportReport {
   final List<ContentEntry> entries;
   final List<ContentValidationError> errors;
 
+  /// 规则覆盖优先级（S3 决策 D2）：0..1000，缺省 0。
+  ///
+  /// 具名可选参数 + 默认值：`ContentImportReport` 是公开类型，新增字段不能破坏
+  /// 既有构造点（批量导入向导里的异常兜底报告等）。
+  final int priority;
+
   /// 不阻断导入的诊断（规则契约里的 warning 级诊断）。
   ///
   /// 可选具名参数 + 默认空列表：`ContentImportReport` 是公开类型，新增字段
@@ -38,6 +44,7 @@ class ContentImportReport {
     required this.entryCount,
     required this.entries,
     required this.errors,
+    this.priority = 0,
     this.warnings = const [],
     required this.assets,
     required this.contentHash,

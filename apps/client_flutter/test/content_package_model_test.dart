@@ -240,6 +240,51 @@ void main() {
       expect(manifest.locale, 'zh-CN');
       expect(manifest.system, 'dnd5e-2024');
       expect(manifest.entryCount, 42);
+      expect(manifest.priority, 0, reason: '旧 manifest 不写 priority → 缺省 0');
+    });
+
+    test('priority 往返：缺失 → 0，显式值读回，非整数抛 FormatException', () {
+      final withPriority = ContentPackageManifest.fromJson({
+        'formatVersion': 3,
+        'id': 'errata',
+        'name': 'Errata',
+        'version': '1.0.0',
+        'locale': 'zh-CN',
+        'system': 'dnd5e-2024',
+        'entryCount': 1,
+        'priority': 40,
+      });
+      expect(withPriority.priority, 40);
+      final restored = ContentPackageManifest.fromJson(withPriority.toJson());
+      expect(restored.priority, 40, reason: 'toJson 始终写出 priority，往返自洽');
+      expect(
+        ContentPackageManifest.fromJson(
+          ContentPackageManifest.fromJson({
+            'formatVersion': 3,
+            'id': 'legacy',
+            'name': 'Legacy',
+            'version': '1.0.0',
+            'locale': 'zh-CN',
+            'system': 'dnd5e-2024',
+            'entryCount': 1,
+          }).toJson(),
+        ).priority,
+        0,
+      );
+      // 类型错误不静默取默认值：写了 "40" 的包必须被发现，而不是悄悄排到档案之后。
+      expect(
+        () => ContentPackageManifest.fromJson({
+          'formatVersion': 3,
+          'id': 'bad',
+          'name': 'Bad',
+          'version': '1.0.0',
+          'locale': 'zh-CN',
+          'system': 'dnd5e-2024',
+          'entryCount': 1,
+          'priority': '40',
+        }),
+        throwsFormatException,
+      );
     });
 
     test('rejects missing format version', () {

@@ -49,7 +49,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -141,6 +141,16 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(
           campaignCharactersCache,
           campaignCharactersCache.visibleToPlayers,
+        );
+      }
+      if (from >= 2 && from < 14) {
+        // Schema v14: local_content_packages.priority（S3 规则覆盖优先级）。
+        // 默认 0，老包升级后 tier 仍是 100，任何角色数值都不变。
+        // `from >= 2` 是必需的：`from < 2` 时上面的 createTable 已经按**当前**
+        // schema 建表（含 priority），再加一次会重复列。
+        await m.addColumn(
+          localContentPackages,
+          localContentPackages.priority,
         );
       }
     },

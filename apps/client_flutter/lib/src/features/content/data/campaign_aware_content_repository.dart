@@ -33,6 +33,11 @@ class CampaignAwareContentRepository implements ContentRepository {
   @override
   Stream<List<ContentPackageManifest>> watchPackages() => local.watchPackages();
 
+  /// 优先级是本地包元数据（S3 决策 D2）：战役缓存里的条目没有独立 priority 列，
+  /// 一律走本地仓库的投影。
+  @override
+  Future<Map<String, int>> packagePriorities() => local.packagePriorities();
+
   @override
   Future<List<ContentEntry>> search(ContentQuery query) async {
     // 查询本地时剥离 favoritesOnly 标记，由本方法统一按合并键筛选收藏。

@@ -12,6 +12,8 @@
 import 'class_rule_set.dart';
 import 'rule_diagnostic.dart';
 import 'rule_field_path.dart';
+import 'rule_override_declaration.dart';
+import 'rule_override_priority.dart';
 import 'rule_profile.dart';
 import 'rule_values.dart';
 
@@ -657,20 +659,21 @@ abstract final class RuleProfileResolver {
 
     final entry = entryRules == null
         ? null
-        : _OrderedDeclaration(
+        : RuleOverrideDeclaration.package(
             originId: entryOrigin,
-            tier: kEntryTier,
+            packageId: RuleOverrideDeclaration.packageIdOf(entryOrigin),
+            entryId: entryId,
             rules: entryRules,
           );
     final archive = fromArchive == null
         ? null
-        : _OrderedDeclaration(
-            originId: kBuiltinOriginId,
-            tier: kBuiltinTier,
-            rules: fromArchive,
-          );
-    // 已按优先级从高到低排好，并在第一条 `mode: replace` 处截断（D4）。
-    final ordered = _orderedDeclarations(<_OrderedDeclaration>[?entry, ?archive]);
+        : RuleOverrideDeclaration.builtin(fromArchive);
+    // 排序 + `replace` 截断的唯一实现在 RuleOverrideOrder（决策 D1/D4/D6），
+    // 解析器不再自己写第二处 sort。
+    final ordered = RuleOverrideOrder.effective(
+      <RuleOverrideDeclaration>[?entry, ?archive],
+      characterEntryId: entryId,
+    );
 
     final spellcasting = _mergeSpellcasting(
       declarations: ordered,
@@ -703,64 +706,19 @@ abstract final class RuleProfileResolver {
       archiveRules: fromArchive,
     );
   }
-
-  /// 有序声明（高 → 低），并在遇到第一条 `mode: replace` 时**截断**：更低 tier
-  /// 不再参与任何列 / 等级的合并（S3 决策 D4）。返回的列表里包含那条 `replace`。
-  ///
-  /// 排序口径（同 tier）：
-  /// 1. `replace` 先于 `patch`（`ClassMergeMode.index` 降序）——`replace` 必须最先
-  ///    落，否则同 tier 的 `patch` 会先消费掉列，独占语义就失效；
-  /// 2. `originId` 升序（确定性回退；D6 的"按包 id 字典序"由此保证）。
-  ///
-  /// **本批次是脚手架**：任务 7 会把排序与截断整体搬到 `RuleOverrideOrder.ordered` /
-  /// `.effective`（并删掉本方法），届时解析器不再有第二处 `sort`。
-  static List<_OrderedDeclaration> _orderedDeclarations(
-    List<_OrderedDeclaration> declarations,
-  ) {
-    final sorted = [...declarations]
-      ..sort((a, b) {
-        final byTier = b.tier.compareTo(a.tier);
-        if (byTier != 0) return byTier;
-        final byMode = b.rules.mode.index.compareTo(a.rules.mode.index);
-        if (byMode != 0) return byMode;
-        return a.originId.compareTo(b.originId);
-      });
-    final result = <_OrderedDeclaration>[];
-    for (final declaration in sorted) {
-      result.add(declaration);
-      if (declaration.rules.mode == ClassMergeMode.replace) break;
-    }
-    return result;
-  }
-}
-
-/// 一条参与合并的声明（本批次只有"条目"与"档案"两级）。
-///
-/// **这是脚手架**：任务 7 会把它整体换成 `RuleOverrideDeclaration`（`.package` /
-/// `.builtin` 两个命名构造）并删除本类，届时合并链上只允许存在一种声明类型。
-class _OrderedDeclaration {
-  const _OrderedDeclaration({
-    required this.originId,
-    required this.tier,
-    required this.rules,
-  });
-
-  final String originId;
-  final int tier;
-  final ClassRuleSet rules;
 }
 
 /// 列级取值的**唯一**实现（标量列：`hitDie` / `savingThrowAbilities` /
 /// `spellcasting.mode|ability|listTags|archetype` / `resources` 的合键等）。
 ///
 /// [declarations] 必须已按优先级**从高到低**排好（排序的唯一实现在
-/// `RuleOverrideOrder`，本批次由 [RuleProfileResolver.resolveClassRules] 构造）。
-/// 取"第一个声明过该列"的声明的值即生效值；全都未声明 → `(value: null)`。
+/// `RuleOverrideOrder.effective`，本文件不排序）。取"第一个声明过该列"的声明的值
+/// 即生效值；全都未声明 → `(value: null)`。
 /// **显式 null 也算声明**（`archetype: null` = 清空该列），因此判据只看
 /// `declares`，绝不看"值是否为 null"。
 _ColumnPick<T> _pickColumn<T>({
   required String field,
-  required List<_OrderedDeclaration> declarations,
+  required List<RuleOverrideDeclaration> declarations,
   required bool Function(ClassRuleSet rules) declares,
   required T? Function(ClassRuleSet rules) read,
   required Map<String, RuleFieldSource> sources,
@@ -783,13 +741,13 @@ _ColumnPick<T> _pickColumn<T>({
 /// 是列，`RuleFieldPath` 也没有等级维度。列级来源 = 该列的最高 tier 声明者。
 Map<int, T> _pickTableColumn<T>({
   required String field,
-  required List<_OrderedDeclaration> declarations,
+  required List<RuleOverrideDeclaration> declarations,
   required bool Function(ClassRuleSet rules) declares,
   required T? Function(ClassRuleSet rules, int level) read,
   required Map<String, RuleFieldSource> sources,
 }) {
   final readers = <T? Function(int level)>[];
-  _OrderedDeclaration? owner;
+  RuleOverrideDeclaration? owner;
   for (final declaration in declarations) {
     if (!declares(declaration.rules)) continue;
     owner ??= declaration;
@@ -828,7 +786,7 @@ void _writeSource(
 /// - `mode` 的默认值 `none` 在**合并之后**落，缺省不算声明（否则条目只写
 ///   `prepared` 时会把档案的 `mode: prepared` 误压成 `none`）。
 ClassSpellcasting? _mergeSpellcasting({
-  required List<_OrderedDeclaration> declarations,
+  required List<RuleOverrideDeclaration> declarations,
   required Map<String, RuleFieldSource> sources,
 }) {
   ClassSpellcasting? spellcastingOf(ClassRuleSet rules) => rules.spellcasting;
@@ -907,7 +865,7 @@ ClassSpellcasting? _mergeSpellcasting({
 /// - `description` 没有数值语义：取最高 tier 声明的非空值，**不记来源**；
 /// - 合并结果的 `fields` 是**声明列的并集**，供下游判断"该列是否未声明"。
 List<ClassResourceRule> _mergeResources({
-  required List<_OrderedDeclaration> declarations,
+  required List<RuleOverrideDeclaration> declarations,
   required Map<String, RuleFieldSource> sources,
 }) {
   final ids = <String>[];
@@ -1001,11 +959,11 @@ ClassResourceRule? _resourceOf(ClassRuleSet rules, String id) {
 ///   的"路径无等级维度"已知限制）。
 MaxSpec? _mergeResourceMaximum({
   required String id,
-  required List<_OrderedDeclaration> declarations,
+  required List<RuleOverrideDeclaration> declarations,
   required Map<String, RuleFieldSource> sources,
 }) {
   final field = RuleFieldPath.resource(id, 'maximum');
-  final contributors = <_OrderedDeclaration>[];
+  final contributors = <RuleOverrideDeclaration>[];
   for (final declaration in declarations) {
     final rule = _resourceOf(declaration.rules, id);
     if (rule == null || !rule.declares('maximum')) continue;

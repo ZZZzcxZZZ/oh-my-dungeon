@@ -902,6 +902,55 @@ void main() {
       expect(report.warnings, isEmpty);
     });
 
+    test('写了 spellcasting 却没写 mode 且档案无可继承 → missingCoreField', () async {
+      // 唯一写出来的列（prepared）会被 parse 的缺省 `mode: none` 静默短路：
+      // 原有两条分支都进不去（`mode != none` 为假、块非 null），必须补报。
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {
+                'hitDie': 10,
+                'spellcasting': {
+                  'ability': 'cha',
+                  'prepared': {'1': 4},
+                },
+              },
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+      final warning = report.warnings.singleWhere(
+        (w) => w.message.contains('missingCoreField'),
+      );
+      expect(warning.path, r'$.entries[0].structured.classRules.spellcasting');
+      expect(warning.message, contains('mode'));
+    });
+
+    test('写了 spellcasting 却没写 mode，但档案同 slug 提供施法 → 不误报', () async {
+      // 档案已提供 `mode: prepared`：条目省略 mode 是"继续继承"，声明的 prepared
+      // 列正常生效，不报缺失（§3.6 字段 / 列级继承）。
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'wizard',
+            structured: {
+              'classRules': {
+                'hitDie': 6,
+                'spellcasting': {
+                  'prepared': {'1': 4},
+                },
+              },
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+      expect(report.warnings, isEmpty);
+    });
+
     test('施法职业既无自身 slots 也无提供法术位的原型 → missingCoreField', () async {
       final report = await importer.previewJson(
         packageJson(

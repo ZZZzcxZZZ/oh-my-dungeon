@@ -2,7 +2,17 @@
 //
 // 解析器写来源、UI 读来源、角色数据持久化来源都必须走这里；任何地方都不得手拼
 // `'spellcasting.prepared'` / `'resources.rage.maximum'`，也不得自己写中文标签。
-// 列白名单同时是 `class_rule_set.dart` 的两个 `declares` 与列级合并的合法列集合。
+//
+// 列白名单是**唯一权威**，不再有第二份字面量：`class_rule_set.dart` 的
+// `kSpellcastingFields` 直接等于 [spellcastingColumns]，`kResourceFields` 等于
+// `resourceColumns ∪ {id, description}`。因此"能解析的键"与"能列级合并 / 记来源的
+// 列"不会各写一份而漂移（`id` 是合键、`description` 没有数值语义，两者都只出现在
+// `kResourceFields` 里）。
+//
+// **已知限制**：路径**没有等级维度**（契约 §3.7 的来源粒度是列）。决策 D5 的表列
+// 逐级合并会产出"1..19 级来自档案、20 级来自条目"的数值，但来源只如实记在**最高
+// tier 的声明者**一条上（`spellcasting.prepared`），不做 `spellcasting.prepared@20`
+// 这类逐级来源路径——逐级细节需要时由调用方读表自己比。
 abstract final class RuleFieldPath {
   static const hitDie = 'hitDie';
   static const savingThrowAbilities = 'savingThrowAbilities';

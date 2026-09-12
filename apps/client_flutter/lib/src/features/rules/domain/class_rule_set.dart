@@ -2,6 +2,7 @@
 // 顶层未知键在解析任何字段之前报出；`spellcasting` 与 `resources[i]` 这类子结构的
 // 未知键，也在解析该结构的内容之前报出。diagnostics 顺序因此与"阅读顺序"一致。
 import 'rule_diagnostic.dart';
+import 'rule_field_path.dart';
 import 'rule_values.dart';
 
 /// 属性键的**诊断噪音抑制默认值**：只在档案 `abilities` 不可用（档案缺失本身已经
@@ -35,27 +36,17 @@ const kProgressionFields = {
 };
 
 /// `classRules.<slug>.spellcasting` 允许的字段（§3.3）。
-const kSpellcastingFields = {
-  'mode',
-  'ability',
-  'listTags',
-  'archetype',
-  'slots',
-  'slotLevel',
-  'prepared',
-  'cantrips',
-  'maximumSpellLevel',
-};
+///
+/// **不是第二份字面量**：直接取 [RuleFieldPath.spellcastingColumns]——列级来源路径、
+/// 列级合并判据与解析白名单共用同一份集合，避免三处各自维护而漂移。
+const kSpellcastingFields = RuleFieldPath.spellcastingColumns;
 
 /// `classRules.<slug>.resources[]` 允许的字段（§3.4）。
-const kResourceFields = {
-  'id',
-  'name',
-  'maximum',
-  'recovery',
-  'startsAtLevel',
-  'description',
-};
+///
+/// = [RuleFieldPath.resourceColumns]（参与列级合并、记来源的列）∪
+/// `{id, description}`：`id` 是合键（不是可覆盖的列），`description` 无数值语义
+/// （取最高 tier 的非空值、**不记来源**）。同样不是第二份字面量。
+const kResourceFields = {...RuleFieldPath.resourceColumns, 'id', 'description'};
 
 /// 标准生命骰骰面（§3.2）：生命骰只可能是这五种；d7/d9/d20 一律拒绝。
 const kStandardHitDieFaces = {4, 6, 8, 10, 12};
@@ -127,7 +118,7 @@ class ClassResourceRule {
     this.recoveryTable,
     this.startsAtLevel = 1,
     this.description,
-    this.fields = const {},
+    required this.fields,
   });
 
   final String id;
@@ -170,6 +161,9 @@ class ClassResourceRule {
   /// 声明过哪些列（**列级合并的唯一判据**，契约 §3.6）。
   /// 由 [ClassRuleSet.parse] 在"键存在"时填充；缺省值不算声明，
   /// 显式 0 / 空表算声明（"存在但为 0"与"未声明"不同，§3.12）。
+  ///
+  /// **必填**（无默认值）：漏填会让 `declares` 恒 false、整条资源静默退回低 tier，
+  /// 因此让"漏填"变成编译错误，而不是运行期的静默行为变化。
   final Set<String> fields;
 
   bool declares(String column) => fields.contains(column);
@@ -187,7 +181,7 @@ class ClassSpellcasting {
     this.prepared,
     this.cantrips,
     this.maximumSpellLevel,
-    this.fields = const {},
+    required this.fields,
   });
 
   final String mode;
@@ -203,6 +197,9 @@ class ClassSpellcasting {
   /// 声明过哪些列（**列级合并的唯一判据**，契约 §3.6）。
   /// 由 [ClassRuleSet.parse] 在"键存在"时填充；缺省值不算声明，
   /// 显式 `null` 算声明（`archetype: null` = 清空该列）。
+  ///
+  /// **必填**（无默认值）：漏填会让 `declares` 恒 false、整块 `spellcasting` 静默
+  /// 退回低 tier，因此让"漏填"变成编译错误。
   final Set<String> fields;
 
   bool declares(String column) => fields.contains(column);

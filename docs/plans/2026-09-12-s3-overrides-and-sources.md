@@ -3950,6 +3950,8 @@ git commit -m "test(rules): 覆盖 / 勘误场景端到端验收
 | 风险 / 限制 | 说明与缓解 |
 |---|---|
 | 列级合并改变既有包的解析结果 | 只有"条目部分声明 `spellcasting`"的包会变（从"整块替换"变成"逐列回退"）——这正是本轮的目标行为，且方向是**从丢失数值变成补齐数值**。`replace` 声明可恢复旧的"以我为准"语义。任务 2 / 3 必须跑全量客户端测试，任何失败都按"行为变化"逐条记录，不得放宽断言 |
+| 条目显式 `resources: []` **不再清空档案资源** | 旧"整块替换"语义下 `resources: []` 会把档案资源全删掉；按 id / 列合并后它只表示"这个条目没有新增资源"，档案同 id 资源继续生效。这是**有意的行为变化**：唯一清空手段是 `classRules.mode: "replace"`（D4）。锁定用例在 `test/rules/resource_column_merge_test.dart`（"条目显式 resources: [] 不清空档案资源"） |
+| 混合形态的 `maximum` 曾整条静默消失 | 最高 tier 声明 `{"table": …}`、低 tier 是常量 / 公式时，旧 `_mergeResourceMaximum` 会把低 tier 的 `MaxSpec` 丢掉（`table == null` 直接返回），于是"档案 `maximum: 2` + 勘误 `{"table": {"20": 5}}`"让 1..19 级资源整条消失（违反 §3.12）。批次 A 改为把各 tier 的 `MaxSpec` 用 `withFallback` 分层保留，逐级回退到常量 / 公式并在运行期再算；两条真实数值用例（档案常量 / 档案公式 + 勘误表）锁定 |
 | `replace` 的语义容易与 `spellcasting.mode` 混淆 | `invalidMergeMode` 的错误消息明确提示 `spellcasting.mode` 的位置；`kClassRuleFields` 的 `unknownField` 建议逻辑（`_suggestion`）按前 3 个字符匹配，`mode` 不会再触发"是否想写…" |
 | 补丁资源放宽了 `name` / `maximum` 必填 | 放宽只发生在**条目**侧；档案侧新增 `_validateArchiveResources` 保持 fail-fast；条目侧由 `incompleteResourcePatch` 在导入期拦住。运行期 `resourcesAt` 对 null 采取"跳过"并带 `assert` |
 | 列内**逐级**合并不支持 | 勘误若只改某一级的 `prepared`，必须重述整列的表（§3.12 的"低于最早声明等级 = 未声明"会被放大）。这是刻意的取舍（与 `Table` 的既有语义一致，且避免"三处优先级"），记入 `docs/README.md` §7.7 已知限制 |
@@ -4022,6 +4024,13 @@ git commit -m "test(rules): 覆盖 / 勘误场景端到端验收
 - 这条会让"按等级回退"成为唯一实现点：必须有单一函数（例如
   `mergeRuleTable(lower, upper) -> Table`）承担，`slots` / `prepared` / `cantrips` /
   `maximumSpellLevel` / `slotLevel` 全部走它，`resources.maximum.table` 同理。
+  **实现落点（批次 A 已落地）**：`rule_values.dart` 的 `firstDeclaredAt` 是"哪一层声明了
+  这个等级"的唯一原语；`mergeRuleTableLevels`（施法表列）与 `MaxSpec.resolve` 的
+  `withFallback` 层链（`resources.maximum`，额外支持常量 / 公式形态）都只经过它。
+- **`recovery` 不逐级合并（已落地，§3.4）**：常量形态与 `{"table": …}` 形态是同一条来源
+  路径，整列由"声明过 `recovery` 的最高 tier"负责；该表未声明的等级落默认 `longRest` 或
+  沿用最后声明值，**不**回退低 tier 的 `recovery` 表。恢复语义是枚举，逐级拼接两张表会产出
+  作者没写过的混合语义；锁定用例在 `test/rules/resource_column_merge_test.dart`。
 
 ### D6 冲突：运行期提示 + UI 选择，不进导入 error
 导入期只校验形状（`mode` / `priority` / 补丁资源 / 表形状）。两个包在**同一 tier**声明

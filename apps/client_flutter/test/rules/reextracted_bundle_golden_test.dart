@@ -119,8 +119,30 @@ const _maxSpellLevel = <String, Map<int, int?>>{
   'warlock': {1: 1, 5: 3, 11: 5, 20: 5},
 };
 
-const _hitDie = <String, int>{
-  'barbarian': 12,
+/// 战士 / 野蛮人的职业资源上限（§6.2 oracle；数值来自内置档案 / 官方表，不从生产
+/// 代码派生）：等级 → {资源 id: 上限}。`startsAtLevel` 之前的等级整条不出现。
+const _resources = <String, Map<int, Map<String, int>>>{
+  'barbarian': {
+    1: {'rage': 2},
+    5: {'rage': 3},
+    11: {'rage': 4},
+    20: {'rage': 6},
+  },
+  'fighter': {
+    1: {'second_wind': 2},
+    5: {'second_wind': 3, 'action_surge': 1},
+    11: {'second_wind': 4, 'action_surge': 1},
+    20: {'second_wind': 4, 'action_surge': 2},
+  },
+};
+
+/// 战士 / 野蛮人资源的恢复语义（§6.2 oracle）。
+const _resourceRecovery = <String, Map<String, String>>{
+  'barbarian': {'rage': 'shortRestOne'},
+  'fighter': {'second_wind': 'shortRestOne', 'action_surge': 'shortRest'},
+};
+
+const _hitDie = <String, int>{'barbarian': 12,
   'fighter': 10,
   'paladin': 10,
   'ranger': 10,
@@ -348,6 +370,72 @@ void main() {
       Dnd5eRules.weaponAbility(structuredOf(longbow)),
       'dex',
       reason: '长弓的 properties 写「弹药（射程 150/600；箭矢）」+ ability: dex',
+    );
+  });
+
+  test('抽样等级的战士 / 野蛮人资源次数与恢复语义命中 oracle（§6.2）', () {
+    for (final slug in _resources.keys) {
+      final entry = classBySlug[slug]!;
+      final rules = Dnd5eRules.resolveClassRules(
+        entryId: entry['id']! as String,
+        classSummary: entry['name']! as String,
+        structured: structuredOf(entry),
+      );
+      for (final level in _levels) {
+        final actual = <String, int>{
+          for (final resource in rules.resourcesAt(level, const {}))
+            resource.id: resource.maximum,
+        };
+        expect(actual, _resources[slug]![level], reason: '$slug L$level 资源次数');
+      }
+      for (final expectation in _resourceRecovery[slug]!.entries) {
+        final resource = rules.resources.singleWhere(
+          (candidate) => candidate.id == expectation.key,
+        );
+        expect(
+          resource.recoveryAt(5),
+          expectation.value,
+          reason: '$slug ${expectation.key} 的恢复语义',
+        );
+      }
+    }
+  });
+
+  test('真实私包条目上的资源列级合并：勘误只改 recovery 与 20 级上限，其余仍来自档案', () {
+    // 以真实 bundle 的 barbarian 条目为底（其 `classRules` 不写 resources，数值全由
+    // 内置档案提供），再叠一条"勘误式"资源声明：只写 recovery 与 20 级的 maximum。
+    // 1..19 级的上限、name、startsAtLevel 必须原样来自档案，不得整条消失。
+    final base = structuredOf(classBySlug['barbarian']!);
+    final classRules = Map<String, Object?>.from(base['classRules']! as Map);
+    classRules['resources'] = [
+      {
+        'id': 'rage',
+        'recovery': 'longRest',
+        'maximum': {
+          'table': {'20': 7},
+        },
+      },
+    ];
+    final rules = Dnd5eRules.resolveClassRules(
+      entryId: classBySlug['barbarian']!['id']! as String,
+      classSummary: classBySlug['barbarian']!['name']! as String,
+      structured: {...base, 'classRules': classRules},
+    );
+
+    expect(rules.resources.map((resource) => resource.id), ['rage']);
+    expect(rules.resources.single.name, '狂暴', reason: 'name 由档案补齐');
+    expect(rules.resourcesAt(1, const {}).single.maximum, 2, reason: '1 级上限来自档案');
+    expect(rules.resourcesAt(5, const {}).single.maximum, 3, reason: '5 级上限来自档案');
+    expect(rules.resourcesAt(11, const {}).single.maximum, 4, reason: '11 级上限来自档案');
+    expect(
+      rules.resourcesAt(20, const {}).single.maximum,
+      7,
+      reason: '20 级由勘误表负责',
+    );
+    expect(
+      rules.resourcesAt(20, const {}).single.recovery,
+      'longRest',
+      reason: 'recovery 整列由勘误声明负责',
     );
   });
 }

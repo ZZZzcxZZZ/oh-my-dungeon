@@ -115,6 +115,52 @@ void main() {
       expect(rage.declares('startsAtLevel'), isTrue);
       expect(rules.resources[1].maximum!.resolve(level: 1, abilities: const {}), 0);
     });
+
+    test('构造后 declares 与解析时出现的键逐项一致（fields 必填，漏填即编译错误）', () {
+      // `fields` 是**必填**参数：漏填会让 declares 恒 false、整块静默退回低 tier，
+      // 所以这里锁定"parse 填进去的集合 == 输入里出现过的键"这一契约。
+      const rawSpellcasting = <String, Object?>{
+        'mode': 'known',
+        'ability': 'cha',
+        'slots': {
+          '1': {'1': 2},
+        },
+        'prepared': {'1': 4},
+      };
+      const rawResource = <String, Object?>{
+        'id': 'rage',
+        'name': '狂暴',
+        'maximum': 2,
+        'recovery': 'longRest',
+      };
+      final diagnostics = <RuleDiagnostic>[];
+      final rules = ClassRuleSet.parse({
+        'spellcasting': rawSpellcasting,
+        'resources': [rawResource],
+      }, path: _path, diagnostics: diagnostics);
+
+      expect(
+        diagnostics.where((d) => d.severity == RuleSeverity.error),
+        isEmpty,
+        reason: '$diagnostics',
+      );
+      final spellcasting = rules.spellcasting!;
+      for (final column in RuleFieldPath.spellcastingColumns) {
+        expect(
+          spellcasting.declares(column),
+          rawSpellcasting.containsKey(column),
+          reason: 'spellcasting.$column',
+        );
+      }
+      final rage = rules.resources.single;
+      for (final column in RuleFieldPath.resourceColumns) {
+        expect(
+          rage.declares(column),
+          rawResource.containsKey(column),
+          reason: 'resources.rage.$column',
+        );
+      }
+    });
   });
 
   group('来源字段路径', () {
@@ -141,6 +187,19 @@ void main() {
         'recovery',
         'startsAtLevel',
       });
+    });
+
+    test('解析白名单由 RuleFieldPath 派生，不是第二份字面量', () {
+      // 防漂移：`kSpellcastingFields` 必须就是列白名单本身；资源侧则是
+      // "参与列级合并 / 记来源的列" ∪ {id 合键, description 无数值语义}。
+      expect(kSpellcastingFields, same(RuleFieldPath.spellcastingColumns));
+      expect(
+        kResourceFields,
+        {...RuleFieldPath.resourceColumns, 'id', 'description'},
+      );
+      expect(RuleFieldPath.resourceColumns, isNot(contains('id')));
+      expect(RuleFieldPath.resourceColumns, isNot(contains('description')));
+      expect(kResourceFields, containsAll(const ['id', 'description']));
     });
 
     test('每个路径都有中文展示名（UI 不得自己拼）', () {

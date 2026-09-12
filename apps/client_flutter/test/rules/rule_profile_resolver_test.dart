@@ -1128,6 +1128,57 @@ void main() {
       expect(result.profile, isNull);
     });
 
+    test('档案资源缺 name / maximum 是 fail-fast（invalidTable，path 精确到列）', () {
+      // 档案不是补丁：没有"低 tier 可补齐"这回事。缺一列就整包失败，绝不产出
+      // "没有名称 / 没有上限"的资源让运行期静默跳过（§3.1、§3.4）。
+      final cases = <(String, Map<String, Object?>, String)>[
+        (
+          '缺 name',
+          {
+            'id': 'rage',
+            'maximum': 2,
+          },
+          r'$.classes.barbarian.resources[0].name',
+        ),
+        (
+          '缺 maximum',
+          {
+            'id': 'rage',
+            'name': '狂暴',
+          },
+          r'$.classes.barbarian.resources[0].maximum',
+        ),
+        (
+          'name 与 maximum 都缺',
+          {
+            'id': 'rage',
+          },
+          r'$.classes.barbarian.resources[0].name',
+        ),
+      ];
+      for (final (label, resource, path) in cases) {
+        final raw = archive();
+        (raw['classes']! as Map)['barbarian'] = {
+          'hitDie': 12,
+          'savingThrowAbilities': ['str', 'con'],
+          'resources': [resource],
+        };
+        final result = RuleProfileResolver.resolveBuiltin(raw);
+        expect(result.profile, isNull, reason: label);
+        expect(
+          result.errors.first.code,
+          'invalidTable',
+          reason: label,
+        );
+        expect(result.errors.first.path, path, reason: label);
+        expect(
+          result.errors.first.severity,
+          RuleSeverity.error,
+          reason: label,
+        );
+      }
+    });
+
     test('原型白名单：prepared / cantrips 等原型不得承载的键报 unknownField', () {
       for (final extra in ['prepared', 'cantrips']) {
         final raw = archive();

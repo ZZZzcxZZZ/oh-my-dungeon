@@ -61,6 +61,10 @@ class RuleFieldSource {
 }
 
 /// 来源表的持久化与排序的**唯一**实现（角色数据 `data.classRuleSources`）。
+///
+/// **接线在后续任务（任务 9 / 11）**：本批次 lib 内还没有读写 `data.classRuleSources`
+/// 的调用点——角色页展示来源与导入报告列出来源分别由任务 9、任务 11 接入。序列化
+/// 与排序口径只在这里，接入方不得另写一份 `{originId, tier}` 解析。
 abstract final class RuleFieldSourceMap {
   /// 按字段路径升序输出：同一角色每次派生的 JSON 键序一致，测试与 diff 稳定。
   static Map<String, Object?> toData(Map<String, RuleFieldSource> sources) {

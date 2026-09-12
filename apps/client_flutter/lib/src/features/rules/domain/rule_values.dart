@@ -184,13 +184,37 @@ T? _valueAt<T>(Map<int, T> byLevel, List<int> declaredLevels, int level) {
 }
 
 /// 资源上限：整数，或 `{"formula": "…"}` / `{"table": <Table<int>>}`，对象形态可带 `minimum`。
+///
+/// S3 决策 D5 起还承载**合并链**：`_mergeResourceMaximum` 把各 tier 的 `MaxSpec`
+/// 用 [withFallback] 串成"高 → 低"，[resolve] 在该等级本层未声明时继续问后备层。
+/// 这消灭了"最高 tier 是表、低 tier 是常量 / 公式"时低 tier 数值**静默消失**的洞
+/// （例：档案 `maximum: 2` + 勘误 `{"table": {"20": 5}}` 时 1..19 级仍有上限 2）。
 class MaxSpec {
-  const MaxSpec._({this.value, this.formula, this.table, this.minimum});
+  const MaxSpec._({
+    this.value,
+    this.formula,
+    this.table,
+    this.minimum,
+    this.fallback,
+  });
 
   final int? value;
   final String? formula;
   final IntTable? table;
   final int? minimum;
+
+  /// 更低 tier 的后备层（S3 决策 D5 的**逐级回退**唯一实现）。解析期构造的
+  /// `MaxSpec` 恒为 null；只有 [_mergeResourceMaximum] 的合并结果带后备链。
+  final MaxSpec? fallback;
+
+  /// 把 [next] 接在**本层之后**（本层不变）；仅由合并链构造使用。
+  MaxSpec withFallback(MaxSpec next) => MaxSpec._(
+    value: value,
+    formula: formula,
+    table: table,
+    minimum: minimum,
+    fallback: next,
+  );
 
   static MaxSpec? tryParse(Object? raw) {
     if (raw is num) {
@@ -216,16 +240,31 @@ class MaxSpec {
     return MaxSpec._(table: table, minimum: minimum);
   }
 
-  /// 从"等级 → 值"构造**表形态**的合并结果（[mergeRuleTableLevels] 的唯一下游）；
-  /// 空表 → null（所有 tier 都没声明 → 未声明）。`minimum` 与整数 / 公式形态同义。
-  static MaxSpec? fromLevels(Map<int, int> byLevel, {int? minimum}) {
-    final table = IntTable.fromLevels(byLevel);
-    if (table == null) return null;
-    return MaxSpec._(table: table, minimum: minimum);
+  /// 返回 `int?`：本层在该等级**未声明**（表的最早声明等级高于当前等级）时，
+  /// 沿 [fallback] 链回退到低 tier 的常量 / 公式 / 表（原样保留、此处再算），
+  /// 整条链都没有 → null（调用方跳过），不静默变 0（§3.12）。
+  ///
+  /// `minimum` 是**最高 tier 声明者**（本对象）的下限：它作为整条合并链最终值的
+  /// 下限（与 D5 之前"胜出者的 `minimum` 作用于合并结果"一致）；后备层自己的
+  /// `minimum` 已在 [_ownValue] 里对自身值生效。
+  ///
+  /// 逐级回退的判据走 [firstDeclaredAt]（**唯一实现**），与 [mergeRuleTableLevels]
+  /// 共用同一个"哪一层声明了这个等级"的原语。
+  int? resolve({required int level, required Map<String, int> abilities}) {
+    final layers = <MaxSpec>[];
+    for (MaxSpec? layer = this; layer != null; layer = layer.fallback) {
+      layers.add(layer);
+    }
+    final value = firstDeclaredAt<int>(level, [
+      for (final layer in layers)
+        (probe) => layer._ownValue(probe, abilities),
+    ]);
+    if (value == null) return null;
+    return minimum == null || value >= minimum! ? value : minimum!;
   }
 
-  /// 返回 `int?`：表在该等级**未声明**时返回 null（调用方跳过），不静默变 0（§3.12）。
-  int? resolve({required int level, required Map<String, int> abilities}) {
+  /// 本层的"结算值"：原始值套**本层**的 `minimum`；本层未声明该等级 → null。
+  int? _ownValue(int level, Map<String, int> abilities) {
     final raw = switch (this) {
       MaxSpec(value: final v?) => v,
       MaxSpec(formula: final f?) => _evaluate(f, level, abilities),
@@ -266,6 +305,20 @@ int _evaluate(String formula, int level, Map<String, int> abilities) {
   return int.parse(formula);
 }
 
+/// 逐级合并的**唯一**原语（S3 决策 D5）：对 [level] 按优先级从高到低问每一层
+/// [tiers]，返回第一个非 null 的值（"这一层声明了这个等级"）；全都没声明 → null。
+///
+/// [mergeRuleTableLevels]（`slots` / `slotLevel` / `prepared` / `cantrips` /
+/// `maximumSpellLevel`）与 [MaxSpec.resolve]（`resources.<id>.maximum`，含常量 /
+/// 公式形态的逐级回退）都只经过这里，不得各自再写一份"从高到低问"的循环。
+T? firstDeclaredAt<T>(int level, List<T? Function(int level)> tiers) {
+  for (final read in tiers) {
+    final value = read(level);
+    if (value != null) return value;
+  }
+  return null;
+}
+
 /// `Table<T>` 列**逐级合并**的唯一实现（S3 决策 D5）。
 ///
 /// [tiers] 按优先级从高到低给出各 tier 的取值器：`read(level)` 返回该 tier 在该
@@ -278,21 +331,18 @@ int _evaluate(String formula, int level, Map<String, int> abilities) {
 /// 等级 → 结果里不含该等级（未声明）。显式 0 / 显式空表都是非 null 值，因此算
 /// "已声明"（§3.12）。
 ///
-/// `slots` / `slotLevel` / `prepared` / `cantrips` / `maximumSpellLevel` /
-/// `resources.maximum.table` 全部只经这里，不得各自再写一份逐级循环。
+/// `slots` / `slotLevel` / `prepared` / `cantrips` / `maximumSpellLevel` 全部只经
+/// 这里；`resources.maximum` 的形态比它们多（额外有常量 / 公式），走
+/// [MaxSpec.withFallback] 的层链，但"哪一层声明了这个等级"同样只由 [firstDeclaredAt]
+/// 决定。
 Map<int, T> mergeRuleTableLevels<T>(
   List<T? Function(int level)> tiers, {
   int maxLevel = 20,
 }) {
   final merged = <int, T>{};
   for (var level = 1; level <= maxLevel; level++) {
-    for (final read in tiers) {
-      final value = read(level);
-      if (value != null) {
-        merged[level] = value;
-        break;
-      }
-    }
+    final value = firstDeclaredAt<T>(level, tiers);
+    if (value != null) merged[level] = value;
   }
   return merged;
 }

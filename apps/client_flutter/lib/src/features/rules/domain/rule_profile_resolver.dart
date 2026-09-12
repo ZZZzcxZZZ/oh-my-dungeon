@@ -476,6 +476,10 @@ abstract final class RuleProfileResolver {
   /// - 施法职业**整块缺** `spellcasting`（[hasSpellChoiceIntent] 为真，即条目 `rules`
   ///   里有 `optionType == 'spell'` 的选择）→ warning `missingCoreField`：`mode` 无从
   ///   得知，第一条判断不会触发，但运行期连施法属性都拿不到；
+  /// - **写了** `spellcasting` 块却**没写 `mode`** 且档案也没有同 slug 施法可继承
+  ///   （parse 把缺省值落成 `none`）→ warning `missingCoreField`：块里已声明的其它列
+  ///   （`prepared` / `slots` / `ability`…）会被 `mode: none` 全部短路，运行期一个都
+  ///   不生效。这是"静默丢弃"的入口，必须报出来，让作者显式写 `mode`；
   /// - 施法职业未声明 `prepared` → warning `missingPreparedColumn`
   ///   （原型不承载该列，编辑器因此不限制准备数量）；
   /// - 资源的 `maximum.table` 在 [ClassResourceRule.startsAtLevel] 及以上出现 0
@@ -485,22 +489,22 @@ abstract final class RuleProfileResolver {
   /// 只对**条目声明**调用：内置档案自己的表由资产测试兜底，导入期的 warning
   /// 是针对第三方包的作者提示（§5.2 的 warning 语义就是"可导入，导入预览中列出"）。
   ///
-  /// [archiveSpellcasting] 是**档案侧**同 slug 职业的 `spellcasting`：条目按字段
-  /// 继承档案（§3.6），档案已提供时"条目没写 `spellcasting`"不是缺省，不得误报。
-  ///
-  /// [archiveRules] 是**档案侧**同 slug 职业的完整规则块，用于判定补丁资源是否有
-  /// 低 tier 可补齐（见下方 `incompleteResourcePatch`）。
+  /// [archiveRules] 是**档案侧**同 slug 职业的完整规则块：条目按字段 / 列继承档案
+  /// （§3.6），档案已提供 `spellcasting` 时"条目没写"不是缺省，不得误报；补丁资源
+  /// 是否有低 tier 可补齐也看它。**只收这一个参数**——`archiveSpellcasting` 是同一
+  /// 对象的 `spellcasting` 部分（内部派生），多一个入参就多一处"忘传 → 静默变
+  /// false"的隐患。
   static void validateEntryClassRules({
     required RuleProfile profile,
     required ClassRuleSet? entryRules,
     required String path,
     required List<RuleDiagnostic> diagnostics,
     bool hasSpellChoiceIntent = false,
-    ClassSpellcasting? archiveSpellcasting,
     ClassRuleSet? archiveRules,
   }) {
     if (entryRules == null) return;
     final spellcasting = entryRules.spellcasting;
+    final archiveSpellcasting = archiveRules?.spellcasting;
     _validateArchetype(
       archetype: spellcasting?.archetype,
       path: '$path.spellcasting.archetype',
@@ -544,6 +548,23 @@ abstract final class RuleProfileResolver {
         'missingCoreField',
         '该职业声明了法术选择（optionType "spell"）却完全未声明 spellcasting，'
             '档案也没有同 slug 职业可继承：角色卡的法术位与施法属性将缺省',
+      );
+    } else if (spellcasting != null &&
+        !spellcasting.declares('mode') &&
+        !archiveProvidesSpellcasting &&
+        spellcasting.fields.isNotEmpty) {
+      // `mode` 没写（`declares('mode')` 为 false）⇒ parse 落缺省 `none`，第一条
+      // 分支不进；`spellcasting` 非 null ⇒ 第二条分支也不进。块里已声明的其它列
+      // 会被 `mode: none` 静默丢弃（`fields.isNotEmpty` 此刻就等价于"含 mode 以外
+      // 的列"，因为 mode 不在 fields 里）。档案也没有同 slug 施法可继承时，唯一
+      // 出路是报出来。
+      _addWarning(
+        diagnostics,
+        '$path.spellcasting',
+        'missingCoreField',
+        'spellcasting 未声明 mode（缺省为 none），档案也没有同 slug 施法可继承：'
+            '块里已声明的列（如 prepared / slots / ability）都不会生效。'
+            '想施法请写 mode: prepared / known；确实不施法请显式写 mode: none',
       );
     }
     for (var index = 0; index < entryRules.resources.length; index++) {
@@ -847,9 +868,10 @@ ClassSpellcasting? _mergeSpellcasting({
 ///   声明过该列"的一侧；
 /// - `recovery` 的常量形态与 `{"table": …}` 形态是**同一条来源路径**（§3.4 的双
 ///   表示歧义），两者整体取同一侧，不拆开；
-/// - `maximum` 是列：最高 tier 的声明者胜出；若胜出者是**表**形态，则与更低 tier
-///   的表形态按等级合并（[mergeRuleTableLevels]），所以"勘误只改 20 级的上限"不必
-///   重述整表。胜出者是整数 / formula 形态时整列由它负责（常量 / 公式没有等级维度）；
+/// - `maximum` 是列：所有声明过该列的 tier 的 `MaxSpec` 被**分层保留**
+///   （[_mergeResourceMaximum]）。最高 tier 是**表**时，该表未声明的等级逐级回退到
+///   低 tier 的 `MaxSpec`（表 / 常量 / 公式都行），所以"勘误只改 20 级的上限"不必
+///   重述整表；最高 tier 是整数 / 公式时它覆盖所有等级（常量 / 公式没有等级维度）；
 /// - 合并后 `name` / `maximum` 仍可能为 null：导入期已用 `incompleteResourcePatch`
 ///   拦住条目补丁，档案侧由 `_validateArchiveResources` fail-fast。运行期
 ///   [ResolvedClassRules.resourcesAt] 对 null 采取"跳过"，避免产出没有上限的假资源；
@@ -935,11 +957,19 @@ ClassResourceRule? _resourceOf(ClassRuleSet rules, String id) {
   return null;
 }
 
-/// `resources.<id>.maximum` 的列级 + 表列逐级合并（决策 D5）。
+/// `resources.<id>.maximum` 的列级 + 逐级合并（决策 D5）。
 ///
-/// 最高 tier 的声明者决定形态：整数 / 公式形态整列由它负责（没有等级维度）；
-/// **表**形态则把各 tier 的表按等级合并（[mergeRuleTableLevels]），
-/// `minimum` 取胜出者的（`max(结算结果, minimum)` 的语义不变）。
+/// **分层保留所有 tier 的 `MaxSpec`**（`withFallback` 串成高 → 低），而不是只留
+/// 最高 tier 那一份：
+/// - 最高 tier 是**表**时，本表未声明的等级继续问低 tier 的 `MaxSpec`——常量 / 公式
+///   原样保留，运行期 [MaxSpec.resolve] 再算（`formula: "level"` 因此仍按角色等级
+///   结算），不会被静默丢弃；
+/// - 最高 tier 是整数 / 公式时它覆盖所有等级（没有等级维度），后备层自然不会被问到；
+/// - 表 + 表的逐级结果与旧的 `mergeRuleTableLevels` 逐项相等（`Table.at` 自己负责
+///   "高于最后声明沿用最后声明值"），因此这不是行为变化，而是补上混合形态的洞；
+/// - `minimum` 取最高 tier 声明者的（[MaxSpec.resolve] 里作为最终下限）；
+/// - 来源仍只有一条：最高 tier 的声明者（§3.7 的来源粒度是列，见 `RuleFieldPath`
+///   的"路径无等级维度"已知限制）。
 MaxSpec? _mergeResourceMaximum({
   required String id,
   required List<_OrderedDeclaration> declarations,
@@ -956,13 +986,14 @@ MaxSpec? _mergeResourceMaximum({
   final owner = contributors.first;
   _writeSource(sources, field, owner.originId, owner.tier);
 
-  final ownerSpec = _resourceOf(owner.rules, id)!.maximum;
-  if (ownerSpec == null || ownerSpec.table == null) return ownerSpec;
-  final mergedLevels = mergeRuleTableLevels<int>([
-    for (final declaration in contributors)
-      (level) => _resourceOf(declaration.rules, id)!.maximum?.table?.at(level),
-  ]);
-  return MaxSpec.fromLevels(mergedLevels, minimum: ownerSpec.minimum);
+  // 从最低 tier 往最高 tier 组装后备链：`spec.withFallback(已组装的低层链)`。
+  MaxSpec? layered;
+  for (final declaration in contributors.reversed) {
+    final spec = _resourceOf(declaration.rules, id)!.maximum;
+    if (spec == null) continue;
+    layered = layered == null ? spec : spec.withFallback(layered);
+  }
+  return layered;
 }
 
 /// 档案形状/类型错误一律 error（§3.1、§5.2）。

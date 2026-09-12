@@ -1,5 +1,6 @@
 import '../../content/domain/content_entry.dart';
 import '../../rules/domain/character_rule_definition.dart';
+import '../../rules/domain/rule_choice_semantics.dart';
 import '../../rules/domain/rule_profile.dart';
 import 'dnd5e_rules.dart';
 
@@ -55,25 +56,36 @@ abstract final class StructuredClassRules {
   /// 职业技能选择。唯一来源是 `entry.rules` 里**第一条**
   /// `optionType == 'skill'` 的选择（先看 `rules.choices`，再看
   /// `rules.progression[].choices`）：`minimum` 作 [StructuredSkillChoice.count]，
-  /// 内联 `options` 的 `label`（字符串元素即其本身）作
-  /// [StructuredSkillChoice.options]。没有这条选择就返回
+  /// 候选 label 一律来自 `RuleChoiceSemantics.candidatesFor`（**唯一候选枚举点**，
+  /// 与创建向导的技能网格是同一份候选），不再自己读 `options` / 拼内联 label。
+  ///
+  /// [entries] 用于解析 `optionTags` / `optionEntryIds` 表达的**条目候选**；不传时
+  /// （展示摘要在没有内容仓库时）只有内联候选。没有这条选择就返回
   /// [StructuredSkillChoice.empty]——**不**回退中文散文，也不猜测全部技能。
   ///
-  /// 模型允许用 `optionTags` / `optionEntryIds` 表达候选（§3.10.2）：
-  /// 此时 `options` 为空但**候选不是"任意技能"**，[StructuredSkillChoice.restricted]
-  /// 置位，展示层给中性文案而不是"任选N项（任意技能）"。
-  static StructuredSkillChoice skillChoice(ContentEntry? entry) {
-    final rules = entry?.rules;
-    if (rules == null) return StructuredSkillChoice.empty;
+  /// 候选为空但选择确实限定了候选（`optionTags` / `optionEntryIds`）时，
+  /// [StructuredSkillChoice.restricted] 置位，展示层给中性文案而不是"任选N项（任意技能）"。
+  static StructuredSkillChoice skillChoice(
+    ContentEntry? entry, {
+    Map<String, ContentEntry> entries = const <String, ContentEntry>{},
+  }) {
+    final source = entry;
+    final rules = source?.rules;
+    if (source == null || rules == null) return StructuredSkillChoice.empty;
     for (final choice in _choices(rules)) {
       if (choice.optionType != 'skill') continue;
+      final candidates = RuleChoiceSemantics.candidatesFor(
+        choice,
+        entries: entries,
+        sourceEntryId: source.id,
+      );
       return StructuredSkillChoice(
         count: choice.minimum,
-        options: choice.options
-            .map((option) => option.label)
+        options: candidates
+            .map((candidate) => candidate.label)
             .toList(growable: false),
         restricted:
-            choice.options.isEmpty &&
+            candidates.isEmpty &&
             (choice.optionTags.isNotEmpty || choice.optionEntryIds.isNotEmpty),
       );
     }

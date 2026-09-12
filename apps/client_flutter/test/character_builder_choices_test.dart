@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character_edit_draft.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_editor_page.dart';
@@ -1100,6 +1102,237 @@ void main() {
       ['agonizing-blast', 'agonizing-blast'],
       reason: 'repeatable 的两次选取必须落库两份（有序 List 的语义）',
     );
+  });
+
+  // 任务 7：技能选择的选中值走与通用选择同一份状态（`_ruleChoices` →
+  // `build.choices`），顺序 = 点击顺序；背景预设仍走 `skillProficiencies`。
+  testWidgets('熟练步骤的选择写进 build.choices 并按点击顺序保存', (tester) async {
+    tester.view.physicalSize = const Size(1200, 1500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    CharacterEditDraft? submitted;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          contentEntries: [
+            _entry(
+              id: 'guide:class/ranger',
+              type: 'class',
+              name: '游侠',
+              structured: const {
+                'classRules': {'hitDie': 10},
+              },
+              rules: const {
+                'progression': [
+                  {
+                    'levels': [1],
+                    'choices': [
+                      {
+                        'id': 'class-skills',
+                        'label': '选择两项技能熟练',
+                        'optionType': 'skill',
+                        'minimum': 2,
+                        'maximum': 2,
+                        'builderStep': 'proficiencies',
+                        'options': ['察觉', '求生', '隐匿'],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ),
+            _entry(
+              id: 'guide:background/soldier',
+              type: 'background',
+              name: '士兵',
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:species/human',
+              type: 'species',
+              name: '人类',
+              rules: const {},
+            ),
+          ],
+          onSubmit: (draft) async {
+            submitted = draft;
+            return true;
+          },
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const Key('standard-character-name-field')),
+      '布伦',
+    );
+    await tester.pumpAndSettle();
+
+    await _goToDesktopStep(tester, 4);
+    // 依次点『求生』『察觉』：落库顺序必须是点击顺序，不是候选声明顺序。
+    await tester.tap(find.byKey(const Key('standard-skill-求生-chip')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('standard-skill-察觉-chip')));
+    await tester.pumpAndSettle();
+
+    await _goToDesktopStep(tester, 8);
+    await tester.tap(find.widgetWithText(FilledButton, '创建角色'));
+    await tester.pumpAndSettle();
+
+    expect(submitted, isNotNull);
+    final build = submitted!.data['build']! as Map;
+    expect(
+      (build['choices']! as Map)['guide:class/ranger#class-skills#1'],
+      ['求生', '察觉'],
+      reason: '技能选择与通用选择同一份状态：顺序 = 点击顺序',
+    );
+    expect(submitted!.data['choices'], {
+      'guide:class/ranger#class-skills#1': ['求生', '察觉'],
+    });
+    expect(submitted!.skills['求生'], isTrue, reason: '自动授予进 skills');
+    expect(submitted!.skills['察觉'], isTrue, reason: '自动授予进 skills');
+    expect(submitted!.skills['隐匿'], isFalse);
+    // 背景预设仍走 `skillProficiencies`（士兵 = 运动、威吓），不与技能选择混同。
+    expect(submitted!.skills['运动'], isTrue, reason: '背景预设仍在');
+    expect(submitted!.skills['威吓'], isTrue, reason: '背景预设仍在');
+  });
+
+  // 任务 7：技能选择不再有"专门 UI 免检"——未完成时必须阻塞创建，
+  // 否则就是"声明了却不用完成"的静默失效。
+  testWidgets('未完成的技能选择阻塞创建（不再免检）', (tester) async {
+    tester.view.physicalSize = const Size(1200, 1500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          contentEntries: [
+            _entry(
+              id: 'guide:class/ranger',
+              type: 'class',
+              name: '游侠',
+              structured: const {
+                'classRules': {'hitDie': 10},
+              },
+              rules: const {
+                'progression': [
+                  {
+                    'levels': [1],
+                    'choices': [
+                      {
+                        'id': 'class-skills',
+                        'label': '选择两项技能熟练',
+                        'optionType': 'skill',
+                        'minimum': 2,
+                        'maximum': 2,
+                        'builderStep': 'proficiencies',
+                        'options': ['察觉', '求生', '隐匿'],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ),
+            _entry(
+              id: 'guide:background/soldier',
+              type: 'background',
+              name: '士兵',
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:species/human',
+              type: 'species',
+              name: '人类',
+              rules: const {},
+            ),
+          ],
+          onSubmit: (_) async => true,
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const Key('standard-character-name-field')),
+      '布伦',
+    );
+    await tester.pumpAndSettle();
+
+    await _goToDesktopStep(tester, 8);
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, '创建角色'))
+          .onPressed,
+      isNull,
+      reason: '技能选择未完成时不得创建（免检已删除）',
+    );
+
+    await _goToDesktopStep(tester, 4);
+    await tester.tap(find.byKey(const Key('standard-skill-求生-chip')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('还需选择 1 项技能'),
+      findsOneWidget,
+      reason: '未达 minimum 时界面必须说明还差几项',
+    );
+    await tester.tap(find.byKey(const Key('standard-skill-察觉-chip')));
+    await tester.pumpAndSettle();
+
+    await _goToDesktopStep(tester, 8);
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, '创建角色'))
+          .onPressed,
+      isNotNull,
+      reason: '技能选择完成后即可创建',
+    );
+  });
+
+  // 结构守卫（任务 7）：`usesDedicatedOptionUi` 只允许作为**渲染判据**存在
+  // （决定由哪个专门渲染器画），校验 / 免检路径不得再出现它；升级规划器与独立
+  // 升级页完全不得出现（本级新增的选择由共享组件真的渲染，无需免检）。
+  test('结构守卫：usesDedicatedOptionUi 不是免检判据', () {
+    // 只比对**代码行**（注释里讨论这个判据是允许的，注释不是分支）。
+    String codeOf(String relativePath) => File(relativePath)
+        .readAsStringSync()
+        .split('\n')
+        .where((line) {
+          final trimmed = line.trimLeft();
+          return !trimmed.startsWith('//');
+        })
+        .join('\n');
+
+    final builderPage = codeOf(
+      'lib/src/features/characters/presentation/character_editor_builder_page.dart',
+    );
+    // 校验 / pending / 推荐 三条免检路径曾用这两种写法；删除后不得复活。
+    expect(
+      builderPage,
+      isNot(contains('!active.definition.usesDedicatedOptionUi')),
+    );
+    expect(
+      builderPage,
+      isNot(contains('active.definition.usesDedicatedOptionUi) continue')),
+    );
+    // 唯一允许的负向判断是**渲染**过滤（决定谁不归通用卡片画）。
+    expect(
+      builderPage,
+      contains('!choice.definition.usesDedicatedOptionUi'),
+      reason: '渲染判据必须保留，否则专门渲染器的选择会被通用卡片重复渲染',
+    );
+    for (final path in const [
+      'lib/src/features/characters/domain/character_upgrade_planner.dart',
+      'lib/src/features/characters/presentation/character_upgrade_page.dart',
+    ]) {
+      expect(
+        codeOf(path),
+        isNot(contains('usesDedicatedOptionUi')),
+        reason: '$path 不得再出现免检分支',
+      );
+    }
   });
 }
 

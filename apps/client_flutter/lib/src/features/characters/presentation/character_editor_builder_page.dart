@@ -52,7 +52,11 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
   final List<Map<String, Object?>> _customSpells = [];
   final Set<String> _selectedItemRefs = {};
   final Map<String, List<String>> _ruleChoices = {};
-  late Set<String> _selectedSkillProficiencies;
+
+  /// **背景预设**技能（`_presetSkillsForBackground`）。它只由背景决定，不是规则
+  /// 选择：职业声明了 `optionType: "skill"` 时它是锁定的背景身份（`fixed`），
+  /// 没有职业选择时（既有行为）它就是可编辑的技能集合本身。
+  late Set<String> _backgroundSkillProficiencies;
   late Map<String, int> _abilityScores;
   late Map<String, TextEditingController> _abilityControllers;
   AbilityScoreMethod _abilityMethod = AbilityScoreMethod.standardArray;
@@ -117,7 +121,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     _classEntryId = _entryIdFor('class', _className);
     _speciesEntryId = _entryIdFor('species', _species);
     _backgroundEntryId = _entryIdFor('background', _background);
-    _selectedSkillProficiencies = _presetSkillsForBackground(_background);
+    _backgroundSkillProficiencies = _presetSkillsForBackground(_background);
     _abilityScores = _presetAbilitiesForClass(_className);
     _abilityControllers = {
       for (final entry in Dnd5eRules.abilityLabels.entries)
@@ -200,12 +204,10 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       8,
     ];
     final visibleStep = visibleStepIndexes.indexOf(_currentStep);
-    // `skill` 选择由「熟练」步骤的技能选择器承担（选中值在任务 7 之前仍写进
-    // `_selectedSkillProficiencies`），其余选择一律按普通选择校验：数量、以及
-    // `requires` 前置（前置不满足 = 未完成，且由选择区显示原因，不静默跳过）。
-    final ruleChoicesAreValid = activeRuleChoices
-        .where((active) => !active.definition.usesDedicatedOptionUi)
-        .every(_ruleChoiceIsComplete);
+    // 所有选择一律按普通选择校验：数量、以及 `requires` 前置（前置不满足 = 未完成，
+    // 且由选择区显示原因，不静默跳过）。**没有免检名单**：`usesDedicatedOptionUi`
+    // 只决定渲染位置（技能网格 / 法术池），选中值同样进 `_ruleChoices`。
+    final ruleChoicesAreValid = activeRuleChoices.every(_ruleChoiceIsComplete);
     final stepContent = _buildStepContent(
       context: context,
       classOptions: classOptions,
@@ -250,7 +252,6 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         selectedSpells: _selectedSpellRefs.length,
         selectedItems: _selectedItemRefs.length,
         pendingChoices: activeRuleChoices
-            .where((active) => !active.definition.usesDedicatedOptionUi)
             .where((active) => !_ruleChoiceIsComplete(active))
             .length,
       ),
@@ -286,7 +287,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       spellRefs: _selectedSpellRefs.toList(),
       itemRefs: _selectedItemRefs.toList(),
       abilities: Map.unmodifiable(_abilityScores),
-      skillProficiencies: _selectedSkillProficiencies.toList(),
+      skillProficiencies: _backgroundSkillProficiencies.toList(growable: false),
       classEntry: _entryById(_classEntryId),
       classEntryId: _classEntryId,
       speciesEntryId: _speciesEntryId,
@@ -349,12 +350,6 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     final ruleChoiceWidgets = RuleChoiceGroupedSections(
       groups: ruleChoiceGroups,
     );
-    final classSkillChoice = StructuredClassRules.skillChoice(
-      _entryById(_classEntryId),
-    );
-    final fixedBackgroundSkills = classSkillChoice.count > 0
-        ? _presetSkillsForBackground(_background)
-        : const <String>{};
     return switch (_currentStep) {
       0 => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -408,7 +403,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
             onSelected: (value) => setState(() {
               _background = value;
               _backgroundEntryId = _entryIdFor('background', value);
-              _selectedSkillProficiencies = _presetSkillsForBackground(value);
+              _backgroundSkillProficiencies = _presetSkillsForBackground(value);
               _applyRecommendedRuleChoices();
             }),
           ),
@@ -476,14 +471,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
             ]),
           ),
           ruleChoiceWidgets,
-          _SkillProficiencySection(
-            selected: _selectedSkillProficiencies,
-            options: classSkillChoice.options,
-            maximum: classSkillChoice.count > 0 ? classSkillChoice.count : null,
-            fixed: fixedBackgroundSkills,
-            onChanged: (next) =>
-                setState(() => _selectedSkillProficiencies = next),
-          ),
+          ..._skillProficiencySections(),
           _RuleGrantPreview(
             entries: _ruleEntriesForStep(4, activeRuleChoices),
             level: _level,
@@ -580,7 +568,6 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         review: review,
         abilityMethodLabel: _abilityMethodLabel(_abilityMethod),
         pendingRuleChoices: activeRuleChoices
-            .where((active) => !active.definition.usesDedicatedOptionUi)
             .where((active) => !_ruleChoiceIsComplete(active))
             .toList(growable: false),
       ),
@@ -836,11 +823,9 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     while (changed) {
       changed = false;
       for (final active in _activeRuleChoices()) {
-        // `recommendedEntryIds` 只指向**条目**，而 `skill` 选择由技能选择器承担
-        // （[RuleChoiceDefinition.usesDedicatedOptionUi]，纯渲染判据）：把条目 id
-        // 写进 `_ruleChoices` 会让它对不上候选。其余选择（含内联值类型）的推荐
-        // 一律经 `recommendedFor` 的候选过滤，解析不到条目候选时自然为空。
-        if (active.definition.usesDedicatedOptionUi) continue;
+        // `recommendedEntryIds` 只指向**条目**，而推荐值必须落在候选集里：
+        // `recommendedFor` 已按候选过滤（技能选择没有条目候选时自然为空），
+        // 因此不再需要"跳过专门 UI"的免检分支。
         if ((_ruleChoices[active.key] ?? const <String>[]).isNotEmpty) continue;
         final recommended = resolver.recommendedFor(
           active.definition,
@@ -851,6 +836,48 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         changed = true;
       }
     }
+  }
+
+  /// 「熟练」步骤的专门渲染器（`usesDedicatedOptionUi` 的选择 = `optionType:
+  /// "skill"`）：每条技能选择一组技能网格，候选与共享组件同源
+  /// （`RuleChoiceSemantics.candidatesFor`），选中值写进 `_ruleChoices`。
+  ///
+  /// 职业**没有**任何技能选择时保持既有行为：同一组件降级为"背景预设编辑"
+  /// （全技能网格、写回 [_backgroundSkillProficiencies]）——这是历史 UX，不是
+  /// 第二种"职业技能选择"实现（候选、交互、落库都由同一处承担）。
+  List<Widget> _skillProficiencySections() {
+    final skillChoices = _activeRuleChoices()
+        .where(
+          (active) =>
+              active.builderStep == 4 && active.definition.usesDedicatedOptionUi,
+        )
+        .toList(growable: false);
+    if (skillChoices.isEmpty) {
+      return [
+        _SkillProficiencySection(
+          selected: _backgroundSkillProficiencies.toList(growable: false),
+          onChanged: (next) =>
+              setState(() => _backgroundSkillProficiencies = next.toSet()),
+        ),
+      ];
+    }
+    return [
+      for (final active in skillChoices)
+        _SkillProficiencySection(
+          selected: _ruleChoices[active.key] ?? const <String>[],
+          options: _candidatesFor(
+            active,
+          ).map((candidate) => candidate.label).toList(growable: false),
+          minimum: active.definition.minimum,
+          maximum: active.definition.maximum,
+          repeatable: active.definition.repeatable,
+          fixed: _backgroundSkillProficiencies,
+          onChanged: (next) => setState(() {
+            _ruleChoices[active.key] = next;
+            _applyRecommendedRuleChoices();
+          }),
+        ),
+    ];
   }
 
   void _replaceSet(Set<String> target, Set<String> next) {

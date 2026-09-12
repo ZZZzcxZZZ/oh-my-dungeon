@@ -192,6 +192,52 @@ void main() {
     );
   });
 
+  // 任务 7：候选 label 的唯一来源是 `RuleChoiceSemantics.candidatesFor`
+  // （展示与创建向导的技能网格是同一份候选）。`optionEntryIds` 表达的条目候选
+  // 在传入 entries 时也要能取到条目名，不再退化成"候选由条目规则给出"。
+  test('skillChoice 的候选 label 经 candidatesFor（含 optionEntryIds 条目候选）', () {
+    final entry = ContentEntry(
+      id: 'test:class/astral',
+      type: 'class',
+      slug: 'astral',
+      name: '星界骑士',
+      body: const [],
+      revision: 1,
+      rules: CharacterRuleDefinition.fromJson({
+        'choices': [
+          {
+            'id': 'class-skills',
+            'label': '选择两项技能熟练',
+            'optionType': 'skill',
+            'minimum': 2,
+            'maximum': 2,
+            'optionEntryIds': ['test:skill/stealth'],
+          },
+        ],
+      }),
+    );
+    final stealth = ContentEntry.fromJson({
+      'id': 'test:skill/stealth',
+      'type': 'skill',
+      'slug': 'stealth',
+      'name': '隐匿',
+      'body': <Object?>[],
+      'revision': 1,
+    });
+
+    // 不传 entries：只有内联候选（这里没有）→ 中性文案，不误标"任意技能"。
+    expect(StructuredClassRules.skillChoice(entry).options, isEmpty);
+    expect(StructuredClassRules.skillChoice(entry).restricted, isTrue);
+
+    // 传 entries：条目候选的 label 来自同一份候选枚举。
+    final resolved = StructuredClassRules.skillChoice(
+      entry,
+      entries: {'test:skill/stealth': stealth},
+    );
+    expect(resolved.options, ['隐匿']);
+    expect(resolved.restricted, isFalse);
+  });
+
   test('preparedLimit 只读职业自身的 prepared 表（含短数组向上沿用）', () {
     const entry = ContentEntry(
       id: 'test:class/astral',

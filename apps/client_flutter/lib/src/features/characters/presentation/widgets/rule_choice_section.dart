@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../content/domain/content_entry.dart';
@@ -168,8 +169,7 @@ class RuleChoiceSection extends StatelessWidget {
                               // 选到第二次（§3.10.2 允许同一 id 选 N 次）。减一次
                               // 由 chip 上的删除图标承担（`onDeleted`），移除的是
                               // **第一次出现**的那次。
-                              onSelected: (isSelected) =>
-                                  _onChipSelected(candidate, isSelected),
+                              onSelected: (_) => _onChipSelected(candidate),
                               onDeleted:
                                   definition.repeatable &&
                                       (counts[candidate.id] ?? 0) > 0
@@ -227,38 +227,21 @@ class RuleChoiceSection extends StatelessWidget {
         .toList(growable: false);
   }
 
-  /// 选中 / 取消的唯一交互实现：
-  /// - `repeatable`：点击 chip = **加一次**（最多 `maximum` 次，达到上限不再追加），
-  ///   减一次由 chip 上的删除图标（`onDeleted`）承担；
-  /// - 非 `repeatable` 取消：移除**第一次出现**的该 id（其余顺序不变）；
-  /// - 非 `repeatable` 且 `maximum == 1`：替换当前值；
-  /// - 其余：未达 `maximum` 时追加。
-  void _onChipSelected(RuleChoiceCandidate candidate, bool isSelected) {
-    if (definition.repeatable) {
-      _addOne(candidate.id);
-      return;
-    }
-    if (!isSelected) {
-      _removeOne(candidate.id);
-      return;
-    }
-    final next = <String>[...selected];
-    if (definition.maximum <= 1) {
-      next
-        ..clear()
-        ..add(candidate.id);
-    } else {
-      if (next.length >= definition.maximum) return;
-      next.add(candidate.id);
-    }
-    onChanged(List<String>.unmodifiable(next));
-  }
-
-  void _addOne(String id) {
-    final next = <String>[...selected];
-    if (next.length >= definition.maximum) return;
-    next.add(id);
-    onChanged(List<String>.unmodifiable(next));
+  /// 选中 / 取消的唯一交互实现：算法本体是顶层函数
+  /// [toggleRuleChoiceSelection]（技能选择器与共享组件共用，只有一处实现），
+  /// 本方法只负责把 chip 的事件翻译成它的入参。
+  ///
+  /// 结果与当前选中值**逐项相同**时不回调：已达上限的追加是 no-op，不得
+  /// 触发一次"看起来什么都没变"的重建（更不得静默丢值）。
+  void _onChipSelected(RuleChoiceCandidate candidate) {
+    final next = toggleRuleChoiceSelection(
+      selected: selected,
+      id: candidate.id,
+      repeatable: definition.repeatable,
+      maximum: definition.maximum,
+    );
+    if (listEquals(next, selected)) return;
+    onChanged(next);
   }
 
   void _removeOne(String id) {
@@ -305,6 +288,41 @@ int ruleChoiceBuilderStep(String? declaredStep, {required int inheritedStep}) {
     'details' => 7,
     _ => inheritedStep,
   };
+}
+
+/// 选择 chip 的**唯一**选中 / 取消算法（契约 §3.10.2、§3.10.3-4）。
+///
+/// 创建向导「熟练」步骤的技能选择器与共享组件 [RuleChoiceSection] 都调它，
+/// **不得**各自再写一份"加/减/替换"的判断。顺序 = 用户点击顺序 =
+/// `build.choices` 落库顺序；返回**不可变副本**。
+///
+/// 语义：
+/// - `repeatable == false` 且该 id 已在选中值里 → 移除**第一次出现**的那次
+///   （顺序不变，其余重复项保留）；
+/// - `repeatable == false` 且 `maximum <= 1` → 替换为当前 id（单选卡片点击另一个
+///   候选即切换，不需要先取消）；
+/// - 已选数量达到 `maximum` → 原样返回（不静默丢弃已选值）；
+/// - 其余 → 追加到末尾。
+///
+/// `repeatable == true` 时"减一次"由 chip 上的删除图标承担（共享组件的
+/// `onDeleted`），不走本函数——本函数只负责"加一次"。
+List<String> toggleRuleChoiceSelection({
+  required List<String> selected,
+  required String id,
+  required bool repeatable,
+  required int maximum,
+}) {
+  final next = <String>[...selected];
+  if (!repeatable && next.contains(id)) {
+    next.remove(id);
+    return List<String>.unmodifiable(next);
+  }
+  if (!repeatable && maximum <= 1) {
+    return List<String>.unmodifiable(<String>[id]);
+  }
+  if (next.length >= maximum) return List<String>.unmodifiable(selected);
+  next.add(id);
+  return List<String>.unmodifiable(next);
 }
 
 /// 一组 `group` 相同的选择（`group == null` = 无标题组）。

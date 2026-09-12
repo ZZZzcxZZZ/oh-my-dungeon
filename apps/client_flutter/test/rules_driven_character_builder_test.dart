@@ -1135,6 +1135,190 @@ void main() {
       expect(actions.single['name'], '动作如潮');
     });
   });
+
+  // 任务 7：技能选择统一写入 `build.choices`，经**自动授予**进 `skills`；
+  // `skillProficiencies` 退回"背景预设"单一职责（这里不传 = 背景无预设）。
+  test('技能选择写在 build.choices，经自动授予进 skills（不再走 skillProficiencies）', () {
+    final ranger = _entry(
+      id: 'test:class/ranger',
+      type: 'class',
+      name: '游侠',
+      structured: const {
+        'classRules': {'hitDie': 10},
+      },
+      rules: const {
+        'progression': [
+          {
+            'levels': [1],
+            'choices': [
+              {
+                'id': 'class-skills',
+                'label': '选择两项技能熟练',
+                'optionType': 'skill',
+                'minimum': 2,
+                'maximum': 2,
+                'options': ['察觉', '求生', '隐匿'],
+              },
+            ],
+          },
+        ],
+      },
+    );
+    final builder = RulesDrivenCharacterBuilder(entries: {ranger.id: ranger});
+    final draft = builder.build(
+      name: '测试角色',
+      build: const CharacterBuild(
+        level: 1,
+        selections: {'class': 'test:class/ranger'},
+        choices: {
+          'test:class/ranger#class-skills': ['察觉', '求生'],
+        },
+      ),
+      abilities: const {'wis': 14},
+    );
+
+    expect(draft.skills['察觉'], isTrue);
+    expect(draft.skills['求生'], isTrue);
+    expect(draft.skills['隐匿'], isFalse);
+    expect((draft.data['build']! as Map)['choices'], {
+      'test:class/ranger#class-skills#1': ['察觉', '求生'],
+    });
+    expect(draft.data['choices'], {
+      'test:class/ranger#class-skills#1': ['察觉', '求生'],
+    });
+  });
+
+  // 任务 7：背景预设仍走 `skillProficiencies`，与规则选择互不覆盖。
+  test('背景预设技能与规则选择的技能都进 skills（背景仍在）', () {
+    final ranger = _entry(
+      id: 'test:class/ranger',
+      type: 'class',
+      name: '游侠',
+      structured: const {
+        'classRules': {'hitDie': 10},
+      },
+      rules: const {
+        'choices': [
+          {
+            'id': 'class-skills',
+            'label': '选择两项技能熟练',
+            'optionType': 'skill',
+            'minimum': 1,
+            'maximum': 1,
+            'options': ['察觉', '求生'],
+          },
+        ],
+      },
+    );
+    final draft = RulesDrivenCharacterBuilder(
+      entries: {ranger.id: ranger},
+    ).build(
+      name: '测试角色',
+      build: const CharacterBuild(
+        level: 1,
+        selections: {'class': 'test:class/ranger'},
+        choices: {
+          'test:class/ranger#class-skills': ['察觉'],
+        },
+      ),
+      abilities: const {'wis': 14},
+      skillProficiencies: const ['运动', '威吓'],
+    );
+
+    expect(draft.skills['察觉'], isTrue, reason: '规则选择经自动授予进 skills');
+    expect(draft.skills['运动'], isTrue, reason: '背景预设仍生效');
+    expect(draft.skills['威吓'], isTrue, reason: '背景预设仍生效');
+    expect(draft.skills['求生'], isFalse);
+  });
+
+  test('语言选项记录到 data.profile.languages，不做数值派生', () {    final ranger = _entry(
+      id: 'test:class/ranger',
+      type: 'class',
+      name: '游侠',
+      structured: const {
+        'classRules': {'hitDie': 10},
+      },
+      rules: const {
+        'choices': [
+          {
+            'id': 'languages',
+            'label': '额外语言',
+            'optionType': 'language',
+            'minimum': 1,
+            'maximum': 1,
+            'options': ['龙语', '精灵语'],
+          },
+        ],
+      },
+    );
+    final builder = RulesDrivenCharacterBuilder(entries: {ranger.id: ranger});
+    final draft = builder.build(
+      name: '测试角色',
+      build: const CharacterBuild(
+        level: 1,
+        selections: {'class': 'test:class/ranger'},
+        choices: {
+          'test:class/ranger#languages': ['龙语'],
+        },
+      ),
+      abilities: const {'wis': 14},
+    );
+
+    expect((draft.data['profile']! as Map)['languages'], ['龙语']);
+    expect(draft.data['choices'], contains('test:class/ranger#languages'));
+    // 记录型选择不做数值派生：语言不产生任何 grant。
+    expect(
+      (draft.data['resolvedGrants']! as List).where(
+        (grant) => (grant as Map)['target'] == 'language:龙语',
+      ),
+      isEmpty,
+    );
+  });
+
+  test('语言选项的对象元素取 label，重复选取去重', () {
+    final ranger = _entry(
+      id: 'test:class/ranger',
+      type: 'class',
+      name: '游侠',
+      structured: const {
+        'classRules': {'hitDie': 10},
+      },
+      rules: const {
+        'choices': [
+          {
+            'id': 'languages',
+            'label': '额外语言',
+            'optionType': 'language',
+            'minimum': 1,
+            'maximum': 3,
+            'repeatable': true,
+            'options': [
+              {'id': 'draconic', 'label': '龙语'},
+              '精灵语',
+            ],
+          },
+        ],
+      },
+    );
+    final draft = RulesDrivenCharacterBuilder(
+      entries: {ranger.id: ranger},
+    ).build(
+      name: '测试角色',
+      build: const CharacterBuild(
+        level: 1,
+        selections: {'class': 'test:class/ranger'},
+        choices: {
+          'test:class/ranger#languages': ['draconic', 'draconic', '精灵语'],
+        },
+      ),
+      abilities: const {'wis': 14},
+    );
+
+    expect((draft.data['profile']! as Map)['languages'], ['龙语', '精灵语']);
+    expect(draft.data['choices'], {
+      'test:class/ranger#languages': ['draconic', 'draconic', '精灵语'],
+    });
+  });
 }
 
 ContentEntry _entry({

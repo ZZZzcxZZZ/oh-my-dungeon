@@ -463,20 +463,33 @@ class _PointBuyAbilityTile extends StatelessWidget {
   }
 }
 
+/// 「熟练」步骤的技能选择器（`optionType: "skill"` 的**专门渲染器**）。
+///
+/// 值类型与交互口径与共享组件 [RuleChoiceSection] 一致：
+/// - 选中值是有序 `List<String>`，顺序 = 点击顺序（即 `build.choices` 落库顺序）；
+/// - 选中 / 取消算法只有 [toggleRuleChoiceSelection] 一处（共享组件同款）；
+/// - [fixed]（背景预设）只展示、不可点：它是**背景**的身份，不进 `build.choices`。
 class _SkillProficiencySection extends StatelessWidget {
   const _SkillProficiencySection({
     required this.selected,
     required this.onChanged,
     this.options = const <String>[],
     this.fixed = const <String>{},
+    this.minimum,
     this.maximum,
+    this.repeatable = false,
   });
 
-  final Set<String> selected;
+  final List<String> selected;
   final List<String> options;
   final Set<String> fixed;
+
+  /// 必选项数（有专门选择的技能选择才有）；仅用于"还需选择 N 项"的提示，
+  /// **不**参与选中值语义（校验由创建向导的 `_ruleChoiceIsComplete` 唯一承担）。
+  final int? minimum;
   final int? maximum;
-  final ValueChanged<Set<String>> onChanged;
+  final bool repeatable;
+  final ValueChanged<List<String>> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -492,6 +505,10 @@ class _SkillProficiencySection extends StatelessWidget {
     final displayedSkills = Dnd5eRules.skills
         .where((skill) => displayedNames.contains(skill.name))
         .toList(growable: false);
+    // 未受 `maximum` 约束（背景预设编辑模式）时上限 = 全部技能：`toggleRuleChoiceSelection`
+    // 需要一个具体上限，但不能凭空捏造一个比"全部技能"更小的数。
+    final toggleMaximum = maximum ?? Dnd5eRules.skills.length;
+    final missing = minimum == null ? 0 : (minimum! - chosen.length);
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
@@ -510,6 +527,15 @@ class _SkillProficiencySection extends StatelessWidget {
               ),
             ],
           ),
+          if (missing > 0) ...[
+            const SizedBox(height: 4),
+            Text(
+              '还需选择 $missing 项技能',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -533,15 +559,14 @@ class _SkillProficiencySection extends StatelessWidget {
                       selected: isSelected,
                       onSelected: isFixed || (!isSelected && atLimit)
                           ? null
-                          : (nextSelected) {
-                              final next = {...selected};
-                              if (nextSelected) {
-                                next.add(skill.name);
-                              } else {
-                                next.remove(skill.name);
-                              }
-                              onChanged(next);
-                            },
+                          : (_) => onChanged(
+                              toggleRuleChoiceSelection(
+                                selected: selected,
+                                id: skill.name,
+                                repeatable: repeatable,
+                                maximum: toggleMaximum,
+                              ),
+                            ),
                     );
                   },
                 ),

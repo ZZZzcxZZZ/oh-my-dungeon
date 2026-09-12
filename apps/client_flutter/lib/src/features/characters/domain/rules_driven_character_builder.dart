@@ -3,6 +3,7 @@ import '../../rules/domain/character_build.dart';
 import '../../rules/domain/character_rule_definition.dart';
 import '../../rules/domain/character_rules_engine.dart';
 import '../../rules/domain/rule_choice_quota.dart';
+import '../../rules/domain/rule_choice_semantics.dart';
 import '../../rules/domain/rule_math.dart' as rule_math;
 import '../../rules/domain/rule_profile.dart';
 import '../../rules/domain/rule_values.dart';
@@ -125,6 +126,15 @@ class RulesDrivenCharacterBuilder {
       ledger,
       extraEntryIds: {...extraSpellRefs, ...extraItemRefs},
     );
+    // 记录型选择（`language` / `damageType` / `weaponMastery` / `value`）的落库
+    // 镜像：与 `build.choices` 同形（键 = 生效单元键），便于内容显示按 key 读取；
+    // **不做数值派生**。
+    final recordedChoices = <String, List<String>>{
+      for (final entry in ledger.resolvedChoices.entries) entry.key: entry.value,
+    };
+    // 语言落到**既有存储** `data['profile']['languages']`（决策 D6）：
+    // `CharacterProfile.fromCharacter` 读的就是它，`data['languages']` 没有读取方。
+    final languagePicks = _languagePicks(ledger);
 
     return CharacterEditDraft(
       name: name.trim(),
@@ -155,6 +165,8 @@ class RulesDrivenCharacterBuilder {
       contentReferences: contentReferences,
       data: {
         'build': effectiveBuild.toJson(),
+        'choices': recordedChoices,
+        if (languagePicks.isNotEmpty) 'profile': {'languages': languagePicks},
         'contentRefs': {
           'features': featureRefs,
           'spells': spellRefs,
@@ -331,6 +343,38 @@ class RulesDrivenCharacterBuilder {
   ContentEntry? _selectedEntry(CharacterBuild build, String slot) {
     final id = build.selections[slot];
     return id == null ? null : entries[id];
+  }
+
+  /// 记录型选择里的**语言**：`optionType == "language"` 的选中值 → 候选 label。
+  ///
+  /// **唯一实现点**：选择键的解析只有 `RuleChoiceSemantics.definitionForKey` 一处、
+  /// 候选 label 只有 `RuleChoiceSemantics.candidatesFor` 一处；本方法只做"挑出
+  /// language 选择 + 取 label + 去重"，不自己 split 键、不读 `entry.type`。
+  List<String> _languagePicks(CharacterGrantLedger ledger) {
+    final picks = <String>[];
+    for (final choice in ledger.resolvedChoices.entries) {
+      final resolved = RuleChoiceSemantics.definitionForKey(
+        choice.key,
+        entries: entries,
+      );
+      if (resolved == null ||
+          resolved.definition.optionType != 'language') {
+        continue;
+      }
+      final labels = {
+        for (final candidate in RuleChoiceSemantics.candidatesFor(
+          resolved.definition,
+          entries: entries,
+          sourceEntryId: resolved.sourceEntryId,
+        ))
+          candidate.id: candidate.label,
+      };
+      for (final id in choice.value) {
+        final label = labels[id] ?? id;
+        if (!picks.contains(label)) picks.add(label);
+      }
+    }
+    return picks;
   }
 
   List<String> _entryRefs(CharacterGrantLedger ledger, RuleGrantKind kind) {

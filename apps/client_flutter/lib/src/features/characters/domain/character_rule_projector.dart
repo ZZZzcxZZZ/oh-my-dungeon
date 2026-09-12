@@ -76,6 +76,7 @@ class CharacterRuleProjector {
     final mergedData = Map<String, Object?>.from(oldData);
     for (final key in const [
       'build',
+      'choices',
       'resolvedGrants',
       'pendingChoices',
       'spellSlots',

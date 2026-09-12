@@ -25,7 +25,8 @@
     "docker:down": "pwsh -NoLogo -NoProfile -File scripts/docker-compose.ps1 down",
     "docker:logs": "pwsh -NoLogo -NoProfile -File scripts/docker-compose.ps1 logs -f",
     "lint:design": "designmd lint DESIGN.md",
-    "test:scripts": "python -m unittest scripts/test_phb_2024_v2_tools.py scripts/test_private_rulebook_extractors.py scripts/test_release_packaging.py scripts/test_static_preview_server.py -v"
+    "check:drift-worker": "python3 scripts/check_drift_worker.py",
+    "test:scripts": "npm run check:drift-worker && python -m unittest scripts/test_phb_2024_v2_tools.py scripts/test_private_rulebook_extractors.py scripts/test_release_packaging.py scripts/test_static_preview_server.py -v"
   },
   "engines": {
     "node": ">=22 <25",

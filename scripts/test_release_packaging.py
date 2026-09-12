@@ -1,9 +1,11 @@
+import hashlib
 import unittest
 import json
 import tempfile
 from pathlib import Path
 
 from scripts.build_private_core_bundle import merge_private_bundles
+from scripts.check_drift_worker import REQUIRED_FIELDS, verify as verify_drift_worker
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -179,6 +181,45 @@ class ReleasePackagingTest(unittest.TestCase):
 
         self.assertIn('[Alias("d")]', script)
         self.assertIn('$ComposeArgs += "--detach"', script)
+
+    def test_drift_worker_manifest_matches_the_committed_artifact(self):
+        """提交的 drift worker 产物必须与清单一致（见 docs/README.md §14.5）。
+
+        `web/drift_worker.dart.js` 是 `dart compile js` 的产物，必须提交（Flutter web
+        构建不会自动编译 `web/` 下的额外入口）。改动 `web/drift_worker.dart` 或升级
+        `pubspec.lock` 里的 drift 却忘记重编译时，这条测试会转红——否则只有运行期才会炸。
+        """
+        manifest_path = (
+            ROOT / "apps" / "client_flutter" / "web" / "drift_worker.manifest.json"
+        )
+        self.assertTrue(
+            manifest_path.is_file(),
+            "web/drift_worker.manifest.json 缺失；"
+            "请运行 pwsh -File scripts/rebuild-drift-worker.ps1",
+        )
+
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        for field in REQUIRED_FIELDS:
+            with self.subTest(field=field):
+                self.assertIn(field, manifest)
+
+        # 清单记录的哈希必须与磁盘上的实际内容一致。
+        entrypoint = ROOT / "apps" / "client_flutter" / manifest["entrypoint"]
+        self.assertEqual(
+            manifest["entrypointSha256"],
+            hashlib.sha256(entrypoint.read_bytes()).hexdigest(),
+        )
+
+        output = ROOT / "apps" / "client_flutter" / manifest["output"]
+        self.assertTrue(output.is_file(), f"{manifest['output']} 缺失")
+        self.assertEqual(
+            manifest["outputSha256"],
+            hashlib.sha256(output.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(manifest["outputBytes"], output.stat().st_size)
+
+        # 完整校验（drift 版本、体积下限、worker 标记）由检查脚本负责。
+        self.assertEqual([], verify_drift_worker())
 
     def test_powershell_scripts_with_chinese_text_keep_the_utf8_bom(self):
         """含中文的 `.ps1` 必须带 UTF-8 BOM（见 docs/README.md §14.3）。

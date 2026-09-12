@@ -971,6 +971,9 @@ dart run build_runner build --delete-conflicting-outputs
 
 `npm run doctor` 会执行该步骤（CI 的 client job 不执行，因此提交前务必本地生成并提交产物）。
 
+`web/` 下的额外入口（drift WASM worker）不走 build_runner，单独有编译与清单校验流程，
+见 §14.5。
+
 ### 12.5 CI（`.github/workflows/ci.yml`，5 个 job）
 
 | job | 内容 |
@@ -1097,8 +1100,56 @@ Copy-Item node_modules\@prisma\engines\libquery_engine-linux-musl-openssl-3.0.x.
 
 - 客户端：`flutter test`（widget/单元）、契约测试、golden（CI 校验）。
 - 服务端：`jest` 单元 + `supertest` e2e。
-- 脚本：`python -m unittest`（`npm run test:scripts`）。
+- 脚本：`python -m unittest`（`npm run test:scripts`，含 drift worker 清单校验，见 §14.5）。
 - 私有内容：`npm run validate:phb-private`（不进公开 CI）。
+
+### 14.5 提交的 drift WASM worker 产物
+
+`apps/client_flutter/web/drift_worker.dart.js` **是有意提交的编译产物**，不要删除，也不要
+加进 `.gitignore`。Flutter web 构建只处理 `lib/main.dart` 这一个入口，**不会**自动编译
+`web/` 下的额外入口；drift 官方要求把 `dart compile js web/drift_worker.dart` 的产物一并
+提交，否则 web 端数据库不可用。
+
+产物由清单 `apps/client_flutter/web/drift_worker.manifest.json` 钉住：入口源码 sha256、
+`pubspec.lock` 里的 drift 版本、生成该 JS 的 Dart SDK 版本、产物的 sha256 与字节数。
+
+**什么时候必须重新生成**（改动以下任一项之后）：
+
+- `apps/client_flutter/web/drift_worker.dart`（哪怕只加一个空格）；
+- `pubspec.lock` 里的 `drift` 版本（升级 / 降级 drift、drift_flutter）。
+
+**怎么重新生成**：
+
+```powershell
+pwsh -File scripts/rebuild-drift-worker.ps1
+```
+
+脚本用 `dart compile js -O4` 重新编译（输出文件名保持不变，以维持产物里的
+sourceMappingURL），覆盖 `web/` 下的 `.js` / `.js.map` / `.js.deps`，再刷新清单并打印
+摘要。随后提交 `web/drift_worker.dart.js` 与 `web/drift_worker.manifest.json`
+（`.js.map` / `.js.deps` 是 Git 忽略的中间产物，不提交）。
+
+**怎么检出漂移**：
+
+```bash
+python3 scripts/check_drift_worker.py     # 退出码非 0 即已漂移
+```
+
+校验逐项进行：清单存在且字段齐全 → 入口源码 sha256 一致 → 产物存在且大于 100 KB
+（防占位文件）→ 产物 sha256 与字节数一致 → 产物里能找到 drift 的 wasm worker 标记
+（`drift_db` / `_drift_feature_detection` / `drift_mock_db`；`-O4` 会把
+`WasmDatabase.workerMainForOpen` 之类符号名压缩掉，所以只能按 drift 源码里的字符串
+常量判定）→ `pubspec.lock` 的 drift 版本与清单一致。任一项不符即非零退出，并打印
+「改了什么、该跑哪条命令重新生成」。
+
+接线：`npm run test:scripts` 会先跑 `npm run check:drift-worker`；同一断言也作为
+`scripts/test_release_packaging.py::test_drift_worker_manifest_matches_the_committed_artifact`
+存在，所以任何运行脚本测试的地方都会一并校验。
+
+> CI 现状：`.github/workflows/ci.yml` 只有 `server` / `client` / `design` / `golden` /
+> `docker` 五个 job，**没有 scripts job**，因此上述检查目前在 CI 不会自动执行。提交前
+> 必须本地跑 `npm run test:scripts`（或直接跑上面的校验命令）。若将来新增 scripts job，
+> 跑 `npm run test:scripts` 即可覆盖本项（ubuntu runner 自带 `python3`）。
 
 ---
 

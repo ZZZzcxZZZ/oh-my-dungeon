@@ -1,0 +1,10 @@
+{
+  "entrypoint": "web/drift_worker.dart",
+  "entrypointSha256": "16a172503e2c7e7b6b3229427c59ae8f8c428cfccd2ae3a783a6f8d6f9dae662",
+  "driftVersion": "2.34.1",
+  "driftWorkerSdk": "3.11.1",
+  "output": "web/drift_worker.dart.js",
+  "outputSha256": "59163007b166e0846c7a631989ec8afdd219860b39aa6cf6e0ac06f9b9a8e4f8",
+  "outputBytes": 354618,
+  "rebuildCommand": "pwsh -File scripts/rebuild-drift-worker.ps1"
+}

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../domain/ability_score_generator.dart';
 import '../domain/character.dart';
 import '../domain/character_edit_draft.dart';
+import '../domain/class_rule_summary.dart';
 import '../domain/declared_levels.dart';
 import '../domain/dnd5e_rules.dart';
 import '../domain/equipment_cost.dart';
@@ -1566,8 +1567,10 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
           ),
           _StructuredRuleSummary(
             title: '职业规则摘要',
-            entry: _entryById(_classEntryId),
-            fields: const ['primaryAbility', 'hitDie'],
+            items: _classSummaryItems(_entryById(_classEntryId), const [
+              'primaryAbility',
+              'hitDie',
+            ]),
           ),
           _LevelProgressionSection(
             level: _level,
@@ -1655,13 +1658,12 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         children: [
           _StructuredRuleSummary(
             title: '职业熟练摘要',
-            entry: _entryById(_classEntryId),
-            fields: const [
+            items: _classSummaryItems(_entryById(_classEntryId), const [
               'savingThrows',
               'skills',
               'weaponProficiency',
               'armorProficiency',
-            ],
+            ]),
           ),
           ...ruleChoiceWidgets,
           _SkillProficiencySection(
@@ -1683,8 +1685,9 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         children: [
           _StructuredRuleSummary(
             title: '职业初始装备',
-            entry: _entryById(_classEntryId),
-            fields: const ['startingEquipment'],
+            items: _classSummaryItems(_entryById(_classEntryId), const [
+              'startingEquipment',
+            ]),
           ),
           ...ruleChoiceWidgets,
           if (ruleChoiceWidgets.isEmpty) ...[
@@ -2481,24 +2484,48 @@ class _DetailsStep extends StatelessWidget {
   }
 }
 
+/// 职业摘要卡的条目：展示元数据（`primaryAbility` / `weaponProficiency` /
+/// `armorProficiency` / `startingEquipment`）继续读 `structured`；规则值
+/// （`hitDie` / `savingThrows` / `skills`）一律经 [ClassRuleSummary] 这唯一口径。
+///
+/// 规则值未声明（`null`）时不产生该行——不回退旧散文键、不显示 `0`。
+List<({String field, String value})> _classSummaryItems(
+  ContentEntry? entry,
+  List<String> fields,
+) {
+  final rules = ClassRuleSummary.of(entry);
+  final items = <({String field, String value})>[];
+  for (final field in fields) {
+    final value = switch (field) {
+      'hitDie' => rules.hitDie,
+      'savingThrows' => rules.savingThrows,
+      'skills' => rules.skillChoice,
+      _ => _structuredFieldText(entry?.structured[field]),
+    };
+    if (value != null && value.isNotEmpty) {
+      items.add((field: field, value: value));
+    }
+  }
+  return items;
+}
+
+/// 展示元数据（`structured`）的纯文本化：可迭代值按顿号连接，空值为 `null`。
+String? _structuredFieldText(Object? value) {
+  if (value == null) return null;
+  final text = value is Iterable
+      ? value.map((item) => '$item').join('、')
+      : '$value'.trim();
+  return text.isEmpty ? null : text;
+}
+
 class _StructuredRuleSummary extends StatelessWidget {
-  const _StructuredRuleSummary({
-    required this.title,
-    required this.entry,
-    required this.fields,
-  });
+  const _StructuredRuleSummary({required this.title, required this.items});
 
   final String title;
-  final ContentEntry? entry;
-  final List<String> fields;
+  final List<({String field, String value})> items;
 
   @override
   Widget build(BuildContext context) {
-    final items = <({String field, String value})>[];
-    for (final field in fields) {
-      final value = _formatValue(entry?.structured[field]);
-      if (value.isNotEmpty) items.add((field: field, value: value));
-    }
     if (items.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -2535,12 +2562,6 @@ class _StructuredRuleSummary extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  static String _formatValue(Object? value) {
-    if (value == null) return '';
-    if (value is Iterable) return value.map((item) => '$item').join('、');
-    return '$value'.trim();
   }
 
   static String _labelFor(String field) => switch (field) {

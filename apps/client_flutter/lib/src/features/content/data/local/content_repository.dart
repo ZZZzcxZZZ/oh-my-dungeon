@@ -59,6 +59,7 @@ Set<String> normalizedContentFacetValues(
     entry.type,
     field,
     raw,
+    entry: entry,
   );
 }
 

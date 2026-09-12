@@ -1,3 +1,6 @@
+import '../../characters/domain/class_rule_summary.dart';
+import 'content_entry.dart';
+
 enum ContentFieldValueKind { text, integer, decimal, boolean, stringList }
 
 class ContentFieldSchema {
@@ -113,8 +116,22 @@ class ContentSchemaRegistry {
     return result;
   }
 
-  Set<String> normalizeFacetValues(String type, String field, Object? value) {
-    if (value == null) return const {};
+  /// facet 值归一化。facet **计数**与**筛选**共用这一个函数，因此任何派生
+  /// 规则只能写在这里。
+  ///
+  /// 新契约不再写顶层 `structured.hitDie`，职业生命骰只在
+  /// `structured.classRules.hitDie`；因此 `class` + `hitDie` 且 `value == null`
+  /// 时经 [ClassRuleSummary] 从规则值派生 `d<N>` 字符串（与旧数据取值一致）。
+  /// 其余字段 `value == null` 仍视为"未声明"。
+  Set<String> normalizeFacetValues(
+    String type,
+    String field,
+    Object? value, {
+    ContentEntry? entry,
+  }) {
+    if (value == null) {
+      return _derivedFacetValues(type, field, entry);
+    }
     final schema = schemaFor(type);
     final definition = schema.fields
         .where((candidate) => candidate.key == field)
@@ -131,6 +148,20 @@ class ContentSchemaRegistry {
       return normalized.map((item) => '$item').toSet();
     }
     return <String>{if (normalized != null) '$normalized'};
+  }
+
+  /// `value == null`（旧键缺失）时的派生值。
+  ///
+  /// 目前只有一处：职业生命骰从 `classRules`（条目 ∪ 档案）派生，口径与
+  /// [ClassRuleSummary] 完全一致——**唯一派生点**，facet 计数与筛选同源。
+  Set<String> _derivedFacetValues(
+    String type,
+    String field,
+    ContentEntry? entry,
+  ) {
+    if (type != 'class' || field != 'hitDie' || entry == null) return const {};
+    final hitDie = ClassRuleSummary.of(entry).hitDie;
+    return hitDie == null ? const {} : <String>{hitDie};
   }
 
   ContentSchemaValidationResult validateForCreation({
@@ -332,13 +363,10 @@ const _schemas = <ContentTypeSchema>[
     type: 'class',
     label: '职业',
     fields: [
-      ContentFieldSchema(key: 'hitDie', label: '生命骰', filterable: true),
       ContentFieldSchema(key: 'primaryAbility', label: '主属性', filterable: true),
-      ContentFieldSchema(
-        key: 'proficiencies',
-        label: '熟练',
-        kind: ContentFieldValueKind.stringList,
-      ),
+      ContentFieldSchema(key: 'hitDie', label: '生命骰', filterable: true),
+      ContentFieldSchema(key: 'savingThrows', label: '豁免熟练'),
+      ContentFieldSchema(key: 'skills', label: '技能选择'),
     ],
   ),
   ContentTypeSchema(

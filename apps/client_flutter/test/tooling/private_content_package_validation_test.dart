@@ -88,11 +88,10 @@ void main() {
     skip: packagePath.isEmpty ? 'No private package path was provided.' : false,
   );
 
-  // 任务 10 完成后**必须移除本用例的 skip**，并确认它在私有包上转绿：
   // 新契约下技能选择的唯一来源是 `classEntry.rules` 的 `choices`（含
   // `progression[].choices`）里 `optionType == "skill"` 的选择（`minimum` 是必选
-  // 项数、内联 `options` 是候选值）。私有包内容尚未迁移到新契约（任务 10），条目
-  // 里还没有这类选择，因此这里显式 skip，而不是放宽断言。
+  // 项数、内联 `options` 是候选值）。重提取包（formatVersion 3）已迁移到该形状，
+  // 因此本用例不再 skip，直接校验真实私有包。
   test(
     'every included class exposes its skill choice through rules.choices',
     () async {
@@ -142,8 +141,6 @@ void main() {
         }
       }
     },
-    skip: packagePath.isEmpty
-        ? 'No private package path was provided.'
-        : '私有包内容尚未迁移到新契约（任务 10 迁移后移除此 skip）',
+    skip: packagePath.isEmpty ? 'No private package path was provided.' : false,
   );
 }

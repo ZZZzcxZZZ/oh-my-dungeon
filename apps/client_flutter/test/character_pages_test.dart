@@ -280,7 +280,6 @@ void main() {
       'name': '战士',
       'body': <Map<String, Object?>>[],
       'revision': 1,
-      'structured': {'hitDie': 'd10'},
       'rules': {
         'progression': [
           {
@@ -349,7 +348,6 @@ void main() {
       'name': 'Guardian',
       'body': <Map<String, Object?>>[],
       'revision': 1,
-      'structured': {'hitDie': 'd10'},
       'rules': {
         'progression': [
           {
@@ -1692,9 +1690,8 @@ void main() {
       'body': <Map<String, Object?>>[],
       'revision': 1,
       'structured': {
-        'hitDie': 'd10',
-        'savingThrows': '力量与体质',
-        'skills': '选择2项：特技、驯兽、运动、历史、洞悉、威吓、游说、察觉、求生',
+        // 任务 10：生命骰 / 豁免熟练走 `classRules`（旧散文键已删除）。
+        'classRules': {'hitDie': 10, 'savingThrowAbilities': ['str', 'con']},
       },
       'rules': {
         'progression': [
@@ -2636,12 +2633,12 @@ const _fighterContent = ContentEntry(
   structured: {
     'page': 60,
     'primaryAbility': '力量或敏捷',
-    'hitDie': 'd10',
-    'savingThrows': '力量与体质',
-    'skills': '选择2项：特技、驯兽、运动、历史、洞悉、威吓、游说、察觉、求生',
     'weaponProficiency': '简易武器与军用武器',
     'armorProficiency': '轻甲、中甲、重甲与盾牌',
     'startingEquipment': '链甲、巨剑、轻弩、20支弩矢、地城套组以及4GP',
+    // 任务 10：规则值只在 `classRules`，不再有顶层 `hitDie` / `savingThrows` /
+    // `skills` 散文副本。
+    'classRules': {'hitDie': 10, 'savingThrowAbilities': ['str', 'con']},
   },
   tags: ['private-phb-2024-index', 'class'],
   source: ContentSource(label: 'Private PHB 2024 PDF Index'),
@@ -2661,12 +2658,14 @@ final _fighterRulesContent = ContentEntry.fromJson({
   'structured': {
     'page': 60,
     'primaryAbility': '力量或敏捷',
-    'hitDie': 'd10',
-    'savingThrows': '力量与体质',
-    'skills': '选择2项：特技、驯兽、运动、历史、洞悉、威吓、游说、察觉、求生',
     'weaponProficiency': '简易武器与军用武器',
     'armorProficiency': '轻甲、中甲、重甲与盾牌',
     'startingEquipment': '链甲、巨剑、轻弩、20支弩矢、地城套组以及4GP',
+    // 任务 10：生命骰 / 豁免熟练的唯一来源是 `classRules`（旧散文键已删除）。
+    'classRules': {
+      'hitDie': 10,
+      'savingThrowAbilities': ['str', 'con'],
+    },
   },
   'rules': {
     'choices': [
@@ -2694,11 +2693,12 @@ const _wizardContent = ContentEntry(
   revision: 1,
   structured: {
     'primaryAbility': '智力',
-    'hitDie': 'd6',
     'startingEquipment': '法术书、长袍、匕首以及5GP',
     // 任务 8.5：法术选择规则走新契约 `classRules.spellcasting`
     // （逐级表 + 原型），不再有顶层 progression 行数组。
     'classRules': {
+      'hitDie': 6,
+      'savingThrowAbilities': ['int', 'wis'],
       'spellcasting': {
         'mode': 'prepared',
         'ability': 'int',

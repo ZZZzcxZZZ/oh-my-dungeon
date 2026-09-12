@@ -27,7 +27,6 @@ void main() {
               type: 'class',
               name: '战士',
               revision: 1,
-              structured: const {'hitDie': 'd10'},
               rules: const {
                 'progression': [
                   {
@@ -112,7 +111,6 @@ void main() {
               type: 'class',
               name: '战士',
               revision: 1,
-              structured: const {'hitDie': 'd10'},
               rules: const {
                 'progression': [
                   {
@@ -207,7 +205,6 @@ void main() {
                 type: 'class',
                 name: '战士',
                 revision: 1,
-                structured: const {'hitDie': 'd10'},
                 rules: const {
                   'progression': [
                     {
@@ -302,7 +299,6 @@ void main() {
                 type: 'class',
                 name: '战士',
                 revision: 1,
-                structured: const {'hitDie': 'd10'},
                 rules: const {},
               ),
               _entry(
@@ -434,7 +430,6 @@ void main() {
               type: 'class',
               name: '战士',
               revision: 1,
-              structured: const {'hitDie': 'd10'},
               rules: const {},
             ),
             _entry(
@@ -485,10 +480,11 @@ void main() {
                 type: 'class',
                 name: '法师 / Wizard',
                 structured: const {
-                  'hitDie': 'd6',
                   // 任务 8.5：法术选择规则走新契约 `classRules.spellcasting`
                   // （逐级表 + 原型），不再有顶层 progression 行数组。
+                  // 任务 10：生命骰同样在 `classRules`（旧字符串键已删除）。
                   'classRules': {
+                    'hitDie': 6,
                     'spellcasting': {
                       'mode': 'prepared',
                       'ability': 'int',
@@ -573,7 +569,8 @@ void main() {
               type: 'class',
               name: '法师',
               structured: const {
-                'hitDie': 'd6',
+                // 任务 10：生命骰在 `classRules`（旧字符串键已删除）。
+                'classRules': {'hitDie': 6},
                 'startingEquipment': '选择A或B：(A) 法术书；或(B) 55GP',
               },
             ),

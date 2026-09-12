@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../characters/domain/class_rule_summary.dart';
 import '../domain/content_entry.dart';
 import '../domain/content_schema_registry.dart';
 import '../domain/content_type_definition.dart';
@@ -94,9 +95,12 @@ Widget _metadataRows(
     entry.type,
     entry.structured,
   );
+  // 职业规则字段（生命骰 / 豁免熟练 / 技能选择）的值一律经 [ClassRuleSummary]
+  // 这唯一口径；其余字段继续读 `structured`。
+  final classRules = entry.type == 'class' ? ClassRuleSummary.of(entry) : null;
   final rows = <Widget>[];
   for (final field in fields) {
-    final value = _formatValue(structured[field.key]);
+    final value = _metadataValue(structured, classRules, field.key);
     if (value == null) continue;
     rows.add(
       Padding(
@@ -123,6 +127,29 @@ Widget _metadataRows(
   }
   if (rows.isEmpty) return const SizedBox.shrink();
   return Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows);
+}
+
+/// 元数据行的展示值。
+///
+/// 职业的规则字段（`hitDie` / `savingThrows` / `skills`）一律取
+/// [ClassRuleSummary]（条目声明 ∪ 内置档案，唯一口径）：未声明即 `null`
+/// ——**不回退**旧散文键、不显示 `0`。其余字段照旧读 `structured`。
+String? _metadataValue(
+  Map<String, Object?> structured,
+  ({String? hitDie, String? savingThrows, String? skillChoice})? classRules,
+  String key,
+) {
+  if (classRules != null) {
+    switch (key) {
+      case 'hitDie':
+        return classRules.hitDie;
+      case 'savingThrows':
+        return classRules.savingThrows;
+      case 'skills':
+        return classRules.skillChoice;
+    }
+  }
+  return _formatValue(structured[key]);
 }
 
 String? _formatValue(Object? value) {
@@ -153,9 +180,10 @@ class _ClassDefinition extends _BaseDefinition {
 
   @override
   List<ContentFieldDefinition> get searchableFields => const [
-    ContentFieldDefinition(key: 'hitDie', label: '生命骰'),
     ContentFieldDefinition(key: 'primaryAbility', label: '主属性'),
-    ContentFieldDefinition(key: 'proficiencies', label: '熟练'),
+    ContentFieldDefinition(key: 'hitDie', label: '生命骰'),
+    ContentFieldDefinition(key: 'savingThrows', label: '豁免熟练'),
+    ContentFieldDefinition(key: 'skills', label: '技能选择'),
   ];
 
   @override

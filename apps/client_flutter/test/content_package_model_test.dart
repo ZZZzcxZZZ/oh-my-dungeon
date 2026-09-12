@@ -143,7 +143,14 @@ void main() {
             'text': '动作如潮',
           },
         ],
-        'structured': {'hitDie': 'd10'},
+        // 任务 10：职业规则只在 `classRules`，不再有顶层 `hitDie` 字符串副本；
+        // 这里仍断言 `structured` 原样保留（换成新契约载荷）。
+        'structured': {
+          'classRules': {
+            'hitDie': 10,
+            'savingThrowAbilities': ['str', 'con'],
+          },
+        },
         'tags': ['class'],
         'source': {'label': '本地资料'},
         'revision': 1,
@@ -157,7 +164,10 @@ void main() {
       expect(entry.summary, '武器大师');
       expect(entry.body, hasLength(2));
       expect(entry.body.last, isA<EntryLinkBlock>());
-      expect(entry.structured['hitDie'], 'd10');
+      expect(entry.structured['classRules'], {
+        'hitDie': 10,
+        'savingThrowAbilities': ['str', 'con'],
+      });
       expect(entry.tags, ['class']);
       expect(entry.source.label, '本地资料');
       expect(entry.revision, 1);

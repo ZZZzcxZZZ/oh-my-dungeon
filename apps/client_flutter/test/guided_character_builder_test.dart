@@ -63,7 +63,6 @@ void main() {
               type: 'class',
               name: '战士',
               revision: 3,
-              structured: const {'hitDie': 'd10'},
               rules: const {
                 'grants': [
                   {
@@ -218,7 +217,9 @@ void main() {
               type: 'class',
               name: '战士',
               revision: 1,
-              structured: const {'hitDie': 'd10'},
+              structured: const {
+                'classRules': {'hitDie': 10},
+              },
               rules: const {
                 'progression': [
                   {
@@ -327,7 +328,9 @@ void main() {
               type: 'class',
               name: 'Mage',
               revision: 1,
-              structured: const {'hitDie': 'd6'},
+              structured: const {
+                'classRules': {'hitDie': 6},
+              },
               rules: const {
                 'progression': [
                   {

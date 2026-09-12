@@ -27,9 +27,16 @@ class CharacterUpgradePlan {
   /// 角色的职业声明范围（§3.12）。
   final DeclaredLevels declaredLevels;
 
-  /// 目标等级是否落在声明范围之外（低于最早声明等级或高于最后声明等级）。
+  /// 目标等级是否落在声明范围之外（低于最早声明等级、或高于最后声明等级）。
   /// 界面据此提示"该职业未声明…，你仍可继续（数值按未声明处理）"。
-  bool get beyondDeclaredLevel => !declaredLevels.covers(targetLevel);
+  ///
+  /// "完全没有等级声明"（[DeclaredLevels.isEmpty]，即 `max == null`）也算范围之外：
+  /// 没有任何 min/max 可比较，界面此时展示的是 [DeclaredLevels.rangeLabel] 的
+  /// "该职业未声明任何等级内容"，而不是把"不知道"当成"已覆盖"。
+  bool get beyondDeclaredLevel =>
+      declaredLevels.isEmpty ||
+      declaredLevels.isBeyond(targetLevel) ||
+      declaredLevels.isBelow(targetLevel);
 
   bool get isComplete =>
       missingEntryIds.isEmpty && choices.every((choice) => choice.isValid);

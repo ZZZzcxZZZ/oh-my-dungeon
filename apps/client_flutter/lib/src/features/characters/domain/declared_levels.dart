@@ -4,6 +4,10 @@ import '../../rules/domain/rule_profile.dart';
 import 'character.dart';
 import 'dnd5e_rules.dart';
 
+/// 角色等级上限（规则书 1–20）。滑杆的 `max` 与"未声明区间"文案共用这一个常量，
+/// 避免各处硬编码 20 后各自漂移。
+const kMaxCharacterLevel = 20;
+
 /// 角色的`data.classIdentity.declaredLevels`读取器（契约 §3.12）。
 ///
 /// 部分声明是一等功能：职业可以只声明 1–5 级，`Table` 允许短数组；高于最后声明
@@ -43,6 +47,23 @@ class DeclaredLevels {
   /// 声明范围文案：`职业声明：1–5 级`；完全没有声明时给显式说明。
   String get rangeLabel =>
       isEmpty ? '该职业未声明任何等级内容' : '职业声明：$min–$max 级';
+
+  /// 滑杆下方的"已声明 / 未声明"区间文案（§3.12）：
+  /// `已声明 1–5 级 · 6–20 级未声明`。
+  ///
+  /// 这是该文案的**唯一实现**：界面不得各自拼接区间字符串，也不得各自硬编码 20。
+  String get declaredRangeCaption {
+    final maximum = max;
+    if (maximum == null) {
+      return '该职业未声明任何等级 · 1–$kMaxCharacterLevel 级均按未声明处理';
+    }
+    return <String>[
+      '已声明 $min–$maximum 级',
+      if (min > 1) '1–${min - 1} 级未声明',
+      if (maximum < kMaxCharacterLevel)
+        '${maximum + 1}–$kMaxCharacterLevel 级未声明',
+    ].join(' · ');
+  }
 
   /// 高于最后声明等级时的补充说明（信息级，不是错误）。
   String get beyondLabel => isEmpty

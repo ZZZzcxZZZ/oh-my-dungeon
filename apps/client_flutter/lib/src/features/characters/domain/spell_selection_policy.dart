@@ -8,7 +8,6 @@ class SpellSelectionRules {
     this.ability,
     this.listTags = const [],
     this.maximumSpellLevel = -1,
-    this.maximum,
     this.maximumCantrips,
     this.maximumLeveledSpells,
   });
@@ -19,7 +18,6 @@ class SpellSelectionRules {
       ability = null,
       listTags = const [],
       maximumSpellLevel = -1,
-      maximum = null,
       maximumCantrips = null,
       maximumLeveledSpells = null;
 
@@ -28,7 +26,6 @@ class SpellSelectionRules {
   final String? ability;
   final List<String> listTags;
   final int maximumSpellLevel;
-  final int? maximum;
   final int? maximumCantrips;
   final int? maximumLeveledSpells;
 }

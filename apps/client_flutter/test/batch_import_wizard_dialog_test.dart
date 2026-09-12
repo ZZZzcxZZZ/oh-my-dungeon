@@ -38,6 +38,29 @@ void main() {
     return PickedContentFile(name: '$id.json', bytes: utf8.encode(json));
   }
 
+  /// 一个**有效但带 warning** 的包：自制职业声明了空的 classRules，
+  /// 于是拿到 `missingCoreField`（缺 hitDie）提示，但不阻断导入。
+  PickedContentFile warningFile({required String id}) {
+    final json = jsonEncode({
+      'formatVersion': 3,
+      'id': id,
+      'name': id,
+      'version': '1.0.0',
+      'locale': 'zh-CN',
+      'system': 'dnd5e-2024',
+      'entryCount': 1,
+      'entries': [
+        {
+          ...testFighterEntry().toJson(),
+          'id': '$id:class/homebrew-sage',
+          'slug': 'homebrew-sage',
+          'structured': {'classRules': <String, Object?>{}},
+        },
+      ],
+    });
+    return PickedContentFile(name: '$id.json', bytes: utf8.encode(json));
+  }
+
   PickedContentFile invalidFile({required String id}) {
     final json = jsonEncode({
       'formatVersion': 3,
@@ -130,6 +153,25 @@ void main() {
     expect(find.textContaining('entryCount'), findsOneWidget);
     // 无效文件不可勾选, 因此有效导入按钮只显示 1 个.
     expect(find.widgetWithText(FilledButton, '导入 1 个'), findsOneWidget);
+  });
+
+  testWidgets('shows rule warnings for valid files instead of dropping them', (
+    tester,
+  ) async {
+    await pumpDialog(
+      tester,
+      files: [
+        packageFile(id: 'alpha', name: 'Alpha Pack'),
+        warningFile(id: 'gamma'),
+      ],
+    );
+
+    // 有效：依旧可以勾选导入。
+    expect(find.widgetWithText(FilledButton, '导入 2 个'), findsOneWidget);
+    // warning 不能像以前那样被静默丢掉。
+    expect(find.text('提示（不阻断导入）'), findsOneWidget);
+    expect(find.textContaining('missingCoreField'), findsOneWidget);
+    expect(find.byKey(const Key('batch-import-warning-gamma')), findsOneWidget);
   });
 
   testWidgets('skips unchecked files when importing', (tester) async {

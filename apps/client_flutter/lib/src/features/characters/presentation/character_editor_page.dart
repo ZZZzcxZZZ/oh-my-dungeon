@@ -21,8 +21,10 @@ import '../../rules/domain/character_build.dart';
 import '../../rules/domain/character_rule_definition.dart';
 import '../../rules/domain/character_rules_engine.dart';
 import '../../rules/domain/rule_choice_resolver.dart';
+import '../../rules/domain/rule_profile.dart';
 import 'widgets/character_builder_shell.dart';
 import 'widgets/declared_level_banner.dart';
+import 'widgets/declared_level_track_shape.dart';
 
 class CharacterEditorPage extends StatefulWidget {
   const CharacterEditorPage({
@@ -824,6 +826,7 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                 itemRefs: quickDraft.itemRefs,
                 abilities: quickDraft.abilities,
                 skillProficiencies: quickDraft.skillProficiencies,
+                classEntry: entries[quickDraft.classEntryId],
                 classEntryId: quickDraft.classEntryId,
                 speciesEntryId: quickDraft.speciesEntryId,
                 backgroundEntryId: quickDraft.backgroundEntryId,
@@ -1486,6 +1489,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       itemRefs: _selectedItemRefs.toList(),
       abilities: Map.unmodifiable(_abilityScores),
       skillProficiencies: _selectedSkillProficiencies.toList(),
+      classEntry: _entryById(_classEntryId),
       classEntryId: _classEntryId,
       speciesEntryId: _speciesEntryId,
       backgroundEntryId: _backgroundEntryId,
@@ -1724,7 +1728,6 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
               selected: _selectedSpellRefs,
               onChanged: (next) =>
                   setState(() => _replaceSet(_selectedSpellRefs, next)),
-              maximum: spellSelectionRules.maximum,
               maximumCantrips: spellSelectionRules.maximumCantrips,
               maximumLeveledSpells: spellSelectionRules.maximumLeveledSpells,
               maximumSpellLevel: spellSelectionRules.maximumSpellLevel,
@@ -3022,38 +3025,14 @@ class _LevelProgressionSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final classRules = Dnd5eRules.resolveClassRules(
       entryId: classEntry?.id,
       classSummary: classEntry?.name ?? className,
       structured: classEntry?.structured ?? const <String, Object?>{},
     );
-    final hitDie = classRules.hitDie;
-    final hp = hitDie == null
-        ? (Dnd5eRules.abilityModifier(
-                    Dnd5eRules.abilityScore(abilities, 'con'),
-                  ) *
-                  level.clamp(1, 20))
-              .clamp(1, 1 << 30)
-        : Dnd5eRules.averageHitPointsForHitDie(
-            hitDie: hitDie,
-            level: level,
-            constitution: Dnd5eRules.abilityScore(abilities, 'con'),
-          );
-    final proficiency = Dnd5eRules.proficiencyBonus(level);
-    final spellSlots = classRules.spellSlots(level);
-    // 职业资源必须带 abilities：`formula: ability:<key>` 的上限由属性决定。
-    final classResources = Dnd5eRules.classResourcesFromRules(
-      rules: classRules,
-      level: level,
-      abilities: abilities,
-    );
     // §3.12：声明范围只有一种口径，与 Builder 写入值同源（[DeclaredLevels.fromEntry]）；
     // 滑杆据此区分已声明 / 未声明区间。
     final declaredLevels = DeclaredLevels.fromEntry(classEntry);
-    final declaredColor = theme.colorScheme.primary;
-    final undeclaredColor = theme.colorScheme.tertiary;
-    final coversLevel = declaredLevels.covers(level);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -3071,86 +3050,23 @@ class _LevelProgressionSection extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text('等级', style: theme.textTheme.titleMedium),
-                      ),
-                      InputChip(
-                        avatar: const Icon(Icons.trending_up_outlined),
-                        label: Text('当前等级 $level'),
-                      ),
-                    ],
-                  ),
+                  _LevelSectionHeader(level: level),
                   const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      IconButton.filledTonal(
-                        key: const Key('standard-level-decrement-button'),
-                        tooltip: '降低等级',
-                        onPressed: level <= 1 ? null : () => onChanged(level - 1),
-                        icon: const Icon(Icons.remove),
-                      ),
-                      Expanded(
-                        child: SliderTheme(
-                          data: SliderTheme.of(context).copyWith(
-                            activeTrackColor: coversLevel
-                                ? declaredColor
-                                : undeclaredColor,
-                            thumbColor: coversLevel
-                                ? declaredColor
-                                : undeclaredColor,
-                          ),
-                          child: Slider(
-                            value: level.toDouble(),
-                            min: 1,
-                            max: 20,
-                            divisions: 19,
-                            label: '$level',
-                            semanticFormatterCallback: (value) =>
-                                declaredLevels.covers(value.round())
-                                ? '第 ${value.round()} 级（已声明）'
-                                : '第 ${value.round()} 级（该职业未声明）',
-                            onChanged: (value) => onChanged(value.round()),
-                          ),
-                        ),
-                      ),
-                      IconButton.filledTonal(
-                        key: const Key('standard-level-increment-button'),
-                        tooltip: '提高等级',
-                        onPressed: level >= 20 ? null : () => onChanged(level + 1),
-                        icon: const Icon(Icons.add),
-                      ),
-                    ],
+                  _DeclaredLevelSlider(
+                    level: level,
+                    declaredLevels: declaredLevels,
+                    onChanged: onChanged,
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    _declaredRangeCaption(declaredLevels),
-                    key: const Key('standard-level-declared-range'),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: coversLevel
-                          ? theme.colorScheme.onSurfaceVariant
-                          : undeclaredColor,
-                    ),
+                  _DeclaredRangeCaption(
+                    levels: declaredLevels,
+                    level: level,
                   ),
                   const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      Chip(label: Text('HP $hp')),
-                      Chip(label: Text('熟练 +$proficiency')),
-                      if (spellSlots.isNotEmpty)
-                        Chip(
-                          label: Text('法术位 ${_formatSpellSlots(spellSlots)}'),
-                        ),
-                      if (classResources.isNotEmpty)
-                        Chip(
-                          label: Text(
-                            '职业资源 ${_formatClassResources(classResources)}',
-                          ),
-                        ),
-                    ],
+                  _LevelSummaryChips(
+                    rules: classRules,
+                    level: level,
+                    abilities: abilities,
                   ),
                 ],
               ),
@@ -3160,18 +3076,170 @@ class _LevelProgressionSection extends StatelessWidget {
       ),
     );
   }
+}
 
-  /// 滑杆下方的区间说明：明确哪一段已声明、哪一段未声明（§3.12）。
-  static String _declaredRangeCaption(DeclaredLevels levels) {
-    final maximum = levels.max;
-    if (maximum == null) {
-      return '该职业未声明任何等级 · 1–20 级均按未声明处理';
-    }
-    return <String>[
-      '已声明 ${levels.min}–$maximum 级',
-      if (levels.min > 1) '1–${levels.min - 1} 级未声明',
-      if (maximum < 20) '${maximum + 1}–20 级未声明',
-    ].join(' · ');
+/// 等级卡片标题行：左"等级"、右"当前等级 N"。
+class _LevelSectionHeader extends StatelessWidget {
+  const _LevelSectionHeader({required this.level});
+
+  final int level;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text('等级', style: Theme.of(context).textTheme.titleMedium),
+        ),
+        InputChip(
+          avatar: const Icon(Icons.trending_up_outlined),
+          label: Text('当前等级 $level'),
+        ),
+      ],
+    );
+  }
+}
+
+/// 等级滑杆 + 两侧加减按钮。
+///
+/// §3.12：轨道按"已声明 / 未声明"**双色**（已声明 = 主题色，未声明 =
+/// `outlineVariant`，唯一实现见 [DeclaredLevelTrackShape]），并把刻度提示画出来。
+/// 滑块本身保持主题色：它是"当前等级"的抓手，不是区间标记——区间由轨道和下方
+/// 文案表达，滑到未声明等级时另有 [DeclaredLevelBanner] 信息条。
+class _DeclaredLevelSlider extends StatelessWidget {
+  const _DeclaredLevelSlider({
+    required this.level,
+    required this.declaredLevels,
+    required this.onChanged,
+  });
+
+  final int level;
+  final DeclaredLevels declaredLevels;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final declaredColor = theme.colorScheme.primary;
+    return Row(
+      children: [
+        IconButton.filledTonal(
+          key: const Key('standard-level-decrement-button'),
+          tooltip: '降低等级',
+          onPressed: level <= 1 ? null : () => onChanged(level - 1),
+          icon: const Icon(Icons.remove),
+        ),
+        Expanded(
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              activeTrackColor: declaredColor,
+              inactiveTrackColor: theme.colorScheme.outlineVariant,
+              thumbColor: declaredColor,
+              trackShape: DeclaredLevelTrackShape(
+                levels: declaredLevels,
+                min: 1,
+                max: kMaxCharacterLevel.toDouble(),
+              ),
+            ),
+            child: Slider(
+              value: level.toDouble(),
+              min: 1,
+              max: kMaxCharacterLevel.toDouble(),
+              divisions: kMaxCharacterLevel - 1,
+              label: '$level',
+              semanticFormatterCallback: (value) =>
+                  declaredLevels.covers(value.round())
+                  ? '第 ${value.round()} 级（已声明）'
+                  : '第 ${value.round()} 级（该职业未声明）',
+              onChanged: (value) => onChanged(value.round()),
+            ),
+          ),
+        ),
+        IconButton.filledTonal(
+          key: const Key('standard-level-increment-button'),
+          tooltip: '提高等级',
+          onPressed: level >= kMaxCharacterLevel
+              ? null
+              : () => onChanged(level + 1),
+          icon: const Icon(Icons.add),
+        ),
+      ],
+    );
+  }
+}
+
+/// 滑杆下方的区间说明；文案口径只有一处（[DeclaredLevels.declaredRangeCaption]）。
+class _DeclaredRangeCaption extends StatelessWidget {
+  const _DeclaredRangeCaption({required this.levels, required this.level});
+
+  final DeclaredLevels levels;
+
+  /// 当前等级：只为着色（当前等级不在声明范围内时用信息色）。
+  final int level;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final covered = levels.covers(level);
+    return Text(
+      levels.declaredRangeCaption,
+      key: const Key('standard-level-declared-range'),
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: covered
+            ? theme.colorScheme.onSurfaceVariant
+            : theme.colorScheme.tertiary,
+      ),
+    );
+  }
+}
+
+/// HP / 熟练加值 / 法术位 / 职业资源摘要。数值口径全部来自同一个 `classRules`
+/// （条目声明 ∪ 内置档案），并带 `abilities` 以便 `formula: ability:<key>` 结算。
+class _LevelSummaryChips extends StatelessWidget {
+  const _LevelSummaryChips({
+    required this.rules,
+    required this.level,
+    required this.abilities,
+  });
+
+  final ResolvedClassRules rules;
+  final int level;
+  final Map<String, int> abilities;
+
+  @override
+  Widget build(BuildContext context) {
+    final hitDie = rules.hitDie;
+    final hp = hitDie == null
+        ? (Dnd5eRules.abilityModifier(
+                    Dnd5eRules.abilityScore(abilities, 'con'),
+                  ) *
+                  level.clamp(1, 20))
+              .clamp(1, 1 << 30)
+        : Dnd5eRules.averageHitPointsForHitDie(
+            hitDie: hitDie,
+            level: level,
+            constitution: Dnd5eRules.abilityScore(abilities, 'con'),
+          );
+    final spellSlots = rules.spellSlots(level);
+    final classResources = Dnd5eRules.classResourcesFromRules(
+      rules: rules,
+      level: level,
+      abilities: abilities,
+    );
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        Chip(label: Text('HP $hp')),
+        Chip(label: Text('熟练 +${Dnd5eRules.proficiencyBonus(level)}')),
+        if (spellSlots.isNotEmpty)
+          Chip(label: Text('法术位 ${_formatSpellSlots(spellSlots)}')),
+        if (classResources.isNotEmpty)
+          Chip(
+            label: Text('职业资源 ${_formatClassResources(classResources)}'),
+          ),
+      ],
+    );
   }
 
   static String _formatSpellSlots(Map<String, int> slots) {
@@ -3589,7 +3657,6 @@ class _SpellChoiceSection extends StatefulWidget {
     required this.entries,
     required this.selected,
     required this.onChanged,
-    required this.maximum,
     required this.maximumCantrips,
     required this.maximumLeveledSpells,
     required this.maximumSpellLevel,
@@ -3603,7 +3670,6 @@ class _SpellChoiceSection extends StatefulWidget {
   final List<ContentEntry> entries;
   final Set<String> selected;
   final ValueChanged<Set<String>> onChanged;
-  final int? maximum;
   final int? maximumCantrips;
   final int? maximumLeveledSpells;
   final int maximumSpellLevel;
@@ -3739,7 +3805,6 @@ class _SpellChoiceSectionState extends State<_SpellChoiceSection> {
               selected: widget.selected,
               selectedCantrips: selectedCantrips,
               selectedLeveledSpells: selectedLeveledSpells,
-              maximum: widget.maximum,
               maximumCantrips: widget.maximumCantrips,
               maximumLeveledSpells: widget.maximumLeveledSpells,
               onChanged: widget.onChanged,
@@ -3795,9 +3860,9 @@ class _SpellChoiceSectionState extends State<_SpellChoiceSection> {
       return '戏法 $selectedCantrips/${widget.maximumCantrips ?? '不限'}'
           ' · 法术 $selectedLeveledSpells/${widget.maximumLeveledSpells ?? '不限'}';
     }
-    return widget.maximum == null
-        ? '已选 ${widget.selected.length}'
-        : '已选 ${widget.selected.length} / ${widget.maximum}';
+    // 上限只有 `prepared` / `cantrips` 两列（§3.1/§3.3 原型不提供它们）；
+    // 两列都未声明时没有可显示的上限，只报已选数量，不拿"未声明"当 0 或 20。
+    return '已选 ${widget.selected.length}';
   }
 }
 
@@ -3807,7 +3872,6 @@ class _SpellOptionTile extends StatelessWidget {
     required this.selected,
     required this.selectedCantrips,
     required this.selectedLeveledSpells,
-    required this.maximum,
     required this.maximumCantrips,
     required this.maximumLeveledSpells,
     required this.onChanged,
@@ -3818,7 +3882,6 @@ class _SpellOptionTile extends StatelessWidget {
   final Set<String> selected;
   final int selectedCantrips;
   final int selectedLeveledSpells;
-  final int? maximum;
   final int? maximumCantrips;
   final int? maximumLeveledSpells;
   final ValueChanged<Set<String>> onChanged;
@@ -3832,7 +3895,8 @@ class _SpellOptionTile extends StatelessWidget {
     final categorySelected = isCantrip
         ? selectedCantrips
         : selectedLeveledSpells;
-    final totalAtLimit = maximum != null && selected.length >= maximum!;
+    // 上限只有 `prepared` / `cantrips` 两列；两列都未声明时不设上限
+    // （不拿"未声明"当 0）。
     final categoryAtLimit =
         categoryMaximum != null && categorySelected >= categoryMaximum;
 
@@ -3840,7 +3904,7 @@ class _SpellOptionTile extends StatelessWidget {
       key: Key('spell-choice-${entry.id}'),
       contentPadding: EdgeInsets.zero,
       value: isSelected,
-      enabled: isSelected || (!totalAtLimit && !categoryAtLimit),
+      enabled: isSelected || !categoryAtLimit,
       title: Text(entry.name),
       subtitle: Text(
         '${_SpellChoiceSectionState._spellLevelLabel(SpellSelectionPolicy.spellLevel(entry))}'
@@ -3854,7 +3918,7 @@ class _SpellOptionTile extends StatelessWidget {
       onChanged: (checked) {
         final next = Set<String>.from(selected);
         if (checked == true) {
-          if (!totalAtLimit && !categoryAtLimit) next.add(entry.id);
+          if (!categoryAtLimit) next.add(entry.id);
         } else {
           next.remove(entry.id);
         }

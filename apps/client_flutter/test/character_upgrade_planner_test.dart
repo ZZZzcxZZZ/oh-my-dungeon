@@ -1,6 +1,7 @@
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character_rule_projector.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character_upgrade_planner.dart';
+import 'package:dnd_table_client/src/features/characters/domain/declared_levels.dart';
 import 'package:dnd_table_client/src/features/characters/domain/dnd5e_rules.dart';
 import 'package:dnd_table_client/src/features/characters/domain/rules_driven_character_builder.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
@@ -209,6 +210,70 @@ void main() {
       );
     },
   );
+
+  // §3.12：`beyondDeclaredLevel` 的语义是"低于最早声明等级、或高于最后声明等级"，
+  // 另外"完全没有声明"（max == null）也算范围之外——不能把"不知道"当成"已覆盖"。
+  group('beyondDeclaredLevel 与声明范围同义', () {
+    CharacterUpgradePlan planFor(DeclaredLevels levels, int target) =>
+        CharacterUpgradePlan(
+          currentLevel: target - 1,
+          targetLevel: target,
+          build: CharacterBuild(
+            level: target,
+            selections: const <String, String>{},
+          ),
+          newGrants: const [],
+          choices: const [],
+          missingEntryIds: const [],
+          declaredLevels: levels,
+        );
+
+    test('范围内 false；高于 max / 低于 min / 完全没有声明 都 true', () {
+      const range = DeclaredLevels(min: 1, max: 5);
+      expect(planFor(range, 1).beyondDeclaredLevel, isFalse);
+      expect(planFor(range, 5).beyondDeclaredLevel, isFalse);
+      expect(planFor(range, 6).beyondDeclaredLevel, isTrue);
+      expect(
+        planFor(const DeclaredLevels(min: 1, max: 20), 20).beyondDeclaredLevel,
+        isFalse,
+      );
+
+      const late = DeclaredLevels(min: 5, max: 10);
+      expect(planFor(late, 4).beyondDeclaredLevel, isTrue);
+      expect(planFor(late, 5).beyondDeclaredLevel, isFalse);
+
+      // 完全没有声明：min/max 都无从比较，界面必须提示而不是静默放行。
+      expect(planFor(const DeclaredLevels(), 4).beyondDeclaredLevel, isTrue);
+    });
+
+    test('读角色持久化的声明范围：1–5 级的角色升到 6 级置位，升到 4 级不置位', () {
+      CharacterSheet atLevel(int level) {
+        final base = _character();
+        return base.copyWith(
+          level: level,
+          data: <String, Object?>{
+            ...base.dataMap,
+            'classIdentity': <String, Object?>{
+              'entryId': null,
+              'slug': 'tester',
+              'name': 'Tester',
+              'declared': true,
+              'declaredLevels': <String, Object?>{'min': 1, 'max': 5},
+            },
+          },
+        );
+      }
+
+      final planner = CharacterUpgradePlanner(entries: entries);
+      final beyond = planner.plan(atLevel(5));
+      expect(beyond.targetLevel, 6);
+      expect(beyond.beyondDeclaredLevel, isTrue);
+
+      final inside = planner.plan(atLevel(3));
+      expect(inside.targetLevel, 4);
+      expect(inside.beyondDeclaredLevel, isFalse);
+    });
+  });
 
   // 缺陷 4：角色卡上的 `abilities` 是**最终值**（含已生效的 `kind: ability`
   // 加值），再派生时必须先减回基础值，否则同一份授予会反复叠加。

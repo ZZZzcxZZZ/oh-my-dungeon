@@ -252,6 +252,38 @@ class _PreviewCard extends StatelessWidget {
                         ),
                       ),
                   ],
+                  // 规则契约的 warning 级诊断（§5.3）：不阻断导入，但必须可见——
+                  // 单文件预览对话框已经展示，多文件路径不能把它们静默丢掉。
+                  if (report.warnings.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 14,
+                          color: colorScheme.tertiary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '提示（不阻断导入）',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.tertiary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    for (final warning in report.warnings.take(3))
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 1),
+                        child: Text(
+                          '${warning.path}: ${warning.message}',
+                          key: Key('batch-import-warning-${report.packageId}'),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.tertiary,
+                          ),
+                        ),
+                      ),
+                  ],
                 ],
               ),
             ),

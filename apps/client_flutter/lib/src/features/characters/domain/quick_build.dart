@@ -1,3 +1,4 @@
+import '../../content/domain/content_entry.dart';
 import '../../rules/domain/rule_profile.dart';
 import 'character_edit_draft.dart';
 import 'declared_levels.dart';
@@ -14,6 +15,7 @@ class QuickBuildSelection {
     this.itemRefs = const [],
     this.abilities,
     this.skillProficiencies,
+    this.classEntry,
     this.classEntryId,
     this.speciesEntryId,
     this.backgroundEntryId,
@@ -38,6 +40,15 @@ class QuickBuildSelection {
   final List<String> itemRefs;
   final Map<String, int>? abilities;
   final List<String>? skillProficiencies;
+
+  /// 职业条目（有内容资料库时传进来）。
+  ///
+  /// 规则数值与声明范围必须与创建向导**同源**：带上它就等于带上
+  /// `structured.classRules` 与 `progression[].levels`（[DeclaredLevels.fromEntry]），
+  /// 否则只剩展示名 → 档案 slug 一条路，会出现"向导显示 1–5 级、落库 max=null"
+  /// 这种同一角色两处数字不同的缺陷。
+  final ContentEntry? classEntry;
+
   final String? classEntryId;
   final String? speciesEntryId;
   final String? backgroundEntryId;
@@ -85,14 +96,17 @@ class QuickBuildService {
   const QuickBuildService._();
 
   static CharacterEditDraft build(QuickBuildSelection selection) {
+    // 职业身份只有一个来源：有条目就用条目 id，否则用调用方给的 id。
+    final classEntryId = selection.classEntry?.id ?? selection.classEntryId;
     final classRules = _classRules(
+      entry: selection.classEntry,
       entryId: selection.classEntryId,
       classSummary: selection.className,
     );
     final abilities =
         selection.abilities ??
         abilityPresetFor(
-          classEntryId: selection.classEntryId,
+          classEntryId: classEntryId,
           className: selection.className,
         );
     final maxHp = _averageHitPoints(
@@ -110,12 +124,15 @@ class QuickBuildService {
       if (saves.containsKey(ability)) saves[ability] = true;
     }
     final slug = Dnd5eRules.resolveClassSlug(
-      entryId: selection.classEntryId,
+      entryId: classEntryId,
       classSummary: selection.className,
     );
-    // §3.12：声明范围与 Builder / 向导同源（快速创建拿不到条目，只有展示名，
-    // 因此没有 `progression[].levels` 可并——口径函数相同，来源就是档案侧）。
-    final declaredLevels = DeclaredLevels.fromResolvedClassRules(classRules);
+    // §3.12：声明范围与 Builder / 向导同源。有职业条目就整体走
+    // [DeclaredLevels.fromEntry]（条目 `progression[].levels` ∪ 条目各表 ∪ 档案）；
+    // 只有展示名时没有 progression 可并，但仍是同一个口径函数，来源是档案侧。
+    final declaredLevels = selection.classEntry != null
+        ? DeclaredLevels.fromEntry(selection.classEntry)
+        : DeclaredLevels.fromResolvedClassRules(classRules);
 
     return CharacterEditDraft(
       name: selection.name.trim(),
@@ -159,7 +176,7 @@ class QuickBuildService {
         },
         // 职业身份以条目为准；只有展示名时记下解析出的 slug，规则数值仍来自档案。
         'classIdentity': {
-          'entryId': selection.classEntryId,
+          'entryId': classEntryId,
           if (slug.isNotEmpty) 'slug': slug,
           'name': selection.className,
           // 展示名解析不到档案 slug 即"未声明"。
@@ -194,12 +211,17 @@ class QuickBuildService {
   }
 
   /// 展示名 / 条目 id → 档案规则（唯一入口，UI 不再按职业名分支）。
+  ///
+  /// 有条目时把 `structured.classRules` 一并带上：快速创建与创建向导读到的
+  /// 数值因此完全一致（字段级合并的唯一实现在 [Dnd5eRules.resolveClassRules]）。
   static ResolvedClassRules _classRules({
+    required ContentEntry? entry,
     required String? entryId,
     required String classSummary,
   }) => Dnd5eRules.resolveClassRules(
-    entryId: entryId,
-    classSummary: classSummary,
+    entryId: entry?.id ?? entryId,
+    classSummary: entry?.name ?? classSummary,
+    structured: entry?.structured ?? const <String, Object?>{},
   );
 
   /// 未声明生命骰（自制职业）时只按体质调整值计，且总生命至少 1（§3.6 第 3 步）。

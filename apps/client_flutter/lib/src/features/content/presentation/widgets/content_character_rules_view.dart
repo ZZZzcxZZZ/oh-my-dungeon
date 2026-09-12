@@ -21,10 +21,12 @@ class ContentCharacterRulesView extends StatelessWidget {
     if (rules == null) return const SizedBox.shrink();
     final theme = Theme.of(context);
     final immediateGrants = _visibleGrants(rules.grants);
-    // §3.12：声明范围是**职业**概念，用条目自身声明的范围展示；职业条目即使完全
-    // 没有声明也要显式说明"未声明"，非职业条目（物种/背景等）没有这个概念就不显示。
+    // §3.12：声明范围是**职业**概念。判据就是条目类型：只有 `class` 条目才显示
+    // "职业声明：…"，职业条目即使完全没有声明也要显式说明"未声明"；非职业条目
+    // （物种/背景等）即便碰巧解析出等级区间也不显示——否则资料库会凭空冒出一条
+    // "职业声明"。这与 [DeclaredLevels._progressionLevels] 只认 `class` 一致。
     final declaredLevels = DeclaredLevels.fromEntry(entry);
-    final showDeclaredLevels = entry.type == 'class' || !declaredLevels.isEmpty;
+    final showDeclaredLevels = entry.type == 'class';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

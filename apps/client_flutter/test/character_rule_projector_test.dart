@@ -99,9 +99,48 @@ void main() {
       'entryId': null,
       'slug': 'bard',
       'name': '吟游诗人',
-      'declaredLevels': {'min': null, 'max': null},
+      'declaredLevels': {'min': 1, 'max': 20},
       'declared': true,
     });
+  });
+
+  test('回填的声明范围来自档案的真实范围，不是写死的空区间', () {
+    // 野蛮人档案只有狂暴表（1/3/6/12/17 级各一档）→ 声明范围 1–17。
+    // 写死 {min: null, max: null} 会让角色卡把已声明的 1–17 级说成"未声明"。
+    final barbarian = CharacterSheet.local(
+      id: 'legacy-barbarian',
+      name: '旧野蛮人',
+      level: 3,
+      classSummary: '野蛮人',
+    );
+
+    final identity =
+        const CharacterRuleProjector(entries: <String, ContentEntry>{})
+            .project(barbarian)
+            .dataMap['classIdentity']
+        as Map;
+
+    expect(identity['slug'], 'barbarian');
+    expect(identity['declaredLevels'], {'min': 1, 'max': 17});
+  });
+
+  test('档案里没有等级表的职业（游荡者）回填为空区间，而不是编造 1–20', () {
+    final rogue = CharacterSheet.local(
+      id: 'legacy-rogue',
+      name: '旧游荡者',
+      level: 3,
+      classSummary: '游荡者',
+    );
+
+    final identity =
+        const CharacterRuleProjector(entries: <String, ContentEntry>{})
+            .project(rogue)
+            .dataMap['classIdentity']
+        as Map;
+
+    expect(identity['slug'], 'rogue');
+    expect(identity['declaredLevels'], {'min': null, 'max': null});
+    expect(identity['declared'], isTrue);
   });
 
   test('不认识的名字标记「未声明」，禁止裸子串回填', () {
@@ -121,6 +160,7 @@ void main() {
     expect(identity['entryId'], isNull);
     expect(identity['declared'], isFalse);
     expect(identity['name'], '星界游侠');
+    expect(identity['declaredLevels'], {'min': null, 'max': null});
     expect(projected.classResources, isEmpty);
   });
 

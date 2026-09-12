@@ -6,18 +6,21 @@
 // 走 `MaxSpec` 同一套封闭语法，非法在导入期报 `invalidMaxSpec`。
 import 'dart:convert';
 
+import 'package:dnd_table_client/src/features/characters/domain/dnd5e_rules.dart';
 import 'package:dnd_table_client/src/features/content/data/import/content_package_importer.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_import_report.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-
 import '../support/content_test_support.dart';
+import 'rule_profile_test_support.dart';
 
 /// 构造一个单 class 条目的包文档；`structured` 缺省即"未声明 classRules"。
 String packageJson({
   required Map<String, Object?> entry,
-  int formatVersion = 3,
+  num formatVersion = 3,
   String id = 'diag-pack',
+  Object? globalAbilities,
+  Object? globalSkills,
 }) => jsonEncode({
   'formatVersion': formatVersion,
   'id': id,
@@ -26,6 +29,8 @@ String packageJson({
   'locale': 'zh-CN',
   'system': 'dnd5e-2024',
   'entryCount': 1,
+  'abilities': ?globalAbilities,
+  'skills': ?globalSkills,
   'entries': [entry],
 });
 
@@ -156,6 +161,26 @@ void main() {
       );
     });
 
+    test('写了 classRules 却不是对象 → error，不当成"没有规则来源"放行', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {'classRules': 'hitDie: 10'},
+          ),
+        ),
+      );
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.path == r'$.entries[0].structured.classRules',
+      );
+      expect(error.message, contains('invalidTable'));
+      expect(
+        report.warnings.any((w) => w.message.contains('unresolvedClassRule')),
+        isFalse,
+      );
+    });
+
     test('非 class 条目带 classRules 不参与校验', () async {
       final report = await importer.previewJson(
         packageJson(
@@ -188,25 +213,50 @@ void main() {
       );
       expect(error.path, r'$.entries[0].structured.classRules');
       expect(error.message, contains('fighter'));
-      // 未声明 classRules 的普通自制职业只给 warning，见下一组用例。
-      expect(report.warnings.single.message, contains('unresolvedClassRule'));
+      // §5.2：命中档案的条目**不再**收到 unresolvedClassRule——那会说"将只使用内置
+      // 档案"，与同一条目的 error 自相矛盾。
+      expect(report.warnings, isEmpty);
+    });
+
+    test('判定键与运行期同源：id 末段命中内置职业即受保护（slug 字段无豁免）', () async {
+      // 运行期身份 = entry id 末段（`Dnd5eRules.resolveClassSlug` / `_slugFor`）；
+      // 条目里的 `slug` 只是展示字段，写别的值不能让内置数值被静默继承。
+      final report = await importer.previewJson(
+        packageJson(
+          entry: {
+            ...classEntry(slug: 'custom-x'),
+            'id': 'diag-pack:class/fighter',
+          },
+        ),
+      );
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.message.contains('builtinSlugRequiresExplicitRules'),
+      );
+      expect(error.message, contains('fighter'));
+      expect(report.warnings, isEmpty);
+    });
+
+    test('反向不误拦：id 末段是自制 slug 时，slug 字段写内置名也不阻断', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: {
+            ...classEntry(slug: 'fighter'),
+            'id': 'diag-pack:class/custom-x',
+          },
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+      final warning = report.warnings.singleWhere(
+        (w) => w.message.contains('unresolvedClassRule'),
+      );
+      expect(warning.path, r'$.entries[0].structured.classRules');
     });
 
     test('所有内置 slug 都受保护（判据来自档案，不写死名单）', () async {
-      for (final slug in const [
-        'barbarian',
-        'bard',
-        'cleric',
-        'druid',
-        'fighter',
-        'monk',
-        'paladin',
-        'ranger',
-        'rogue',
-        'sorcerer',
-        'warlock',
-        'wizard',
-      ]) {
+      final slugs = Dnd5eRules.profile.classes.keys.toList()..sort();
+      expect(slugs, isNotEmpty, reason: '档案没装配好，这条测试就没有意义');
+      for (final slug in slugs) {
         final report = await importer.previewJson(
           packageJson(entry: classEntry(slug: slug)),
         );
@@ -215,14 +265,27 @@ void main() {
           isFalse,
           reason: '内置职业 $slug 未声明 classRules 必须被拒绝',
         );
-        expect(
-          report.errors.any(
-            (e) => e.message.contains('builtinSlugRequiresExplicitRules'),
-          ),
-          isTrue,
-          reason: '$slug 缺少 builtinSlugRequiresExplicitRules',
+        final error = report.errors.singleWhere(
+          (e) => e.message.contains('builtinSlugRequiresExplicitRules'),
         );
+        expect(error.message, contains(slug));
       }
+    });
+
+    test('id 末段命中内置职业且声明了 classRules → 放行', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: {
+            ...classEntry(slug: 'custom-x'),
+            'id': 'diag-pack:class/fighter',
+            'structured': {
+              'classRules': {'hitDie': 10},
+            },
+          },
+        ),
+      );
+      expect(report.valid, isTrue);
+      expect(report.errors, isEmpty);
     });
 
     test('slug 命中内置职业且显式声明 classRules → 放行', () async {
@@ -469,6 +532,426 @@ void main() {
         error.path,
         r'$.entries[0].rules.choices[0].options[0].grants[0].formula',
       );
+    });
+  });
+
+  group('档案侧校验：原型与属性键', () {
+    test('archetype 不在档案 progressions → unknownArchetype，路径精确到字段', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {
+                'hitDie': 10,
+                'spellcasting': {
+                  'mode': 'prepared',
+                  'ability': 'cha',
+                  'archetype': 'bogus',
+                  'slots': {
+                    '1': {'1': 2},
+                  },
+                  'prepared': {'1': 4},
+                },
+              },
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.message.contains('unknownArchetype'),
+      );
+      expect(
+        error.path,
+        r'$.entries[0].structured.classRules.spellcasting.archetype',
+      );
+      expect(error.message, contains('bogus'));
+    });
+
+    test('archetype 命中档案 progressions → 放行（full-caster 法术位可算）', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {
+                'hitDie': 10,
+                'spellcasting': {
+                  'mode': 'prepared',
+                  'ability': 'cha',
+                  'archetype': 'full-caster',
+                  'prepared': {'1': 4},
+                },
+              },
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+    });
+
+    test('kind: ability 的 target 不在档案 abilities → unknownAbility', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {'hitDie': 10},
+            },
+            rules: {
+              'grants': [
+                {
+                  'id': 'asi',
+                  'kind': 'ability',
+                  'label': '幸运提升',
+                  'target': 'luck',
+                  'value': 1,
+                },
+              ],
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.message.contains('unknownAbility'),
+      );
+      expect(error.path, r'$.entries[0].rules.grants[0].target');
+      expect(error.message, contains('luck'));
+    });
+
+    test('formula ability:xyz 的键不在档案 abilities → unknownAbility', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {'hitDie': 10},
+            },
+            rules: {
+              'grants': [
+                {
+                  'id': 'hp',
+                  'kind': 'hitPoints',
+                  'label': '额外生命',
+                  'formula': 'ability:xyz',
+                },
+              ],
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.message.contains('unknownAbility'),
+      );
+      expect(error.path, r'$.entries[0].rules.grants[0].formula');
+      expect(error.message, contains('ability:xyz'));
+    });
+
+    test('formula ability:con 的键在档案内 → 放行', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {'hitDie': 10},
+            },
+            rules: {
+              'grants': [
+                {
+                  'id': 'hp',
+                  'kind': 'hitPoints',
+                  'label': '额外生命',
+                  'formula': 'ability:con',
+                },
+              ],
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+    });
+  });
+
+  group('§5.2 warning code', () {
+    test('施法职业未声明 prepared → missingPreparedColumn', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {
+                'hitDie': 10,
+                'spellcasting': {
+                  'mode': 'prepared',
+                  'ability': 'cha',
+                  'archetype': 'full-caster',
+                },
+              },
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+      final warning = report.warnings.singleWhere(
+        (w) => w.message.contains('missingPreparedColumn'),
+      );
+      expect(
+        warning.path,
+        r'$.entries[0].structured.classRules.spellcasting.prepared',
+      );
+    });
+
+    test('非施法职业（mode: none）不会触发 missingPreparedColumn', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {
+                'hitDie': 10,
+                'spellcasting': {'mode': 'none'},
+              },
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+      expect(report.warnings, isEmpty);
+    });
+
+    test('施法职业既无自身 slots 也无提供法术位的原型 → missingCoreField', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {
+                'hitDie': 10,
+                'spellcasting': {
+                  'mode': 'prepared',
+                  'ability': 'cha',
+                  'prepared': {'1': 4},
+                },
+              },
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+      final warning = report.warnings.singleWhere(
+        (w) => w.message.contains('missingCoreField'),
+      );
+      expect(warning.path, r'$.entries[0].structured.classRules.spellcasting');
+    });
+
+    test('施法职业挂了提供法术位的原型 → 不触发 missingCoreField', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {
+                'hitDie': 10,
+                'spellcasting': {
+                  'mode': 'prepared',
+                  'ability': 'cha',
+                  'archetype': 'half-caster',
+                  'prepared': {'1': 4},
+                },
+              },
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+      expect(report.warnings, isEmpty);
+    });
+
+    test('资源表在 startsAtLevel 及以上出现 0 → zeroLevelResource', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {
+                'hitDie': 10,
+                'resources': [
+                  {
+                    'id': 'focus',
+                    'name': '专注',
+                    'recovery': 'longRest',
+                    'startsAtLevel': 2,
+                    'maximum': {
+                      'table': {'1': 0, '2': 3, '5': 0},
+                    },
+                  },
+                ],
+              },
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+      final warning = report.warnings.singleWhere(
+        (w) => w.message.contains('zeroLevelResource'),
+      );
+      expect(
+        warning.path,
+        r'$.entries[0].structured.classRules.resources[0].maximum.table',
+      );
+      // startsAtLevel 之前的 0（1 级）不算；2 级及以上为 0 的档位才报。
+      expect(warning.message, isNot(contains('1 级')));
+      expect(warning.message, contains('5 级'));
+    });
+
+    test('资源表全程为正 → 不触发 zeroLevelResource', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {
+                'hitDie': 10,
+                'resources': [
+                  {
+                    'id': 'focus',
+                    'name': '专注',
+                    'recovery': 'longRest',
+                    'maximum': {
+                      'table': {'1': 2, '5': 3},
+                    },
+                  },
+                ],
+              },
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+      expect(report.warnings, isEmpty);
+    });
+
+    test('常量 maximum: 0 不是"表" → 不触发 zeroLevelResource', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {
+                'hitDie': 10,
+                'resources': [
+                  {
+                    'id': 'focus',
+                    'name': '专注',
+                    'recovery': 'longRest',
+                    'maximum': 0,
+                  },
+                ],
+              },
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+      expect(report.warnings, isEmpty);
+    });
+
+    test('包自带 abilities / skills 清单 → ignoredGlobalList（两条）', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {'hitDie': 10},
+            },
+          ),
+          globalAbilities: <String>['str', 'dex'],
+          globalSkills: <Map<String, Object?>>[
+            <String, Object?>{'name': '杂技', 'ability': 'dex'},
+          ],
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+      final codes = report.warnings
+          .where((w) => w.message.contains('ignoredGlobalList'))
+          .toList();
+      expect(codes.length, 2);
+      expect(
+        codes.map((w) => w.path).toList(),
+        <String>[r'$.abilities', r'$.skills'],
+      );
+    });
+
+    test('包不带全局清单 → 没有 ignoredGlobalList', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {'hitDie': 10},
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+      expect(report.warnings, isEmpty);
+    });
+  });
+
+  group('formatVersion 严格判据', () {
+    test('3.5 不是 v3：不截断成 3 放行，报 unsupportedFormatVersion', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          formatVersion: 3.5,
+          entry: classEntry(
+            structured: {
+              'classRules': {'hitDie': 10},
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.path == r'$.formatVersion',
+      );
+      expect(error.message, contains('3.5'));
+      expect(error.message, contains('unsupportedFormatVersion'));
+    });
+
+    test('1 / 2 也带 unsupportedFormatVersion code', () async {
+      for (final legacy in [1, 2]) {
+        final report = await importer.previewJson(
+          packageJson(
+            formatVersion: legacy,
+            entry: classEntry(
+              structured: {
+                'classRules': {'hitDie': 10},
+              },
+            ),
+          ),
+        );
+        final error = report.errors.singleWhere(
+          (e) => e.path == r'$.formatVersion',
+        );
+        expect(error.message, contains('unsupportedFormatVersion'));
+      }
+    });
+  });
+
+  group('装配错误不被降级', () {
+    test('档案未装配时 previewJson 原样抛 StateError（不是 invalid entry）', () async {
+      Dnd5eRules.resetForTests();
+      try {
+        await expectLater(
+          importer.previewJson(packageJson(entry: classEntry(slug: 'fighter'))),
+          throwsA(isA<StateError>()),
+        );
+      } finally {
+        await Dnd5eRules.configure(await loadBuiltinProfileForTest());
+      }
     });
   });
 

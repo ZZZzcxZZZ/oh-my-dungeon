@@ -935,9 +935,13 @@ class _SpellsPanelState extends State<_SpellsPanel> {
     final spellRefs = resolved.spellEntryIds;
     final spellsByLevel = _spellsByLevel(spellRefs);
     // §3.12：该等级不在职业声明范围内 → 数值为空时显式说"未声明"，不渲染成 0。
-    final levelUndeclared = !DeclaredLevels.fromCharacter(
-      widget.character,
-    ).covers(widget.character.level);
+    // "完全没有声明"（max == null）**不算**超出范围：内置 rogue / monk 这类职业
+    // 本来就没有法术位，喊"该职业未声明该等级的内容"是错误陈述。这与
+    // `DeclaredLevels.detailLabel` / `rangeLabel` 的 isEmpty 口径一致。
+    final declaredLevels = DeclaredLevels.fromCharacter(widget.character);
+    final levelUndeclared =
+        !declaredLevels.isEmpty &&
+        !declaredLevels.covers(widget.character.level);
 
     if (ability == null &&
         slotMaximums.isEmpty &&
@@ -2687,9 +2691,12 @@ class _ResourcesPanelState extends State<_ResourcesPanel> {
   @override
   Widget build(BuildContext context) {
     // §3.12：该等级不在职业声明范围内 → 没有资源时显式说"未声明"，不渲染成 0。
-    final levelUndeclared = !DeclaredLevels.fromCharacter(
-      widget.character,
-    ).covers(widget.character.level);
+    // "完全没有声明"（max == null）不算超出范围：没有声明过等级表的职业本来就没有
+    // 资源，不该被说成"未声明该等级的内容"。口径与法术位区、`detailLabel` 一致。
+    final declaredLevels = DeclaredLevels.fromCharacter(widget.character);
+    final levelUndeclared =
+        !declaredLevels.isEmpty &&
+        !declaredLevels.covers(widget.character.level);
     return _Section(
       title: '职业资源',
       icon: Icons.bolt_outlined,

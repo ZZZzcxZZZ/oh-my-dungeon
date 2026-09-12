@@ -414,18 +414,119 @@ abstract final class RuleProfileResolver {
     List<RuleDiagnostic> diagnostics,
   ) {
     for (final entry in classes.entries) {
-      final archetype = entry.value.spellcasting?.archetype;
-      if (archetype != null && !progressions.containsKey(archetype)) {
-        diagnostics.add(
-          RuleDiagnostic(
-            path: '\$.classes.${entry.key}.spellcasting.archetype',
-            severity: RuleSeverity.error,
-            code: 'unknownArchetype',
-            message: '未知原型 "$archetype"',
-          ),
+      _validateArchetype(
+        archetype: entry.value.spellcasting?.archetype,
+        path: '\$.classes.${entry.key}.spellcasting.archetype',
+        progressions: progressions,
+        diagnostics: diagnostics,
+      );
+    }
+  }
+
+  /// 单个 `archetype` 的存在性（§3.3、§5.1）。**唯一实现**：内置档案解析
+  /// （[_validateArchetypes]）与条目 `structured.classRules` 的导入期校验
+  /// （[validateEntryClassRules]）都走这里，档案查询逻辑不复制第二份。
+  static void _validateArchetype({
+    required String? archetype,
+    required String path,
+    required Map<String, ClassProgression> progressions,
+    required List<RuleDiagnostic> diagnostics,
+  }) {
+    if (archetype == null || progressions.containsKey(archetype)) return;
+    diagnostics.add(
+      RuleDiagnostic(
+        path: path,
+        severity: RuleSeverity.error,
+        code: 'unknownArchetype',
+        message: '未知原型 "$archetype"',
+      ),
+    );
+  }
+
+  /// 条目 `structured.classRules` 的**档案侧**校验（§4.2/§4.3、§5.1、§5.2）。
+  ///
+  /// 导入期唯一入口：形状/类型问题由 [ClassRuleSet.parse]（`abilities` 传档案的）
+  /// 负责，这里只补"必须查档案才能判断"的部分，不复制任何档案查询：
+  /// - `spellcasting.archetype` 必须存在于档案 `progressions` → error `unknownArchetype`；
+  /// - 施法职业（`mode != none`）没有任何法术位来源（自身 `slots` 与所挂原型都没有）
+  ///   → warning `missingCoreField`：运行期 [ResolvedClassRules.spellSlots] 会恒为空；
+  /// - 施法职业未声明 `prepared` → warning `missingPreparedColumn`
+  ///   （原型不承载该列，编辑器因此不限制准备数量）；
+  /// - 资源的 `maximum.table` 在 [ClassResourceRule.startsAtLevel] 及以上出现 0
+  ///   → warning `zeroLevelResource`（显式 0 = "存在但上限为 0"，多半是作者想表达
+  ///   "该等级还没有这个资源"，那应该用 `startsAtLevel`）。
+  ///
+  /// 只对**条目声明**调用：内置档案自己的表由资产测试兜底，导入期的 warning
+  /// 是针对第三方包的作者提示（§5.2 的 warning 语义就是"可导入，导入预览中列出"）。
+  static void validateEntryClassRules({
+    required RuleProfile profile,
+    required ClassRuleSet? entryRules,
+    required String path,
+    required List<RuleDiagnostic> diagnostics,
+  }) {
+    if (entryRules == null) return;
+    final spellcasting = entryRules.spellcasting;
+    _validateArchetype(
+      archetype: spellcasting?.archetype,
+      path: '$path.spellcasting.archetype',
+      progressions: profile.progressions,
+      diagnostics: diagnostics,
+    );
+    if (spellcasting != null && spellcasting.mode != 'none') {
+      if (spellcasting.prepared == null) {
+        _addWarning(
+          diagnostics,
+          '$path.spellcasting.prepared',
+          'missingPreparedColumn',
+          '施法职业未声明 prepared：原型不提供该列，编辑器将不限制准备数量',
+        );
+      }
+      final ownsSlots = spellcasting.slots != null;
+      final archetypeSlots =
+          profile.progression(spellcasting.archetype)?.slots != null;
+      if (!ownsSlots && !archetypeSlots) {
+        _addWarning(
+          diagnostics,
+          '$path.spellcasting',
+          'missingCoreField',
+          '施法职业既未声明 spellcasting.slots 也未挂载提供法术位的原型：'
+              '角色卡的法术位将缺省',
         );
       }
     }
+    for (var index = 0; index < entryRules.resources.length; index++) {
+      _validateResourceZeroLevels(
+        entryRules.resources[index],
+        '$path.resources[$index]',
+        diagnostics,
+      );
+    }
+  }
+
+  /// 资源上限表在 `startsAtLevel` 及以上为 0 的档位（§5.2 `zeroLevelResource`）。
+  ///
+  /// 只看**表**形态：常量 `maximum: 0` 没有等级概念，不触发。取值语义走
+  /// [IntTable.at]（高于最后声明等级沿用最后声明值），因此 `{"1": 0}` 这种
+  /// "从头就写 0" 的表会被如实报出来，而不是靠调用方各自判空。
+  static void _validateResourceZeroLevels(
+    ClassResourceRule resource,
+    String path,
+    List<RuleDiagnostic> diagnostics,
+  ) {
+    final table = resource.maximum.table;
+    if (table == null) return;
+    final zeroLevels = <int>[
+      for (var level = table.minLevel; level <= table.maxLevel; level++)
+        if (level >= resource.startsAtLevel && table.at(level) == 0) level,
+    ];
+    if (zeroLevels.isEmpty) return;
+    _addWarning(
+      diagnostics,
+      '$path.maximum.table',
+      'zeroLevelResource',
+      '资源表在 ${zeroLevels.join('、')} 级为 0：该级上限为 0（显式 0 表示'
+          '"存在但上限为 0"；若想表达"该等级还没有这个资源"，请改用 startsAtLevel）',
+    );
   }
 
   /// 条目声明 ∪ 档案（条目优先，**字段级**，§3.6、§3.7、§3.8）。
@@ -535,6 +636,21 @@ void _invalidTable(List<RuleDiagnostic> out, String path, String message) =>
         message: message,
       ),
     );
+
+/// 可导入的提示级诊断（§5.2）：只提示，不阻断。
+void _addWarning(
+  List<RuleDiagnostic> out,
+  String path,
+  String code,
+  String message,
+) => out.add(
+  RuleDiagnostic(
+    path: path,
+    severity: RuleSeverity.warning,
+    code: code,
+    message: message,
+  ),
+);
 
 /// 白名单之外的键（§3.1）：解析期即拦，不留给测试兜底。
 void _unknownField(List<RuleDiagnostic> out, String path, String name) =>

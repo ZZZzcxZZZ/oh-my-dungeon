@@ -4,6 +4,7 @@ import 'package:dnd_table_client/src/features/characters/presentation/character_
 import 'package:dnd_table_client/src/features/characters/presentation/character_editor_page.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_upgrade_page.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/widgets/declared_level_banner.dart';
+import 'package:dnd_table_client/src/features/characters/presentation/widgets/declared_level_track_shape.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_import_report.dart';
 import 'package:dnd_table_client/src/features/content/presentation/content_import_preview_dialog.dart';
@@ -218,7 +219,7 @@ void main() {
   });
 
   group('创建向导：等级滑杆区分已声明 / 未声明区间', () {
-    testWidgets('默认声明范围内滑杆用 primary，超出后转 tertiary 并给信息条', (
+    testWidgets('轨道按已声明 / 未声明双色（primary / outlineVariant），越界给信息条', (
       tester,
     ) async {
       tester.view.physicalSize = const Size(1200, 2000);
@@ -242,12 +243,22 @@ void main() {
       expect(find.textContaining('仍可继续'), findsNothing);
 
       final theme = Theme.of(tester.element(find.byType(Slider)));
+      var sliderTheme = SliderTheme.of(tester.element(find.byType(Slider)));
+      // §3.12：未声明区间用 `outlineVariant`（不是 tertiary——那是"生命环·受伤"的
+      // 角色），已声明区间用主题色；两者同时存在，轨道才是双色。
+      expect(sliderTheme.activeTrackColor, theme.colorScheme.primary);
+      expect(sliderTheme.inactiveTrackColor, theme.colorScheme.outlineVariant);
       expect(
-        SliderTheme.of(tester.element(find.byType(Slider))).thumbColor,
-        theme.colorScheme.primary,
+        sliderTheme.inactiveTrackColor,
+        isNot(theme.colorScheme.tertiary),
       );
+      expect(sliderTheme.thumbColor, theme.colorScheme.primary);
+      final shape = sliderTheme.trackShape;
+      expect(shape, isA<DeclaredLevelTrackShape>());
+      expect((shape! as DeclaredLevelTrackShape).levels.max, 5);
+      expect((shape as DeclaredLevelTrackShape).levels.min, 1);
 
-      // 升到 8 级：越过最后声明等级，滑杆与信息条同时变化。
+      // 升到 8 级：越过最后声明等级，信息条出现；轨道两色不变（区间没变）。
       final increment = find.byKey(
         const Key('standard-level-increment-button'),
       );
@@ -260,9 +271,65 @@ void main() {
 
       expect(find.textContaining('该职业未声明 6 级以上内容'), findsOneWidget);
       expect(find.textContaining('仍可继续'), findsOneWidget);
+      sliderTheme = SliderTheme.of(tester.element(find.byType(Slider)));
+      expect(sliderTheme.activeTrackColor, theme.colorScheme.primary);
+      expect(sliderTheme.inactiveTrackColor, theme.colorScheme.outlineVariant);
+    });
+  });
+
+  group('声明区间文案与轨道比例（唯一口径）', () {
+    test('declaredRangeCaption 覆盖未声明 / 单侧未声明 / 全覆盖三种边界', () {
       expect(
-        SliderTheme.of(tester.element(find.byType(Slider))).thumbColor,
-        theme.colorScheme.tertiary,
+        const DeclaredLevels(min: 1, max: 5).declaredRangeCaption,
+        '已声明 1–5 级 · 6–20 级未声明',
+      );
+      expect(
+        const DeclaredLevels(min: 5, max: 10).declaredRangeCaption,
+        '已声明 5–10 级 · 1–4 级未声明 · 11–20 级未声明',
+      );
+      expect(
+        const DeclaredLevels(min: 1, max: 20).declaredRangeCaption,
+        '已声明 1–20 级',
+      );
+      expect(
+        const DeclaredLevels().declaredRangeCaption,
+        '该职业未声明任何等级 · 1–20 级均按未声明处理',
+      );
+    });
+
+    test('declaredRangeFraction 用真实比例切分轨道', () {
+      expect(
+        DeclaredLevelTrackShape.declaredRangeFraction(
+          levels: const DeclaredLevels(min: 1, max: 5),
+          min: 1,
+          max: 20,
+        ),
+        (0.0, 4 / 19),
+      );
+      expect(
+        DeclaredLevelTrackShape.declaredRangeFraction(
+          levels: const DeclaredLevels(min: 5, max: 10),
+          min: 1,
+          max: 20,
+        ),
+        (4 / 19, 9 / 19),
+      );
+      expect(
+        DeclaredLevelTrackShape.declaredRangeFraction(
+          levels: const DeclaredLevels(min: 1, max: 20),
+          min: 1,
+          max: 20,
+        ),
+        (0.0, 1.0),
+      );
+      expect(
+        DeclaredLevelTrackShape.declaredRangeFraction(
+          levels: const DeclaredLevels(),
+          min: 1,
+          max: 20,
+        ),
+        isNull,
+        reason: '完全没有声明时整条轨道都是未声明色',
       );
     });
   });
@@ -303,7 +370,46 @@ void main() {
       expect(find.text('暂无可追踪资源'), findsNothing);
     });
 
-    testWidgets('已声明等级有数值时不能说未声明（沿用语义不被覆盖）', (tester) async {
+    testWidgets('完全没有等级声明时不说"未声明"（没有等级表的职业本来就没有法术位）', (
+      tester,
+    ) async {
+      // max == null（无 classIdentity）：内置 rogue / monk 这类职业没有法术位表，
+      // 快速创建也会落库 {min: null, max: null}——喊"该职业未声明该等级的内容"
+      // 是错误陈述，应照实说"暂无法术位 / 暂无可追踪资源"。
+      final character = _character(level: 5);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterDetailPage(
+            character: character,
+            initialTab: 'spells',
+            onSaveCharacter: (_) async => true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('暂无法术位'), findsOneWidget);
+      expect(find.textContaining('该职业未声明该等级的内容'), findsNothing);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterDetailPage(
+            character: character,
+            initialTab: 'resources',
+            onSaveCharacter: (_) async => true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('暂无可追踪资源'), findsOneWidget);
+      expect(find.textContaining('该职业未声明该等级的内容'), findsNothing);
+    });
+
+    testWidgets('超出声明范围但已有数值时不显示"未声明"（沿用语义不被覆盖）', (
+      tester,
+    ) async {
       final character = _character(
         level: 8,
         classIdentity: _identity(min: 1, max: 5),
@@ -408,6 +514,56 @@ void main() {
       );
 
       expect(find.text('该职业未声明任何等级内容'), findsOneWidget);
+    });
+
+    testWidgets('非职业条目即使带 classRules 也不显示"职业声明"（判据只看条目类型）', (
+      tester,
+    ) async {
+      // 物种条目带了 `structured.classRules` 时能解析出 1–5 级，但"职业声明"是
+      // 职业概念：资料库不能因为条目碰巧有规则块就凭空显示一条职业声明。
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: ContentCharacterRulesView(
+                entry: _entry(
+                  id: 'test:species/human',
+                  type: 'species',
+                  name: '人类',
+                  structured: const <String, Object?>{
+                    'classRules': <String, Object?>{
+                      'hitDie': 8,
+                      'resources': <Object?>[
+                        <String, Object?>{
+                          'id': 'focus',
+                          'name': '专注',
+                          'recovery': 'longRest',
+                          'maximum': <String, Object?>{
+                            'table': <String, int>{'1': 2, '5': 4},
+                          },
+                        },
+                      ],
+                    },
+                  },
+                  rules: const <String, Object?>{
+                    'grants': <Object?>[
+                      <String, Object?>{
+                        'id': 'speed',
+                        'kind': 'speed',
+                        'value': 30,
+                        'label': '步行速度',
+                      },
+                    ],
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(DeclaredLevelBanner), findsNothing);
+      expect(find.textContaining('职业声明'), findsNothing);
     });
 
     testWidgets('非职业条目（无声明范围）不显示职业声明信息条', (tester) async {

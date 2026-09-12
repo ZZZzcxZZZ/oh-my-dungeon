@@ -14,6 +14,7 @@ import '../../../rules/domain/character_rule_definition.dart';
 import '../../../rules/domain/class_rule_set.dart';
 import '../../../rules/domain/rule_choice_resolver.dart';
 import '../../../rules/domain/rule_diagnostic.dart';
+import '../../../rules/domain/rule_profile_resolver.dart';
 import '../../../rules/domain/rule_values.dart';
 import '../local/content_repository.dart';
 import 'legacy_class_feature_rules_migrator.dart';
@@ -249,6 +250,7 @@ class ContentPackageImporter {
     final json = parsed;
 
     // Validate formatVersion：契约只承认一个版本，1/2 是旧格式，整包拒绝。
+    // 判据是**严格不等** `!= 3`：`toInt()` 会把 3.5 截成 3 放行。
     final formatVersionValue = json['formatVersion'];
     var formatVersion = 0;
     if (formatVersionValue == null) {
@@ -265,17 +267,31 @@ class ContentPackageImporter {
           message: 'formatVersion must be a number',
         ),
       );
-    } else if (formatVersionValue.toInt() != 3) {
+    } else if (formatVersionValue != 3) {
       errors.add(
         ContentValidationError(
           path: r'$.formatVersion',
           message:
-              'formatVersion ${formatVersionValue.toInt()} 是旧格式，只支持 formatVersion 3；'
-              '请用新版工具重新生成/重新提取资料包',
+              'formatVersion $formatVersionValue 是旧格式或不受支持的版本：'
+              '只支持 formatVersion 3；请用新版工具重新生成/重新提取资料包'
+              '（unsupportedFormatVersion）',
         ),
       );
     } else {
       formatVersion = 3;
+    }
+
+    // 内置档案是 abilities / skills 的**唯一权威**（§3.1、§5.2）：包自带同名清单
+    // 不报错，但要明确告知作者"这份清单被忽略"，避免他以为改这里能生效。
+    for (final ignored in const ['abilities', 'skills']) {
+      if (json[ignored] == null) continue;
+      warnings.add(
+        ContentValidationError(
+          path: '\$.$ignored',
+          message: '资料包自带的 $ignored 清单会被忽略：内置档案是唯一权威'
+              '（ignoredGlobalList）',
+        ),
+      );
     }
 
     // Validate required string fields
@@ -383,16 +399,21 @@ class ContentPackageImporter {
           }
         }
 
-        // Parse the entry
+        // Parse the entry：这里只放"纯内容解析"。规则诊断在 try 之外运行，
+        // 因为 `structured.classRules` 的档案校验要读 `Dnd5eRules.profile`——
+        // 未装配档案是**启动装配错误**，不能被 `catch (e)` 降级成
+        // "invalid entry: …"（把装配问题误报成内容问题）。
+        String normalizedType = '';
+        Map<String, Object?>? parsedEntryJson;
+        Object? rawClassRules;
         try {
           final normalizedJson = Map<String, Object?>.from(entryJson);
           final sourceType = '${normalizedJson['type'] ?? ''}';
-          final normalizedType = ContentSchemaRegistry.defaults.normalizeType(
+          normalizedType = ContentSchemaRegistry.defaults.normalizeType(
             sourceType,
           );
           normalizedJson['type'] = normalizedType;
           final structured = normalizedJson['structured'];
-          Object? rawClassRules;
           if (structured is Map) {
             final normalizedStructured = ContentSchemaRegistry.defaults
                 .normalizeStructured(
@@ -402,17 +423,10 @@ class ContentPackageImporter {
             rawClassRules = normalizedStructured['classRules'];
             normalizedJson['structured'] = normalizedStructured;
           }
-          _validateStructuredClassRules(
-            normalizedType: normalizedType,
-            slug: '${normalizedJson['slug'] ?? ''}',
-            rawClassRules: rawClassRules,
-            path: '$entryPath.structured.classRules',
-            errors: errors,
-            warnings: warnings,
-          );
           final entry = ContentEntry.fromJson(normalizedJson);
           parsedEntries[i] = entry;
           entries.add(entry);
+          parsedEntryJson = normalizedJson;
         } catch (e) {
           errors.add(
             ContentValidationError(
@@ -421,6 +435,17 @@ class ContentPackageImporter {
             ),
           );
         }
+        if (parsedEntryJson == null) continue;
+
+        _validateStructuredClassRules(
+          normalizedType: normalizedType,
+          entryId: entryId is String ? entryId : '',
+          name: '${parsedEntryJson['name'] ?? ''}',
+          rawClassRules: rawClassRules,
+          path: '$entryPath.structured.classRules',
+          errors: errors,
+          warnings: warnings,
+        );
       }
 
       // Second pass: validate links
@@ -678,16 +703,24 @@ class ContentPackageImporter {
 
   /// `structured.classRules` 的导入期诊断（契约：error 阻断整包、warning 只提示）。
   ///
-  /// 三条规则：
-  /// 1. 显式声明了 `classRules` → 交给 [ClassRuleSet.parse]，按 severity 分流；
-  /// 2. 未声明、且 slug 命中**内置档案**的职业 → error
+  /// 四条规则：
+  /// 1. 显式声明了 `classRules`（对象）→ 交给 `ClassRuleSet.parse`（形状/类型，
+  ///    `abilities` 传档案的）+ [RuleProfileResolver.validateEntryClassRules]
+  ///    （档案侧：`unknownArchetype` 与 §5.2 的 warning），按 severity 分流；
+  /// 2. 写了 `classRules` 却不是对象 → error `invalidTable`。这不是"没有规则来源"，
+  ///    降级成 warning 会让坏声明静默通过，职业最后一条规则都没有；
+  /// 3. 未声明、且规范 slug 命中**内置档案**的职业 → error
   ///    `builtinSlugRequiresExplicitRules`：杜绝"slug 写错就静默继承内置职业数值"。
   ///    判据来自 [Dnd5eRules.profile] 的 `classes` / `classAliases`，不写死名单；
-  /// 3. 未声明的普通自制职业 → warning `unresolvedClassRule`（只使用内置档案，
-  ///    若有同 slug）。
+  /// 4. 未声明的普通自制职业（档案里也没有）→ warning `unresolvedClassRule`；
+  ///    命中档案的条目**不再**收到该 warning（文案与 error 自相矛盾）。
+  ///
+  /// 判定用的 slug 与运行期**同源**：都是"条目 id 末段"（[Dnd5eRules.resolveClassSlug]），
+  /// 不是条目里的 `slug` 展示字段——运行期按 id 末段继承内置数值，保护必须盯同一个键。
   void _validateStructuredClassRules({
     required String normalizedType,
-    required String slug,
+    required String entryId,
+    required String name,
     required Object? rawClassRules,
     required String path,
     required List<ContentValidationError> errors,
@@ -695,26 +728,37 @@ class ContentPackageImporter {
   }) {
     if (normalizedType != 'class') return;
 
+    final slug = Dnd5eRules.resolveClassSlug(
+      entryId: entryId.isEmpty ? null : entryId,
+      classSummary: name,
+    );
+    final archiveRules = slug.isEmpty
+        ? null
+        : Dnd5eRules.profile.classRules(slug);
+
     final diagnostics = <RuleDiagnostic>[];
     if (rawClassRules is Map) {
-      ClassRuleSet.parse(
+      final entryRules = ClassRuleSet.parse(
         Map<String, Object?>.from(rawClassRules),
         path: path,
         diagnostics: diagnostics,
+        abilities: Dnd5eRules.profile.abilities,
       );
-    } else {
-      diagnostics.add(
-        RuleDiagnostic(
+      RuleProfileResolver.validateEntryClassRules(
+        profile: Dnd5eRules.profile,
+        entryRules: entryRules,
+        path: path,
+        diagnostics: diagnostics,
+      );
+    } else if (rawClassRules != null) {
+      errors.add(
+        ContentValidationError(
           path: path,
-          severity: RuleSeverity.warning,
-          code: 'unresolvedClassRule',
-          message: '职业条目未声明 classRules，将只使用内置档案（若有同 slug）',
+          message: 'classRules 必须是对象（invalidTable）',
         ),
       );
-    }
-
-    // 内置 slug 保护：声明了 classRules 就不再报；未声明但命中内置职业必须阻断。
-    if (rawClassRules is! Map && Dnd5eRules.profile.classRules(slug) != null) {
+    } else if (archiveRules != null) {
+      // 未声明 classRules 却命中内置职业：必须阻断，不能静默继承内置数值。
       diagnostics.add(
         RuleDiagnostic(
           path: path,
@@ -723,6 +767,17 @@ class ContentPackageImporter {
           message:
               'slug "$slug" 属于内置职业：若要覆盖其数值必须显式声明 classRules，'
               '否则会静默继承内置数值',
+        ),
+      );
+    } else {
+      // 既无 classRules 也无档案匹配：这才是"没有任何可用规则来源"（§5.2）。
+      diagnostics.add(
+        RuleDiagnostic(
+          path: path,
+          severity: RuleSeverity.warning,
+          code: 'unresolvedClassRule',
+          message: '职业条目未声明 classRules，且内置档案没有同 slug 职业：'
+              '该职业没有任何可用规则来源',
         ),
       );
     }
@@ -740,16 +795,23 @@ class ContentPackageImporter {
     }
   }
 
-  /// `hitPoints` / `ability` grant 的 `formula` 必须过 [MaxSpec] 的同一套封闭语法。
+  /// `hitPoints` / `ability` grant 的 `formula` 必须过 [MaxSpec] 的同一套封闭语法，
+  /// 且 `kind: ability` 的 `target` 与 `formula: ability:<key>` 的键必须落在档案
+  /// `abilities` 内（§5.1 `unknownAbility`）。
   ///
   /// 契约：非法 formula 在**导入期**就报 `invalidMaxSpec`，不能只在运行期静默跳过
   /// （运行期 [MaxSpec.tryParse] 返回 null 会让加值悄悄消失）。其它 grant kind 的
   /// `formula` 语义不同（如伤害骰），不受该封闭语法约束。
+  ///
+  /// 属性键同理：`MaxSpec` 的正则只保证 `ability:[a-z]{3}` 的**形状**，运行期
+  /// [RulesDrivenCharacterBuilder] 对不在档案里的键是跳过（加值消失），所以键是否
+  /// 存在必须在导入期报出来。属性键的唯一权威是档案 `abilities`。
   void _validateGrantFormulas(
     CharacterRuleDefinition rules,
     String rulesPath,
     List<ContentValidationError> errors,
   ) {
+    final abilities = Dnd5eRules.profile.abilities;
     void validate(
       List<RuleGrantDefinition> grants,
       String grantsPath,
@@ -759,6 +821,18 @@ class ContentPackageImporter {
         if (grant.kind != RuleGrantKind.hitPoints &&
             grant.kind != RuleGrantKind.ability) {
           continue;
+        }
+        if (grant.kind == RuleGrantKind.ability &&
+            grant.target != null &&
+            !abilities.contains(grant.target)) {
+          errors.add(
+            ContentValidationError(
+              path: '$grantsPath[$i].target',
+              message:
+                  '未知属性键 "${grant.target}"，可用：${abilities.join(', ')}'
+                  '（unknownAbility）',
+            ),
+          );
         }
         final formula = grant.formula;
         // §3.5：`hitPoints` / `ability` 的 `value` 与 `formula` 是**二选一**，
@@ -775,6 +849,17 @@ class ContentPackageImporter {
           continue;
         }
         if (formula == null) continue;
+        if (formula.startsWith('ability:') &&
+            !abilities.contains(formula.substring('ability:'.length))) {
+          errors.add(
+            ContentValidationError(
+              path: '$grantsPath[$i].formula',
+              message:
+                  'formula "$formula" 的属性键不在档案 abilities 内，'
+                  '可用：${abilities.join(', ')}（unknownAbility）',
+            ),
+          );
+        }
         if (MaxSpec.tryParse(<String, Object?>{'formula': formula}) != null) {
           continue;
         }

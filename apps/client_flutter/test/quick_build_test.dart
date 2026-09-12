@@ -1,4 +1,5 @@
 import 'package:dnd_table_client/src/features/characters/domain/quick_build.dart';
+import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -140,6 +141,77 @@ void main() {
       expect(draft.data['runtime'], {
         'classResourcesUsed': {'second_wind': 0, 'action_surge': 0},
       });
+    });
+
+    test('带职业条目时与创建向导同源：条目的 classRules 与声明范围都进角色数据', () {
+      final classEntry = ContentEntry.fromJson(<String, Object?>{
+        'id': 'test:class/tester',
+        'type': 'class',
+        'slug': 'tester',
+        'name': '测试职业',
+        'body': <Object?>[],
+        'revision': 1,
+        'structured': <String, Object?>{
+          'classRules': <String, Object?>{
+            'hitDie': 10,
+            'savingThrowAbilities': <String>['wis'],
+            'resources': <Object?>[
+              <String, Object?>{
+                'id': 'focus',
+                'name': '专注',
+                'recovery': 'longRest',
+                'maximum': <String, Object?>{
+                  'table': <String, int>{'1': 2, '5': 4},
+                },
+              },
+            ],
+          },
+        },
+      });
+
+      final draft = QuickBuildService.build(
+        QuickBuildSelection(
+          name: 'Nia',
+          className: '测试职业',
+          species: '人类',
+          background: '士兵',
+          level: 3,
+          classEntry: classEntry,
+        ),
+      );
+
+      final identity = draft.data['classIdentity']! as Map;
+      expect(identity['entryId'], 'test:class/tester');
+      expect(identity['slug'], 'tester');
+      // 条目资源表只声明到 5 级 → 声明范围 1–5（不是 {min: null, max: null}）。
+      expect(identity['declaredLevels'], {'min': 1, 'max': 5});
+      // 条目自己的 classRules 生效：生命骰 10、豁免感知、资源上限取自 1–5 表。
+      expect(draft.data['hitDie'], 10);
+      expect(draft.data['savingThrowAbilities'], <String>['wis']);
+      expect(draft.data['classResources'], <Object?>[
+        <String, Object?>{
+          'id': 'focus',
+          'name': '专注',
+          'maximum': 2,
+          'recovery': 'longRest',
+        },
+      ]);
+    });
+
+    test('拿不到条目（只有展示名）时声明范围是"未声明"，不编造区间', () {
+      const selection = QuickBuildSelection(
+        name: 'Nia',
+        className: '测试职业',
+        species: '人类',
+        background: '士兵',
+        level: 3,
+      );
+
+      final draft = QuickBuildService.build(selection);
+
+      final identity = draft.data['classIdentity']! as Map;
+      expect(identity['declaredLevels'], {'min': null, 'max': null});
+      expect(draft.data['hitDie'], isNull);
     });
 
     test('preserves rest recovery semantics for every class resource', () {

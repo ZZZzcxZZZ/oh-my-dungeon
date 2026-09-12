@@ -2,6 +2,7 @@ import '../../content/domain/content_entry.dart';
 import '../../rules/domain/character_build.dart';
 import 'character.dart';
 import 'character_content_reference.dart';
+import 'declared_levels.dart';
 import 'dnd5e_rules.dart';
 import 'rules_driven_character_builder.dart';
 
@@ -87,6 +88,12 @@ class CharacterRuleProjector {
   ///   按 **slug / name / aliases 精确匹配**回填（[Dnd5eRules.resolveClassSlug]
   ///   只做精确相等或 `<别名><分隔符>` 前缀，**禁止裸子串**）；
   /// - 匹配不到就显式标记 `declared: false`（"未声明"），界面据此不显示 0。
+  ///
+  /// 声明范围**不在这里手写形状**：拿不到条目（没有 `build.selections.class`）时
+  /// 走 [Dnd5eRules.resolveClassRules] + [DeclaredLevels.fromResolvedClassRules]，
+  /// 也就是与 Builder / 向导同一个权威口径（内置档案同 slug 职业的范围）。
+  /// 老角色 `吟游诗人` 因此拿到档案的 1–20，而不是被写成 `{min: null, max: null}`
+  /// 让角色卡误报"该职业未声明该等级的内容"。
   Map<String, Object?> _classIdentity(
     Map<String, Object?> derivedIdentity,
     CharacterSheet character,
@@ -97,21 +104,18 @@ class CharacterRuleProjector {
     final slug = Dnd5eRules.resolveClassSlug(
       classSummary: character.classSummary,
     );
-    if (slug.isEmpty) {
-      return <String, Object?>{
-        'entryId': null,
-        'slug': null,
-        'name': character.classSummary,
-        'declaredLevels': const <String, Object?>{'min': null, 'max': null},
-        'declared': false,
-      };
-    }
+    final declaredLevels = DeclaredLevels.fromResolvedClassRules(
+      Dnd5eRules.resolveClassRules(
+        entryId: null,
+        classSummary: character.classSummary,
+      ),
+    );
     return <String, Object?>{
       'entryId': null,
-      'slug': slug,
+      'slug': slug.isEmpty ? null : slug,
       'name': character.classSummary,
-      'declaredLevels': const <String, Object?>{'min': null, 'max': null},
-      'declared': true,
+      'declaredLevels': declaredLevels.toData(),
+      'declared': slug.isNotEmpty,
     };
   }
 

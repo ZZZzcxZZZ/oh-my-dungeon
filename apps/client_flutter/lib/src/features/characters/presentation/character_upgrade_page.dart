@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import '../../content/domain/content_entry.dart';
 import '../../content/presentation/content_entry_preview_page.dart';
 import '../../rules/domain/character_rules_engine.dart';
-import '../../rules/domain/rule_choice_resolver.dart';
+import '../../rules/domain/rule_choice_semantics.dart';
 import '../domain/character.dart';
 import '../domain/character_upgrade_planner.dart';
 import 'widgets/declared_level_banner.dart';
+import 'widgets/rule_choice_section.dart';
 
 typedef CharacterUpgradeApply = Future<bool> Function(CharacterSheet character);
 
@@ -208,61 +209,28 @@ class _ChoiceOptions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 值类型 / 仅内联候选的选择由专门 UI（技能选择器等）承担，通用条目选项卡片
-    // 解析不到任何条目候选；这里给中性文案，而不是把正常声明渲染成"没有符合条件
-    // 的资料条目"的红色缺料错误。判据的唯一实现点是
-    // `RuleChoiceDefinition.usesDedicatedOptionUi`。
+    // `usesDedicatedOptionUi` 是**渲染判据**：技能选择由角色卡上的技能选择器
+    // 承担，独立升级页没有该选择器，给中性文案而不是把正常声明渲染成"没有符合
+    // 条件的资料条目"的红色缺料错误（判据的唯一实现在
+    // `RuleChoiceDefinition.usesDedicatedOptionUi`）。
     if (choice.definition.usesDedicatedOptionUi) {
       return const Text('该选择由对应界面选择。');
     }
-    final options = RuleChoiceResolver(
-      entries: entries,
-    ).optionsFor(choice.definition, sourceEntryId: choice.sourceEntryId);
-    if (options.isEmpty) return const Text('没有符合条件的资料条目');
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('选择 ${choice.definition.minimum}–${choice.definition.maximum} 项'),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final option in options)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  FilterChip(
-                    label: Text(option.name),
-                    selected: choice.selected.contains(option.id),
-                    onSelected: (selected) {
-                      final next = <String>[...choice.selected];
-                      if (selected) {
-                        if (choice.definition.maximum == 1) next.clear();
-                        if (next.length < choice.definition.maximum) {
-                          next.add(option.id);
-                        }
-                      } else {
-                        next.remove(option.id);
-                      }
-                      onChanged(next);
-                    },
-                  ),
-                  IconButton(
-                    key: Key('builder-open-entry-${option.id}'),
-                    tooltip: '查看 ${option.name}',
-                    onPressed: () => showContentEntryPreviewDialog(
-                      context,
-                      entry: option,
-                      entries: entries.values.toList(growable: false),
-                    ),
-                    icon: const Icon(Icons.open_in_new, size: 18),
-                  ),
-                ],
-              ),
-          ],
-        ),
-      ],
+    return RuleChoiceSection(
+      definition: choice.definition,
+      candidates: RuleChoiceSemantics.candidatesFor(
+        choice.definition,
+        entries: entries,
+        sourceEntryId: choice.sourceEntryId,
+      ),
+      selected: choice.selected,
+      showTitle: false,
+      onOpenEntry: (entry) => showContentEntryPreviewDialog(
+        context,
+        entry: entry,
+        entries: entries.values.toList(growable: false),
+      ),
+      onChanged: onChanged,
     );
   }
 }

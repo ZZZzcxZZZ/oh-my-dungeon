@@ -44,7 +44,7 @@ class _CharacterUpgradeSection extends StatelessWidget {
   final bool applied;
   final VoidCallback? onApply;
   final List<ContentEntry> entries;
-  final void Function(String key, Set<String> selected) onChoiceChanged;
+  final void Function(String key, List<String> selected) onChoiceChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -119,6 +119,9 @@ class _CharacterUpgradeSection extends StatelessWidget {
   }
 }
 
+/// 编辑器升级队列里的一条规则选择：**薄包装**，只把 `ActiveRuleChoice` 翻译成
+/// 共享组件 `RuleChoiceSection` 的入参（候选一律经
+/// `RuleChoiceSemantics.candidatesFor`，不再各自调 `RuleChoiceResolver`）。
 class _UpgradeRuleChoiceSection extends StatelessWidget {
   const _UpgradeRuleChoiceSection({
     required this.choice,
@@ -128,79 +131,28 @@ class _UpgradeRuleChoiceSection extends StatelessWidget {
 
   final ActiveRuleChoice choice;
   final List<ContentEntry> entries;
-  final ValueChanged<Set<String>> onChanged;
+  final ValueChanged<List<String>> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final definition = choice.definition;
-    final options = RuleChoiceResolver(
-      entries: {for (final entry in entries) entry.id: entry},
-    ).optionsFor(definition, sourceEntryId: choice.sourceEntryId);
-    return Card.outlined(
-      margin: const EdgeInsets.only(top: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    definition.label,
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                ),
-                Icon(
-                  choice.isValid
-                      ? Icons.check_circle_outline
-                      : Icons.pending_actions_outlined,
-                  color: choice.isValid
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).colorScheme.error,
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${choice.sourceEntryName} · 选择 ${definition.minimum}-${definition.maximum} 项',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 8),
-            if (options.isEmpty)
-              Text(
-                '没有符合当前等级与资格的选项。',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.error,
-                ),
-              )
-            else
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final option in options)
-                    FilterChip(
-                      label: Text(option.name),
-                      selected: choice.selected.contains(option.id),
-                      onSelected: (selected) {
-                        final next = choice.selected.toSet();
-                        if (selected) {
-                          if (definition.maximum == 1) next.clear();
-                          if (next.length < definition.maximum) {
-                            next.add(option.id);
-                          }
-                        } else {
-                          next.remove(option.id);
-                        }
-                        onChanged(next);
-                      },
-                    ),
-                ],
-              ),
-          ],
-        ),
+    final entriesById = {for (final entry in entries) entry.id: entry};
+    return RuleChoiceSection(
+      definition: choice.definition,
+      candidates: RuleChoiceSemantics.candidatesFor(
+        choice.definition,
+        entries: entriesById,
+        sourceEntryId: choice.sourceEntryId,
       ),
+      selected: choice.selected,
+      sourceLabel: choice.sourceLevel == null
+          ? choice.sourceEntryName
+          : '${choice.sourceEntryName} · 等级 ${choice.sourceLevel}',
+      onOpenEntry: (entry) => showContentEntryPreviewDialog(
+        context,
+        entry: entry,
+        entries: entries,
+      ),
+      onChanged: onChanged,
     );
   }
 }

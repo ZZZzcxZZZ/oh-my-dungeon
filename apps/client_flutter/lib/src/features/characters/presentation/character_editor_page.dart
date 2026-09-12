@@ -23,10 +23,12 @@ import '../../rules/domain/character_rule_definition.dart';
 import '../../rules/domain/character_rules_engine.dart';
 import '../../rules/domain/rule_choice_quota.dart';
 import '../../rules/domain/rule_choice_resolver.dart';
+import '../../rules/domain/rule_choice_semantics.dart';
 import '../../rules/domain/rule_profile.dart';
 import 'widgets/character_builder_shell.dart';
 import 'widgets/declared_level_banner.dart';
 import 'widgets/declared_level_track_shape.dart';
+import 'widgets/rule_choice_section.dart';
 
 part 'character_editor_creation_flow.dart';
 part 'character_editor_builder_page.dart';
@@ -81,7 +83,7 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
   late final Map<String, bool> _skills;
   late _CreationFlow _flow;
   Map<String, Object?>? _appliedRulesData;
-  final Map<String, Set<String>> _upgradeRuleChoices = {};
+  final Map<String, List<String>> _upgradeRuleChoices = {};
   bool _saving = false;
 
   // 头像选择状态（规范 §头像来源：本地角色头像离线保存在客户端）。
@@ -609,7 +611,7 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
       choices: {
         ...previousBuild.choices,
         for (final entry in _upgradeRuleChoices.entries)
-          entry.key: entry.value.toList(growable: false),
+          entry.key: List<String>.unmodifiable(entry.value),
       },
       // `requires` 的能力门槛读**基础属性**（决策 D4），不是 `_abilityControllers`
       // 里的最终值：升级预览必须与引擎同口径，否则"门槛其实满足"的选择会被
@@ -684,7 +686,7 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
       final preview = _upgradePreview();
       if (preview == null) return;
       for (final choice in preview.ruleChoices) {
-        if ((_upgradeRuleChoices[choice.key] ?? const <String>{}).isNotEmpty) {
+        if ((_upgradeRuleChoices[choice.key] ?? const <String>[]).isNotEmpty) {
           continue;
         }
         final recommended = resolver.recommendedFor(
@@ -692,7 +694,7 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
           sourceEntryId: choice.sourceEntryId,
         );
         if (recommended.isEmpty) continue;
-        _upgradeRuleChoices[choice.key] = recommended.toSet();
+        _upgradeRuleChoices[choice.key] = recommended.toList(growable: false);
         changed = true;
       }
     }

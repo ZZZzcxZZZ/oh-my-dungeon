@@ -1,4 +1,5 @@
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
+import 'package:dnd_table_client/src/features/characters/domain/character_edit_draft.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_editor_page.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_upgrade_page.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
@@ -699,6 +700,97 @@ void main() {
     expect(find.text('已选总价 60 GP'), findsOneWidget);
     expect(find.text('已超出建议上限，仍可继续创建和购买。'), findsOneWidget);
     expect(find.widgetWithText(FilterChip, '昂贵板甲'), findsOneWidget);
+  });
+
+  // 任务 6a：选择状态由 `Set` 改为有序 `List`——顺序即用户点击顺序，
+  // 落进 `build.choices` 后可直接表达"同一选项重复 N 次"。
+  testWidgets('选择顺序按用户点击顺序落进 build.choices（Set → List）', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    CharacterEditDraft? submitted;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          contentEntries: [
+            _entry(
+              id: 'guide:class/fighter',
+              type: 'class',
+              name: '战士',
+              rules: const {
+                'progression': [
+                  {
+                    'levels': [1],
+                    'choices': [
+                      {
+                        'id': 'style',
+                        'label': '选择两种战斗风格',
+                        'optionType': 'feat',
+                        'minimum': 2,
+                        'maximum': 2,
+                        'optionEntryIds': [
+                          'guide:feat/duel',
+                          'guide:feat/defense',
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ),
+            _entry(
+              id: 'guide:background/soldier',
+              type: 'background',
+              name: '士兵',
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:species/human',
+              type: 'species',
+              name: '人类',
+              rules: const {},
+            ),
+            _entry(id: 'guide:feat/duel', type: 'feat', name: '决斗'),
+            _entry(id: 'guide:feat/defense', type: 'feat', name: '防御'),
+          ],
+          onSubmit: (draft) async {
+            submitted = draft;
+            return true;
+          },
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('standard-character-name-field')),
+      '布伦',
+    );
+    await tester.pumpAndSettle();
+
+    // 依次点第二个、第一个。
+    await tester.ensureVisible(find.text('防御'));
+    await tester.tap(find.text('防御'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('决斗'));
+    await tester.tap(find.text('决斗'));
+    await tester.pumpAndSettle();
+
+    await _goToDesktopStep(tester, 8);
+    await tester.tap(find.widgetWithText(FilledButton, '创建角色'));
+    await tester.pumpAndSettle();
+
+    expect(submitted, isNotNull);
+    final build = submitted!.data['build']! as Map;
+    expect(
+      (build['choices']! as Map)['guide:class/fighter#style#1'],
+      ['guide:feat/defense', 'guide:feat/duel'],
+      reason: '顺序即点击顺序，不被排序改写',
+    );
   });
 }
 

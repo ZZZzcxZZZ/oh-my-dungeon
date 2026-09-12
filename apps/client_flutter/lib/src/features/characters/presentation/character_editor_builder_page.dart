@@ -51,7 +51,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
   final Set<String> _selectedSpellRefs = {};
   final List<Map<String, Object?>> _customSpells = [];
   final Set<String> _selectedItemRefs = {};
-  final Map<String, Set<String>> _ruleChoices = {};
+  final Map<String, List<String>> _ruleChoices = {};
   late Set<String> _selectedSkillProficiencies;
   late Map<String, int> _abilityScores;
   late Map<String, TextEditingController> _abilityControllers;
@@ -208,7 +208,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     final ruleChoicesAreValid = activeRuleChoices
         .where((active) => !active.definition.usesDedicatedOptionUi)
         .every((active) {
-          final selected = _ruleChoices[active.key] ?? const <String>{};
+          final selected = _ruleChoices[active.key] ?? const <String>[];
           return selected.length >= active.definition.minimum &&
               selected.length <= active.definition.maximum;
         });
@@ -258,7 +258,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         pendingChoices: activeRuleChoices
             .where((active) => !active.definition.usesDedicatedOptionUi)
             .where((active) {
-              final selected = _ruleChoices[active.key] ?? const <String>{};
+              final selected = _ruleChoices[active.key] ?? const <String>[];
               return selected.length < active.definition.minimum ||
                   selected.length > active.definition.maximum;
             })
@@ -340,14 +340,12 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     });
     final ruleChoiceWidgets = [
       for (final active in choicesForCurrentStep)
-        _RuleChoiceSection(
-          choice: active,
-          options: _choiceOptions(
-            active.definition,
-            sourceEntryId: active.sourceEntryId,
-          ),
-          allEntries: widget.contentEntries,
-          selected: _ruleChoices[active.key] ?? const <String>{},
+        RuleChoiceSection(
+          definition: active.definition,
+          candidates: _candidatesFor(active),
+          selected: _ruleChoices[active.key] ?? const <String>[],
+          sourceLabel: _choiceSourceLabel(active),
+          onOpenEntry: _openEntry,
           onChanged: (next) => setState(() {
             _ruleChoices[active.key] = next;
             _applyRecommendedRuleChoices();
@@ -575,7 +573,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         abilityMethodLabel: _abilityMethodLabel(_abilityMethod),
         pendingRuleChoices: activeRuleChoices
             .where((active) {
-              final selected = _ruleChoices[active.key] ?? const <String>{};
+              final selected = _ruleChoices[active.key] ?? const <String>[];
               return selected.length < active.definition.minimum ||
                   selected.length > active.definition.maximum;
             })
@@ -713,7 +711,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       for (final active in result.where(
         (choice) => choice.sourceEntryId == entry.id,
       )) {
-        final selected = _ruleChoices[active.key] ?? const <String>{};
+        final selected = _ruleChoices[active.key] ?? const <String>[];
         queue.addAll(
           selected.map(
             (selectedId) =>
@@ -781,14 +779,23 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     );
   }
 
-  List<ContentEntry> _choiceOptions(
-    RuleChoiceDefinition definition, {
-    required String sourceEntryId,
-  }) {
-    return RuleChoiceResolver(
-      entries: {for (final entry in widget.contentEntries) entry.id: entry},
-    ).optionsFor(definition, sourceEntryId: sourceEntryId);
+  List<RuleChoiceCandidate> _candidatesFor(_ActiveRuleChoice active) {
+    return RuleChoiceSemantics.candidatesFor(
+      active.definition,
+      entries: _entriesById,
+      sourceEntryId: active.sourceEntryId,
+    );
   }
+
+  String _choiceSourceLabel(_ActiveRuleChoice active) {
+    return active.level == null
+        ? active.sourceName
+        : '${active.sourceName} · 等级 ${active.level}';
+  }
+
+  Map<String, ContentEntry> get _entriesById => {
+    for (final entry in widget.contentEntries) entry.id: entry,
+  };
 
   int _builderStepFor(String? declaredStep, int inheritedStep) {
     return switch (declaredStep) {
@@ -816,13 +823,13 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         // `recommendedEntryIds` 只可能指向条目，写进 `_ruleChoices` 会以
         // 条目 id 冒充值类型候选，泄漏进值类型/混合选择的答案里。
         if (active.definition.usesDedicatedOptionUi) continue;
-        if ((_ruleChoices[active.key] ?? const <String>{}).isNotEmpty) continue;
+        if ((_ruleChoices[active.key] ?? const <String>[]).isNotEmpty) continue;
         final recommended = resolver.recommendedFor(
           active.definition,
           sourceEntryId: active.sourceEntryId,
         );
         if (recommended.isEmpty) continue;
-        _ruleChoices[active.key] = recommended.toSet();
+        _ruleChoices[active.key] = recommended.toList(growable: false);
         changed = true;
       }
     }

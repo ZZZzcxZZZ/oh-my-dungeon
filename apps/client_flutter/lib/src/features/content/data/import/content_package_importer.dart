@@ -724,18 +724,30 @@ class ContentPackageImporter {
         }
         final choiceId = requirement.choice;
         if (choiceId == null) continue;
-        ({RuleChoiceDefinition definition, String sourceEntryId, int? level})?
-        found;
+        // 作用域内**所有**同 `choiceId` 的定义（不是首个命中）。选择键是
+        // `<entryId>#<choiceId>`，运行期 [RuleChoiceSemantics.requiresSatisfied]
+        // 经 `_selectedOptions` 把作用域内所有同 choiceId 键的选中值取**并集**；
+        // 导入期若只取首个命中，当同一条选择 id 同时出现在条目与其
+        // `featureOf` / `subclassOf` 祖先时，祖先定义的合法 option 会被误拒
+        // （导入口径比运行期更严 = 假阴性）。
+        final definitions =
+            <({RuleChoiceDefinition definition, String sourceEntryId})>[];
         for (final scopeId in RuleChoiceSemantics.scopeEntryIdsFor(
           sourceEntryId,
           entries,
         )) {
-          found ??= RuleChoiceSemantics.definitionForKey(
+          final found = RuleChoiceSemantics.definitionForKey(
             '$scopeId#$choiceId',
             entries: entries,
           );
+          if (found != null) {
+            definitions.add((
+              definition: found.definition,
+              sourceEntryId: found.sourceEntryId,
+            ));
+          }
         }
-        if (found == null) {
+        if (definitions.isEmpty) {
           errors.add(
             ContentValidationError(
               path: '$itemPath.choice',
@@ -748,11 +760,14 @@ class ContentPackageImporter {
         }
         final option = requirement.option;
         if (option == null) continue;
-        final candidateIds = RuleChoiceSemantics.candidatesFor(
-          found.definition,
-          entries: entries,
-          sourceEntryId: found.sourceEntryId,
-        ).map((candidate) => candidate.id).toSet();
+        final candidateIds = <String>{
+          for (final found in definitions)
+            ...RuleChoiceSemantics.candidatesFor(
+              found.definition,
+              entries: entries,
+              sourceEntryId: found.sourceEntryId,
+            ).map((candidate) => candidate.id),
+        };
         if (!candidateIds.contains(option)) {
           errors.add(
             ContentValidationError(
@@ -946,10 +961,11 @@ class ContentPackageImporter {
   /// 返回值的用途：调用方在 `catch` 里据此**不再**追加笼统的 `invalid entry`，
   /// 避免同一条输入报两次、淹没精确位置。
   ///
-  /// 覆盖范围（§5.1）：`unknownGrantKind`、`unknownOptionType`、
-  /// `invalidChoiceRange`、`duplicateOptionId`、`invalidValueOption`、
-  /// `invalidAutoGrant`（条目类型的字符串元素）、`countsToward` 取值
-  /// （`invalidCountsToward`）、`requires` 的形状/取值（`invalidRequires`）。
+  /// 覆盖范围（§5.1）：`unknownGrantKind`、`unknownField`（选择对象的未知字段）、
+  /// `unknownOptionType`、`invalidChoiceRange`、`duplicateOptionId`、
+  /// `invalidValueOption`、`invalidAutoGrant`（条目类型的字符串元素）、
+  /// `countsToward` 取值（`invalidCountsToward`）、`requires` 的形状/取值
+  /// （`invalidRequires`）。
   ///
   /// **不覆盖**（仍走解析层笼统的 `invalid entry`，因为 §5.1 没有对应 code、
   /// 或属于"列表本身不是数组 / 元素不是对象"这类结构错误）：`rules.grants` /
@@ -1123,14 +1139,27 @@ class ContentPackageImporter {
   /// 一条选择的形状/取值校验（§5.1），在**解析之前**对原始 JSON 执行，因此
   /// `repeatable` / `group` / `help` / 内联选项 `grants` 一律放行（它们已有真实
   /// 运行时语义）；这里只保留"声明了但取值/形状无效"的精确诊断：
-  /// `unknownOptionType`、`invalidChoiceRange`、`invalidValueOption`、
-  /// `duplicateOptionId`、`invalidAutoGrant`、`invalidCountsToward`、
-  /// `invalidRequires`（形状/取值）。
+  /// `unknownField`、`unknownOptionType`、`invalidChoiceRange`、
+  /// `invalidValueOption`、`duplicateOptionId`、`invalidAutoGrant`、
+  /// `invalidCountsToward`、`invalidRequires`（形状/取值）。
   void _validateRawChoice(
     Map<String, Object?> choice,
     String path,
     List<ContentValidationError> errors,
   ) {
+    // §5.1 `unknownField`：字段名拼错（例如 `grup`）在解析期被静默忽略——解析层
+    // 只读白名单键。这里在原始 JSON 上按 [kRuleChoiceFields]（选择对象字段全集）
+    // 显式报错，path 精确到该键，不静默。
+    for (final key in choice.keys) {
+      if (kRuleChoiceFields.contains(key)) continue;
+      errors.add(
+        ContentValidationError(
+          path: '$path.$key',
+          message: '未知字段 $path.$key（unknownField）',
+        ),
+      );
+    }
+
     final optionType = choice['optionType'];
     final isValueType = isValueOptionType(optionType);
     if (optionType is! String || !_knownOptionTypes.contains(optionType)) {
@@ -1343,11 +1372,14 @@ class ContentPackageImporter {
       );
     }
 
-    // `requires` 的**形状/取值**校验（§5.1 `invalidRequires`）。解析层
-    // （[RuleRequiresDefinition.fromJson]）对非法形状一律抛 `FormatException`，
-    // 但那条诊断没有字段位置；这里在任何解析之前先给出精确 path。**引用**
-    // （`choice` / `option` 是否存在、`ability` 键是否在档案内）在第二遍
-    // [_validateRuleReferences] 里校验，那里有全部条目与 `relations` 祖先链。
+    // `requires` 的**形状/取值**校验（§5.1 `invalidRequires`）。判据本体是
+    // [validateRuleRequiresJson]（解析层 `RuleRequiresDefinition.fromJson` 调用
+    // **同一个**纯函数），这里只负责把 `issue.field` 拼成精确 path——两处因此
+    // 不可能分叉。`ability` 形态缺 `minimum`、跨形态字段（choice 形态写 minimum /
+    // ability 形态写 option）、未知字段都在这里报错，不再降级成解析层的
+    // `$.entries[i]` + `invalid entry`。**引用**（`choice` / `option` 是否存在、
+    // `ability` 键是否在档案内）在第二遍 [_validateRuleReferences] 里校验，那里有
+    // 全部条目与 `relations` 祖先链。
     if (choice.containsKey('requires')) {
       final rawRequires = choice['requires'];
       if (rawRequires is! List) {
@@ -1370,44 +1402,17 @@ class ContentPackageImporter {
             );
             continue;
           }
-          final map = Map<String, Object?>.from(item);
-          final ability = map['ability'];
-          final choiceId = map['choice'];
-          final minimum = map['minimum'];
-          if ((choiceId == null) == (ability == null)) {
-            errors.add(
-              ContentValidationError(
-                path: itemPath,
-                message:
-                    'requires 必须是 {choice, option?} 或 {ability, minimum} '
-                    '之一（invalidRequires）',
-              ),
-            );
-          }
-          if (ability != null && ability is! String) {
-            errors.add(
-              ContentValidationError(
-                path: '$itemPath.ability',
-                message: 'requires.ability 必须是字符串（invalidRequires）',
-              ),
-            );
-          }
-          if (choiceId != null && (choiceId is! String || choiceId.trim().isEmpty)) {
-            errors.add(
-              ContentValidationError(
-                path: '$itemPath.choice',
-                message: 'requires.choice 必须是非空字符串（invalidRequires）',
-              ),
-            );
-          }
-          if (minimum != null && (minimum is! num || minimum.toInt() <= 0)) {
-            errors.add(
-              ContentValidationError(
-                path: '$itemPath.minimum',
-                message: 'requires.minimum 必须是正整数（invalidRequires）',
-              ),
-            );
-          }
+          final issue = validateRuleRequiresJson(
+            Map<String, Object?>.from(item),
+          );
+          if (issue == null) continue;
+          final field = issue.field;
+          errors.add(
+            ContentValidationError(
+              path: field == null ? itemPath : '$itemPath.$field',
+              message: '${issue.message}（invalidRequires）',
+            ),
+          );
         }
       }
     }

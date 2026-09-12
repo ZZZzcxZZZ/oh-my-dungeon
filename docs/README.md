@@ -639,8 +639,8 @@ PHB 2024 官方表格）：
   `ability` 只接受 `value`，并在**派生之前**施加（影响 HP / AC / 豁免 / 技能 / 法术 DC）。
 - 选择（`choices`）写在 `rules.choices` 或 `rules.progression[].choices`，选择键为
   `{sourceEntryId}#{choiceId}`（多等级步骤带生效等级：`{sourceEntryId}#{choiceId}#{level}`）。
-  选择系统的**运行时语义已实现**（计划 2，2026-09-12）：字段一律声明即生效，导入期只做
-  取值/引用校验。
+  选择系统的**运行时语义已实现**（计划 2，2026-09-12）：字段一律声明即生效，导入期做
+  取值/引用/未知字段校验（字段全集见下表，拼错的字段名报 `unknownField` 而不是静默忽略）。
 
 **选择对象字段全集**：
 
@@ -655,8 +655,8 @@ PHB 2024 官方表格）：
 | `recommendedEntryIds` | string[] | 推荐项，界面预选 |
 | `repeatable` | bool，默认 `false` | 同一 option id 可被选多次；`maximum` 随之成为**次数上限**，每次选取独立结算 `grants` |
 | `countsToward` | `"spellbook"` / `"known"` / `"prepared"` / `null` | 计入哪个数量池；`null` = 不占池，只受 `maximum`。`prepared` / `known` 取职业 `spellcasting.prepared` 列，`spellbook` 无独立数值列（不限） |
-| `requires` | object[] | `{choice, option?}` 或 `{ability, minimum}`；两形态字段互斥，混写/多余字段/非法取值导入报 `invalidRequires`。不满足时选择（或 `options[].requires` 的选项）不可用并说明原因，已选值进 pending 不静默丢弃 |
-| `group` / `help` | string? | 分组标题与帮助文案（呈现在选择面板） |
+| `requires` | object[] | `{choice, option?}` 或 `{ability, minimum}`；两形态字段互斥、ability 形态必须有正整数 `minimum`，混写/多余字段/缺字段/非法取值导入报精确到字段的 `invalidRequires`。不满足时选择（或 `options[].requires` 的选项）不可用并说明原因，已选值进 pending 不静默丢弃 |
+| `group` / `help` | string? | 分组标题与帮助文案（呈现在选择面板；技能网格与法术池两种专用渲染器同样渲染 `group`，组标题样式只有一处实现） |
 | `builderStep` | string | 创建向导步骤提示（`allowedBuilderSteps`）。**值类型/专用 UI 例外**：`skill` 恒在「熟练」步骤、`spell` 恒在「法术」步骤，位置只由 `optionType` 决定（`builderStep` 被忽略） |
 
 **字符串简写自动授予**（写成对象可用显式 `grants` 覆盖）：

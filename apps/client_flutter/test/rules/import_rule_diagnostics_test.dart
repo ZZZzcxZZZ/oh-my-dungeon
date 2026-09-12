@@ -1698,12 +1698,145 @@ void main() {
       }
     });
 
+    test('requires 形态白名单：缺 minimum / 跨形态 / 多余字段都报精确 path 的 invalidRequires', () async {
+      // 正例：两种形态各自只带自己的字段。
+      expect(
+        (await reportFor({
+          'optionType': 'classFeature',
+          'optionTags': ['x'],
+          'requires': [
+            {'choice': 'pick'},
+            {'ability': 'cha', 'minimum': 13},
+          ],
+        })).valid,
+        isTrue,
+      );
+
+      // 三个反例（每一行是"原始输入 → 精确到字段的 path"）：
+      for (final (bad, path) in <(Map<String, Object?>, String)>[
+        // ability 形态缺 `minimum`：此前原始遍放过，解析层抛 FormatException，
+        // 被降级成 `$.entries[0]` + `invalid entry`。
+        (
+          {
+            'requires': [
+              {'ability': 'cha'},
+            ],
+          },
+          r'$.entries[0].rules.choices[0].requires[0].minimum',
+        ),
+        // choice 形态写了另一形态的 `minimum`：多余字段，此前同样静默通过。
+        (
+          {
+            'requires': [
+              {'choice': 'pick', 'minimum': 2},
+            ],
+          },
+          r'$.entries[0].rules.choices[0].requires[0].minimum',
+        ),
+        // ability 形态写了另一形态的 `option`：多余字段。
+        (
+          {
+            'requires': [
+              {'ability': 'cha', 'minimum': 13, 'option': 'x'},
+            ],
+          },
+          r'$.entries[0].rules.choices[0].requires[0].option',
+        ),
+      ]) {
+        final report = await reportFor(bad);
+        expect(report.valid, isFalse, reason: '$bad');
+        final error = report.errors.single;
+        expect(error.path, path, reason: '$bad → ${report.errors}');
+        expect(error.message, contains('invalidRequires'));
+        // 不得退化成"path 只到条目"的笼统误差（§5.1 path 精度）。
+        expect(error.path, isNot(r'$.entries[0]'));
+        expect(error.message, isNot(contains('invalid entry')));
+      }
+    });
+
+    test('requires 的作用域取并集：祖先定义的合法 option 不被误拒（与运行期同源）', () async {
+      // 同一条选择 id `pick` 同时出现在条目与其 `featureOf` 祖先上：运行期
+      // `RuleChoiceSemantics.requiresSatisfied` 把作用域内所有同 choiceId 键的
+      // 选中值取**并集**，所以祖先声明的 `ancestor-option` 是合法引用；导入期
+      // 若只取**首个命中**（条目自己）就会误拒。
+      Future<ContentImportReport> report(String option) => importer.previewJson(
+        jsonEncode({
+          'formatVersion': 3,
+          'id': 'diag-pack',
+          'name': 'Diag pack',
+          'version': '1.0.0',
+          'locale': 'zh-CN',
+          'system': 'dnd5e-2024',
+          'entryCount': 2,
+          'entries': [
+            {
+              'id': 'diag-pack:classFeature/child',
+              'type': 'classFeature',
+              'slug': 'child',
+              'name': 'Child',
+              'body': <Object?>[],
+              'revision': 1,
+              'relations': [
+                {'type': 'featureOf', 'targetId': 'diag-pack:class/ancestor'},
+              ],
+              'rules': {
+                'choices': [
+                  {
+                    'id': 'pick',
+                    'label': '选择',
+                    'optionType': 'feat',
+                    'optionTags': ['child-tag'],
+                    'requires': [
+                      {'choice': 'pick', 'option': option},
+                    ],
+                  },
+                ],
+              },
+            },
+            {
+              'id': 'diag-pack:class/ancestor',
+              'type': 'class',
+              'slug': 'ancestor',
+              'name': 'Ancestor',
+              'body': <Object?>[],
+              'revision': 1,
+              'rules': {
+                'choices': [
+                  {
+                    'id': 'pick',
+                    'label': '选择',
+                    'optionType': 'feat',
+                    'options': [
+                      {'id': 'ancestor-option', 'label': '祖先选项'},
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      );
+
+      final union = await report('ancestor-option');
+      expect(union.valid, isTrue, reason: union.errors.toString());
+      expect(union.errors, isEmpty);
+
+      // 反向对照：真正不在并集里的 option 仍然要报错（修成并集不等于放宽）。
+      final missing = await report('missing-option');
+      expect(missing.valid, isFalse);
+      final error = missing.errors.single;
+      expect(
+        error.path,
+        r'$.entries[0].rules.choices[0].requires[0].option',
+      );
+      expect(error.message, contains('invalidRequires'));
+    });
+
     test('invalidAutoGrant：条目类型的字符串选项无法推断 grants', () async {
       final report = await reportFor({
         'optionType': 'classFeature',
         'optionTags': ['x'],
-        'options': <Object?>['星界之势'],
-      });
+        'options': <Object?>['星界之势'],      });
       expect(report.valid, isFalse);
       final error = report.errors.singleWhere(
         (e) => e.message.contains('invalidAutoGrant'),
@@ -1810,6 +1943,35 @@ void main() {
       );
       expect(error.path, r'$.entries[0].rules.choices[0].optionType');
       expect(error.message, contains('savingThrow'));
+    });
+
+    test('unknownField：选择对象里的拼错字段名不再被静默忽略', () async {
+      // `grup` 是 `group` 的拼错：解析层只读白名单键，会静默忽略它——§5.1 的
+      // `unknownField` 承诺必须由导入期原始遍落实，path 精确到该键。
+      final report = await reportForChoice({
+        'optionType': 'feat',
+        'optionTags': ['x'],
+        'grup': '技能',
+      });
+      expect(report.valid, isFalse);
+      final error = report.errors.single;
+      expect(error.path, r'$.entries[0].rules.choices[0].grup');
+      expect(error.message, contains('unknownField'));
+
+      // 白名单内的字段全集一个都不误报。
+      final ok = await reportForChoice({
+        'optionType': 'feat',
+        'optionTags': ['x'],
+        'group': '技能',
+        'help': '说明',
+        'repeatable': true,
+        'recommendedEntryIds': <Object?>[],
+      });
+      expect(
+        ok.errors.any((e) => e.message.contains('unknownField')),
+        isFalse,
+        reason: ok.errors.toString(),
+      );
     });
 
     test('invalidChoiceRange（maximum < minimum）→ path 到 maximum', () async {

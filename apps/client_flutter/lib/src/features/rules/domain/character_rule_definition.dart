@@ -172,9 +172,9 @@ class RuleGrantDefinition {
 
 /// `countsToward` 的合法取值（契约 §3.10.2 表）。
 ///
-/// 这是取值集合的**唯一实现点**：解析层用它抛 [FormatException]。导入期据它报
-/// 精确到字段的 `invalidCountsToward` 属于**计划任务 10 接线**；接线前导入器仍对
-/// `countsToward` 一律拒收，也不引用本集合。两处不得各写一份白名单。
+/// 这是取值集合的**唯一实现点**：解析层用它抛 [FormatException]，导入期也据它报
+/// 精确到字段的 `invalidCountsToward`（`rule_choice_validation.dart` 的
+/// `validateRawChoice` 调 [isCountsTowardPool]）。两处不得各写一份白名单。
 const kCountsTowardPools = <String>{'spellbook', 'known', 'prepared'};
 
 /// `null`（省略 = 不占上限）与三个池名合法；其它（含非字符串）非法。
@@ -186,9 +186,10 @@ bool isCountsTowardPool(Object? value) =>
 /// `value` 只记录选择（产出空 grants，不算"无法推断"）。
 ///
 /// `RuleChoiceSemantics.autoGrantsFor` 的 `switch` 与它必须一一对应：运行期由
-/// `autoGrantsFor` 真正产出。导入期据它判断"字符串简写能否推断 grants"（不能则报
-/// `invalidAutoGrant`）属于**计划任务 10 接线**，接线前导入器不引用本集合。
-/// 两处用同一个集合，避免"导入放行、运行期推断不出"。
+/// `autoGrantsFor` 真正产出。导入期判断"字符串简写能否推断 grants"（不能则报
+/// `invalidAutoGrant`）**不引用本集合**，而是直接看
+/// `RuleChoiceSemantics.autoGrantsFor()` 是否返回 `null`（`autoGrantsFor() == null`
+/// = 无法推断）——两边因此天然同源，不会出现"导入口径放行、运行期推断不出"。
 const kAutoGrantOptionTypes = <String>{
   'skill',
   'ability',
@@ -198,13 +199,97 @@ const kAutoGrantOptionTypes = <String>{
   'value',
 };
 
+/// `requires` 元素形状/取值违规的**唯一描述**（§5.1 `invalidRequires`）。
+///
+/// [field] 是出错字段名（`null` = 错误落在元素本身，即两种形态的 XOR 不成立）；
+/// [message] 是**不含 code 后缀**的诊断文案——解析层把它包成 [FormatException]，
+/// 导入期的原始遍把它拼进带精确 path 的 `invalidRequires` error。
+class RuleRequiresValidationIssue {
+  const RuleRequiresValidationIssue({this.field, required this.message});
+
+  final String? field;
+  final String message;
+}
+
+/// `requires` 元素的形状/取值校验（§5.1 `invalidRequires`）的**唯一实现点**。
+///
+/// **同源保证**：[RuleRequiresDefinition.fromJson] 与本函数是同一套判据——
+/// `fromJson` 直接调用本函数，非 `null` 就抛 `FormatException(issue.message)`；
+/// 导入期原始遍（`rule_choice_validation.dart` 的 `validateRawChoice`）也调用它，
+/// 按 `issue.field` 拼出精确到字段的 path。两处**不允许**再写第二份形态白名单或
+/// 取值判断；`rule_choice_validation_test` 的原始遍反例与
+/// `rule_choice_definition_test` 的解析层反例互为镜像。
+///
+/// 返回 `null` = 合法。判据（顺序即报告的优先级）：
+/// 1. `choice` 与 `ability` 必须**恰好出现一个**（混写或都缺 → 元素级错误）；
+/// 2. 按形态收紧字段白名单：choice 形态只允许 `{choice, option}`，ability 形态只
+///    允许 `{ability, minimum}`，其余字段（含另一形态的字段）一律报 [`field`]；
+/// 3. choice 形态：`choice` 必须是非空字符串，`option` 省略或非空字符串；
+/// 4. ability 形态：`ability` 必须是非空字符串，`minimum` **必须存在**且为正整数
+///    （缺 `minimum` 是非法形状，不是"默认 0"）。
+RuleRequiresValidationIssue? validateRuleRequiresJson(
+  Map<String, Object?> json,
+) {
+  final choice = json['choice'];
+  final option = json['option'];
+  final ability = json['ability'];
+  final minimum = json['minimum'];
+  final hasChoice = choice != null;
+  final hasAbility = ability != null;
+  if (hasChoice == hasAbility) {
+    return const RuleRequiresValidationIssue(
+      message: 'requires 必须是 {choice, option?} 或 {ability, minimum} 之一',
+    );
+  }
+  // XOR 判定出形态后按形态收紧字段白名单：未知字段与另一形态的字段在此都是
+  // 多余字段，一律报错（§3.10.3-7「声明了但无效必须报错」），绝不静默丢弃 ——
+  // 静默丢弃会让 toJson 往返丢字段，也让下游把脏输入当可信。
+  final allowed = hasChoice
+      ? const <String>{'choice', 'option'}
+      : const <String>{'ability', 'minimum'};
+  final extra = json.keys.where((key) => !allowed.contains(key)).toList();
+  if (extra.isNotEmpty) {
+    return RuleRequiresValidationIssue(
+      field: extra.first,
+      message: 'requires 出现未定义或形态不允许的字段：$extra',
+    );
+  }
+  if (hasChoice) {
+    if (choice is! String || choice.trim().isEmpty) {
+      return const RuleRequiresValidationIssue(
+        field: 'choice',
+        message: 'requires.choice 必须是非空字符串',
+      );
+    }
+    if (option != null && (option is! String || option.trim().isEmpty)) {
+      return const RuleRequiresValidationIssue(
+        field: 'option',
+        message: 'requires.option 必须是非空字符串',
+      );
+    }
+    return null;
+  }
+  if (ability is! String || ability.trim().isEmpty) {
+    return const RuleRequiresValidationIssue(
+      field: 'ability',
+      message: 'requires.ability 必须是非空字符串',
+    );
+  }
+  if (minimum is! num || minimum.toInt() <= 0) {
+    return const RuleRequiresValidationIssue(
+      field: 'minimum',
+      message: 'requires.minimum 必须是正整数',
+    );
+  }
+  return null;
+}
+
 /// 一条前置依赖（契约 §3.10.2）：`{choice, option?}` 或 `{ability, minimum}`。
 ///
-/// **形状的唯一入口**是 [RuleRequiresDefinition.fromJson]：两种形态混写、字段
-/// 缺失、**按形态收紧白名单后的多余字段**（含另一形态的字段）、取值非法一律抛
-/// [FormatException]，绝不静默丢弃或留给运行期猜测。const 构造器带 assert，
-/// debug 下同样拒绝这些非法形状。本批次（计划 2 任务 1–2）只解析与提供判定纯
-/// 函数；引擎/UI 的消费在任务 3–6。
+/// **形状的唯一入口**是 [RuleRequiresDefinition.fromJson]（判据本体是
+/// [validateRuleRequiresJson]）：两种形态混写、字段缺失、**按形态收紧白名单后的
+/// 多余字段**（含另一形态的字段）、取值非法一律抛 [FormatException]，绝不静默
+/// 丢弃或留给运行期猜测。const 构造器带 assert，debug 下同样拒绝这些非法形状。
 class RuleRequiresDefinition {
   const RuleRequiresDefinition({
     this.choice,
@@ -237,48 +322,23 @@ class RuleRequiresDefinition {
   bool get isAbilityForm => ability != null;
 
   factory RuleRequiresDefinition.fromJson(Map<String, Object?> json) {
+    // 形状/取值判据**只有** [validateRuleRequiresJson] 一份（与导入期原始遍同源）；
+    // 本工厂只负责在通过后构造，不再自己写第二套白名单 / 取值判断。
+    final issue = validateRuleRequiresJson(json);
+    if (issue != null) throw FormatException(issue.message);
     final choice = json['choice'];
     final option = json['option'];
     final ability = json['ability'];
     final minimum = json['minimum'];
-    final hasChoice = choice != null;
-    final hasAbility = ability != null;
-    if (hasChoice == hasAbility) {
-      throw const FormatException(
-        'requires 必须是 {choice, option?} 或 {ability, minimum} 之一',
-      );
-    }
-    // XOR 判定出形态后按形态收紧字段白名单：未知字段与另一形态的字段在此都是
-    // 多余字段，一律抛 FormatException（§3.10.3-7「声明了但无效必须报错」），
-    // 绝不静默丢弃 —— 静默丢弃会让 toJson 往返丢字段，也让下游把脏输入当可信。
-    final allowed = hasChoice
-        ? const <String>{'choice', 'option'}
-        : const <String>{'ability', 'minimum'};
-    final extra = json.keys.where((key) => !allowed.contains(key)).toList();
-    if (extra.isNotEmpty) {
-      throw FormatException('requires 出现未定义或形态不允许的字段：$extra');
-    }
-    if (hasChoice) {
-      if (choice is! String || choice.trim().isEmpty) {
-        throw const FormatException('requires.choice 必须是非空字符串');
-      }
-      if (option != null && (option is! String || option.trim().isEmpty)) {
-        throw const FormatException('requires.option 必须是非空字符串');
-      }
+    if (choice != null) {
       return RuleRequiresDefinition(
-        choice: choice.trim(),
+        choice: (choice as String).trim(),
         option: option is String ? option.trim() : null,
       );
     }
-    if (ability is! String || ability.trim().isEmpty) {
-      throw const FormatException('requires.ability 必须是非空字符串');
-    }
-    if (minimum is! num || minimum.toInt() <= 0) {
-      throw const FormatException('requires.minimum 必须是正整数');
-    }
     return RuleRequiresDefinition(
-      ability: ability.trim(),
-      minimum: minimum.toInt(),
+      ability: (ability as String).trim(),
+      minimum: (minimum as num).toInt(),
     );
   }
 
@@ -348,6 +408,30 @@ const kValueOptionTypes = <String>{
 /// 在原始 JSON 上的校验都调它，避免"解析后的对象"与"原始 map"两套写法分叉。
 bool isValueOptionType(Object? optionType) =>
     optionType is String && kValueOptionTypes.contains(optionType);
+
+/// 选择对象的**字段全集**（契约 §3.10.2 表；§5.1 `unknownField` 的白名单）。
+///
+/// **唯一实现点**：[RuleChoiceDefinition] 的解析/序列化字段与导入期原始遍的
+/// `unknownField` 校验都读它。字段名拼错（例如 `grup`）在解析期会被静默忽略——
+/// 那正是 §5.1 要杜绝的"声明了但无效"，所以导入期必须据此显式报错。
+const kRuleChoiceFields = <String>{
+  'id',
+  'label',
+  'optionType',
+  'minimum',
+  'maximum',
+  'options',
+  'optionEntryIds',
+  'optionTags',
+  'maximumOptionLevel',
+  'recommendedEntryIds',
+  'builderStep',
+  'repeatable',
+  'countsToward',
+  'requires',
+  'group',
+  'help',
+};
 
 /// `rules.choices[]` / `rules.progression[].choices[]` 的一条选择（契约 §3.10）。
 ///

@@ -208,6 +208,44 @@ void main() {
       }
     });
 
+    test('解析层与导入期原始遍共用同一份形状判据（validateRuleRequiresJson 同源）', () {
+      // `RuleRequiresDefinition.fromJson` 只调 `validateRuleRequiresJson`：本用例
+      // 逐条核对"纯函数判据 ⇔ fromJson 行为"，任何一方单独改判据都会在这里分叉。
+      final cases = <Map<String, Object?>>[
+        {'choice': 'pick'},
+        {'choice': 'pick', 'option': 'o'},
+        {'ability': 'cha', 'minimum': 13},
+        {'ability': 'cha'},
+        {'choice': 'pick', 'minimum': 2},
+        {'ability': 'cha', 'minimum': 13, 'option': 'x'},
+        {'choice': 'pick', 'ability': 'cha'},
+        {'choice': ''},
+        {'choice': 'pick', 'option': ' '},
+        {'ability': 'cha', 'minimum': 0},
+        {'ability': 'cha', 'minimum': '13'},
+        {'choice': 'pick', 'unknown': 1},
+      ];
+      for (final json in cases) {
+        final issue = validateRuleRequiresJson(json);
+        if (issue == null) {
+          final parsed = RuleRequiresDefinition.fromJson(json);
+          expect(parsed.toJson(), json, reason: '合法形态往返：$json');
+          continue;
+        }
+        expect(
+          () => RuleRequiresDefinition.fromJson(json),
+          throwsA(
+            isA<FormatException>().having(
+              (error) => error.message,
+              'message',
+              issue.message,
+            ),
+          ),
+          reason: '$json → ${issue.field} / ${issue.message}',
+        );
+      }
+    });
+
     test('const 构造器拒绝 fromJson 会拒绝的非法形状（自洽）', () {
       final ability = 'cha';
       final choice = 'a';

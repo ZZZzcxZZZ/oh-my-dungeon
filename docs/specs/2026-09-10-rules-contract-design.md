@@ -727,7 +727,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 
 | code | 条件 | 示例消息 |
 |---|---|---|
-| `unknownField` | `classRules` 顶层、`spellcasting` 对象内、**每个资源对象内**、选择对象内出现未定义字段 | `未知字段 classRules.hitDices，是否想写 hitDie？` |
+| `unknownField` | `classRules` 顶层、`spellcasting` 对象内、**每个资源对象内**、选择对象内出现未定义字段（白名单 = `kRuleChoiceFields`，由导入期原始遍报错，path 精确到该键） | `未知字段 classRules.hitDices，是否想写 hitDie？` |
 | `invalidHitDie` | `hitDie` 不是标准骰面 `{4,6,8,10,12}`，或写成 `"d10"` 字符串 | `生命骰只写整数且必须是标准骰面 4/6/8/10/12，例如 d10 写 10` |
 | `unknownAbility` | 豁免 / 施法属性 / `formula ability:x` / `kind:"ability"` 的 `target` 不在 `abilities` | `未知属性键 "力量"，可用：str, dex, con, int, wis, cha` |
 | `unknownSkill` | `optionType: "skill"` 的选择里的选项 **id** 不在 `skills`（运行期由 `autoGrantsFor` 把选项 id 变成 `skill:<id>`，所以判据是 id） | `未知技能 "特技"（unknownSkill）` |
@@ -746,7 +746,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `invalidOptionRef` | 条目选项引用不存在、或未通过 `optionType`/`optionTags`/`maximumOptionLevel` 过滤、或 `recommendedEntryIds` 不合法 | `选项 "x:feat/a" 不满足本选择的类型/标签/等级过滤` |
 | `duplicateOptionId` | 同一选择内 inline 选项 id 重复，或 id 与条目选项冲突 | `选项 id "asi" 重复` |
 | `invalidValueOption` | 值类型选择里出现条目选项字段（`optionEntryIds`/`optionTags`），或值类型选择未写内联 `options` | `值类型选择不允许 optionEntryIds` |
-| `invalidRequires` | `requires` 元素形状非法（两形态混写 / 缺字段 / 多余字段，解析层 fail-fast；取值侧由导入器给出精确 path）、引用的 `choice` 不在同一 `sourceEntryId` 或其 `featureOf` / `subclassOf` 祖先内、`option` 不在该选择的候选集（`candidatesFor`）里、`ability` 不在 `abilities`、`minimum` 非正 | `requires 引用的选择 "spellbook-x" 不存在（invalidRequires）` |
+| `invalidRequires` | `requires` 元素形状非法（两形态混写 / 缺 `minimum` / 多余字段——判据是纯函数 `validateRuleRequiresJson` **一处**，解析层 `fromJson` 与导入期原始遍共用它，导入期 path 精确到出错字段）、引用的 `choice` 不在同一 `sourceEntryId` 或其 `featureOf` / `subclassOf` 祖先内、`option` 不在该选择的候选集（`candidatesFor`，取作用域内所有同名选择定义的**并集**，与运行期一致）里、`ability` 不在 `abilities`、`minimum` 非正 | `requires 引用的选择 "spellbook-x" 不存在（invalidRequires）` |
 | `invalidCountsToward` | `countsToward` 不在 `spellbook`/`known`/`prepared` 且非 `null` | `countsToward 必须是 spellbook / known / prepared 或省略（invalidCountsToward）` |
 | `invalidAutoGrant` | 字符串简写无法为该 `optionType` 推断 grants 且未显式写 `grants`（条目类型的字符串元素）；或值类型候选没有显式 `grants` 时自动推断失败（`ability` 的 `data.value` 非正整数） | `optionType "classFeature" 的选项 "星界之势" 缺少 grants，且无法自动推断（invalidAutoGrant）` |
 

@@ -761,6 +761,19 @@ class ContentPackageImporter {
           continue;
         }
         final formula = grant.formula;
+        // §3.5：`hitPoints` / `ability` 的 `value` 与 `formula` 是**二选一**，
+        // 同时写会让"到底按哪个结算"变成运行期猜测，导入期直接报 error。
+        if (formula != null && grant.value != null) {
+          errors.add(
+            ContentValidationError(
+              path: '$grantsPath[$i].formula',
+              message:
+                  'hitPoints / ability 授予的 value 与 formula 只能二选一，'
+                  '不能同时声明（invalidMaxSpec）',
+            ),
+          );
+          continue;
+        }
         if (formula == null) continue;
         if (MaxSpec.tryParse(<String, Object?>{'formula': formula}) != null) {
           continue;

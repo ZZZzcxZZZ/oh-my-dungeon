@@ -617,6 +617,90 @@ void main() {
       expect(declaredLevels, wizardLevels.toData());
     });
   });
+
+  // §3.5：`levels: [1,2,3]` 是"同一份效果在每个已达等级各生效一次"，
+  // hitPoints 到 3 级要 +3、ability 到 3 级要 +3；派生本身必须幂等。
+  group('多等级 grant：每个已达等级各生效一次且派生幂等', () {
+    ContentEntry classEntry({required bool withGrants}) => _entry(
+      id: 'test:class/ascendant',
+      type: 'class',
+      name: 'Ascendant',
+      structured: const {
+        'classRules': {'hitDie': 10},
+      },
+      rules: {
+        'progression': [
+          {
+            'levels': [1, 2, 3],
+            'grants': withGrants
+                ? const [
+                    {
+                      'id': 'hp-up',
+                      'kind': 'hitPoints',
+                      'value': 1,
+                      'label': '生命提升',
+                    },
+                    {
+                      'id': 'asi-int',
+                      'kind': 'ability',
+                      'target': 'int',
+                      'value': 1,
+                      'label': '属性提升：智力 +1',
+                    },
+                  ]
+                : const <Map<String, Object?>>[],
+          },
+        ],
+      },
+    );
+
+    const baseAbilities = {
+      'str': 16,
+      'dex': 14,
+      'con': 14,
+      'int': 10,
+      'wis': 12,
+      'cha': 8,
+    };
+    const build = CharacterBuild(
+      level: 3,
+      selections: {'class': 'test:class/ascendant'},
+    );
+
+    CharacterEditDraft derive({required bool withGrants}) =>
+        RulesDrivenCharacterBuilder(
+          entries: {'test:class/ascendant': classEntry(withGrants: withGrants)},
+        ).build(name: 'Aria', build: build, abilities: baseAbilities);
+
+    test('hitPoints +1 到 3 级累计 +3，ability int +1 累计 +3', () {
+      final plain = derive(withGrants: false);
+      final boosted = derive(withGrants: true);
+
+      expect(
+        boosted.maxHp - plain.maxHp,
+        3,
+        reason: '1/2/3 级各 +1，被压成一次就只有 +1',
+      );
+      expect(boosted.abilities['int'], 13, reason: '10 + 1×3');
+      expect(
+        boosted.armorClass,
+        plain.armorClass,
+        reason: '智力加值不影响 AC；AC 只由 dex 派生',
+      );
+      expect(boosted.initiativeBonus, plain.initiativeBonus);
+    });
+
+    test('同一份输入连续派生两次，数值完全相同（幂等）', () {
+      final first = derive(withGrants: true);
+      final second = derive(withGrants: true);
+
+      expect(second.maxHp, first.maxHp);
+      expect(second.armorClass, first.armorClass);
+      expect(second.initiativeBonus, first.initiativeBonus);
+      expect(second.abilities, first.abilities);
+      expect(second.level, first.level);
+    });
+  });
 }
 
 ContentEntry _entry({

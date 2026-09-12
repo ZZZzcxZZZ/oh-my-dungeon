@@ -4,7 +4,6 @@ import '../../rules/domain/character_rules_engine.dart';
 import 'character.dart';
 import 'character_content_reference.dart';
 import 'declared_levels.dart';
-import 'dnd5e_rules.dart';
 import 'rules_driven_character_builder.dart';
 
 class CharacterUpgradePlan {
@@ -93,16 +92,18 @@ class CharacterUpgradePlanner {
       throw StateError('The level-up plan is stale.');
     }
 
-    final derived = RulesDrivenCharacterBuilder(entries: entries).build(
+    final builder = RulesDrivenCharacterBuilder(entries: entries);
+    final derived = builder.build(
       name: character.name,
       build: plan.build,
-      abilities: <String, int>{
-        for (final key in Dnd5eRules.defaultAbilities.keys)
-          key: _int(
-            character.abilityMap[key],
-            Dnd5eRules.defaultAbilities[key] ?? 10,
-          ),
-      },
+      // 再派生必须用**基础属性**：角色卡上的 `abilities` 已含此前等级生效的
+      // `kind: ability` 加值，直接回传会让同一份授予再叠加一次（缺陷 4）。
+      // 减加值的唯一实现点在 [RulesDrivenCharacterBuilder.baseAbilitiesFrom]；
+      // 减的是"角色卡当前等级"那份构建的加值，新增等级的那份由本次派生叠加。
+      abilities: builder.baseAbilitiesFrom(
+        character.abilityMap,
+        _currentBuild(character),
+      ),
       notes: character.notes,
     );
     final oldData = character.dataMap;
@@ -135,6 +136,9 @@ class CharacterUpgradePlanner {
       armorClass: derived.armorClass,
       speed: derived.speed,
       initiativeBonus: derived.initiativeBonus,
+      // 派生结果里的属性是"最终值"（基础值 + 本等级为止的全部 ability 加值），
+      // 必须写回，否则下一次再派生会把同一份加值重复叠加（缺陷 4）。
+      abilities: derived.abilities,
       saves: derived.saves,
       skills: derived.skills,
       inventory: _mergeInventory(character.inventoryList, derived.inventory),
@@ -178,17 +182,23 @@ class CharacterUpgradePlanner {
     }
     return CharacterBuild.fromJson(Map<String, Object?>.from(raw));
   }
+
+  /// 角色卡上"当前已生效"的构建：等级以 [CharacterSheet.level] 为准，
+  /// 选择沿用存档里的 `build`。用于反推基础属性。
+  CharacterBuild _currentBuild(CharacterSheet character) {
+    final saved = _savedBuild(character);
+    return CharacterBuild(
+      level: character.level,
+      selections: saved.selections,
+      choices: saved.choices,
+    );
+  }
 }
 
 Map<String, Object?> _mergeMaps(Object? current, Object? derived) => {
   if (current is Map) ...Map<String, Object?>.from(current),
   if (derived is Map) ...Map<String, Object?>.from(derived),
 };
-
-int _int(Object? value, int fallback) {
-  if (value is num) return value.toInt();
-  return int.tryParse('$value') ?? fallback;
-}
 
 List<Map<String, Object?>> _mergeInventory(
   List<Object?> current,

@@ -422,8 +422,9 @@ void main() {
 
     expect(submitted, isNotNull);
     final build = submitted!.data['build'] as Map<String, Object?>;
+    // 选择键带生效等级（§3.5）：每个已达等级是独立的选择实例。
     expect(build['choices'], {
-      'guide:class/guardian#technique': ['guide:class-feature/battle-focus'],
+      'guide:class/guardian#technique#2': ['guide:class-feature/battle-focus'],
     });
     expect(
       submitted!.data['resolvedGrants'],

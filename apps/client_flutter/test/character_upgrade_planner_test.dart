@@ -1,6 +1,10 @@
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
+import 'package:dnd_table_client/src/features/characters/domain/character_rule_projector.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character_upgrade_planner.dart';
+import 'package:dnd_table_client/src/features/characters/domain/dnd5e_rules.dart';
+import 'package:dnd_table_client/src/features/characters/domain/rules_driven_character_builder.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
+import 'package:dnd_table_client/src/features/rules/domain/character_build.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -205,6 +209,144 @@ void main() {
       );
     },
   );
+
+  // 缺陷 4：角色卡上的 `abilities` 是**最终值**（含已生效的 `kind: ability`
+  // 加值），再派生时必须先减回基础值，否则同一份授予会反复叠加。
+  group('再派生不重复叠加 ability grant', () {
+    final ascendant = _entry(
+      id: 'class:ascendant',
+      type: 'class',
+      name: 'Ascendant',
+      structured: const <String, Object?>{
+        'classRules': <String, Object?>{
+          'hitDie': 10,
+          'savingThrowAbilities': <String>['str', 'con'],
+          'resources': <Map<String, Object?>>[
+            <String, Object?>{
+              'id': 'focus',
+              'name': '专注',
+              'recovery': 'longRest',
+              'maximum': <String, Object?>{'formula': 'ability:cha'},
+            },
+          ],
+        },
+      },
+      rules: const <String, Object?>{
+        'progression': <Map<String, Object?>>[
+          <String, Object?>{
+            'levels': <int>[1, 4],
+            'grants': <Map<String, Object?>>[
+              <String, Object?>{
+                'id': 'asi-dex',
+                'kind': 'ability',
+                'target': 'dex',
+                'value': 2,
+                'label': '敏捷提升',
+              },
+              <String, Object?>{
+                'id': 'asi-cha',
+                'kind': 'ability',
+                'target': 'cha',
+                'value': 2,
+                'label': '魅力提升',
+              },
+            ],
+          },
+        ],
+      },
+    );
+    final entries4 = <String, ContentEntry>{ascendant.id: ascendant};
+    const baseAbilities = <String, int>{
+      'str': 16,
+      'dex': 13,
+      'con': 14,
+      'int': 10,
+      'wis': 12,
+      'cha': 14,
+    };
+    const levelOneBuild = CharacterBuild(
+      level: 1,
+      selections: <String, String>{'class': 'class:ascendant'},
+    );
+
+    CharacterSheet createLevelOne() => RulesDrivenCharacterBuilder(
+      entries: entries4,
+    ).build(
+      name: 'Ayla',
+      build: levelOneBuild,
+      abilities: baseAbilities,
+    ).toLocalCharacter();
+
+    CharacterSheet upgradeToLevelFour() {
+      final planner = CharacterUpgradePlanner(entries: entries4);
+      var character = createLevelOne();
+      for (var target = 2; target <= 4; target++) {
+        final plan = planner.plan(character);
+        expect(plan.targetLevel, target);
+        character = planner.apply(character, plan);
+      }
+      return character;
+    }
+
+    test('L1 创建时每份加值各生效一次', () {
+      final levelOne = createLevelOne();
+
+      expect(levelOne.abilityMap['dex'], 15, reason: '13 + 2');
+      expect(levelOne.abilityMap['cha'], 16, reason: '14 + 2');
+    });
+
+    test('L1→L4：只叠加 4 级新增的一份，dex 只 +2（不是 +4）', () {
+      final planner = CharacterUpgradePlanner(entries: entries4);
+      var character = createLevelOne();
+      final dexIncrements = <int>[];
+
+      for (var target = 2; target <= 4; target++) {
+        final next = planner.apply(character, planner.plan(character));
+        dexIncrements.add(
+          Dnd5eRules.abilityScore(next.abilityMap, 'dex') -
+              Dnd5eRules.abilityScore(character.abilityMap, 'dex'),
+        );
+        character = next;
+      }
+
+      expect(
+        dexIncrements,
+        <int>[0, 0, 2],
+        reason: '只有 4 级那一份 +2；把最终值当基础值会变成每次 +2',
+      );
+      expect(character.abilityMap['dex'], 17, reason: '13 + 2×2');
+      expect(character.abilityMap['cha'], 18, reason: '14 + 2×2');
+      // AC / 先攻都读同一份 effectiveAbilities：敏捷 15(+2) → 17(+3)，只涨 1。
+      expect(character.armorClass, 13, reason: '10 + dex 调整值 3');
+      expect(character.initiativeBonus, 3);
+      // 豁免 / 技能只反映一次：职业豁免仍是 str/con，没有凭空多出技能熟练。
+      expect(character.saveMap['str'], isTrue);
+      expect(character.saveMap['con'], isTrue);
+      expect(character.saveMap['dex'], isFalse);
+      expect(character.skillMap.values.every((value) => value == false), isTrue);
+    });
+
+    test('连续再派生 3 次数值不变（projector 往返稳定）', () {
+      final upgraded = upgradeToLevelFour();
+      final projector = CharacterRuleProjector(entries: entries4);
+      var sheet = upgraded;
+
+      for (var round = 0; round < 3; round++) {
+        sheet = projector.project(sheet);
+
+        expect(Dnd5eRules.abilityScore(sheet.abilityMap, 'dex'), 17);
+        expect(Dnd5eRules.abilityScore(sheet.abilityMap, 'cha'), 18);
+        expect(sheet.armorClass, upgraded.armorClass);
+        expect(sheet.maxHp, upgraded.maxHp);
+        expect(sheet.initiativeBonus, upgraded.initiativeBonus);
+        // classResources 的 `formula: ability:cha` 也必须按基础属性结算：
+        // cha 18 → +4；把最终值再叠加一次会变成 22 → +6。
+        final resources = (sheet.dataMap['classResources']! as List)
+            .cast<Map<Object?, Object?>>();
+        expect(resources.single['maximum'], 4);
+      }
+    });
+  });
 }
 
 CharacterSheet _character() {

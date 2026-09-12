@@ -587,12 +587,13 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
     final nextLedger = engine.evaluate(nextBuild);
     final previousKeys = {
       for (final grant in previousLedger.grants)
-        '${grant.sourceEntryId}#${grant.id}',
+        ruleUnitKey(grant.sourceEntryId, grant.id, grant.sourceLevel),
     };
     final newGrants = nextLedger.grants
         .where(
-          (grant) =>
-              !previousKeys.contains('${grant.sourceEntryId}#${grant.id}'),
+          (grant) => !previousKeys.contains(
+            ruleUnitKey(grant.sourceEntryId, grant.id, grant.sourceLevel),
+          ),
         )
         .toList(growable: false);
     final previousChoiceKeys = {
@@ -645,20 +646,30 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
       for (final entry in _abilityControllers.entries)
         entry.key: int.tryParse(entry.value.text.trim()) ?? 10,
     };
-    final generated =
-        RulesDrivenCharacterBuilder(
-          entries: {for (final entry in widget.contentEntries) entry.id: entry},
-        ).build(
-          name: _nameController.text,
-          build: preview.build,
-          abilities: abilities,
-          notes: _notesController.text,
-        );
+    final builder = RulesDrivenCharacterBuilder(
+      entries: {for (final entry in widget.contentEntries) entry.id: entry},
+    );
+    // 再派生必须用**基础属性**：`_abilityControllers` 里是已含生效加值的最终值，
+    // 直接回传会让同一份 `kind: ability` 授予再叠加一次（缺陷 4）。减加值的唯一
+    // 实现在 builder；减的是角色卡**当前等级**那份构建的加值。
+    final currentBuild = CharacterBuild.fromJson(
+      Map<String, Object?>.from(character.dataMap['build']! as Map),
+    );
+    final generated = builder.build(
+      name: _nameController.text,
+      build: preview.build,
+      abilities: builder.baseAbilitiesFrom(abilities, currentBuild),
+      notes: _notesController.text,
+    );
     setState(() {
       _maxHpController.text = '${generated.maxHp}';
       _acController.text = '${generated.armorClass}';
       _speedController.text = '${generated.speed}';
       _initiativeController.text = '${generated.initiativeBonus}';
+      // 属性也写回"最终值"：否则下次再派生会用过期的属性当基础值（缺陷 4）。
+      for (final entry in generated.abilities.entries) {
+        _abilityControllers[entry.key]?.text = '${entry.value}';
+      }
       _inventoryController.text = _inventoryToLines(
         _mergeInventory(
           _parseInventory(_inventoryController.text),
@@ -1847,7 +1858,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         );
         result.add(
           _ActiveRuleChoice(
-            key: '${entry.id}#${definition.id}',
+            key: ruleUnitKey(entry.id, definition.id, null),
             sourceEntryId: entry.id,
             sourceName: entry.name,
             builderStep: builderStep,
@@ -1856,25 +1867,29 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         );
       }
       for (final progression in rules.progression) {
-        // 一个步骤可覆盖多个等级（`levels`）：取已达等级中最高的那个作为展示等级。
-        final reached = progression.levels.where((level) => level <= _level);
-        if (reached.isEmpty) continue;
-        final reachedLevel = reached.last;
-        for (final definition in progression.choices) {
-          final builderStep = _builderStepFor(
-            definition.builderStep,
-            current.builderStep,
-          );
-          result.add(
-            _ActiveRuleChoice(
-              key: '${entry.id}#${definition.id}',
-              sourceEntryId: entry.id,
-              sourceName: entry.name,
-              builderStep: builderStep,
-              level: reachedLevel,
-              definition: definition,
-            ),
-          );
+        // 一个步骤可覆盖多个等级（`levels`）：每个已达等级都是**独立**的生效单元
+        // （§3.5 "同一批效果在多个等级重复生效"），选择也要每级各问一次；
+        // 键必须带上等级，否则同一份选择会被折叠成一次、且与引擎判断不一致。
+        final reachedLevels = progression.levels
+            .where((level) => level <= _level)
+            .toList(growable: false);
+        for (final reachedLevel in reachedLevels) {
+          for (final definition in progression.choices) {
+            final builderStep = _builderStepFor(
+              definition.builderStep,
+              current.builderStep,
+            );
+            result.add(
+              _ActiveRuleChoice(
+                key: ruleUnitKey(entry.id, definition.id, reachedLevel),
+                sourceEntryId: entry.id,
+                sourceName: entry.name,
+                builderStep: builderStep,
+                level: reachedLevel,
+                definition: definition,
+              ),
+            );
+          }
         }
       }
       for (final active in result.where(

@@ -298,6 +298,5 @@ String _grantKindLabel(ResolvedRuleGrant grant) => switch (grant.kind.name) {
   'spell' => '法术',
   'equipment' => '装备',
   'action' => '动作',
-  'resource' => '职业资源',
   _ => '规则更新',
 };

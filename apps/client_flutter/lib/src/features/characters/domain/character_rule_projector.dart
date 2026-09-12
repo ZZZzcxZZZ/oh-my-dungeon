@@ -28,13 +28,14 @@ class CharacterRuleProjector {
       selections: savedBuild.selections,
       choices: savedBuild.choices,
     );
-    final derived = RulesDrivenCharacterBuilder(entries: entries).build(
+    final builder = RulesDrivenCharacterBuilder(entries: entries);
+    final derived = builder.build(
       name: character.name,
       build: build,
-      abilities: {
-        for (final key in Dnd5eRules.defaultAbilities.keys)
-          key: _abilityValue(character.abilityMap[key], key),
-      },
+      // 再派生必须用**基础属性**：角色卡上的 `abilities` 已含生效中的
+      // `kind: ability` 加值，直接回传会每次派生都再叠加一遍（缺陷 4）。
+      // 减加值的唯一实现在 [RulesDrivenCharacterBuilder.baseAbilitiesFrom]。
+      abilities: builder.baseAbilitiesFrom(character.abilityMap, build),
       notes: character.notes,
     );
     final oldData = character.dataMap;
@@ -125,11 +126,6 @@ class CharacterRuleProjector {
     final data = Map<String, Object?>.from(character.dataMap)
       ..['classIdentity'] = identity;
     return character.copyWith(data: data);
-  }
-
-  int _abilityValue(Object? value, String key) {
-    if (value is num) return value.toInt();
-    return int.tryParse('$value') ?? Dnd5eRules.defaultAbilities[key] ?? 10;
   }
 
   Map<String, Object?> _mergeContentRefs(Object? current, Object? derived) {

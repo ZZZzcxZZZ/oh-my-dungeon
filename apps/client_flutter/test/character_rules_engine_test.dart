@@ -467,6 +467,121 @@ void main() {
     });
   });
 
+  // §3.5：`levels: [4,8,12,16]` 是"同一批效果在多个等级**重复生效**"，
+  // 每个已达等级都是独立的生效单元——不能被后一次展开覆盖掉。
+  group('多等级生效单元：每个已达等级各生效一次', () {
+    final ascendant = _entry(
+      id: 'test:class/ascendant',
+      type: 'class',
+      name: '晋升者',
+      rules: const {
+        'progression': [
+          {
+            'levels': [1, 2, 3],
+            'grants': [
+              {
+                'id': 'asi-int',
+                'kind': 'ability',
+                'target': 'int',
+                'value': 1,
+                'label': '属性提升：智力 +1',
+              },
+            ],
+            'choices': [
+              {
+                'id': 'asi-or-feat',
+                'label': '属性提升或专长',
+                'optionType': 'feat',
+                'minimum': 1,
+                'maximum': 1,
+              },
+            ],
+          },
+        ],
+      },
+    );
+    final gift = _entry(
+      id: 'test:feat/gift',
+      type: 'feat',
+      name: '天赋',
+      rules: const {},
+    );
+    final engine = CharacterRulesEngine(
+      entries: {ascendant.id: ascendant, gift.id: gift},
+    );
+
+    test('levels:[1,2,3] 的属性加值到 3 级累计 3 份，不被覆盖', () {
+      final ledger = engine.evaluate(
+        const CharacterBuild(
+          level: 3,
+          selections: {'class': 'test:class/ascendant'},
+        ),
+      );
+
+      final units = ledger.grantsOfKind(RuleGrantKind.ability).toList();
+      expect(
+        units,
+        hasLength(3),
+        reason: 'ledger 键必须带生效等级，否则 1/2 级会被 3 级覆盖成 1 份',
+      );
+      expect(units.map((grant) => grant.sourceLevel).toSet(), {1, 2, 3});
+      expect(
+        units.fold<num>(0, (sum, grant) => sum + (grant.value ?? 0)),
+        3,
+        reason: '3 级应累计 +3',
+      );
+      // 派生是"按等级各生效一次"的输入：AC / HP 等消费方直接对 ledger 求和。
+      final levelOne = engine.evaluate(
+        const CharacterBuild(
+          level: 1,
+          selections: {'class': 'test:class/ascendant'},
+        ),
+      );
+      expect(levelOne.grantsOfKind(RuleGrantKind.ability), hasLength(1));
+    });
+
+    test('choices 采用同一种语义：每个已达等级独立一次', () {
+      final ledger = engine.evaluate(
+        const CharacterBuild(
+          level: 3,
+          selections: {'class': 'test:class/ascendant'},
+        ),
+      );
+
+      expect(ledger.activeChoices.map((choice) => choice.sourceLevel), [
+        1,
+        2,
+        3,
+      ]);
+      expect(
+        ledger.activeChoices.map((choice) => choice.key).toSet(),
+        hasLength(3),
+        reason: '同一份选择在多个等级各问一次，键必须能区分等级',
+      );
+      expect(ledger.pendingChoices, hasLength(3));
+    });
+
+    test('兼容旧存档：不带等级的 choice 键仍能被解析', () {
+      final ledger = engine.evaluate(
+        const CharacterBuild(
+          level: 1,
+          selections: {'class': 'test:class/ascendant'},
+          choices: {
+            'test:class/ascendant#asi-or-feat': ['test:feat/gift'],
+          },
+        ),
+      );
+
+      expect(ledger.pendingChoices, isEmpty);
+      expect(ledger.resolvedChoiceEntryIds, contains(gift.id));
+      expect(
+        ledger.resolvedChoices['test:class/ascendant#asi-or-feat#1'],
+        [gift.id],
+        reason: '解析结果写回带等级的键，下次派生即可自愈',
+      );
+    });
+  });
+
   group('RuleChoiceDefinition.options（内联选项解析与序列化）', () {
     test('字符串简写展开为 id == label', () {
       final choice = RuleChoiceDefinition.fromJson(const {

@@ -106,6 +106,21 @@ class CharacterGrantLedger {
   }
 }
 
+/// 一条"生效单元"的唯一键：`<条目 id>#<定义 id>`。
+///
+/// `progression[].levels` 声明的是"**同一批效果在多个等级重复生效**"（契约 §3.5）：
+/// `levels: [4, 8, 12, 16]` 的属性提升到 16 级要累计 +4，而不是只 +1。因此每个已达
+/// 等级都是**独立**的生效单元，键必须带上 [sourceLevel]；只有步骤级之外的条目级定义
+/// （`rules.grants` / `rules.choices`，与等级无关）才不带等级。
+///
+/// 这是键格式的**唯一**实现点：引擎与编辑器（升级预览 diff、选择列表）都必须经过它，
+/// 否则两侧对"本等级新增了什么"的判断会不一致。
+String ruleUnitKey(String entryId, String definitionId, int? sourceLevel) {
+  return sourceLevel == null
+      ? '$entryId#$definitionId'
+      : '$entryId#$definitionId#$sourceLevel';
+}
+
 class CharacterRulesEngine {
   const CharacterRulesEngine({required this.entries});
 
@@ -193,7 +208,9 @@ class CharacterRulesEngine {
     required Map<String, ResolvedRuleGrant> target,
   }) {
     for (final definition in definitions) {
-      final key = '${entry.id}#${definition.id}';
+      // 键带生效等级：同一份定义在多个已达等级各生效一次（§3.5），
+      // 后一个等级不能覆盖前一个等级的结算结果。
+      final key = ruleUnitKey(entry.id, definition.id, sourceLevel);
       target[key] = ResolvedRuleGrant(
         id: definition.id,
         kind: definition.kind,
@@ -223,8 +240,16 @@ class CharacterRulesEngine {
   }) {
     final resolver = RuleChoiceResolver(entries: entries);
     for (final definition in definitions) {
-      final key = '${entry.id}#${definition.id}';
-      final requested = build.choices[key] ?? const <String>[];
+      // 选择与授予共用同一种多等级语义（§3.5）：每个已达等级都是一次独立的
+      // 选择实例（16 级的 4 次属性提升各选一次），键同样带上生效等级。
+      final key = ruleUnitKey(entry.id, definition.id, sourceLevel);
+      // 兼容等级限定键之前写入的旧存档：只有不带等级的键时沿用它。
+      final requested =
+          build.choices[key] ??
+          (sourceLevel == null
+              ? const <String>[]
+              : build.choices[ruleUnitKey(entry.id, definition.id, null)] ??
+                    const <String>[]);
       final selected = requested
           .where(
             (entryId) =>

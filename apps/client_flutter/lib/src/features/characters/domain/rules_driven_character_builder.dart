@@ -44,8 +44,13 @@ class RulesDrivenCharacterBuilder {
     );
     // 属性加值（`kind: ability`）必须在**任何派生之前**叠加：HP / AC / 豁免 /
     // 技能 / 法术 DC 全部读 [effectiveAbilities]，不再读入参 [abilities]。
+    // `formula` 的求值入参是**基础属性**（入参本身），不是叠加后的值，避免自引用。
     final effectiveAbilities = <String, int>{...abilities};
-    _abilityGrantBonuses(ledger).forEach((key, value) {
+    _abilityGrantBonuses(
+      ledger,
+      level: build.level,
+      abilities: abilities,
+    ).forEach((key, value) {
       effectiveAbilities[key] = (effectiveAbilities[key] ?? 10) + value;
     });
     final saves = {for (final key in Dnd5eRules.abilityLabels.keys) key: false};
@@ -223,6 +228,44 @@ class RulesDrivenCharacterBuilder {
     );
   }
 
+  /// 再派生的**唯一**换算点：把角色卡上的"最终属性值"（已含 `kind: ability`
+  /// 授予的加值）换算回 [build] 对应的**基础属性**（= 最终值 − 加值）。
+  ///
+  /// 加值由"条目 + 等级 + 选择"确定性算出，因此该换算本身可重复执行而不累积；
+  /// `character_upgrade_planner` / `character_rule_projector` / 编辑器在选择
+  /// "再次派生"时必须调用这里，**不要**各自再写一遍减法（缺陷 4）。
+  ///
+  /// [finalAbilities] 通常是 `CharacterSheet.abilityMap`；[build] 必须是**角色卡上
+  /// 那份已经生效的构建**（等级 = `character.level`），否则会把"本等级新增的加值"
+  /// 也当成已含的值减掉。
+  Map<String, int> baseAbilitiesFrom(
+    Map<String, Object?> finalAbilities,
+    CharacterBuild build,
+  ) {
+    final normalized = <String, int>{
+      for (final key in Dnd5eRules.defaultAbilities.keys)
+        key: Dnd5eRules.abilityScore(finalAbilities, key),
+    };
+    final ledger = _engine.evaluate(build);
+    // 先用传入值求一次；再用其反推的基础值复核一次（两次都确定性），
+    // 这样 `formula: ability:<键>` 也以基础值结算，不会自引用。
+    final provisional = _subtract(
+      normalized,
+      _abilityGrantBonuses(ledger, level: build.level, abilities: normalized),
+    );
+    return _subtract(
+      normalized,
+      _abilityGrantBonuses(ledger, level: build.level, abilities: provisional),
+    );
+  }
+
+  Map<String, int> _subtract(Map<String, int> values, Map<String, int> bonuses) {
+    return <String, int>{
+      for (final entry in values.entries)
+        entry.key: entry.value - (bonuses[entry.key] ?? 0),
+    };
+  }
+
   ContentEntry? _selectedEntry(CharacterBuild build, String slot) {
     final id = build.selections[slot];
     return id == null ? null : entries[id];
@@ -326,15 +369,29 @@ class RulesDrivenCharacterBuilder {
   }
 
   /// `kind: ability` 授予的属性加值：`target` 是属性键（档案 `abilities` 之一），
-  /// `value` 累加；无 `target` 或非档案属性的授予被跳过（不是属性加值）。
-  Map<String, int> _abilityGrantBonuses(CharacterGrantLedger ledger) {
+  /// `value` 累加；`formula` 走与 `hitPoints` 相同的封闭语法（§3.9），按职业等级与
+  /// [abilities] 求值。无 `target` 或非档案属性的授予被跳过（不是属性加值）。
+  ///
+  /// [abilities] 必须是**基础属性**（叠加之前的入参）：`formula: ability:<键>`
+  /// 若读叠加后的值会自引用（§3.10.3.7"声明了就必须生效"）。
+  Map<String, int> _abilityGrantBonuses(
+    CharacterGrantLedger ledger, {
+    required int level,
+    required Map<String, int> abilities,
+  }) {
     final bonuses = <String, int>{};
     for (final grant in ledger.grantsOfKind(RuleGrantKind.ability)) {
       final target = grant.target;
       if (target == null || !Dnd5eRules.abilityLabels.containsKey(target)) {
         continue;
       }
-      final value = grant.value?.toInt() ?? 0;
+      var value = grant.value?.toInt() ?? 0;
+      final formula = grant.formula;
+      if (formula != null) {
+        final spec = MaxSpec.tryParse(<String, Object?>{'formula': formula});
+        final resolved = spec?.resolve(level: level, abilities: abilities);
+        if (resolved != null) value += resolved;
+      }
       if (value == 0) continue;
       bonuses[target] = (bonuses[target] ?? 0) + value;
     }

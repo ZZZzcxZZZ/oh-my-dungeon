@@ -77,24 +77,63 @@ class LegacyClassFeatureRulesMigrator {
     }
 
     final existingRules = entry.rules ?? const CharacterRuleDefinition();
-    // 按等级归类，便于与旧版逐级特性合并；多等级步骤（`levels`）展开成逐级条目，
-    // 合并语义与旧版"每个等级一个步骤"一致。
-    final progression = <int, RuleProgressionDefinition>{
-      for (final step in existingRules.progression)
-        for (final stepLevel in step.levels) stepLevel: step,
-    };
-    for (final level in grantsByLevel.keys) {
-      final existing = progression[level];
-      progression[level] = RuleProgressionDefinition(
-        levels: [level],
-        grants: [...?existing?.grants, ...grantsByLevel[level]!],
-        choices: existing?.choices ?? const [],
+    // 按**对象身份**去重：`levels` 是"同一批效果在多个等级重复生效"（契约 §3.5），
+    // 一个步骤只能输出一次。旧的"level → step"映射会把 `levels: [4,8,12,16]`
+    // 的步骤复制成 4 份（规则页重复渲染、同一 choice 出现多次）。
+    final stepsByIdentity = <RuleProgressionDefinition, Set<int>>{};
+    for (final step in existingRules.progression) {
+      stepsByIdentity.putIfAbsent(step, () => <int>{}).addAll(step.levels);
+    }
+
+    // 旧版 `structured.features` 声明的等级要由"逐级特性步骤"接管：必须把这些等级
+    // 从原步骤的 `levels` 里**摘掉**，只去重而不摘会让同一等级被两个步骤同时覆盖。
+    final replacedLevels = grantsByLevel.keys.toSet();
+    // 每个等级只能被一个步骤覆盖：先占先得，保证输出无重叠区间。
+    final claimed = <int>{};
+    final keptSteps = <_ProgressionStep>[];
+
+    for (final entry in stepsByIdentity.entries) {
+      final levels = entry.value
+          .where((level) => !replacedLevels.contains(level))
+          .toList()
+        ..sort();
+      final kept = <int>[];
+      for (final level in levels) {
+        if (claimed.add(level)) kept.add(level);
+      }
+      if (kept.isEmpty) continue;
+      keptSteps.add(
+        _ProgressionStep(
+          levels: kept,
+          grants: entry.key.grants,
+          choices: entry.key.choices,
+        ),
       );
     }
-    final sortedProgression = progression.values.toList()
-      ..sort(
-        (left, right) => left.levels.first.compareTo(right.levels.first),
+
+    for (final level in grantsByLevel.keys.toList()..sort()) {
+      if (!claimed.add(level)) continue;
+      final grants = <RuleGrantDefinition>[];
+      final choices = <RuleChoiceDefinition>[];
+      for (final entry in stepsByIdentity.entries) {
+        if (!entry.value.contains(level)) continue;
+        grants.addAll(entry.key.grants);
+        choices.addAll(entry.key.choices);
+      }
+      grants.addAll(grantsByLevel[level]!);
+      keptSteps.add(
+        _ProgressionStep(levels: <int>[level], grants: grants, choices: choices),
       );
+    }
+
+    final sortedProgression = <RuleProgressionDefinition>[
+      for (final step in keptSteps)
+        RuleProgressionDefinition(
+          levels: step.levels,
+          grants: step.grants,
+          choices: step.choices,
+        ),
+    ]..sort((left, right) => left.levels.first.compareTo(right.levels.first));
 
     return _MigratedClass(
       classEntry: ContentEntry(
@@ -165,6 +204,18 @@ class _MigratedClass {
 
   final ContentEntry classEntry;
   final List<ContentEntry> features;
+}
+
+class _ProgressionStep {
+  const _ProgressionStep({
+    required this.levels,
+    required this.grants,
+    required this.choices,
+  });
+
+  final List<int> levels;
+  final List<RuleGrantDefinition> grants;
+  final List<RuleChoiceDefinition> choices;
 }
 
 class _LegacyFeature {

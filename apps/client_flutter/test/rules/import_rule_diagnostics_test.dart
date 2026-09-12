@@ -316,6 +316,42 @@ void main() {
       expect(error.path, r'$.entries[0].rules.progression[0].grants[0].formula');
     });
 
+    test('hitPoints / ability 同时写 value 与 formula → 导入期报 invalidMaxSpec', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {'hitDie': 10},
+            },
+            rules: {
+              'progression': [
+                {
+                  'levels': [4],
+                  'grants': [
+                    {
+                      'id': 'asi',
+                      'kind': 'ability',
+                      'label': '属性提升',
+                      'target': 'int',
+                      'value': 1,
+                      'formula': 'level',
+                    },
+                  ],
+                },
+              ],
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.message.contains('invalidMaxSpec'),
+      );
+      expect(error.path, r'$.entries[0].rules.progression[0].grants[0].formula');
+      expect(error.message, contains('二选一'));
+    });
+
     test('合法 formula（level / ability:cha / 2*level / 7）放行', () async {
       final report = await importer.previewJson(
         packageJson(

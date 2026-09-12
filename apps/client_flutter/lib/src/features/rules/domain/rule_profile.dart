@@ -23,7 +23,8 @@ const kEntryTier = 100;
 /// 它准备法术，但法术位走契约魔法）。读取口只有 [ResolvedClassRules.usesPactMagic]。
 const kPactArchetype = 'pact';
 
-/// 某个字段最终取自哪里（§3.7）。
+/// 某个字段 / 列最终取自哪里（契约 §3.7；S3 起粒度为**列**，字段路径见
+/// `rule_field_path.dart` 的 `RuleFieldPath`）。
 class RuleFieldSource {
   const RuleFieldSource({
     required this.field,
@@ -31,12 +32,53 @@ class RuleFieldSource {
     required this.tier,
   });
 
+  /// 列级字段路径，如 `hitDie` / `spellcasting.prepared` / `resources.rage.maximum`。
+  /// 取值必须来自 `RuleFieldPath`（唯一实现），不得手拼。
   final String field;
+
   final String originId; // 'builtin:dnd5e-2024' 或条目 id
-  final int tier; // 0 内置档案 / 100 条目声明
+  final int tier; // 0 内置档案 / 100 + package.priority 包声明
+
+  Map<String, Object?> toJson() => {
+    'field': field,
+    'originId': originId,
+    'tier': tier,
+  };
+
+  /// 坏数据返回 null：来源是"附加信息"，读不回来时按"来源未知"处理，
+  /// 绝不猜一个 originId（界面据此显示"来源未知"而不是"来自内置档案"）。
+  static RuleFieldSource? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final field = '${raw['field'] ?? ''}'.trim();
+    final originId = '${raw['originId'] ?? ''}'.trim();
+    final tier = raw['tier'];
+    if (field.isEmpty || originId.isEmpty || tier is! int) return null;
+    return RuleFieldSource(field: field, originId: originId, tier: tier);
+  }
 
   @override
   String toString() => 'RuleFieldSource($field ← $originId, tier $tier)';
+}
+
+/// 来源表的持久化与排序的**唯一**实现（角色数据 `data.classRuleSources`）。
+abstract final class RuleFieldSourceMap {
+  /// 按字段路径升序输出：同一角色每次派生的 JSON 键序一致，测试与 diff 稳定。
+  static Map<String, Object?> toData(Map<String, RuleFieldSource> sources) {
+    final keys = sources.keys.toList()..sort();
+    return {
+      for (final key in keys) key: sources[key]!.toJson(),
+    };
+  }
+
+  static Map<String, RuleFieldSource> fromData(Object? raw) {
+    if (raw is! Map) return const {};
+    final result = <String, RuleFieldSource>{};
+    for (final entry in raw.entries) {
+      final source = RuleFieldSource.fromJson(entry.value);
+      if (source != null) result['${entry.key}'] = source;
+    }
+    return result;
+  }
 }
 
 /// `progressions.<name>`：跨职业共享的进阶模板（§3.1）。
@@ -133,6 +175,13 @@ class ResolvedClassRules {
   /// 该列最终取自哪里（契约 §3.7；键是 [RuleFieldPath] 的字段路径）。
   /// 未声明 / 未记录时返回 null（**不猜**，界面据此显示"来源未知"）。
   RuleFieldSource? sourceOf(String field) => fieldSources[field];
+
+  /// 本条解析结果实际用到的来源 id（去重、排序）。UI 用它决定"是否发生了覆盖"：
+  /// 只有内置档案 → 没有覆盖；出现非内置 id → 有覆盖。
+  List<String> get activeOriginIds {
+    final ids = {for (final source in fieldSources.values) source.originId};
+    return ids.toList()..sort();
+  }
 
   /// 条目自身声明的规则块（`structured.classRules`；未声明为 null）。
   final ClassRuleSet? entryRules;

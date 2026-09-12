@@ -160,10 +160,41 @@ class _SpellsPanelState extends State<_SpellsPanel> {
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.auto_fix_high_outlined),
                       title: Text(_entryName(spell)),
-                      subtitle: Text(
-                        resolved.preparedSpellEntryIds.contains(spell)
-                            ? '已准备'
-                            : '未准备',
+                      subtitle: Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            resolved.preparedSpellEntryIds.contains(spell)
+                                ? '已准备'
+                                : '未准备',
+                          ),
+                          // 契约 §3.11 A3：`countsToward == null` 的显式法术选择
+                          // （不占数量池）额外记 `alwaysPreparedEntryIds`，这里给出
+                          // "始终准备"标记（secondaryContainer / onSecondaryContainer，
+                          // 无新 token）。
+                          if (resolved.alwaysPreparedSpellEntryIds.contains(spell))
+                            Chip(
+                              key: Key('always-prepared-$spell'),
+                              label: const Text('始终准备'),
+                              labelStyle: Theme.of(context)
+                                  .textTheme
+                                  .labelSmall
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSecondaryContainer,
+                                  ),
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.secondaryContainer,
+                              side: BorderSide.none,
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                            ),
+                        ],
                       ),
                       onTap: () => _openSpell(spell),
                       trailing: Row(

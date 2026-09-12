@@ -93,32 +93,52 @@ class _CustomSpellDialogState extends State<_CustomSpellDialog> {
   }
 }
 
+/// 法术步骤的**池渲染器**：既承担"职业 `classRules.spellcasting` 驱动"的自由
+/// 挑选（[maximumCantrips] / [maximumLeveledSpells]），也承担**显式法术选择**
+/// （`optionType: "spell"`，[maximum] = 该选择的有效上限）的法术池。
+///
+/// 候选由调用方给入：显式选择一律传
+/// `RuleChoiceSemantics.candidatesFor` 的条目候选（与引擎同一份，绝不在这里
+/// 再按标签 / 环阶过滤一遍——两套过滤不一致会让"选得进去、校验不过"变成静默阻塞）；
+/// 职业驱动路径传 `SpellSelectionPolicy.eligibleSpells` 的结果。
+///
+/// 自定义法术属于 [CustomSpellSection]（不占规则选择上限），两条路径都渲染它。
 class _SpellChoiceSection extends StatefulWidget {
   const _SpellChoiceSection({
     required this.entries,
     required this.selected,
     required this.onChanged,
-    required this.maximumCantrips,
-    required this.maximumLeveledSpells,
-    required this.maximumSpellLevel,
-    required this.automaticRulesConfigured,
-    required this.customSpells,
-    required this.onAddCustom,
-    required this.onRemoveCustom,
     required this.onOpenEntry,
+    this.title = '规则法术',
+    this.hint,
+    this.blockedReason,
+    this.maximum,
+    this.maximumCantrips,
+    this.maximumLeveledSpells,
+    this.maximumSpellLevel = 9,
+    this.automaticRulesConfigured = true,
   });
 
   final List<ContentEntry> entries;
-  final Set<String> selected;
-  final ValueChanged<Set<String>> onChanged;
+  final List<String> selected;
+  final ValueChanged<List<String>> onChanged;
+  final ValueChanged<ContentEntry> onOpenEntry;
+  final String title;
+  final String? hint;
+
+  /// 选择级 `requires` 不满足时的原因文案（`null` = 满足）。不满足时**不渲染
+  /// 候选**（与共享组件同语义，§3.10.3-5）；原因文案由 `ruleChoiceBlockedReason`
+  /// 一处产出，这里只负责显示。
+  final String? blockedReason;
+
+  /// 整个池的总上限（显式法术选择的有效上限）。`null` = 用
+  /// [maximumCantrips] / [maximumLeveledSpells] 的分类上限。
+  final int? maximum;
+
   final int? maximumCantrips;
   final int? maximumLeveledSpells;
   final int maximumSpellLevel;
   final bool automaticRulesConfigured;
-  final List<Map<String, Object?>> customSpells;
-  final VoidCallback onAddCustom;
-  final ValueChanged<int> onRemoveCustom;
-  final ValueChanged<ContentEntry> onOpenEntry;
 
   @override
   State<_SpellChoiceSection> createState() => _SpellChoiceSectionState();
@@ -170,7 +190,7 @@ class _SpellChoiceSectionState extends State<_SpellChoiceSection> {
       children: [
         Row(
           children: [
-            Expanded(child: Text('规则法术', style: theme.textTheme.titleMedium)),
+            Expanded(child: Text(widget.title, style: theme.textTheme.titleMedium)),
             Text(
               _selectionCountLabel(
                 selectedCantrips: selectedCantrips,
@@ -184,13 +204,36 @@ class _SpellChoiceSectionState extends State<_SpellChoiceSection> {
         ),
         const SizedBox(height: 4),
         Text(
-          !widget.automaticRulesConfigured
-              ? '该职业未提供自动法术规则；仍可在下方添加自定义法术。'
-              : '按职业列表与当前等级筛选，最高 ${widget.maximumSpellLevel} 环',
+          widget.hint ??
+              (!widget.automaticRulesConfigured
+                  ? '该职业未提供自动法术规则；仍可在下方添加自定义法术。'
+                  : '按职业列表与当前等级筛选，最高 ${widget.maximumSpellLevel} 环'),
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
+        if (widget.blockedReason case final String reason) ...[
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.block_outlined,
+                size: 18,
+                color: theme.colorScheme.error,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  reason,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ] else ...[
         const SizedBox(height: 12),
         TextField(
           key: const Key('spell-choice-search'),
@@ -248,16 +291,68 @@ class _SpellChoiceSectionState extends State<_SpellChoiceSection> {
               selectedLeveledSpells: selectedLeveledSpells,
               maximumCantrips: widget.maximumCantrips,
               maximumLeveledSpells: widget.maximumLeveledSpells,
-              onChanged: widget.onChanged,
+              onChanged: _emit,
               onOpenEntry: widget.onOpenEntry,
             ),
+        ],
+      ],
+    );
+  }
+
+  /// 池上限只有一处判断：`maximum`（显式法术选择的有效上限）。移除永远允许
+  /// （`next.length` 只会变小），因此"超过上限"必然来自追加。
+  void _emit(List<String> next) {
+    if (widget.maximum case final int cap when next.length > cap) return;
+    widget.onChanged(next);
+  }
+
+  static String _spellLevelLabel(int? level) {
+    if (level == null) return '未分类';
+    return level == 0 ? '戏法' : '$level 环';
+  }
+
+  String _selectionCountLabel({
+    required int selectedCantrips,
+    required int selectedLeveledSpells,
+  }) {
+    if (widget.maximum case final int cap) {
+      return '已选 ${widget.selected.length}/$cap';
+    }
+    if (widget.maximumCantrips != null || widget.maximumLeveledSpells != null) {
+      return '戏法 $selectedCantrips/${widget.maximumCantrips ?? '不限'}'
+          ' · 法术 $selectedLeveledSpells/${widget.maximumLeveledSpells ?? '不限'}';
+    }
+    // 上限只有 `prepared` / `cantrips` 两列（§3.1/§3.3 原型不提供它们）；
+    // 两列都未声明时没有可显示的上限，只报已选数量，不拿"未声明"当 0 或 20。
+    return '已选 ${widget.selected.length}';
+  }
+}
+
+/// 自定义法术（不占规则选择上限）：两条法术路径都渲染它。
+class _CustomSpellSection extends StatelessWidget {
+  const _CustomSpellSection({
+    required this.customSpells,
+    required this.onAddCustom,
+    required this.onRemoveCustom,
+  });
+
+  final List<Map<String, Object?>> customSpells;
+  final VoidCallback onAddCustom;
+  final ValueChanged<int> onRemoveCustom;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         const Divider(height: 32),
         Row(
           children: [
             Expanded(child: Text('自定义法术', style: theme.textTheme.titleMedium)),
             FilledButton.tonalIcon(
               key: const Key('add-custom-spell'),
-              onPressed: widget.onAddCustom,
+              onPressed: onAddCustom,
               icon: const Icon(Icons.add),
               label: const Text('添加'),
             ),
@@ -270,40 +365,24 @@ class _SpellChoiceSectionState extends State<_SpellChoiceSection> {
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
-        for (var index = 0; index < widget.customSpells.length; index++)
+        for (var index = 0; index < customSpells.length; index++)
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.auto_awesome_outlined),
-            title: Text('${widget.customSpells[index]['name']}'),
+            title: Text('${customSpells[index]['name']}'),
             subtitle: Text(
-              _spellLevelLabel(widget.customSpells[index]['level'] as int?),
+              _SpellChoiceSectionState._spellLevelLabel(
+                customSpells[index]['level'] as int?,
+              ),
             ),
             trailing: IconButton(
               tooltip: '移除自定义法术',
-              onPressed: () => widget.onRemoveCustom(index),
+              onPressed: () => onRemoveCustom(index),
               icon: const Icon(Icons.delete_outline),
             ),
           ),
       ],
     );
-  }
-
-  static String _spellLevelLabel(int? level) {
-    if (level == null) return '未分类';
-    return level == 0 ? '戏法' : '$level 环';
-  }
-
-  String _selectionCountLabel({
-    required int selectedCantrips,
-    required int selectedLeveledSpells,
-  }) {
-    if (widget.maximumCantrips != null || widget.maximumLeveledSpells != null) {
-      return '戏法 $selectedCantrips/${widget.maximumCantrips ?? '不限'}'
-          ' · 法术 $selectedLeveledSpells/${widget.maximumLeveledSpells ?? '不限'}';
-    }
-    // 上限只有 `prepared` / `cantrips` 两列（§3.1/§3.3 原型不提供它们）；
-    // 两列都未声明时没有可显示的上限，只报已选数量，不拿"未声明"当 0 或 20。
-    return '已选 ${widget.selected.length}';
   }
 }
 
@@ -320,12 +399,12 @@ class _SpellOptionTile extends StatelessWidget {
   });
 
   final ContentEntry entry;
-  final Set<String> selected;
+  final List<String> selected;
   final int selectedCantrips;
   final int selectedLeveledSpells;
   final int? maximumCantrips;
   final int? maximumLeveledSpells;
-  final ValueChanged<Set<String>> onChanged;
+  final ValueChanged<List<String>> onChanged;
   final ValueChanged<ContentEntry> onOpenEntry;
 
   @override
@@ -357,13 +436,12 @@ class _SpellOptionTile extends StatelessWidget {
         icon: const Icon(Icons.open_in_new),
       ),
       onChanged: (checked) {
-        final next = Set<String>.from(selected);
         if (checked == true) {
-          if (!categoryAtLimit) next.add(entry.id);
+          if (categoryAtLimit) return;
+          onChanged(<String>[...selected, entry.id]);
         } else {
-          next.remove(entry.id);
+          onChanged(<String>[...selected]..remove(entry.id));
         }
-        onChanged(next);
       },
     );
   }

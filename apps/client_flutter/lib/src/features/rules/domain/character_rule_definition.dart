@@ -427,21 +427,23 @@ class RuleChoiceDefinition {
 
   /// 该选择是否由**专门渲染器**承担，因此不出现在通用选择卡片里。
   ///
-  /// 判据（唯一实现点）：`skill` 由创建向导「熟练」步骤的技能选择器承担。
+  /// 判据（唯一实现点）：`skill` 由创建向导「熟练」步骤的技能选择器承担，
+  /// `spell` 由「法术」步骤的法术池承担（[isSpellChoice]）。
   ///
   /// 这是**渲染判据**，不是"免检"判据：候选合并
   /// （`RuleChoiceSemantics.candidatesFor`）让内联 `options` 与条目候选对通用卡片
   /// 同样可见后，选中值一律进 `build.choices`，校验 / 额度 / 升级判定都按普通选择
   /// 处理，不再有"值写在别处所以免检"的例外。
   ///
-  /// `optionType: "spell"` 的专用渲染器（法术池）属于计划任务 9；在它落地前把
-  /// `spell` 也算作"专门渲染"会让显式法术选择在向导里**不可见**却仍被校验
-  /// （§3.10.3-7 的静默失效，与决策 D7 同一类缺陷），因此本任务只并入 `skill`，
-  /// [isSpellChoice] 先作为判据落地，由任务 9 在加入法术池渲染后并入本判据。
-  bool get usesDedicatedOptionUi => optionType == 'skill';
+  /// `spell` 必须在专门渲染器**存在**之后才并入本判据：先并入会让显式法术选择在
+  /// 向导里不可见却仍被校验（§3.10.3-7 的静默失效，与决策 D7 同一类缺陷）。
+  /// 创建向导的法术步骤（`_spellChoicePoolSections`）、编辑器升级队列与独立升级页
+  /// 都已渲染 `spell` 选择，故并入是安全的。
+  bool get usesDedicatedOptionUi => optionType == 'skill' || isSpellChoice;
 
-  /// 显式法术选择（契约 §3.10.2）。计划任务 9 的专用渲染器接入后它才成为
-  /// "专门 UI"（见 [usesDedicatedOptionUi]）。
+  /// 显式法术选择（契约 §3.10.2）：由法术池渲染，候选经
+  /// `RuleChoiceSemantics.candidatesFor`（`maximumOptionLevel` / `optionTags`），
+  /// 上限经 `RuleChoiceQuota.effectiveMaximum`。
   bool get isSpellChoice => optionType == 'spell';
 
   /// 值类型选择的判据入口（实现点在 [isValueOptionType]）。

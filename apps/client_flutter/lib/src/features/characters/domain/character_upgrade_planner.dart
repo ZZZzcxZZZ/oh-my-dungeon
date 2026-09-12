@@ -4,6 +4,7 @@ import '../../rules/domain/character_rules_engine.dart';
 import '../../rules/domain/rule_choice_quota.dart';
 import 'character.dart';
 import 'character_content_reference.dart';
+import 'character_manual_overrides.dart';
 import 'declared_levels.dart';
 import 'dnd5e_rules.dart';
 import 'rules_driven_character_builder.dart';
@@ -42,7 +43,8 @@ class CharacterUpgradePlan {
 
   /// 本级选择必须**真的完成**（数量 + `requires`，见 [ActiveRuleChoice.isValid]）。
   ///
-  /// `usesDedicatedOptionUi` 只决定渲染位置（渲染判据），不再是"免检"例外：升级页
+  /// "专门 UI"判据（选择是否由专门渲染器承担）只决定渲染位置，不再是"免检"
+  /// 例外：升级页
   /// 用共享组件渲染本级新增的每一条选择，所以"要求完成"不会变成死锁——反而是
   /// 免检会让本级新增的专门 UI 选择被静默跳过（§3.10.3-7）。
   bool get isComplete =>
@@ -128,6 +130,7 @@ class CharacterUpgradePlanner {
     final mergedData = Map<String, Object?>.from(oldData);
     for (final key in const <String>[
       'build',
+      'choices',
       'contentRefs',
       'resolvedGrants',
       'pendingChoices',
@@ -137,6 +140,23 @@ class CharacterUpgradePlanner {
       'actions',
     ]) {
       if (derived.data.containsKey(key)) mergedData[key] = derived.data[key];
+    }
+    // 显式法术选择的"已准备 / 始终准备"镜像由 builder 产出（§3.11 A3）。
+    // **合并**而不是覆盖：派生结果里只有这两份镜像，用户的自定义法术 / 手动
+    // 添加或移除的法术必须原样保留。合并实现只有
+    // `CharacterManualOverrides.copyWithSpellPicksFrom` 一处。
+    if (derived.data['manualOverrides'] case final Map derivedOverrides) {
+      mergedData['manualOverrides'] = CharacterManualOverrides.fromJson(
+        Map<String, Object?>.from(
+          (oldData['manualOverrides'] as Map?) ?? const <String, Object?>{},
+        ),
+      )
+          .copyWithSpellPicksFrom(
+            CharacterManualOverrides.fromJson(
+              Map<String, Object?>.from(derivedOverrides),
+            ),
+          )
+          .toJson();
     }
     mergedData['ruleSnapshots'] = _mergeMaps(
       oldData['ruleSnapshots'],

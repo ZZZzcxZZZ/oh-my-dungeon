@@ -6,6 +6,7 @@ class ResolvedCharacterOverrides {
     required this.featureEntryIds,
     required this.spellEntryIds,
     required this.preparedSpellEntryIds,
+    required this.alwaysPreparedSpellEntryIds,
     required this.customFeatures,
     required this.customSpells,
     required this.actions,
@@ -14,6 +15,11 @@ class ResolvedCharacterOverrides {
   final List<String> featureEntryIds;
   final List<String> spellEntryIds;
   final List<String> preparedSpellEntryIds;
+
+  /// `countsToward == null` 的显式法术选择选中的法术（契约 §3.11 A3），
+  /// 与 [preparedSpellEntryIds] 一样只保留**当前确实存在的法术**。
+  final List<String> alwaysPreparedSpellEntryIds;
+
   final List<Map<String, Object?>> customFeatures;
   final List<Map<String, Object?>> customSpells;
   final List<Map<String, Object?>> actions;
@@ -50,11 +56,15 @@ class CharacterOverrideResolver {
     final prepared = overrides.preparedSpellEntryIds
         .where(spells.contains)
         .toList(growable: false);
+    final alwaysPrepared = overrides.alwaysPreparedEntryIds
+        .where(spells.contains)
+        .toList(growable: false);
 
     return ResolvedCharacterOverrides(
       featureEntryIds: features.toList(growable: false),
       spellEntryIds: spells.toList(growable: false),
       preparedSpellEntryIds: prepared,
+      alwaysPreparedSpellEntryIds: alwaysPrepared,
       customFeatures: overrides.customFeatures,
       customSpells: overrides.customSpells,
       actions: <Map<String, Object?>>[

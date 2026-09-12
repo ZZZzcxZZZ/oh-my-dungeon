@@ -139,6 +139,11 @@ class RulesDrivenCharacterBuilder {
     // 装备方案 A/B（`optionType: "equipmentBundle"` 的选中值）：物品与货币的解析
     // 只有 `EquipmentBundleItems.from` 一处，`inventory` / `currency` 都读它。
     final equipmentBundles = _equipmentBundles(ledger);
+    // 显式法术选择的镜像（契约 §3.11 A3）：选中的法术**全部**进
+    // `preparedEntryIds`；`countsToward == null` 的那些额外记
+    // `alwaysPreparedEntryIds`（仅用于展示"始终准备"标记）。判定与去重只有
+    // `_spellChoicePicks` 一处。
+    final spellPicks = _spellChoicePicks(ledger);
 
     return CharacterEditDraft(
       name: name.trim(),
@@ -164,6 +169,14 @@ class RulesDrivenCharacterBuilder {
         'build': effectiveBuild.toJson(),
         'choices': recordedChoices,
         if (languagePicks.isNotEmpty) 'profile': {'languages': languagePicks},
+        if (spellPicks.prepared.isNotEmpty)
+          'manualOverrides': {
+            'spells': {
+              'preparedEntryIds': spellPicks.prepared,
+              if (spellPicks.alwaysPrepared.isNotEmpty)
+                'alwaysPreparedEntryIds': spellPicks.alwaysPrepared,
+            },
+          },
         'contentRefs': {
           'features': featureRefs,
           'spells': spellRefs,
@@ -360,6 +373,39 @@ class RulesDrivenCharacterBuilder {
       rows.addAll(bundle.items);
     }
     return rows;
+  }
+
+  /// 显式法术选择（`optionType: "spell"`）的选中值 → 已准备 / 始终准备两份镜像。
+  ///
+  /// 语义（契约 §3.11 A3）：**所有**显式法术选择的选中法术都进 `prepared`；
+  /// `countsToward == null` 的那些**额外**进 `alwaysPrepared`（不占数量池，
+  /// 只用于展示"始终准备"标记）。
+  ///
+  /// **唯一实现点**：选择键的解析只有 `RuleChoiceSemantics.definitionForKey`、
+  /// 法术选择判据只有 `RuleChoiceDefinition.isSpellChoice`（"专门 UI"判据的
+  /// `spell` 分支）；两份镜像都在这里生成，
+  /// **不得**再有第二个合并点。两份都是**去重**集合（决策 D9）：重复选取的次数
+  /// 只保留在有序的 `build.choices` 里。
+  ({List<String> prepared, List<String> alwaysPrepared}) _spellChoicePicks(
+    CharacterGrantLedger ledger,
+  ) {
+    final prepared = <String>[];
+    final alwaysPrepared = <String>[];
+    for (final choice in ledger.resolvedChoices.entries) {
+      final resolved = RuleChoiceSemantics.definitionForKey(
+        choice.key,
+        entries: entries,
+      );
+      if (resolved == null || !resolved.definition.isSpellChoice) continue;
+      final countsToward = resolved.definition.countsToward;
+      for (final id in choice.value) {
+        if (!prepared.contains(id)) prepared.add(id);
+        if (countsToward == null && !alwaysPrepared.contains(id)) {
+          alwaysPrepared.add(id);
+        }
+      }
+    }
+    return (prepared: prepared, alwaysPrepared: alwaysPrepared);
   }
 
   /// 装备方案 A/B：`optionType: "equipmentBundle"` 选择的选中值 → 逐条

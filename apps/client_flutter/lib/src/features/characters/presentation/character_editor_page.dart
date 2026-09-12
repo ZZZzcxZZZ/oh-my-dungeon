@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../domain/ability_score_generator.dart';
 import '../domain/character.dart';
 import '../domain/character_edit_draft.dart';
+import '../domain/character_manual_overrides.dart';
 import '../domain/class_rule_summary.dart';
 import '../domain/declared_levels.dart';
 import '../domain/dnd5e_rules.dart';
@@ -907,12 +908,20 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
                 customSpells: quickDraft.customSpells,
               ),
             );
+      // 手动覆盖**合并**而非覆盖（契约 §3.11 A3）：builder 已经写入了显式法术
+      // 选择的 `preparedEntryIds` / `alwaysPreparedEntryIds`，这里只补自定义法术，
+      // 不得把它们整段丢掉。解析与序列化只有 `CharacterManualOverrides` 一处。
+      final mergedOverrides = CharacterManualOverrides.fromJson(
+        Map<String, Object?>.from(
+          (baseDraft.data['manualOverrides'] as Map?) ??
+              const <String, Object?>{},
+        ),
+      ).copyWith(customSpells: quickDraft.customSpells);
       final draft = baseDraft.copyWith(
         data: {
           ...baseDraft.data,
           'story': quickDraft.storyData,
-          if (quickDraft.customSpells.isNotEmpty)
-            'manualOverrides': quickDraft.manualOverridesData,
+          'manualOverrides': mergedOverrides.toJson(),
         },
       );
       final ok = await widget.onSubmit(draft);

@@ -2,6 +2,7 @@ import '../../content/domain/content_entry.dart';
 import '../../rules/domain/character_build.dart';
 import 'character.dart';
 import 'character_content_reference.dart';
+import 'character_manual_overrides.dart';
 import 'declared_levels.dart';
 import 'dnd5e_rules.dart';
 import 'rules_driven_character_builder.dart';
@@ -93,6 +94,22 @@ class CharacterRuleProjector {
       oldData['contentRefs'],
       derivedData['contentRefs'],
     );
+    // 显式法术选择的"已准备 / 始终准备"镜像同样由派生更新（§3.11 A3）：
+    // **合并**（只改这两份镜像），用户的手动法术编辑原样保留。合并实现只有
+    // `CharacterManualOverrides.copyWithSpellPicksFrom` 一处。
+    if (derivedData['manualOverrides'] case final Map derivedOverrides) {
+      mergedData['manualOverrides'] = CharacterManualOverrides.fromJson(
+        Map<String, Object?>.from(
+          (oldData['manualOverrides'] as Map?) ?? const <String, Object?>{},
+        ),
+      )
+          .copyWithSpellPicksFrom(
+            CharacterManualOverrides.fromJson(
+              Map<String, Object?>.from(derivedOverrides),
+            ),
+          )
+          .toJson();
+    }
     mergedData['ruleSnapshots'] = _mergeMaps(
       oldData['ruleSnapshots'],
       derivedData['ruleSnapshots'],

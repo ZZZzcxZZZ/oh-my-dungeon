@@ -135,6 +135,12 @@ class CharacterQuickEditService {
           overrides.preparedSpellEntryIds,
           entryId,
         ),
+        // "始终准备"标记随法术一起移除，否则会留下一条指向不存在法术的
+        // 孤儿标记（展示层还要再过滤一次才能不显示它）。
+        alwaysPreparedEntryIds: _remove(
+          overrides.alwaysPreparedEntryIds,
+          entryId,
+        ),
       ),
     );
   }
@@ -151,6 +157,10 @@ class CharacterQuickEditService {
         preparedSpellEntryIds: prepared
             ? _add(overrides.preparedSpellEntryIds, entryId)
             : _remove(overrides.preparedSpellEntryIds, entryId),
+        // 取消准备时同时摘掉"始终准备"标记：两者不能互相矛盾。
+        alwaysPreparedEntryIds: prepared
+            ? overrides.alwaysPreparedEntryIds
+            : _remove(overrides.alwaysPreparedEntryIds, entryId),
       ),
     );
   }

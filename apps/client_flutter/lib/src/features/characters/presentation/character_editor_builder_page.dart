@@ -350,6 +350,8 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     final ruleChoiceWidgets = RuleChoiceGroupedSections(
       groups: ruleChoiceGroups,
     );
+    // 显式法术选择的法术池（`usesDedicatedOptionUi` 的 `spell` 分支）。
+    final spellChoicePools = _spellChoicePoolSections(activeRuleChoices);
     return switch (_currentStep) {
       0 => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -523,22 +525,28 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ruleChoiceWidgets,
-          if (ruleChoiceGroups.isEmpty)
+          // 显式法术选择（`optionType: "spell"`）由**法术池**承担（专用渲染器）；
+          // 声明了显式法术选择时，法术步骤只由它们驱动（§3.10.3-3 声明与选择
+          // 分离），不再同时显示"自由挑选"的全量列表。
+          ...spellChoicePools,
+          if (ruleChoiceGroups.isEmpty && spellChoicePools.isEmpty)
             _SpellChoiceSection(
               entries: spellEntries,
-              selected: _selectedSpellRefs,
+              selected: _selectedSpellRefs.toList(growable: false),
               onChanged: (next) =>
-                  setState(() => _replaceSet(_selectedSpellRefs, next)),
+                  setState(() => _replaceSet(_selectedSpellRefs, next.toSet())),
               maximumCantrips: spellSelectionRules.maximumCantrips,
               maximumLeveledSpells: spellSelectionRules.maximumLeveledSpells,
               maximumSpellLevel: spellSelectionRules.maximumSpellLevel,
               automaticRulesConfigured: spellSelectionRules.configured,
-              customSpells: _customSpells,
-              onAddCustom: _addCustomSpell,
-              onRemoveCustom: (index) =>
-                  setState(() => _customSpells.removeAt(index)),
               onOpenEntry: (entry) => _openEntry(entry),
             ),
+          _CustomSpellSection(
+            customSpells: _customSpells,
+            onAddCustom: _addCustomSpell,
+            onRemoveCustom: (index) =>
+                setState(() => _customSpells.removeAt(index)),
+          ),
         ],
       ),
       // 决策 D7：`builderStep: "details"` 也必须有渲染位置（示例包
@@ -836,6 +844,79 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         changed = true;
       }
     }
+  }
+
+  /// 显式法术选择（`optionType: "spell"`）的法术池**专门渲染器**。
+  ///
+  /// 候选 = `RuleChoiceSemantics.candidatesFor` 的条目候选：`maximumOptionLevel`
+  /// 与 `optionTags`（法术列表）的过滤**只在** `RuleChoiceResolver.optionsFor`
+  /// 一处（与引擎 `normalizeSelection` 同一份候选）；这里不再写第二套按环阶 /
+  /// 标签的判断，否则"界面上看得见、引擎判非法"就会变成静默阻塞。
+  ///
+  /// 上限 = `RuleChoiceQuota.effectiveMaximum`（`countsToward` 池的有效上限，
+  /// 池数值只有 `RuleChoiceQuota.limitsFor` 一处来源）。
+  List<Widget> _spellChoicePoolSections(
+    List<_ActiveRuleChoice> activeRuleChoices,
+  ) {
+    final spellChoices = activeRuleChoices
+        .where(
+          (active) =>
+              active.builderStep == 6 && active.definition.isSpellChoice,
+        )
+        .toList(growable: false);
+    if (spellChoices.isEmpty) return const <Widget>[];
+    final poolLimits = RuleChoiceQuota.limitsFor(
+      rules: Dnd5eRules.resolveClassRules(
+        entryId: _classEntryId,
+        classSummary: _className,
+        structured:
+            _entryById(_classEntryId)?.structured ?? const <String, Object?>{},
+      ),
+      level: _level,
+    );
+    return [
+      for (final active in spellChoices)
+        _SpellChoiceSection(
+          title: active.definition.label,
+          hint: active.definition.help,
+          blockedReason: _blockedReasonFor(active),
+          entries: _candidatesFor(active)
+              .map((candidate) => candidate.entry)
+              .whereType<ContentEntry>()
+              .toList(growable: false),
+          selected: _ruleChoices[active.key] ?? const <String>[],
+          maximum: RuleChoiceQuota.effectiveMaximum(
+            countsToward: active.definition.countsToward,
+            maximum: active.definition.maximum,
+            poolLimits: poolLimits,
+            usedByOthers: _poolUsageByOthers(activeRuleChoices, active),
+          ),
+          maximumSpellLevel: active.definition.maximumOptionLevel ?? 9,
+          onChanged: (next) => setState(() {
+            _ruleChoices[active.key] = next;
+            _applyRecommendedRuleChoices();
+          }),
+          onOpenEntry: _openEntry,
+        ),
+    ];
+  }
+
+  /// 同一 `countsToward` 池里**其它**选择已占的数量：引擎按声明顺序"先声明先占"
+  /// （决策 D8），界面用同一口径给出剩余额度；最终判定仍以引擎为准（超额会进
+  /// visible 的 pending，不静默丢弃）。
+  int _poolUsageByOthers(
+    List<_ActiveRuleChoice> activeRuleChoices,
+    _ActiveRuleChoice self,
+  ) {
+    final pool = self.definition.countsToward;
+    if (pool == null) return 0;
+    var used = 0;
+    for (final active in activeRuleChoices) {
+      if (active.key == self.key) continue;
+      if (active.definition.countsToward != pool) continue;
+      used += (_ruleChoices[active.key] ?? const <String>[]).length;
+    }
+    return used;
   }
 
   /// 「熟练」步骤的专门渲染器（`usesDedicatedOptionUi` 的选择 = `optionType:

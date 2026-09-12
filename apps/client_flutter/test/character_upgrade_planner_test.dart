@@ -509,6 +509,78 @@ void main() {
       );
     });
   });
+
+  // 任务 9 / 契约 §3.11 A3：升级派生出的"已准备法术"镜像必须**合并**进既有
+  // 手动覆盖（只改这两份），用户的手动覆盖原样保留。
+  test('升级合并显式法术选择镜像，不覆盖手动覆盖（§3.11 A3）', () {
+    final mage = _entry(
+      id: 'class:mage',
+      type: 'class',
+      name: 'Mage',
+      structured: const {
+        'classRules': {'hitDie': 6},
+      },
+      rules: const {
+        'progression': [
+          {
+            'levels': [2],
+            'choices': [
+              {
+                'id': 'spells-2',
+                'label': 'Spells',
+                'optionType': 'spell',
+                'minimum': 0,
+                'maximum': 1,
+                'optionTags': ['spell-list:mage'],
+                'maximumOptionLevel': 1,
+              },
+            ],
+          },
+        ],
+      },
+    );
+    final spark = _entry(
+      id: 'spell:spark',
+      type: 'spell',
+      name: 'Spark',
+      tags: const ['spell-list:mage'],
+      structured: const {'level': 0},
+    );
+    final planner = CharacterUpgradePlanner(
+      entries: {mage.id: mage, spark.id: spark},
+    );
+    final base = _character();
+    final initial = base.copyWith(
+      data: <String, Object?>{
+        ...base.dataMap,
+        'build': <String, Object?>{
+          'level': 1,
+          'selections': <String, String>{'class': 'class:mage'},
+          'choices': <String, List<String>>{},
+        },
+      },
+    );
+
+    final plan = planner.plan(initial);
+    final completed = planner.select(
+      initial,
+      plan,
+      plan.choices.single.key,
+      <String>['spell:spark'],
+    );
+    final upgraded = planner.apply(initial, completed);
+
+    final overrides = upgraded.dataMap['manualOverrides']! as Map;
+    expect(
+      (overrides['spells']! as Map)['preparedEntryIds'],
+      <String>['spell:spark'],
+    );
+    expect(
+      (overrides['features']! as Map)['addedEntryIds'],
+      <String>['feature:homebrew'],
+      reason: '合并只改法术准备镜像，手动覆盖必须保留',
+    );
+  });
 }
 
 CharacterSheet _character() {

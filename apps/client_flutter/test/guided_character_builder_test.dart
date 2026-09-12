@@ -456,12 +456,20 @@ void main() {
     expect(find.text('Spark'), findsWidgets);
     expect(find.text('Ward'), findsWidgets);
     expect(find.text('Storm'), findsNothing);
+    // 任务 9（机制变更）：显式法术选择由**法术池**承担（专用渲染器），不再是
+    // 通用 chip 卡片；`recommendedEntryIds` 仍在池里预选。断言从"FilterChip
+    // 选中"改为"池里的法术已勾选"，语义不变（推荐项默认生效）。
     expect(
       tester
-          .widget<FilterChip>(find.widgetWithText(FilterChip, 'Spark'))
-          .selected,
+          .widget<CheckboxListTile>(
+            find.byKey(const Key('spell-choice-guide:spell/spark')),
+          )
+          .value,
       isTrue,
     );
+    // 同一选择不再由通用卡片重复渲染（渲染判据 `usesDedicatedOptionUi` 已并入
+    // `spell`：一条选择只有一个渲染位置）。
+    expect(find.widgetWithText(FilterChip, 'Spark'), findsNothing);
 
     await tester.enterText(
       find.byKey(const Key('standard-character-name-field')),

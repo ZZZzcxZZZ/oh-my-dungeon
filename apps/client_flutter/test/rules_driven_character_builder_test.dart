@@ -1455,6 +1455,139 @@ void main() {
       'pp': 0,
     });
   });
+
+  // 任务 9 / 契约 §3.11 A3：显式法术选择的选中法术**全部**进
+  // `manualOverrides.spells.preparedEntryIds`；`countsToward == null` 的那些
+  // **额外**进 `alwaysPreparedEntryIds`。
+  test('countsToward == null 的显式法术选择额外记 alwaysPreparedEntryIds', () {
+    final wizard = _entry(
+      id: 'test:class/wizard',
+      type: 'class',
+      name: '法师',
+      structured: const {
+        'classRules': {'hitDie': 6},
+      },
+      rules: const {
+        'choices': [
+          {
+            'id': 'always-spells',
+            'label': '始终准备的法术',
+            'optionType': 'spell',
+            'minimum': 0,
+            'maximum': 2,
+            'optionTags': ['spell-list:wizard'],
+            'maximumOptionLevel': 1,
+          },
+          {
+            'id': 'spellbook',
+            'label': '法术书',
+            'optionType': 'spell',
+            'minimum': 0,
+            'maximum': 2,
+            'optionTags': ['spell-list:wizard'],
+            'maximumOptionLevel': 1,
+            'countsToward': 'spellbook',
+          },
+        ],
+      },
+    );
+    final spark = _entry(
+      id: 'test:spell/spark',
+      type: 'spell',
+      name: '电火花',
+      structured: const {'level': 0},
+      tags: const ['spell-list:wizard'],
+      rules: const {},
+    );
+    final ward = _entry(
+      id: 'test:spell/ward',
+      type: 'spell',
+      name: '护盾术',
+      structured: const {'level': 1},
+      tags: const ['spell-list:wizard'],
+      rules: const {},
+    );
+    final draft = RulesDrivenCharacterBuilder(
+      entries: {wizard.id: wizard, spark.id: spark, ward.id: ward},
+    ).build(
+      name: '测试角色',
+      build: const CharacterBuild(
+        level: 1,
+        selections: {'class': 'test:class/wizard'},
+        choices: {
+          'test:class/wizard#always-spells': ['test:spell/ward'],
+          'test:class/wizard#spellbook': ['test:spell/spark'],
+        },
+      ),
+      abilities: const {'int': 16},
+    );
+
+    final overrides = draft.data['manualOverrides']! as Map;
+    expect(overrides['spells'], {
+      'preparedEntryIds': ['test:spell/ward', 'test:spell/spark'],
+      'alwaysPreparedEntryIds': ['test:spell/ward'],
+    });
+  });
+
+  test('repeatable 的显式法术选择：镜像去重（D9），次数只留在 build.choices', () {
+    final wizard = _entry(
+      id: 'test:class/wizard',
+      type: 'class',
+      name: '法师',
+      structured: const {
+        'classRules': {'hitDie': 6},
+      },
+      rules: const {
+        'choices': [
+          {
+            'id': 'always-spells',
+            'label': '始终准备的法术',
+            'optionType': 'spell',
+            'minimum': 0,
+            'maximum': 2,
+            'repeatable': true,
+            'optionTags': ['spell-list:wizard'],
+            'maximumOptionLevel': 0,
+          },
+        ],
+      },
+    );
+    final spark = _entry(
+      id: 'test:spell/spark',
+      type: 'spell',
+      name: '电火花',
+      structured: const {'level': 0},
+      tags: const ['spell-list:wizard'],
+      rules: const {},
+    );
+    final draft = RulesDrivenCharacterBuilder(
+      entries: {wizard.id: wizard, spark.id: spark},
+    ).build(
+      name: '测试角色',
+      build: const CharacterBuild(
+        level: 1,
+        selections: {'class': 'test:class/wizard'},
+        choices: {
+          'test:class/wizard#always-spells': [
+            'test:spell/spark',
+            'test:spell/spark',
+          ],
+        },
+      ),
+      abilities: const {'int': 16},
+    );
+
+    expect(draft.data['choices'], {
+      'test:class/wizard#always-spells': [
+        'test:spell/spark',
+        'test:spell/spark',
+      ],
+    });
+    expect((draft.data['manualOverrides']! as Map)['spells'], {
+      'preparedEntryIds': ['test:spell/spark'],
+      'alwaysPreparedEntryIds': ['test:spell/spark'],
+    });
+  });
 }
 
 ContentEntry _entry({

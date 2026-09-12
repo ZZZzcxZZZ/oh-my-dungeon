@@ -1291,6 +1291,138 @@ void main() {
     );
   });
 
+  // 任务 9：显式 `optionType: "spell"` 的选择由**法术池**渲染（专用渲染器），
+  // 候选按 `maximumOptionLevel`（环阶）与 `optionTags`（法术列表）过滤——与引擎
+  // 同一份 `candidatesFor`；选中的法术落库进 `manualOverrides`。
+  testWidgets('显式法术选择由法术池渲染并按环阶/列表过滤', (tester) async {
+    tester.view.physicalSize = const Size(1200, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    CharacterEditDraft? submitted;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          contentEntries: [
+            _entry(
+              id: 'guide:class/mage',
+              type: 'class',
+              name: '法师',
+              structured: const {
+                'classRules': {'hitDie': 6},
+              },
+              rules: const {
+                'choices': [
+                  {
+                    'id': 'spells-1',
+                    'label': '一环法术',
+                    'optionType': 'spell',
+                    'minimum': 0,
+                    'maximum': 2,
+                    'builderStep': 'spells',
+                    'optionTags': ['spell-list:x'],
+                    'maximumOptionLevel': 0,
+                    'countsToward': 'prepared',
+                  },
+                ],
+              },
+            ),
+            _entry(
+              id: 'guide:background/sage',
+              type: 'background',
+              name: '贤者',
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:species/human',
+              type: 'species',
+              name: '人类',
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:spell/spark',
+              type: 'spell',
+              name: '电火花',
+              structured: const {'level': 0, 'school': '塑能'},
+              tags: const ['spell-list:x'],
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:spell/ward',
+              type: 'spell',
+              name: '护盾术',
+              structured: const {'level': 1, 'school': '防护'},
+              tags: const ['spell-list:x'],
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:spell/hex',
+              type: 'spell',
+              name: '邪术之箭',
+              structured: const {'level': 0, 'school': '塑能'},
+              tags: const ['spell-list:y'],
+              rules: const {},
+            ),
+          ],
+          onSubmit: (draft) async {
+            submitted = draft;
+            return true;
+          },
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const Key('standard-character-name-field')),
+      '米尔',
+    );
+    await tester.pumpAndSettle();
+
+    await _goToDesktopStep(tester, 6);
+    // 池标题 = 选择 label；上限来自 `maximum`（池无声明上限时等于 maximum）。
+    expect(find.text('一环法术'), findsOneWidget);
+    expect(find.text('已选 0/2'), findsOneWidget);
+    expect(find.byKey(const Key('spell-choice-guide:spell/spark')), findsOneWidget);
+    // 环阶过滤：1 环超出 `maximumOptionLevel: 0`。
+    expect(find.byKey(const Key('spell-choice-guide:spell/ward')), findsNothing);
+    // 列表过滤：另一条法术列表的戏法不在候选里。
+    expect(find.byKey(const Key('spell-choice-guide:spell/hex')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('spell-choice-guide:spell/spark')));
+    await tester.pumpAndSettle();
+    expect(find.text('已选 1/2'), findsOneWidget);
+
+    // 自定义法术与显式法术选择**合并**（不互相覆盖）。
+    await tester.tap(find.byKey(const Key('add-custom-spell')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('custom-spell-name')),
+      '自创星火',
+    );
+    await tester.tap(find.byKey(const Key('custom-spell-confirm')));
+    await tester.pumpAndSettle();
+
+    await _goToDesktopStep(tester, 8);
+    await tester.tap(find.widgetWithText(FilledButton, '创建角色'));
+    await tester.pumpAndSettle();
+
+    expect(submitted, isNotNull);
+    final build = submitted!.data['build']! as Map;
+    expect(
+      (build['choices']! as Map)['guide:class/mage#spells-1'],
+      ['guide:spell/spark'],
+    );
+    final overrideSpells =
+        (submitted!.data['manualOverrides']! as Map)['spells']! as Map;
+    expect(overrideSpells['preparedEntryIds'], ['guide:spell/spark']);
+    expect(
+      overrideSpells['custom'],
+      hasLength(1),
+      reason: '自定义法术不能被选择镜像覆盖掉',
+    );
+  });
+
   // 结构守卫（任务 7）：`usesDedicatedOptionUi` 只允许作为**渲染判据**存在
   // （决定由哪个专门渲染器画），校验 / 免检路径不得再出现它；升级规划器与独立
   // 升级页完全不得出现（本级新增的选择由共享组件真的渲染，无需免检）。

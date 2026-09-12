@@ -420,9 +420,15 @@ PHB 2024 官方表格）：
    **必须显式声明 `classRules`**（`builtinSlugRequiresExplicitRules`），杜绝"误写 id
    末段就悄悄继承内置数值"。
 7. 自制职业可以只靠 `classRules` 声明规则；未声明字段显示"未声明"而非猜测。
-8. 技能选择与法术选择收敛到同一套声明（`rules.choices` / `rules.progression[].choices`）；
-   完整的选择系统运行时语义属计划 2，本轮尚未支持的选择字段导入即拒收
-   （`unsupportedChoiceField` / `invalidCountsToward` / `invalidRequires`，§9.2.3）。
+8. **选择系统运行时语义落地**（计划 2，2026-09-12）：内联选项与字符串简写选中即生效
+   （自动授予熟练/属性加值）；`repeatable` 允许同一选项选多次并按其次数结算 `grants`；
+   `countsToward` 计入共享额度池（`prepared` / `known` 取职业 `prepared` 列，`spellbook`
+   无独立数值列 → 不限）；`requires` 不满足时该选择/选项不可用并在界面说明原因；`group` /
+   `help` 落到选择面板；`optionType: "spell"` 走法术池并把选中值镜像进
+   `manualOverrides.spells.alwaysPreparedEntryIds`。导入期不再"存在即拒收"，改为真正的
+   取值/引用校验（`invalidCountsToward` / `invalidRequires` / `invalidAutoGrant`，§9.2.3）。
+   技能选择由 `rules.progression[].choices` 的 `optionType: "skill"` 承担并写入
+   `build.choices`（背景技能仍由背景预设承担）。
 9. **新增 8 个职业的资源池追踪**（连同原有的战士、野蛮人共 10 个职业、13 项资源）——
    能力增加，不是回归；老角色首次打开时由项目器补齐。
 10. 武器攻击改为读取物品条目自身的 `structured`（`damage` / `category` / `finesse`），
@@ -450,7 +456,7 @@ PHB 2024 官方表格）：
 | 骰子细节 | 优势/劣势只允许二选一，未实现"同时存在即抵消"；攻击掷出天然 20 不自动重击翻倍伤害 |
 | 职业资源的效果 | 只追踪"用了几次 / 怎么恢复"（10 个职业 13 项资源的上限与恢复语义**已建模**）；资源池的**具体效果未结算**：引导神力选项、野性形态数据与形态切换、术法点转换法术位、圣疗治疗结算、魔法诡计恢复法术位、诗人激励骰的授予与消耗 |
 | 伤害抗性与免疫 | `conditionResistance` grant 已从契约移除，抗性/免疫结算**未建模** |
-| 选择系统（计划 2） | `repeatable` / `countsToward` / `requires` / `group` / `help` 与内联选项的 `grants` 尚无运行时消费；本轮在导入期以 `unsupportedChoiceField` / `invalidCountsToward` / `invalidRequires` 拒收（§9.2.3） |
+| 选择系统（计划 2，已实现） | `repeatable` / `countsToward` / `requires` / `group` / `help` 与内联选项 `grants` **已实现**（§9.2.3）。能力边界：`requires` 的 `ability` 门槛按**入参基础属性**判定（由其它选择授予的属性加值不计入门槛）；`spellbook` 池无独立数值列，只受选择自身 `maximum` 约束；PHB 提取器尚未产出 `optionType: "spell"` 选择（运行时已支持）；背景技能仍走中文名预设 |
 | 专精（Expertise） | 技能加值只有熟练/非熟练两档，无 ×2 专精 |
 | 多职业 | 不支持多职业等级与法术位合并 |
 | XP 与升级 | 无经验值系统；等级由用户维护，升级按 +1 级规划（内容包驱动可选内容） |
@@ -632,10 +638,39 @@ PHB 2024 官方表格）：
   `speed`、`armorClass`、`hitPoints`、`ability`。`hitPoints` 的 `value` / `formula` 二选一；
   `ability` 只接受 `value`，并在**派生之前**施加（影响 HP / AC / 豁免 / 技能 / 法术 DC）。
 - 选择（`choices`）写在 `rules.choices` 或 `rules.progression[].choices`，选择键为
-  `{sourceEntryId}#{choiceId}`。本轮选择**只承载形状与参照**；完整的选择系统运行时语义属计划 2，
-  声明了但还无法消费的字段一律在导入期拒收：`repeatable` / `group` / `help` 与内联选项的
-  `grants` → `unsupportedChoiceField`；`countsToward` → `invalidCountsToward`；
-  `requires` → `invalidRequires`（后两者本轮"存在即拒收"，计划 2 收窄为真正的取值校验）。
+  `{sourceEntryId}#{choiceId}`（多等级步骤带生效等级：`{sourceEntryId}#{choiceId}#{level}`）。
+  选择系统的**运行时语义已实现**（计划 2，2026-09-12）：字段一律声明即生效，导入期只做
+  取值/引用校验。
+
+**选择对象字段全集**：
+
+| 字段 | 类型 | 语义 |
+|---|---|---|
+| `id` / `label` | string | 必填；选择键见上 |
+| `optionType` | string | **条目类型**（`subclass`/`feat`/`spell`/`item`/`classFeature`/`equipmentBundle`/`custom`…）或**值类型**（`value`/`skill`/`ability`/`language`/`damageType`/`weaponMastery`） |
+| `minimum` / `maximum` | int | 默认 `1` / 等于 `minimum` |
+| `options` | array | **内联选项**：字符串 `"察觉"` 等价于 `{id:"察觉", label:"察觉"}`；对象 `{id, label, description?, data?, grants?, requires?}`。选中内联选项即应用其 `grants` |
+| `optionEntryIds` / `optionTags` | string[] | 条目选项的白名单 / 标签过滤（AND 跨字段、OR 同字段） |
+| `maximumOptionLevel` | int? | 条目选项的等级上限（0–9） |
+| `recommendedEntryIds` | string[] | 推荐项，界面预选 |
+| `repeatable` | bool，默认 `false` | 同一 option id 可被选多次；`maximum` 随之成为**次数上限**，每次选取独立结算 `grants` |
+| `countsToward` | `"spellbook"` / `"known"` / `"prepared"` / `null` | 计入哪个数量池；`null` = 不占池，只受 `maximum`。`prepared` / `known` 取职业 `spellcasting.prepared` 列，`spellbook` 无独立数值列（不限） |
+| `requires` | object[] | `{choice, option?}` 或 `{ability, minimum}`；两形态字段互斥，混写/多余字段/非法取值导入报 `invalidRequires`。不满足时选择（或 `options[].requires` 的选项）不可用并说明原因，已选值进 pending 不静默丢弃 |
+| `group` / `help` | string? | 分组标题与帮助文案（呈现在选择面板） |
+| `builderStep` | string | 创建向导步骤提示（`allowedBuilderSteps`）。**值类型/专用 UI 例外**：`skill` 恒在「熟练」步骤、`spell` 恒在「法术」步骤，位置只由 `optionType` 决定（`builderStep` 被忽略） |
+
+**字符串简写自动授予**（写成对象可用显式 `grants` 覆盖）：
+
+| `optionType` | 自动授予 |
+|---|---|
+| `skill` | `{kind: "proficiency", target: "skill:<选项 id>"}`；id 必须落在档案 `skills` 内，否则 `unknownSkill` |
+| `ability` | `{kind: "ability", target: "<选项 id>", value: <选项 data.value ?? 1>}`；id 必须落在档案 `abilities` 内（否则 `unknownAbility`），`data.value` 必须为正整数 |
+| `language` | 不做数值派生：写入角色卡的 `data.profile.languages`（并镜像到 `data.choices`） |
+| `damageType` / `weaponMastery` / `value` | 只记录选择（`data.choices`），供显示与后续特性引用 |
+
+无法推断自动授予（条目类型的字符串元素没有 grants；或 `ability` 选项的 `data.value` 非正整数）
+报 `invalidAutoGrant`。`requires` 的 `ability` 门槛读**入参基础属性**（`build.abilities`），
+不用结算后属性——否则选择与前置互相引用、求值没有不动点。
 
 #### 9.2.4 `Table<T>` 取值语义与声明范围
 
@@ -662,7 +697,7 @@ PHB 2024 官方表格）：
 
 | 严重度 | 行为 | 主要 code |
 |---|---|---|
-| error | **阻断整包**、不写入本地库，`path` 精确到字段 | 格式与档案：`unsupportedFormatVersion`、`unknownField`、`invalidHitDie`、`unknownAbility`、`invalidSpellcastingMode`、`unknownArchetype`、`invalidTable`、`invalidMaxSpec`、`duplicateResourceId`、`invalidRecovery`、`unknownGrantKind`、`builtinSlugRequiresExplicitRules`；选择：`unknownOptionType`、`invalidChoiceRange`、`invalidOptionRef`、`duplicateOptionId`、`invalidValueOption`、`unknownSkill`、`invalidSkillCount`、`unsupportedChoiceField`、`invalidCountsToward`、`invalidRequires` |
+| error | **阻断整包**、不写入本地库，`path` 精确到字段 | 格式与档案：`unsupportedFormatVersion`、`unknownField`、`invalidHitDie`、`unknownAbility`、`invalidSpellcastingMode`、`unknownArchetype`、`invalidTable`、`invalidMaxSpec`、`duplicateResourceId`、`invalidRecovery`、`unknownGrantKind`、`builtinSlugRequiresExplicitRules`；选择：`unknownOptionType`、`invalidChoiceRange`、`invalidOptionRef`、`duplicateOptionId`、`invalidValueOption`、`unknownSkill`、`invalidSkillCount`、`invalidCountsToward`、`invalidRequires`、`invalidAutoGrant` |
 | warning | 在导入预览中以次级样式列出，**不阻断确认** | `missingCoreField`、`missingPreparedColumn`、`ignoredGlobalList`、`unresolvedClassRule`、`zeroLevelResource` |
 
 - 旧格式一律按 error 处理并提示用新版工具重新生成/重新提取；包自带的 `abilities` / `skills`
@@ -1203,8 +1238,12 @@ Material 3 设计系统契约（`DESIGN.md` 与契约测试/golden）；自托�
 职业规则 4 字段（`hitDie` / `savingThrowAbilities` / `spellcasting` / `resources`）、
 `rules.progression[].levels` 多等级步骤、声明范围（部分声明为一等公民）在全部相关 GUI 可见、
 导入期规则诊断（error 阻断整包 / warning 只提示）、PHB 2024 私有包按新契约重提取。
-**未完成**：选择系统运行时语义（计划 2）、`patch`/`replace` 与来源显示（S3）、
-作者 GUI 与 `.dndpack` 导出（S4）——见 §7.7 与
+**选择系统运行时语义（计划 2，2026-09-12 完成）**：内联选项与字符串简写选中即生效、
+`repeatable` / `countsToward` / `requires` / `group` / `help` 全部落地、`optionType: "spell"`
+走法术池、装备 A/B 写入 `inventory` / `currency`、编辑器三处选择界面共用 `RuleChoiceSection`；
+导入期从"存在即拒收"收窄为取值/引用校验并新增 `invalidAutoGrant`（§9.2.3）。
+**未完成**：`patch`/`replace` 与来源显示（S3）、作者 GUI 与 `.dndpack` 导出（S4），
+以及 PHB 提取器产出 `optionType: "spell"` 选择与背景条目驱动技能授予（§11）——见 §7.7 与
 `docs/plans/2026-09-10-rules-contract-core.md` 的「待办」段。
 
 ### 实测基线（2026-09-12）
@@ -1212,9 +1251,9 @@ Material 3 设计系统契约（`DESIGN.md` 与契约测试/golden）；自托�
 | 项 | 结果 |
 |---|---|
 | `flutter analyze` | 0 问题 |
-| `flutter test` | **1237 通过 / 6 跳过**（3 条 golden 默认跳过 + 3 条依赖 `--dart-define` 私有包路径的用例） |
+| `flutter test` | **1391 通过 / 6 跳过**（3 条 golden 默认跳过 + 3 条依赖 `--dart-define` 私有包路径的用例） |
 | 服务端 `npm run lint` + `npm test` | 24 套件 / 355 测试通过，0 跳过 |
-| `npm run test:scripts` | **37 通过**（4 个脚本测试套件 + drift worker 产物清单校验；本地有 `private-imports/` 时 0 跳过，公开 CI 上 9 条提取类用例自行 skip） |
+| `npm run test:scripts` | **38 通过**（4 个脚本测试套件 + drift worker 产物清单校验；本地有 `private-imports/` 时 0 跳过，公开 CI 上 9 条提取类用例自行 skip） |
 | `npm run lint:design` | 0 error / 0 warning（1 条 token 统计 info） |
 | `npm run validate:phb-private` | 通过（校验器 + 真实导入器 3 个用例） |
 | CI | 6 个 job：`server` / `client` / `design` / `golden` / `docker` / `scripts` |

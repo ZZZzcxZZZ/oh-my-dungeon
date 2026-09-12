@@ -469,6 +469,18 @@ S3 的 patch/replace 才需要跨包优先级与冲突 UI（届时一条 errata 
 例如 2024 邪术师：`{"mode": "prepared", "ability": "cha", "archetype": "pact"}` ——
 它**准备**法术（mode），但法术位走**契约魔法**（archetype）。
 
+> **状态（2026-09-12，计划 2 已落地）**：§3.10 的选择系统**运行时语义已实现**——
+> `options[].grants`（含字符串简写自动授予）、`repeatable`、`countsToward`、`requires`、
+> `group` / `help`、`optionType: "spell"` 的法术池、装备 A/B 写入 `inventory` / `currency`，
+> 以及编辑器选择面板（创建向导 / 编辑器升级队列 / 独立升级页共用 `RuleChoiceSection`）。
+> 唯一实现点：候选枚举 `RuleChoiceSemantics.candidatesFor`、规范化
+> `normalizeSelection`、自动授予 `autoGrantsFor`、前置判定 `requiresSatisfied`、额度
+> `RuleChoiceQuota.effectiveMaximum`。实现计划见
+> [`plans/2026-09-12-choice-system-runtime.md`](../plans/2026-09-12-choice-system-runtime.md)。
+> **仍未落地**（§11）：PHB 提取器尚未产出 `optionType: "spell"` 的选择（运行时已支持该类
+> 选择，只是提取器把法术选择交给 `classRules.spellcasting` 数值承担）；背景条目驱动技能授予
+> 仍走中文名预设 `_presetSkillsForBackground`。
+
 #### 3.10.2 目标：一个模型，两种选项载体
 
 A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progression[].choices`（作用域键沿用
@@ -517,7 +529,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `id` / `label` | string | 必填；选择键 = `{sourceEntryId}#{id}` |
 | `optionType` | string | **条目类型**（`subclass`/`feat`/`spell`/`item`/`classFeature`/`equipmentBundle`/`custom`…）或**值类型**（`value`/`skill`/`ability`/`language`/`damageType`/`weaponMastery`） |
 | `minimum` / `maximum` | int | 默认 `1` / 等于 `minimum`；`maximum` 为可选数量上限 |
-| `options` | array | **内联选项**（唯一写法，没有别名）。元素可以是字符串 `"察觉"`（等价于 `{id:"察觉", label:"察觉"}`）或对象 `{id, label, description?, data?, grants?}`；字符串元素会按 `optionType` 自动补 `grants`（见下） |
+| `options` | array | **内联选项**（唯一写法，没有别名）。元素可以是字符串 `"察觉"`（等价于 `{id:"察觉", label:"察觉"}`）或对象 `{id, label, description?, data?, grants?, requires?}`；字符串元素会按 `optionType` 自动补 `grants`（见下）。`options[].requires` 与选择级同形，用来隐藏**该选项**（决策 D6） |
 | `optionEntryIds` / `optionTags` | string[] | 条目选项的白名单 / 标签过滤（跨字段 AND、同字段 OR，沿用现有语义） |
 | `maximumOptionLevel` | int? | 条目选项的等级上限（0–9） |
 | `recommendedEntryIds` | string[] | 推荐项，UI 预选 |
@@ -537,12 +549,27 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 
 | `optionType` | 自动 grants |
 |---|---|
-| `skill` | `{kind: "proficiency", target: "skill:<名>"}` |
-| `ability` | `{kind: "ability", target: "<属性键>", value: <choice.value ?? 1>}` |
-| `language` | `{kind: "note", ...}` 不适用 → 记录到角色卡的"语言"列表（`data.languages`），不做数值派生 |
+| `skill` | `{kind: "proficiency", target: "skill:<id>"}`；`<id>` 必须落在档案 `skills` 内，否则导入报 `unknownSkill` |
+| `ability` | `{kind: "ability", target: "<选项 id>", value: <data.value ?? 1>}`；加值写在选项的 `data.value`（决策 D2，整数、正整数），`<选项 id>` 必须落在档案 `abilities` 内，否则导入报 `unknownAbility` |
+| `language` | 不做数值派生：记录到角色卡的"语言"列表（既有存储 `data.profile.languages`，决策 D6），`data.choices` 另存一份选中值镜像 |
 | `damageType` / `weaponMastery` / `value` | 只记录选择（`data.choices`），供内容显示与后续特性引用 |
 
 写成完整对象时，作者可覆盖自动 grants（显式 `grants` 优先），也可给选项加 `description` / `data`。
+**无法推断**（条目类型的字符串元素没有 grants，或 `ability` 选项的 `data.value` 不是正整数）
+在导入期报 `invalidAutoGrant`（决策 D1）。
+
+**三个实现口径（决策，2026-09-12）**：
+
+- **`countsToward` 的额度来源**（D1/D3）：池是**具名额度**。`prepared` 与 `known` 共用职业
+  `classRules.spellcasting.prepared` 逐级表（客户端只有这一列"已知/准备"数值）；
+  `spellbook` **没有独立数值列 → 无上限**（只受选择自身 `maximum` 约束）；省略 / `null` 不占池。
+  选择声明的 `maximum` 与池的剩余额度取小，超额部分进 pending 并在界面说明原因。
+- **`requires` 的能力门槛读入参基础属性**（D2/D4）：用 `CharacterBuild.abilities`（玩家输入的
+  属性值），**不是**结算后的有效属性——否则「选择」与「前置」互相引用、求值没有不动点。
+  代价：由另一个选择授予的属性加值不满足前置（见 §7.7 已知限制）。
+- **`requires.option` 匹配选中值**（D5）：内联选项 id 与条目 id 都算；存在性判定 = 该选择的
+  候选集（`RuleChoiceSemantics.candidatesFor`）。`{choice, option}` 的作用域是同一
+  `sourceEntryId` 或沿 `relations` 的 `featureOf` / `subclassOf` 链向上的祖先（A4）。
 
 #### 3.10.3 设计要点
 
@@ -703,8 +730,8 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `unknownField` | `classRules` 顶层、`spellcasting` 对象内、**每个资源对象内**、选择对象内出现未定义字段 | `未知字段 classRules.hitDices，是否想写 hitDie？` |
 | `invalidHitDie` | `hitDie` 不是标准骰面 `{4,6,8,10,12}`，或写成 `"d10"` 字符串 | `生命骰只写整数且必须是标准骰面 4/6/8/10/12，例如 d10 写 10` |
 | `unknownAbility` | 豁免 / 施法属性 / `formula ability:x` / `kind:"ability"` 的 `target` 不在 `abilities` | `未知属性键 "力量"，可用：str, dex, con, int, wis, cha` |
-| `unknownSkill` | `optionType: "skill"` 的选择里的选项不在 `skills` | `未知技能 "特技"（可用别名：杂技）` |
-| `invalidSkillCount` | 技能选择的 `minimum`/`maximum` 不在 0..选项数 | `技能选择的数量必须为 0..6` |
+| `unknownSkill` | `optionType: "skill"` 的选择里的选项 **id** 不在 `skills`（运行期由 `autoGrantsFor` 把选项 id 变成 `skill:<id>`，所以判据是 id） | `未知技能 "特技"（unknownSkill）` |
+| `invalidSkillCount` | 技能选择的 `minimum`/`maximum` 不在 0..选项数（候选数 = `RuleChoiceSemantics.candidatesFor` 的长度） | `技能选择的数量必须为 0..6` |
 | `invalidSpellcastingMode` | `mode` 不在枚举 | `spellcasting.mode 必须是 prepared / known / none` |
 | `unknownArchetype` | `archetype` 不在 `progressions` | `未知原型 "three-quarter-caster"` |
 | `invalidTable` | `Table<T>` 键不在 1..20、数组长度为 0 或 >20、值类型不符或为负；`resources[].startsAtLevel` 不在 1..20（沿用本 code，不新增） | `prepared["21"] 的键必须为 1..20`（**短数组合法**，见 §3.12） |
@@ -719,16 +746,18 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `invalidOptionRef` | 条目选项引用不存在、或未通过 `optionType`/`optionTags`/`maximumOptionLevel` 过滤、或 `recommendedEntryIds` 不合法 | `选项 "x:feat/a" 不满足本选择的类型/标签/等级过滤` |
 | `duplicateOptionId` | 同一选择内 inline 选项 id 重复，或 id 与条目选项冲突 | `选项 id "asi" 重复` |
 | `invalidValueOption` | 值类型选择里出现条目选项字段（`optionEntryIds`/`optionTags`），或值类型选择未写内联 `options` | `值类型选择不允许 optionEntryIds` |
-| `invalidRequires` | `requires` 引用了不存在的 `choice`/`option`，或 `ability` 非法、`minimum` 非正 | `requires 引用的选择 "spellbook-x" 不存在` |
-| `invalidCountsToward` | `countsToward` 不在 `spellbook`/`known`/`prepared`/`null` | `countsToward 必须是 spellbook / known / prepared 或省略` |
-| `invalidAutoGrant` | 字符串简写无法为该 `optionType` 推断 grants，且未显式写 `grants` | `optionType "value" 的选项 "x" 缺少 grants，且无法自动推断` |
-| `unsupportedChoiceField` | 选择对象或内联选项里出现**本轮尚无运行时消费**的字段：`repeatable` / `group` / `help`，以及内联选项对象的 `grants` | `选择系统的「repeatable」尚未实现（计划 2 落地前一律拒收）` |
+| `invalidRequires` | `requires` 元素形状非法（两形态混写 / 缺字段 / 多余字段，解析层 fail-fast；取值侧由导入器给出精确 path）、引用的 `choice` 不在同一 `sourceEntryId` 或其 `featureOf` / `subclassOf` 祖先内、`option` 不在该选择的候选集（`candidatesFor`）里、`ability` 不在 `abilities`、`minimum` 非正 | `requires 引用的选择 "spellbook-x" 不存在（invalidRequires）` |
+| `invalidCountsToward` | `countsToward` 不在 `spellbook`/`known`/`prepared` 且非 `null` | `countsToward 必须是 spellbook / known / prepared 或省略（invalidCountsToward）` |
+| `invalidAutoGrant` | 字符串简写无法为该 `optionType` 推断 grants 且未显式写 `grants`（条目类型的字符串元素）；或值类型候选没有显式 `grants` 时自动推断失败（`ability` 的 `data.value` 非正整数） | `optionType "classFeature" 的选项 "星界之势" 缺少 grants，且无法自动推断（invalidAutoGrant）` |
 
-> `unsupportedChoiceField` 是"不接受声明了但用不了"（§3.10.3 第 7 条）的落点：本轮选择系统的
-> 运行时语义由计划 2 承接（§11），在此之前这些字段**导入即拒收**，而不是静默忽略。
-> `countsToward` / `requires` 同理，但按字段语义各用自己的 code 报出
-> （`invalidCountsToward` / `invalidRequires`，见上表；计划 2 把它们收窄为真正的取值校验）。
-> 计划 2 实现后这些字段改为被真正消费，对应的拒收分支随之退场。
+> **`unsupportedChoiceField` 已退役**（计划 2，2026-09-12）：`repeatable` / `group` / `help` /
+> 内联选项 `grants` 现在都有真实运行时消费，导入期**放行**并按上面的取值/引用规则校验
+> （`countsToward` → `invalidCountsToward`；`requires` → `invalidRequires`；无法推断自动授予
+> → `invalidAutoGrant`）。`unsupportedChoiceField` 在 `lib/` 内**没有任何产生点**，规格与
+> `docs/README.md` 的清单里也不再有它。
+>
+> **不接受"声明了但用不了"**（§3.10.3 第 7 条）依旧成立：这条原则现在由"取值/引用校验 +
+> 运行期真正消费"共同保证，而不是靠"存在即拒收"。
 
 ### 5.2 Warning（可导入，导入预览中列出）
 
@@ -849,19 +878,34 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
    **状态：本轮达成**（`reextracted_bundle_golden_test.dart`；缺私有包时只注册显式 skip 占位）。
    注意：§7 第 11 条（武僧豁免）是**有意的数值更正**，不在"与改造前相等"的字面范围内。
 4. §6.3 合成自制职业包端到端通过（含升级与选择系统专项）。
-   **状态：本轮部分达成**——职业数值端到端由 `homebrew_class_end_to_end_test.dart` 覆盖；
-   **选择系统专项由计划 2 承接**。
+   **状态：本轮达成（计划 2 收尾）**——职业数值端到端与选择系统专项都由
+   `homebrew_class_end_to_end_test.dart` 覆盖：真实导入 `samples/homebrew-astral-knight`
+   建角色、字符串简写自动授予、内联 `grants` / `ability` 改变派生、`repeatable` 结算两次、
+   `requires` 不满足进 pending、装备 A/B 写入 `inventory` / `currency`、`optionType: "spell"`
+   受 `prepared` 池约束、`countsToward: null` 记 `alwaysPreparedEntryIds`、`group` / `help`
+   落到选择面板，以及创建向导路径在 3 级可建出角色。
 5. §5.1 / §5.2 每条诊断都有对应测试，`path` 精确。
-   **状态：本轮达成（一处例外）**——§5.1 的 error 与 §5.2 的全部 warning 均由
-   `import_rule_diagnostics_test.dart` 覆盖；唯一未实现的 code 是 `invalidAutoGrant`
-   （**由计划 2 承接**：字符串简写自动授予属选择系统运行时，本轮无法触发）。
+   **状态：本轮达成（计划 2 收尾）**——§5.1 的 error 与 §5.2 的全部 warning 均由
+   `import_rule_diagnostics_test.dart` 覆盖；`invalidAutoGrant` 已落地（字符串简写无法推断
+   自动授予，或 `ability` 选项的 `data.value` 非正整数），条目类型/值类型两条触发路径各有用例。
+   原 `unsupportedChoiceField` 已退役（无产生点），规格与 README 清单均已移除。
 6. `npm run check`、`npm run test:scripts`、`npm run lint:design` 全绿。
    **状态：本轮达成**（`npm run lint:design` 已复跑；其余属阶段门）。
 7. `docs/README.md` §9.2 含完整自制职业示例（含选择与法术选择），且示例可被测试中的合成包复用（文档与实现不脱节）。
    **状态：由计划 3 承接**（本轮只落 `docs/README.md` §9.2「规则与内容契约」与最小示例；
    "完整示例 + 与合成包复用"未达成）。
 8. **选择系统（§3.10）**：字符串简写自动授予且选中生效；内联选项的 `ability`/`hitPoints` 改变派生结果；`optionType: "spell"` + `countsToward` 受 `prepared` 约束；`repeatable` 行为正确；`requires` 隐藏语义正确；`group`/`help` 呈现；装备 A/B 方案写入 `inventory`；技能选择与法术选择都只由 `optionType: "skill"` / `"spell"` 的选择定义承担（`classRules` 不再派生选择）。
-   **状态：由计划 2 承接**（本轮只做"声明了但用不了 → 导入期拒收"，见 §11）。
+   **状态：本轮达成（计划 2，2026-09-12）**，逐条测试：
+   - 字符串简写自动授予 → `rule_choice_semantics_test.dart` + `homebrew_class_end_to_end_test.dart`；
+   - 内联 `ability` / `hitPoints` 改变派生 → `character_rules_engine_test.dart` + `rules_driven_character_builder_test.dart`；
+   - `optionType: "spell"` + `countsToward` 受 `prepared` 约束 → `character_builder_choices_test.dart` + `homebrew_class_end_to_end_test.dart`；
+   - `repeatable` → 引擎、共享组件与 e2e（`homebrew_class_end_to_end_test.dart`）；
+   - `requires` 隐藏语义 → 引擎、`rule_choice_section_test.dart` 与 e2e；
+   - `group` / `help` → `rule_choice_section_test.dart` + e2e；
+   - 装备 A/B 写入 `inventory` → `equipment_bundle_items_test.dart` + e2e；
+   - 技能/法术选择只由显式选择承担 → `rules_driven_character_builder_test.dart`。
+   **边界**：PHB 提取器尚未产出 `optionType: "spell"` 的选择（运行时已支持，见 §11）；
+   背景技能仍走中文名预设（决策 D10）。
 
 ---
 
@@ -869,18 +913,20 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 
 **本轮延后（由后续计划承接）**：
 
-- **选择系统的运行时语义 —— 计划 2 承接**：`options[].grants` 的消费（含字符串简写自动授予）、
-  `repeatable`、`countsToward`、`requires`、`group` / `help` 的呈现，以及对应的编辑器选择面板
-  改造（值类型与条目选项分组、选择状态 `Set` → 有序 `List`、`optionType: "spell"` 的法术池、
-  装备 A/B 写入 `inventory`）。**本轮这些字段一导入就被拒收**，不再"声明了但静默无效"：
-  `repeatable` / `group` / `help` / 内联选项的 `grants` → `unsupportedChoiceField`；
-  `countsToward` → `invalidCountsToward`；`requires` → `invalidRequires`
-  （后两者本轮只做"存在即拒收"，计划 2 落地后收窄为真正的取值/引用校验）。
-- **§5.1 中唯一仍未实现的 code —— 计划 2 承接**：`invalidAutoGrant`（字符串简写自动推断
-  grants 的失败信号；自动授予本身是选择系统运行时，本轮无法触发）。**其余 §5.1 的 error 与
-  §5.2 的全部 warning 本轮已实现**，逐条有测试（`import_rule_diagnostics_test.dart`）。
+- **PHB 提取器产出 `optionType: "spell"` 选择 —— 后续脚本工作承接**（决策 D8）：选择系统的
+  **运行时**已支持显式法术选择（法术池、`countsToward`、`alwaysPreparedEntryIds`，见 §3.10、
+  §3.11 A3）；但 `scripts/extract_phb_2024_v2.py` 目前把 PHB 的法术选择交给
+  `classRules.spellcasting` 的数值表承担，**未按规则书表格生成 `optionType: "spell"` 的选择**。
+  补齐提取器是脚本侧后续工作，不影响客户端正确性。
+- **背景条目驱动技能授予 —— 后续工作承接**（决策 D10）：背景技能仍由
+  `_presetSkillsForBackground` 的**中文名预设**提供，不走背景条目的 `rules`。
 - **文档收口 —— 计划 3 承接**：`docs/README.md` §9.2 的**完整**自制职业示例（含选择与法术选择）
   与"示例可被合成包复用"（§10.7）。本轮只落事实来源里的契约节与最小示例。
+
+> 已由计划 2 落地并从本清单移出：选择系统运行时语义（`options[].grants` 消费含字符串简写
+> 自动授予、`repeatable`、`countsToward`、`requires`、`group` / `help`、编辑器选择面板改造、
+> 装备 A/B 写入 `inventory`）与 `invalidAutoGrant` 诊断。见 §3.10 与
+> [`plans/2026-09-12-choice-system-runtime.md`](../plans/2026-09-12-choice-system-runtime.md)。
 
 **其余不在本次范围**：
 

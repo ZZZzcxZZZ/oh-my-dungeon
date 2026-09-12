@@ -20,6 +20,16 @@ class _StandardBuildPage extends StatefulWidget {
 
 class _StandardBuildPageState extends State<_StandardBuildPage> {
   static const _steps = ['职业', '背景', '物种', '属性', '熟练', '装备', '法术', '故事', '审核'];
+
+  /// 专用 UI 选择的「家步骤」。数值**只有**
+  /// `RuleChoiceDefinition.dedicatedOptionSteps` 一处定义；这里只是取出来当常量
+  /// 用，专用渲染器据此认领（不写 `builderStep == 4` 之类的第二套位置判断）。
+  static final int _skillHomeStep =
+      RuleChoiceDefinition.dedicatedOptionSteps[RuleChoiceDefinition
+          .skillOptionType]!;
+  static final int _spellHomeStep =
+      RuleChoiceDefinition.dedicatedOptionSteps[RuleChoiceDefinition
+          .spellOptionType]!;
   static const _stepIcons = [
     Icons.shield_outlined,
     Icons.history_edu_outlined,
@@ -853,9 +863,10 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
 
   /// 显式法术选择（`optionType: "spell"`）的法术池**专门渲染器**。
   ///
-  /// 认领**只看 `optionType`**（[RuleChoiceDefinition.isSpellChoice]），不看
-  /// `builderStep`：家步骤由 `RuleChoiceDefinition.dedicatedOptionSteps` 唯一决定
-  /// （`spell` → 「法术」步骤 6），声明里的 `builderStep` 只是提示。
+  /// 认领**只看 `optionType`**（[RuleChoiceDefinition.isSpellChoice]）与
+  /// `renderStep`（= `dedicatedOptionStep`，家步骤由
+  /// `RuleChoiceDefinition.dedicatedOptionSteps` 唯一决定：`spell` → 「法术」步骤
+  /// 6），**不看声明里的 `builderStep`**（它只是提示）。
   ///
   /// 候选 = `RuleChoiceSemantics.candidatesFor`（枚举唯一实现点：`maximumOptionLevel`
   /// 与 `optionTags` 的过滤在 `RuleChoiceResolver.optionsFor`，与引擎
@@ -870,7 +881,11 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     List<_ActiveRuleChoice> activeRuleChoices,
   ) {
     final spellChoices = activeRuleChoices
-        .where((active) => active.definition.isSpellChoice)
+        .where(
+          (active) =>
+              active.definition.isSpellChoice &&
+              active.renderStep == _spellHomeStep,
+        )
         .toList(growable: false);
     if (spellChoices.isEmpty) return const <Widget>[];
     final poolLimits = RuleChoiceQuota.limitsFor(
@@ -962,9 +977,10 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
 
   /// 「熟练」步骤的专门渲染器（`optionType: "skill"` 的值类型选择）。
   ///
-  /// 认领**只看 `optionType`**（[RuleChoiceDefinition.isSkillChoice]），不看
-  /// `builderStep`：家步骤由 `RuleChoiceDefinition.dedicatedOptionSteps` 唯一决定，
-  /// 声明里的 `builderStep` 只是提示。每条技能选择一组技能网格，候选与共享组件
+  /// 认领**只看 `optionType`**（[RuleChoiceDefinition.isSkillChoice]）与
+  /// `renderStep`（家步骤由 `RuleChoiceDefinition.dedicatedOptionSteps` 唯一决定：
+  /// `skill` → 「熟练」步骤 4），**不看声明里的 `builderStep`**（它只是提示）。
+  /// 每条技能选择一组技能网格，候选与共享组件
   /// 同源（`RuleChoiceSemantics.candidatesFor` + 选项级 `requires` 过滤），选中值
   /// 写进 `_ruleChoices`。
   ///
@@ -977,7 +993,11 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
   /// 第二种"职业技能选择"实现（候选、交互、落库都由同一处承担）。
   List<Widget> _skillProficiencySections() {
     final skillChoices = _activeRuleChoices()
-        .where((active) => active.definition.isSkillChoice)
+        .where(
+          (active) =>
+              active.definition.isSkillChoice &&
+              active.renderStep == _skillHomeStep,
+        )
         .toList(growable: false);
     if (skillChoices.isEmpty) {
       return [

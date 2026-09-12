@@ -180,6 +180,25 @@ class ReleasePackagingTest(unittest.TestCase):
         self.assertIn('[Alias("d")]', script)
         self.assertIn('$ComposeArgs += "--detach"', script)
 
+    def test_powershell_scripts_with_chinese_text_keep_the_utf8_bom(self):
+        """含中文的 `.ps1` 必须带 UTF-8 BOM（见 docs/README.md §14.3）。
+
+        Windows PowerShell 5.1 会把无 BOM 的脚本按 ANSI 解析，中文注释与字符串会变成
+        乱码并可能直接报错。文本编辑器/重写脚本很容易悄悄吃掉 BOM，所以这里钉死。
+        """
+        checked = 0
+        for script in sorted((ROOT / "scripts").glob("*.ps1")):
+            raw = script.read_bytes()
+            if raw.decode("utf-8", errors="ignore").isascii():
+                continue
+            checked += 1
+            with self.subTest(script=script.name):
+                self.assertTrue(
+                    raw.startswith(b"\xef\xbb\xbf"),
+                    f"{script.name} 含非 ASCII 文本但没有 UTF-8 BOM",
+                )
+        self.assertGreater(checked, 0, "至少应有一个含中文的 PowerShell 脚本")
+
 
 if __name__ == "__main__":
     unittest.main()

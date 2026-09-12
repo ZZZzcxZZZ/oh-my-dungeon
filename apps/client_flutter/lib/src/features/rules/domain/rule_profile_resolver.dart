@@ -669,8 +669,8 @@ abstract final class RuleProfileResolver {
             tier: kBuiltinTier,
             rules: fromArchive,
           );
-    // 已按优先级从高到低排好；排序的唯一实现在任务 7 抽出（本批次只有两级）。
-    final ordered = <_OrderedDeclaration>[?entry, ?archive];
+    // 已按优先级从高到低排好，并在第一条 `mode: replace` 处截断（D4）。
+    final ordered = _orderedDeclarations(<_OrderedDeclaration>[?entry, ?archive]);
 
     final spellcasting = _mergeSpellcasting(
       declarations: ordered,
@@ -702,6 +702,35 @@ abstract final class RuleProfileResolver {
       entryRules: entryRules,
       archiveRules: fromArchive,
     );
+  }
+
+  /// 有序声明（高 → 低），并在遇到第一条 `mode: replace` 时**截断**：更低 tier
+  /// 不再参与任何列 / 等级的合并（S3 决策 D4）。返回的列表里包含那条 `replace`。
+  ///
+  /// 排序口径（同 tier）：
+  /// 1. `replace` 先于 `patch`（`ClassMergeMode.index` 降序）——`replace` 必须最先
+  ///    落，否则同 tier 的 `patch` 会先消费掉列，独占语义就失效；
+  /// 2. `originId` 升序（确定性回退；D6 的"按包 id 字典序"由此保证）。
+  ///
+  /// **本批次是脚手架**：任务 7 会把排序与截断整体搬到 `RuleOverrideOrder.ordered` /
+  /// `.effective`（并删掉本方法），届时解析器不再有第二处 `sort`。
+  static List<_OrderedDeclaration> _orderedDeclarations(
+    List<_OrderedDeclaration> declarations,
+  ) {
+    final sorted = [...declarations]
+      ..sort((a, b) {
+        final byTier = b.tier.compareTo(a.tier);
+        if (byTier != 0) return byTier;
+        final byMode = b.rules.mode.index.compareTo(a.rules.mode.index);
+        if (byMode != 0) return byMode;
+        return a.originId.compareTo(b.originId);
+      });
+    final result = <_OrderedDeclaration>[];
+    for (final declaration in sorted) {
+      result.add(declaration);
+      if (declaration.rules.mode == ClassMergeMode.replace) break;
+    }
+    return result;
   }
 }
 

@@ -117,6 +117,27 @@ void main() {
       expect(report.errors.single.message, contains('unknownField'));
     });
 
+    test('classRules.mode 非法值阻断整包，path 精确（invalidMergeMode）', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            structured: {
+              'classRules': {'mode': 'merge', 'hitDie': 10},
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isFalse);
+      final error = report.errors.singleWhere(
+        (e) => e.message.contains('invalidMergeMode'),
+      );
+      expect(
+        error.path,
+        r'$.entries[0].structured.classRules.mode',
+      );
+      expect(error.message, contains('spellcasting.mode'));
+    });
+
     test('缺 hitDie 只给 warning（missingCoreField），不阻断', () async {
       final report = await importer.previewJson(
         packageJson(

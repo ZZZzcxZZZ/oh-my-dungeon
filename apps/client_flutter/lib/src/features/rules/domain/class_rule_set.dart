@@ -17,8 +17,9 @@ const kDefaultAbilities = {'str', 'dex', 'con', 'int', 'wis', 'cha'};
 // 否则清单会与档案漂移，`optionType: "skill"` 的选项与角色卡技能行对不上，
 // 熟练会被静默丢弃。
 
-/// `classRules.<slug>` 顶层允许的字段（§3.2）。
+/// `classRules.<slug>` 顶层允许的字段（§3.2 + S3 决策 D1）。
 const kClassRuleFields = {
+  'mode',
   'hitDie',
   'savingThrowAbilities',
   'spellcasting',
@@ -55,6 +56,29 @@ const kStandardHitDieFaces = {4, 6, 8, 10, 12};
 /// `spellcasting.archetype == 'pact'`。
 const _modes = {'prepared', 'known', 'none'};
 const _recoveries = {'shortRest', 'shortRestOne', 'longRest', 'none'};
+
+/// `classRules.mode`：该规则块相对**更低 tier** 的合并语义（契约 §3.8 推广、
+/// S3 决策 D1）。位置固定在 `structured.classRules.mode`，**不是**包级字段。
+///
+/// 枚举顺序即"同 tier 优先级"：`replace` 在后，排序时取 `index` 降序 ⇒
+/// `replace` 先于 `patch`（`replace` 必须最先落，才能真的独占，见 D4/D6）。
+enum ClassMergeMode {
+  /// 只覆盖自己声明过的列 / 等级，未声明的继续向下回退（**缺省**）。
+  patch,
+
+  /// 自己就是该职业的全部真相：更低 tier（含内置档案）不再提供任何列，
+  /// 未声明的列一律"未声明"（D4）。
+  replace;
+
+  /// 非法取值返回 null（由调用方报 `invalidMergeMode`），
+  /// 缺失 / 显式 null 视为缺省 [patch]。
+  static ClassMergeMode? tryParse(Object? raw) => switch (raw) {
+    null => ClassMergeMode.patch,
+    'patch' => ClassMergeMode.patch,
+    'replace' => ClassMergeMode.replace,
+    _ => null,
+  };
+}
 
 void _addError(
   List<RuleDiagnostic> out,
@@ -231,12 +255,16 @@ class ClassSpellcasting {
 /// 不在此处（§3.2、§3.10）。
 class ClassRuleSet {
   const ClassRuleSet({
+    this.mode = ClassMergeMode.patch,
     this.hitDie,
     this.savingThrowAbilities = const {},
     this.spellcasting,
     this.resources = const [],
     this.fields = const {},
   });
+
+  /// 该规则块相对更低 tier 的合并语义（`classRules.mode`，缺省 [ClassMergeMode.patch]）。
+  final ClassMergeMode mode;
 
   final int? hitDie;
   final Set<String> savingThrowAbilities;
@@ -284,6 +312,7 @@ class ClassRuleSet {
     );
 
     final fields = <String>{};
+    final mode = _parseMergeMode(raw, path: path, diagnostics: diagnostics);
     final hitDie = _parseHitDie(
       raw,
       path: path,
@@ -313,6 +342,7 @@ class ClassRuleSet {
     );
 
     return ClassRuleSet(
+      mode: mode,
       hitDie: hitDie,
       savingThrowAbilities: savingThrows,
       spellcasting: spellcasting,
@@ -333,6 +363,26 @@ class ClassRuleSet {
     }
     return '';
   }
+}
+
+/// `classRules.mode`（D1）：缺省 `patch`；非法值报 `invalidMergeMode` 并提示
+/// `spellcasting.mode` 才是法术选择模型的位置（`mode: prepared` 这类抄错位置的写法
+/// 必须报出来，不能静默当 `patch`）。报错后仍返回 `patch`，让解析继续、形状可用。
+ClassMergeMode _parseMergeMode(
+  Map<String, Object?> raw, {
+  required String path,
+  required List<RuleDiagnostic> diagnostics,
+}) {
+  final mode = ClassMergeMode.tryParse(raw['mode']);
+  if (mode != null) return mode;
+  _addError(
+    diagnostics,
+    '$path.mode',
+    'invalidMergeMode',
+    'classRules.mode 只接受 patch / replace；若想声明法术选择模型，'
+        '请写在 spellcasting.mode（prepared / known / none）',
+  );
+  return ClassMergeMode.patch;
 }
 
 int? _parseHitDie(

@@ -857,13 +857,15 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
   /// `builderStep`：家步骤由 `RuleChoiceDefinition.dedicatedOptionSteps` 唯一决定
   /// （`spell` → 「法术」步骤 6），声明里的 `builderStep` 只是提示。
   ///
-  /// 候选 = `RuleChoiceSemantics.candidatesFor` 的条目候选：`maximumOptionLevel`
-  /// 与 `optionTags`（法术列表）的过滤**只在** `RuleChoiceResolver.optionsFor`
-  /// 一处（与引擎 `normalizeSelection` 同一份候选）；这里不再写第二套按环阶 /
-  /// 标签的判断，否则"界面上看得见、引擎判非法"就会变成静默阻塞。
+  /// 候选 = `RuleChoiceSemantics.candidatesFor`（枚举唯一实现点：`maximumOptionLevel`
+  /// 与 `optionTags` 的过滤在 `RuleChoiceResolver.optionsFor`，与引擎
+  /// `normalizeSelection` 同一份）**再经** `visibleRuleChoiceCandidates`（选项级
+  /// `requires` 过滤的唯一实现点，与共享组件同源）：内联候选不再被丢弃，被隐藏
+  /// 的已选值会列成"已选但未生效"。
   ///
   /// 上限 = `RuleChoiceQuota.effectiveMaximum`（`countsToward` 池的有效上限，
-  /// 池数值只有 `RuleChoiceQuota.limitsFor` 一处来源）。
+  /// 池数值只有 `RuleChoiceQuota.limitsFor` 一处来源）；上限为 0 时给出**可见原因**
+  /// 而不是让 tile 可点却无反应（P2-12）。
   List<Widget> _spellChoicePoolSections(
     List<_ActiveRuleChoice> activeRuleChoices,
   ) {
@@ -882,34 +884,66 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     );
     return [
       for (final active in spellChoices)
-        _SpellChoiceSection(
-          title: active.definition.label,
-          hint: active.definition.help,
-          blockedReason: _blockedReasonFor(active),
-          entries: _candidatesFor(active)
-              .map((candidate) => candidate.entry)
-              .whereType<ContentEntry>()
-              .toList(growable: false),
-          selected: _ruleChoices[active.key] ?? const <String>[],
-          maximum: RuleChoiceQuota.effectiveMaximum(
+        () {
+          final selected = _ruleChoices[active.key] ?? const <String>[];
+          final candidates = _candidatesFor(active);
+          final visible = visibleRuleChoiceCandidates(
+            candidates,
+            _requiresContextFor(active),
+          );
+          final maximum = RuleChoiceQuota.effectiveMaximum(
             countsToward: active.definition.countsToward,
             maximum: active.definition.maximum,
             poolLimits: poolLimits,
             usedByOthers: _poolUsageByOthers(activeRuleChoices, active),
-          ),
-          maximumSpellLevel: active.definition.maximumOptionLevel ?? 9,
-          onChanged: (next) => setState(() {
-            _ruleChoices[active.key] = next;
-            _applyRecommendedRuleChoices();
-          }),
-          onOpenEntry: _openEntry,
-        ),
+          );
+          return _SpellChoiceSection(
+            title: active.definition.label,
+            hint: active.definition.help,
+            blockedReason: _blockedReasonFor(active),
+            // 池额度被同池选择占满（先声明先占）时也要有可见原因：否则候选 tile
+            // 点得动却没反应（`_emit` 静默丢弃），用户看不到任何解释。
+            capExhaustedReason: maximum == 0 && selected.isEmpty
+                ? '本选择的额度已被同一数量池中声明在前面的选择占满'
+                      '（先声明先占）；请先取消同池的其它选择。'
+                : null,
+            repeatable: active.definition.repeatable,
+            entries: [
+              for (final candidate in visible)
+                if (candidate.entry != null) candidate.entry!,
+            ],
+            inlineCandidates: [
+              for (final candidate in visible)
+                if (candidate.entry == null) candidate,
+            ],
+            hiddenSelectedLabels: [
+              for (final id in selected)
+                if (!visible.any((candidate) => candidate.id == id))
+                  candidates
+                          .where((candidate) => candidate.id == id)
+                          .firstOrNull
+                          ?.label ??
+                      id,
+            ],
+            selected: selected,
+            maximum: maximum,
+            maximumSpellLevel: active.definition.maximumOptionLevel ?? 9,
+            onChanged: (next) => setState(() {
+              _ruleChoices[active.key] = next;
+              _applyRecommendedRuleChoices();
+            }),
+            onOpenEntry: _openEntry,
+          );
+        }(),
     ];
   }
 
-  /// 同一 `countsToward` 池里**其它**选择已占的数量：引擎按声明顺序"先声明先占"
-  /// （决策 D8），界面用同一口径给出剩余额度；最终判定仍以引擎为准（超额会进
-  /// visible 的 pending，不静默丢弃）。
+  /// 同一 `countsToward` 池里**其它**选择已占的数量（与引擎同一口径，决策 D8）。
+  ///
+  /// 引擎只累计"**声明在前**且 `requires` 已满足"的同池选择；界面必须用同一口径，
+  /// 否则会把有效上限算小 → 出现"点得动却没反应、且没有原因"的 tile（P2-12）。
+  /// 顺序按 `_activeRuleChoices()` 的声明顺序，只累计 [self] **之前**的选择。
+  /// 最终判定仍以引擎为准（超额会进可见的 pending，不静默丢弃）。
   int _poolUsageByOthers(
     List<_ActiveRuleChoice> activeRuleChoices,
     _ActiveRuleChoice self,
@@ -918,8 +952,9 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     if (pool == null) return 0;
     var used = 0;
     for (final active in activeRuleChoices) {
-      if (active.key == self.key) continue;
+      if (active.key == self.key) break;
       if (active.definition.countsToward != pool) continue;
+      if (_blockedReasonFor(active) != null) continue;
       used += (_ruleChoices[active.key] ?? const <String>[]).length;
     }
     return used;

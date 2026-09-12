@@ -436,6 +436,9 @@ class CharacterRulesEngine {
           selection: selection,
           entry: entry,
           sourceLevel: sourceLevel,
+          // 选项级 `requires` 的判定上下文与选择级同源（决策 D6 / P2-1）。
+          selectedByKey: build.choices,
+          abilities: build.abilities,
           target: target,
         );
       }
@@ -506,12 +509,17 @@ class CharacterRulesEngine {
   ///
   /// 每次出现（第几次选取）与每条 grant（声明下标）合起来才是唯一生效单元，
   /// 键的拼装只允许 [ruleChoiceGrantKey] 一处、且只在这里调用。
+  ///
+  /// [selectedByKey] / [abilities] 是选项级 `requires` 的判定上下文：不满足的候选
+  /// 由 `RuleChoiceSemantics.grantsForSelection` 直接跳过（唯一实现点）。
   void _recordInlineGrants({
     required RuleChoiceDefinition definition,
     required String choiceKey,
     required List<String> selection,
     required ContentEntry entry,
     required int? sourceLevel,
+    required Map<String, List<String>> selectedByKey,
+    required Map<String, int> abilities,
     required Map<String, ResolvedRuleGrant> target,
   }) {
     final occurrences = <String, int>{};
@@ -525,6 +533,8 @@ class CharacterRulesEngine {
         definition,
         <String>[optionId],
         entries: entries,
+        selectedByKey: selectedByKey,
+        abilities: abilities,
         sourceEntryId: entry.id,
       );
       for (var grantIndex = 0; grantIndex < optionGrants.length; grantIndex++) {

@@ -109,9 +109,13 @@ class _SpellChoiceSection extends StatefulWidget {
     required this.selected,
     required this.onChanged,
     required this.onOpenEntry,
+    this.inlineCandidates = const <RuleChoiceCandidate>[],
+    this.hiddenSelectedLabels = const <String>[],
     this.title = '规则法术',
     this.hint,
     this.blockedReason,
+    this.capExhaustedReason,
+    this.repeatable = false,
     this.maximum,
     this.maximumCantrips,
     this.maximumLeveledSpells,
@@ -119,7 +123,18 @@ class _SpellChoiceSection extends StatefulWidget {
     this.automaticRulesConfigured = true,
   });
 
+  /// 条目候选（法术池主列表，已按选项级 `requires` 过滤）。
   final List<ContentEntry> entries;
+
+  /// 内联候选（`options[]`，已按选项级 `requires` 过滤）：不建条目也能选，选中值
+  /// 由 `RuleChoiceSemantics.grantsForSelection` 展开。旧实现用
+  /// `whereType<ContentEntry>()` 把它们整批丢掉（P2-9）。
+  final List<RuleChoiceCandidate> inlineCandidates;
+
+  /// 已选但**不在可见候选集**里的值（被选项级 `requires` 隐藏）：列出来，不静默
+  /// 丢弃，也不让它冒充"生效"（引擎不会为它产出 grants）。
+  final List<String> hiddenSelectedLabels;
+
   final List<String> selected;
   final ValueChanged<List<String>> onChanged;
   final ValueChanged<ContentEntry> onOpenEntry;
@@ -130,6 +145,14 @@ class _SpellChoiceSection extends StatefulWidget {
   /// 候选**（与共享组件同语义，§3.10.3-5）；原因文案由 `ruleChoiceBlockedReason`
   /// 一处产出，这里只负责显示。
   final String? blockedReason;
+
+  /// 有效上限被同池选择占满（先声明先占）时的原因文案：不渲染候选，只说明原因。
+  /// 否则 tile 会"点得动却没反应、且没有任何解释"（P2-12）。
+  final String? capExhaustedReason;
+
+  /// 同一法术可否被选多次（契约 §3.10.2 的 `repeatable`）。`true` 时勾选 = 再选
+  /// 一次（chip 标签显示 `名称 ×N`），减一次由行内的移除图标承担。
+  final bool repeatable;
 
   /// 整个池的总上限（显式法术选择的有效上限）。`null` = 用
   /// [maximumCantrips] / [maximumLeveledSpells] 的分类上限。
@@ -190,7 +213,9 @@ class _SpellChoiceSectionState extends State<_SpellChoiceSection> {
       children: [
         Row(
           children: [
-            Expanded(child: Text(widget.title, style: theme.textTheme.titleMedium)),
+            Expanded(
+              child: Text(widget.title, style: theme.textTheme.titleMedium),
+            ),
             Text(
               _selectionCountLabel(
                 selectedCantrips: selectedCantrips,
@@ -212,91 +237,132 @@ class _SpellChoiceSectionState extends State<_SpellChoiceSection> {
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
-        if (widget.blockedReason case final String reason) ...[
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                Icons.block_outlined,
-                size: 18,
-                color: theme.colorScheme.error,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  reason,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.error,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ] else ...[
         const SizedBox(height: 12),
-        TextField(
-          key: const Key('spell-choice-search'),
-          controller: _searchController,
-          decoration: const InputDecoration(
-            labelText: '搜索法术',
-            prefixIcon: Icon(Icons.search),
-          ),
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            DropdownMenu<int?>(
-              key: const Key('spell-choice-level-filter'),
-              initialSelection: _level,
-              label: const Text('环位'),
-              width: 136,
-              dropdownMenuEntries: [
-                const DropdownMenuEntry(value: null, label: '全部环位'),
-                for (var value = 0; value <= widget.maximumSpellLevel; value++)
-                  DropdownMenuEntry(
-                    value: value,
-                    label: value == 0 ? '戏法' : '$value 环',
-                  ),
-              ],
-              onSelected: (value) => setState(() => _level = value),
-            ),
-            if (schools.isNotEmpty)
-              DropdownMenu<String?>(
-                key: const Key('spell-choice-school-filter'),
-                initialSelection: _school,
-                label: const Text('学派'),
-                width: 160,
-                dropdownMenuEntries: [
-                  const DropdownMenuEntry(value: null, label: '全部学派'),
-                  for (final school in schools)
-                    DropdownMenuEntry(value: school, label: school),
-                ],
-                onSelected: (value) => setState(() => _school = value),
-              ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (filtered.isEmpty)
-          Text(widget.entries.isEmpty ? '没有符合当前职业与等级的规则法术。' : '没有符合筛选条件的法术。')
+        if (widget.blockedReason != null)
+          _notice(context, widget.blockedReason!)
+        else if (widget.capExhaustedReason != null)
+          _notice(context, widget.capExhaustedReason!)
         else
-          for (final entry in filtered)
-            _SpellOptionTile(
-              entry: entry,
-              selected: widget.selected,
+          ..._picker(context, filtered, schools,
               selectedCantrips: selectedCantrips,
-              selectedLeveledSpells: selectedLeveledSpells,
-              maximumCantrips: widget.maximumCantrips,
-              maximumLeveledSpells: widget.maximumLeveledSpells,
-              onChanged: _emit,
-              onOpenEntry: widget.onOpenEntry,
+              selectedLeveledSpells: selectedLeveledSpells),
+        // 被选项级 `requires` 隐藏的已选值：不静默丢弃，也不冒充"生效"。
+        if (widget.hiddenSelectedLabels.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            '已选但未生效：${widget.hiddenSelectedLabels.join('、')}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.error,
             ),
+          ),
         ],
       ],
     );
+  }
+
+  /// 不可选的原因（选择级 `requires` / 池额度占满）：只显示原因，不渲染候选。
+  Widget _notice(BuildContext context, String reason) {
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.block_outlined, size: 18, color: theme.colorScheme.error),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            reason,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.error,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 可选状态下的候选区：搜索 / 过滤 + 内联候选 + 条目法术列表。
+  List<Widget> _picker(
+    BuildContext context,
+    List<ContentEntry> filtered,
+    List<String> schools, {
+    required int selectedCantrips,
+    required int selectedLeveledSpells,
+  }) {
+    return [
+      TextField(
+        key: const Key('spell-choice-search'),
+        controller: _searchController,
+        decoration: const InputDecoration(
+          labelText: '搜索法术',
+          prefixIcon: Icon(Icons.search),
+        ),
+        onChanged: (_) => setState(() {}),
+      ),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          DropdownMenu<int?>(
+            key: const Key('spell-choice-level-filter'),
+            initialSelection: _level,
+            label: const Text('环位'),
+            width: 136,
+            dropdownMenuEntries: [
+              const DropdownMenuEntry(value: null, label: '全部环位'),
+              for (var value = 0; value <= widget.maximumSpellLevel; value++)
+                DropdownMenuEntry(
+                  value: value,
+                  label: value == 0 ? '戏法' : '$value 环',
+                ),
+            ],
+            onSelected: (value) => setState(() => _level = value),
+          ),
+          if (schools.isNotEmpty)
+            DropdownMenu<String?>(
+              key: const Key('spell-choice-school-filter'),
+              initialSelection: _school,
+              label: const Text('学派'),
+              width: 160,
+              dropdownMenuEntries: [
+                const DropdownMenuEntry(value: null, label: '全部学派'),
+                for (final school in schools)
+                  DropdownMenuEntry(value: school, label: school),
+              ],
+              onSelected: (value) => setState(() => _school = value),
+            ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      // 内联候选（`options[]`）：不受环位 / 学派筛选影响（它们没有条目元数据），
+      // 但同样计入上限与 `countsToward`；旧实现把它们整批丢掉（P2-9）。
+      for (final candidate in widget.inlineCandidates)
+        _InlineSpellOptionTile(
+          candidate: candidate,
+          selected: widget.selected,
+          repeatable: widget.repeatable,
+          onChanged: _emit,
+        ),
+      if (filtered.isEmpty)
+        Text(
+          widget.entries.isEmpty
+              ? '没有符合当前职业与等级的规则法术。'
+              : '没有符合筛选条件的法术。',
+        )
+      else
+        for (final entry in filtered)
+          _SpellOptionTile(
+            entry: entry,
+            selected: widget.selected,
+            repeatable: widget.repeatable,
+            selectedCantrips: selectedCantrips,
+            selectedLeveledSpells: selectedLeveledSpells,
+            maximumCantrips: widget.maximumCantrips,
+            maximumLeveledSpells: widget.maximumLeveledSpells,
+            onChanged: _emit,
+            onOpenEntry: widget.onOpenEntry,
+          ),
+    ];
   }
 
   /// 池上限只有一处判断：`maximum`（显式法术选择的有效上限）。移除永远允许
@@ -396,10 +462,12 @@ class _SpellOptionTile extends StatelessWidget {
     required this.maximumLeveledSpells,
     required this.onChanged,
     required this.onOpenEntry,
+    this.repeatable = false,
   });
 
   final ContentEntry entry;
   final List<String> selected;
+  final bool repeatable;
   final int selectedCantrips;
   final int selectedLeveledSpells;
   final int? maximumCantrips;
@@ -409,7 +477,6 @@ class _SpellOptionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isSelected = selected.contains(entry.id);
     final isCantrip = SpellSelectionPolicy.spellLevel(entry) == 0;
     final categoryMaximum = isCantrip ? maximumCantrips : maximumLeveledSpells;
     final categorySelected = isCantrip
@@ -419,17 +486,40 @@ class _SpellOptionTile extends StatelessWidget {
     // （不拿"未声明"当 0）。
     final categoryAtLimit =
         categoryMaximum != null && categorySelected >= categoryMaximum;
+    final subtitle = Text(
+      '${_SpellChoiceSectionState._spellLevelLabel(SpellSelectionPolicy.spellLevel(entry))}'
+      '${SpellSelectionPolicy.spellSchool(entry).isEmpty ? '' : ' · ${SpellSelectionPolicy.spellSchool(entry)}'}',
+    );
 
+    // `repeatable`（契约 §3.10.2）：同一法术可选多次。复选框的语义是"再加一次"，
+    // 减一次由行内移除图标承担——普通 checkbox 在已选时回调 `false`，永远选不到
+    // 第二次（这正是 P2-10：UI 与 `repeatable` 契约相互矛盾）。
+    if (repeatable) {
+      final count = selected.where((id) => id == entry.id).length;
+      return _RepeatableSpellRow(
+        tileKey: Key('spell-choice-${entry.id}'),
+        title: count > 1 ? '${entry.name} ×$count' : entry.name,
+        subtitle: subtitle,
+        selected: count > 0,
+        removeKey: Key('spell-choice-remove-${entry.id}'),
+        onAdd: categoryAtLimit
+            ? null
+            : () => onChanged(<String>[...selected, entry.id]),
+        onRemove: count > 0
+            ? () => onChanged(<String>[...selected]..remove(entry.id))
+            : null,
+        onOpenEntry: () => onOpenEntry(entry),
+      );
+    }
+
+    final isSelected = selected.contains(entry.id);
     return CheckboxListTile(
       key: Key('spell-choice-${entry.id}'),
       contentPadding: EdgeInsets.zero,
       value: isSelected,
       enabled: isSelected || !categoryAtLimit,
       title: Text(entry.name),
-      subtitle: Text(
-        '${_SpellChoiceSectionState._spellLevelLabel(SpellSelectionPolicy.spellLevel(entry))}'
-        '${SpellSelectionPolicy.spellSchool(entry).isEmpty ? '' : ' · ${SpellSelectionPolicy.spellSchool(entry)}'}',
-      ),
+      subtitle: subtitle,
       secondary: IconButton(
         tooltip: '查看${entry.name}',
         onPressed: () => onOpenEntry(entry),
@@ -443,6 +533,114 @@ class _SpellOptionTile extends StatelessWidget {
           onChanged(<String>[...selected]..remove(entry.id));
         }
       },
+    );
+  }
+}
+
+/// 内联法术候选（`options[]`）：没有条目可预览，选中值由
+/// `RuleChoiceSemantics.grantsForSelection` 展开，同样计入 `maximum`。
+class _InlineSpellOptionTile extends StatelessWidget {
+  const _InlineSpellOptionTile({
+    required this.candidate,
+    required this.selected,
+    required this.repeatable,
+    required this.onChanged,
+  });
+
+  final RuleChoiceCandidate candidate;
+  final List<String> selected;
+  final bool repeatable;
+  final ValueChanged<List<String>> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = selected.where((id) => id == candidate.id).length;
+    final subtitle = candidate.description?.trim();
+    if (repeatable) {
+      return _RepeatableSpellRow(
+        tileKey: Key('spell-choice-${candidate.id}'),
+        title: count > 1 ? '${candidate.label} ×$count' : candidate.label,
+        subtitle: subtitle == null || subtitle.isEmpty
+            ? const Text('内联选项')
+            : Text('内联选项 · $subtitle'),
+        selected: count > 0,
+        removeKey: Key('spell-choice-remove-${candidate.id}'),
+        onAdd: () => onChanged(<String>[...selected, candidate.id]),
+        onRemove: count > 0
+            ? () => onChanged(<String>[...selected]..remove(candidate.id))
+            : null,
+        onOpenEntry: null,
+      );
+    }
+    return CheckboxListTile(
+      key: Key('spell-choice-${candidate.id}'),
+      contentPadding: EdgeInsets.zero,
+      value: count > 0,
+      title: Text(candidate.label),
+      subtitle: subtitle == null || subtitle.isEmpty
+          ? const Text('内联选项')
+          : Text('内联选项 · $subtitle'),
+      onChanged: (checked) => onChanged(
+        checked == true
+            ? <String>[...selected, candidate.id]
+            : (<String>[...selected]..remove(candidate.id)),
+      ),
+    );
+  }
+}
+
+/// `repeatable` 的一行：点击整行 = "再加一次"，右侧图标 = "减一次"。
+class _RepeatableSpellRow extends StatelessWidget {
+  const _RepeatableSpellRow({
+    required this.tileKey,
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.removeKey,
+    required this.onAdd,
+    required this.onRemove,
+    required this.onOpenEntry,
+  });
+
+  final Key tileKey;
+  final String title;
+  final Widget subtitle;
+  final bool selected;
+  final Key removeKey;
+  final VoidCallback? onAdd;
+  final VoidCallback? onRemove;
+  final VoidCallback? onOpenEntry;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      key: tileKey,
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(
+        selected ? Icons.check_circle : Icons.add_circle_outline,
+        color: Theme.of(context).colorScheme.primary,
+      ),
+      title: Text(title),
+      subtitle: subtitle,
+      onTap: onAdd,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (onOpenEntry != null)
+            IconButton(
+              tooltip: '查看$title',
+              onPressed: onOpenEntry,
+              icon: const Icon(Icons.open_in_new),
+            ),
+          if (onRemove != null)
+            IconButton(
+              key: removeKey,
+              tooltip: '移除一次$title',
+              onPressed: onRemove,
+              icon: const Icon(Icons.remove_circle_outline),
+            ),
+        ],
+      ),
     );
   }
 }

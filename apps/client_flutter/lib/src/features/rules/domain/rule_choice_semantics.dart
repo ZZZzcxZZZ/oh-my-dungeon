@@ -234,10 +234,17 @@ abstract final class RuleChoiceSemantics {
   ///
   /// 条目候选**不**在这里展开自身 grants（它由规则队列/ledger 承担）；非候选值
   /// 一律忽略。返回空列表表示"这些选择不产出 grants"。
+  ///
+  /// **选项级 `requires` 不满足的候选不产出 grants**（决策 D6）：隐藏的候选即使
+  /// 还留在选中值里也不得生效——这正是"UI 隐藏、引擎照给"的静默失效。判定本体是
+  /// [candidateRequiresSatisfied]，因此 [selectedByKey] / [abilities] 与
+  /// [requiresSatisfied] 同源（调用方必须传，否则无法判定）。
   static List<RuleGrantDefinition> grantsForSelection(
     RuleChoiceDefinition definition,
     List<String> selected, {
     required Map<String, ContentEntry> entries,
+    required Map<String, List<String>> selectedByKey,
+    required Map<String, int> abilities,
     String? sourceEntryId,
   }) {
     final candidates = {
@@ -252,6 +259,15 @@ abstract final class RuleChoiceSemantics {
     for (final id in selected) {
       final candidate = candidates[id];
       if (candidate == null) continue;
+      if (!candidateRequiresSatisfied(
+        candidate,
+        sourceEntryId: sourceEntryId ?? '',
+        selectedByKey: selectedByKey,
+        abilities: abilities,
+        entries: entries,
+      )) {
+        continue;
+      }
       if (candidate.grants.isNotEmpty) {
         result.addAll(candidate.grants);
         continue;

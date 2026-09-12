@@ -76,19 +76,27 @@ class _CharacterUpgradeSection extends StatelessWidget {
                         : '${grant.sourceEntryName} · 等级 ${grant.sourceLevel}',
                   ),
                 ),
-              for (final choice in preview.ruleChoices)
-                _UpgradeRuleChoiceSection(
-                  choice: choice,
-                  entries: entries,
-                  requiresContext: RuleChoiceRequiresContext(
-                    sourceEntryId: choice.sourceEntryId,
-                    selectedByKey: preview.build.choices,
-                    abilities: preview.build.abilities,
-                    entries: {for (final entry in entries) entry.id: entry},
+              // `group` 相同的选择归一组：归组的**唯一实现点**是
+              // `groupRuleChoiceSections`（与创建向导同一份），升级队列不得再写
+              // 一套逐条渲染的分组循环。每条选择仍显示自己的标题（共享组件）。
+              RuleChoiceGroupedSections(
+                groups: groupRuleChoiceSections<ActiveRuleChoice>(
+                  preview.ruleChoices,
+                  groupOf: (choice) => choice.definition.group,
+                  buildChoice: (choice) => _UpgradeRuleChoiceSection(
+                    choice: choice,
+                    entries: entries,
+                    requiresContext: RuleChoiceRequiresContext(
+                      sourceEntryId: choice.sourceEntryId,
+                      selectedByKey: preview.build.choices,
+                      abilities: preview.build.abilities,
+                      entries: {for (final entry in entries) entry.id: entry},
+                    ),
+                    onChanged: (selected) =>
+                        onChoiceChanged(choice.key, selected),
                   ),
-                  onChanged: (selected) =>
-                      onChoiceChanged(choice.key, selected),
                 ),
+              ),
               for (final entryId in preview.missingEntryIds)
                 ListTile(
                   dense: true,

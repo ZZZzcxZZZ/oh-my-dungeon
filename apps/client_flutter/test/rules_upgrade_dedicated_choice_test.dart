@@ -1,7 +1,8 @@
-// 阻塞项 3（计划任务 6b 后的新语义）：`optionType: "skill"` 的选中值在任务 7
-// 之前仍写进草稿 `skills`，但任务 7 起会写进 `build.choices`。升级面**不再**用
-// `usesDedicatedOptionUi` 免检：
-//   - **上一级**未完成的专门 UI 选择不阻塞升级（只统计本级新增的选择）；
+// 阻塞项 3（计划任务 6b 后的新语义）+ P2-3/P2-6：`optionType: "skill"` 的选中值
+// 写进 `build.choices`，升级面**不再**用 `usesDedicatedOptionUi` 免检：
+//   - **上一级**未完成的选择（含 level-less 的创建期义务）不阻塞升级，并且
+//     **也不渲染**（渲染了却不让它阻塞 = "看得见却点不动"的误导）。夹具因此同时
+//     含一条 1 级未完成的技能选择与一条 2 级新增的技能选择；
 //   - **本级新增**的选择必须由共享组件真的渲染出来（否则是"看不见却阻塞"），
 //     未完成就阻塞，完成后即可应用；
 //   - 任何情况下都不得再渲染"没有符合条件的资料条目"的红色假错误。
@@ -46,6 +47,13 @@ void main() {
     expect(find.text('升级队列'), findsOneWidget);
     // 本级新增的技能选择**必须可见**（这是修复"看不见却阻塞"的那一半）。
     expect(find.text('选择两项技能熟练'), findsOneWidget);
+    // P2-3：1 级未完成的创建期义务**不渲染**——它不阻塞升级，渲染出来只会让
+    // 用户以为必须在这里完成（"看得见却点不动"）。
+    expect(
+      find.text('一级技能熟练'),
+      findsNothing,
+      reason: 'level-less / 上一级的义务不阻塞升级，因此也不得进入升级队列',
+    );
     expect(find.textContaining('没有符合'), findsNothing);
 
     final applyButton = find.widgetWithText(FilledButton, '应用等级规则');
@@ -124,6 +132,21 @@ ContentEntry _classEntry() => ContentEntry.fromJson(<String, Object?>{
   },
   'rules': <String, Object?>{
     'progression': <Map<String, Object?>>[
+      // 1 级就存在、但角色一直没完成的**创建期义务**（`sourceLevel == null`）。
+      <String, Object?>{
+        'levels': <int>[1],
+        'choices': <Map<String, Object?>>[
+          <String, Object?>{
+            'id': 'class-skills-1',
+            'label': '一级技能熟练',
+            'optionType': 'skill',
+            'minimum': 2,
+            'maximum': 2,
+            'builderStep': 'proficiencies',
+            'options': <Object?>['运动', '威吓', '杂技'],
+          },
+        ],
+      },
       <String, Object?>{
         'levels': <int>[2],
         'grants': <Map<String, Object?>>[

@@ -115,8 +115,9 @@ void main() {
     await tester.pump();
     expect(selected, ['a', 'a'], reason: 'repeatable 的草稿里必须真有两份');
     expect(
-      tester.widget<FilterChip>(find.widgetWithText(FilterChip, '魔能爆 ×2')),
-      isNotNull,
+      find.widgetWithText(FilterChip, '魔能爆 ×2'),
+      findsOneWidget,
+      reason: '重复计数必须画在 chip 标签上（`widget(...)` + isNotNull 恒真，不是断言）',
     );
     expect(
       tester.widget<FilterChip>(find.byType(FilterChip)).selected,
@@ -129,6 +130,50 @@ void main() {
     expect(find.text('魔能爆'), findsOneWidget);
     expect(find.text('魔能爆 ×2'), findsNothing);
   });
+  // P2-5：`['a','b','a']` 的首末两次出现不可辨识时，"取消只移除第一次出现"无法被
+  // 验证（`['a','a']` 移除哪一次结果都一样）。交错用例把两者区分开：移除首项得到
+  // `['b','a']`，移除末项会得到 `['a','b']`。
+  testWidgets('repeatable 交错选中：取消只移除第一次出现的那份', (tester) async {
+    const repeatable = RuleChoiceDefinition(
+      id: 'invocations',
+      label: '祈唤',
+      optionType: 'classFeature',
+      minimum: 1,
+      maximum: 3,
+      repeatable: true,
+      options: [
+        RuleChoiceOption(id: 'a', label: '魔能爆'),
+        RuleChoiceOption(id: 'b', label: '苦痛魔爆'),
+      ],
+    );
+    List<String>? changed;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RuleChoiceSection(
+            definition: repeatable,
+            candidates: RuleChoiceSemantics.candidatesFor(
+              repeatable,
+              entries: const <String, ContentEntry>{},
+            ),
+            selected: const ['a', 'b', 'a'],
+            onChanged: (next) => changed = next,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.widgetWithText(FilterChip, '魔能爆 ×2'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('rule-choice-remove-a')));
+    await tester.pump();
+
+    expect(
+      changed,
+      <String>['b', 'a'],
+      reason: '移除的是**第一次**出现的 a；顺序不变，其余重复项保留',
+    );
+  });
+
   testWidgets('达到 maximum 后 repeatable 不再追加（不静默超额）', (tester) async {
     const capped = RuleChoiceDefinition(
       id: 'invocations',
@@ -265,6 +310,131 @@ void main() {
     expect(find.text('魔能爆'), findsNothing, reason: '前置不满足时不渲染候选 chip');
   });
 
+  // P2-8：两种"空候选"必须区分——资料库缺料 vs 选项级 `requires` 把候选全隐藏。
+  testWidgets('空候选区分"资料库缺料"与"选项级前置未满足"两种原因', (tester) async {
+    const missing = RuleChoiceDefinition(
+      id: 'pick',
+      label: '选一个',
+      optionType: 'feat',
+      minimum: 1,
+      maximum: 1,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RuleChoiceSection(
+            definition: missing,
+            candidates: RuleChoiceSemantics.candidatesFor(
+              missing,
+              entries: const <String, ContentEntry>{},
+            ),
+            selected: const <String>[],
+            onChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+    expect(find.text('资料库中缺少 feat 选项。'), findsOneWidget);
+
+    const gated = RuleChoiceDefinition(
+      id: 'pick',
+      label: '选一个',
+      optionType: 'classFeature',
+      minimum: 1,
+      maximum: 1,
+      options: [
+        RuleChoiceOption(
+          id: 'a',
+          label: '高阶祈唤',
+          requires: [RuleRequiresDefinition(ability: 'cha', minimum: 13)],
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RuleChoiceSection(
+            definition: gated,
+            candidates: RuleChoiceSemantics.candidatesFor(
+              gated,
+              entries: const <String, ContentEntry>{},
+            ),
+            selected: const <String>[],
+            requiresContext: const RuleChoiceRequiresContext(
+              sourceEntryId: 'test:class/warlock',
+              selectedByKey: <String, List<String>>{},
+              abilities: {'cha': 12},
+              entries: <String, ContentEntry>{},
+            ),
+            onChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+    expect(
+      find.text('资料库中缺少 classFeature 选项。'),
+      findsNothing,
+      reason: '候选存在、只是被前置隐藏：报"缺料"是误导（P2-8）',
+    );
+    expect(
+      find.text('当前条件下没有可选的 classFeature 选项（候选的选项级 requires 均未满足）。'),
+      findsOneWidget,
+    );
+  });
+
+  // P2-1：被选项级 `requires` 隐藏的**已选**值必须列为"已选但未生效"，不得
+  // 静默消失（值是引擎判"不产出 grants"的依据，用户必须看得见）。
+  testWidgets('选项级 requires 隐藏的已选值列为"已选但未生效"', (tester) async {
+    const gated = RuleChoiceDefinition(
+      id: 'invocations',
+      label: '祈唤',
+      optionType: 'classFeature',
+      minimum: 1,
+      maximum: 2,
+      options: [
+        RuleChoiceOption(id: 'a', label: '魔能爆'),
+        RuleChoiceOption(
+          id: 'b',
+          label: '高阶祈唤',
+          requires: [RuleRequiresDefinition(ability: 'cha', minimum: 13)],
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RuleChoiceSection(
+            definition: gated,
+            candidates: RuleChoiceSemantics.candidatesFor(
+              gated,
+              entries: const <String, ContentEntry>{},
+            ),
+            selected: const ['a', 'b'],
+            requiresContext: const RuleChoiceRequiresContext(
+              sourceEntryId: 'test:class/warlock',
+              selectedByKey: <String, List<String>>{},
+              abilities: {'cha': 12},
+              entries: <String, ContentEntry>{},
+            ),
+            onChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(_chip('魔能爆'), findsOneWidget);
+    expect(
+      _chip('高阶祈唤'),
+      findsNothing,
+      reason: '前置不满足的候选不显示可点 chip',
+    );
+    expect(
+      find.text('已选但未生效：高阶祈唤'),
+      findsOneWidget,
+      reason: '被隐藏的已选值必须可见（引擎不会为它产出 grants）',
+    );
+  });
+
   testWidgets('help 以小字展示，group 标题由分组容器按首次声明顺序渲染', (
     tester,
   ) async {
@@ -278,6 +448,15 @@ void main() {
       help: '每次长休后可以更换一项。',
       options: [RuleChoiceOption(id: 'a', label: '魔能爆')],
     );
+    const second = RuleChoiceDefinition(
+      id: 'eldritch',
+      label: '魔能祈唤',
+      optionType: 'classFeature',
+      minimum: 1,
+      maximum: 1,
+      group: '魔能祈唤组',
+      options: [RuleChoiceOption(id: 'c', label: '苦痛魔爆')],
+    );
     const ungrouped = RuleChoiceDefinition(
       id: 'pact',
       label: '契约恩赐',
@@ -287,7 +466,7 @@ void main() {
       options: [RuleChoiceOption(id: 'b', label: '链主恩赐')],
     );
     final groups = groupRuleChoiceSections<RuleChoiceDefinition>(
-      const [helped, ungrouped],
+      const [helped, second, ungrouped],
       groupOf: (definition) => definition.group,
       buildChoice: (definition) => RuleChoiceSection(
         definition: definition,
@@ -300,9 +479,12 @@ void main() {
       ),
     );
 
-    expect(groups, hasLength(2));
-    expect(groups.first.title, '魔能契约');
-    expect(groups.last.title, isNull, reason: '未声明 group 的组排最后');
+    expect(groups, hasLength(3));
+    expect(
+      groups.map((group) => group.title),
+      <String?>['魔能契约', '魔能祈唤组', null],
+      reason: '具名组按首次声明顺序，未声明 group 的组排最后（只有 1 个具名组时顺序断言是空的）',
+    );
 
     await tester.pumpWidget(
       MaterialApp(
@@ -315,8 +497,10 @@ void main() {
     );
 
     expect(find.text('魔能契约'), findsOneWidget);
+    expect(find.text('魔能祈唤组'), findsOneWidget);
     expect(find.text('每次长休后可以更换一项。'), findsOneWidget);
     expect(find.text('祈唤'), findsOneWidget);
+    expect(find.text('魔能祈唤'), findsOneWidget);
     expect(find.text('契约恩赐'), findsOneWidget);
   });
 }

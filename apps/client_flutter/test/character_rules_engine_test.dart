@@ -1210,6 +1210,99 @@ void main() {
       expect(grant.value, 1);
     });
 
+    // P2-1：**选项级** `requires`（`options[].requires`，决策 D6）也要真的生效。
+    // 选择本身合法（数量够、choice 级 requires 满足），因此不会进 pending；但被
+    // 选项级前置挡住的候选**不得展开 grants**——UI 侧同时把"被隐藏但已选"的值列为
+    // "已选但未生效"（`rule_choice_section_test`），两处口径同源
+    // （`RuleChoiceSemantics.candidateRequiresSatisfied`）。
+    test('选项级 requires 不满足的已选候选不生效（不展开 grants）', () {
+      final gatedOption = _entry(
+        id: 'test:class/gated-option',
+        type: 'class',
+        name: '带选项门槛的选择',
+        rules: const {
+          'choices': [
+            {
+              'id': 'invocations',
+              'label': '祈唤',
+              'optionType': 'value',
+              'minimum': 1,
+              'maximum': 2,
+              'options': [
+                {
+                  'id': 'basic',
+                  'label': '基础祈唤',
+                  'grants': [
+                    {
+                      'id': 'basic-str',
+                      'kind': 'ability',
+                      'label': '力量 +1',
+                      'target': 'str',
+                      'value': 1,
+                    },
+                  ],
+                },
+                {
+                  'id': 'high',
+                  'label': '高阶祈唤',
+                  'requires': [
+                    {'ability': 'cha', 'minimum': 13},
+                  ],
+                  'grants': [
+                    {
+                      'id': 'high-cha',
+                      'kind': 'ability',
+                      'label': '魅力 +1',
+                      'target': 'cha',
+                      'value': 1,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      );
+      final optionEngine = CharacterRulesEngine(
+        entries: {gatedOption.id: gatedOption},
+      );
+      CharacterGrantLedger evaluateOptions(int cha) => optionEngine.evaluate(
+        CharacterBuild(
+          level: 1,
+          abilities: {'cha': cha},
+          selections: {'class': 'test:class/gated-option'},
+          choices: {
+            'test:class/gated-option#invocations': ['basic', 'high'],
+          },
+        ),
+        poolLimits: const <String, int>{},
+      );
+
+      final blocked = evaluateOptions(12);
+      expect(
+        blocked.grants.map((grant) => grant.id),
+        <String>['basic-str'],
+        reason: '选项级前置不满足的候选不产出 grants（与 UI 隐藏同一判据）',
+      );
+      expect(
+        blocked.resolvedChoices['test:class/gated-option#invocations'],
+        <String>['basic', 'high'],
+        reason: '不静默丢弃选中值（§3.10.3-5）：UI 据此显示"已选但未生效"',
+      );
+      expect(
+        blocked.grants.where((grant) => grant.id == 'high-cha'),
+        isEmpty,
+        reason: '不生效不是"少给一条"而是"这条候选根本没生效"',
+      );
+
+      final allowed = evaluateOptions(13);
+      expect(
+        allowed.grants.map((grant) => grant.id),
+        unorderedEquals(<String>['basic-str', 'high-cha']),
+        reason: '前置满足后同一条选中值必须生效',
+      );
+    });
+
     test('门槛不满足 → 引用的条目也不授予（不入队）；满足后才生效', () {
       final gatedPlan = _entry(
         id: 'test:class/gated-invocation',

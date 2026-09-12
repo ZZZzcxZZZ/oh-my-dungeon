@@ -2687,7 +2687,7 @@ test('countsToward: null 的法术选择额外记 alwaysPreparedEntryIds', () { 
 5) `character_detail_spells_panel.dart`：把 `alwaysPreparedEntryIds` 里的法术行加一个"始终准备"小标签（`Chip`/`labelSmall`，用 `secondaryContainer`/`onSecondaryContainer`，无新 token）。
 
 **实现要点**
-- 法术池的候选过滤唯一实现点是 `SpellSelectionPolicy`（`eligibleSpells` / `spellLevel` / `spellSchool`）；本任务只增"按选择过滤"的入参，不复制标签/等级判断。
+- 法术池的**候选枚举**唯一实现点是 `RuleChoiceSemantics.candidatesFor`（条目侧复用 `RuleChoiceResolver.optionsFor` 的 `optionTags` / `maximumOptionLevel` 过滤，与引擎 `normalizeSelection` 同一份；内联 `options` 一并合并且在里面），**选项级 `requires` 过滤**唯一实现点是 `visibleRuleChoiceCandidates`（与共享组件同源）。`SpellSelectionPolicy` 只承担职业 `classRules.spellcasting` 驱动的"自由挑选"路径的环阶 / 学派筛选与展示，不得成为显式法术选择的第二套候选过滤（批次 C+D 审查 P2-9 修订：旧草稿把两者混为一谈，导致内联候选被 `whereType<ContentEntry>()` 丢掉、选项级 `requires` 也不过滤）。
 - `countsToward` 决策 D1 在法术上第一次可见：`prepared`/`known` 受 `prepared` 列约束，`spellbook` 不设上限。
 
 - [ ] **步骤 4：运行测试与全量回归**

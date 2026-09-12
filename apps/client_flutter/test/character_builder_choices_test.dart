@@ -1537,6 +1537,342 @@ void main() {
     );
   });
 
+  // P2-10：`repeatable` 的显式法术选择必须**真的能在 UI 上选两次**。旧实现用
+  // `CheckboxListTile`，勾上之后再点只会取消——UI 与 `repeatable` 契约互相矛盾
+  // （要么 UI 支持，要么契约拒收，必须有一处为真）。
+  testWidgets('repeatable 的显式法术选择可以在法术池里选两次', (tester) async {
+    tester.view.physicalSize = const Size(1200, 1500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    CharacterEditDraft? submitted;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          contentEntries: [
+            _entry(
+              id: 'guide:class/mage',
+              type: 'class',
+              name: '法师',
+              structured: const {
+                'classRules': {'hitDie': 6},
+              },
+              rules: const {
+                'choices': [
+                  {
+                    'id': 'repeatable-spells',
+                    'label': '可重复的法术',
+                    'optionType': 'spell',
+                    'minimum': 0,
+                    'maximum': 2,
+                    'repeatable': true,
+                    'optionTags': ['spell-list:x'],
+                    'maximumOptionLevel': 0,
+                  },
+                ],
+              },
+            ),
+            _entry(
+              id: 'guide:background/sage',
+              type: 'background',
+              name: '贤者',
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:species/human',
+              type: 'species',
+              name: '人类',
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:spell/spark',
+              type: 'spell',
+              name: '电火花',
+              structured: const {'level': 0},
+              tags: const ['spell-list:x'],
+              rules: const {},
+            ),
+          ],
+          onSubmit: (draft) async {
+            submitted = draft;
+            return true;
+          },
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const Key('standard-character-name-field')),
+      '米尔',
+    );
+    await tester.pumpAndSettle();
+
+    await _goToDesktopStep(tester, 6);
+    final tile = find.byKey(const Key('spell-choice-guide:spell/spark'));
+    expect(tile, findsOneWidget);
+
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('电火花 ×2'),
+      findsOneWidget,
+      reason: 'repeatable 的第二次选取必须真的发生（×2 计数可见）',
+    );
+    await tester.tap(find.byKey(const Key('spell-choice-remove-guide:spell/spark')));
+    await tester.pumpAndSettle();
+    expect(find.text('电火花 ×2'), findsNothing, reason: '减一次移除一份');
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+
+    await _goToDesktopStep(tester, 8);
+    await tester.tap(find.widgetWithText(FilledButton, '创建角色'));
+    await tester.pumpAndSettle();
+
+    expect(submitted, isNotNull);
+    expect(
+      (submitted!.data['build']! as Map)['choices'],
+      {
+        'guide:class/mage#repeatable-spells': [
+          'guide:spell/spark',
+          'guide:spell/spark',
+        ],
+      },
+      reason: '重复选取的次数只保留在有序的 build.choices 里（决策 D9）',
+    );
+  });
+
+  // P2-9：法术池不得丢弃**内联候选**（`options[]`）。旧实现用
+  // `whereType<ContentEntry>()` 把内联选项整批丢掉：声明里写了却选不到，
+  // 而它仍然是必选项 → "看不见却阻塞创建"。
+  testWidgets('法术池渲染内联候选并写入 build.choices', (tester) async {
+    tester.view.physicalSize = const Size(1200, 1500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    CharacterEditDraft? submitted;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          contentEntries: [
+            _entry(
+              id: 'guide:class/mage',
+              type: 'class',
+              name: '法师',
+              structured: const {
+                'classRules': {'hitDie': 6},
+              },
+              rules: const {
+                'choices': [
+                  {
+                    'id': 'inline-spell',
+                    'label': '内联法术',
+                    'optionType': 'spell',
+                    'minimum': 1,
+                    'maximum': 1,
+                    'options': [
+                      {
+                        'id': 'inline-bolt',
+                        'label': '内联电矢',
+                        'grants': [
+                          {
+                            'id': 'inline-bolt-str',
+                            'kind': 'ability',
+                            'label': '力量 +1',
+                            'target': 'str',
+                            'value': 1,
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ),
+            _entry(
+              id: 'guide:background/sage',
+              type: 'background',
+              name: '贤者',
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:species/human',
+              type: 'species',
+              name: '人类',
+              rules: const {},
+            ),
+          ],
+          onSubmit: (draft) async {
+            submitted = draft;
+            return true;
+          },
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const Key('standard-character-name-field')),
+      '米尔',
+    );
+    await tester.pumpAndSettle();
+
+    await _goToDesktopStep(tester, 6);
+    final inlineTile = find.byKey(const Key('spell-choice-inline-bolt'));
+    expect(
+      inlineTile,
+      findsOneWidget,
+      reason: '内联候选必须出现在法术池里（旧实现整批丢弃）',
+    );
+    await tester.tap(inlineTile);
+    await tester.pumpAndSettle();
+    expect(find.text('已选 1/1'), findsOneWidget);
+
+    await _goToDesktopStep(tester, 8);
+    expect(
+      _createButton(tester).onPressed,
+      isNotNull,
+      reason: '内联候选可以选中，因此必选项可完成（无死锁）',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '创建角色'));
+    await tester.pumpAndSettle();
+
+    expect(submitted, isNotNull);
+    final build = submitted!.data['build']! as Map;
+    expect(
+      (build['choices']! as Map)['guide:class/mage#inline-spell'],
+      ['inline-bolt'],
+    );
+    expect(
+      (submitted!.data['resolvedGrants']! as List)
+          .whereType<Map>()
+          .map((grant) => grant['id']),
+      contains('inline-bolt-str'),
+      reason: '内联选项的 grants 选中即生效',
+    );
+  });
+
+  // P2-12：UI 的 `countsToward` 口径必须与引擎一致——引擎只让"声明在前且
+  // `requires` 已满足"的同池选择占额度。旧 UI 把前置不满足的选择也算进去，会把
+  // 后面选择的有效上限定成 0：tile 点得动却没反应，且没有任何原因。
+  testWidgets('同池额度只被"前置已满足"的在前选择占用（UI 与引擎同口径）', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          contentEntries: [
+            _entry(
+              id: 'guide:class/mage',
+              type: 'class',
+              name: '法师',
+              structured: const {
+                'classRules': {
+                  'hitDie': 6,
+                  'spellcasting': {
+                    'mode': 'prepared',
+                    'ability': 'int',
+                    'archetype': 'full-caster',
+                    // 池上限 1：前置不满足的那条若被算作"已占用"，下一条就只剩 0。
+                    'prepared': {'1': 1},
+                  },
+                },
+              },
+              rules: const {
+                'choices': [
+                  {
+                    'id': 'gated-spells',
+                    'label': '有门槛的法术',
+                    'optionType': 'spell',
+                    'minimum': 0,
+                    'maximum': 1,
+                    'optionTags': ['spell-list:gated'],
+                    'maximumOptionLevel': 0,
+                    'countsToward': 'prepared',
+                    // 永远不满足的前置：候选会被隐藏，但推荐值仍会进草稿。
+                    'requires': [
+                      {'ability': 'cha', 'minimum': 99},
+                    ],
+                    'recommendedEntryIds': ['guide:spell/gated'],
+                  },
+                  {
+                    'id': 'open-spells',
+                    'label': '公开法术',
+                    'optionType': 'spell',
+                    'minimum': 0,
+                    'maximum': 1,
+                    'optionTags': ['spell-list:open'],
+                    'maximumOptionLevel': 0,
+                    'countsToward': 'prepared',
+                  },
+                ],
+              },
+            ),
+            _entry(
+              id: 'guide:background/sage',
+              type: 'background',
+              name: '贤者',
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:species/human',
+              type: 'species',
+              name: '人类',
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:spell/gated',
+              type: 'spell',
+              name: '禁忌之焰',
+              structured: const {'level': 0},
+              tags: const ['spell-list:gated'],
+              rules: const {},
+            ),
+            _entry(
+              id: 'guide:spell/open',
+              type: 'spell',
+              name: '公开之焰',
+              structured: const {'level': 0},
+              tags: const ['spell-list:open'],
+              rules: const {},
+            ),
+          ],
+          onSubmit: (draft) async => true,
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const Key('standard-character-name-field')),
+      '米尔',
+    );
+    await tester.pumpAndSettle();
+
+    await _goToDesktopStep(tester, 6);
+    // 前置不满足的那条：显示原因、不渲染候选。
+    expect(find.text('需要魅力 99'), findsOneWidget);
+    expect(
+      find.byKey(const Key('spell-choice-guide:spell/gated')),
+      findsNothing,
+      reason: '选择级 requires 不满足时不渲染候选',
+    );
+    // 池额度 1 仍应留给后面这条选择（引擎不会让未生效的选择占额度）。
+    expect(
+      find.byKey(const Key('spell-choice-guide:spell/open')),
+      findsOneWidget,
+      reason: 'UI 若把前置不满足的选择也算进同池额度，这里会是 0 → 点得动却没反应',
+    );
+    expect(find.text('已选 0/1'), findsOneWidget);
+  });
+
   // 结构守卫（任务 7）：`usesDedicatedOptionUi` 只允许作为**渲染判据**存在
   // （决定由哪个专门渲染器画），校验 / 免检路径不得再出现它；升级规划器与独立
   // 升级页完全不得出现（本级新增的选择由共享组件真的渲染，无需免检）。

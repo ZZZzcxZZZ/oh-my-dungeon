@@ -95,25 +95,33 @@ class _CharacterUpgradePageState extends State<CharacterUpgradePage> {
                                 ],
                               ),
                       ),
-                      for (final choice in plan.choices)
-                        _UpgradeSection(
-                          title: choice.definition.label,
-                          icon: choice.isValid
-                              ? Icons.check_circle_outline
-                              : Icons.radio_button_unchecked,
-                          child: _ChoiceOptions(
-                            choice: choice,
-                            entries: _entries,
-                            requiresContext: RuleChoiceRequiresContext(
-                              sourceEntryId: choice.sourceEntryId,
-                              selectedByKey: plan.build.choices,
-                              abilities: plan.build.abilities,
+                      // `group` 相同的选择归一组：归组的**唯一实现点**是
+                      // `groupRuleChoiceSections`（与创建向导 / 编辑器升级队列同一
+                      // 份），本页不得再写一套逐条渲染的分组循环。
+                      RuleChoiceGroupedSections(
+                        groups: groupRuleChoiceSections<ActiveRuleChoice>(
+                          plan.choices,
+                          groupOf: (choice) => choice.definition.group,
+                          buildChoice: (choice) => _UpgradeSection(
+                            title: choice.definition.label,
+                            icon: choice.isValid
+                                ? Icons.check_circle_outline
+                                : Icons.radio_button_unchecked,
+                            child: _ChoiceOptions(
+                              choice: choice,
                               entries: _entries,
+                              requiresContext: RuleChoiceRequiresContext(
+                                sourceEntryId: choice.sourceEntryId,
+                                selectedByKey: plan.build.choices,
+                                abilities: plan.build.abilities,
+                                entries: _entries,
+                              ),
+                              onChanged: (selected) =>
+                                  _select(choice.key, selected),
                             ),
-                            onChanged: (selected) =>
-                                _select(choice.key, selected),
                           ),
                         ),
+                      ),
                       if (plan.missingEntryIds.isNotEmpty)
                         _UpgradeSection(
                           title: '缺少资料',

@@ -55,21 +55,18 @@ class RuleChoiceSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final blocked = blockedReason != null;
-    final counts = _countsById(selected);
+    // 候选过滤的唯一实现点是 `visibleRuleChoiceCandidates`（选项级 `requires`）；
+    // 选择级 `blockedReason` 不满足时整块候选都不画（值也不生效）。
     final visible = blocked
         ? const <RuleChoiceCandidate>[]
         : visibleRuleChoiceCandidates(candidates, requiresContext);
+    // 已选但**选项级** `requires` 不满足的值：候选被隐藏，值却还在草稿里。
+    // 不静默丢弃，也不让它冒充"生效"——列出来（决策 D6 / P2-1）。
     final hiddenSelected = <String>[
       for (final id in selected)
         if (!visible.any((candidate) => candidate.id == id)) id,
     ];
-    final valid =
-        !blocked &&
-        selected.length >= definition.minimum &&
-        selected.length <= definition.maximum;
-    final label = sourceLabel;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Card.outlined(
@@ -78,154 +75,231 @@ class RuleChoiceSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (showTitle) ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        definition.label,
-                        style: theme.textTheme.titleMedium,
-                      ),
-                    ),
-                    Icon(
-                      valid ? Icons.check_circle : Icons.pending_outlined,
-                      color: valid
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.error,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-              ],
-              if (label != null)
-                Text(
-                  '$label · 选择 ${definition.minimum}-${definition.maximum} 项'
-                  ' · 已选 ${selected.length}',
-                  style: theme.textTheme.bodySmall,
-                ),
-              if (definition.help != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  definition.help!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-              if (blocked) ...[
-                const SizedBox(height: 12),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.block_outlined,
-                      size: 18,
-                      color: theme.colorScheme.error,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        blockedReason!,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.error,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (selected.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    '已选但未生效：${_labelsFor(selected, candidates)}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.error,
-                    ),
-                  ),
-                ],
-              ] else ...[
-                const SizedBox(height: 12),
-                if (visible.isEmpty)
-                  Text(
-                    // 两种"空候选"必须区分（不误导）：资料库缺料 vs 选项级前置
-                    // 未满足把候选全隐藏了。判定只用 `candidates.isEmpty`，
-                    // 因为过滤的唯一实现点是 `visibleRuleChoiceCandidates`。
-                    candidates.isEmpty
-                        ? '资料库中缺少 ${definition.optionType} 选项。'
-                        : '当前条件下没有可选的 ${definition.optionType} 选项'
-                              '（候选的选项级 requires 均未满足）。',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.error,
-                    ),
-                  )
-                else
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final candidate in visible)
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            FilterChip(
-                              label: Text(
-                                _chipLabel(
-                                  candidate,
-                                  counts[candidate.id] ?? 0,
-                                ),
-                              ),
-                              selected: counts.containsKey(candidate.id),
-                              // `repeatable` 的 chip 是"加一次"按钮：`FilterChip`
-                              // 在已选时回调 `false`，按普通 toggle 语义永远无法
-                              // 选到第二次（§3.10.2 允许同一 id 选 N 次）。减一次
-                              // 由 chip 上的删除图标承担（`onDeleted`），移除的是
-                              // **第一次出现**的那次。
-                              onSelected: (_) => _onChipSelected(candidate),
-                              onDeleted:
-                                  definition.repeatable &&
-                                      (counts[candidate.id] ?? 0) > 0
-                                  ? () => _removeOne(candidate.id)
-                                  : null,
-                              deleteIcon:
-                                  definition.repeatable &&
-                                      (counts[candidate.id] ?? 0) > 0
-                                  ? Icon(
-                                      Icons.remove_circle_outline,
-                                      size: 18,
-                                      key: Key(
-                                        'rule-choice-remove-${candidate.id}',
-                                      ),
-                                    )
-                                  : null,
-                            ),
-                            if (candidate.entry != null &&
-                                onOpenEntry != null)
-                              IconButton(
-                                key: Key('builder-open-entry-${candidate.id}'),
-                                tooltip: '查看 ${candidate.label}',
-                                onPressed: () =>
-                                    onOpenEntry!(candidate.entry!),
-                                icon: const Icon(Icons.open_in_new, size: 18),
-                              ),
-                          ],
-                        ),
-                    ],
-                  ),
-                // 已选但**选项级** `requires` 不满足的值：候选被隐藏，值却还在草稿
-                // 里。不静默丢弃，也不让它冒充"生效"——列出来（决策 D6）。
-                if (hiddenSelected.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    '已选但未生效：${_labelsFor(hiddenSelected, candidates)}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.error,
-                    ),
-                  ),
-                ],
-              ],
+              if (showTitle) _title(context),
+              if (sourceLabel != null) _sourceLine(context),
+              if (definition.help != null) _help(context),
+              const SizedBox(height: 12),
+              if (blocked)
+                _blockedNotice(context, selected)
+              else
+                ..._candidateArea(context, visible, hiddenSelected),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  /// 标题行：选择 `label` + 完成状态图标（`minimum`–`maximum` 与前置都满足才打勾）。
+  Widget _title(BuildContext context) {
+    final theme = Theme.of(context);
+    final valid =
+        blockedReason == null &&
+        selected.length >= definition.minimum &&
+        selected.length <= definition.maximum;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              definition.label,
+              style: theme.textTheme.titleMedium,
+            ),
+          ),
+          Icon(
+            valid ? Icons.check_circle : Icons.pending_outlined,
+            color: valid ? theme.colorScheme.primary : theme.colorScheme.error,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 来源与数量摘要（`来源条目 · 选择 2-2 项 · 已选 1`）。
+  Widget _sourceLine(BuildContext context) {
+    return Text(
+      '$sourceLabel · 选择 ${definition.minimum}-${definition.maximum} 项'
+      ' · 已选 ${selected.length}',
+      style: Theme.of(context).textTheme.bodySmall,
+    );
+  }
+
+  /// `help` 小字（`DESIGN.md` 的次要文字角色，无新 token）。
+  Widget _help(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(
+        definition.help!,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
+  /// 选择级 `requires` 不满足：只显示原因 + 已选值清单，不渲染候选。
+  Widget _blockedNotice(BuildContext context, List<String> selectedValues) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.block_outlined,
+              size: 18,
+              color: theme.colorScheme.error,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                blockedReason!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (selectedValues.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            '已选但未生效：${_labelsFor(selectedValues, candidates)}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.error,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// 候选区：空候选给出**区分过的**原因；否则按载体来源分组展示候选。
+  List<Widget> _candidateArea(
+    BuildContext context,
+    List<RuleChoiceCandidate> visible,
+    List<String> hiddenSelected,
+  ) {
+    final theme = Theme.of(context);
+    if (visible.isEmpty) {
+      return [
+        Text(
+          // 两种"空候选"必须区分（不误导）：资料库缺料 vs 选项级前置把候选全
+          // 隐藏了。判定用 `candidates.isEmpty`——过滤的唯一实现点是
+          // `visibleRuleChoiceCandidates`，这里不重新过滤。
+          candidates.isEmpty
+              ? '资料库中缺少 ${definition.optionType} 选项。'
+              : '当前条件下没有可选的 ${definition.optionType} 选项'
+                    '（候选的选项级 requires 均未满足）。',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.error,
+          ),
+        ),
+      ];
+    }
+    final inline = visible
+        .where((candidate) => candidate.isInline)
+        .toList(growable: false);
+    final entryBacked = visible
+        .where((candidate) => !candidate.isInline)
+        .toList(growable: false);
+    return [
+      // §3.10.3-2：内联选项与条目候选**合并展示并分组**。两者语义不同（内联自带
+      // grants、条目进规则队列），同名时不再无法分辨；只有一种载体时不加分组小标
+      // （避免给单组候选添噪音）。
+      if (inline.isNotEmpty)
+        ..._candidateGroup(
+          context,
+          inline,
+          caption: entryBacked.isEmpty ? null : '选择自带',
+        ),
+      if (entryBacked.isNotEmpty)
+        ..._candidateGroup(
+          context,
+          entryBacked,
+          caption: inline.isEmpty ? null : '来自资料库',
+        ),
+      if (hiddenSelected.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        Text(
+          '已选但未生效：${_labelsFor(hiddenSelected, candidates)}',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.error,
+          ),
+        ),
+      ],
+    ];
+  }
+
+  /// 一组候选（可选分组小标 + chip 流）。
+  List<Widget> _candidateGroup(
+    BuildContext context,
+    List<RuleChoiceCandidate> group, {
+    required String? caption,
+  }) {
+    final theme = Theme.of(context);
+    final counts = _countsById(selected);
+    return [
+      if (caption != null) ...[
+        const SizedBox(height: 4),
+        Text(
+          caption,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final candidate in group)
+            _candidateRow(context, candidate, counts),
+        ],
+      ),
+    ];
+  }
+
+  /// 单个候选 chip（`repeatable` 时附带"减一次"图标）与可选的"查看"按钮。
+  Widget _candidateRow(
+    BuildContext context,
+    RuleChoiceCandidate candidate,
+    Map<String, int> counts,
+  ) {
+    final count = counts[candidate.id] ?? 0;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        FilterChip(
+          label: Text(_chipLabel(candidate, count)),
+          selected: counts.containsKey(candidate.id),
+          // `repeatable` 的 chip 是"加一次"按钮：`FilterChip` 在已选时回调
+          // `false`，按普通 toggle 语义永远无法选到第二次（§3.10.2 允许同一 id
+          // 选 N 次）。减一次由 chip 上的删除图标承担（`onDeleted`），移除的是
+          // **第一次出现**的那次。
+          onSelected: (_) => _onChipSelected(candidate),
+          onDeleted: definition.repeatable && count > 0
+              ? () => _removeOne(candidate.id)
+              : null,
+          deleteIcon: definition.repeatable && count > 0
+              ? Icon(
+                  Icons.remove_circle_outline,
+                  size: 18,
+                  key: Key('rule-choice-remove-${candidate.id}'),
+                )
+              : null,
+        ),
+        if (candidate.entry != null && onOpenEntry != null)
+          IconButton(
+            key: Key('builder-open-entry-${candidate.id}'),
+            tooltip: '查看 ${candidate.label}',
+            onPressed: () => onOpenEntry!(candidate.entry!),
+            icon: const Icon(Icons.open_in_new, size: 18),
+          ),
+      ],
     );
   }
 

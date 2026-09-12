@@ -475,6 +475,8 @@ void main() {
         definition,
         const ['str', 'str'],
         entries: const {},
+        selectedByKey: const {},
+        abilities: const {},
       );
 
       expect(grants, hasLength(2));
@@ -495,6 +497,8 @@ void main() {
           skillChoice,
           const ['察觉'],
           entries: const {},
+          selectedByKey: const {},
+          abilities: const {},
         ).single.target,
         'skill:察觉',
       );
@@ -512,6 +516,8 @@ void main() {
           languageChoice,
           const ['精灵语'],
           entries: const {},
+          selectedByKey: const {},
+          abilities: const {},
         ),
         isEmpty,
       );
@@ -546,6 +552,8 @@ void main() {
           definition,
           [feat.id],
           entries: {feat.id: feat},
+          selectedByKey: const {},
+          abilities: const {},
         ),
         isEmpty,
       );
@@ -566,6 +574,8 @@ void main() {
           definition,
           const ['zzz'],
           entries: const {},
+          selectedByKey: const {},
+          abilities: const {},
         ),
         isEmpty,
       );
@@ -606,9 +616,59 @@ void main() {
         definition,
         const ['p:feat/a'],
         entries: {feat.id: feat},
+        selectedByKey: const {},
+        abilities: const {},
       );
 
       expect(grants.map((grant) => grant.id), ['inline-a-grant']);
+    });
+
+    // P2-1：选项级 `requires` 不满足的候选**不产出 grants**——它们的候选在 UI 里
+    // 已被隐藏，引擎若照给就是"界面看不见、数值却生效"。判定本体与隐藏判据同源
+    // （`candidateRequiresSatisfied`）。
+    test('选项级 requires 不满足的已选候选不产出 grants，满足后产出', () {
+      const definition = RuleChoiceDefinition(
+        id: 'invocations',
+        label: '祈唤',
+        optionType: 'ability',
+        minimum: 0,
+        maximum: 2,
+        options: [
+          RuleChoiceOption(id: 'str', label: '力量 +1'),
+          RuleChoiceOption(
+            id: 'cha',
+            label: '魅力 +1',
+            requires: [RuleRequiresDefinition(ability: 'cha', minimum: 13)],
+          ),
+        ],
+      );
+      const selected = <String>['str', 'cha'];
+
+      final unsatisfied = RuleChoiceSemantics.grantsForSelection(
+        definition,
+        selected,
+        entries: const {},
+        selectedByKey: const {},
+        abilities: const {'cha': 12},
+      );
+      expect(
+        unsatisfied.map((grant) => grant.target),
+        <String>['str'],
+        reason: '前置不满足的候选不生效（UI 也隐藏它）',
+      );
+
+      final satisfied = RuleChoiceSemantics.grantsForSelection(
+        definition,
+        selected,
+        entries: const {},
+        selectedByKey: const {},
+        abilities: const {'cha': 13},
+      );
+      expect(
+        satisfied.map((grant) => grant.target),
+        <String>['str', 'cha'],
+        reason: '前置满足后同一条选中值必须生效',
+      );
     });
   });
 

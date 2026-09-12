@@ -651,22 +651,24 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
     final previousChoiceKeys = {
       for (final choice in previousLedger.activeChoices) choice.key,
     };
-    // 只有**本级新增**的选择才进入升级队列与 `pendingChoices`：上一级未完成的
-    // 选择（技能在任务 7 之前的选中值不进 `build.choices`）不该堵塞升级；
-    // 本级新增的选择必须由升级队列真的渲染出来（共享组件），否则就是
-    // "看不见却阻塞"——`usesDedicatedOptionUi` 只决定渲染位置，不再免检。
+    // 升级义务的**唯一口径**：只算"本级新增"的选择（键在上一个等级的账本里没有）。
+    //
+    // - level-less 必选项（`sourceLevel == null`，例如职业的创建期技能选择）是
+    //   **创建期义务**：上一个等级没完成也不阻塞升级，因此**既不进队列也不进
+    //   pending**。把它渲染出来却不让它阻塞，就是"看得见却点不动"的误导。
+    // - 本级新增的选择必须由升级队列真的渲染出来（共享组件），未完成就阻塞
+    //   （`pendingChoices` 与队列**用同一份过滤**，所以"渲染 ⇒ 未完成必阻塞"）。
+    bool isThisLevelsObligation(String key) =>
+        !previousChoiceKeys.contains(key);
     final upgradeChoices = nextLedger.activeChoices
-        .where(
-          (choice) =>
-              !previousChoiceKeys.contains(choice.key) || !choice.isValid,
-        )
+        .where((choice) => isThisLevelsObligation(choice.key))
         .toList(growable: false);
     return _CharacterUpgradePreview(
       build: nextBuild,
       newGrants: newGrants,
       ruleChoices: upgradeChoices,
       pendingChoices: nextLedger.pendingChoices
-          .where((pending) => !previousChoiceKeys.contains(pending.key))
+          .where((pending) => isThisLevelsObligation(pending.key))
           .toList(growable: false),
       missingEntryIds: nextLedger.missingEntryIds,
     );

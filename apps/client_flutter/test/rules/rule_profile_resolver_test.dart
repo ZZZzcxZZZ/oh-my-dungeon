@@ -4,9 +4,12 @@ import 'dart:io';
 
 import 'package:dnd_table_client/src/features/rules/domain/class_rule_set.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_diagnostic.dart';
+import 'package:dnd_table_client/src/features/rules/domain/rule_field_path.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_profile.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_profile_resolver.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'rule_profile_test_support.dart';
 
 const _path = r'$.structured.classRules';
 
@@ -1213,7 +1216,7 @@ void main() {
       }
     });
 
-    test('字段级合并：条目优先，档案补齐，并记录来源', () {
+    test('顶层字段 + 列级合并：条目优先，档案补齐，并记录来源', () {
       final profile = RuleProfileResolver.resolveBuiltin(archive()).profile!;
       final diagnostics = <RuleDiagnostic>[];
       final merged = RuleProfileResolver.resolveClassRules(
@@ -1241,9 +1244,42 @@ void main() {
         kEntryTier,
         reason: '条目来源 tier 100',
       );
-      // 来源只记录真正被声明过的字段：双方都没声明 spellcasting / resources 时
+      // 来源只记录真正被声明过的列/字段：双方都没声明 spellcasting / resources 时
       // 不得因为"默认空集合"而凭空记一条来源。
       expect(merged.fieldSources.keys, {'hitDie', 'savingThrowAbilities'});
+    });
+
+    test('spellcasting 的来源键是列级路径，不再是整块 spellcasting', () {
+      final profile = RuleProfileResolver.resolveBuiltin(
+        overrideArchive(),
+      ).profile!;
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: ClassRuleSet.parse(
+          {
+            'spellcasting': {
+              'prepared': {'5': 9},
+            },
+          },
+          path: _path,
+          diagnostics: <RuleDiagnostic>[],
+        ),
+        entryId: 'errata:class/wizard',
+      );
+      expect(merged.fieldSources.containsKey('spellcasting'), isFalse);
+      expect(
+        merged.fieldSources[RuleFieldPath.spellcasting('prepared')]!.originId,
+        'errata:class/wizard',
+      );
+      expect(
+        merged.fieldSources[RuleFieldPath.spellcasting('slots')]!.originId,
+        'builtin:dnd5e-2024',
+      );
+      expect(
+        merged.fieldSources[RuleFieldPath.spellcasting('mode')]!.originId,
+        'builtin:dnd5e-2024',
+      );
     });
 
     test('条目完全没有规则时用档案，完全未声明时为空', () {

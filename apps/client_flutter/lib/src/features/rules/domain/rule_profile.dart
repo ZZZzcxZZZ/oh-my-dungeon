@@ -130,6 +130,10 @@ class ResolvedClassRules {
   final ClassProgression? archetype;
   final Map<String, RuleFieldSource> fieldSources;
 
+  /// 该列最终取自哪里（契约 §3.7；键是 [RuleFieldPath] 的字段路径）。
+  /// 未声明 / 未记录时返回 null（**不猜**，界面据此显示"来源未知"）。
+  RuleFieldSource? sourceOf(String field) => fieldSources[field];
+
   /// 条目自身声明的规则块（`structured.classRules`；未声明为 null）。
   final ClassRuleSet? entryRules;
 

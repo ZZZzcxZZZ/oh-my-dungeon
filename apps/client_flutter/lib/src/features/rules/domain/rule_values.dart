@@ -20,6 +20,19 @@ class IntTable {
     return IntTable._(byLevel, levels, levels.first, levels.last);
   }
 
+  /// 从"等级 → 值"构造**合并结果**（[mergeRuleTableLevels] 的唯一下游）；
+  /// 空表 → null（所有 tier 都没声明 → 未声明）。
+  static IntTable? fromLevels(Map<int, int> byLevel) {
+    if (byLevel.isEmpty) return null;
+    final levels = byLevel.keys.toList()..sort();
+    return IntTable._(
+      Map<int, int>.unmodifiable(byLevel),
+      List<int>.unmodifiable(levels),
+      levels.first,
+      levels.last,
+    );
+  }
+
   int? at(int level) => _valueAt(_byLevel, _levels, level);
 }
 
@@ -64,6 +77,22 @@ class SlotTable {
     if (byLevel.isEmpty) return null;
     final levels = byLevel.keys.toList()..sort();
     return SlotTable._(byLevel, levels, levels.first, levels.last);
+  }
+
+  /// 从"等级 → 法术位表"构造**合并结果**（[mergeRuleTableLevels] 的唯一下游）；
+  /// 空表 → null（所有 tier 都没声明 → 未声明）。
+  static SlotTable? fromLevels(Map<int, Map<String, int>> byLevel) {
+    if (byLevel.isEmpty) return null;
+    final levels = byLevel.keys.toList()..sort();
+    return SlotTable._(
+      Map<int, Map<String, int>>.unmodifiable({
+        for (final entry in byLevel.entries)
+          entry.key: Map<String, int>.unmodifiable(entry.value),
+      }),
+      List<int>.unmodifiable(levels),
+      levels.first,
+      levels.last,
+    );
   }
 
   static _SlotsResult _slots(Object? raw) {
@@ -227,6 +256,37 @@ int _evaluate(String formula, int level, Map<String, int> abilities) {
     return int.parse(formula.substring(0, formula.length - 6)) * level;
   }
   return int.parse(formula);
+}
+
+/// `Table<T>` 列**逐级合并**的唯一实现（S3 决策 D5）。
+///
+/// [tiers] 按优先级从高到低给出各 tier 的取值器：`read(level)` 返回该 tier 在该
+/// 等级的值，null 表示"该 tier 在该等级未声明"。取值语义与 [IntTable.at] /
+/// [SlotTable.at] 完全一致：低于最早声明等级 → null；高于最后声明等级 → 沿用最后
+/// 声明值。因此"某 tier 只写 20 级"不会影响 1..19 级，而"只写 5 级"按既有 `Table`
+/// 语义沿用到 20 级。
+///
+/// 对 1..[maxLevel] 每个等级独立取"声明过该等级的最高 tier"；所有 tier 都没声明该
+/// 等级 → 结果里不含该等级（未声明）。显式 0 / 显式空表都是非 null 值，因此算
+/// "已声明"（§3.12）。
+///
+/// `slots` / `slotLevel` / `prepared` / `cantrips` / `maximumSpellLevel` /
+/// `resources.maximum.table` 全部只经这里，不得各自再写一份逐级循环。
+Map<int, T> mergeRuleTableLevels<T>(
+  List<T? Function(int level)> tiers, {
+  int maxLevel = 20,
+}) {
+  final merged = <int, T>{};
+  for (var level = 1; level <= maxLevel; level++) {
+    for (final read in tiers) {
+      final value = read(level);
+      if (value != null) {
+        merged[level] = value;
+        break;
+      }
+    }
+  }
+  return merged;
 }
 
 /// 解析"长度 ≤20 的数组"或"稀疏 map"；非法输入返回 null。

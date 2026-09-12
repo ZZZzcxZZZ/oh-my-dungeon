@@ -11,6 +11,7 @@
 // 契约里唯一的展开点：展开后运行期只有 `{环阶: 数量}` 一种形状。
 import 'class_rule_set.dart';
 import 'rule_diagnostic.dart';
+import 'rule_field_path.dart';
 import 'rule_profile.dart';
 import 'rule_values.dart';
 
@@ -566,7 +567,11 @@ abstract final class RuleProfileResolver {
     );
   }
 
-  /// 条目声明 ∪ 档案（条目优先，**字段级**，§3.6、§3.7、§3.8）。
+  /// 条目声明 ∪ 档案（条目优先，**顶层字段 + 列级**，§3.6、§3.7、§3.8、S3 决策 D5）。
+  ///
+  /// 合并顺序在代码与注释里写死：**先做 tier 之间（条目 vs 档案）的逐列 / 逐级
+  /// 合并**，得到该职业自身的各列；**之后**才由 [ResolvedClassRules] 按 §3.3 决定
+  /// "该列在某个等级未声明时是否回退 `archetype`"。两级关系不混在一起。
   static ResolvedClassRules resolveClassRules({
     required RuleProfile profile,
     required String slug,
@@ -577,43 +582,55 @@ abstract final class RuleProfileResolver {
     final entryOrigin = entryId ?? '<entry>';
     final sources = <String, RuleFieldSource>{};
 
-    final spellcasting = _mergeField<ClassSpellcasting>(
-      field: 'spellcasting',
-      entryRules: entryRules,
-      fromArchive: fromArchive,
-      entryOrigin: entryOrigin,
+    final entry = entryRules == null
+        ? null
+        : _OrderedDeclaration(
+            originId: entryOrigin,
+            tier: kEntryTier,
+            rules: entryRules,
+          );
+    final archive = fromArchive == null
+        ? null
+        : _OrderedDeclaration(
+            originId: kBuiltinOriginId,
+            tier: kBuiltinTier,
+            rules: fromArchive,
+          );
+    // 已按优先级从高到低排好；排序的唯一实现在任务 7 抽出（本批次只有两级）。
+    final ordered = <_OrderedDeclaration>[?entry, ?archive];
+
+    final spellcasting = _mergeSpellcasting(
+      declarations: ordered,
       sources: sources,
-      read: (rules) => rules.spellcasting,
     );
     return ResolvedClassRules(
-      hitDie: _mergeField<int>(
-        field: 'hitDie',
-        entryRules: entryRules,
-        fromArchive: fromArchive,
-        entryOrigin: entryOrigin,
-        sources: sources,
+      hitDie: _pickColumn<int>(
+        field: RuleFieldPath.hitDie,
+        declarations: ordered,
+        declares: (rules) => rules.declares('hitDie'),
         read: (rules) => rules.hitDie,
-      ),
+        sources: sources,
+      ).value,
       savingThrowAbilities:
-          _mergeField<Set<String>>(
-            field: 'savingThrowAbilities',
-            entryRules: entryRules,
-            fromArchive: fromArchive,
-            entryOrigin: entryOrigin,
-            sources: sources,
+          _pickColumn<Set<String>>(
+            field: RuleFieldPath.savingThrowAbilities,
+            declarations: ordered,
+            declares: (rules) => rules.declares('savingThrowAbilities'),
             read: (rules) => rules.savingThrowAbilities,
-          ) ??
+            sources: sources,
+          ).value ??
           const {},
       spellcasting: spellcasting,
+      // resources 仍是"整块替换"：任务 3 换成按 id 的列级合并，本任务刻意不动它，
+      // 保证每个任务的失败测试集合最小。
       resources:
-          _mergeField<List<ClassResourceRule>>(
+          _pickColumn<List<ClassResourceRule>>(
             field: 'resources',
-            entryRules: entryRules,
-            fromArchive: fromArchive,
-            entryOrigin: entryOrigin,
-            sources: sources,
+            declarations: ordered,
+            declares: (rules) => rules.declares('resources'),
             read: (rules) => rules.resources,
-          ) ??
+            sources: sources,
+          ).value ??
           const [],
       archetype: profile.progression(spellcasting?.archetype),
       fieldSources: sources,
@@ -623,44 +640,161 @@ abstract final class RuleProfileResolver {
       archiveRules: fromArchive,
     );
   }
+}
 
-  /// 单字段的两级取值：只有该侧**显式声明过**这个字段才取它的值，未声明就回退；
-  /// 两侧都没声明则保持"未声明"（null），绝不按名字相近回退（§3.6）。
-  ///
-  /// 档案没声明过的字段不记来源：[ClassRuleSet] 的集合字段默认是空集合/空表，
-  /// 不能把"默认值"当成"档案补齐"，否则来源记录会凭空多出字段（§3.7）。
-  static T? _mergeField<T>({
-    required String field,
-    required ClassRuleSet? entryRules,
-    required ClassRuleSet? fromArchive,
-    required String entryOrigin,
-    required Map<String, RuleFieldSource> sources,
-    required T? Function(ClassRuleSet) read,
-  }) {
-    if (entryRules != null && entryRules.declares(field)) {
-      final fromEntry = read(entryRules);
-      if (fromEntry != null) {
-        sources[field] = RuleFieldSource(
-          field: field,
-          originId: entryOrigin,
-          tier: kEntryTier,
-        );
-        return fromEntry;
-      }
-    }
-    if (fromArchive != null && fromArchive.declares(field)) {
-      final fromBuiltin = read(fromArchive);
-      if (fromBuiltin != null) {
-        sources[field] = RuleFieldSource(
-          field: field,
-          originId: kBuiltinOriginId,
-          tier: kBuiltinTier,
-        );
-        return fromBuiltin;
-      }
-    }
-    return null;
+/// 一条参与合并的声明（本批次只有"条目"与"档案"两级）。
+///
+/// **这是脚手架**：任务 7 会把它整体换成 `RuleOverrideDeclaration`（`.package` /
+/// `.builtin` 两个命名构造）并删除本类，届时合并链上只允许存在一种声明类型。
+class _OrderedDeclaration {
+  const _OrderedDeclaration({
+    required this.originId,
+    required this.tier,
+    required this.rules,
+  });
+
+  final String originId;
+  final int tier;
+  final ClassRuleSet rules;
+}
+
+/// 列级取值的**唯一**实现（标量列：`hitDie` / `savingThrowAbilities` /
+/// `spellcasting.mode|ability|listTags|archetype` / `resources` 的合键等）。
+///
+/// [declarations] 必须已按优先级**从高到低**排好（排序的唯一实现在
+/// `RuleOverrideOrder`，本批次由 [RuleProfileResolver.resolveClassRules] 构造）。
+/// 取"第一个声明过该列"的声明的值即生效值；全都未声明 → `(value: null)`。
+/// **显式 null 也算声明**（`archetype: null` = 清空该列），因此判据只看
+/// `declares`，绝不看"值是否为 null"。
+_ColumnPick<T> _pickColumn<T>({
+  required String field,
+  required List<_OrderedDeclaration> declarations,
+  required bool Function(ClassRuleSet rules) declares,
+  required T? Function(ClassRuleSet rules) read,
+  required Map<String, RuleFieldSource> sources,
+}) {
+  for (final declaration in declarations) {
+    if (!declares(declaration.rules)) continue;
+    _writeSource(sources, field, declaration.originId, declaration.tier);
+    return _ColumnPick(
+      value: read(declaration.rules),
+      originId: declaration.originId,
+    );
   }
+  return const _ColumnPick(value: null, originId: null);
+}
+
+/// `Table<T>` 列的取值 + 来源（决策 D5）：值走 [mergeRuleTableLevels]（逐级合并的
+/// 唯一实现），来源记在"最高 tier 且声明过该列"的声明上。
+///
+/// 逐级的来源细节（"1..19 级来自档案、20 级来自条目"）不在本批次：§3.7 的来源粒度
+/// 是列，`RuleFieldPath` 也没有等级维度。列级来源 = 该列的最高 tier 声明者。
+Map<int, T> _pickTableColumn<T>({
+  required String field,
+  required List<_OrderedDeclaration> declarations,
+  required bool Function(ClassRuleSet rules) declares,
+  required T? Function(ClassRuleSet rules, int level) read,
+  required Map<String, RuleFieldSource> sources,
+}) {
+  final readers = <T? Function(int level)>[];
+  _OrderedDeclaration? owner;
+  for (final declaration in declarations) {
+    if (!declares(declaration.rules)) continue;
+    owner ??= declaration;
+    readers.add((level) => read(declaration.rules, level));
+  }
+  if (owner == null) return const {};
+  _writeSource(sources, field, owner.originId, owner.tier);
+  return mergeRuleTableLevels<T>(readers);
+}
+
+class _ColumnPick<T> {
+  const _ColumnPick({required this.value, required this.originId});
+
+  final T? value;
+  final String? originId;
+}
+
+/// 来源写入的**唯一**出口（契约 §3.7）。字段路径必须来自 [RuleFieldPath]。
+void _writeSource(
+  Map<String, RuleFieldSource> sources,
+  String field,
+  String originId,
+  int tier,
+) {
+  sources[field] = RuleFieldSource(field: field, originId: originId, tier: tier);
+}
+
+/// tier 之间（条目 vs 档案）的 `spellcasting` 列级 + 表列逐级合并（§3.6、D5）。
+///
+/// - 双方都没有 `spellcasting` → null（不产生来源）；
+/// - 标量列逐列取"高优先级且声明过该列"的一侧（`mode` / `ability` / `listTags` /
+///   `archetype`）；
+/// - 表列（`slots` / `slotLevel` / `prepared` / `cantrips` / `maximumSpellLevel`）
+///   在声明过该列的各 tier 之间**按等级**合并（[mergeRuleTableLevels]）；
+/// - 合并结果的 `fields` 是**声明列的并集**，供下游判断"该列是否未声明"；
+/// - `mode` 的默认值 `none` 在**合并之后**落，缺省不算声明（否则条目只写
+///   `prepared` 时会把档案的 `mode: prepared` 误压成 `none`）。
+ClassSpellcasting? _mergeSpellcasting({
+  required List<_OrderedDeclaration> declarations,
+  required Map<String, RuleFieldSource> sources,
+}) {
+  ClassSpellcasting? spellcastingOf(ClassRuleSet rules) => rules.spellcasting;
+  bool declaresColumn(ClassRuleSet rules, String column) =>
+      spellcastingOf(rules)?.declares(column) ?? false;
+
+  final present = <ClassRuleSet>[
+    for (final declaration in declarations)
+      if (spellcastingOf(declaration.rules) != null) declaration.rules,
+  ];
+  if (present.isEmpty) return null;
+
+  T? column<T>(String name, T? Function(ClassSpellcasting) read) =>
+      _pickColumn<T>(
+        field: RuleFieldPath.spellcasting(name),
+        declarations: declarations,
+        declares: (rules) => declaresColumn(rules, name),
+        read: (rules) => read(spellcastingOf(rules)!),
+        sources: sources,
+      ).value;
+
+  IntTable? intTable(String name, IntTable? Function(ClassSpellcasting) read) =>
+      IntTable.fromLevels(
+        _pickTableColumn<int>(
+          field: RuleFieldPath.spellcasting(name),
+          declarations: declarations,
+          declares: (rules) => declaresColumn(rules, name),
+          read: (rules, level) => read(spellcastingOf(rules)!)?.at(level),
+          sources: sources,
+        ),
+      );
+
+  final slots = _pickTableColumn<Map<String, int>>(
+    field: RuleFieldPath.spellcasting('slots'),
+    declarations: declarations,
+    declares: (rules) => declaresColumn(rules, 'slots'),
+    read: (rules, level) => spellcastingOf(rules)!.slots?.at(level),
+    sources: sources,
+  );
+
+  return ClassSpellcasting(
+    mode: column<String>('mode', (c) => c.mode) ?? 'none',
+    ability: column<String>('ability', (c) => c.ability),
+    listTags: column<List<String>>('listTags', (c) => c.listTags) ?? const [],
+    archetype: column<String>('archetype', (c) => c.archetype),
+    slots: SlotTable.fromLevels(slots),
+    slotLevel: intTable('slotLevel', (c) => c.slotLevel),
+    prepared: intTable('prepared', (c) => c.prepared),
+    cantrips: intTable('cantrips', (c) => c.cantrips),
+    maximumSpellLevel: intTable(
+      'maximumSpellLevel',
+      (c) => c.maximumSpellLevel,
+    ),
+    fields: {
+      for (final declaration in declarations)
+        ...?spellcastingOf(declaration.rules)?.fields,
+    },
+  );
 }
 
 /// 档案形状/类型错误一律 error（§3.1、§5.2）。

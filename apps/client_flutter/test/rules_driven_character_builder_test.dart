@@ -1319,6 +1319,142 @@ void main() {
       'test:class/ranger#languages': ['draconic', 'draconic', '精灵语'],
     });
   });
+
+  // 任务 8 / §3.11 A2：装备方案 A/B 的物品与货币写进 `inventory` / `currency`；
+  // `structured.itemTemplate` 一律忽略；方案条目本身不是库存物品。
+  test('选中的装备方案把 items 与 currency 写进 inventory/currency（忽略 itemTemplate）', () {
+    final warden = _entry(
+      id: 'test:class/warden',
+      type: 'class',
+      name: '守望者',
+      structured: const {
+        'classRules': {'hitDie': 10},
+      },
+      rules: const {
+        'choices': [
+          {
+            'id': 'starting-equipment',
+            'label': '初始装备',
+            'optionType': 'equipmentBundle',
+            'minimum': 1,
+            'maximum': 1,
+          },
+        ],
+      },
+    );
+    final bundleA = _entry(
+      id: 'test:equipment-bundle/a',
+      type: 'equipmentBundle',
+      name: '方案 A',
+      structured: const {
+        'items': [
+          {'name': '链甲'},
+          {'name': '巨剑', 'quantity': 1},
+        ],
+        'currency': {'gp': 15, 'sp': 5},
+        'itemTemplate': {
+          'items': [
+            {'name': '模板物品'},
+          ],
+          'currency': {'gp': 999},
+        },
+      },
+      rules: const {},
+    );
+    final bundleB = _entry(
+      id: 'test:equipment-bundle/b',
+      type: 'equipmentBundle',
+      name: '方案 B',
+      structured: const {
+        'items': [
+          {'name': '皮甲'},
+        ],
+        'currency': {'gp': 100},
+      },
+      rules: const {},
+    );
+    final draft = RulesDrivenCharacterBuilder(
+      entries: {warden.id: warden, bundleA.id: bundleA, bundleB.id: bundleB},
+    ).build(
+      name: '测试角色',
+      build: const CharacterBuild(
+        level: 1,
+        selections: {'class': 'test:class/warden'},
+        choices: {
+          'test:class/warden#starting-equipment': ['test:equipment-bundle/a'],
+        },
+      ),
+      abilities: const {'str': 14},
+    );
+
+    expect(draft.inventory, contains(containsPair('name', '链甲')));
+    expect(draft.inventory, contains(containsPair('name', '巨剑')));
+    expect(
+      draft.inventory.any((row) => row['name'] == '模板物品'),
+      isFalse,
+      reason: 'itemTemplate 一律忽略',
+    );
+    expect(
+      draft.inventory.any((row) => row['name'] == '皮甲'),
+      isFalse,
+      reason: '未选中的方案 B 不得出现',
+    );
+    expect(
+      draft.inventory.any(
+        (row) => row['entryId'] == 'test:equipment-bundle/a',
+      ),
+      isFalse,
+      reason: '方案条目本身不是库存物品',
+    );
+    expect(draft.currency, {
+      'cp': 0,
+      'sp': 5,
+      'ep': 0,
+      'gp': 15,
+      'pp': 0,
+    });
+  });
+
+  // 任务 8：没有选中方案时货币全是 0（初始值来自唯一键清单，不是第二份硬编码）。
+  test('未选装备方案时 currency 只有 0 值', () {
+    final warden = _entry(
+      id: 'test:class/warden',
+      type: 'class',
+      name: '守望者',
+      structured: const {
+        'classRules': {'hitDie': 10},
+      },
+      rules: const {
+        'choices': [
+          {
+            'id': 'starting-equipment',
+            'label': '初始装备',
+            'optionType': 'equipmentBundle',
+            'minimum': 0,
+            'maximum': 1,
+          },
+        ],
+      },
+    );
+    final draft = RulesDrivenCharacterBuilder(
+      entries: {warden.id: warden},
+    ).build(
+      name: '测试角色',
+      build: const CharacterBuild(
+        level: 1,
+        selections: {'class': 'test:class/warden'},
+      ),
+      abilities: const {'str': 14},
+    );
+
+    expect(draft.currency, {
+      'cp': 0,
+      'sp': 0,
+      'ep': 0,
+      'gp': 0,
+      'pp': 0,
+    });
+  });
 }
 
 ContentEntry _entry({

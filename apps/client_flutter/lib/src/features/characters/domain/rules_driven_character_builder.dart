@@ -11,6 +11,7 @@ import 'character_content_reference.dart';
 import 'character_edit_draft.dart';
 import 'declared_levels.dart';
 import 'dnd5e_rules.dart';
+import 'equipment_bundle_items.dart';
 import 'structured_class_rules.dart';
 
 class RulesDrivenCharacterBuilder {
@@ -135,6 +136,9 @@ class RulesDrivenCharacterBuilder {
     // 语言落到**既有存储** `data['profile']['languages']`（决策 D6）：
     // `CharacterProfile.fromCharacter` 读的就是它，`data['languages']` 没有读取方。
     final languagePicks = _languagePicks(ledger);
+    // 装备方案 A/B（`optionType: "equipmentBundle"` 的选中值）：物品与货币的解析
+    // 只有 `EquipmentBundleItems.from` 一处，`inventory` / `currency` 都读它。
+    final equipmentBundles = _equipmentBundles(ledger);
 
     return CharacterEditDraft(
       name: name.trim(),
@@ -149,15 +153,8 @@ class RulesDrivenCharacterBuilder {
       abilities: Map<String, int>.from(effectiveAbilities),
       saves: saves,
       skills: skills,
-      inventory: [
-        for (final entryId in itemRefs)
-          {
-            'entryId': entryId,
-            'name': entries[entryId]?.name ?? entryId,
-            'quantity': 1,
-          },
-      ],
-      currency: const {'cp': 0, 'sp': 0, 'ep': 0, 'gp': 0, 'pp': 0},
+      inventory: _inventoryRows(itemRefs, equipmentBundles),
+      currency: _currencyTotals(equipmentBundles),
       notes: notes.isEmpty
           ? 'D&D 2024 引导创建：${backgroundEntry?.name ?? ''} / ${speciesEntry?.name ?? ''} / ${classEntry?.name ?? ''}。'
           : notes,
@@ -343,6 +340,59 @@ class RulesDrivenCharacterBuilder {
   ContentEntry? _selectedEntry(CharacterBuild build, String slot) {
     final id = build.selections[slot];
     return id == null ? null : entries[id];
+  }
+
+  /// 库存行：`rules.grants` / 条目选择带出的物品在前（带 `entryId`），选中的装备
+  /// 方案物品按声明顺序追加（无 `entryId`，`itemTemplate` 被忽略）。
+  List<Map<String, Object>> _inventoryRows(
+    List<String> itemRefs,
+    List<EquipmentBundleItems> bundles,
+  ) {
+    final rows = <Map<String, Object>>[
+      for (final entryId in itemRefs)
+        {
+          'entryId': entryId,
+          'name': entries[entryId]?.name ?? entryId,
+          'quantity': 1,
+        },
+    ];
+    for (final bundle in bundles) {
+      rows.addAll(bundle.items);
+    }
+    return rows;
+  }
+
+  /// 装备方案 A/B：`optionType: "equipmentBundle"` 选择的选中值 → 逐条
+  /// `EquipmentBundleItems`。
+  ///
+  /// **唯一实现点**：`structured.items` / `structured.currency` 的解析只在
+  /// `EquipmentBundleItems.from`；本方法只负责按"选择的选中值"挑出方案条目
+  /// （`rules.grants` 带出的方案条目不被当成库存物品，见
+  /// `_choiceEntryRefs(..., {'equipment','item'})` 不含 `equipmentBundle`）。
+  List<EquipmentBundleItems> _equipmentBundles(CharacterGrantLedger ledger) {
+    final bundles = <EquipmentBundleItems>[];
+    for (final selection in ledger.resolvedChoices.values) {
+      for (final id in selection) {
+        final entry = entries[id];
+        if (entry == null || entry.type != 'equipmentBundle') continue;
+        bundles.add(EquipmentBundleItems.from(entry.structured));
+      }
+    }
+    return bundles;
+  }
+
+  /// 货币合计：初始值 0 的币种清单来自 [EquipmentBundleItems.currencyKeys]
+  /// （**唯一**硬编码点），本方法只做累加。
+  Map<String, int> _currencyTotals(List<EquipmentBundleItems> bundles) {
+    final totals = <String, int>{
+      for (final key in EquipmentBundleItems.currencyKeys) key: 0,
+    };
+    for (final bundle in bundles) {
+      for (final entry in bundle.currency.entries) {
+        totals[entry.key] = (totals[entry.key] ?? 0) + entry.value;
+      }
+    }
+    return totals;
   }
 
   /// 记录型选择里的**语言**：`optionType == "language"` 的选中值 → 候选 label。

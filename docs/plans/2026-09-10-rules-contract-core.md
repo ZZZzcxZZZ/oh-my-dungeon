@@ -2033,6 +2033,11 @@ git commit -m "refactor(rules): Dnd5eRules 表查询改读内置档案，删除�
 | `preparedSpellLimit` | 保留签名，内部直接 `resolveClassRules(...).preparedLimit(level)`；**删除** `preparedSpellcasting` 开关与"属性调整值 + 等级"公式（新契约里没有这两个概念） |
 | 私有 `_validSkills` / 两个中文正则 / 散文解析 | 全部删除 |
 
+> **执行后记（W11）**：任务 8 完成后 `preparedSpellLimit` 已无生产调用点（只有测试在用），
+> 属"迁移后应删除的过渡 shim"，已在合并前删除；测试改调
+> `Dnd5eRules.resolveClassRules(...).preparedLimit(level)`。同理删除 `ResolvedClassRules.pactSlotLevel`
+> （契约魔法法术位的环阶由 `spellSlots(level)` 的键承载）。
+
 - [ ] **步骤 2：重写测试（旧断言锚定的是已废弃语义）**
 
 `structured_class_rules_test.dart` 里 10+ 条 `preparedSpellLimit` 断言与 3 条散文技能断言都要重写：

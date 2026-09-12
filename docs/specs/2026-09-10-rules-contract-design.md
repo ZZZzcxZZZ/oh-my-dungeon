@@ -633,7 +633,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 
 | 组件 | 文件 | 职责 |
 |---|---|---|
-| `RuleProfile` | `features/rules/domain/rule_profile.dart` | 不可变；`abilities`、`skills`、`progressions`、`classes(slug → ClassRuleSet)`、`aliases`；纯查询（档案侧 `classRules(key)` / `progression(name)`）。解析后的职业查询在 `ResolvedClassRules`：`hitDie`、`savingThrowAbilities`、`spellcasting`、`resources`、`fieldSources` 与 `spellSlots(level)`、`pactSlotLevel(level)`、`preparedLimit(level)`、`cantripLimit(level)`、`maxSpellLevel(level)`、`resourcesAt(level, abilities)`、`spellcastingAbility`、`usesPactMagic`、`declaredMinLevel` / `declaredMaxLevel` |
+| `RuleProfile` | `features/rules/domain/rule_profile.dart` | 不可变；`abilities`、`skills`、`progressions`、`classes(slug → ClassRuleSet)`、`aliases`；纯查询（档案侧 `classRules(key)` / `progression(name)`）。解析后的职业查询在 `ResolvedClassRules`：`hitDie`、`savingThrowAbilities`、`spellcasting`、`resources`、`fieldSources`（**只供数据层/测试读取，本轮 UI 未消费**，见 §3.7）与 `spellSlots(level)`、`preparedLimit(level)`、`cantripLimit(level)`、`maxSpellLevel(level)`、`resourcesAt(level, abilities)`、`spellcastingAbility`、`usesPactMagic`、`declaredMinLevel` / `declaredMaxLevel`。**契约魔法法术位的环阶由 `spellSlots(level)` 的键承载**（`pact` 原型展开成 `{"3": 2}` 这种形状），因此不再有独立的 `pactSlotLevel(level)`（实现期删除：与 `maxSpellLevel` 同源同值、无生产调用点） |
 | `ClassRuleSet` / `ClassSpellcasting` / `ClassResourceRule` / `MaxSpec` | 同上 | 值对象，含 `fromJson`/校验钩子 |
 | `RuleProfileResolver` | `features/rules/domain/rule_profile_resolver.dart` | 纯函数：`resolveBuiltin(档案 JSON)`、`resolveClassRules(profile, slug, entryRules, entryId)`、`validateEntryClassRules(...)` → `RuleProfile` / `ResolvedClassRules` + `RuleDiagnostic` |
 | `RuleDiagnostic` | 同上 | `{path, severity, code, message}`；导入器把它翻译成 `ContentValidationError`（error）或导入警告（warning） |

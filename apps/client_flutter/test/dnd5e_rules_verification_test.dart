@@ -581,7 +581,8 @@ void main() {
       ],
       'monk': [
         8,
-        ['dex', 'wis'],
+        // SRD 5.2.1：武僧豁免熟练是 Strength and Dexterity（力量与敏捷）
+        ['str', 'dex'],
       ],
       'paladin': [
         10,
@@ -967,7 +968,7 @@ void main() {
       '牧师': {'wis', 'cha'},
       '德鲁伊': {'int', 'wis'},
       '战士': {'str', 'con'},
-      '武僧': {'dex', 'wis'},
+      '武僧': {'str', 'dex'},
       '圣武士': {'wis', 'cha'},
       '游侠': {'dex', 'str'},
       '游荡者': {'dex', 'int'},

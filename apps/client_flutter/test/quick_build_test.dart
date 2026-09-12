@@ -171,7 +171,7 @@ void main() {
         '牧师': ['wis', 'cha'],
         '德鲁伊': ['int', 'wis'],
         '战士': ['str', 'con'],
-        '武僧': ['dex', 'wis'],
+        '武僧': ['str', 'dex'],
         '圣武士': ['wis', 'cha'],
         '游侠': ['dex', 'str'],
         '游荡者': ['dex', 'int'],

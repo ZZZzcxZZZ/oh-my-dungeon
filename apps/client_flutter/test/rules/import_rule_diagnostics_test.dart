@@ -1096,6 +1096,110 @@ void main() {
     });
   });
 
+  group('整块缺 spellcasting 的施法职业（作者意图信号）', () {
+    // `mode` 无从得知时，现有的 `mode != none` 分支一条都不报；补判只能靠作者意图：
+    // 条目 `rules` 里有 `optionType == 'spell'` 的选择（`rules.choices` 或
+    // `rules.progression[].choices`）。
+    Map<String, Object?> spellChoice([String id = 'spells']) => {
+      'id': id,
+      'optionType': 'spell',
+      'minimum': 1,
+      'maximum': 1,
+    };
+
+    test('rules.choices 有法术选择却无 spellcasting → missingCoreField warning', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {'hitDie': 10},
+            },
+            rules: {
+              'choices': [spellChoice()],
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+      final warning = report.warnings.single;
+      expect(warning.message, contains('missingCoreField'));
+      expect(warning.path, r'$.entries[0].structured.classRules.spellcasting');
+    });
+
+    test('progression[].choices 的法术选择同样算意图；声明了 spellcasting 就不报', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {
+                'hitDie': 10,
+                'spellcasting': {
+                  'mode': 'prepared',
+                  'ability': 'cha',
+                  'archetype': 'half-caster',
+                  'prepared': {'1': 4},
+                },
+              },
+            },
+            rules: {
+              'progression': [
+                {
+                  'levels': [1],
+                  'choices': [spellChoice()],
+                },
+              ],
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+      expect(report.warnings, isEmpty);
+    });
+
+    test('没有法术选择的普通职业不触发（意图信号是唯一判据）', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {'hitDie': 10},
+            },
+            rules: {
+              'choices': [
+                {'id': 'skills', 'optionType': 'skill', 'minimum': 2, 'maximum': 2},
+              ],
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+      expect(report.warnings, isEmpty);
+    });
+
+    test('slug 命中内置职业且档案提供 spellcasting → 不误报', () async {
+      // 反例防线：条目按字段**继承**档案（§3.6），部分声明 classRules 的内置职业
+      // （这里只覆盖 hitDie）在运行期拿得到档案的 spellcasting；"条目没写"不是缺省。
+      // 少了这层判据，一个只覆盖生命骰的 wizard 房规包就会被误报。
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'wizard',
+            structured: {
+              'classRules': {'hitDie': 6},
+            },
+            rules: {
+              'choices': [spellChoice()],
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+      expect(report.warnings, isEmpty);
+    });
+  });
+
   group('formatVersion 严格判据', () {
     test('3.5 不是 v3：不截断成 3 放行，报 unsupportedFormatVersion', () async {
       final report = await importer.previewJson(
@@ -1132,6 +1236,40 @@ void main() {
           (e) => e.path == r'$.formatVersion',
         );
         expect(error.message, contains('unsupportedFormatVersion'));
+      }
+    });
+
+    test('缺省 / 非数字分支同样带 unsupportedFormatVersion code', () async {
+      // 三条失败分支对作者是同一件事："这个版本不受支持，请重新生成"，
+      // code 不该只在"数值不等于 3"那一条出现。
+      String documentWith(Object? version, {required bool omit}) => jsonEncode({
+        if (!omit) 'formatVersion': version,
+        'id': 'diag-pack',
+        'name': 'Diag pack',
+        'version': '1.0.0',
+        'locale': 'zh-CN',
+        'system': 'dnd5e-2024',
+        'entryCount': 1,
+        'entries': [
+          classEntry(
+            structured: {
+              'classRules': {'hitDie': 10},
+            },
+          ),
+        ],
+      });
+
+      for (final (label, document) in <(String, String)>[
+        ('缺省', documentWith(null, omit: true)),
+        ('非数字', documentWith('3', omit: false)),
+      ]) {
+        final report = await importer.previewJson(document);
+        expect(report.valid, isFalse, reason: '$label 必须被拒绝');
+        final error = report.errors.singleWhere(
+          (e) => e.path == r'$.formatVersion',
+        );
+        expect(error.message, contains('unsupportedFormatVersion'), reason: label);
+        expect(error.message, contains('formatVersion 3'), reason: label);
       }
     });
   });

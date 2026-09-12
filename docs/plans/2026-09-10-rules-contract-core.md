@@ -2965,3 +2965,17 @@ W3 之前派生的角色卡里，`abilities` 是**旧语义的最终值**（多�
 
 > 规格里的 P3（校验）与 P4（grant kind 收紧）已并入本计划（任务 9 与任务 11），
 > 因此本计划完成后只剩选择系统与文档两块。
+
+### 欠账：两个角色页面单文件过长（W8 记录，**本轮不拆分**）
+
+`docs/archive/superpowers/specs/2026-07-16-character-experience-redesign.md` 提过
+"角色详情拆分为头部、导航和六个栏目文件，避免继续扩大现有单文件"。现状（W8 实测）：
+
+| 文件 | 行数 |
+|---|---|
+| `apps/client_flutter/lib/src/features/characters/presentation/character_editor_page.dart` | 4251 |
+| `apps/client_flutter/lib/src/features/characters/presentation/character_detail_page.dart` | 3720 |
+
+规则契约这一轮**不做拆分**：它在本计划目标之外，且这两个页面是角色创建 / 详情的唯一入口
+（创建向导、声明范围、职业资源与法术位都挂在上面），拆分风险远大于收益。
+**另立任务拆分**，并在此之前不要再把新逻辑塞进这两个文件；不要顺手夹带进规则契约的收尾提交。

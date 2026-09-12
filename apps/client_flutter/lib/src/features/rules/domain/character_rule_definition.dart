@@ -375,6 +375,24 @@ class CharacterRuleDefinition {
   final List<RuleChoiceDefinition> choices;
   final List<RuleProgressionDefinition> progression;
 
+  /// 条目自身是否声明了 [optionType] 类型的选择（契约 §3.10）：
+  /// `rules.choices` ∪ `rules.progression[].choices`，**与等级无关**——导入期校验
+  /// 看的是"作者声明过这种选择吗"，不是"当前角色够不够等级"。
+  ///
+  /// 这是"条目里有没有这类选择"的**唯一遍历点**：两层列表的遍历顺序与存在性判断
+  /// 只在这里写一次，调用方不得各自重写。
+  bool declaresChoiceOfType(String optionType) {
+    for (final choice in choices) {
+      if (choice.optionType == optionType) return true;
+    }
+    for (final step in progression) {
+      for (final choice in step.choices) {
+        if (choice.optionType == optionType) return true;
+      }
+    }
+    return false;
+  }
+
   factory CharacterRuleDefinition.fromJson(Map<String, Object?> json) {
     return CharacterRuleDefinition(
       grants: _parseList(json['grants'], RuleGrantDefinition.fromJson),

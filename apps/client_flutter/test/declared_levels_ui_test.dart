@@ -371,18 +371,41 @@ void main() {
       );
     });
 
-    test('declaredRangeFraction 对单级声明给 null（轨道只画未声明色，不崩）', () {
-      // min == max 的区间宽度为 0，是退化区间：按契约返回 null，
-      // 调用方只画未声明色。倒序（min > max）同理，不能让 `Rect` 出现负宽度。
-      expect(
-        DeclaredLevelTrackShape.declaredRangeFraction(
-          levels: const DeclaredLevels(min: 5, max: 5),
+    test('declaredRangeFraction 对单级声明给零宽区间，仍画出可见的已声明段', () {
+      // min == max 的区间比例宽度为 0，但它**不是**"没有已声明区间"：文案会写
+      // "已声明 5–5 级"，轨道若整条都是未声明色就与文案自相矛盾。
+      final single = DeclaredLevelTrackShape.declaredRangeFraction(
+        levels: const DeclaredLevels(min: 5, max: 5),
+        min: 1,
+        max: 20,
+      );
+      expect(single, (4 / 19, 4 / 19), reason: '单级声明是零宽区间，不是 null');
+
+      // 零宽区间落成像素时撑到最小可见宽度（1 逻辑像素），区间宽 > 0。
+      final track = Rect.fromLTWH(0, 0, 380, 8);
+      final rect = DeclaredLevelTrackShape.declaredTrackRect(
+        track: track,
+        fraction: single!,
+      );
+      expect(rect.width, kDeclaredTrackMinWidth);
+      expect(rect.width, greaterThan(0));
+      expect(rect.left, greaterThanOrEqualTo(track.left));
+      expect(rect.right, lessThanOrEqualTo(track.right));
+
+      // 轨道右端的单级声明（20 级）改为向左展开，同样不越界。
+      final atEnd = DeclaredLevelTrackShape.declaredTrackRect(
+        track: track,
+        fraction: DeclaredLevelTrackShape.declaredRangeFraction(
+          levels: const DeclaredLevels(min: 20, max: 20),
           min: 1,
           max: 20,
-        ),
-        isNull,
-        reason: '单级声明的区间宽度为 0：退化区间一律按"没有已声明区间"处理',
+        )!,
       );
+      expect(atEnd.width, kDeclaredTrackMinWidth);
+      expect(atEnd.left, greaterThanOrEqualTo(track.left));
+      expect(atEnd.right, lessThanOrEqualTo(track.right));
+
+      // 倒序（min > max）仍是坏数据：不得画出负宽度轨道。
       expect(
         DeclaredLevelTrackShape.declaredRangeFraction(
           levels: const DeclaredLevels(min: 5, max: 4),

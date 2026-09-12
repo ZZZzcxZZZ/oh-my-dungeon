@@ -1,3 +1,4 @@
+import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character_edit_draft.dart';
 import 'package:dnd_table_client/src/features/characters/domain/declared_levels.dart';
 import 'package:dnd_table_client/src/features/characters/domain/dnd5e_rules.dart';
@@ -685,6 +686,61 @@ void main() {
       final declaredLevels = persisted['declaredLevels'] as Map<String, Object?>;
       expect(declaredLevels['max'], isNull);
       expect(declaredLevels, wizardLevels.toData());
+    });
+
+    test('条目展示 slug 为空串时身份仍用 id 末段：职业资源可解析', () {
+      // `ContentEntry.slug` 是**展示字段**，允许空串（只判 null）；运行期的职业身份
+      // 口径是 entry id 末段（`Dnd5eRules.resolveClassSlug`）。写入口径若用展示字段，
+      // `CharacterSheet.classResources` 会误判"没有职业身份"并提前返回空列表。
+      final classEntry = ContentEntry.fromJson({
+        'id': 'test:class/fighter',
+        'type': 'class',
+        'slug': '',
+        'name': '战士',
+        'body': <Map<String, Object?>>[],
+        'revision': 1,
+        'structured': <String, Object?>{},
+        'rules': <String, Object?>{
+          'progression': [
+            {'levels': [1], 'grants': <Object?>[]},
+          ],
+        },
+      });
+
+      final draft = buildFor(classEntry);
+      final identity = draft.data['classIdentity']! as Map<String, Object?>;
+      expect(identity['slug'], 'fighter', reason: '身份口径 = entry id 末段');
+      // 1 级战士：档案 `second_wind` 表 {'1': 2}（真实数值，不放松断言）。
+      expect(draft.data['classResources'], [
+        {
+          'id': 'second_wind',
+          'name': '第二气息',
+          'maximum': 2,
+          'recovery': 'shortRestOne',
+        },
+      ]);
+
+      // 读侧：没有显式 `data.classResources` 的角色（老存档 / 投影路径）靠
+      // `classIdentity` 重新解析规则档案。
+      final sheet = CharacterSheet.local(
+        id: 'sheet-1',
+        name: 'Aria',
+        level: 1,
+        classSummary: '战士',
+      ).copyWith(
+        abilities: const <String, Object?>{
+          'str': 16,
+          'dex': 14,
+          'con': 14,
+          'int': 10,
+          'wis': 12,
+          'cha': 10,
+        },
+        data: <String, Object?>{'classIdentity': identity},
+      );
+      expect(sheet.classResources.map((resource) => resource.id), [
+        'second_wind',
+      ]);
     });
   });
 

@@ -182,7 +182,14 @@ class RulesDrivenCharacterBuilder {
         ],
         'classIdentity': {
           'entryId': classEntry?.id,
-          'slug': classEntry?.slug,
+          // 身份口径与运行期**同源**：条目 id 末段（[Dnd5eRules.resolveClassSlug]，
+          // 与 `resolveClassRules` / 导入器保护键 / `QuickBuildService` 同一入口），
+          // **不是**条目的展示字段 `slug`——后者允许为空串，会让
+          // `CharacterSheet.classResources` 误判"没有职业身份"而提前返回空。
+          'slug': Dnd5eRules.resolveClassSlug(
+            entryId: classEntry?.id,
+            classSummary: classEntry?.name ?? '',
+          ),
           'name': classEntry?.name,
           // 没有职业条目即"未声明"：界面显示"未声明"而不是 0。
           'declared': classEntry != null,

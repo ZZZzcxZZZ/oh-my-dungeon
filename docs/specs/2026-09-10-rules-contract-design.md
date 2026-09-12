@@ -718,7 +718,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 
 | code | 条件 |
 |---|---|
-| `missingCoreField` | 职业条目缺 `hitDie`（或施法职业缺 `spellcasting`），角色卡对应数值将缺省 |
+| `missingCoreField` | 职业条目缺 `hitDie`；或施法职业（条目 `rules` 有 `optionType: "spell"` 的选择，`mode` 无从得知）整块缺 `spellcasting` **且档案也没有同 slug 职业提供**（字段级继承，§3.6）——角色卡对应数值将缺省 |
 | `missingPreparedColumn` | 施法职业未声明 `prepared`（原型**不提供**该列，见 §3.1/§3.3；编辑器不限制数量） |
 | `ignoredGlobalList` | 包自带了 `abilities` / `skills` 清单（内置档案为唯一权威，该清单被忽略） |
 | `unresolvedClassRule` | 条目没有任何可用规则来源（既无 `classRules` 也无档案匹配） |

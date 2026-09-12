@@ -251,20 +251,25 @@ class ContentPackageImporter {
 
     // Validate formatVersion：契约只承认一个版本，1/2 是旧格式，整包拒绝。
     // 判据是**严格不等** `!= 3`：`toInt()` 会把 3.5 截成 3 放行。
+    // 三条失败分支（缺省 / 非数字 / 数值不为 3）都带 `unsupportedFormatVersion`：
+    // 它们对作者是同一件事——"这个版本不受支持，请重新生成"，code 不该只在其中一条出现。
     final formatVersionValue = json['formatVersion'];
     var formatVersion = 0;
     if (formatVersionValue == null) {
       errors.add(
         const ContentValidationError(
           path: r'$.formatVersion',
-          message: 'formatVersion is required',
+          message: '缺少 formatVersion：只支持 formatVersion 3；'
+              '请用新版工具重新生成/重新提取资料包（unsupportedFormatVersion）',
         ),
       );
     } else if (formatVersionValue is! num) {
       errors.add(
-        const ContentValidationError(
+        ContentValidationError(
           path: r'$.formatVersion',
-          message: 'formatVersion must be a number',
+          message: 'formatVersion 必须是数字（当前为 "$formatVersionValue"）：'
+              '只支持 formatVersion 3；请用新版工具重新生成/重新提取资料包'
+              '（unsupportedFormatVersion）',
         ),
       );
     } else if (formatVersionValue != 3) {
@@ -465,6 +470,7 @@ class ContentPackageImporter {
           entryId: entryId is String ? entryId : '',
           name: '${parsedEntryJson['name'] ?? ''}',
           rawClassRules: rawClassRules,
+          entryRuleDefinition: parsedEntries[i]?.rules,
           path: '$entryPath.structured.classRules',
           errors: errors,
           warnings: warnings,
@@ -745,6 +751,7 @@ class ContentPackageImporter {
     required String entryId,
     required String name,
     required Object? rawClassRules,
+    required CharacterRuleDefinition? entryRuleDefinition,
     required String path,
     required List<ContentValidationError> errors,
     required List<ContentValidationError> warnings,
@@ -770,6 +777,13 @@ class ContentPackageImporter {
       RuleProfileResolver.validateEntryClassRules(
         profile: Dnd5eRules.profile,
         entryRules: entryRules,
+        // 整块缺 `spellcasting` 的施法职业只能靠**作者意图**判断（`mode` 无从得知）：
+        // 条目 `rules` 里有 `optionType == 'spell'` 的选择即视为施法职业。
+        // 判据的唯一遍历点在 [CharacterRuleDefinition.declaresChoiceOfType]。
+        hasSpellChoiceIntent:
+            entryRuleDefinition?.declaresChoiceOfType('spell') ?? false,
+        // 档案侧已提供 `spellcasting` 时条目不写它不是缺省（字段级继承，§3.6）。
+        archiveSpellcasting: archiveRules?.spellcasting,
         path: path,
         diagnostics: diagnostics,
       );

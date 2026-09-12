@@ -450,6 +450,9 @@ abstract final class RuleProfileResolver {
   /// - `spellcasting.archetype` 必须存在于档案 `progressions` → error `unknownArchetype`；
   /// - 施法职业（`mode != none`）没有任何法术位来源（自身 `slots` 与所挂原型都没有）
   ///   → warning `missingCoreField`：运行期 [ResolvedClassRules.spellSlots] 会恒为空；
+  /// - 施法职业**整块缺** `spellcasting`（[hasSpellChoiceIntent] 为真，即条目 `rules`
+  ///   里有 `optionType == 'spell'` 的选择）→ warning `missingCoreField`：`mode` 无从
+  ///   得知，第一条判断不会触发，但运行期连施法属性都拿不到；
   /// - 施法职业未声明 `prepared` → warning `missingPreparedColumn`
   ///   （原型不承载该列，编辑器因此不限制准备数量）；
   /// - 资源的 `maximum.table` 在 [ClassResourceRule.startsAtLevel] 及以上出现 0
@@ -458,11 +461,16 @@ abstract final class RuleProfileResolver {
   ///
   /// 只对**条目声明**调用：内置档案自己的表由资产测试兜底，导入期的 warning
   /// 是针对第三方包的作者提示（§5.2 的 warning 语义就是"可导入，导入预览中列出"）。
+  ///
+  /// [archiveSpellcasting] 是**档案侧**同 slug 职业的 `spellcasting`：条目按字段
+  /// 继承档案（§3.6），档案已提供时"条目没写 `spellcasting`"不是缺省，不得误报。
   static void validateEntryClassRules({
     required RuleProfile profile,
     required ClassRuleSet? entryRules,
     required String path,
     required List<RuleDiagnostic> diagnostics,
+    bool hasSpellChoiceIntent = false,
+    ClassSpellcasting? archiveSpellcasting,
   }) {
     if (entryRules == null) return;
     final spellcasting = entryRules.spellcasting;
@@ -472,6 +480,10 @@ abstract final class RuleProfileResolver {
       progressions: profile.progressions,
       diagnostics: diagnostics,
     );
+    // "档案已提供施法"与"条目已声明施法"在 `mode == none` 上必须同一口径：
+    // §3.6 第 3 步把"缺失或 mode none"都算作无法术位/无施法属性。
+    final archiveProvidesSpellcasting =
+        archiveSpellcasting != null && archiveSpellcasting.mode != 'none';
     if (spellcasting != null && spellcasting.mode != 'none') {
       if (spellcasting.prepared == null) {
         _addWarning(
@@ -493,6 +505,19 @@ abstract final class RuleProfileResolver {
               '角色卡的法术位将缺省',
         );
       }
+    } else if (spellcasting == null &&
+        hasSpellChoiceIntent &&
+        !archiveProvidesSpellcasting) {
+      // 整块缺失 + 作者意图（`optionType: "spell"` 的选择）+ 档案也没提供：
+      // 运行期 `ResolvedClassRules.spellcasting` 为 null，法术位、准备上限、
+      // 施法属性一起缺省。只在**两侧都没有**时报，避免把"继承内置数值"误报成缺省。
+      _addWarning(
+        diagnostics,
+        '$path.spellcasting',
+        'missingCoreField',
+        '该职业声明了法术选择（optionType "spell"）却完全未声明 spellcasting，'
+            '档案也没有同 slug 职业可继承：角色卡的法术位与施法属性将缺省',
+      );
     }
     for (var index = 0; index < entryRules.resources.length; index++) {
       _validateResourceZeroLevels(

@@ -14,7 +14,14 @@ import '../../domain/declared_levels.dart';
 /// 两个颜色都从 `SliderTheme` 读，颜色角色仍由主题决定，代码里不写死颜色值。
 /// 完全没有声明（[DeclaredLevels.isEmpty]）时整条轨道都是未声明色。
 ///
-/// 区间 → 轨道比例的换算只有一处实现：[declaredRangeFraction]。
+/// 区间 → 轨道比例的换算只有一处实现：[DeclaredLevelTrackShape.declaredRangeFraction]，
+/// 比例 → 像素的落点只有一处实现：[DeclaredLevelTrackShape.declaredTrackRect]。
+///
+/// 单级声明（`min == max`）在比例上是零宽：它**不是**"没有声明"（文案会写
+/// "已声明 5–5 级"），所以不在比例层丢掉，而是由 [kDeclaredTrackMinWidth]
+/// 撑成一条可见的已声明段，避免轨道与下方文案自相矛盾。
+const double kDeclaredTrackMinWidth = 1;
+
 class DeclaredLevelTrackShape extends SliderTrackShape
     with BaseSliderTrackShape {
   const DeclaredLevelTrackShape({
@@ -36,8 +43,11 @@ class DeclaredLevelTrackShape extends SliderTrackShape
   ///
   /// 等级 `L` 的位置比例 = `(L - min) / (max - min)`，区间取
   /// `[levels.min, levels.max]` 两个端点并夹到 `0..1`。
-  /// 完全没有声明（`max == null`）或区间退化（`end <= start`）时返回 `null`，
-  /// 调用方据此只画未声明色。
+  /// 完全没有声明（`max == null`）、滑杆区间退化（`max <= min`）或等级区间倒序
+  /// （`levels.max < levels.min`，坏数据）时返回 `null`，调用方据此只画未声明色。
+  ///
+  /// 单级声明（`levels.min == levels.max`）**不**返回 `null`：区间比例确实是零宽，
+  /// 但"这一级已声明"是事实，由 [declaredTrackRect] 撑成最小可见宽度。
   static (double, double)? declaredRangeFraction({
     required DeclaredLevels levels,
     required double min,
@@ -48,8 +58,27 @@ class DeclaredLevelTrackShape extends SliderTrackShape
     double ratio(int level) => ((level - min) / (max - min)).clamp(0.0, 1.0);
     final start = ratio(levels.min);
     final end = ratio(maximum);
-    if (end <= start) return null;
+    if (end < start) return null;
     return (start, end);
+  }
+
+  /// [declaredRangeFraction] 在轨道像素上的落点（**唯一**的比例 → 像素换算）。
+  ///
+  /// 宽度不足 [kDeclaredTrackMinWidth] 时（典型来源是单级声明的零宽区间，但也
+  /// 包括轨道很窄时的小区间）撑到最小可见宽度：先向右展开，顶到轨道右端时改为
+  /// 向左展开；轨道本身比最小宽度还窄时以轨道为限，绝不产生负宽度。
+  /// 宽度已足够的区间原样返回。
+  static Rect declaredTrackRect({
+    required Rect track,
+    required (double, double) fraction,
+  }) {
+    var left = track.left + track.width * fraction.$1;
+    var right = track.left + track.width * fraction.$2;
+    if (right - left < kDeclaredTrackMinWidth) {
+      right = (left + kDeclaredTrackMinWidth).clamp(track.left, track.right);
+      left = (right - kDeclaredTrackMinWidth).clamp(track.left, track.right);
+    }
+    return Rect.fromLTRB(left, track.top, right, track.bottom);
   }
 
   @override
@@ -103,12 +132,7 @@ class DeclaredLevelTrackShape extends SliderTrackShape
 
     final fraction = declaredRangeFraction(levels: levels, min: min, max: max);
     if (fraction == null) return;
-    final declaredRect = Rect.fromLTRB(
-      trackRect.left + trackRect.width * fraction.$1,
-      trackRect.top,
-      trackRect.left + trackRect.width * fraction.$2,
-      trackRect.bottom,
-    );
+    final declaredRect = declaredTrackRect(track: trackRect, fraction: fraction);
     paint.color = declaredColor;
     context.canvas.drawRRect(
       RRect.fromRectAndRadius(declaredRect, radius),

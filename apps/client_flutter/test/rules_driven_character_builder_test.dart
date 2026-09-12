@@ -949,6 +949,135 @@ void main() {
     });
   });
 
+  group('内联选项的 grants 派生（键带 grant 下标 / 前置门禁）', () {
+    const baseAbilities = {
+      'str': 16,
+      'dex': 14,
+      'con': 14,
+      'int': 10,
+      'wis': 12,
+      'cha': 8,
+    };
+    ContentEntry giftClass({List<Map<String, Object?>> requires = const []}) =>
+        _entry(
+          id: 'test:class/gift-giver',
+          type: 'class',
+          name: '赠礼者',
+          structured: const {
+            'classRules': {'hitDie': 10},
+          },
+          rules: {
+            'choices': [
+              {
+                'id': 'gift',
+                'label': '赠礼',
+                'optionType': 'value',
+                'minimum': 1,
+                'maximum': 1,
+                if (requires.isNotEmpty) 'requires': requires,
+                'options': [
+                  {
+                    'id': 'boon',
+                    'label': '恩赐',
+                    'grants': [
+                      {
+                        'id': 'boon-str',
+                        'kind': 'ability',
+                        'target': 'str',
+                        'value': 1,
+                        'label': '力量 +1',
+                      },
+                      {
+                        'id': 'boon-hp',
+                        'kind': 'hitPoints',
+                        'value': 2,
+                        'label': '生命 +2',
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        );
+
+    test('一个内联选项的两条 grants 都进派生：str +1 且 maxHp +2', () {
+      final entry = giftClass();
+      final builder = RulesDrivenCharacterBuilder(entries: {entry.id: entry});
+      CharacterEditDraft derive({required bool chosen}) => builder.build(
+        name: 'Aria',
+        build: CharacterBuild(
+          level: 1,
+          selections: {'class': entry.id},
+          choices: chosen
+              ? const {'test:class/gift-giver#gift': ['boon']}
+              : const <String, List<String>>{},
+        ),
+        abilities: baseAbilities,
+      );
+
+      final withGift = derive(chosen: true);
+      final plain = derive(chosen: false);
+
+      expect(
+        withGift.abilities['str'],
+        baseAbilities['str']! + 1,
+        reason: 'ability str +1 必须生效',
+      );
+      expect(
+        withGift.maxHp,
+        plain.maxHp + 2,
+        reason: 'hitPoints +2 必须生效；键缺 grant 下标时只会剩最后一条',
+      );
+      final grants = (withGift.data['resolvedGrants'] as List)
+          .cast<Map<String, Object?>>()
+          .map((grant) => grant['id'])
+          .toList(growable: false);
+      expect(grants, containsAll(<String>['boon-str', 'boon-hp']));
+    });
+
+    test('门槛不满足的内联 grants 不进派生；属性到位后同一选择开始生效', () {
+      final entry = giftClass(
+        requires: const [
+          {'ability': 'cha', 'minimum': 13},
+        ],
+      );
+      final builder = RulesDrivenCharacterBuilder(entries: {entry.id: entry});
+      CharacterEditDraft derive(int cha, {bool chosen = true}) => builder.build(
+        name: 'Aria',
+        build: CharacterBuild(
+          level: 1,
+          selections: {'class': entry.id},
+          choices: chosen
+              ? const {'test:class/gift-giver#gift': ['boon']}
+              : const <String, List<String>>{},
+          abilities: {'cha': cha},
+        ),
+        abilities: {...baseAbilities, 'cha': cha},
+      );
+      final plain = derive(12, chosen: false);
+
+      final blocked = derive(12);
+      expect(
+        blocked.abilities['str'],
+        baseAbilities['str'],
+        reason: '前置不满足 = 真的不生效，不得偷偷给 +1',
+      );
+      expect(
+        blocked.maxHp,
+        plain.maxHp,
+        reason: 'hitPoints +2 同样不得生效',
+      );
+      final pending = blocked.data['pendingChoices'] as List;
+      expect(pending, hasLength(1), reason: '保留在 pendingChoices 供 UI 显示');
+
+      final allowed = derive(13);
+      expect(allowed.abilities['str'], baseAbilities['str']! + 1);
+      expect(allowed.maxHp, plain.maxHp + 2);
+      expect(allowed.data['pendingChoices'], isEmpty);
+    });
+  });
+
   // §3.5 与 `character_rules_engine.dart`：多等级展开是"每个等级一个生效单元"，
   // 但 `kind: action` 的动作身份与等级无关——运行期只应有一行动作。
   group('多等级 kind: action 不产出重复动作行', () {

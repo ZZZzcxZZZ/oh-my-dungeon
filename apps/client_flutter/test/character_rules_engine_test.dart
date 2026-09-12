@@ -55,12 +55,14 @@ void main() {
           level: 1,
           selections: {'class': 'test:class/fighter'},
         ),
+        poolLimits: const <String, int>{},
       );
       final levelTwo = engine.evaluate(
         const CharacterBuild(
           level: 2,
           selections: {'class': 'test:class/fighter'},
         ),
+        poolLimits: const <String, int>{},
       );
 
       expect(
@@ -125,6 +127,7 @@ void main() {
               'test:class/fighter#weapon-mastery': ['test:equipment/longsword'],
             },
           ),
+          poolLimits: const <String, int>{},
         );
 
         expect(ledger.pendingChoices, hasLength(1));
@@ -177,6 +180,7 @@ void main() {
             'test:class/fighter#fighting-style': ['test:feat/defense'],
           },
         ),
+        poolLimits: const <String, int>{},
       );
 
       expect(ledger.pendingChoices, isEmpty);
@@ -274,6 +278,7 @@ void main() {
             'test:class/wizard#subclass': ['test:subclass/evoker'],
           },
         ),
+        poolLimits: const <String, int>{},
       );
 
       expect(ledger.pendingChoices, isEmpty);
@@ -373,6 +378,7 @@ void main() {
             'test:class/mage#cantrip': ['test:spell/forbidden'],
           },
         ),
+        poolLimits: const <String, int>{},
       );
 
       expect(ledger.pendingChoices, hasLength(1));
@@ -441,6 +447,7 @@ void main() {
           selections: const {'class': 'test:class/guardian'},
           choices: {'test:class/guardian#starting-equipment': recommended},
         ),
+        poolLimits: const <String, int>{},
       );
 
       expect(recommended, [bundle.id]);
@@ -517,6 +524,7 @@ void main() {
           level: 3,
           selections: {'class': 'test:class/ascendant'},
         ),
+        poolLimits: const <String, int>{},
       );
 
       final units = ledger.grantsOfKind(RuleGrantKind.ability).toList();
@@ -537,6 +545,7 @@ void main() {
           level: 1,
           selections: {'class': 'test:class/ascendant'},
         ),
+        poolLimits: const <String, int>{},
       );
       expect(levelOne.grantsOfKind(RuleGrantKind.ability), hasLength(1));
     });
@@ -547,6 +556,7 @@ void main() {
           level: 3,
           selections: {'class': 'test:class/ascendant'},
         ),
+        poolLimits: const <String, int>{},
       );
 
       expect(ledger.activeChoices.map((choice) => choice.sourceLevel), [
@@ -571,6 +581,7 @@ void main() {
             'test:class/ascendant#asi-or-feat': ['test:feat/gift'],
           },
         ),
+        poolLimits: const <String, int>{},
       );
 
       expect(ledger.pendingChoices, isEmpty);
@@ -619,6 +630,7 @@ void main() {
             'test:class/ascendant-16#asi-or-feat': ['test:feat/gift'],
           },
         ),
+        poolLimits: const <String, int>{},
       );
 
       expect(ledger.pendingChoices, isEmpty);
@@ -689,6 +701,7 @@ void main() {
           selections: {'class': 'test:class/ascendant-choices'},
           choices: {'test:class/ascendant-choices#asi': ['str']},
         ),
+        poolLimits: const <String, int>{},
       );
 
       expect(ledger.missingEntryIds, isEmpty, reason: 'str 是内联选项，不是条目 id');
@@ -704,6 +717,146 @@ void main() {
       expect(grant.value, 1);
     });
 
+    test('一个内联选项的多条 grants 全部进 ledger（键必须带 grant 下标）', () {
+      final multi = _entry(
+        id: 'test:class/multi-grant',
+        type: 'class',
+        name: '多重授予',
+        rules: const {
+          'choices': [
+            {
+              'id': 'gift',
+              'label': '赠礼',
+              'optionType': 'value',
+              'minimum': 1,
+              'maximum': 1,
+              'options': [
+                {
+                  'id': 'boon',
+                  'label': '恩赐',
+                  'grants': [
+                    {
+                      'id': 'boon-str',
+                      'kind': 'ability',
+                      'label': '力量 +1',
+                      'target': 'str',
+                      'value': 1,
+                    },
+                    {
+                      'id': 'boon-hp',
+                      'kind': 'hitPoints',
+                      'label': '生命 +2',
+                      'value': 2,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      );
+      final multiEngine = CharacterRulesEngine(entries: {multi.id: multi});
+
+      final ledger = multiEngine.evaluate(
+        const CharacterBuild(
+          level: 1,
+          selections: {'class': 'test:class/multi-grant'},
+          choices: {'test:class/multi-grant#gift': ['boon']},
+        ),
+        poolLimits: const <String, int>{},
+      );
+
+      expect(ledger.pendingChoices, isEmpty);
+      expect(
+        ledger.grants,
+        hasLength(2),
+        reason: '两条 grants 同属一次选取，键缺 grant 维度会让前一条被后一条覆盖',
+      );
+      expect(
+        ledger.grants.map((grant) => grant.id),
+        containsAll(<String>['boon-str', 'boon-hp']),
+      );
+      expect(
+        ledger.grants.singleWhere((grant) => grant.id == 'boon-str').kind,
+        RuleGrantKind.ability,
+      );
+      expect(
+        ledger.grants.singleWhere((grant) => grant.id == 'boon-str').value,
+        1,
+      );
+      expect(
+        ledger.grants.singleWhere((grant) => grant.id == 'boon-hp').kind,
+        RuleGrantKind.hitPoints,
+      );
+      expect(
+        ledger.grants.singleWhere((grant) => grant.id == 'boon-hp').value,
+        2,
+      );
+    });
+
+    test('同一 grant id 在一个选项里出现两次：按下标区分，不按 id 覆盖', () {
+      final twin = _entry(
+        id: 'test:class/twin-grant',
+        type: 'class',
+        name: '同名授予',
+        rules: const {
+          'choices': [
+            {
+              'id': 'gift',
+              'label': '赠礼',
+              'optionType': 'value',
+              'minimum': 1,
+              'maximum': 1,
+              'options': [
+                {
+                  'id': 'boon',
+                  'label': '恩赐',
+                  'grants': [
+                    {
+                      'id': 'same-id',
+                      'kind': 'ability',
+                      'label': '力量 +1',
+                      'target': 'str',
+                      'value': 1,
+                    },
+                    {
+                      'id': 'same-id',
+                      'kind': 'hitPoints',
+                      'label': '生命 +2',
+                      'value': 2,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      );
+      final twinEngine = CharacterRulesEngine(entries: {twin.id: twin});
+
+      final ledger = twinEngine.evaluate(
+        const CharacterBuild(
+          level: 1,
+          selections: {'class': 'test:class/twin-grant'},
+          choices: {'test:class/twin-grant#gift': ['boon']},
+        ),
+        poolLimits: const <String, int>{},
+      );
+
+      expect(
+        ledger.grants,
+        hasLength(2),
+        reason: 'grant.id 没有唯一性校验；键若用 id 就会把后一条覆盖掉',
+      );
+      expect(
+        ledger.grants.map((grant) => grant.kind),
+        containsAll(<RuleGrantKind>[
+          RuleGrantKind.ability,
+          RuleGrantKind.hitPoints,
+        ]),
+      );
+    });
+
     test('repeatable: true 同一选项选两次 → 两份生效单元；resolvedChoices 保留重复', () {
       final ledger = engine.evaluate(
         const CharacterBuild(
@@ -714,6 +867,7 @@ void main() {
             'test:class/ascendant-choices#training': ['察觉'],
           },
         ),
+        poolLimits: const <String, int>{},
       );
 
       expect(ledger.grants.where((grant) => grant.id == 'asi-str'), hasLength(2));
@@ -742,6 +896,7 @@ void main() {
             'test:class/ascendant-choices#training': ['察觉', '察觉'],
           },
         ),
+        poolLimits: const <String, int>{},
       );
 
       final pending = ledger.pendingChoices.singleWhere(
@@ -763,6 +918,7 @@ void main() {
           selections: {'class': 'test:class/ascendant-choices'},
           choices: {'test:class/ascendant-choices#training': ['察觉']},
         ),
+        poolLimits: const <String, int>{},
       );
 
       final grant = ledger.grants.singleWhere(
@@ -780,6 +936,7 @@ void main() {
             'test:class/ascendant-choices#training': ['test:feat/不存在'],
           },
         ),
+        poolLimits: const <String, int>{},
       );
 
       final pending = ledger.pendingChoices.singleWhere(
@@ -840,6 +997,7 @@ void main() {
             'test:class/ascendant-inline-multilevel#asi#8': ['str'],
           },
         ),
+        poolLimits: const <String, int>{},
       );
 
       expect(ledger.pendingChoices, isEmpty);
@@ -919,6 +1077,7 @@ void main() {
           'test:class/warlockish#invocations': [invocation.id],
         },
       ),
+      poolLimits: const <String, int>{},
     );
 
     test('能力门槛不满足 → requiresSatisfied=false 且进 pending', () {
@@ -964,6 +1123,7 @@ void main() {
             ],
           },
         ),
+        poolLimits: const <String, int>{},
       );
 
       expect(
@@ -972,6 +1132,162 @@ void main() {
             .requiresSatisfied,
         isFalse,
         reason: '缺 build.abilities = "未记录"，不猜成 10（决策 D4）',
+      );
+    });
+
+    test('内联选项的门槛不满足 → 该选择的 grants 真的不生效，只留在 pending', () {
+      final gated = _entry(
+        id: 'test:class/gated-gift',
+        type: 'class',
+        name: '有门槛的赠礼',
+        rules: const {
+          'choices': [
+            {
+              'id': 'gift',
+              'label': '高阶赠礼',
+              'optionType': 'value',
+              'minimum': 1,
+              'maximum': 1,
+              'requires': [
+                {'ability': 'cha', 'minimum': 13},
+              ],
+              'options': [
+                {
+                  'id': 'boon',
+                  'label': '魅力 +1',
+                  'grants': [
+                    {
+                      'id': 'gift-cha',
+                      'kind': 'ability',
+                      'label': '魅力 +1',
+                      'target': 'cha',
+                      'value': 1,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      );
+      final gatedEngine = CharacterRulesEngine(entries: {gated.id: gated});
+      CharacterGrantLedger evaluateGift(int cha) => gatedEngine.evaluate(
+        CharacterBuild(
+          level: 1,
+          abilities: {'cha': cha},
+          selections: {'class': 'test:class/gated-gift'},
+          choices: {'test:class/gated-gift#gift': ['boon']},
+        ),
+        poolLimits: const <String, int>{},
+      );
+
+      final blocked = evaluateGift(12);
+      expect(
+        blocked.grants.where((grant) => grant.id == 'gift-cha'),
+        isEmpty,
+        reason: '前置不满足 = 不生效，内联 grants 不得展开进账',
+      );
+      final active = blocked.activeChoices.single;
+      expect(active.requiresSatisfied, isFalse);
+      expect(active.isValid, isFalse);
+      expect(active.selected, ['boon'], reason: '不静默丢弃选中值（§3.10.3-5）');
+      expect(
+        blocked.resolvedChoices['test:class/gated-gift#gift'],
+        ['boon'],
+        reason: '仍保留在 resolvedChoices，UI 才能显示"已选但未生效"',
+      );
+      final pending = blocked.pendingChoices.single;
+      expect(pending.reason, RuleChoicePendingReason.requiresUnsatisfied);
+      expect(pending.selected, ['boon']);
+
+      final allowed = evaluateGift(13);
+      expect(allowed.pendingChoices, isEmpty);
+      expect(allowed.activeChoices.single.requiresSatisfied, isTrue);
+      final grant = allowed.grants.singleWhere(
+        (grant) => grant.id == 'gift-cha',
+      );
+      expect(grant.target, 'cha');
+      expect(grant.value, 1);
+    });
+
+    test('门槛不满足 → 引用的条目也不授予（不入队）；满足后才生效', () {
+      final gatedPlan = _entry(
+        id: 'test:class/gated-invocation',
+        type: 'class',
+        name: '有门槛的祈唤',
+        rules: const {
+          'choices': [
+            {
+              'id': 'invocations',
+              'label': '祈唤',
+              'optionType': 'classFeature',
+              'minimum': 1,
+              'maximum': 1,
+              'optionTags': ['invocation'],
+              'requires': [
+                {'ability': 'cha', 'minimum': 13},
+              ],
+            },
+          ],
+        },
+      );
+      final invocationWithRules = _entry(
+        id: 'test:class-feature/gift-of-power',
+        type: 'classFeature',
+        name: '力量馈赠',
+        tags: const ['invocation'],
+        rules: const {
+          'grants': [
+            {
+              'id': 'gift-of-power',
+              'kind': 'feature',
+              'label': '力量馈赠',
+              'entryId': 'test:class-feature/gift-of-power',
+            },
+          ],
+        },
+      );
+      final gatedEngine = CharacterRulesEngine(
+        entries: {
+          gatedPlan.id: gatedPlan,
+          invocationWithRules.id: invocationWithRules,
+        },
+      );
+      CharacterGrantLedger evaluateGated(int cha) => gatedEngine.evaluate(
+        CharacterBuild(
+          level: 1,
+          abilities: {'cha': cha},
+          selections: {'class': 'test:class/gated-invocation'},
+          choices: {
+            'test:class/gated-invocation#invocations': [
+              'test:class-feature/gift-of-power',
+            ],
+          },
+        ),
+        poolLimits: const <String, int>{},
+      );
+
+      final blocked = evaluateGated(12);
+      expect(
+        blocked.grants.where((grant) => grant.id == 'gift-of-power'),
+        isEmpty,
+        reason: '该选择不生效，它引用的条目也不得入队授予',
+      );
+      expect(blocked.resolvedChoiceEntryIds, isEmpty);
+      expect(blocked.missingEntryIds, isEmpty);
+      expect(
+        blocked.pendingChoices.single.reason,
+        RuleChoicePendingReason.requiresUnsatisfied,
+      );
+
+      final allowed = evaluateGated(13);
+      expect(allowed.pendingChoices, isEmpty);
+      expect(allowed.resolvedChoiceEntryIds, [
+        'test:class-feature/gift-of-power',
+      ]);
+      expect(
+        allowed.grants.where((grant) => grant.id == 'gift-of-power'),
+        hasLength(1),
       );
     });
 
@@ -1131,7 +1447,7 @@ void main() {
       expect(free.poolCap, isNull);
     });
 
-    test('声明了 countsToward 但池无上限（spellbook）→ 有效上限是 maximum，原因仍归因于池', () {
+    test('声明了 countsToward 但池没有声明额度（spellbook）→ 有效上限是 maximum，原因 aboveMaximum', () {
       final bookPlan = _entry(
         id: 'test:class/spellbook-keeper',
         type: 'class',
@@ -1180,8 +1496,8 @@ void main() {
       );
       expect(
         ledger.pendingChoices.single.reason,
-        RuleChoicePendingReason.poolExceeded,
-        reason: '声明了 countsToward → 超额归因于池语义（池无上限由 poolCap 表达）',
+        RuleChoicePendingReason.aboveMaximum,
+        reason: '池没有声明额度（spellbook 不在 poolLimits 里）→ 超额归因于自身 maximum',
       );
       final book = ledger.activeChoices.single;
       expect(book.pool, 'spellbook');
@@ -1227,11 +1543,129 @@ void main() {
             'test:class/odd-keeper#odd': ['test:spell/a'],
           },
         ),
+        poolLimits: const <String, int>{},
       );
 
       expect(ledger.pendingChoices, isEmpty);
       expect(ledger.activeChoices.single.pool, 'rituals');
       expect(ledger.activeChoices.single.poolCap, 2);
+    });
+
+    test('未声明 countsToward 但超自身 maximum → aboveMaximum（不是 poolExceeded）', () {
+      final ledger = engine.evaluate(
+        const CharacterBuild(
+          level: 1,
+          selections: {'class': 'test:class/spellkeeper'},
+          choices: {
+            'test:class/spellkeeper#free': [
+              'test:spell/a',
+              'test:spell/b',
+              'test:spell/c',
+            ],
+          },
+        ),
+        // 即便池列表非空，`free` 自己不占池 → 超额与池无关。
+        poolLimits: const {'prepared': 3},
+      );
+
+      expect(
+        ledger.resolvedChoices['test:class/spellkeeper#free'],
+        hasLength(2),
+      );
+      final pending = ledger.pendingChoices.single;
+      expect(pending.reason, RuleChoicePendingReason.aboveMaximum);
+      expect(pending.invalidSelected, ['test:spell/c']);
+      expect(
+        ledger.activeChoices
+            .singleWhere((choice) => choice.definition.id == 'free')
+            .pool,
+        isNull,
+      );
+    });
+
+    test('跨条目争用同一池：按 build.selections 的迭代顺序 FCFS（顺序随存档复现）', () {
+      final first = _entry(
+        id: 'test:class/pool-first',
+        type: 'class',
+        name: '先声明者',
+        rules: const {
+          'choices': [
+            {
+              'id': 'book',
+              'label': '法术书',
+              'optionType': 'spell',
+              'minimum': 0,
+              'maximum': 2,
+              'countsToward': 'prepared',
+              'optionTags': ['spell-list:mage'],
+            },
+          ],
+        },
+      );
+      final second = _entry(
+        id: 'test:class/pool-second',
+        type: 'class',
+        name: '后声明者',
+        rules: const {
+          'choices': [
+            {
+              'id': 'book',
+              'label': '法术书',
+              'optionType': 'spell',
+              'minimum': 0,
+              'maximum': 2,
+              'countsToward': 'prepared',
+              'optionTags': ['spell-list:mage'],
+            },
+          ],
+        },
+      );
+      final crossEngine = CharacterRulesEngine(
+        entries: {
+          first.id: first,
+          second.id: second,
+          for (final spell in spells) spell.id: spell,
+        },
+      );
+
+      CharacterGrantLedger evaluateCross(List<String> order) =>
+          crossEngine.evaluate(
+            CharacterBuild(
+              level: 1,
+              selections: {
+                for (var index = 0; index < order.length; index++)
+                  'slot$index': order[index],
+              },
+              choices: const {
+                'test:class/pool-first#book': ['test:spell/a', 'test:spell/b'],
+                'test:class/pool-second#book': ['test:spell/c', 'test:spell/d'],
+              },
+            ),
+            poolLimits: const {'prepared': 2},
+          );
+
+      final firstWins = evaluateCross([first.id, second.id]);
+      expect(firstWins.resolvedChoices['test:class/pool-first#book'], [
+        'test:spell/a',
+        'test:spell/b',
+      ]);
+      expect(firstWins.resolvedChoices['test:class/pool-second#book'], isEmpty);
+      expect(
+        firstWins.pendingChoices.single.reason,
+        RuleChoicePendingReason.poolExceeded,
+        reason: '池声明了额度，超额归因于池',
+      );
+
+      final secondWins = evaluateCross([second.id, first.id]);
+      expect(secondWins.resolvedChoices['test:class/pool-second#book'], [
+        'test:spell/c',
+        'test:spell/d',
+      ]);
+      expect(secondWins.resolvedChoices['test:class/pool-first#book'], isEmpty);
+      expect(
+        secondWins.pendingChoices.single.reason,
+        RuleChoicePendingReason.poolExceeded,
+      );
     });
   });
 

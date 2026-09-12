@@ -28,11 +28,28 @@ class CharacterRuleProjector {
     // 再派生必须用**基础属性**：角色卡上的 `abilities` 已含生效中的
     // `kind: ability` 加值，直接回传会每次派生都再叠加一遍（缺陷 4）。
     // 减加值的唯一实现在 [RulesDrivenCharacterBuilder.baseAbilitiesFrom]。
-    // 反推的参照是"当前等级 + 存档里的选择"，与下面重派生用的构建只差 `abilities`。
+    // 「前置不满足的选择不生效」这条门禁读的是 `build.abilities`（决策 D4），
+    // 所以**反推的账与重派生的账必须看到同一份输入**，否则减掉的是"没生效的加值"
+    // 或漏减了"生效中的加值"，HP / AC 会漂移、再派生也不再幂等。下面这份
+    // `ledgerAbilities` 就是那**唯一一份**输入：先给 `baseAbilitiesFrom`，再给
+    // `build`。
+    final ledgerAbilities = savedBuild.abilities.isNotEmpty
+        ? savedBuild.abilities
+        // 旧存档没有 `data['build']['abilities']`：先用"无能力记录"求一次基础属性
+        // （无记录 = 门槛不满足 = 只有无条件加值被减掉），把它当作门禁输入。
+        : builder.baseAbilitiesFrom(
+            character.abilityMap,
+            CharacterBuild(
+              level: character.level,
+              selections: savedBuild.selections,
+              choices: savedBuild.choices,
+            ),
+          );
     final stateBuild = CharacterBuild(
       level: character.level,
       selections: savedBuild.selections,
       choices: savedBuild.choices,
+      abilities: ledgerAbilities,
     );
     final baseAbilities = builder.baseAbilitiesFrom(
       character.abilityMap,
@@ -42,12 +59,11 @@ class CharacterRuleProjector {
       level: character.level,
       selections: savedBuild.selections,
       choices: savedBuild.choices,
-      // 旧存档没有 `data['build']['abilities']`：这次派生**自愈**回填基础属性，
-      // 否则能力型 `requires` 会永远判为不满足（决策 D4 的可见 pending）。
-      // 回填的是基础值（入参），不是角色卡上的最终值——`requires` 的口径如此。
-      abilities: savedBuild.abilities.isEmpty
-          ? baseAbilities
-          : savedBuild.abilities,
+      // 旧存档没有 `data['build']['abilities']`：这次派生**自愈**回填基础属性
+      // 输入，否则能力型 `requires` 会永远判为不满足（决策 D4 的可见 pending）。
+      // 回填的是**门禁输入**（上面那一份），不是角色卡上的最终值——`requires`
+      // 的口径如此。
+      abilities: ledgerAbilities,
     );
     final derived = builder.build(
       name: character.name,

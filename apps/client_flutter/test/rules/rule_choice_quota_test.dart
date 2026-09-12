@@ -1,4 +1,5 @@
 import 'package:dnd_table_client/src/features/characters/domain/dnd5e_rules.dart';
+import 'package:dnd_table_client/src/features/rules/domain/character_rule_definition.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_choice_quota.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -104,5 +105,26 @@ void main() {
     final levelFive = RuleChoiceQuota.limitsFor(rules: wizard, level: 5);
     expect(levelFive['prepared'], greaterThan(4));
     expect(levelFive['known'], levelFive['prepared']);
+  });
+
+  test('池名与额度来源一致：kCountsTowardPools = limitsFor 键空间 ∪ 显式无限池', () {
+    final wizard = Dnd5eRules.resolveClassRules(
+      entryId: 'x:class/wizard',
+      classSummary: '法师',
+    );
+    final declared = <String>{
+      ...RuleChoiceQuota.limitsFor(rules: wizard, level: 1).keys,
+      ...kUnlimitedCountsTowardPools,
+    };
+
+    // 两份清单（合法池名 / 额度来源）将来必须一起改：新增池名要么让 `limitsFor`
+    // 给出数值，要么在 `kUnlimitedCountsTowardPools` 里显式标注"不限"；少了任一步
+    // 就会静默落到"漏加 = 不限"的默认分支。这里做**双向**相等断言：
+    // 既不允许池名没有来源，也不允许来源里有已废弃的池名。
+    expect(
+      declared,
+      kCountsTowardPools,
+      reason: '每个合法池名都必须有显式额度来源（数值或"不限"）',
+    );
   });
 }

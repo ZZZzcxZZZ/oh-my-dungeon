@@ -571,12 +571,13 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
   }
 
   /// 升级预览用的职业规则解析（条目身份优先，§3.6）。选中条目不在内容仓库里
-  /// （被删除等）时退回"仅按展示名对齐档案"，与 [Dnd5eRules.resolveClassRules]
-  /// 的语义一致；不猜职业。
+  /// （被删除等）时传 `entryId: null`，与 builder / 升级规划器**同一口径**：都退回
+  /// [Dnd5eRules.resolveClassRules] 的"仅按展示名（classSummary）对齐档案"分支；
+  /// 不再把原始 id 传进去（那会让预览与落库走两条解析路径）。不猜职业。
   ResolvedClassRules _resolveClassRules(String? entryId) {
     final entry = entryId == null ? null : _entryById(entryId);
     return Dnd5eRules.resolveClassRules(
-      entryId: entry?.id ?? entryId,
+      entryId: entry?.id,
       classSummary: entry?.name ?? '',
       structured: entry?.structured ?? const <String, Object?>{},
     );

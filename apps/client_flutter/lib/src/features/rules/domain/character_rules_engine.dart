@@ -41,7 +41,7 @@ enum RuleChoicePendingReason {
   /// 已选数量不足 `minimum`。
   belowMinimum,
 
-  /// 已选数量超出 `maximum`（或池额度）。
+  /// 已选数量超出该选择**自身**（或有效）的 `maximum`。
   aboveMaximum,
 
   /// 选中值不在候选集里（内联选项与条目候选都算候选）。
@@ -53,7 +53,7 @@ enum RuleChoicePendingReason {
   /// `requires` 不满足（能力门槛或引用的选择未满足）。
   requiresUnsatisfied,
 
-  /// 超出 `countsToward` 池的剩余额度（决策 D8：先声明先占）。
+  /// 超出**已声明**池额度的剩余可用量（决策 D8：先声明先占）。
   poolExceeded,
 }
 
@@ -119,8 +119,10 @@ class ActiveRuleChoice {
   /// 该选择是否允许同一选项重复选取（契约 §3.10.2）。
   final bool repeatable;
 
-  /// `requires` 是否满足（契约 §3.10.3-5）。不满足时该选择**不生效**，
-  /// 但选中值仍保留在 [selected] / [invalidSelected] 里（不静默丢弃）。
+  /// `requires` 是否满足（契约 §3.10.3-5）。不满足时该选择**不生效**：
+  /// 引擎不展开它的内联 grants、不把条目候选排进规则队列、不占 `countsToward`
+  /// 额度；但选中值仍保留在 [selected] / [invalidSelected] 里（不静默丢弃），
+  /// UI 据此显示"已选但未生效"及其原因。
   final bool requiresSatisfied;
 
   /// 选择面板的分组标题 / 帮助文案（契约 §3.10.2；纯呈现）。
@@ -175,19 +177,28 @@ String ruleUnitKey(String entryId, String definitionId, int? sourceLevel) {
       : '$entryId#$definitionId#$sourceLevel';
 }
 
-/// 内联选项授予的**生效单元键**：`<选择键>#<选项 id>#<第几次>`。
+/// 内联选项授予的**生效单元键**：`<选择键>#<选项 id>#<第几次>#<第几条 grant>`。
 ///
 /// `repeatable: true` 时同一选项的每一次选取都是独立生效单元（选两次"力量 +1"
 /// 要累计 +2），因此第几次（从 0 起）必须进键；非 repeatable 时下标恒为 0。
+/// 一个内联选项还可以声明**多条** `grants`（`options[].grants` 是数组），它们同属
+/// 一次选取，只用"第几次"会让第二条起互相覆盖、静默丢数据；因此把 **grants 的
+/// 声明下标**也并入键。用下标而**不是** `grant.id`：`grant.id` 没有唯一性校验，
+/// 同一个 id 可以在一个选项里出现两次（两条都得落账）。
+///
 /// 内联选项的 grants 由 `RuleChoiceSemantics.grantsForSelection`（**唯一实现点**）
 /// 展开，本函数只负责给出落账用的键。
 ///
 /// 这是该键格式的**唯一实现点**：内联 grants 的 `resolvedGrants` 落库与后续升级
-/// diff 都必须经过它。**当前接线状态**：仅 `CharacterRulesEngine._resolveChoices`
-/// 调用（计划任务 3）；编辑器 diff / 属性逆运算的接线在任务 6+，它们此刻仍在用
-/// `ruleUnitKey` 比对"条目级"生效单元。
-String ruleChoiceGrantKey(String choiceKey, String optionId, int occurrence) =>
-    '$choiceKey#$optionId#$occurrence';
+/// diff 都必须经过它。**当前接线状态**：仅 `CharacterRulesEngine._recordInlineGrants`
+/// 调用（计划任务 3 起，键的拼装只允许那一处）；编辑器 diff / 属性逆运算的接线在
+/// 任务 6+，它们此刻仍在用 `ruleUnitKey` 比对"条目级"生效单元。
+String ruleChoiceGrantKey(
+  String choiceKey,
+  String optionId,
+  int occurrence,
+  int grantIndex,
+) => '$choiceKey#$optionId#$occurrence#$grantIndex';
 
 /// `kind: action` 的**动作身份**键：`<条目 id>#<定义 id>`，**不带等级**。
 ///
@@ -203,9 +214,11 @@ class CharacterRulesEngine {
 
   final Map<String, ContentEntry> entries;
 
+  /// [poolLimits] **必填**：默认值会让"漏传"静默变成"不限"，而额度只有
+  /// [RuleChoiceQuota.limitsFor] 一处来源，调用方必须显式给出（无池就传空表）。
   CharacterGrantLedger evaluate(
     CharacterBuild build, {
-    Map<String, int> poolLimits = const <String, int>{},
+    required Map<String, int> poolLimits,
   }) {
     final grants = <String, ResolvedRuleGrant>{};
     final pendingChoices = <PendingRuleChoice>[];
@@ -215,6 +228,10 @@ class CharacterRulesEngine {
     final activeChoices = <ActiveRuleChoice>[];
     // `countsToward` 池是**角色级**共享的：池占用必须在整次求值内跨条目、跨等级
     // 累加（决策 D8 的"先声明先占"要求确定遍历顺序，本 map 就是那个顺序的状态）。
+    // 顺序语义（FCFS，D8）：**条目内**按 `rules.choices` / 各步骤 `choices` 的
+    // **声明顺序**；**跨条目**按 `build.selections` 的**迭代顺序**（队列按它播种，
+    // 新发现的条目追加在后）。`build.selections` 随存档持久化，因此同一存档的
+    // 争用结果可复现。
     final poolUsage = <String, int>{};
     final queue = build.selections.values.toList(growable: true);
     final visited = <String>{};
@@ -397,8 +414,10 @@ class CharacterRulesEngine {
       final selection = normalized.selected;
       // `requires` 判定只有 `RuleChoiceSemantics.requiresSatisfied` 一处（唯一实现
       // 点）：能力门槛读 `build.abilities`（**基础属性**，决策 D4），选择引用读
-      // `build.choices` 的选中值。不满足时选中值**不丢弃**（§3.10.3-5），只是该
-      // 选择不生效并进 pending。
+      // `build.choices` 的选中值。不满足时选中值**不丢弃**（§3.10.3-5），但该选择
+      // **真的不生效**：不展开内联 grants、不把条目候选排进队列、不占
+      // `countsToward` 额度——只保留在 `resolvedChoices` / pending 供 UI 显示
+      // "已选但未生效"。
       final requiresSatisfied = RuleChoiceSemantics.requiresSatisfied(
         definition.requires,
         sourceEntryId: entry.id,
@@ -406,39 +425,19 @@ class CharacterRulesEngine {
         abilities: build.abilities,
         entries: entries,
       );
-      // 内联选项的 grants 进同一本账：每次出现都是一个独立生效单元
-      // （`repeatable` 选两次"力量 +1"就要累计 +2），键带出现序号。展开只有
-      // `RuleChoiceSemantics.grantsForSelection` 一处（唯一实现点），引擎里不再
-      // 写第二份自动推断。
-      final occurrences = <String, int>{};
-      for (final optionId in selection) {
-        final occurrence = occurrences.update(
-          optionId,
-          (count) => count + 1,
-          ifAbsent: () => 0,
+      // 内联选项的 grants 进同一本账：展开只有
+      // `RuleChoiceSemantics.grantsForSelection` 一处（唯一实现点），键的拼装只有
+      // `ruleChoiceGrantKey` 一处（在 `_recordInlineGrants` 内）。前置不满足 =
+      // 不生效，直接跳过。
+      if (requiresSatisfied) {
+        _recordInlineGrants(
+          definition: definition,
+          choiceKey: key,
+          selection: selection,
+          entry: entry,
+          sourceLevel: sourceLevel,
+          target: target,
         );
-        final optionGrants = RuleChoiceSemantics.grantsForSelection(
-          definition,
-          <String>[optionId],
-          entries: entries,
-          sourceEntryId: entry.id,
-        );
-        for (final grant in optionGrants) {
-          target[ruleChoiceGrantKey(key, optionId, occurrence)] =
-              ResolvedRuleGrant(
-                id: grant.id,
-                kind: grant.kind,
-                label: grant.label,
-                sourceEntryId: entry.id,
-                sourceEntryName: entry.name,
-                sourceLevel: sourceLevel,
-                target: grant.target,
-                entryId: grant.entryId,
-                value: grant.value,
-                formula: grant.formula,
-                data: grant.data,
-              );
-        }
       }
       activeChoices.add(
         ActiveRuleChoice(
@@ -478,23 +477,73 @@ class CharacterRulesEngine {
               violations: normalized.violations,
               minimum: definition.minimum,
               countsToward: countsToward,
+              poolLimits: poolLimits,
             ),
           ),
         );
       }
       // 本选择占用的额度累加进池：后续选择按声明顺序看到更小的剩余额度。
-      if (countsToward != null) {
+      // 前置不满足的选择**不占额度**（真的不生效）。
+      if (requiresSatisfied && countsToward != null) {
         poolUsage[countsToward] =
             (poolUsage[countsToward] ?? 0) + selection.length;
       }
       resolvedChoices[key] = selection;
       // 只把**条目**候选排进队列：内联 id 不是条目，入队只会污染 missingEntryIds。
-      // `resolvedChoiceEntryIds`（内容引用）同样只收条目 id。
-      final entryBacked = selection
-          .where(entries.containsKey)
-          .toList(growable: false);
-      resolvedChoiceEntryIds.addAll(entryBacked);
-      queue.addAll(entryBacked);
+      // `resolvedChoiceEntryIds`（内容引用）同样只收条目 id。前置不满足时
+      // 整个跳过：该选择引用的条目**也不授予**它的 grants / progression。
+      if (requiresSatisfied) {
+        final entryBacked = selection
+            .where(entries.containsKey)
+            .toList(growable: false);
+        resolvedChoiceEntryIds.addAll(entryBacked);
+        queue.addAll(entryBacked);
+      }
+    }
+  }
+
+  /// 内联选项 grants 的展开与落账（`_resolveChoices` 的唯一抽取点）。
+  ///
+  /// 每次出现（第几次选取）与每条 grant（声明下标）合起来才是唯一生效单元，
+  /// 键的拼装只允许 [ruleChoiceGrantKey] 一处、且只在这里调用。
+  void _recordInlineGrants({
+    required RuleChoiceDefinition definition,
+    required String choiceKey,
+    required List<String> selection,
+    required ContentEntry entry,
+    required int? sourceLevel,
+    required Map<String, ResolvedRuleGrant> target,
+  }) {
+    final occurrences = <String, int>{};
+    for (final optionId in selection) {
+      final occurrence = occurrences.update(
+        optionId,
+        (count) => count + 1,
+        ifAbsent: () => 0,
+      );
+      final optionGrants = RuleChoiceSemantics.grantsForSelection(
+        definition,
+        <String>[optionId],
+        entries: entries,
+        sourceEntryId: entry.id,
+      );
+      for (var grantIndex = 0; grantIndex < optionGrants.length; grantIndex++) {
+        final grant = optionGrants[grantIndex];
+        target[ruleChoiceGrantKey(choiceKey, optionId, occurrence, grantIndex)] =
+            ResolvedRuleGrant(
+              id: grant.id,
+              kind: grant.kind,
+              label: grant.label,
+              sourceEntryId: entry.id,
+              sourceEntryName: entry.name,
+              sourceLevel: sourceLevel,
+              target: grant.target,
+              entryId: grant.entryId,
+              value: grant.value,
+              formula: grant.formula,
+              data: grant.data,
+            );
+      }
     }
   }
 
@@ -502,10 +551,11 @@ class CharacterRulesEngine {
   /// `requiresUnsatisfied` > `notACandidate` > `notRepeatable` > `poolExceeded` /
   /// `aboveMaximum` > `belowMinimum`。
   ///
-  /// `aboveMaximum` 与 `poolExceeded` 的分工：该选择**声明了** `countsToward` 时记
-  /// `poolExceeded`——这个超额是"计入数量池"带来的；否则记 `aboveMaximum`（只与
-  /// 自身 `maximum` 有关）。池**没有声明上限**（决策 D3：例如 `spellbook`）同样是
-  /// 池语义，仍记 `poolExceeded`；"有没有上限"由
+  /// `aboveMaximum` 与 `poolExceeded` 的分工：该选择**声明了** `countsToward`
+  /// **且该池声明了额度**（`poolLimits` 含这个池名）时才记 `poolExceeded`——这个
+  /// 超额是"计入数量池"带来的；否则记 `aboveMaximum`。池**没有声明上限**（决策 D3：
+  /// 例如 `spellbook`）记 `aboveMaximum`：`poolCap` 此时就是自身 `maximum`，
+  /// 超额与"入池"无关，归因不能冒充池额度。"有没有上限"由
   /// [RuleChoiceQuota.effectiveMaximum] 决定，`ActiveRuleChoice.poolCap` 会显示
   /// 有效上限，两条信息互不冒充。
   ///
@@ -517,6 +567,7 @@ class CharacterRulesEngine {
     required Set<RuleChoiceViolation> violations,
     required int minimum,
     required String? countsToward,
+    required Map<String, int> poolLimits,
   }) {
     if (!requiresSatisfied) return RuleChoicePendingReason.requiresUnsatisfied;
     if (violations.contains(RuleChoiceViolation.notACandidate)) {
@@ -526,7 +577,10 @@ class CharacterRulesEngine {
       return RuleChoicePendingReason.notRepeatable;
     }
     if (violations.contains(RuleChoiceViolation.aboveMaximum)) {
-      return countsToward != null
+      // 只有**声明了额度**的池才让超额归因于池（无上限池的超额是自己 maximum）。
+      final countsTowardLimitedPool =
+          countsToward != null && poolLimits.containsKey(countsToward);
+      return countsTowardLimitedPool
           ? RuleChoicePendingReason.poolExceeded
           : RuleChoicePendingReason.aboveMaximum;
     }

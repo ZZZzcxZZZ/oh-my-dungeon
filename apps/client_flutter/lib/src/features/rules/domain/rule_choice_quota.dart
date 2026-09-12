@@ -1,11 +1,20 @@
 import 'rule_profile.dart';
 
+/// 声明了 `countsToward` 但**档案没有容量列**的池：无上限（决策 D3）。
+///
+/// 与 [RuleChoiceQuota.limitsFor] 的键空间**一起**必须覆盖契约的合法池名单
+/// （`kCountsTowardPools`，测试锁定）：新增池名时要么在这里显式声明"不限"，要么让
+/// [RuleChoiceQuota.limitsFor] 给出数值。不允许出现"加了池名却漏加额度来源、于是
+/// 静默落到不限"的第三态。
+const kUnlimitedCountsTowardPools = <String>{'spellbook'};
+
 /// `countsToward` 的额度语义（契约 §3.10.2，决策 D3）。
 ///
 /// 池上限的**唯一来源**是 [limitsFor]：`prepared` 与 `known` 共用职业 `prepared`
-/// 表，`spellbook` **不出现**（`classRules` 没有法术书容量列，见决策 D1/D3：
-/// 池没有声明上限 = 不限，绝不臆造数字）。本文件只做算术，不查内容仓库、
-/// 不读 `Dnd5eRules`：调用方把已解析的 [ResolvedClassRules] 与等级传进来。
+/// 表，`spellbook` **不出现**（`classRules` 没有法术书容量列，见决策 D1/D3）
+/// ——它在 [kUnlimitedCountsTowardPools] 里被显式标注为无限池。本文件只做算术，
+/// 不查内容仓库、不读 `Dnd5eRules`：调用方把已解析的 [ResolvedClassRules] 与等级
+/// 传进来。
 abstract final class RuleChoiceQuota {
   /// 该职业在该等级可用的**池上限表**；未声明（`preparedLimit` 为 null，例如
   /// `mode: "none"` 的非施法者）返回空表。

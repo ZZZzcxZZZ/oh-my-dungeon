@@ -146,7 +146,7 @@ npm run lint:design
 |---|---|
 | `apps/client_flutter/lib/src/features/rules/domain/character_rule_definition.dart` | `RuleChoiceDefinition` 增 `repeatable` / `countsToward` / `requires` / `group` / `help`；新增 `RuleRequiresDefinition`、`kCountsTowardPools` / `isCountsTowardPool`、`kAutoGrantOptionTypes`；`usesDedicatedOptionUi` 语义收窄为"有专门渲染器" |
 | `apps/client_flutter/lib/src/features/rules/domain/character_build.dart` | 新增 `abilities`（`Map<String,int>`，JSON 往返） |
-| `apps/client_flutter/lib/src/features/rules/domain/character_rules_engine.dart` | `ruleChoiceGrantKey`；`_resolveChoices` 用语义层；内联 grants 进 ledger；只把**条目**候选入队；`ActiveRuleChoice` / `PendingRuleChoice` 扩展（`requiresSatisfied` / `repeatable` / `group` / `help` / `pool` / `poolCap` / `reason`）；`evaluate` 增可选 `poolLimits` |
+| `apps/client_flutter/lib/src/features/rules/domain/character_rules_engine.dart` | `ruleChoiceGrantKey`；`_resolveChoices` 用语义层；内联 grants 进 ledger（键带 grant 下标）；只把**条目**候选入队；`ActiveRuleChoice` / `PendingRuleChoice` 扩展（`requiresSatisfied` / `repeatable` / `group` / `help` / `pool` / `poolCap` / `reason`）；`evaluate` 的 `poolLimits` 为**必填** |
 | `apps/client_flutter/lib/src/features/characters/domain/rules_driven_character_builder.dart` | 持久化 `build.abilities`；内联 grants 经 ledger 派生（无需新代码，但 `data` 新增 `choices` / `profile.languages` / `manualOverrides`）；装备方案写 `inventory`/`currency`；`skillProficiencies` 只承接背景预设 |
 | `apps/client_flutter/lib/src/features/characters/domain/character_rule_projector.dart` | 重建 `CharacterBuild` 时带上 `abilities`（用 `baseAbilitiesFrom` 的结果回填）；合并键增加 `choices` |
 | `apps/client_flutter/lib/src/features/characters/domain/character_upgrade_planner.dart` | 传 `abilities` 与 `poolLimits`；`isComplete` 不再靠 `usesDedicatedOptionUi` 免检 |
@@ -1401,14 +1401,20 @@ group('内联选项与 repeatable（契约 §3.10.2 / §3.10.3）', () {
 1) 新增键函数（放在 `ruleUnitKey` 旁）：
 
 ```dart
-/// 内联选项授予的**生效单元键**：`<选择键>#<选项 id>#<第几次>`。
+/// 内联选项授予的**生效单元键**：`<选择键>#<选项 id>#<第几次>#<第几条 grant>`。
 ///
 /// `repeatable: true` 时同一选项的每一次选择都是独立生效单元（选两次"力量 +1"
 /// 要累计 +2），因此第几次（从 0 起）必须进键；非 repeatable 时下标恒为 0。
-/// 这是该键格式的**唯一实现点**：`resolvedGrants` 落库、升级 diff、属性逆运算
-/// 都只经过它。
-String ruleChoiceGrantKey(String choiceKey, String optionId, int occurrence) =>
-    '$choiceKey#$optionId#$occurrence';
+/// 一个选项还可以声明**多条** grants，它们同属一次选取：只用"第几次"会让第二条
+/// 起互相覆盖，因此把 grants 的**声明下标**也并入键（用下标而不是 `grant.id`，
+/// 后者没有唯一性校验）。这是该键格式的**唯一实现点**：`resolvedGrants` 落库、
+/// 升级 diff、属性逆运算都只经过它；键的拼装只允许在 `_recordInlineGrants` 一处。
+String ruleChoiceGrantKey(
+  String choiceKey,
+  String optionId,
+  int occurrence,
+  int grantIndex,
+) => '$choiceKey#$optionId#$occurrence#$grantIndex';
 ```
 
 2) `PendingRuleChoice` 增 `reason`（可选，默认 null）与 `RuleChoicePendingReason` 枚举：
@@ -1456,36 +1462,17 @@ enum RuleChoicePendingReason {
       );
       final selection = normalized.selected;
       // 内联选项的 grants 进同一本账：每次出现都是一个独立生效单元
-      // （`repeatable` 选两次"力量 +1"就要累计 +2），键带出现序号。
-      final occurrences = <String, int>{};
-      for (final optionId in selection) {
-        final occurrence = occurrences.update(
-          optionId,
-          (count) => count + 1,
-          ifAbsent: () => 0,
+      // （`repeatable` 选两次"力量 +1"就要累计 +2），键带出现序号 + grant 下标。
+      // 前置不满足 = 不生效，整段跳过（见任务 4 的真门禁）。
+      if (requiresSatisfied) {
+        _recordInlineGrants(
+          definition: definition,
+          choiceKey: key,
+          selection: selection,
+          entry: entry,
+          sourceLevel: sourceLevel,
+          target: target,
         );
-        final optionGrants = RuleChoiceSemantics.grantsForSelection(
-          definition,
-          <String>[optionId],
-          entries: entries,
-          sourceEntryId: entry.id,
-        );
-        for (final grant in optionGrants) {
-          final grantKey = ruleChoiceGrantKey(key, optionId, occurrence);
-          target[grantKey] = ResolvedRuleGrant(
-            id: grant.id,
-            kind: grant.kind,
-            label: grant.label,
-            sourceEntryId: entry.id,
-            sourceEntryName: entry.name,
-            sourceLevel: sourceLevel,
-            target: grant.target,
-            entryId: grant.entryId,
-            value: grant.value,
-            formula: grant.formula,
-            data: grant.data,
-          );
-        }
       }
       ...
       final accepted = selection;              // 已按 maximum 截断
@@ -1501,6 +1488,52 @@ enum RuleChoicePendingReason {
 
 > 上面是**结构示意**，不是逐字代码：内联 grants 的展开必须调
 > `RuleChoiceSemantics.grantsForSelection`（唯一实现点），不得在引擎里再写一份自动推断。
+
+键的拼装只允许在 `_recordInlineGrants` 一处（`occurrence` 是"第几次选取"，
+`grantIndex` 是"该选项第几条 grants"）：
+
+```dart
+  void _recordInlineGrants({
+    required RuleChoiceDefinition definition,
+    required String choiceKey,
+    required List<String> selection,
+    required ContentEntry entry,
+    required int? sourceLevel,
+    required Map<String, ResolvedRuleGrant> target,
+  }) {
+    final occurrences = <String, int>{};
+    for (final optionId in selection) {
+      final occurrence = occurrences.update(
+        optionId,
+        (count) => count + 1,
+        ifAbsent: () => 0,
+      );
+      final optionGrants = RuleChoiceSemantics.grantsForSelection(
+        definition,
+        <String>[optionId],
+        entries: entries,
+        sourceEntryId: entry.id,
+      );
+      for (var grantIndex = 0; grantIndex < optionGrants.length; grantIndex++) {
+        final grant = optionGrants[grantIndex];
+        target[ruleChoiceGrantKey(choiceKey, optionId, occurrence, grantIndex)] =
+            ResolvedRuleGrant(
+              id: grant.id,
+              kind: grant.kind,
+              label: grant.label,
+              sourceEntryId: entry.id,
+              sourceEntryName: entry.name,
+              sourceLevel: sourceLevel,
+              target: grant.target,
+              entryId: grant.entryId,
+              value: grant.value,
+              formula: grant.formula,
+              data: grant.data,
+            );
+      }
+    }
+  }
+```
 
 `_resolveGrants` 需要能接收 `target` map（已有），因此把内联 grants 的写入放在 `_resolveChoices` 里通过一个新增的 `target` 参数完成；`_resolveChoices` 的调用点（`evaluate` 内两处）补传 `grants`。
 
@@ -1693,11 +1726,11 @@ class CharacterBuild {
       );
 ```
 
-写入 `ActiveRuleChoice.requiresSatisfied`；当 `!requiresSatisfied` 时把该选择加入 `pending`（`reason: requiresUnsatisfied`），并**保留** `selected`/`invalidSelected` 供 UI 说明"为什么不生效"。
+写入 `ActiveRuleChoice.requiresSatisfied`。前置不满足 = **真的不生效**：不展开内联 grants、不把该选择引用的条目候选取进规则队列、不占 `countsToward` 额度；但仍把该选择加入 `pending`（`reason: requiresUnsatisfied`），并**保留** `selected`/`invalidSelected` 与 `resolvedChoices` 供 UI 说明"为什么未生效"。
 
 3) 各构造点带上 `abilities`：
 - `RulesDrivenCharacterBuilder.build`：`effectiveBuild` 增 `abilities: build.abilities`；
-- `CharacterRuleProjector.project`：`baseAbilitiesFrom` 的结果既传给 `builder.build(abilities:)`，也写回重建的 `CharacterBuild.abilities`（旧存档自愈）；
+- `CharacterRuleProjector.project`：门禁读 `build.abilities`，所以 `baseAbilitiesFrom` 的减法账与 `builder.build` 的结算账必须看到**同一份**输入（同一个 `ledgerAbilities`）；旧存档缺 `data['build']['abilities']` 时先用"空门槛"求一次基础属性再复用，写回重建的 `CharacterBuild.abilities`（旧存档自愈）；
 - `CharacterUpgradePlanner`：`plan` / `apply` 里的 `CharacterBuild` 增 `abilities`（从 `character.dataMap['build']['abilities']` 读出，缺失时用 `RulesDrivenCharacterBuilder.baseAbilitiesFrom`）；
 - `character_editor_page._submitQuickBuild`：构造 `CharacterBuild(...)` 时增 `abilities: quickDraft.abilities ?? Dnd5eRules.defaultAbilities`；
 - `character_editor_page._upgradePreview`：`nextBuild` / `previousBuild` 沿用 `previousBuild.abilities`。
@@ -1932,16 +1965,18 @@ abstract final class RuleChoiceQuota {
 }
 ```
 
-`CharacterRulesEngine.evaluate` 增可选参数：
+`CharacterRulesEngine.evaluate` 增**必填**命名参数（默认值会让"漏传"静默变成"不限"）：
 
 ```dart
   CharacterGrantLedger evaluate(
     CharacterBuild build, {
-    Map<String, int> poolLimits = const <String, int>{},
+    required Map<String, int> poolLimits,
   }) {
 ```
 
-在 `_resolveChoices` 里，池占用按**确定遍历顺序**先声明先占（决策 D8）：`evaluate` 维护 `poolUsage: Map<String, int>`，处理每个选择前算出 `usedByOthers = 池总占用`，处理完把本选择的 `selected.length` 累加进池；`effectiveMaximum = RuleChoiceQuota.effectiveMaximum(...)` 传给 `normalizeSelection`；若 `normalized.violations.contains(aboveMaximum)` 且 `definition.countsToward != null` 且池上限存在 → `reason: poolExceeded`（否则 `aboveMaximum`）。`ActiveRuleChoice` 增 `pool` / `poolCap`。
+在 `_resolveChoices` 里，池占用按**确定遍历顺序**先声明先占（决策 D8）：**条目内**按声明顺序，**跨条目**按 `build.selections` 的迭代顺序（队列按它播种，随存档持久化、可复现）。`evaluate` 维护 `poolUsage: Map<String, int>`，处理每个选择前算出 `usedByOthers = 池总占用`，处理完（且前置满足时）把本选择的 `selected.length` 累加进池；`effectiveMaximum = RuleChoiceQuota.effectiveMaximum(...)` 传给 `normalizeSelection`；若 `normalized.violations.contains(aboveMaximum)` 且 `definition.countsToward != null` 且 `poolLimits.containsKey(countsToward)`（**池声明了额度**）→ `reason: poolExceeded`，否则 `aboveMaximum`（无上限池如 `spellbook` 按自身 `maximum` 归因）。`ActiveRuleChoice` 增 `pool` / `poolCap`。
+
+池名与额度来源的一致性由测试锁定：`kCountsTowardPools` 必须等于 `limitsFor` 的键空间 ∪ **显式无限池** `kUnlimitedCountsTowardPools`（决策 D3），新增池名漏加来源就会红，而不是静默"不限"。
 
 生产调用点补 `poolLimits:`（都用 `RuleChoiceQuota.limitsFor(rules: classRules, level: level)`）：
 - `RulesDrivenCharacterBuilder.build`（已有 `classRules`）；

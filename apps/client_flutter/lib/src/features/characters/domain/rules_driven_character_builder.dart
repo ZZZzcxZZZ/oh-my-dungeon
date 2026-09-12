@@ -33,11 +33,8 @@ class RulesDrivenCharacterBuilder {
     final speciesEntry = _selectedEntry(build, 'species');
     final backgroundEntry = _selectedEntry(build, 'background');
     // 职业数值的唯一入口：条目身份优先，`structured.classRules` 覆盖档案（§3.6、§3.7）。
-    final classRules = Dnd5eRules.resolveClassRules(
-      entryId: classEntry?.id,
-      classSummary: classEntry?.name ?? '',
-      structured: classEntry?.structured ?? const <String, Object?>{},
-    );
+    // 与 [baseAbilitiesFrom] 共用 [_classRulesFor]，避免两处各写一份三参数调用。
+    final classRules = _classRulesFor(build);
     final ledger = _engine.evaluate(
       build,
       poolLimits: RuleChoiceQuota.limitsFor(

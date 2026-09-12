@@ -767,13 +767,14 @@ def extract_class(cls_name: str) -> tuple[dict[str, Any] | None,
         body = [{"type": "paragraph", "text": desc}]
         cf_entry = make_entry(
             "classFeature", feat_slug, feat_name, body,
-            structured={"level": level, "classSlug": slug},
+            structured={"level": level},
             tags=[slug, f"level-{level}"],
             summary=f"{level}级 {name} 特性",
+            relations=[
+                {"type": "featureOf", "targetId": entry_id("class", slug)},
+            ],
             source_path=str(cls_path),
         )
-        # 建立 featureOf 关系
-        cf_entry["structured"]["featureOf"] = entry_id("class", slug)
         class_feature_entries.append(cf_entry)
 
     # 生成 progression
@@ -890,13 +891,14 @@ def extract_subclass(sub_path: Path, parent_class_slug: str,
 
     生成的子职业条目具备：
     - relations: [{type: "subclassOf", targetId: <parent class entryId>}]
-    - structured.parentClass: 父职业显示名（仅用于 UI 展示，非关系引用）
+    - structured.parentClass: 父职业显示名（资料库子职卡片展示用；**分组/筛选**走
+      `subclassOf` 关系，见 `content_library_controller`）
     - rules.progression: 仅包含子职业实际解锁特性的等级（3/7/10/15/18 等），
       每个等级的 grants 指向 subclass classFeature 条目。
 
     子职业特性段落格式与父职业一致："N级：特性名 EnglishName 描述..."。
-    每个特性生成一条 classFeature 条目，structured.featureOf 指向子职业 entryId，
-    与父职业 classFeature 保持一致的结构。
+    每个特性生成一条 classFeature 条目，`relations` 里一条 `featureOf` 指向子职业 entryId，
+    与父职业 classFeature（`featureOf` → 职业 entryId）保持一致的结构。
     """
     html = read_html(sub_path)
     soup = BeautifulSoup(html, "html.parser")
@@ -944,15 +946,11 @@ def extract_subclass(sub_path: Path, parent_class_slug: str,
         body = [{"type": "paragraph", "text": desc}]
         cf_entry = make_entry(
             "classFeature", feat_slug, feat_name, body,
-            structured={
-                "level": level,
-                "classSlug": parent_class_slug,
-                "subclassName": name,
-                "featureOf": subclass_entry_id,
-            },
+            structured={"level": level},
             tags=[parent_class_slug, slug, f"level-{level}", "subclass"],
             aliases=[feat_en] if feat_en else [],
             summary=f"{level}级 {name} 特性",
+            relations=[{"type": "featureOf", "targetId": subclass_entry_id}],
             source_path=str(sub_path),
         )
         subclass_feature_entries.append(cf_entry)
@@ -1082,7 +1080,9 @@ def _process_spell(h4: Tag, p: Tag, level: int, schools_pat: str,
         return
     slug = slugify(name, en_name)
     structured: dict[str, Any] = {"level": level}
-    structured["levelLabel"] = "戏法" if level == 0 else f"{level}环"
+    # 环阶中文标签只用于 body/summary 展示，不作为 structured 元数据输出
+    # （客户端只读 `level`，多写一个键就是同一概念的第二种形状）。
+    level_label = "戏法" if level == 0 else f"{level}环"
 
     em = p.find("em")
     em_text = clean_text(em.get_text()) if em else ""
@@ -1149,7 +1149,7 @@ def _process_spell(h4: Tag, p: Tag, level: int, schools_pat: str,
     # 添加 statBlock 块
     stat_fields: dict[str, str] = {}
     for k, v in [
-        ("环阶", structured.get("levelLabel", "")),
+        ("环阶", level_label),
         ("学派", structured.get("school", "")),
         ("施法时间", structured.get("castingTime", "")),
         ("施法距离", structured.get("range", "")),
@@ -1168,7 +1168,7 @@ def _process_spell(h4: Tag, p: Tag, level: int, schools_pat: str,
         structured=structured,
         tags=tags,
         aliases=[en_name] if en_name else [],
-        summary=f"{structured.get('levelLabel', '')} {structured.get('school', '')} · {name}",
+        summary=f"{level_label} {structured.get('school', '')} · {name}",
         source_path=str(source_path),
     )
     items.append(entry)

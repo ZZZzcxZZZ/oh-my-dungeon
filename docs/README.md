@@ -1005,8 +1005,6 @@ assets/bundled_content.json            # 公开构建恒为 {}
 | `python scripts/extract_phb_2024_v2.py` | 玩家手册 → v2 包 |
 | `python scripts/extract_monster_manual_private.py` | 怪物图鉴 → 怪物包 |
 | `python scripts/extract_dmg_2024_items.py` | 城主指南 → 物品包 |
-| `python scripts/generate_phb_private_index.py` | 目录/页码索引（不含正文） |
-| `python scripts/extract_phb_from_chm.py` | 旧 CHM 一次性提取（历史工具） |
 | `python scripts/check_subclass.py` | 子职业数据完整性校验 |
 
 ```powershell
@@ -1029,8 +1027,9 @@ pwsh -File scripts/build_private_client.ps1 -Target apk -BuildArgs @(
 - 流程：聚合三包 → 覆盖 `bundled_content.json` → `flutter build` → **finally 恢复 `{}`**
 - 内嵌默认服务器由 `BundledDefaultServerSeeder` 消费（仅发布构建启用；测试与公开构建保持
   「无服务器」语义）
-- 另有 `scripts/build-private-test-apk.ps1`（打包 APK 到 `dist/android/`）与
-  `scripts/serve_private_web.py`（私有 Web 反代，5181 → 后端 3000）
+- 另有 `scripts/build-private-test-apk.ps1`（打包 APK 到 `dist/android/`）。
+  私有 Web 预览走 `scripts/static_preview_server.py`（本地静态服务 + 到后端的反向代理，
+  见 §13 上面的 `preview:client`）。
 
 ### 13.4 服务端部署包
 
@@ -1172,6 +1171,12 @@ Material 3 设计系统契约（`DESIGN.md` 与契约测试/golden）；自托�
     `archive/development/`、`archive/engineering/`、`archive/acceptance/`、
     `archive/roadmap/`、`archive/design/`、`archive/agents/`
   - 归档内容仅用于追溯，**不得**作为当前接口或待办依据。
+- 2026-09-12（清理轮）：`archive/` 只保留**仍有追溯价值**的部分——
+  `archive/architecture/`（旧架构与领域模型）与 `archive/superpowers/specs/`
+  （设计规格与权衡记录）；已删除 `roadmap/`、`superpowers/plans/`、`agent-prompts/`、
+  `agents/`、`content/`、`deployment/`、`development/`、`engineering/`、`design/`、
+  `acceptance/`、`handoffs/`、`product/`（一次性执行记录，`git log -- docs/archive/` 可取回）。
+  同轮删除的还有 5 个无引用脚本与 `private-imports/mm-private-v1*`，见 `archive/README.md`。
 - 已删除的代码：`features/encounters`（客户端）、`modules/encounters` 与 `modules/media`
   （服务端，未挂载）、旧战役内容编辑器与 JSON 导入对话框、空的 `check_requests` 目录。
   服务端 `Session`/`ChatMessage`/`Encounter` 等 Prisma 模型保留以兼容历史数据，

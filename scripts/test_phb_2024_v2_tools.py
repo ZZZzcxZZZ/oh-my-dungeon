@@ -364,6 +364,70 @@ class Phb2024V2ToolsTest(unittest.TestCase):
             )
             self.assertLessEqual(len(subclass["slug"]), 60)
 
+    def test_class_features_link_to_their_owner_by_relation(self) -> None:
+        """职业特性必须用 `featureOf` **关系**挂回宿主，不能只写 structured 元数据。
+
+        客户端 `content_detail_page` 按 `relations[].type == 'featureOf'` 过滤职业特性列表；
+        `structured.featureOf` / `classSlug` / `subclassName` / `levelLabel` 在客户端
+        没有任何读者，属"同一概念的第二种形状"，提取器不得再输出。
+        """
+        dead_keys = {"featureOf", "classSlug", "subclassName", "levelLabel"}
+        # extract_class 用全局 SLUG_SEEN 做 slug 去重，逐职业提取前必须清空。
+        extractor.SLUG_SEEN.clear()
+        extractor.CLASS_ENTRY_SLUGS.clear()
+
+        entries: list[dict] = []
+        features: list[dict] = []
+        for cls_name in extractor.CLASS_DIRS:
+            entry, class_features, subclasses = extractor.extract_class(cls_name)
+            self.assertIsNotNone(entry, cls_name)
+            entries.append(entry)
+            entries.extend(subclasses)
+            features.extend(class_features)
+            entries.extend(class_features)
+
+        entry_ids = {entry["id"] for entry in entries}
+        self.assertEqual(len(entry_ids), len(entries), "条目 id 必须唯一")
+        self.assertTrue(features, "至少应提取出职业特性")
+
+        for entry in entries:
+            with self.subTest(entry=entry["id"]):
+                structured = entry.get("structured") or {}
+                self.assertFalse(
+                    dead_keys & set(structured),
+                    f"{entry['id']} 仍输出死元数据：{sorted(dead_keys & set(structured))}",
+                )
+
+        linked_classes: set[str] = set()
+        for feature in features:
+            with self.subTest(feature=feature["id"]):
+                relations = feature.get("relations") or []
+                targets = [
+                    relation["targetId"]
+                    for relation in relations
+                    if relation.get("type") == "featureOf"
+                ]
+                self.assertEqual(
+                    len(targets),
+                    1,
+                    f"{feature['id']} 必须恰好有一条 featureOf 关系，实际 {targets}",
+                )
+                self.assertIn(
+                    targets[0],
+                    entry_ids,
+                    f"{feature['id']} 的 featureOf 目标不存在：{targets[0]}",
+                )
+                linked_classes.add(targets[0])
+
+        # 12 个核心职业都必须能通过关系找到自己的特性（否则资料库职业页特性列表为空）。
+        class_ids = {entry["id"] for entry in entries if entry["type"] == "class"}
+        self.assertEqual(len(class_ids), 12)
+        self.assertEqual(
+            class_ids - linked_classes,
+            set(),
+            "下列职业没有任何特性挂在它下面",
+        )
+
     def test_validator_passes_with_gbk_console_encoding(self) -> None:
         environment = os.environ.copy()
         environment["PYTHONIOENCODING"] = "gbk"

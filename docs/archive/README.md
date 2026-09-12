@@ -11,16 +11,21 @@
 | 目录 | 内容 |
 |---|---|
 | `architecture/` | 旧架构、领域模型、接口边界、离线同步、AI Agent 契约、角色权限、内容 Schema |
-| `content/` | 内容包 v2 格式规范（字段细节仍可用于兼容排查） |
-| `deployment/` | 旧自托管、迁移、备份恢复文档（部署主流程已被 tarball + `start.sh` 取代） |
-| `development/` | 旧本地开发与私有资料流水线文档（后者已并入主文档 §13） |
-| `engineering/` | 旧工程规范（脚本清单、policy 方法名、事件清单等曾与代码漂移） |
-| `design/` | UI 设计系统审查报告（约 430 个元素的审查与修复记录） |
-| `acceptance/` | 历史验收清单与测试候选版记录 |
-| `roadmap/` | 旧路线、阶段执行记录、已完成计划 |
-| `agents/` | 旧 Agent 执行指南与工作提示 |
-| `superpowers/plans/` | 已完成、被替代或停止执行的实现计划 |
-| `superpowers/specs/` | 已完成或被取代的设计规格 |
+| `superpowers/specs/` | 已完成或被取代的设计规格（设计推理与权衡记录，仍有追溯价值） |
+
+## 已在 2026-09-12 清理掉的部分
+
+以下内容属"已被取代的一次性执行记录"，已从工作树删除（`git log -- docs/archive/`
+仍可取回原文件）：
+
+| 曾经的目录 | 内容 | 删除理由 |
+|---|---|---|
+| `roadmap/` | v0.2–v2.17 阶段执行计划、旧路线、验收清单 | 纯历史执行记录，与当前代码无对应关系 |
+| `superpowers/plans/` | 已完成的实现计划 | 同上；结论已落到当前代码与 `../README.md` |
+| `agent-prompts/`、`agents/` | 旧多智能体并行提示与执行指南 | 一次性协作产物，流程已变更 |
+| `content/` | 内容包 v1 / v2 格式规范 | 格式契约已收敛为唯一版本 `formatVersion: 3`，见 `../README.md` §9.2 |
+| `deployment/`、`development/`、`engineering/` | 旧自托管、本地开发、私有资料流水线、工程规范 | 已并入 `../README.md` §13/§14 与 `AGENTS.md` |
+| `design/`、`acceptance/`、`handoffs/`、`product/` | 旧设计审查报告、验收记录、交接、产品分析 | 一次性记录；设计契约现由 `DESIGN.md` + `npm run lint:design` 守护 |
 
 ## 使用规则
 

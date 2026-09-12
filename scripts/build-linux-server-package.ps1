@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
   [string]$Version = "0.1.0",
   [string]$OutputDirectory
@@ -20,7 +20,7 @@ $requiredEngines = @(
   "libquery_engine-linux-musl-openssl-3.0.x.so.node"
 )
 if (-not (Test-Path -LiteralPath $enginesSource)) {
-  throw "Missing apps/server_nest/engines. Restore the offline Prisma engines before packaging (see docs/development/private-content-pipeline.md)."
+  throw "Missing apps/server_nest/engines. Restore the offline Prisma engines before packaging (see docs/README.md 13.5 离线 Prisma 引擎)."
 }
 foreach ($engine in $requiredEngines) {
   if (-not (Test-Path -LiteralPath (Join-Path $enginesSource $engine))) {

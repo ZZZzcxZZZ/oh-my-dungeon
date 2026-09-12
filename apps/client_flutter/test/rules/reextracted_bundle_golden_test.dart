@@ -242,6 +242,53 @@ void main() {
     }
   });
 
+  test('职业特性用 featureOf 关系挂回宿主（资料库职业页据此列特性）', () {
+    // 客户端 `content_detail_page` 按 `relations[].type == 'featureOf'` 过滤职业特性列表；
+    // 只写 `structured.featureOf` 这类元数据的话，职业页的特性列表会是空的。
+    const deadMetadataKeys = {'featureOf', 'classSlug', 'subclassName', 'levelLabel'};
+    for (final entry in entries) {
+      final structured = structuredOf(entry);
+      expect(
+        structured.keys.toSet().intersection(deadMetadataKeys),
+        isEmpty,
+        reason: '${entry['id']} 仍输出无读者的元数据',
+      );
+    }
+
+    final entryIds = entries.map((entry) => entry['id']! as String).toSet();
+    final features = entries
+        .where((entry) => entry['type'] == 'classFeature')
+        .toList();
+    expect(features, isNotEmpty);
+
+    final linkedTargets = <String>{};
+    for (final feature in features) {
+      final targets = ((feature['relations'] as List?) ?? const [])
+          .cast<Map>()
+          .where((relation) => relation['type'] == 'featureOf')
+          .map((relation) => relation['targetId']! as String)
+          .toList();
+      expect(
+        targets,
+        hasLength(1),
+        reason: '${feature['id']} 必须恰好有一条 featureOf 关系，实际 $targets',
+      );
+      expect(
+        entryIds,
+        contains(targets.single),
+        reason: '${feature['id']} 的 featureOf 目标不存在',
+      );
+      linkedTargets.add(targets.single);
+    }
+
+    final classIds = classes.map((entry) => entry['id']! as String).toSet();
+    expect(
+      classIds.difference(linkedTargets),
+      isEmpty,
+      reason: '下列职业没有任何特性挂在它下面',
+    );
+  });
+
   test('抽样等级 1/5/11/20 的法术位与官方表逐项一致（独立 oracle）', () {
     for (final slug in _hitDie.keys) {
       final entry = classBySlug[slug]!;

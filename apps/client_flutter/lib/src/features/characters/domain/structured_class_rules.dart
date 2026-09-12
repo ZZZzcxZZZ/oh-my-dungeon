@@ -4,12 +4,21 @@ import '../../rules/domain/rule_profile.dart';
 import 'dnd5e_rules.dart';
 
 class StructuredSkillChoice {
-  const StructuredSkillChoice({required this.count, required this.options});
+  const StructuredSkillChoice({
+    required this.count,
+    required this.options,
+    this.restricted = false,
+  });
 
   static const empty = StructuredSkillChoice(count: 0, options: []);
 
   final int count;
   final List<String> options;
+
+  /// 候选**不是**"任意技能"：选择用 `optionTags` / `optionEntryIds` 表达，
+  /// 只是没有内联 `options` 可以列出名字。展示层据此给中性文案，
+  /// 不能写成"任意技能"。
+  final bool restricted;
 }
 
 /// 职业初始装备的选择上限。来自 class entry 的
@@ -48,6 +57,10 @@ abstract final class StructuredClassRules {
   /// 内联 `options` 的 `label`（字符串元素即其本身）作
   /// [StructuredSkillChoice.options]。没有这条选择就返回
   /// [StructuredSkillChoice.empty]——**不**回退中文散文，也不猜测全部技能。
+  ///
+  /// 模型允许用 `optionTags` / `optionEntryIds` 表达候选（§3.10.2）：
+  /// 此时 `options` 为空但**候选不是"任意技能"**，[StructuredSkillChoice.restricted]
+  /// 置位，展示层给中性文案而不是"任选N项（任意技能）"。
   static StructuredSkillChoice skillChoice(ContentEntry? entry) {
     final rules = entry?.rules;
     if (rules == null) return StructuredSkillChoice.empty;
@@ -58,6 +71,9 @@ abstract final class StructuredClassRules {
         options: choice.options
             .map((option) => option.label)
             .toList(growable: false),
+        restricted:
+            choice.options.isEmpty &&
+            (choice.optionTags.isNotEmpty || choice.optionEntryIds.isNotEmpty),
       );
     }
     return StructuredSkillChoice.empty;

@@ -505,9 +505,14 @@ abstract final class RuleProfileResolver {
 
   /// 资源上限表在 `startsAtLevel` 及以上为 0 的档位（§5.2 `zeroLevelResource`）。
   ///
-  /// 只看**表**形态：常量 `maximum: 0` 没有等级概念，不触发。取值语义走
-  /// [IntTable.at]（高于最后声明等级沿用最后声明值），因此 `{"1": 0}` 这种
-  /// "从头就写 0" 的表会被如实报出来，而不是靠调用方各自判空。
+  /// 只看**表**形态：常量 `maximum: 0` 没有等级概念，不触发。
+  ///
+  /// 取值语义走 [IntTable.at]（不高于当前等级的最大已声明档位；高于最后声明
+  /// 等级沿用最后声明值），因此**必须显式补查 `startsAtLevel`**：
+  /// `startsAtLevel: 3` + `table: {"1": 0}` 时 `minLevel..maxLevel` 只有 1 级
+  /// （在 `startsAtLevel` 之前，不算），但 [IntTable.at]`(3)` 沿用 1 级的 0
+  /// ——运行期 `resourcesAt` 会产出"上限 0"的资源。漏查这一档就会一条 warning
+  /// 都不报，作者也看不到问题。
   static void _validateResourceZeroLevels(
     ClassResourceRule resource,
     String path,
@@ -519,6 +524,13 @@ abstract final class RuleProfileResolver {
       for (var level = table.minLevel; level <= table.maxLevel; level++)
         if (level >= resource.startsAtLevel && table.at(level) == 0) level,
     ];
+    // 表范围可能整个落在 `startsAtLevel` 之前，但"沿用最后声明值"仍会让
+    // `startsAtLevel` 及以上恒为 0：这一档不在上面的循环里，单独补查。
+    if (table.maxLevel < resource.startsAtLevel &&
+        table.at(resource.startsAtLevel) == 0) {
+      zeroLevels.add(resource.startsAtLevel);
+      zeroLevels.sort();
+    }
     if (zeroLevels.isEmpty) return;
     _addWarning(
       diagnostics,

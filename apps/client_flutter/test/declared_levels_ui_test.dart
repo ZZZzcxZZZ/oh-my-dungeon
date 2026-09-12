@@ -153,6 +153,58 @@ void main() {
       expect(levels.isBeyond(3), isFalse);
       expect(levels.detailLabel(3), '该职业未声明 5 级以下内容，你仍可继续（数值按未声明处理）');
     });
+
+    test('undeclares 只在"有声明但超范围"时为真，完全没有声明时为假', () {
+      const declared = DeclaredLevels(min: 5, max: 10);
+      expect(declared.undeclares(3), isTrue, reason: '低于最早声明等级');
+      expect(declared.undeclares(11), isTrue, reason: '高于最后声明等级');
+      expect(declared.undeclares(5), isFalse);
+      expect(declared.undeclares(10), isFalse);
+
+      // 完全没有等级声明：这不是"该等级未声明"，而是"该职业没有等级表"。
+      expect(const DeclaredLevels().undeclares(3), isFalse);
+    });
+
+    test('isDeclared 从 classIdentity.declared 读取，缺省为 true', () {
+      expect(
+        DeclaredLevels.isDeclared(
+          _character(level: 3, classIdentity: _identity(min: 1, max: 5)),
+        ),
+        isTrue,
+      );
+      expect(
+        DeclaredLevels.isDeclared(
+          _character(
+            level: 3,
+            classIdentity: _identity(min: null, max: null, declared: false),
+          ),
+        ),
+        isFalse,
+        reason: '职业名解析不到档案 = 未声明',
+      );
+      // 没有 classIdentity（老存档 / 快速创建）：没有可比的"未声明"标记，
+      // 按"已声明但没有等级表"处理，不能说成未知职业。
+      expect(DeclaredLevels.isDeclared(_character(level: 3)), isTrue);
+    });
+
+    test('rangeLevelLabel 只在职业身份未声明时给范围级文案', () {
+      expect(
+        const DeclaredLevels(min: 1, max: 5).rangeLevelLabel(isDeclared: true),
+        isNull,
+        reason: '已声明但没有数值时由调用方说"暂无"，不是范围级文案',
+      );
+      expect(
+        const DeclaredLevels().rangeLevelLabel(isDeclared: false),
+        '该职业未声明任何等级内容',
+        reason: '范围级文案与 rangeLabel 同一份实现',
+      );
+      // 身份未声明但记录里碰巧有范围（迁移期数据）：仍以 rangeLabel 为准，
+      // 不把"不知道"渲染成"该职业没有"。
+      expect(
+        const DeclaredLevels(min: 1, max: 5).rangeLevelLabel(isDeclared: false),
+        '职业声明：1–5 级',
+      );
+    });
   });
 
   group('DeclaredLevelBanner 共用的信息条', () {
@@ -297,6 +349,51 @@ void main() {
       );
     });
 
+    test('min == max（稀疏表只声明一个等级）时区间不写成倒序或空档', () {
+      // 稀疏 `{"5": …}`（或 progression 只有 [5]）让 min == max == 5：
+      // 文案必须说"已声明 5–5 级"，两侧的未声明区间各说一次，不能出现
+      // "已声明 5–5 级 · 5–4 级未声明" 这类倒序，也不能漏掉任何一侧。
+      const single = DeclaredLevels(min: 5, max: 5);
+      expect(single.declaredRangeCaption, '已声明 5–5 级 · 1–4 级未声明 · 6–20 级未声明');
+      expect(single.rangeLabel, '职业声明：5–5 级');
+      expect(single.covers(5), isTrue);
+      expect(single.covers(4), isFalse);
+      expect(single.covers(6), isFalse);
+
+      // 边界：min == max == 1 只有右侧未声明；min == max == 20 只有左侧未声明。
+      expect(
+        const DeclaredLevels(min: 1, max: 1).declaredRangeCaption,
+        '已声明 1–1 级 · 2–20 级未声明',
+      );
+      expect(
+        const DeclaredLevels(min: 20, max: 20).declaredRangeCaption,
+        '已声明 20–20 级 · 1–19 级未声明',
+      );
+    });
+
+    test('declaredRangeFraction 对单级声明给 null（轨道只画未声明色，不崩）', () {
+      // min == max 的区间宽度为 0，是退化区间：按契约返回 null，
+      // 调用方只画未声明色。倒序（min > max）同理，不能让 `Rect` 出现负宽度。
+      expect(
+        DeclaredLevelTrackShape.declaredRangeFraction(
+          levels: const DeclaredLevels(min: 5, max: 5),
+          min: 1,
+          max: 20,
+        ),
+        isNull,
+        reason: '单级声明的区间宽度为 0：退化区间一律按"没有已声明区间"处理',
+      );
+      expect(
+        DeclaredLevelTrackShape.declaredRangeFraction(
+          levels: const DeclaredLevels(min: 5, max: 4),
+          min: 1,
+          max: 20,
+        ),
+        isNull,
+        reason: 'min > max 的坏数据不得画出负宽度轨道',
+      );
+    });
+
     test('declaredRangeFraction 用真实比例切分轨道', () {
       expect(
         DeclaredLevelTrackShape.declaredRangeFraction(
@@ -405,6 +502,53 @@ void main() {
 
       expect(find.text('暂无可追踪资源'), findsOneWidget);
       expect(find.textContaining('该职业未声明该等级的内容'), findsNothing);
+    });
+
+    testWidgets('职业身份未声明（declared: false）时说"未声明"，不说"没有"', (tester) async {
+      // 职业名解析不到档案（未重导入的自制职业 / 老存档匹配失败）→
+      // `classIdentity.declared == false`、`declaredLevels.max == null`。
+      // 这和"已知职业但没有随等级变化的表"（rogue / monk）不是一回事：
+      // 断言成"暂无法术位 / 暂无可追踪资源"就是把"未知"说成"没有"（§3.12）。
+      final character = _character(
+        level: 5,
+        classIdentity: _identity(min: null, max: null, declared: false),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterDetailPage(
+            character: character,
+            initialTab: 'spells',
+            onSaveCharacter: (_) async => true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('该职业未声明任何等级内容'), findsOneWidget);
+      expect(
+        find.text('暂无法术位'),
+        findsNothing,
+        reason: '"未声明"不能被断言成"该职业没有法术位"',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterDetailPage(
+            character: character,
+            initialTab: 'resources',
+            onSaveCharacter: (_) async => true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('该职业未声明任何等级内容'), findsOneWidget);
+      expect(
+        find.text('暂无可追踪资源'),
+        findsNothing,
+        reason: '"未声明"不能被断言成"该职业没有资源"',
+      );
     });
 
     testWidgets('超出声明范围但已有数值时不显示"未声明"（沿用语义不被覆盖）', (

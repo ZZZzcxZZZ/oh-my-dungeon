@@ -59,12 +59,19 @@ class DeclaredLevelBanner extends StatelessWidget {
 
 /// 未声明等级的法术位 / 职业资源区文案（**不渲染成 0**）。
 ///
-/// 角色卡上"这个等级职业没声明过内容"必须可见：显示这句话，而不是 `0`。
+/// 角色卡上"职业没声明过内容"必须可见：显示这句话，而不是 `0`。
+///
+/// 文案本身**不在这里**（唯一实现是 [DeclaredLevels.rangeLevelLabel] /
+/// [DeclaredLevels.detailLabel]）：本组件只负责把两种"未声明"渲染成同一个
+/// 信息样式，避免范围级与等级级各写一套排版。
 class UndeclaredLevelNotice extends StatelessWidget {
-  const UndeclaredLevelNotice({super.key});
+  const UndeclaredLevelNotice({this.label = levelLabel, super.key});
 
-  /// 该职业未声明该等级的内容（数值型未声明不得渲染成 0）。
-  static const String label = '该职业未声明该等级的内容';
+  /// 该职业**未声明该等级**的内容（数值型未声明不得渲染成 0）。
+  static const String levelLabel = '该职业未声明该等级的内容';
+
+  /// 要显示的"未声明"文案（范围级或等级级），默认 [levelLabel]。
+  final String label;
 
   @override
   Widget build(BuildContext context) {

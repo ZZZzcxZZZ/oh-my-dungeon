@@ -73,6 +73,16 @@ class _SchemaBackedDefinition implements ContentTypeDefinition {
 sealed class _BaseDefinition implements ContentTypeDefinition {
   const _BaseDefinition();
 
+  /// 显示字段**只有一处生效来源**：内容类型 schema（`ContentTypeSchema.fields`）。
+  ///
+  /// registry 总是把定义包成 [_SchemaBackedDefinition]，它的
+  /// `searchableFields`（以及 `buildMetadata`）一律用 `schema.fields`，因此子类
+  /// 覆写 `searchableFields` **不会生效**——那些列表只是接口满足物（本文件里
+  /// 仍有多处历史覆写），要改显示字段请改 schema。职业的定义已经按这个口径清理
+  /// （见 [_ClassDefinition]），不要再新增手工副本。
+  @override
+  List<ContentFieldDefinition> get searchableFields => const [];
+
   @override
   Widget buildSummary(BuildContext context, ContentEntry entry) {
     return Text(entry.summary.isEmpty ? entry.name : entry.summary);
@@ -97,10 +107,15 @@ Widget _metadataRows(
   );
   // 职业规则字段（生命骰 / 豁免熟练 / 技能选择）的值一律经 [ClassRuleSummary]
   // 这唯一口径；其余字段继续读 `structured`。
-  final classRules = entry.type == 'class' ? ClassRuleSummary.of(entry) : null;
+  final classFields = entry.type == 'class'
+      ? ClassRuleSummary.fieldValues(
+          ClassRuleSummary.of(entry),
+          fields: fields.map((field) => field.key),
+        )
+      : null;
   final rows = <Widget>[];
   for (final field in fields) {
-    final value = _metadataValue(structured, classRules, field.key);
+    final value = _metadataValue(structured, classFields, field.key);
     if (value == null) continue;
     rows.add(
       Padding(
@@ -134,20 +149,18 @@ Widget _metadataRows(
 /// 职业的规则字段（`hitDie` / `savingThrows` / `skills`）一律取
 /// [ClassRuleSummary]（条目声明 ∪ 内置档案，唯一口径）：未声明即 `null`
 /// ——**不回退**旧散文键、不显示 `0`。其余字段照旧读 `structured`。
+///
+/// "key → 记录成员"的映射只有一处实现（[ClassRuleSummary.fieldValues]）：
+/// 这里不再重列记录成员名（以前展示层把记录类型结构性重写一遍，加字段会被
+/// 静默丢弃）。规则字段哪怕值为 `null` 也不落回 `structured`——map 里**出现**
+/// 这个 key 就代表"它是规则字段"。
 String? _metadataValue(
   Map<String, Object?> structured,
-  ({String? hitDie, String? savingThrows, String? skillChoice})? classRules,
+  Map<String, String?>? classFields,
   String key,
 ) {
-  if (classRules != null) {
-    switch (key) {
-      case 'hitDie':
-        return classRules.hitDie;
-      case 'savingThrows':
-        return classRules.savingThrows;
-      case 'skills':
-        return classRules.skillChoice;
-    }
+  if (classFields != null && classFields.containsKey(key)) {
+    return classFields[key];
   }
   return _formatValue(structured[key]);
 }
@@ -178,18 +191,15 @@ class _ClassDefinition extends _BaseDefinition {
   @override
   IconData get icon => Icons.school_outlined;
 
-  @override
-  List<ContentFieldDefinition> get searchableFields => const [
-    ContentFieldDefinition(key: 'primaryAbility', label: '主属性'),
-    ContentFieldDefinition(key: 'hitDie', label: '生命骰'),
-    ContentFieldDefinition(key: 'savingThrows', label: '豁免熟练'),
-    ContentFieldDefinition(key: 'skills', label: '技能选择'),
-  ];
-
-  @override
-  Widget buildMetadata(BuildContext context, ContentEntry entry) {
-    return _metadataRows(context, entry, searchableFields);
-  }
+  // 显示字段**只有一处来源**：内容类型 schema 的 `fields`（`primaryAbility` /
+  // `hitDie` / `savingThrows` / `skills` 四项，见
+  // `content_schema_registry.dart` 的 class schema）。后三项的值由
+  // `_metadataRows` 经 [ClassRuleSummary] 从 `classRules` 派生，**不读**
+  // `structured` 的同名散文键。
+  //
+  // 这里以前覆写 `searchableFields` / `buildMetadata`，但 registry 总是把定义
+  // 包成 `_SchemaBackedDefinition`（它用 `schema.fields` 覆盖两者），所以那份
+  // 手工同步的列表**不可达**：留两处只会漏改，不会生效。
 }
 
 class _SubclassDefinition extends _BaseDefinition {

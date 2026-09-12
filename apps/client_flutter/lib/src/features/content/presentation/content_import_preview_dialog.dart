@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../characters/domain/declared_levels.dart';
 import '../domain/content_import_report.dart';
+import 'widgets/content_diagnostic_list.dart';
 
 class ContentImportPreviewDialog extends StatelessWidget {
   const ContentImportPreviewDialog({
@@ -45,7 +46,7 @@ class ContentImportPreviewDialog extends StatelessWidget {
             // 规则契约的 warning 级诊断：只提示，不阻断导入。
             if (report.warnings.isNotEmpty) ...[
               const SizedBox(height: 12),
-              _DiagnosticList(
+              ContentDiagnosticList(
                 key: const Key('import-preview-warnings'),
                 diagnostics: report.warnings,
                 warning: true,
@@ -77,13 +78,13 @@ class ContentImportPreviewDialog extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _DiagnosticList(
+            ContentDiagnosticList(
               key: const Key('import-preview-errors'),
               diagnostics: report.errors,
             ),
             if (report.warnings.isNotEmpty) ...[
               const SizedBox(height: 12),
-              _DiagnosticList(
+              ContentDiagnosticList(
                 key: const Key('import-preview-warnings'),
                 diagnostics: report.warnings,
                 warning: true,
@@ -97,54 +98,6 @@ class ContentImportPreviewDialog extends StatelessWidget {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('关闭'),
         ),
-      ],
-    );
-  }
-}
-
-/// 诊断列表：error 用 `error` 色，warning 用次级样式（`tertiary` + info 图标）。
-class _DiagnosticList extends StatelessWidget {
-  const _DiagnosticList({
-    required this.diagnostics,
-    this.warning = false,
-    super.key,
-  });
-
-  final List<ContentValidationError> diagnostics;
-  final bool warning;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = warning
-        ? theme.colorScheme.tertiary
-        : theme.colorScheme.error;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (warning)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, size: 16, color: color),
-                const SizedBox(width: 6),
-                Text(
-                  '提示（不阻断导入）',
-                  style: theme.textTheme.labelLarge?.copyWith(color: color),
-                ),
-              ],
-            ),
-          ),
-        for (final diagnostic in diagnostics)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Text(
-              '${diagnostic.path}: ${diagnostic.message}',
-              style: theme.textTheme.bodyMedium?.copyWith(color: color),
-            ),
-          ),
       ],
     );
   }

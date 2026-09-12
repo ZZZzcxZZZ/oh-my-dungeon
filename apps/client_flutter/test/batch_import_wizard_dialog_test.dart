@@ -40,7 +40,7 @@ void main() {
 
   /// 一个**有效但带 warning** 的包：自制职业声明了空的 classRules，
   /// 于是拿到 `missingCoreField`（缺 hitDie）提示，但不阻断导入。
-  PickedContentFile warningFile({required String id}) {
+  PickedContentFile warningFile({required String id, int zeroResources = 0}) {
     final json = jsonEncode({
       'formatVersion': 3,
       'id': id,
@@ -54,7 +54,23 @@ void main() {
           ...testFighterEntry().toJson(),
           'id': '$id:class/homebrew-sage',
           'slug': 'homebrew-sage',
-          'structured': {'classRules': <String, Object?>{}},
+          'structured': {
+            'classRules': <String, Object?>{
+              // 每张"3 级起上限恒为 0"的表各自产出 1 条 zeroLevelResource。
+              'resources': [
+                for (var index = 0; index < zeroResources; index++)
+                  {
+                    'id': 'focus-$index',
+                    'name': '专注 $index',
+                    'recovery': 'longRest',
+                    'startsAtLevel': 3,
+                    'maximum': {
+                      'table': {'1': 0},
+                    },
+                  },
+              ],
+            },
+          },
         },
       ],
     });
@@ -171,7 +187,38 @@ void main() {
     // warning 不能像以前那样被静默丢掉。
     expect(find.text('提示（不阻断导入）'), findsOneWidget);
     expect(find.textContaining('missingCoreField'), findsOneWidget);
-    expect(find.byKey(const Key('batch-import-warning-gamma')), findsOneWidget);
+    // key 带索引：同一包的多条 warning 各有各的定位点（以前全一样）。
+    expect(
+      find.byKey(const Key('batch-import-warning-gamma-0')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('超过 3 条 warning 时截断可见并显式说明还有多少条', (tester) async {
+    await pumpDialog(
+      tester,
+      files: [
+        packageFile(id: 'alpha', name: 'Alpha Pack'),
+        // 4 条 zeroLevelResource + 1 条 missingCoreField = 5 条 warning。
+        warningFile(id: 'gamma', zeroResources: 4),
+      ],
+    );
+
+    // 前 3 条渲染出来，各自有独立 key。
+    for (var index = 0; index < 3; index++) {
+      expect(
+        find.byKey(Key('batch-import-warning-gamma-$index')),
+        findsOneWidget,
+        reason: '第 $index 条 warning 必须可见且有独立 key',
+      );
+    }
+    expect(
+      find.byKey(const Key('batch-import-warning-gamma-3')),
+      findsNothing,
+    );
+    // 截断**不静默**：显式说还有 2 条（共 5 条）。
+    expect(find.textContaining('还有 2 条'), findsOneWidget);
+    expect(find.textContaining('共 5 条'), findsOneWidget);
   });
 
   testWidgets('skips unchecked files when importing', (tester) async {

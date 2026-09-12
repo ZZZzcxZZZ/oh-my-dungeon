@@ -882,6 +882,29 @@ List<WeaponAttackAction> _deriveWeaponAttacks({
   contentEntries: contentEntries,
 );
 
+/// 空的法术位 / 职业资源区的文案（契约 §3.12，三分支）。
+///
+/// 三者**不是**同一件事，文案必须分开口径：
+/// 1. [rangeLevelLabel] 非 `null` → 职业身份未声明（解析不到档案）：
+///    说"未声明"，**不**断言成"该职业没有法术位 / 资源"；
+/// 2. `max == null` 的已声明职业（rogue / monk 这类没有等级表的）→ 调用方给的
+///    [emptyLabel]（"暂无法术位" / "暂无可追踪资源"）；
+/// 3. 有等级声明但当前等级不在范围内 → [UndeclaredLevelNotice] 的等级级文案。
+///
+/// 分支判断本身就是这个函数，因此"法术位区与资源区口径一致"是结构保证，
+/// 不靠两处各写一遍。
+Widget _emptyClassValueNotice({
+  required String? rangeLevelLabel,
+  required bool levelUndeclared,
+  required String emptyLabel,
+  required TextStyle? style,
+}) {
+  final rangeLabel = rangeLevelLabel;
+  if (rangeLabel != null) return UndeclaredLevelNotice(label: rangeLabel);
+  if (levelUndeclared) return const UndeclaredLevelNotice();
+  return Text(emptyLabel, style: style);
+}
+
 class _SpellsPanel extends StatefulWidget {
   const _SpellsPanel({
     required this.character,
@@ -935,13 +958,18 @@ class _SpellsPanelState extends State<_SpellsPanel> {
     final spellRefs = resolved.spellEntryIds;
     final spellsByLevel = _spellsByLevel(spellRefs);
     // §3.12：该等级不在职业声明范围内 → 数值为空时显式说"未声明"，不渲染成 0。
-    // "完全没有声明"（max == null）**不算**超出范围：内置 rogue / monk 这类职业
-    // 本来就没有法术位，喊"该职业未声明该等级的内容"是错误陈述。这与
-    // `DeclaredLevels.detailLabel` / `rangeLabel` 的 isEmpty 口径一致。
+    // 三分支（口径只在 [DeclaredLevels.rangeLevelLabel] 一处）：
+    // 1. 职业身份未声明（`declared == false`）→ 范围级文案：**不知道**这个职业
+    //    有什么，不能说成"暂无法术位"；
+    // 2. 已声明但完全没有等级表（rogue / monk 这类 `max == null`）→ "暂无法术位"
+    //    是关于该职业的真实陈述；
+    // 3. 有等级声明但当前等级不在范围内 → 等级级 `UndeclaredLevelNotice`。
     final declaredLevels = DeclaredLevels.fromCharacter(widget.character);
-    final levelUndeclared =
-        !declaredLevels.isEmpty &&
-        !declaredLevels.covers(widget.character.level);
+    final classDeclared = DeclaredLevels.isDeclared(widget.character);
+    final rangeLevelLabel = declaredLevels.rangeLevelLabel(
+      isDeclared: classDeclared,
+    );
+    final levelUndeclared = declaredLevels.undeclares(widget.character.level);
 
     if (ability == null &&
         slotMaximums.isEmpty &&
@@ -986,12 +1014,12 @@ class _SpellsPanelState extends State<_SpellsPanel> {
           title: '法术位',
           icon: Icons.hourglass_bottom_outlined,
           child: slotMaximums.isEmpty
-              ? (levelUndeclared
-                    ? const UndeclaredLevelNotice()
-                    : Text(
-                        '暂无法术位',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ))
+              ? _emptyClassValueNotice(
+                  rangeLevelLabel: rangeLevelLabel,
+                  levelUndeclared: levelUndeclared,
+                  emptyLabel: '暂无法术位',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                )
               : Column(
                   children: [
                     for (final entry in _sortedSlotEntries(slotMaximums))
@@ -2691,12 +2719,13 @@ class _ResourcesPanelState extends State<_ResourcesPanel> {
   @override
   Widget build(BuildContext context) {
     // §3.12：该等级不在职业声明范围内 → 没有资源时显式说"未声明"，不渲染成 0。
-    // "完全没有声明"（max == null）不算超出范围：没有声明过等级表的职业本来就没有
-    // 资源，不该被说成"未声明该等级的内容"。口径与法术位区、`detailLabel` 一致。
+    // 三分支口径与法术位区完全一致，文案唯一实现在
+    // [DeclaredLevels.rangeLevelLabel]：职业身份未声明 != 该职业没有资源。
     final declaredLevels = DeclaredLevels.fromCharacter(widget.character);
-    final levelUndeclared =
-        !declaredLevels.isEmpty &&
-        !declaredLevels.covers(widget.character.level);
+    final rangeLevelLabel = declaredLevels.rangeLevelLabel(
+      isDeclared: DeclaredLevels.isDeclared(widget.character),
+    );
+    final levelUndeclared = declaredLevels.undeclares(widget.character.level);
     return _Section(
       title: '职业资源',
       icon: Icons.bolt_outlined,
@@ -2726,12 +2755,12 @@ class _ResourcesPanelState extends State<_ResourcesPanel> {
           if (_resources.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
-              child: levelUndeclared
-                  ? const UndeclaredLevelNotice()
-                  : Text(
-                      '暂无可追踪资源',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
+              child: _emptyClassValueNotice(
+                rangeLevelLabel: rangeLevelLabel,
+                levelUndeclared: levelUndeclared,
+                emptyLabel: '暂无可追踪资源',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
             )
           else
             LayoutBuilder(

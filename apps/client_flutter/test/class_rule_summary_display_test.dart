@@ -1,4 +1,5 @@
 import 'package:dnd_table_client/src/features/characters/domain/class_rule_summary.dart';
+import 'package:dnd_table_client/src/features/characters/domain/dnd5e_rules.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_editor_page.dart';
 import 'package:dnd_table_client/src/features/content/data/local/content_repository.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
@@ -146,6 +147,76 @@ void main() {
         '选择20项：运动、察觉',
       );
     });
+
+    test('skillChoice：optionTags / optionEntryIds 表达候选时不误标"任意技能"', () {
+      // §3.10.2 允许用 tag / entryId 表达候选：候选被限定，只是没有内联名字。
+      // 写成"任选N项（任意技能）"会把"限定候选"说成"随便选"。
+      String? restrictedFor(Map<String, Object?> choice) => ClassRuleSummary.of(
+        _classEntry(
+          'test:class/tagged-skills',
+          rules: {
+            'choices': [choice],
+          },
+        ),
+      ).skillChoice;
+
+      expect(
+        restrictedFor(const {
+          'id': 'x',
+          'optionType': 'skill',
+          'minimum': 2,
+          'maximum': 2,
+          'optionTags': ['skill:stealth'],
+        }),
+        '任选2项（候选由条目规则给出）',
+      );
+      expect(
+        restrictedFor(const {
+          'id': 'x',
+          'optionType': 'skill',
+          'minimum': 3,
+          'maximum': 3,
+          'optionEntryIds': ['test:skill/stealth'],
+        }),
+        '任选3项（候选由条目规则给出）',
+      );
+      // 显式空的内联 options + 没有 tag/entryId 才是真正的"任意技能"。
+      expect(
+        restrictedFor(const {
+          'id': 'x',
+          'optionType': 'skill',
+          'minimum': 1,
+          'maximum': 1,
+          'options': <Object?>[],
+        }),
+        '任选1项（任意技能）',
+      );
+    });
+
+    test('fieldValues：key 与记录成员唯一映射，未知 key 不产生条目', () {
+      final declared = ClassRuleSummary.of(_declaredOnly);
+      final values = ClassRuleSummary.fieldValues(
+        declared,
+        fields: const ['hitDie', 'savingThrows', 'skills', 'primaryAbility'],
+      );
+
+      expect(values, {
+        'hitDie': 'd10',
+        'savingThrows': '力量与体质',
+        'skills': '选择2项：运动、察觉',
+      });
+      expect(values.containsKey('primaryAbility'), isFalse);
+
+      // 未声明时 key 仍保留（值为 null）：调用方据此不回退 `structured`。
+      final bare = _classEntry('test:class/bare');
+      expect(
+        ClassRuleSummary.fieldValues(
+          ClassRuleSummary.of(bare),
+          fields: const ['hitDie', 'savingThrows', 'skills'],
+        ),
+        {'hitDie': null, 'savingThrows': null, 'skills': null},
+      );
+    });
   });
 
   group('创建向导职业摘要', () {
@@ -243,6 +314,49 @@ void main() {
       expect(find.text('豁免熟练'), findsNothing);
       expect(find.text('技能选择'), findsNothing);
     });
+
+    testWidgets('旧散文 hitDie / savingThrows / skills 一律输给 classRules', (
+      tester,
+    ) async {
+      // 同一个条目同时带旧散文键与新契约 classRules：展示层只能读 classRules，
+      // 否则会出现"卡片显示 d12 / 感知与魅力，引擎按 d10 / 力量与体质算"。
+      final entry = _classEntry(
+        'test:class/legacy-prose',
+        structured: const {
+          'primaryAbility': '力量或敏捷',
+          'hitDie': 'd12',
+          'savingThrows': '感知与魅力',
+          'skills': '任选 4 项',
+          'classRules': {
+            'hitDie': 10,
+            'savingThrowAbilities': ['str', 'con'],
+          },
+        },
+        rules: const {
+          'choices': [
+            {
+              'id': 'skills',
+              'label': '选择两项技能熟练',
+              'optionType': 'skill',
+              'minimum': 2,
+              'maximum': 2,
+              'options': ['运动', '察觉'],
+            },
+          ],
+        },
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(home: Scaffold(body: ContentMetadataView(entry: entry))),
+      );
+
+      expect(find.text('d10'), findsOneWidget);
+      expect(find.text('力量与体质'), findsOneWidget);
+      expect(find.text('选择2项：运动、察觉'), findsOneWidget);
+      expect(find.text('d12'), findsNothing);
+      expect(find.text('感知与魅力'), findsNothing);
+      expect(find.text('任选 4 项'), findsNothing);
+    });
   });
 
   group('生命骰 facet（计数与筛选共用同一派生点）', () {
@@ -275,6 +389,77 @@ void main() {
       expect(
         normalizedContentFacetValues(bare, 'hitDie', bare.structured['hitDie']),
         isEmpty,
+      );
+    });
+
+    test('旧顶层 structured.hitDie 不产生 facet 值（绝不回退 raw）', () {
+      // 非内置 slug 的职业包只带旧散文 `structured.hitDie` 不带 `classRules.hitDie`
+      // 时导入器只给 warning、包仍 valid。facet 若回退 raw 就会"按 10 / d12 筛得
+      // 出来、卡片上却没有这一行"（契约要求条目声明 ∪ 档案，未声明即不显示）。
+      final legacy = _classEntry(
+        'test:class/legacy-die',
+        structured: const {'hitDie': 10},
+      );
+      expect(Dnd5eRules.profile.classRules('legacy-die'), isNull);
+      expect(
+        normalizedContentFacetValues(legacy, 'hitDie', legacy.structured['hitDie']),
+        isEmpty,
+        reason: 'classRules 未声明 → 空集，raw structured.hitDie 一律不读',
+      );
+      expect(
+        contentEntryMatchesFacets(legacy, const {
+          'hitDie': {'10'},
+        }),
+        isFalse,
+      );
+      expect(
+        contentEntryMatchesFacets(legacy, const {
+          'hitDie': {'d10'},
+        }),
+        isFalse,
+      );
+
+      final legacyString = _classEntry(
+        'test:class/legacy-die-string',
+        structured: const {'hitDie': 'd12'},
+      );
+      expect(
+        normalizedContentFacetValues(
+          legacyString,
+          'hitDie',
+          legacyString.structured['hitDie'],
+        ),
+        isEmpty,
+        reason: '旧散文 "d12" 同样不得成为 facet 值',
+      );
+    });
+
+    test('classRules 与旧 structured.hitDie 同时存在时以 classRules 为准', () {
+      // 冲突值：facet 只能出现 d10，不能同时出现整数旧值 '12' 与散文 'd12'。
+      final conflict = _classEntry(
+        'test:class/conflict-die',
+        structured: const {
+          'hitDie': 12,
+          'classRules': {'hitDie': 10},
+        },
+      );
+      final values = normalizedContentFacetValues(
+        conflict,
+        'hitDie',
+        conflict.structured['hitDie'],
+      );
+      expect(values, {'d10'});
+      expect(
+        contentEntryMatchesFacets(conflict, const {
+          'hitDie': {'d10'},
+        }),
+        isTrue,
+      );
+      expect(
+        contentEntryMatchesFacets(conflict, const {
+          'hitDie': {'12'},
+        }),
+        isFalse,
       );
     });
   });

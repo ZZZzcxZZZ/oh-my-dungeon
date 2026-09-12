@@ -717,6 +717,43 @@ void main() {
       expect(error.message, contains('luck'));
     });
 
+    test('kind: ability 的合法 target 放行（档案 abilities 内）', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {'hitDie': 10},
+            },
+            rules: {
+              'grants': [
+                {
+                  'id': 'asi',
+                  'kind': 'ability',
+                  'label': '属性提升：智力',
+                  'target': 'int',
+                  'value': 1,
+                },
+                {
+                  'id': 'asi2',
+                  'kind': 'ability',
+                  'label': '属性提升：魅力',
+                  'target': 'cha',
+                  'value': 1,
+                },
+              ],
+            },
+          ),
+        ),
+      );
+      // 合法 target 必须放行：判据是档案 abilities，不是"只要写了 target 就报错"。
+      expect(report.valid, isTrue, reason: report.errors.toString());
+      expect(
+        report.errors.where((e) => e.message.contains('unknownAbility')),
+        isEmpty,
+      );
+    });
+
     test('formula ability:xyz 的键不在档案 abilities → unknownAbility', () async {
       final report = await importer.previewJson(
         packageJson(
@@ -903,8 +940,70 @@ void main() {
       expect(warning.message, contains('5 级'));
     });
 
-    test('资源表全程为正 → 不触发 zeroLevelResource', () async {
+    test('表的范围整个落在 startsAtLevel 之前但沿用值为 0 → 也报 zeroLevelResource', () async {
+      // `{"1": 0}` + startsAtLevel 3：表只声明 1 级（在 3 之前，循环看不到），
+      // 但 §3.1 的"高于最后声明等级沿用最后声明值"让 3 级起上限恒为 0
+      // （运行期 resourcesAt 会产出上限 0 的资源）。漏报这条 warning 等于
+      // 让作者看不到"资源永远为 0"。
       final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {
+                'hitDie': 10,
+                'resources': [
+                  {
+                    'id': 'focus',
+                    'name': '专注',
+                    'recovery': 'longRest',
+                    'startsAtLevel': 3,
+                    'maximum': {
+                      'table': {'1': 0},
+                    },
+                  },
+                ],
+              },
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+      final warning = report.warnings.singleWhere(
+        (w) => w.message.contains('zeroLevelResource'),
+      );
+      expect(warning.message, contains('3 级'));
+    });
+
+    test('表范围在 startsAtLevel 之前但沿用值为正 → 不触发', () async {
+      final report = await importer.previewJson(
+        packageJson(
+          entry: classEntry(
+            slug: 'homebrew-sage',
+            structured: {
+              'classRules': {
+                'hitDie': 10,
+                'resources': [
+                  {
+                    'id': 'focus',
+                    'name': '专注',
+                    'recovery': 'longRest',
+                    'startsAtLevel': 3,
+                    'maximum': {
+                      'table': {'1': 2},
+                    },
+                  },
+                ],
+              },
+            },
+          ),
+        ),
+      );
+      expect(report.valid, isTrue, reason: report.errors.toString());
+      expect(report.warnings, isEmpty);
+    });
+
+    test('资源表全程为正 → 不触发 zeroLevelResource', () async {      final report = await importer.previewJson(
         packageJson(
           entry: classEntry(
             slug: 'homebrew-sage',

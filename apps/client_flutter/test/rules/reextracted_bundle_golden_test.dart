@@ -14,7 +14,11 @@ import 'package:dnd_table_client/src/features/characters/domain/dnd5e_rules.dart
 import 'package:flutter_test/flutter_test.dart';
 
 /// 相对 `apps/client_flutter`（`flutter test` 的工作目录）的私有包路径。
-const _bundlePath = '../../private-imports/phb-2024-v2-bundle.json';
+const _defaultBundlePath = '../../private-imports/phb-2024-v2-bundle.json';
+
+/// 覆盖私有包路径（`flutter test --dart-define=CONTENT_PACKAGE_PATH=...`），
+/// 与 `test/tooling/private_content_package_validation_test.dart` 同名同义。
+const _bundlePathOverride = String.fromEnvironment('CONTENT_PACKAGE_PATH');
 
 const _levels = <int>[1, 5, 11, 20];
 
@@ -140,13 +144,43 @@ const _removedTopLevelKeys = <String>[
 ];
 
 void main() {
-  final bundleFile = File(_bundlePath);
+  final bundlePath = _bundlePathOverride.isEmpty
+      ? _defaultBundlePath
+      : _bundlePathOverride;
+  final bundleFile = File(bundlePath);
   if (!bundleFile.existsSync()) {
-    // 私有包不存在时不校验（裸检出必须能跑）：显式 skip 占位，避免"零用例"。
+    // `private-imports/` 被 Git 忽略，裸检出必须能跑，所以路径不存在时只注册
+    // 显式 skip。但"文件不存在"与"被改名 / 重提取成别的文件名"必须分得开：
+    // 目录里只要还有别的 bundle（或用户显式指定了 CONTENT_PACKAGE_PATH），
+    // 静默绿就是假绿——直接 fail 说清"预期哪条路径不存在"。
+    final overrideProvided = _bundlePathOverride.isNotEmpty;
+    final privateImports = Directory('../../private-imports');
+    final siblingBundles =
+        privateImports.existsSync()
+            ? privateImports
+                  .listSync()
+                  .whereType<File>()
+                  .map((file) => file.path)
+                  .where((path) => path.endsWith('bundle.json'))
+                  .toList(growable: false)
+            : const <String>[];
+    if (overrideProvided || siblingBundles.isNotEmpty) {
+      test('私有重提取 bundle 路径必须精确存在（不得被改名后静默跳过）', () {
+        fail(
+          '预期路径不存在：$bundlePath'
+          '${overrideProvided ? '（来自 CONTENT_PACKAGE_PATH）' : ''}；'
+          'private-imports/ 里现有 bundle：'
+          '${siblingBundles.isEmpty ? '（无）' : siblingBundles.join('、')}。'
+          '请核对文件是否被改名/重提取，或用 '
+          '--dart-define=CONTENT_PACKAGE_PATH=<path> 指定正确路径。',
+        );
+      });
+      return;
+    }
     test(
       '私有重提取 bundle 不存在，跳过金标校验',
       () {},
-      skip: '未找到 $_bundlePath（私有包被 Git 忽略）',
+      skip: '未找到 $bundlePath（私有包被 Git 忽略）',
     );
     return;
   }

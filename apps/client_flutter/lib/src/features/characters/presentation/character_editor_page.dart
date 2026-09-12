@@ -2495,19 +2495,21 @@ class _DetailsStep extends StatelessWidget {
 /// （`hitDie` / `savingThrows` / `skills`）一律经 [ClassRuleSummary] 这唯一口径。
 ///
 /// 规则值未声明（`null`）时不产生该行——不回退旧散文键、不显示 `0`。
+/// "key → 规则值"的成员映射只有一处实现（[ClassRuleSummary.fieldValues]）：
+/// 这里不重列记录成员名。
 List<({String field, String value})> _classSummaryItems(
   ContentEntry? entry,
   List<String> fields,
 ) {
-  final rules = ClassRuleSummary.of(entry);
+  final classFields = ClassRuleSummary.fieldValues(
+    ClassRuleSummary.of(entry),
+    fields: fields,
+  );
   final items = <({String field, String value})>[];
   for (final field in fields) {
-    final value = switch (field) {
-      'hitDie' => rules.hitDie,
-      'savingThrows' => rules.savingThrows,
-      'skills' => rules.skillChoice,
-      _ => _structuredFieldText(entry?.structured[field]),
-    };
+    final value = classFields.containsKey(field)
+        ? classFields[field]
+        : _structuredFieldText(entry?.structured[field]);
     if (value != null && value.isNotEmpty) {
       items.add((field: field, value: value));
     }

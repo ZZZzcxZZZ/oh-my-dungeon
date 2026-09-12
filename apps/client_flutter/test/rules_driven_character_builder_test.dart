@@ -151,12 +151,24 @@ void main() {
     expect(featureSnapshot['body'], isNotEmpty);
   });
 
-  test('uses structured class saves and preserves guided skill choices', () {
-    final fighter = _entry(
-      id: 'test:class/fighter',
+  test('classRules 声明豁免与生命骰，散文键被忽略（非内置 slug）', () {    // 用**非内置** slug（`bulwark` 不在档案里）确保豁免/生命骰不可能来自档案：
+    // 命中内置 slug 时 id 末段会继承档案数值，用例就测不到"条目声明"。
+    // `structured.hitDie` / `structured.savingThrows` 是旧散文键，契约要求忽略，
+    // 这里放一份与 classRules 冲突的值（体质 + 感知 vs 力量 + 体质），
+    // 断言命中的是 classRules。
+    expect(Dnd5eRules.profile.classRules('bulwark'), isNull);
+    final bulwark = _entry(
+      id: 'test:class/bulwark',
       type: 'class',
-      name: '战士',
-      structured: const {'hitDie': 'd10', 'savingThrows': '力量与体质'},
+      name: '壁垒守卫',
+      structured: const {
+        'hitDie': 'd12',
+        'savingThrows': '感知与魅力',
+        'classRules': {
+          'hitDie': 10,
+          'savingThrowAbilities': ['str', 'con'],
+        },
+      },
       rules: const {
         'progression': [
           {
@@ -168,13 +180,13 @@ void main() {
         ],
       },
     );
-    final builder = RulesDrivenCharacterBuilder(entries: {fighter.id: fighter});
+    final builder = RulesDrivenCharacterBuilder(entries: {bulwark.id: bulwark});
 
     final draft = builder.build(
       name: '莱娅',
       build: const CharacterBuild(
         level: 1,
-        selections: {'class': 'test:class/fighter'},
+        selections: {'class': 'test:class/bulwark'},
       ),
       abilities: const {
         'str': 15,
@@ -187,11 +199,69 @@ void main() {
       skillProficiencies: const ['运动', '察觉'],
     );
 
-    expect(draft.saves['str'], isTrue);
+    expect(draft.saves['str'], isTrue, reason: 'classRules.savingThrowAbilities');
     expect(draft.saves['con'], isTrue);
-    expect(draft.saves['dex'], isFalse);
+    expect(draft.saves['wis'], isFalse, reason: '散文 savingThrows 必须被忽略');
+    expect(draft.saves['cha'], isFalse);
     expect(draft.skills['运动'], isTrue);
     expect(draft.skills['察觉'], isTrue);
+  });
+
+  test('kind: ability 的合法 target 生效，非法 target 跳过（判据是档案 abilities）', () {
+    // 导入期按档案 `abilities` 放行 target；运行期必须用同一份集合。
+    // 合法 target（`str`）不加值会让"导入放行、运行期静默丢弃"变成真 bug；
+    // 非法 target（`luck` ≠ 任何档案属性）必须被跳过而不是塞进属性表。
+    expect(Dnd5eRules.profile.abilities, containsAll(<String>['str', 'int']));
+    expect(Dnd5eRules.profile.abilities, isNot(contains('luck')));
+    final classEntry = _entry(
+      id: 'test:class/ascendant',
+      type: 'class',
+      name: 'Ascendant',
+      structured: const {
+        'classRules': {'hitDie': 10},
+      },
+      rules: const {
+        'progression': [
+          {
+            'levels': [1],
+            'grants': [
+              {
+                'id': 'asi-str',
+                'kind': 'ability',
+                'target': 'str',
+                'value': 2,
+                'label': '属性提升：力量 +2',
+              },
+              {
+                'id': 'asi-luck',
+                'kind': 'ability',
+                'target': 'luck',
+                'value': 5,
+                'label': '非法属性',
+              },
+            ],
+          },
+        ],
+      },
+    );
+
+    final draft = RulesDrivenCharacterBuilder(
+      entries: {'test:class/ascendant': classEntry},
+    ).build(
+      name: 'Aria',
+      build: const CharacterBuild(
+        level: 1,
+        selections: {'class': 'test:class/ascendant'},
+      ),
+      abilities: const {'str': 10, 'dex': 10, 'con': 10, 'int': 10},
+    );
+
+    expect(draft.abilities['str'], 12, reason: '合法 target 的 +2 必须生效');
+    expect(
+      draft.abilities.containsKey('luck'),
+      isFalse,
+      reason: '非档案属性不得被塞进属性表',
+    );
   });
   test('persists only rule-approved choices and keeps explicit extras', () {
     final mage = _entry(

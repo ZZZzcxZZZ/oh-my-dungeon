@@ -44,9 +44,43 @@ class DeclaredLevels {
   /// 是否低于最早声明等级（§3.12：该等级未声明）。
   bool isBelow(int level) => max != null && level < min;
 
+  /// 指定等级是否**未声明**（§3.12）：有等级声明但该等级不在范围内。
+  ///
+  /// 与 [isBelow] / [isBeyond] 的差别是"先要求存在声明"：完全没有等级声明
+  /// （[isEmpty]）时返回 `false`。角色卡据此区分"该职业没有随等级变化的表"
+  /// （`isDeclared` 为 true、`max == null`，照实说"暂无法术位"）与"这个等级
+  /// 没声明过"（[UndeclaredLevelNotice] 的等级级文案）。
+  bool undeclares(int level) => !isEmpty && !covers(level);
+
   /// 声明范围文案：`职业声明：1–5 级`；完全没有声明时给显式说明。
   String get rangeLabel =>
       isEmpty ? '该职业未声明任何等级内容' : '职业声明：$min–$max 级';
+
+  /// **范围级**文案（契约 §3.12）：整个职业没有任何可用数值时用哪句话。
+  ///
+  /// 角色卡上的法术位区 / 职业资源区在**没有数值**时有三种情形，三者文案必须分开口径：
+  /// - 职业身份未声明（[isDeclared] == false，职业名解析不到档案）→ [rangeLabel]
+  ///   （"该职业未声明任何等级内容"）：**不知道**这个职业有什么，不能断言成"没有"；
+  /// - 职业身份已声明但确实没有随等级变化的表（`max == null`，rogue / monk 这类）→
+  ///   由调用方给"暂无法术位 / 暂无可追踪资源"：这是关于**该职业**的真实陈述；
+  /// - 有等级声明但当前等级不在范围内 → [UndeclaredLevelNotice] 的等级级文案，
+  ///   由 [detailLabel] 负责，不在本函数职责内。
+  ///
+  /// 返回 `null` = "该职业已声明，没有该内容"（调用方给职业级"暂无"文案）；
+  /// 非 `null` = **范围级**的显式说明。这是范围级文案的**唯一实现**：调用方不得
+  /// 自己拼字符串，也不得把"未声明"退化成"没有"。
+  String? rangeLevelLabel({required bool isDeclared}) =>
+      isDeclared ? null : rangeLabel;
+
+  /// 角色持久化的 `data.classIdentity.declared`（契约 §3.12）。
+  ///
+  /// `false` = 职业名解析不到档案（未重导入的自制职业 / 老存档匹配失败）：
+  /// 界面必须说"未声明"，**不得**说成"该职业没有"。缺少身份块时视为 `true`——
+  /// "没有等级声明"是可比对的既有事实，不是未知。
+  static bool isDeclared(CharacterSheet character) {
+    final identity = character.dataMap['classIdentity'];
+    return !(identity is Map && identity['declared'] == false);
+  }
 
   /// 滑杆下方的"已声明 / 未声明"区间文案（§3.12）：
   /// `已声明 1–5 级 · 6–20 级未声明`。

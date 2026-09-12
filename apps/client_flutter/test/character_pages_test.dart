@@ -2646,8 +2646,8 @@ const _fighterContent = ContentEntry(
 
 /// 与 [_fighterContent] 同样的展示字段，但技能选择改由**新契约**承载：
 /// `rules.choices` 里 `optionType: "skill"` 的内联 `options`。
-/// 旧的中文散文 `structured.skills` 不再被解析，这里保留它只是为了覆盖
-/// 「摘要仍照原样展示 structured 字段」。
+/// 旧的中文散文 `structured.skills` 在夹具里**已经删除**（规则值只在
+/// `structured.classRules`）；这个用例覆盖的是"技能选择在规则摘要里照实展示"。
 final _fighterRulesContent = ContentEntry.fromJson({
   'id': 'content-class-fighter',
   'type': 'class',

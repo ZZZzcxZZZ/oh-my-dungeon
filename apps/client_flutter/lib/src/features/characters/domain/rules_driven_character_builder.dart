@@ -49,11 +49,14 @@ class RulesDrivenCharacterBuilder {
     // `kind: hitPoints` / `classResources` 的 `formula` 则拿**叠加后**的
     // [effectiveAbilities] 求值（下面 `_hitPointGrantBonus` 与
     // `classResourcesFromRules` 传入的正是这份值）。
+    // 属性键集合与 [Dnd5eRules.profile] 的 `abilities` **同源**（§3.1）：
+    // 导入期按档案 `abilities` 放行 `kind: ability` 的 `target`，运行期必须用
+    // 同一份集合，否则"导入放行、运行期静默丢弃"就会悄悄发生。
     final effectiveAbilities = <String, int>{...abilities};
     _abilityGrantBonuses(ledger).forEach((key, value) {
       effectiveAbilities[key] = (effectiveAbilities[key] ?? 10) + value;
     });
-    final saves = {for (final key in Dnd5eRules.abilityLabels.keys) key: false};
+    final saves = {for (final key in Dnd5eRules.profile.abilities) key: false};
     final skills = {for (final skill in Dnd5eRules.skills) skill.name: false};
 
     for (final grant in ledger.grantsOfKind(RuleGrantKind.proficiency)) {
@@ -389,6 +392,12 @@ class RulesDrivenCharacterBuilder {
   /// `kind: ability` 授予的属性加值：`target` 是属性键（档案 `abilities` 之一），
   /// `value` 累加。无 `target` 或非档案属性的授予被跳过（不是属性加值）。
   ///
+  /// 判据是 [Dnd5eRules.profile]`.abilities`，**不是**硬编码的
+  /// [Dnd5eRules.abilityLabels]：`abilityLabels` 只是展示用中文标签（UI 文案）。
+  /// 导入期 `RuleProfileResolver.validateEntryClassRules` 按档案 `abilities`
+  /// 放行 `target`，运行期若改读 `abilityLabels`，只要档案多一个属性键，
+  /// 就会出现"导入放行、运行期静默丢弃加值"。
+  ///
   /// `formula` **不被读取**：§3.5 规定 `kind: ability` 只接受 `value`，
   /// [`ContentPackageImporter`] 在导入期就拒绝 `formula`（含自引用 `ability:<自身
   /// target>` 与链式引用），因为它们让 `baseAbilitiesFrom` 的减法没有精确逆、
@@ -396,10 +405,11 @@ class RulesDrivenCharacterBuilder {
   /// 导入拦不住的（程序化构造）走 `RuleGrantDefinition.fromJson` 的二选一拒绝；
   /// 两者都绕过的极少数情况按 0 处理，与 `_hitPointGrantBonus` 的"不猜"一致。
   Map<String, int> _abilityGrantBonuses(CharacterGrantLedger ledger) {
+    final abilities = Dnd5eRules.profile.abilities;
     final bonuses = <String, int>{};
     for (final grant in ledger.grantsOfKind(RuleGrantKind.ability)) {
       final target = grant.target;
-      if (target == null || !Dnd5eRules.abilityLabels.containsKey(target)) {
+      if (target == null || !abilities.contains(target)) {
         continue;
       }
       final value = grant.value?.toInt() ?? 0;

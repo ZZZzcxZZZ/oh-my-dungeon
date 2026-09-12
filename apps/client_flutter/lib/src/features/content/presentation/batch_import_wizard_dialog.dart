@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../data/import/content_package_importer.dart';
 import '../domain/content_file_picker.dart';
 import '../domain/content_import_report.dart';
+import 'widgets/content_diagnostic_list.dart';
 
 /// Spec §资料库 GUI 增强: 批量导入确认向导. 接收用户一次选择的多个
 /// `.json` / `.dndpack` 文件, 并行生成预览报告, 让用户勾选要导入
@@ -241,48 +242,23 @@ class _PreviewCard extends StatelessWidget {
                       style: theme.textTheme.bodySmall,
                     ),
                   ] else ...[
-                    for (final error in report.errors.take(3))
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 1),
-                        child: Text(
-                          '${error.path}: ${error.message}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.error,
-                          ),
-                        ),
-                      ),
+                    // 与单文件预览对话框**共用**同一个诊断组件：error / warning
+                    // 的图标、间距、字号在两个入口只有一份渲染参数；超过
+                    // `maxVisible` 的部分用"还有 N 条"说明，不静默截断。
+                    ContentDiagnosticList(
+                      diagnostics: report.errors,
+                      keyPrefix: 'batch-import-error-${report.packageId}',
+                    ),
                   ],
                   // 规则契约的 warning 级诊断（§5.3）：不阻断导入，但必须可见——
                   // 单文件预览对话框已经展示，多文件路径不能把它们静默丢掉。
                   if (report.warnings.isNotEmpty) ...[
                     const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.info_outline,
-                          size: 14,
-                          color: colorScheme.tertiary,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '提示（不阻断导入）',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.tertiary,
-                          ),
-                        ),
-                      ],
+                    ContentDiagnosticList(
+                      diagnostics: report.warnings,
+                      warning: true,
+                      keyPrefix: 'batch-import-warning-${report.packageId}',
                     ),
-                    for (final warning in report.warnings.take(3))
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 1),
-                        child: Text(
-                          '${warning.path}: ${warning.message}',
-                          key: Key('batch-import-warning-${report.packageId}'),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.tertiary,
-                          ),
-                        ),
-                      ),
                   ],
                 ],
               ),

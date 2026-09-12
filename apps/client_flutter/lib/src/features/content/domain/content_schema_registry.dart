@@ -119,19 +119,25 @@ class ContentSchemaRegistry {
   /// facet 值归一化。facet **计数**与**筛选**共用这一个函数，因此任何派生
   /// 规则只能写在这里。
   ///
-  /// 新契约不再写顶层 `structured.hitDie`，职业生命骰只在
-  /// `structured.classRules.hitDie`；因此 `class` + `hitDie` 且 `value == null`
-  /// 时经 [ClassRuleSummary] 从规则值派生 `d<N>` 字符串（与旧数据取值一致）。
-  /// 其余字段 `value == null` 仍视为"未声明"。
+  /// 职业生命骰是**唯一**的派生字段（新契约只在
+  /// `structured.classRules.hitDie` 声明生命骰）：无论 `value` 是否存在，都经
+  /// [ClassRuleSummary] 从规则值派生 `d<N>`。顶层 `structured.hitDie`（旧散文
+  /// `'d10'`、整数 `10`、空串 `''`）**一律不读**——否则会出现"筛得出来、
+  /// 卡片上没有"（展示层按契约不读这一行）。
+  ///
+  /// 其余字段照旧：`value == null` 视为"未声明"（空集），非 null 走 schema 归一化。
   Set<String> normalizeFacetValues(
     String type,
     String field,
     Object? value, {
-    ContentEntry? entry,
+    required ContentEntry entry,
   }) {
-    if (value == null) {
-      return _derivedFacetValues(type, field, entry);
+    if (type == 'class' && field == 'hitDie') {
+      // 唯一派生点：未声明（`hitDie == null`）→ 空集，**绝不回退** raw。
+      final hitDie = ClassRuleSummary.of(entry).hitDie;
+      return hitDie == null ? const {} : <String>{hitDie};
     }
+    if (value == null) return const {};
     final schema = schemaFor(type);
     final definition = schema.fields
         .where((candidate) => candidate.key == field)
@@ -148,20 +154,6 @@ class ContentSchemaRegistry {
       return normalized.map((item) => '$item').toSet();
     }
     return <String>{if (normalized != null) '$normalized'};
-  }
-
-  /// `value == null`（旧键缺失）时的派生值。
-  ///
-  /// 目前只有一处：职业生命骰从 `classRules`（条目 ∪ 档案）派生，口径与
-  /// [ClassRuleSummary] 完全一致——**唯一派生点**，facet 计数与筛选同源。
-  Set<String> _derivedFacetValues(
-    String type,
-    String field,
-    ContentEntry? entry,
-  ) {
-    if (type != 'class' || field != 'hitDie' || entry == null) return const {};
-    final hitDie = ClassRuleSummary.of(entry).hitDie;
-    return hitDie == null ? const {} : <String>{hitDie};
   }
 
   ContentSchemaValidationResult validateForCreation({
@@ -362,9 +354,23 @@ const _schemas = <ContentTypeSchema>[
   ContentTypeSchema(
     type: 'class',
     label: '职业',
+    // 这四项是**显示字段**，也是本类型字段列表的**唯一来源**
+    // （`content_type_registry.dart` 里那份手工副本已删）。
+    //
+    // `primaryAbility` 读 `structured`；后三项是 §3.9 契约的职业规则值，
+    // **`structured` 的同名散文键一律不读**：值只由 [ClassRuleSummary] 从
+    // `structured.classRules` 派生（展示层经 `_metadataRows` 调用它）。
+    // 登记它们只为让"职业卡片显示哪些行"与字段列表同源；旧散文
+    // `structured.savingThrows` / `structured.skills` 只会在
+    // `normalizeStructured` 里被归一化保存，**没有任何展示或筛选读取**。
+    //
+    // 只有 `primaryAbility` 是 `filterable`：职业的 facet **不经过**
+    // `schema.fields`，资料库显式请求 `['hitDie']`，由 [normalizeFacetValues]
+    // 走规则口径（不回退 `structured`）。`hitDie` 标 false 是刻意的：
+    // 它是展示行 + 派生 facet，不是可以直接读 `structured` 的字段。
     fields: [
       ContentFieldSchema(key: 'primaryAbility', label: '主属性', filterable: true),
-      ContentFieldSchema(key: 'hitDie', label: '生命骰', filterable: true),
+      ContentFieldSchema(key: 'hitDie', label: '生命骰'),
       ContentFieldSchema(key: 'savingThrows', label: '豁免熟练'),
       ContentFieldSchema(key: 'skills', label: '技能选择'),
     ],

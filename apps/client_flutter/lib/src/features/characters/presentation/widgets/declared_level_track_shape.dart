@@ -69,8 +69,12 @@ class DeclaredLevelTrackShape extends SliderTrackShape
     required TextDirection textDirection,
   }) {
     // 与默认轨道形状同一语义：厚度 <= 0 时轨道没有可画的东西。
-    // `trackHeight` 为 null 属于主题不合法，交给 `getPreferredRect` 的契约断言，
-    // 不在这里静默画一条空轨道。
+    //
+    // `trackHeight` 为 null **不在这里兜底**：`getPreferredRect` 内部用的是
+    // `sliderTheme.trackHeight!`（SDK 的非空断言）+ `assert(...)`，缺省主题由
+    // `SliderTheme.of` 补齐，因此 null 只可能来自自定义主题写错——那种情况按
+    // 契约**大声失败**（SDK 断言），不在这里静默画一条空轨道。
+    // 本 guard 只对"非 null 且 <= 0"生效。
     final trackHeight = sliderTheme.trackHeight;
     if (trackHeight != null && trackHeight <= 0) return;
     final trackRect = getPreferredRect(

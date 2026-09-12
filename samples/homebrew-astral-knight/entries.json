@@ -160,7 +160,8 @@
                 "察觉",
                 "宗教"
               ],
-              "builderStep": "proficiencies"
+              "builderStep": "proficiencies",
+              "group": "技能"
             },
             {
               "id": "fighting-style",
@@ -202,7 +203,9 @@
                 "spell-list:astral-knight"
               ],
               "maximumOptionLevel": 0,
-              "builderStep": "spells"
+              "builderStep": "spells",
+              "group": "1 级法术",
+              "help": "戏法自星界骑士法术列表选择，不占准备上限。"
             }
           ]
         },
@@ -228,7 +231,10 @@
               "optionTags": [
                 "astral-invocation"
               ],
-              "builderStep": "class"
+              "builderStep": "class",
+              "repeatable": true,
+              "group": "2 级祈唤",
+              "help": "同一祈唤可以重复选取，最多 2 次。"
             }
           ]
         },
@@ -1196,6 +1202,126 @@
         "gp": 100,
         "pp": 0
       }
+    }
+  },
+  {
+    "id": "astral-knight:spell/astral-spark",
+    "type": "spell",
+    "slug": "astral-spark",
+    "name": "星界火花",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "星界能量在你掌心凝成一点冷焰，扑向目标。"
+      }
+    ],
+    "aliases": [],
+    "summary": "戏法 塑能 · 星界火花",
+    "tags": [
+      "塑能",
+      "spell-list:astral-knight"
+    ],
+    "structured": {
+      "level": 0,
+      "school": "塑能",
+      "classes": [
+        "星界骑士"
+      ],
+      "castingTime": "动作",
+      "range": "60 尺",
+      "components": "V、S",
+      "duration": "立即"
+    }
+  },
+  {
+    "id": "astral-knight:spell/astral-guide",
+    "type": "spell",
+    "slug": "astral-guide",
+    "name": "星界指引",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "星光在你眼前铺出一条短暂的通路，指引下一步。"
+      }
+    ],
+    "aliases": [],
+    "summary": "戏法 预言 · 星界指引",
+    "tags": [
+      "预言",
+      "spell-list:astral-knight"
+    ],
+    "structured": {
+      "level": 0,
+      "school": "预言",
+      "classes": [
+        "星界骑士"
+      ],
+      "castingTime": "动作",
+      "range": "触碰",
+      "components": "V、S",
+      "duration": "1 轮"
+    }
+  },
+  {
+    "id": "astral-knight:spell/astral-shield",
+    "type": "spell",
+    "slug": "astral-shield",
+    "name": "星界护盾",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "一层薄薄的星界壁垒悬在你身前，替你挡住来势。"
+      }
+    ],
+    "aliases": [],
+    "summary": "1 环 防护 · 星界护盾",
+    "tags": [
+      "防护",
+      "spell-list:astral-knight"
+    ],
+    "structured": {
+      "level": 1,
+      "school": "防护",
+      "classes": [
+        "星界骑士"
+      ],
+      "castingTime": "附赠动作",
+      "range": "自身",
+      "components": "V、S",
+      "duration": "1 轮"
+    }
+  },
+  {
+    "id": "astral-knight:spell/astral-step",
+    "type": "spell",
+    "slug": "astral-step",
+    "name": "星界疾步",
+    "revision": 1,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "你踏入星界一瞬，从原地消失又出现在不远处。"
+      }
+    ],
+    "aliases": [],
+    "summary": "1 环 变化 · 星界疾步",
+    "tags": [
+      "变化",
+      "spell-list:astral-knight"
+    ],
+    "structured": {
+      "level": 1,
+      "school": "变化",
+      "classes": [
+        "星界骑士"
+      ],
+      "castingTime": "附赠动作",
+      "range": "30 尺",
+      "components": "V",
+      "duration": "立即"
     }
   }
 ]

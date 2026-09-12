@@ -187,11 +187,6 @@ class ResolvedClassRules {
     return progression.slots?.at(level) ?? const {};
   }
 
-  /// 契约魔法法术位的环阶：与 [maxSpellLevel] 走同一套两级取值（§3.3、§3.12）——
-  /// `mode == 'none'`、低于原型 `minimumLevel`、两侧都未声明时都是 null。
-  int? pactSlotLevel(int level) =>
-      _pick(level, (c) => c.slotLevel, (p) => p.slotLevel);
-
   /// 已准备/已知法术上限：**只看职业自身**，原型不提供这一列（§3.1、§3.3）。
   /// 未声明返回 null，不回退原型、不猜。
   int? preparedLimit(int level) {

@@ -1,4 +1,5 @@
 import 'character_content_reference.dart';
+import 'declared_levels.dart';
 import 'dnd5e_rules.dart';
 import '../../rules/domain/character_build.dart';
 
@@ -141,21 +142,21 @@ class CharacterSheet {
 
   /// 角色卡上的职业资源。优先级：
   /// 1. `data.classResources`（创建时按条目规则快照写下的显式清单）；
-  /// 2. `data.classIdentity.slug` 存在时，用条目身份重新解析规则档案
-  ///    （老角色回填后也能算出资源）；
-  /// 3. 没有职业身份 / 项目器标记"未声明"（`declared == false`）→ 空列表。
+  /// 2. 职业身份已声明（[DeclaredLevels.isDeclared]）且 `slug` 非空时，用条目身份
+  ///    重新解析规则档案（老角色回填后也能算出资源）；
+  /// 3. 项目器标记"未声明"（`declared == false`）/ 没有身份块 / `slug` 为空 → 空列表。
   ///
   /// 第 2 条**必须**传 [abilityMap]：`formula: ability:<key>` 的上限由属性决定
   /// （如 CHA 16 的诗人激励 = 3）。
   List<Dnd5eClassResource> get classResources {
     final explicit = _explicitClassResources();
     if (explicit.isNotEmpty) return explicit;
-    final identity = dataMap['classIdentity'];
-    if (identity is! Map || identity['declared'] == false) return const [];
-    final slug = '${identity['slug'] ?? ''}'.trim();
+    if (!DeclaredLevels.isDeclared(this)) return const [];
+    final identity = _classIdentity();
+    final slug = '${identity?['slug'] ?? ''}'.trim();
     if (slug.isEmpty) return const [];
     final rules = Dnd5eRules.resolveClassRules(
-      entryId: identity['entryId'] as String?,
+      entryId: identity?['entryId'] as String?,
       classSummary: classSummary,
     );
     return Dnd5eRules.classResourcesFromRules(
@@ -168,20 +169,33 @@ class CharacterSheet {
     );
   }
 
+  /// `data.classIdentity` 块；没有声明时返回 null。
+  Map<Object?, Object?>? _classIdentity() {
+    final identity = dataMap['classIdentity'];
+    return identity is Map ? identity : null;
+  }
+
   List<Dnd5eClassResource> _explicitClassResources() {
-    return _asList(dataMap['classResources'])
-        .map((item) => _asMap(item))
-        .where((item) => item['id'] != null && item['name'] != null)
-        .map(
-          (item) => Dnd5eClassResource(
-            id: '${item['id']}',
-            name: '${item['name']}',
-            maximum: _intValue(item['maximum']),
-            recovery: _resourceRecovery(item['recovery']),
-          ),
-        )
-        .where((item) => item.maximum > 0)
-        .toList(growable: false);
+    final resources = <Dnd5eClassResource>[];
+    for (final raw in _asList(dataMap['classResources'])) {
+      final item = _asMap(raw);
+      final id = item['id'];
+      final name = item['name'];
+      final maximum = item['maximum'];
+      if (id == null || name == null) continue;
+      // §3.12：表里**显式写 0** 表示"存在但上限为 0"，必须保留；只有"未声明上限"
+      // （键缺失或不是数字）才丢弃。写入路径保留显式 0，读取侧丢掉会造成往返不一致。
+      if (maximum is! num) continue;
+      resources.add(
+        Dnd5eClassResource(
+          id: '$id',
+          name: '$name',
+          maximum: maximum.toInt(),
+          recovery: _resourceRecovery(item['recovery']),
+        ),
+      );
+    }
+    return List<Dnd5eClassResource>.unmodifiable(resources);
   }
 
   List<String> get spellRefs {

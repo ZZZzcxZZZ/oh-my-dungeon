@@ -6,7 +6,9 @@ import 'package:dnd_table_client/src/features/rules/domain/rule_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// 任务 8：`savingThrowAbilities` / `hitDie` / `preparedSpellLimit` 三个旧签名
-/// 已随过渡 shim 删除，规则数值一律经条目标识走 [Dnd5eRules.resolveClassRules]。
+/// 已随过渡 shim 删除（`preparedSpellLimit` 的最后调用方已迁移），规则数值一律经
+/// 条目标识走 [Dnd5eRules.resolveClassRules]；准备上限现在读
+/// `ResolvedClassRules.preparedLimit`（下方用例覆盖同一语义）。
 ResolvedClassRules _rulesFor(ContentEntry? entry) {
   if (entry == null) {
     return Dnd5eRules.resolveClassRules(entryId: null, classSummary: '');
@@ -190,7 +192,7 @@ void main() {
     );
   });
 
-  test('preparedSpellLimit 只读职业自身的 prepared 表（含短数组向上沿用）', () {
+  test('preparedLimit 只读职业自身的 prepared 表（含短数组向上沿用）', () {
     const entry = ContentEntry(
       id: 'test:class/astral',
       type: 'class',
@@ -216,7 +218,7 @@ void main() {
     expect(rules.preparedLimit(9), 5, reason: '短数组向上沿用');
   });
 
-  test('preparedSpellLimit 不再看 preparedSpellcasting 开关与散文', () {
+  test('preparedLimit 不再看 preparedSpellcasting 开关与散文', () {
     const declared = ContentEntry(
       id: 'test:class/astral',
       type: 'class',
@@ -238,7 +240,7 @@ void main() {
     );
   });
 
-  test('preparedSpellLimit 读内置档案的 prepared 表（按 slug 精确对齐）', () {
+  test('preparedLimit 读内置档案的 prepared 表（按 slug 精确对齐）', () {
     const entry = ContentEntry(
       id: 'test:class/cleric',
       type: 'class',

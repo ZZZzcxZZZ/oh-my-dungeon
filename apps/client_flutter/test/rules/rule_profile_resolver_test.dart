@@ -810,6 +810,75 @@ void main() {
       expect(profile.classRules('nope'), isNull);
     });
 
+    group('classAliases（§3.6 档案补齐的别名表）', () {
+      test('合法别名：键与 slug 都归一为小写，写入 profile.aliases', () {
+        final raw = archive()
+          ..['classAliases'] = {'野蛮人': 'BARBARIAN', 'Brute': 'barbarian'};
+        final result = RuleProfileResolver.resolveBuiltin(raw);
+        expect(result.errors, isEmpty);
+        final profile = result.profile!;
+        expect(profile.aliases, {'野蛮人': 'barbarian', 'brute': 'barbarian'});
+        // 别名经 `classRules` 回退命中：老角色的散文展示名也能解析到规则。
+        expect(profile.classRules('野蛮人')!.hitDie, 12);
+        expect(profile.classRules('  Brute  ')!.hitDie, 12);
+      });
+
+      test('classAliases 不是对象 → invalidTable 并整包阻断', () {
+        final result = RuleProfileResolver.resolveBuiltin(
+          archive()..['classAliases'] = <Object?>['野蛮人', 'barbarian'],
+        );
+        expect(result.profile, isNull);
+        expect(result.errors.single.code, 'invalidTable');
+        expect(result.errors.single.path, r'$.classAliases');
+        expect(result.errors.single.severity, RuleSeverity.error);
+      });
+
+      test('别名键或 slug 为空 → invalidTable，path 精确到该别名', () {
+        final cases = <(String, Map<String, Object?>)>[
+          ('别名键为空', {'   ': 'barbarian'}),
+          ('slug 为空', {'brute': '   '}),
+          ('slug 不是字符串', {'brute': 12}),
+        ];
+        for (final (label, aliases) in cases) {
+          final result = RuleProfileResolver.resolveBuiltin(
+            archive()..['classAliases'] = aliases,
+          );
+          expect(result.profile, isNull, reason: label);
+          expect(result.errors.single.code, 'invalidTable', reason: label);
+          expect(
+            result.errors.single.path,
+            '\$.classAliases.${aliases.keys.single}',
+            reason: label,
+          );
+          expect(result.errors.single.severity, RuleSeverity.error);
+        }
+      });
+
+      test('别名指向不存在的 slug → invalidTable，消息带该 slug', () {
+        final result = RuleProfileResolver.resolveBuiltin(
+          archive()..['classAliases'] = {'圣武士': 'paladin'},
+        );
+        expect(result.profile, isNull);
+        expect(result.errors.single.code, 'invalidTable');
+        expect(result.errors.single.path, r'$.classAliases.圣武士');
+        expect(result.errors.single.message, contains('paladin'));
+        expect(result.errors.single.severity, RuleSeverity.error);
+      });
+
+      test('classAliases 缺省或为空对象都是合法（可选节）', () {
+        expect(
+          RuleProfileResolver.resolveBuiltin(archive()).profile!.aliases,
+          isEmpty,
+        );
+        expect(
+          RuleProfileResolver.resolveBuiltin(
+            archive()..['classAliases'] = <String, Object?>{},
+          ).profile!.aliases,
+          isEmpty,
+        );
+      });
+    });
+
     group('原型 slots 模板压缩编码（§3.1 唯一展开点）', () {
       // 直接读真实内置档案喂 `resolveBuiltin`——不经过 `RuleProfileStore`，
       // 守住"展开发生在解析器里"（数据层只读资产）。
@@ -967,6 +1036,54 @@ void main() {
                 <Object?>[1, 2],
               ],
               'slotLevel': [3],
+            },
+          ),
+          (
+            'pact 级数 > 20',
+            'pact',
+            {
+              'slots': List.generate(21, (_) => <Object?>[1]),
+              'slotLevel': List.filled(20, 1),
+            },
+          ),
+          (
+            'pact 计数为负数',
+            'pact',
+            {
+              'slots': [
+                <Object?>[-1],
+              ],
+              'slotLevel': [1],
+            },
+          ),
+          (
+            'pact 计数非整数',
+            'pact',
+            {
+              'slots': [
+                <Object?>[2.5],
+              ],
+              'slotLevel': [1],
+            },
+          ),
+          (
+            'pact 的 slotLevel 越界（> 9）',
+            'pact',
+            {
+              'slots': [
+                <Object?>[2],
+              ],
+              'slotLevel': [10],
+            },
+          ),
+          (
+            'pact 的 slotLevel 越界（< 1）',
+            'pact',
+            {
+              'slots': [
+                <Object?>[2],
+              ],
+              'slotLevel': [0],
             },
           ),
         ];
@@ -1233,7 +1350,7 @@ void main() {
       expect(third.maxSpellLevel(5), 4, reason: '自身已声明 → 用自身值');
     });
 
-    test('pactSlotLevel：none / 低于 minimumLevel / 正常三态都走统一守卫（§3.3）', () {
+    test('maxSpellLevel：none / 低于 minimumLevel / 正常三态都走统一守卫（§3.3）', () {
       final profile = RuleProfileResolver.resolveBuiltin(archive()).profile!;
       ResolvedClassRules withMode(String mode) =>
           RuleProfileResolver.resolveClassRules(
@@ -1253,18 +1370,21 @@ void main() {
           );
 
       expect(
-        withMode('none').pactSlotLevel(5),
+        withMode('none').maxSpellLevel(5),
         isNull,
-        reason: 'mode none → 契约法术位不存在（无守卫的旧实现会回退原型）',
+        reason: 'mode none → 最高环阶不存在（无守卫的旧实现会回退原型）',
       );
       expect(
-        withMode('prepared').pactSlotLevel(2),
+        withMode('prepared').maxSpellLevel(2),
         isNull,
-        reason: '低于原型 minimumLevel（原型 slotLevel 表本身 1 级就有值）',
+        reason: '低于原型 minimumLevel（原型表本身 1 级就有值）',
       );
-      expect(withMode('prepared').pactSlotLevel(3), 2);
-      expect(withMode('prepared').pactSlotLevel(5), 3);
-      expect(withMode('prepared').pactSlotLevel(9), 3, reason: '高于最后声明沿用');
+      expect(
+        withMode('prepared').maxSpellLevel(3),
+        1,
+        reason: '达到 minimumLevel 后回退原型（fixture 的 pact 表每级都是 1）',
+      );
+      expect(withMode('prepared').maxSpellLevel(9), 1, reason: '高于最后声明沿用');
     });
 
     test('spellcastingAbility：mode none 时不返回属性（§3.6 第 3 步）', () {

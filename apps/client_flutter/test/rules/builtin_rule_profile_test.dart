@@ -394,11 +394,31 @@ void main() {
     expect(skills.map((skill) => skill['name']).toSet(), hasLength(18));
   });
 
-  test('abilityLabels 的键集合与档案 abilities 一致', () {
-    // 这是**结构白名单**（键集合覆盖），不是数值 oracle：属性键由档案声明，
-    // 展示标签少一个键或多一个键都必须在测试里暴露。
-    final abilities = (archive['abilities']! as List).cast<String>().toSet();
-    expect(Dnd5eRules.abilityLabels.keys.toSet(), abilities);
+  test('属性键集合单源：abilityLabels / defaultAbilities 都派生自档案 abilities', () {
+    // 这是**结构白名单**（键集合覆盖 + 顺序），不是数值 oracle：属性键由档案
+    // 声明；标签表只提供文案、缺一个键就必须在 `configure` 时抛错，而不再有
+    // 第二份硬编码的键名单（否则档案扩展后会出现"导入放行、运行期静默丢弃"）。
+    final abilities = (archive['abilities']! as List).cast<String>().toList();
+    expect(
+      Dnd5eRules.abilityLabels.keys.toList(),
+      abilities,
+      reason: 'abilityLabels 的键与顺序都必须派生自档案',
+    );
+    expect(
+      Dnd5eRules.defaultAbilities.keys.toList(),
+      abilities,
+      reason: 'defaultAbilities 的键与顺序都必须派生自档案',
+    );
+    expect(
+      Dnd5eRules.defaultAbilities.values.toSet(),
+      {10},
+      reason: '缺省属性值一律 10',
+    );
+    expect(
+      Dnd5eRules.abilityLabels.values.toSet().length,
+      abilities.length,
+      reason: '中文标签逐键唯一，缺一即不可',
+    );
   });
 
   test('Dnd5eRules.skills 的名字按顺序等于档案 skills[].name', () {

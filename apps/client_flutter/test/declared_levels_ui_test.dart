@@ -205,6 +205,138 @@ void main() {
         '职业声明：1–5 级',
       );
     });
+
+    test('_fromRaw：max 非数字按"没有等级声明"处理（固定既有行为，不新增 error）', () {
+      // 这是**故意固定**当前行为，不是新契约：老存档 / 手改 JSON 里 `max` 可能是
+      // 字符串（"5"）或 null。读取器不抛错、不上报（老存档不该因为一条脏字段
+      // 让角色卡打不开），而是按 `max = null` = "没有等级声明"处理——宁可少显示
+      // 声明范围，也**不**猜成 20 或 1（§3.12：未声明不得变默认值）。
+      final stringMax = DeclaredLevels.fromCharacter(
+        _character(
+          level: 3,
+          classIdentity: const {
+            'slug': 'tester',
+            'declared': true,
+            'declaredLevels': {'min': 1, 'max': '5'},
+          },
+        ),
+      );
+      expect(stringMax.max, isNull);
+      expect(stringMax.isEmpty, isTrue);
+
+      final nullMax = DeclaredLevels.fromCharacter(
+        _character(
+          level: 3,
+          classIdentity: const {
+            'slug': 'tester',
+            'declared': true,
+            'declaredLevels': {'min': 5, 'max': null},
+          },
+        ),
+      );
+      expect(nullMax.max, isNull, reason: '缺省 max = 没有等级声明');
+      expect(nullMax.min, 5, reason: 'min 是数字时照读，不参与 max 的缺省判断');
+      expect(nullMax.isEmpty, isTrue);
+      expect(nullMax.rangeLabel, '该职业未声明任何等级内容');
+    });
+  });
+
+  group('CharacterSheet.classResources 的读取口径', () {
+    CharacterSheet sheet({
+      Map<String, Object?>? classIdentity,
+      List<Map<String, Object?>>? classResources,
+    }) {
+      return CharacterSheet.local(
+        id: 'hero',
+        name: '阿雅',
+        level: 2,
+        classSummary: '测试职业',
+      ).copyWith(
+        abilities: const <String, int>{
+          'str': 16,
+          'dex': 12,
+          'con': 14,
+          'int': 10,
+          'wis': 10,
+          'cha': 8,
+        },
+        data: <String, Object?>{
+          'classIdentity': ?classIdentity,
+          'classResources': ?classResources,
+        },
+      );
+    }
+
+    test('显式 0 = "存在但上限 0"，读取时保留；只有未声明上限才丢弃', () {
+      // §3.12：写入路径（`classResourcesFromRules`）保留显式 0，读取侧丢掉会造成
+      // 往返不一致——角色卡上"这次休息不能恢复"的资源会凭空消失。
+      final resources = sheet(
+        classResources: const [
+          {'id': 'zero', 'name': '零次资源', 'maximum': 0, 'recovery': 'longRest'},
+          {
+            'id': 'three',
+            'name': '三次资源',
+            'maximum': 3,
+            'recovery': 'shortRest',
+          },
+          {'id': 'undeclared', 'name': '未声明上限'},
+        ],
+      ).classResources;
+
+      expect(
+        resources.map((resource) => resource.id).toList(),
+        ['zero', 'three'],
+        reason: '未声明 maximum 的条目丢弃；显式 0 保留',
+      );
+      expect(resources.first.maximum, 0);
+      expect(resources.last.maximum, 3);
+    });
+
+    test('有 identity 但 slug 为空 → 空列表（不拿展示名瞎猜职业）', () {
+      expect(
+        sheet(
+          classIdentity: const {
+            'entryId': 'test:class/tester',
+            'slug': '   ',
+            'declared': true,
+          },
+        ).classResources,
+        isEmpty,
+      );
+    });
+
+    test('无 identity（老存档 / 快速创建）→ 空列表', () {
+      expect(sheet().classResources, isEmpty);
+    });
+
+    test('identity 标记 declared: false → 空列表（不按展示名回填）', () {
+      expect(
+        sheet(
+          classIdentity: const {
+            'entryId': 'test:class/barbarian',
+            'slug': 'barbarian',
+            'declared': false,
+          },
+        ).classResources,
+        isEmpty,
+      );
+    });
+
+    test('identity 有 slug 时按档案回填资源（老角色路径可用）', () {
+      final resources = sheet(
+        classIdentity: const {
+          'entryId': 'test:class/fighter',
+          'slug': 'fighter',
+          'declared': true,
+        },
+      ).classResources;
+
+      expect(
+        {for (final resource in resources) resource.id: resource.maximum},
+        {'second_wind': 2, 'action_surge': 1},
+        reason: '2024 战士 2 级：第二气息 2/短休、动作如潮 1/短休',
+      );
+    });
   });
 
   group('DeclaredLevelBanner 共用的信息条', () {

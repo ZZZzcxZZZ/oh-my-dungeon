@@ -33,6 +33,13 @@ class Dnd5eRules {
   /// 由 [_profile] 派生的技能清单缓存，只在 [configure] 时填一次。
   static List<Dnd5eSkill>? _skills;
 
+  /// 由 [_profile] 派生的属性标签 / 属性缺省值缓存，只在 [configure] 时填一次。
+  static Map<String, String>? _abilityLabels;
+  static Map<String, int>? _defaultAbilities;
+
+  /// 属性缺省值（未分配时按 10）。
+  static const _defaultAbilityScore = 10;
+
   static RuleProfile get profile {
     final profile = _profile;
     if (profile == null) {
@@ -47,25 +54,45 @@ class Dnd5eRules {
     if (_profile != null) {
       throw StateError('规则档案已配置，重复 configure 被拒绝');
     }
+    // 属性键集合的**唯一权威是档案** `abilities`（§3.1 参照清单）：标签与缺省值
+    // 都按档案的键派生，不在本文件里另存一份键名单。缺标签即抛错——档案放行了
+    // 一个属性键，界面就必须有它的中文名，绝不静默丢弃。
+    final labels = <String, String>{};
+    final defaults = <String, int>{};
+    for (final key in profile.abilities) {
+      final label = _abilityLabelText[key];
+      if (label == null) {
+        throw StateError(
+          '规则档案声明了属性 "$key"，但缺少中文展示标签：'
+          '请在 Dnd5eRules._abilityLabelText 补齐（不得静默丢弃该属性）',
+        );
+      }
+      labels[key] = label;
+      defaults[key] = _defaultAbilityScore;
+    }
     _profile = profile;
     _skills = List<Dnd5eSkill>.unmodifiable(
       profile.skills.entries.map(
         (entry) => Dnd5eSkill(name: entry.key, ability: entry.value),
       ),
     );
+    _abilityLabels = Map<String, String>.unmodifiable(labels);
+    _defaultAbilities = Map<String, int>.unmodifiable(defaults);
   }
 
   @visibleForTesting
   static void resetForTests() {
     _profile = null;
     _skills = null;
+    _abilityLabels = null;
+    _defaultAbilities = null;
   }
 
-  /// 展示用的属性中文标签（UI 文案，不是规则数值）。
-  /// 属性键本身由档案的 `abilities` 声明；两者的键集合由
-  /// `test/rules/builtin_rule_profile_test.dart` 的
-  /// 「abilityLabels 的键集合与档案 abilities 一致」断言守卫。
-  static const abilityLabels = {
+  /// 属性中文标签的**文案表**（只有文案，没有键名单）。
+  ///
+  /// 键集合与顺序派生自档案 [RuleProfile.abilities]：见 [abilityLabels]。
+  /// 这是中文标签的唯一存放点，`character_markdown_codec` 也读 [abilityLabels]。
+  static const _abilityLabelText = {
     'str': '力量',
     'dex': '敏捷',
     'con': '体质',
@@ -73,6 +100,22 @@ class Dnd5eRules {
     'wis': '感知',
     'cha': '魅力',
   };
+
+  /// 展示用的属性中文标签（UI 文案，不是规则数值）：键 = 档案声明的属性键，
+  /// 值 = [_abilityLabelText] 的文案，顺序与档案 `abilities` 一致。
+  ///
+  /// 与 [profile] / [skills] 同口径：未配置档案即抛 [StateError]；档案声明了
+  /// 没有标签的键时 [configure] 已经抛错，绝不返回少了键的清单（那会让
+  /// "导入放行"的属性在运行期静默消失）。
+  static Map<String, String> get abilityLabels {
+    final labels = _abilityLabels;
+    if (labels == null) {
+      throw StateError(
+        'Dnd5eRules 尚未配置规则档案：请在启动时 await Dnd5eRules.configure(...)',
+      );
+    }
+    return labels;
+  }
 
   /// 技能清单（名字 → 属性键）的**唯一权威是档案** `skills`（§3.1 参照清单）：
   /// 顺序即档案数组顺序（Dart 的 `Map` 保持插入顺序），数值与档案逐项一致。
@@ -92,14 +135,20 @@ class Dnd5eRules {
     return skills;
   }
 
-  static const defaultAbilities = {
-    'str': 10,
-    'dex': 10,
-    'con': 10,
-    'int': 10,
-    'wis': 10,
-    'cha': 10,
-  };
+  /// 属性缺省值：键 = 档案声明的属性键（唯一权威），值一律 [_defaultAbilityScore]。
+  ///
+  /// 与 [abilityLabels] / [skills] 同口径：未配置档案即抛 [StateError]。**不存在**
+  /// 第二份写死的六项键名单——那份名单会与档案漂移，让新属性"导入放行、运行期
+  /// 静默丢弃"。
+  static Map<String, int> get defaultAbilities {
+    final defaults = _defaultAbilities;
+    if (defaults == null) {
+      throw StateError(
+        'Dnd5eRules 尚未配置规则档案：请在启动时 await Dnd5eRules.configure(...)',
+      );
+    }
+    return defaults;
+  }
 
   // ── 纯运算：唯一公式来源是 rule_math.dart，这里只做委托 ──
 
@@ -113,7 +162,7 @@ class Dnd5eRules {
   static int abilityScore(Map<String, Object?> abilities, String ability) {
     final value = abilities[ability];
     if (value is num) return value.toInt();
-    return defaultAbilities[ability] ?? 10;
+    return defaultAbilities[ability] ?? _defaultAbilityScore;
   }
 
   static int abilityBonus(Map<String, Object?> abilities, String ability) {

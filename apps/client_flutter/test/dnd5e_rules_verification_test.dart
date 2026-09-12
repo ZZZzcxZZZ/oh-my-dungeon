@@ -300,7 +300,7 @@ void main() {
       );
       // 没有 archetype 可回退：旧的双重信号已被移除，mode: pact 不再算契约魔法。
       expect(rules.usesPactMagic, isFalse);
-      expect(rules.pactSlotLevel(5), isNull);
+      expect(rules.maxSpellLevel(5), isNull);
       expect(rules.spellSlots(5), isEmpty);
     });
   });

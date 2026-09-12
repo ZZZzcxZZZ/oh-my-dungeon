@@ -77,6 +77,10 @@ class DeclaredLevels {
   /// `false` = 职业名解析不到档案（未重导入的自制职业 / 老存档匹配失败）：
   /// 界面必须说"未声明"，**不得**说成"该职业没有"。缺少身份块时视为 `true`——
   /// "没有等级声明"是可比对的既有事实，不是未知。
+  ///
+  /// 这是"职业身份是否未声明"的**唯一判据**：[CharacterSheet.classResources] 与
+  /// 角色卡详情页（法术位 / 施法属性区）都调用这里，不得各自再读一遍
+  /// `classIdentity['declared']`（三处各判一次曾出现相反的缺省语义）。
   static bool isDeclared(CharacterSheet character) {
     final identity = character.dataMap['classIdentity'];
     return !(identity is Map && identity['declared'] == false);

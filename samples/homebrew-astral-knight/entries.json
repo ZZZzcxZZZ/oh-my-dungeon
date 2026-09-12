@@ -175,21 +175,10 @@
                 {
                   "id": "astral-poise",
                   "label": "星界之势",
-                  "description": "你的星界兵装命中后，目标在你下回合开始前不能对你发动借机攻击。",
-                  "grants": [
-                    {
-                      "id": "fs-poise",
-                      "kind": "feature",
-                      "label": "星界之势",
-                      "data": {
-                        "description": "命中后目标无法对你发动借机攻击。"
-                      }
-                    }
-                  ]
+                  "description": "你的星界兵装命中后，目标在你下回合开始前不能对你发动借机攻击。"
                 }
               ],
-              "builderStep": "class",
-              "group": "1 级：战斗风格"
+              "builderStep": "class"
             },
             {
               "id": "starting-equipment",
@@ -213,7 +202,6 @@
                 "spell-list:astral-knight"
               ],
               "maximumOptionLevel": 0,
-              "countsToward": "prepared",
               "builderStep": "spells"
             }
           ]
@@ -237,19 +225,10 @@
               "optionType": "classFeature",
               "minimum": 1,
               "maximum": 2,
-              "repeatable": true,
               "optionTags": [
                 "astral-invocation"
               ],
-              "requires": [
-                {
-                  "ability": "int",
-                  "minimum": 13
-                }
-              ],
-              "builderStep": "class",
-              "group": "2 级：星界祈唤",
-              "help": "智力 13 以上才能选取；同一祈唤可以重复选取（上限 2 次）。"
+              "builderStep": "class"
             }
           ]
         },
@@ -272,8 +251,7 @@
               "optionType": "subclass",
               "minimum": 1,
               "maximum": 1,
-              "builderStep": "class",
-              "group": "3 级：子职"
+              "builderStep": "class"
             }
           ]
         },
@@ -306,8 +284,7 @@
               "recommendedEntryIds": [
                 "astral-knight:feat/astral-adept"
               ],
-              "builderStep": "details",
-              "group": "属性提升等级"
+              "builderStep": "details"
             }
           ]
         },
@@ -434,8 +411,7 @@
               "optionTags": [
                 "epic-boon"
               ],
-              "builderStep": "details",
-              "group": "19 级：传奇恩惠"
+              "builderStep": "details"
             }
           ]
         },
@@ -928,9 +904,7 @@
                 "spell-list:astral-knight"
               ],
               "maximumOptionLevel": 1,
-              "countsToward": null,
-              "builderStep": "spells",
-              "help": "选中的法术始终准备，且不占用星界骑士的准备法术上限。"
+              "builderStep": "spells"
             }
           ]
         },

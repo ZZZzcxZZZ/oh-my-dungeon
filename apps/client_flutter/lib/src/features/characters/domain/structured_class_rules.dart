@@ -42,7 +42,8 @@ class StartingEquipmentChoice {
 /// - **没有散文解析**：`structured.savingThrows` / `structured.skills` 一律忽略，
 ///   也不存在按属性中文标签的包含判断。
 ///
-/// 旧签名全部保留（任务 8 迁移调用方后删除），因此本文件不得破坏构建。
+/// 旧签名的 `preparedSpellLimit` 已删除：准备上限的唯一读取口是
+/// [ResolvedClassRules.preparedLimit]，调用方一律经 [Dnd5eRules.resolveClassRules]。
 abstract final class StructuredClassRules {
   /// 职业豁免熟练（属性键集合）。未声明即空集，不按职业名猜测。
   static Set<String> savingThrowAbilities(ContentEntry? entry) =>
@@ -78,19 +79,6 @@ abstract final class StructuredClassRules {
     }
     return StructuredSkillChoice.empty;
   }
-
-  /// 准备法术数量上限：唯一来源是职业自身 `spellcasting.prepared` 逐级表
-  /// （契约 §3.3，「未声明该等级」时按表语义向上沿用，短数组同理）。
-  /// 职业未声明施法（`mode == 'none'`）或没有 `prepared` 表时返回 null。
-  ///
-  /// [abilities] 与 [level] 中，只有 [level] 参与计算：新契约的准备上限是职业级
-  /// 数值表，与属性调整值无关（旧的"调整值 + 等级"公式已删除）。[abilities]
-  /// 仅为保留旧签名而存在，任务 8 迁移完调用方后随本 shim 一起删除。
-  static int? preparedSpellLimit(
-    ContentEntry? entry, {
-    required Map<String, int> abilities,
-    required int level,
-  }) => _resolved(entry).preparedLimit(level);
 
   /// 职业初始装备自由挑选上限。null 表示该职业未声明自由挑选模式。
   ///

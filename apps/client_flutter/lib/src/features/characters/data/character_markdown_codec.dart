@@ -131,7 +131,7 @@ class CharacterMarkdownCodec {
       ..writeln()
       ..writeln('| 属性 | 数值 |')
       ..writeln('| --- | ---: |');
-    for (final entry in _abilityLabels.entries) {
+    for (final entry in Dnd5eRules.abilityLabels.entries) {
       buffer.writeln(
         '| ${entry.value} | ${_integer(character.abilityMap[entry.key])} |',
       );
@@ -142,7 +142,7 @@ class CharacterMarkdownCodec {
       ..writeln()
       ..writeln('| 属性 | 熟练 |')
       ..writeln('| --- | --- |');
-    for (final entry in _abilityLabels.entries) {
+    for (final entry in Dnd5eRules.abilityLabels.entries) {
       buffer.writeln(
         '| ${entry.value} | ${character.saveMap[entry.key] == true ? '是' : '否'} |',
       );
@@ -403,7 +403,7 @@ class CharacterMarkdownCodec {
           ].join(' · ')
         : '';
     final resolvedAbilities = <String, int>{
-      for (final entry in _abilityLabels.entries)
+      for (final entry in Dnd5eRules.abilityLabels.entries)
         entry.key: isCharacterFormat
             ? _optionalInt(
                 abilities[entry.value] ?? characterAbilities[entry.key],
@@ -467,7 +467,7 @@ class CharacterMarkdownCodec {
           : _requiredInt(combat['先攻'], '先攻'),
       abilities: resolvedAbilities,
       saves: {
-        for (final entry in _abilityLabels.entries)
+        for (final entry in Dnd5eRules.abilityLabels.entries)
           entry.key: saves[entry.value]?.trim() == '是',
       },
       skills: {
@@ -1169,15 +1169,6 @@ Map<String, Object?> _deepMap(Object? value) {
 }
 
 String _localId() => 'imported-${DateTime.now().microsecondsSinceEpoch}';
-
-const _abilityLabels = <String, String>{
-  'str': '力量',
-  'dex': '敏捷',
-  'con': '体质',
-  'int': '智力',
-  'wis': '感知',
-  'cha': '魅力',
-};
 
 const _knownSections = {
   '基础资料',

@@ -58,7 +58,9 @@ void main() {
           .where((entry) => entry.type == 'class')
           .toList(growable: false);
 
-      if (classes.isEmpty) return;
+      // 静默空转是弱测试：一个 class 条目都装不进来，说明导入链本身坏了，
+      // 必须在这里就红，而不是让下面的 for 循环一次都不执行。
+      expect(classes, isNotEmpty, reason: '安装后的资料库里没有任何 class 条目');
 
       for (final classEntry in classes) {
         final subclassChoices = classEntry.rules!.progression
@@ -110,7 +112,8 @@ void main() {
           .where((entry) => entry.type == 'class')
           .toList(growable: false);
 
-      if (classes.isEmpty) return;
+      // 同上一处：静默空转通过是弱测试，装不进 class 条目必须在这里红。
+      expect(classes, isNotEmpty, reason: '安装后的资料库里没有任何 class 条目');
 
       for (final classEntry in classes) {
         final rules = classEntry.rules;

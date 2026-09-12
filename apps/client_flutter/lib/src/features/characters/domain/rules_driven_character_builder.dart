@@ -399,11 +399,11 @@ class RulesDrivenCharacterBuilder {
   /// `kind: ability` 授予的属性加值：`target` 是属性键（档案 `abilities` 之一），
   /// `value` 累加。无 `target` 或非档案属性的授予被跳过（不是属性加值）。
   ///
-  /// 判据是 [Dnd5eRules.profile]`.abilities`，**不是**硬编码的
-  /// [Dnd5eRules.abilityLabels]：`abilityLabels` 只是展示用中文标签（UI 文案）。
+  /// 判据是 [Dnd5eRules.profile]`.abilities`，**不是**任何写死的键名单：
+  /// [Dnd5eRules.abilityLabels] / [Dnd5eRules.defaultAbilities] 现在都由档案
+  /// `abilities` 派生（键集合只有一处来源），本方法直接读档案，绝不硬编码。
   /// 导入期 `RuleProfileResolver.validateEntryClassRules` 按档案 `abilities`
-  /// 放行 `target`，运行期若改读 `abilityLabels`，只要档案多一个属性键，
-  /// 就会出现"导入放行、运行期静默丢弃加值"。
+  /// 放行 `target`，两边**同源**，不会出现"导入放行、运行期静默丢弃加值"。
   ///
   /// `formula` **不被读取**：§3.5 规定 `kind: ability` 只接受 `value`，
   /// [`ContentPackageImporter`] 在导入期就拒绝 `formula`（含自引用 `ability:<自身

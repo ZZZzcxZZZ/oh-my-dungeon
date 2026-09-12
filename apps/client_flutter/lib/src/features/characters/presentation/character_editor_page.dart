@@ -2020,6 +2020,11 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     while (changed) {
       changed = false;
       for (final active in _activeRuleChoices()) {
+        // 值类型 / 内联候选的选择由专门 UI 承担（
+        // [RuleChoiceDefinition.usesDedicatedOptionUi]，唯一判据）：
+        // `recommendedEntryIds` 只可能指向条目，写进 `_ruleChoices` 会以
+        // 条目 id 冒充值类型候选，泄漏进值类型/混合选择的答案里。
+        if (active.definition.usesDedicatedOptionUi) continue;
         if ((_ruleChoices[active.key] ?? const <String>{}).isNotEmpty) continue;
         final recommended = resolver.recommendedFor(
           active.definition,

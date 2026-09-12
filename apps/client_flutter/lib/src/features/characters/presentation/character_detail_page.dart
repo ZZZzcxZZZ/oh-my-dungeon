@@ -1135,7 +1135,7 @@ class _SpellsPanelState extends State<_SpellsPanel> {
               : int.tryParse('${entry.value}') ?? 0,
       };
     }
-    if (_classUndeclared()) return const {};
+    if (!DeclaredLevels.isDeclared(widget.character)) return const {};
     return Dnd5eRules.resolveClassRules(
       entryId: _classEntryId(),
       classSummary: widget.character.classSummary,
@@ -1148,18 +1148,12 @@ class _SpellsPanelState extends State<_SpellsPanel> {
     return identity is Map ? identity['entryId'] as String? : null;
   }
 
-  /// 项目器标记为"未声明"（职业名解析不到档案）：显示"未声明"，不显示 0。
-  bool _classUndeclared() {
-    final identity = widget.character.dataMap['classIdentity'];
-    return identity is Map && identity['declared'] == false;
-  }
-
   String? _spellcastingAbility() {
     final derived = widget.character.dataMap['spellcastingAbility'];
     if (derived is String && Dnd5eRules.abilityLabels.containsKey(derived)) {
       return derived;
     }
-    if (_classUndeclared()) return null;
+    if (!DeclaredLevels.isDeclared(widget.character)) return null;
     return Dnd5eRules.resolveClassRules(
       entryId: _classEntryId(),
       classSummary: widget.character.classSummary,

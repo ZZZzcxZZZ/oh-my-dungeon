@@ -100,8 +100,8 @@ void main() {
                   {
                     'id': 'walking-speed',
                     'kind': 'speed',
-                    'value': 30,
-                    'label': '步行速度',
+                    'value': 10,
+                    'label': '步行速度 +10 尺',
                   },
                 ],
               },

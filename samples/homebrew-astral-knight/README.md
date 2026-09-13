@@ -21,7 +21,7 @@
 | 法术选择 | 1 级与子职 3 级都是 `optionType: spell` + `optionTags` + `maximumOptionLevel` |
 | 子职选择与子职进阶 | 3 级 `optionType: subclass`；`oath-of-the-astral` 自带 3/7/15/20 级进阶 |
 
-共 26 个条目：1 职业 / 1 子职 / 19 职业特性（含 3 祈唤）/ 3 专长 / 2 装备方案，9 个选择定义。
+共 30 个条目：1 职业 / 1 子职 / 19 职业特性（含 3 祈唤）/ 3 专长 / 2 装备方案 / 4 法术，9 个选择定义。
 
 包格式：**`formatVersion: 3`**（唯一被接受的版本；1/2 会被整包拒绝并提示重新生成）。
 `classRules` 只有 4 个字段：`hitDie` / `savingThrowAbilities` / `spellcasting` / `resources`——
@@ -47,23 +47,19 @@ Compress-Archive -Path samples/homebrew-astral-knight/manifest.json,
 ## 当前状态（重要）
 
 **本包可被当前版本的导入器整包导入**（`report.errors` 为空、`report.valid` 为 true），
-并由 `apps/client_flutter/test/rules/sample_packages_import_test.dart` 守卫——
-样本写坏就会红。
+并由 `apps/client_flutter/test/rules/sample_packages_import_test.dart`（整包导入）与
+`apps/client_flutter/test/rules/homebrew_class_end_to_end_test.dart`（真实建角色 + 数值核对）
+守卫——包写坏就会红。
 
-**选择系统的运行时字段由计划 2 承接，当前版本导入器会拒收，故本样本不含它们**：
+**选择系统的运行时字段已经全部落地并生效**（计划 2，2026-09-12）：`repeatable`（2 级祈唤可重复选取）、
+`group` / `help`（选择面板分组标题与说明）、`countsToward`（共享额度池）、`requires`（前置不满足
+则不可选）、内联 `options[].grants`（选中即生效）。本包**已在用**这些字段；导入期只做取值/引用校验
+（`invalidCountsToward` / `invalidRequires` / `invalidAutoGrant` / `invalidOptionRef` …），
+不再"存在即拒收"（契约 §5.1 的 `unsupportedChoiceField` 已退役）。
 
-| 字段 | 当前导入行为 | 落地计划 |
-|---|---|---|
-| `repeatable` / `group` / `help` | `unsupportedChoiceField`（error，整包拒绝） | 计划 2 |
-| `countsToward` | `invalidCountsToward`（error，整包拒绝） | 计划 2 |
-| `requires` | `invalidRequires`（error，整包拒绝） | 计划 2 |
-| 内联 `options[].grants` | `unsupportedChoiceField`（error，整包拒绝） | 计划 2 |
-
-也就是说，"可重复选取的祈唤""智力 13 的前置依赖""按分组/帮助文案展示""子职誓约法术
-不占准备上限"这些**设计意图**在本样本里只体现在条目文字与 `label` 中；等计划 2 实现
-这些字段的运行期语义后，本样本会补回声明，拒收分支随之退场（契约 §5.1 的
-`unsupportedChoiceField` 注释、§11 延后清单）。在此之前**不要**为了让它导入而放宽
-导入校验。
+`docs/README.md` §9.2.7 逐字嵌入了本包的 `manifest.json`、职业条目、一条法术条目与一条特性条目，
+并由 `scripts/test_release_packaging.py::test_readme_examples_match_tracked_samples` 做 JSON 深比较
+守卫：**改这里就必须同步改文档**（反之亦然）。
 
 其余契约能力（自定义生命骰/豁免、逐级法术位与准备表、逐级资源、逐级特性、
-HP/AC/速度/属性加值、技能选择、装备 A/B、子职）在当前版本**已经生效**。
+HP/AC/速度/属性加值、技能选择、装备 A/B、子职）同样已经生效。

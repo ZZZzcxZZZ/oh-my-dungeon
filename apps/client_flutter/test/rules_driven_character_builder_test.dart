@@ -68,8 +68,8 @@ void main() {
           {
             'id': 'walking-speed',
             'kind': 'speed',
-            'value': 30,
-            'label': '步行速度',
+            'value': 10,
+            'label': '步行速度 +10 尺（整体 40 尺）',
           },
         ],
       },
@@ -115,7 +115,8 @@ void main() {
     expect(draft.raceSummary, '人类');
     expect(draft.maxHp, 12);
     expect(draft.armorClass, 13);
-    expect(draft.speed, 30);
+    // `speed` 是**加值**：默认 30 + 种族声明的 +10 = 40（契约 §3.5）。
+    expect(draft.speed, 40);
     expect(draft.saves['str'], isTrue);
     expect(draft.skills['运动'], isTrue);
     expect(

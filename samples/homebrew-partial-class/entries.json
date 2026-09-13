@@ -122,6 +122,43 @@
                 "隐匿"
               ],
               "builderStep": "proficiencies"
+            },
+            {
+              "id": "wayfinder-focus",
+              "label": "选择一项路标专长",
+              "optionType": "feat",
+              "minimum": 1,
+              "maximum": 1,
+              "options": [
+                {
+                  "id": "field-medic",
+                  "label": "战地医者",
+                  "description": "你的路标同时标记伤员：队伍在路标处短休时多恢复 2 点生命。",
+                  "grants": [
+                    {
+                      "id": "field-medic-hp",
+                      "kind": "hitPoints",
+                      "label": "战地医者（+2 HP）",
+                      "value": 2
+                    }
+                  ]
+                },
+                {
+                  "id": "pathfinder",
+                  "label": "寻路者",
+                  "description": "你带路时步伐更快：速度 +5 尺。",
+                  "grants": [
+                    {
+                      "id": "pathfinder-speed",
+                      "kind": "speed",
+                      "label": "寻路者（+5 尺）",
+                      "value": 5
+                    }
+                  ]
+                }
+              ],
+              "builderStep": "class",
+              "group": "专长"
             }
           ]
         },

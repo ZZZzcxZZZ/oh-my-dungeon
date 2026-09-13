@@ -592,6 +592,11 @@ PHB 2024 官方表格）：
 - `grant.kind` 枚举 **9 项**：`feature`、`proficiency`、`spell`、`equipment`、`action`、
   `speed`、`armorClass`、`hitPoints`、`ability`；`id` + `kind` 必填；`hitPoints` 的
   `value` / `formula` 二选一，`ability` 只接受 `value`。
+- **数值型 grant 一律是加值**（不是绝对值）：`hitPoints` 累加进 HP 上限；`ability` 加属性
+  （在派生之前施加，影响 HP / AC / 豁免 / 技能 / 法术 DC）；**`speed` = `30 + Σvalue`**
+  （30 是角色表默认步行速度，写 `10` 表示"速度 +10 尺"，**不是**"速度变成 10 尺"）；
+  **`armorClass` = 基础 AC + `Σvalue`**。`feature` / `proficiency` / `spell` / `equipment` /
+  `action` 是条目引用，不参与数值累加。
 - `choice`：`id` + `optionType` 必填，`minimum` 默认 1、`maximum` 默认等于 `minimum`；
   `maximumOptionLevel` 0–9；`builderStep` ∈ `class` / `origin` / `abilities` /
   `proficiencies` / `equipment` / `spells` / `details`。
@@ -765,94 +770,659 @@ tier（含内置档案）的同 `id` 资源；若**档案没有同 id 资源可�
 
 #### 9.2.6 最小完整示例（可直接复制导入）
 
-下面是一个聚合包的最小完整示例：一个只声明 1 / 3 / 5 级的自制职业，含稀疏表与一条技能选择。
+下面是一个**只声明 1 / 3 / 5 级**的自制职业。它"最小"但有代表性：稀疏表与短数组、
+逐级资源、技能选择，以及一条**值选项**（内联 `options[].grants`，选中即生效）。
 
-```jsonc
+这两块内容与仓库内跟踪的示例包 [`samples/homebrew-partial-class/`](../samples/homebrew-partial-class/README.md) **逐字同源**——`docs/README.md`
+里的 `<!-- from:… -->` 标记由 `scripts/test_release_packaging.py` 的
+`test_readme_examples_match_tracked_samples` 抽取后会与真实文件做 JSON 深比较，
+所以文档与示例包**不可能各自漂移**。
+
+**① 清单**（包级字段）：
+
+<!-- from:samples/homebrew-partial-class/manifest.json -->
+```json
 {
   "formatVersion": 3,
-  "id": "wayfinder-demo",
-  "name": "引路者（示例）",
-  "version": "1.0.0",
+  "id": "wayfinder",
+  "name": "引路者（部分声明示范：只到 5 级）",
+  "version": "0.1.0",
   "locale": "zh-CN",
   "system": "dnd5e-2024",
-  "entryCount": 1,
-  "entries": [
-    {
-      "id": "wayfinder-demo:class/wayfinder",
-      "type": "class",
-      "slug": "wayfinder",
-      "name": "引路者",
-      "revision": 1,
-      "body": [ { "type": "paragraph", "text": "把队伍带出荒野的示例职业。" } ],
-      "tags": ["class"],
-      "structured": {
-        "primaryAbility": "感知",
-        "classRules": {
-          "hitDie": 8,
-          "savingThrowAbilities": ["dex", "wis"],
-          "spellcasting": {
-            "mode": "prepared",
-            "ability": "wis",
-            "listTags": ["spell-list:wayfinder"],
-            "slots": { "1": { "1": 2 }, "3": { "1": 3, "2": 2 } },
-            "prepared": [2, 3, 4, 5, 6],
-            "cantrips": [2, 2, 2, 2, 3],
-            "maximumSpellLevel": [1, 1, 1, 2, 2]
-          },
-          "resources": [
-            {
-              "id": "waymark",
-              "name": "路标",
-              "maximum": { "table": [1, 1, 2, 2, 3] },
-              "recovery": "shortRest"
-            }
-          ]
-        }
-      },
-      "rules": {
-        "progression": [
-          {
-            "levels": [1],
-            "choices": [
-              {
-                "id": "skills",
-                "label": "选择两项技能熟练",
-                "optionType": "skill",
-                "minimum": 2,
-                "maximum": 2,
-                "options": ["洞悉", "自然", "察觉", "求生", "隐匿"],
-                "builderStep": "proficiencies"
-              }
-            ]
-          },
-          {
-            "levels": [1, 3, 5],
-            "grants": [
-              { "id": "wayfarer-vigor", "kind": "hitPoints", "label": "引路者体魄", "value": 1 }
-            ]
-          }
-        ]
-      }
-    }
-  ]
+  "entryCount": 4
 }
 ```
 
-这个示例覆盖了本轮的契约要点：
+**② 职业条目**：
+
+<!-- from:samples/homebrew-partial-class/entries.json#wayfinder:class/wayfinder -->
+```json
+{
+  "id": "wayfinder:class/wayfinder",
+  "type": "class",
+  "slug": "wayfinder",
+  "name": "引路者",
+  "revision": 1,
+  "body": [
+    {
+      "type": "paragraph",
+      "text": "一个把队伍带出荒野的职业——作者只设计到 5 级，剩下的以后再说。"
+    }
+  ],
+  "aliases": [],
+  "summary": "只设计到 5 级的示范职业：用来验证“不必写完 20 级”。",
+  "tags": ["class"],
+  "structured": {
+    "primaryAbility": "感知",
+    "classRules": {
+      "hitDie": 8,
+      "savingThrowAbilities": ["dex", "wis"],
+      "spellcasting": {
+        "mode": "prepared",
+        "ability": "wis",
+        "listTags": ["spell-list:wayfinder"],
+        "prepared": [2, 3, 4, 5, 6],
+        "cantrips": [2, 2, 2, 2, 3],
+        "maximumSpellLevel": [1, 1, 1, 2, 2],
+        "slots": {
+          "1": {
+            "1": 2
+          },
+          "3": {
+            "1": 3,
+            "2": 2
+          }
+        }
+      },
+      "resources": [
+        {
+          "id": "waymark",
+          "name": "路标",
+          "maximum": {
+            "table": [1, 1, 2, 2, 3]
+          },
+          "recovery": "shortRest"
+        },
+        {
+          "id": "far-sight",
+          "name": "远见",
+          "startsAtLevel": 3,
+          "maximum": {
+            "table": {
+              "3": 1,
+              "5": 2
+            }
+          },
+          "recovery": "longRest"
+        }
+      ]
+    }
+  },
+  "rules": {
+    "progression": [
+      {
+        "levels": [1],
+        "grants": [
+          {
+            "id": "l1-mark",
+            "kind": "feature",
+            "label": "荒野路标",
+            "entryId": "wayfinder:classFeature/wild-mark"
+          }
+        ],
+        "choices": [
+          {
+            "id": "skills",
+            "label": "选择两项技能熟练",
+            "optionType": "skill",
+            "minimum": 2,
+            "maximum": 2,
+            "options": ["驯兽", "运动", "洞悉", "自然", "察觉", "求生", "隐匿"],
+            "builderStep": "proficiencies"
+          },
+          {
+            "id": "wayfinder-focus",
+            "label": "选择一项路标专长",
+            "optionType": "feat",
+            "minimum": 1,
+            "maximum": 1,
+            "options": [
+              {
+                "id": "field-medic",
+                "label": "战地医者",
+                "description": "你的路标同时标记伤员：队伍在路标处短休时多恢复 2 点生命。",
+                "grants": [
+                  {
+                    "id": "field-medic-hp",
+                    "kind": "hitPoints",
+                    "label": "战地医者（+2 HP）",
+                    "value": 2
+                  }
+                ]
+              },
+              {
+                "id": "pathfinder",
+                "label": "寻路者",
+                "description": "你带路时步伐更快：速度 +5 尺。",
+                "grants": [
+                  {
+                    "id": "pathfinder-speed",
+                    "kind": "speed",
+                    "label": "寻路者（+5 尺）",
+                    "value": 5
+                  }
+                ]
+              }
+            ],
+            "builderStep": "class",
+            "group": "专长"
+          }
+        ]
+      },
+      {
+        "levels": [3],
+        "grants": [
+          {
+            "id": "l3-sight",
+            "kind": "feature",
+            "label": "远见",
+            "entryId": "wayfinder:classFeature/far-sight"
+          }
+        ]
+      },
+      {
+        "levels": [5],
+        "grants": [
+          {
+            "id": "l5-guide",
+            "kind": "feature",
+            "label": "引路",
+            "entryId": "wayfinder:classFeature/guide"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+这份示例覆盖的契约要点：
 
 | 要点 | 在示例里的位置 |
 |---|---|
 | 只有一个格式版本 | `"formatVersion": 3` |
 | 职业只有 4 个数值字段 | `classRules` 只有 `hitDie` / `savingThrowAbilities` / `spellcasting` / `resources` |
-| 按等级重复生效的步骤 | `"levels": [1, 3, 5]` 的 `hitPoints` grant 在 1 / 3 / 5 级各加 1 |
 | 部分声明（只到 5 级） | `progression` 只到 5 级；`prepared` / `cantrips` / `maximumSpellLevel` 是 5 项短数组 |
-| `Table` 的两种部分写法 | 稀疏：`slots: { "1": …, "3": … }`；短数组：`maximum: { "table": [1, 1, 2, 2, 3] }` |
-| 一条技能选择 | `optionType: "skill"` + `options` + `builderStep: "proficiencies"` |
+| `Table` 的两种部分写法 | 稀疏：`slots: {"1": …, "3": …}`；短数组：`maximum: {"table": [1, 1, 2, 2, 3]}` |
+| 资源"从某级起才有" | `far-sight` 的 `startsAtLevel: 3`（不是写一串 0） |
+| 技能选择（唯一写法） | `optionType: "skill"` + `options` 字符串数组 + `builderStep: "proficiencies"` |
+| 值选项（不建条目） | `optionType: "feat"` + 内联 `options[]`，每个选项自带 `grants` |
+| 值选项的授予生效 | `field-medic` 的 `kind: "hitPoints"`、`pathfinder` 的 `kind: "speed"` |
 
-把上面的对象保存为 `entries.json`，再写一个只含包级字段的 `manifest.json`
-（`formatVersion` / `id` / `name` / `version` / `locale` / `system` / `entryCount`，且
-`entryCount` 与 entries 数量一致），两者一起压缩成 `.dndpack` 即可导入。仓库里有一份同样形状、
-可直接导入的完整示例：[`samples/homebrew-partial-class/`](../samples/homebrew-partial-class/README.md)。
+把清单与条目分别保存为 `manifest.json` / `entries.json`（`entryCount` 必须与 entries 数量一致），
+压缩成 `.dndpack` 即可导入。**更完整的职业包**（法术选择、可重复选取、子职、装备 A/B、
+分组与帮助文案）见下一节。
+
+#### 9.2.7 完整示例（含选择与法术选择，与仓库示例包**同一份**）
+
+上一节是最小可抄模板；这一节是**职业作者要看全的那一份**：下面每一块都是从仓库内跟踪的
+示例包 [`samples/homebrew-astral-knight/`](../samples/homebrew-astral-knight/README.md) **逐字复制**出来的真实文件内容（
+`manifest.json` + 完整职业条目 + 一条法术条目 + 一条特性条目）。`docs/README.md` 与示例包
+之间**不允许脱节**：`scripts/test_release_packaging.py` 的
+`test_readme_examples_match_tracked_samples` 会抽取这些 `<!-- from:… -->` 标记，把下面每一块
+与对应文件（或文件里的某个条目）做 JSON 深比较，任一侧改动而另一侧没跟上就红。
+
+该包共 **30 个条目**：1 职业 / 1 子职 / 19 职业特性（含 3 祈唤）/ 3 专长 / 2 装备方案 / 4 法术，
+**9 个选择定义**；全部内容为原创示例，不含任何规则书正文。它同时被
+`apps/client_flutter/test/rules/sample_packages_import_test.dart`（整包可导入）与
+`homebrew_class_end_to_end_test.dart`（真实建角色、按包内数值核对）读取——文档、示例包、
+测试三者共用同一份数据。
+
+**① 清单**：
+
+<!-- from:samples/homebrew-astral-knight/manifest.json -->
+```json
+{
+  "formatVersion": 3,
+  "id": "astral-knight",
+  "name": "星界骑士（示范自制职业）",
+  "version": "1.0.0",
+  "locale": "zh-CN",
+  "system": "dnd5e-2024",
+  "entryCount": 30
+}
+```
+
+**② 完整职业条目**（`classRules` 四个数值字段、逐级资源、`rules.progression` 的
+`levels` 数组与全部选择——技能 / 值选项（内联 `options` 与 `grants`）/ 装备 A·B /
+戏法（`optionType: "spell"` + `maximumOptionLevel: 0`）/ 可重复祈唤（`repeatable` + `group`）/
+子职 / 专长）：
+
+<!-- from:samples/homebrew-astral-knight/entries.json#astral-knight:class/astral-knight -->
+```json
+{
+  "id": "astral-knight:class/astral-knight",
+  "type": "class",
+  "slug": "astral-knight",
+  "name": "星界骑士",
+  "revision": 1,
+  "body": [
+    {
+      "type": "paragraph",
+      "text": "你以智力施法，把星界之力铸进兵装与誓约。"
+    }
+  ],
+  "aliases": [],
+  "summary": "以智力施法的半施法者骑士，用星界兵装与祈唤作战。",
+  "tags": ["class"],
+  "structured": {
+    "primaryAbility": "智力",
+    "weaponProficiency": "简易武器、军用武器",
+    "armorProficiency": "轻甲、中甲、盾牌",
+    "classRules": {
+      "hitDie": 10,
+      "savingThrowAbilities": ["int", "wis"],
+      "spellcasting": {
+        "mode": "prepared",
+        "ability": "int",
+        "listTags": ["spell-list:astral-knight"],
+        "archetype": "half-caster",
+        "slots": {
+          "5": {
+            "1": 4,
+            "2": 3
+          },
+          "9": {
+            "1": 4,
+            "2": 3,
+            "3": 3
+          }
+        },
+        "prepared": [3, 4, 5, 6, 7, 7, 8, 8, 10, 10, 11, 11, 12, 12, 13, 13, 15, 15, 16, 16],
+        "maximumSpellLevel": {
+          "1": 1,
+          "3": 2,
+          "5": 3,
+          "9": 4,
+          "13": 5
+        },
+        "cantrips": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      },
+      "resources": [
+        {
+          "id": "astral-surge",
+          "name": "星界涌动",
+          "startsAtLevel": 2,
+          "maximum": {
+            "formula": "level",
+            "minimum": 1
+          },
+          "recovery": "shortRestOne"
+        },
+        {
+          "id": "astral-ward",
+          "name": "星界守护",
+          "startsAtLevel": 3,
+          "maximum": {
+            "table": {
+              "3": 1,
+              "7": 2,
+              "12": 3,
+              "17": 4
+            }
+          },
+          "recovery": "longRest"
+        }
+      ]
+    }
+  },
+  "rules": {
+    "progression": [
+      {
+        "levels": [1],
+        "grants": [
+          {
+            "id": "l1-arsenal",
+            "kind": "feature",
+            "label": "星界兵装",
+            "entryId": "astral-knight:classFeature/astral-arsenal"
+          },
+          {
+            "id": "l1-sense",
+            "kind": "feature",
+            "label": "星界感知",
+            "entryId": "astral-knight:classFeature/astral-sense"
+          }
+        ],
+        "choices": [
+          {
+            "id": "class-skills",
+            "label": "选择两项技能熟练",
+            "optionType": "skill",
+            "minimum": 2,
+            "maximum": 2,
+            "options": ["奥秘", "运动", "历史", "洞悉", "调查", "察觉", "宗教"],
+            "builderStep": "proficiencies",
+            "group": "技能"
+          },
+          {
+            "id": "fighting-style",
+            "label": "选择一项战斗风格",
+            "optionType": "feat",
+            "minimum": 1,
+            "maximum": 1,
+            "optionTags": ["fighting-style"],
+            "options": [
+              {
+                "id": "astral-poise",
+                "label": "星界之势",
+                "description": "你的星界兵装命中后，目标在你下回合开始前不能对你发动借机攻击。"
+              }
+            ],
+            "builderStep": "class"
+          },
+          {
+            "id": "starting-equipment",
+            "label": "初始装备（A 或 B）",
+            "optionType": "equipmentBundle",
+            "minimum": 1,
+            "maximum": 1,
+            "optionEntryIds": ["astral-knight:equipmentBundle/starting-a", "astral-knight:equipmentBundle/starting-b"],
+            "builderStep": "equipment"
+          },
+          {
+            "id": "spells-1",
+            "label": "戏法（自星界骑士法术列表选择）",
+            "optionType": "spell",
+            "minimum": 0,
+            "maximum": 2,
+            "optionTags": ["spell-list:astral-knight"],
+            "maximumOptionLevel": 0,
+            "builderStep": "spells",
+            "group": "戏法",
+            "help": "戏法自星界骑士法术列表选择，不占准备上限。"
+          }
+        ]
+      },
+      {
+        "levels": [2],
+        "grants": [
+          {
+            "id": "l2-surge",
+            "kind": "feature",
+            "label": "星界涌动",
+            "entryId": "astral-knight:classFeature/astral-surge"
+          }
+        ],
+        "choices": [
+          {
+            "id": "invocations",
+            "label": "星界祈唤（可重复选取）",
+            "optionType": "classFeature",
+            "minimum": 1,
+            "maximum": 2,
+            "optionTags": ["astral-invocation"],
+            "builderStep": "class",
+            "repeatable": true,
+            "group": "2 级祈唤",
+            "help": "同一祈唤可以重复选取，最多 2 次。"
+          }
+        ]
+      },
+      {
+        "levels": [3],
+        "grants": [
+          {
+            "id": "l3-echo",
+            "kind": "feature",
+            "label": "星界回响",
+            "entryId": "astral-knight:classFeature/astral-echo"
+          }
+        ],
+        "choices": [
+          {
+            "id": "subclass",
+            "label": "选择星界誓约",
+            "optionType": "subclass",
+            "minimum": 1,
+            "maximum": 1,
+            "builderStep": "class"
+          }
+        ]
+      },
+      {
+        "levels": [4, 8, 12, 16],
+        "grants": [
+          {
+            "id": "asi-int",
+            "kind": "ability",
+            "label": "属性提升：智力 +1",
+            "target": "int",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "asi-or-feat",
+            "label": "属性提升或专长",
+            "optionType": "feat",
+            "minimum": 1,
+            "maximum": 1,
+            "optionTags": ["astral-adept"],
+            "recommendedEntryIds": ["astral-knight:feat/astral-adept"],
+            "builderStep": "details"
+          }
+        ]
+      },
+      {
+        "levels": [5],
+        "grants": [
+          {
+            "id": "l5-extra-attack",
+            "kind": "feature",
+            "label": "额外攻击",
+            "entryId": "astral-knight:classFeature/extra-attack"
+          }
+        ]
+      },
+      {
+        "levels": [6],
+        "grants": [
+          {
+            "id": "l6-vigor",
+            "kind": "hitPoints",
+            "label": "星界体魄（每级 +1 HP）",
+            "formula": "level"
+          },
+          {
+            "id": "l6-vigor-feature",
+            "kind": "feature",
+            "label": "星界体魄",
+            "entryId": "astral-knight:classFeature/astral-vigor"
+          }
+        ]
+      },
+      {
+        "levels": [7],
+        "grants": [
+          {
+            "id": "l7-stride",
+            "kind": "speed",
+            "label": "星界步（+10 尺）",
+            "value": 10
+          },
+          {
+            "id": "l7-stride-feature",
+            "kind": "feature",
+            "label": "星界步",
+            "entryId": "astral-knight:classFeature/astral-stride"
+          }
+        ]
+      },
+      {
+        "levels": [10],
+        "grants": [
+          {
+            "id": "l10-cloak",
+            "kind": "armorClass",
+            "label": "星界披风（AC +1）",
+            "value": 1
+          },
+          {
+            "id": "l10-cloak-feature",
+            "kind": "feature",
+            "label": "星界披风",
+            "entryId": "astral-knight:classFeature/astral-cloak"
+          }
+        ]
+      },
+      {
+        "levels": [11],
+        "grants": [
+          {
+            "id": "l11-leap",
+            "kind": "feature",
+            "label": "星界飞跃",
+            "entryId": "astral-knight:classFeature/astral-leap"
+          }
+        ]
+      },
+      {
+        "levels": [14],
+        "grants": [
+          {
+            "id": "l14-eye",
+            "kind": "feature",
+            "label": "星界之眼",
+            "entryId": "astral-knight:classFeature/astral-eye"
+          }
+        ]
+      },
+      {
+        "levels": [18],
+        "grants": [
+          {
+            "id": "l18-bulwark",
+            "kind": "feature",
+            "label": "星界壁垒",
+            "entryId": "astral-knight:classFeature/astral-bulwark"
+          }
+        ]
+      },
+      {
+        "levels": [19],
+        "choices": [
+          {
+            "id": "epic-boon",
+            "label": "传奇恩惠",
+            "optionType": "feat",
+            "minimum": 1,
+            "maximum": 1,
+            "optionTags": ["epic-boon"],
+            "builderStep": "details"
+          }
+        ]
+      },
+      {
+        "levels": [20],
+        "grants": [
+          {
+            "id": "l20-avatar",
+            "kind": "feature",
+            "label": "星界化身",
+            "entryId": "astral-knight:classFeature/astral-avatar"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**③ 法术条目**（`optionType: "spell"` 的选择靠 `optionTags` 指向它；`structured` 只放数值与枚举）：
+
+<!-- from:samples/homebrew-astral-knight/entries.json#astral-knight:spell/astral-spark -->
+```json
+{
+  "id": "astral-knight:spell/astral-spark",
+  "type": "spell",
+  "slug": "astral-spark",
+  "name": "星界火花",
+  "revision": 1,
+  "body": [
+    {
+      "type": "paragraph",
+      "text": "星界能量在你掌心凝成一点冷焰，扑向目标。"
+    }
+  ],
+  "aliases": [],
+  "summary": "戏法 塑能 · 星界火花",
+  "tags": ["塑能", "spell-list:astral-knight"],
+  "structured": {
+    "level": 0,
+    "school": "塑能",
+    "classes": ["星界骑士"],
+    "castingTime": "动作",
+    "range": "60 尺",
+    "components": "V、S",
+    "duration": "立即"
+  }
+}
+```
+
+**④ 特性条目**（`grants` 用 `kind: "feature"` + `entryId` 指向它）：
+
+<!-- from:samples/homebrew-astral-knight/entries.json#astral-knight:classFeature/astral-arsenal -->
+```json
+{
+  "id": "astral-knight:classFeature/astral-arsenal",
+  "type": "classFeature",
+  "slug": "astral-arsenal",
+  "name": "星界兵装",
+  "revision": 1,
+  "body": [
+    {
+      "type": "paragraph",
+      "text": "你可以用一个附赠动作召唤一件星界兵装；它在你手中视为你熟练的武器，并可造成力场伤害。"
+    }
+  ],
+  "aliases": [],
+  "summary": "星界骑士 1 级特性",
+  "tags": ["classFeature"],
+  "structured": {
+    "level": 1,
+    "classSlug": "astral-knight"
+  },
+  "relations": [
+    {
+      "type": "featureOf",
+      "targetId": "astral-knight:class/astral-knight"
+    }
+  ]
+}
+```
+
+下表说明这份示例覆盖了哪些契约要点、分别落在哪：
+
+| 契约要点 | 在示例里的位置 |
+|---|---|
+| 只有一个格式版本 | `manifest.json` 的 `"formatVersion": 3` |
+| 职业只有 4 个数值字段 | 职业条目的 `structured.classRules`（`hitDie` / `savingThrowAbilities` / `spellcasting` / `resources`） |
+| 施法模型与逐级法术位 | `spellcasting.mode/ability/listTags/archetype/slots/prepared/cantrips/maximumSpellLevel`（原型提供 `slots`，`prepared` 是职业独有列） |
+| 逐级资源与恢复语义 | `resources`：`maximum.formula: "level"` 与稀疏 `table`、`recovery: shortRestOne` / `longRest`、`startsAtLevel` |
+| 同一效果在多个等级重复 | `{"levels": [4, 8, 12, 16], "grants": [...]}` |
+| 技能选择（唯一写法） | `optionType: "skill"` + `options` 字符串数组 + `builderStep: "proficiencies"` |
+| 值选项（不建条目） | `optionType: "feat"` + 内联 `options[]`（`id` / `label` / `description`） |
+| 法术选择 | `optionType: "spell"` + `optionTags: ["spell-list:astral-knight"]` + `maximumOptionLevel` |
+| 可重复选取 | 2 级祈唤的 `"repeatable": true` |
+| 分组与帮助文案 | `group`（选择面板分组标题）与 `help`（说明行） |
+| 子职与子职进阶 | `optionType: "subclass"` + 子职条目自带的 `rules.progression` |
+| 特性 / HP / AC / 速度 / 属性加值 | `grants` 的 `kind: feature / hitPoints / armorClass / speed / ability` |
+| 装备 A / B 方案 | `optionType: "equipmentBundle"` + 两个 `equipmentBundle` 条目 |
+
+其余 27 个条目（18 条职业特性、1 条子职、3 条专长、1 条装备方案、3 条法术）与上面是同一套
+形状，直接看 [`samples/homebrew-astral-knight/entries.json`](../samples/homebrew-astral-knight/entries.json) 即可；打包方式见该目录的
+`README.md`（`manifest.json` + `entries.json` 放压缩包根目录，可选 `assets/`）。
 
 ### 9.3 自制内容与检索
 

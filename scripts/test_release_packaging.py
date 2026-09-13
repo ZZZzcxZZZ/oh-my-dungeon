@@ -1,6 +1,7 @@
 import hashlib
 import unittest
 import json
+import re
 import tempfile
 from pathlib import Path
 
@@ -280,6 +281,88 @@ class ReleasePackagingTest(unittest.TestCase):
                     f"{script.name} 含非 ASCII 文本但没有 UTF-8 BOM",
                 )
         self.assertGreater(checked, 0, "至少应有一个含中文的 PowerShell 脚本")
+
+    def test_readme_examples_match_tracked_samples(self):
+        """`docs/README.md` 里带 `<!-- from:… -->` 标记的 JSON 块必须与真实文件**逐字同源**。
+
+        规格 §10.7 要求"§9.2 含完整自制职业示例（含选择与法术选择），且示例可被测试中的
+        合成包复用（文档与实现不脱节）"。这里把"不脱节"钉死：标记指向
+        `samples/**` 里的某个文件（或该文件里的某个条目 id），块内容做 JSON 深比较；
+        任何一侧单独改动都会让这条断言变红。
+        """
+        readme = (ROOT / "docs" / "README.md").read_text(encoding="utf-8")
+        pattern = re.compile(
+            r"<!-- from:(?P<ref>[^\s>]+?)\s*-->\s*\n```json\n(?P<body>.*?)\n```",
+            re.S,
+        )
+        blocks = list(pattern.finditer(readme))
+        self.assertGreater(len(blocks), 0, "README 里没有任何 <!-- from:… --> 示例块")
+
+        seen_types = set()
+        class_blocks = 0
+        inline_grant_blocks = 0
+        all_choice_types = []
+        for match in blocks:
+            ref = match.group("ref")
+            path_part, _, entry_id = ref.partition("#")
+            with self.subTest(ref=ref):
+                target_path = ROOT / path_part
+                self.assertTrue(
+                    target_path.is_file(), f"示例标记指向的文件不存在：{path_part}"
+                )
+                loaded = json.loads(target_path.read_text(encoding="utf-8"))
+                if entry_id:
+                    entries = loaded if isinstance(loaded, list) else loaded["entries"]
+                    matched = [e for e in entries if e.get("id") == entry_id]
+                    self.assertEqual(
+                        1, len(matched), f"{path_part} 里没有唯一命中 {entry_id}"
+                    )
+                    loaded = matched[0]
+                self.assertEqual(
+                    loaded,
+                    json.loads(match.group("body")),
+                    f"{ref} 与真实文件不一致（文档与示例包脱节）",
+                )
+                if isinstance(loaded, dict):
+                    seen_types.add(loaded.get("type"))
+                    if loaded.get("type") == "class":
+                        class_blocks += 1
+                        choice_types = [
+                            choice.get("optionType")
+                            for step in loaded["rules"]["progression"]
+                            for choice in step.get("choices", [])
+                        ]
+                        inline_grants = [
+                            option
+                            for step in loaded["rules"]["progression"]
+                            for choice in step.get("choices", [])
+                            for option in choice.get("options", [])
+                            if isinstance(option, dict) and option.get("grants")
+                        ]
+                        if inline_grants:
+                            inline_grant_blocks += 1
+                        all_choice_types.extend(choice_types)
+
+        self.assertGreaterEqual(class_blocks, 2, "README 应逐字展示最小示例与完整示例两个职业条目")
+        self.assertIn("spell", seen_types, "README 示例里应含一条法术条目")
+        self.assertIn("spell", all_choice_types, "完整示例必须含 optionType: \"spell\" 的法术选择")
+        self.assertIn("skill", all_choice_types, "示例必须含 optionType: \"skill\" 的技能选择")
+        self.assertGreaterEqual(
+            inline_grant_blocks,
+            1,
+            "至少一个示例必须展示内联 options[].grants（值选项选中即生效）",
+        )
+
+        # 每个示例包都必须被 README 提到（新加示例包不能没有文档入口）。
+        for sample in sorted((ROOT / "samples").iterdir()):
+            if not sample.is_dir():
+                continue
+            with self.subTest(sample=sample.name):
+                self.assertIn(
+                    f"samples/{sample.name}",
+                    readme,
+                    f"示例包 {sample.name} 没有被 docs/README.md 引用",
+                )
 
 
 if __name__ == "__main__":

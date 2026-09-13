@@ -137,7 +137,7 @@ void main() {
         'revision': 1,
         'rules': {
           'grants': [
-            {'id': 'local-speed', 'kind': 'speed', 'value': 30, 'label': '速度'},
+            {'id': 'local-speed', 'kind': 'speed', 'value': 10, 'label': '速度 +10 尺'},
           ],
         },
       });

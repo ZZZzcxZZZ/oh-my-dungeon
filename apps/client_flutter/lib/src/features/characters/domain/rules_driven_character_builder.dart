@@ -17,6 +17,9 @@ import 'equipment_bundle_items.dart';
 import 'rule_override_index.dart';
 import 'structured_class_rules.dart';
 
+/// 角色表默认步行速度（尺）：`speed` grant 的加值累加到它之上（契约 §3.5）。
+const int kBaseWalkingSpeed = 30;
+
 class RulesDrivenCharacterBuilder {
   RulesDrivenCharacterBuilder({
     required this.entries,
@@ -142,7 +145,13 @@ class RulesDrivenCharacterBuilder {
         .grantsOfKind(RuleGrantKind.armorClass)
         .fold<num>(0, (sum, grant) => sum + (grant.value ?? 0))
         .toInt();
-    final speedGrant = ledger.grantsOfKind(RuleGrantKind.speed).lastOrNull;
+    // `speed` 与 `armorClass` 同一口径：**加值**，累加到角色表的基础速度上
+    // （§3.5）。绝对值会把角色表里用户可编辑的速度静默覆盖掉——样例包写
+    // "速度 +10 尺" 时，旧实现会把速度变成 10 而不是 40。
+    final speedBonus = ledger
+        .grantsOfKind(RuleGrantKind.speed)
+        .fold<num>(0, (sum, grant) => sum + (grant.value ?? 0))
+        .toInt();
     final maxHp = _averageHitPoints(
       hitDie: classRules.hitDie,
       level: build.level,
@@ -185,7 +194,7 @@ class RulesDrivenCharacterBuilder {
       currentHp: maxHp,
       maxHp: maxHp,
       armorClass: Dnd5eRules.baseArmorClass(effectiveAbilities) + armorBonus,
-      speed: speedGrant?.value?.toInt() ?? 30,
+      speed: kBaseWalkingSpeed + speedBonus,
       initiativeBonus: Dnd5eRules.initiativeBonus(effectiveAbilities),
       abilities: Map<String, int>.from(effectiveAbilities),
       saves: saves,
@@ -385,7 +394,8 @@ class RulesDrivenCharacterBuilder {
   /// `kind: action` 的运行时行：动作身份是 `entryId + grant.id`，**没有随等级
   /// 变化的语义**，而多等级步骤（`levels`）会把同一份动作定义逐级展开成 N 个
   /// 生效单元。这里按身份只保留最早生效的那条，避免 `data['actions']` 出现 N 条
-  /// 完全相同的动作行（`speed` 走 `lastOrNull` 已是单条，两者的"一条"口径在此统一）。
+  /// 完全相同的动作行（与 `hitPoints` / `speed` / `armorClass` 的"多等级 → 多条"
+  /// 情形不同：那三者是可累加的数值，必须逐条结算）。
   ///
   /// 顺序保持 ledger 的产出顺序（选择遍历顺序稳定），不额外排序。
   List<ResolvedRuleGrant> _actionRows(CharacterGrantLedger ledger) {
@@ -668,8 +678,4 @@ class RulesDrivenCharacterBuilder {
     }
     return total;
   }
-}
-
-extension<T> on Iterable<T> {
-  T? get lastOrNull => isEmpty ? null : last;
 }

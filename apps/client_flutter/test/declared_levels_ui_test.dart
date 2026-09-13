@@ -849,8 +849,8 @@ void main() {
                       <String, Object?>{
                         'id': 'speed',
                         'kind': 'speed',
-                        'value': 30,
-                        'label': '步行速度',
+                        'value': 10,
+                        'label': '步行速度 +10 尺',
                       },
                     ],
                   },
@@ -880,8 +880,8 @@ void main() {
                       <String, Object?>{
                         'id': 'speed',
                         'kind': 'speed',
-                        'value': 30,
-                        'label': '步行速度',
+                        'value': 10,
+                        'label': '步行速度 +10 尺',
                       },
                     ],
                   },

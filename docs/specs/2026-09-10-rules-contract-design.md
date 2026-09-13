@@ -358,6 +358,10 @@ cantrips      = cantrips[L]                                        // 同上
 |---|---|---|
 | **实现** | `hitPoints` | 累加进 HP 上限；`value`（固定）或 `formula`（同一封闭语法，按职业等级结算）二选一 |
 | **实现** | `ability` | 属性加值，**在派生之前**施加（影响 HP/AC/豁免/技能/法术 DC）；`target` 为属性键，`value` 为加值；**只接受 `value`**（见下） |
+| **实现** | `speed` | 步行速度**加值**（尺）：结算为 `30 + Σ value`（30 是角色表默认值）。**不是绝对值**——写 10 表示"速度 +10 尺"，不是"速度变成 10 尺" |
+| **实现** | `armorClass` | AC **加值**：结算为 `baseArmorClass(敏捷) + Σ value`（与 `speed` 同一口径，都是加值） |
+| **实现** | `proficiency` / `spell` / `equipment` / `action` | 熟练 / 法术 / 装备 / 动作条目引用（`target` / `entryId`），不参与数值累加 |
+| **实现** | `feature` | 特性条目引用（`entryId`），进角色卡特性列表，不改数值 |
 | **移除** | `resource` | 资源是**职业级静态事实**，改由 `classRules.resources`（§3.4）统一声明；旧包里的 `resource` grant 按未知 kind 报错 |
 | **移除** | `conditionResistance` | 无消费方、真实包未使用。移除后误用会在导入时报错，而不是静默无效；抗性/免疫结算记入 §11 待办 |
 | **移除** | `note` | 同上；角色卡备注由 `notes` 字段承担 |

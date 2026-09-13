@@ -3,7 +3,11 @@ import 'dart:io';
 
 import 'package:dnd_table_client/src/core/database/app_database.dart';
 import 'package:dnd_table_client/src/features/content/data/import/content_package_importer.dart';
+import 'package:dnd_table_client/src/features/characters/domain/character_edit_draft.dart';
+import 'package:dnd_table_client/src/features/characters/domain/rules_driven_character_builder.dart';
 import 'package:dnd_table_client/src/features/content/data/local/content_repository.dart';
+import 'package:dnd_table_client/src/features/rules/domain/character_build.dart';
+import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -89,4 +93,51 @@ void main() {
       );
     });
   }
+
+  test('最小示例包的值选项：内联 grants 选中即生效（docs/README.md §9.2.6 的表格断言）', () {
+    // §9.2.6 的表格声称"值选项的授予生效"（field-medic → hitPoints、pathfinder → speed）。
+    // 文档里的示例包是被测试复用**同一份数据**的，这里就把那句话变成可执行的断言：
+    // 导入 `samples/homebrew-partial-class` 后直接建角色，比较选中 / 不选中的派生结果。
+    final dir = Directory('../../samples/homebrew-partial-class');
+    final rawEntries =
+        jsonDecode(File('${dir.path}/entries.json').readAsStringSync())
+            as List<Object?>;
+    final entries = <String, ContentEntry>{};
+    for (final raw in rawEntries) {
+      if (raw is! Map) continue;
+      final entry = ContentEntry.fromJson(Map<String, Object?>.from(raw));
+      entries[entry.id] = entry;
+    }
+    const classId = 'wayfinder:class/wayfinder';
+    const focusKey = '$classId#wayfinder-focus';
+
+    CharacterEditDraft buildWith(List<String>? picked) =>
+        RulesDrivenCharacterBuilder(
+      entries: entries,
+        ).build(
+      name: '引路者',
+      build: CharacterBuild(
+        level: 1,
+        selections: const <String, String>{'class': classId},
+        choices: <String, List<String>>{focusKey: ?picked},
+      ),
+      abilities: const <String, int>{
+        'str': 10,
+        'dex': 14,
+        'con': 14,
+        'int': 10,
+        'wis': 14,
+        'cha': 10,
+      },
+    );
+
+    final baseline = buildWith(null);
+    final pathfinder = buildWith(const <String>['pathfinder']);
+    final medic = buildWith(const <String>['field-medic']);
+
+    expect(pathfinder.speed, baseline.speed + 5, reason: 'pathfinder 的 speed grant');
+    expect(medic.maxHp, baseline.maxHp + 2, reason: 'field-medic 的 hitPoints grant');
+    expect(baseline.speed, 30);
+    expect(medic.speed, baseline.speed, reason: '没选的选项不得生效');
+  });
 }

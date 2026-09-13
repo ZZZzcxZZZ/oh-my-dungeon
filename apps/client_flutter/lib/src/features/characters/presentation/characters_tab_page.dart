@@ -824,8 +824,11 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
           ),
           onUpgrade: projectedCharacter.level >= 20
               ? null
-              : () => _openUpgradePage(
-                  projectedCharacter,
+              // 回调参数是**详情页当前**的角色（不是这里捕获的 `projectedCharacter`
+              // 快照）：用户在详情页关闭来源 / pin 某列后立刻升级，升级必须看到那份
+              // 选择，否则会被静默还原（A）。
+              : (current) => _openUpgradePage(
+                  current,
                   contentEntries,
                   packagePriorities,
                 ),

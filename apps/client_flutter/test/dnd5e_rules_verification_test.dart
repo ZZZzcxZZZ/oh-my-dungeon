@@ -456,10 +456,16 @@ void main() {
 
     test('长休恢复全部法术位，短休只恢复契约魔法', () {
       const used = {'1': 2, '2': 1};
+      // 入参形状：`spellSlotsAfterRest` 只接收**已解析**的规则（L），断言值逐字不变。
+      ResolvedClassRules rulesFor(String classSummary) =>
+          Dnd5eRules.resolveClassRules(
+            entryId: null,
+            classSummary: classSummary,
+          );
       // 长休：全部清空
       expect(
         Dnd5eRules.spellSlotsAfterRest(
-          classSummary: '法师',
+          rules: rulesFor('法师'),
           used: used,
           longRest: true,
         ),
@@ -468,7 +474,7 @@ void main() {
       // 普通施法者短休：保持不变
       expect(
         Dnd5eRules.spellSlotsAfterRest(
-          classSummary: '法师',
+          rules: rulesFor('法师'),
           used: used,
           longRest: false,
         ),
@@ -477,7 +483,7 @@ void main() {
       // 邪术师短休：契约魔法恢复
       expect(
         Dnd5eRules.spellSlotsAfterRest(
-          classSummary: '邪术师',
+          rules: rulesFor('邪术师'),
           used: const {'5': 2},
           longRest: false,
         ),

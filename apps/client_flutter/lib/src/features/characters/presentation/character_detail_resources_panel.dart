@@ -9,6 +9,7 @@ class _ResourcesPanel extends StatefulWidget {
     this.sources = const <String, RuleFieldSource>{},
     this.conflicts = const <RuleOverrideConflict>[],
     this.originLabels = const <String, String>{},
+    this.entryOriginId,
     this.onDisableOverride,
     this.onResolveConflicts,
   });
@@ -21,6 +22,9 @@ class _ResourcesPanel extends StatefulWidget {
   final Map<String, RuleFieldSource> sources;
   final List<RuleOverrideConflict> conflicts;
   final Map<String, String> originLabels;
+
+  /// 角色自身条目的 originId：来源是它时不显示关闭按钮（C）。
+  final String? entryOriginId;
   final Future<void> Function(String originId)? onDisableOverride;
   final Future<void> Function(List<RuleOverrideConflict> conflicts)?
   onResolveConflicts;
@@ -169,15 +173,23 @@ class _ResourcesPanelState extends State<_ResourcesPanel> {
   }
 
   /// 每条资源的列级来源徽标（只渲染快照里真有来源的列）。
+  ///
+  /// 列清单**只从** [RuleFieldPath.resourceColumns] 派生（唯一实现），不手写
+  /// `['maximum','recovery']` 这类第二份列清单（K）；资源名一并传下去，标签才不会
+  /// 显示裸 id。
   Widget _sourceChips(String resourceId) {
     final known = <String>[
-      for (final column in const <String>['maximum', 'recovery'])
+      for (final column in RuleFieldPath.resourceColumns)
         if (widget.sources.containsKey(
           RuleFieldPath.resource(resourceId, column),
         ))
           RuleFieldPath.resource(resourceId, column),
     ];
     if (known.isEmpty) return const SizedBox.shrink();
+    final resourceName = _resources
+        .where((resource) => resource.id == resourceId)
+        .map((resource) => resource.name)
+        .firstOrNull;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -186,6 +198,8 @@ class _ResourcesPanelState extends State<_ResourcesPanel> {
             field: field,
             source: widget.sources[field],
             originLabels: widget.originLabels,
+            entryOriginId: widget.entryOriginId,
+            resourceName: resourceName,
             onDisableOverride: widget.onDisableOverride,
           ),
       ],

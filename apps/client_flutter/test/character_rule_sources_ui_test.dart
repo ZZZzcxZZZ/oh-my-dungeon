@@ -4,6 +4,7 @@ import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character_rule_overrides.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character_upgrade_planner.dart';
 import 'package:dnd_table_client/src/features/characters/domain/dnd5e_rules.dart';
+import 'package:dnd_table_client/src/features/characters/domain/rule_override_index.dart';
 import 'package:dnd_table_client/src/features/characters/domain/rules_driven_character_builder.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_detail_page.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/widgets/rule_source_list.dart';
@@ -72,6 +73,57 @@ void main() {
       );
       expect(find.textContaining('来源未知'), findsOneWidget);
       expect(find.byIcon(Icons.extension_outlined), findsNothing);
+    });
+
+    // C：角色**自身条目**不是"覆盖"（解析器无条件包含它、忽略对 entryId 的
+    // disabled），因此不得给出点了没反应的关闭按钮。
+    testWidgets('来源是角色自身条目时不显示关闭按钮，也按非覆盖样式渲染', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RuleSourceChip(
+              field: RuleFieldPath.spellcasting('prepared'),
+              source: const RuleFieldSource(
+                field: 'spellcasting.prepared',
+                originId: 'base:class/wizard',
+                tier: 100,
+              ),
+              originLabels: const {'base:class/wizard': '基础包 · 法师'},
+              entryOriginId: 'base:class/wizard',
+              onDisableOverride: (originId) async {},
+            ),
+          ),
+        ),
+      );
+      expect(find.text('关闭该来源的覆盖'), findsNothing);
+      expect(find.byIcon(Icons.extension_outlined), findsNothing);
+      expect(find.byIcon(Icons.rule_outlined), findsOneWidget);
+    });
+
+    testWidgets('关闭按钮文案说明"会关闭该来源在所有列上的覆盖"', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RuleSourceChip(
+              field: RuleFieldPath.spellcasting('prepared'),
+              source: const RuleFieldSource(
+                field: 'spellcasting.prepared',
+                originId: 'errata-pack:class/wizard',
+                tier: 140,
+              ),
+              originLabels: const {'errata-pack:class/wizard': '勘误包'},
+              entryOriginId: 'base:class/wizard',
+              onDisableOverride: (originId) async {},
+            ),
+          ),
+        ),
+      );
+      expect(find.text('关闭该来源的覆盖'), findsOneWidget);
+      expect(
+        find.byTooltip('会关闭该来源在所有列上的覆盖'),
+        findsOneWidget,
+        reason: '按钮按列显示，但 disable(originId) 按整条来源生效',
+      );
     });
   });
 
@@ -403,7 +455,7 @@ void main() {
       expect(find.textContaining('准备法术上限'), findsOneWidget);
       expect(find.textContaining('勘误包'), findsOneWidget);
 
-      await tester.tap(find.text('使用内置档案'));
+      await tester.tap(find.text('关闭该来源的覆盖'));
       await tester.pumpAndSettle();
 
       expect(reapplied, isNotNull);
@@ -465,14 +517,321 @@ void main() {
         'zeta:class/wizard',
       );
     });
+
+    // I：对话框默认把每一项选中为 `effectiveOriginId`，只改一列时其余列不得被
+    // 静默 pin 上（pin 豁免 disabled 且抑制后续冲突提示，且没有撤销入口）。
+    testWidgets('只改一列冲突 → pinned 只含该列（I）', (tester) async {
+      CharacterSheet? reapplied;
+      const preparedConflict = RuleOverrideConflict(
+        field: 'spellcasting.prepared',
+        tier: 140,
+        originIds: ['alpha:class/wizard', 'zeta:class/wizard'],
+        effectiveOriginId: 'alpha:class/wizard',
+      );
+      const hitDieConflict = RuleOverrideConflict(
+        field: 'hitDie',
+        tier: 140,
+        originIds: ['beta:class/wizard', 'gamma:class/wizard'],
+        effectiveOriginId: 'beta:class/wizard',
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterDetailPage(
+            initialTab: 'spells',
+            character: wizard(
+              extra: <String, Object?>{
+                'classRuleConflicts': RuleOverrideConflicts.toData(
+                  const [preparedConflict, hitDieConflict],
+                ),
+              },
+            ),
+            contentEntries: const [],
+            packageNames: const {
+              'alpha': 'A 包',
+              'zeta': 'Z 包',
+              'beta': 'B 包',
+              'gamma': 'G 包',
+            },
+            onSaveCharacter: (character) async {
+              reapplied = character;
+              return true;
+            },
+            onReapplyRules: (character) async {
+              reapplied = character;
+              return character;
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('2 处'), findsOneWidget);
+      await tester.tap(find.textContaining('处理'));
+      await tester.pumpAndSettle();
+
+      // 只改 prepared 那一列；hitDie 保持默认（beta）。
+      await tester.tap(find.text('Z 包').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('保存选择'));
+      await tester.pumpAndSettle();
+
+      expect(
+        CharacterRuleOverrides.fromCharacter(reapplied!).pinned,
+        {'spellcasting.prepared': 'zeta:class/wizard'},
+        reason: '用户没动过的列不得被静默 pin',
+      );
+    });
+
+    // C：关闭覆盖必须留下**恢复入口**（`CharacterRuleOverrides.enable` 的 UI）。
+    testWidgets('已关闭的来源出现在「已关闭的来源」区且可恢复（C）', (tester) async {
+      CharacterSheet? reapplied;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterDetailPage(
+            initialTab: 'profile',
+            character: wizard(
+              extra: <String, Object?>{
+                'ruleOverrides': <String, Object?>{
+                  'disabledOriginIds': <String>['errata'],
+                },
+              },
+            ),
+            contentEntries: const [],
+            packageNames: const {'errata': '勘误包'},
+            onSaveCharacter: (character) async {
+              reapplied = character;
+              return true;
+            },
+            onReapplyRules: (character) async {
+              reapplied = character;
+              return character;
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('已关闭的来源'), findsOneWidget);
+      expect(find.byKey(const Key('disabled-origin-errata')), findsOneWidget);
+
+      await tester.ensureVisible(find.text('恢复'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('恢复'));
+      await tester.pumpAndSettle();
+
+      expect(
+        CharacterRuleOverrides.fromCharacter(reapplied!).disabledOriginIds,
+        isEmpty,
+        reason: '恢复必须真的清掉禁用记录并触发再派生',
+      );
+      expect(find.text('已关闭的来源'), findsNothing);
+    });
+
+    // A：`onUpgrade` 必须收到**详情页当前**的角色，而不是打开详情页时捕获的快照
+    // ——否则用户在详情页刚做出的覆盖选择会在升级再派生时被静默还原。
+    testWidgets('详情页关闭来源后立刻升级：升级回调的参数含该选择（A）', (tester) async {
+      CharacterSheet? upgradeArgument;
+      CharacterSheet? pageState;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterDetailPage(
+            initialTab: 'spells',
+            character: wizard(
+              extra: <String, Object?>{
+                'classRuleSources': RuleFieldSourceMap.toData(
+                  const <String, RuleFieldSource>{
+                    'spellcasting.prepared': RuleFieldSource(
+                      field: 'spellcasting.prepared',
+                      originId: 'errata:class/wizard',
+                      tier: 140,
+                    ),
+                  },
+                ),
+              },
+            ),
+            contentEntries: const [],
+            packageNames: const {'errata': '勘误包'},
+            onSaveCharacter: (character) async => true,
+            onReapplyRules: (character) async => character,
+            onUpgrade: ([CharacterSheet? current]) async {
+              // 无参调用的旧签名在这里会把 `current` 留空——正是本用例要抓的差异。
+              upgradeArgument = current;
+              return current;
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      pageState = tester
+          .widget<CharacterDetailPage>(find.byType(CharacterDetailPage))
+          .character;
+
+      await tester.tap(find.text('关闭该来源的覆盖'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('升级角色'));
+      await tester.pumpAndSettle();
+
+      expect(upgradeArgument, isNotNull, reason: 'onUpgrade 的参数必须是当前角色');
+      expect(
+        CharacterRuleOverrides.fromCharacter(upgradeArgument!).disabledOriginIds,
+        {'errata:class/wizard'},
+        reason: '升级必须看到详情页刚做出的"关闭来源"选择',
+      );
+      expect(pageState, isNotNull);
+    });
+
+    // L：短休的契约魔法判定必须走**带覆盖**的共享解析，否则"关闭声明
+    // `archetype: pact` 的来源"只在数值路径生效、行为路径仍按旧规则恢复全部法术位。
+    testWidgets('关闭声明 archetype: pact 的来源后短休不再清空法术位（L）', (tester) async {
+      final updates = <Map<String, Object?>>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterDetailPage(
+            character: _warlock(disabled: {'errata'}),
+            contentEntries: _warlockEntries(),
+            packagePriorities: _warlockPriorities,
+            onUpdateRuntime:
+                ({
+                  int? currentHp,
+                  int? temporaryHp,
+                  bool? inspiration,
+                  List<String>? conditions,
+                  int? deathSaveSuccesses,
+                  int? deathSaveFailures,
+                  Map<String, int>? spellSlotsUsed,
+                  Map<String, int>? classResourcesUsed,
+                }) async {
+                  updates.add(<String, Object?>{'spellSlotsUsed': spellSlotsUsed});
+                },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.widgetWithText(FilledButton, '短休'));
+      await tester.tap(find.widgetWithText(FilledButton, '短休'));
+      await tester.pumpAndSettle();
+
+      expect(updates, isNotEmpty, reason: '短休必须真的上报运行期更新');
+      expect(
+        updates.last,
+        containsPair('spellSlotsUsed', null),
+        reason: '来源已关闭 ⇒ 不再按契约魔法清空法术位（按档案语义保持已用法术位）',
+      );
+      // 判据本身也要可观察：否则"短路成 null"会让上面的断言假绿。
+      expect(
+        Dnd5eRules.resolveClassRules(
+          entryId: 'base:class/mage',
+          classSummary: 'mage',
+          overrides: RuleOverrideIndex.fromEntries(
+            _warlockEntries(),
+            _warlockPriorities,
+          ),
+          disabledOriginIds: const {'errata'},
+        ).usesPactMagic,
+        isFalse,
+        reason: '勘误关闭后 archetype 不再由勘误提供',
+      );
+      expect(
+        Dnd5eRules.resolveClassRules(
+          entryId: 'base:class/mage',
+          classSummary: 'mage',
+          overrides: RuleOverrideIndex.fromEntries(
+            _warlockEntries(),
+            _warlockPriorities,
+          ),
+        ).usesPactMagic,
+        isTrue,
+        reason: '勘误生效时 archetype 由 errata 提供（对照组前提）',
+      );
+    });
+
+    testWidgets('未关闭该来源时短休按契约魔法清空法术位（对照组）', (tester) async {
+      final updates = <Map<String, Object?>>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterDetailPage(
+            character: _warlock(),
+            contentEntries: _warlockEntries(),
+            packagePriorities: _warlockPriorities,
+            onUpdateRuntime:
+                ({
+                  int? currentHp,
+                  int? temporaryHp,
+                  bool? inspiration,
+                  List<String>? conditions,
+                  int? deathSaveSuccesses,
+                  int? deathSaveFailures,
+                  Map<String, int>? spellSlotsUsed,
+                  Map<String, int>? classResourcesUsed,
+                }) async {
+                  updates.add(<String, Object?>{'spellSlotsUsed': spellSlotsUsed});
+                },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.widgetWithText(FilledButton, '短休'));
+      await tester.tap(find.widgetWithText(FilledButton, '短休'));
+      await tester.pumpAndSettle();
+
+      expect(updates, isNotEmpty);
+      expect(
+        updates.last,
+        containsPair('spellSlotsUsed', <String, int>{}),
+        reason: '勘误把施法进阶改成 pact（契约魔法）⇒ 短休恢复全部法术位',
+      );
+    });
   });
 }
 
-ContentEntry _classEntry(String id, Map<String, Object?> classRules) =>
-    ContentEntry.fromJson(<String, Object?>{
+/// 基础包只声明"会施法"，`archetype` 由勘误包补成 `pact`——关闭勘误即不再是
+/// 契约魔法（L 的行为路径）。slug 故意取**内置档案里没有的职业**（`mage`），
+/// 否则档案自己就会补上 `archetype: pact`，勘误开关将无法被观察到。
+const _warlockPriorities = <String, int>{'errata': 40};
+
+List<ContentEntry> _warlockEntries() => <ContentEntry>[
+  _classEntry('base:class/mage', const {
+    'spellcasting': {'mode': 'prepared'},
+  }, slug: 'mage'),
+  _classEntry('errata:class/mage', const {
+    'spellcasting': {'archetype': 'pact'},
+  }, slug: 'mage'),
+];
+
+/// 1 级邪术师（档案 `archetype: pact`）；[disabled] 写进 `data.ruleOverrides`。
+CharacterSheet _warlock({Set<String> disabled = const <String>{}}) =>
+    CharacterSheet.local(
+      id: 'warlock',
+      name: '契约试炼者',
+      level: 1,
+      classSummary: '邪术师',
+    ).copyWith(
+      data: <String, Object?>{
+        'classIdentity': <String, Object?>{
+          'entryId': 'base:class/mage',
+          'slug': 'mage',
+          'declared': true,
+        },
+        'runtime': <String, Object?>{
+          'spellSlotsUsed': <String, Object?>{'1': 1},
+        },
+        if (disabled.isNotEmpty)
+          'ruleOverrides': <String, Object?>{
+            'disabledOriginIds': disabled.toList(),
+          },
+      },
+    );
+
+ContentEntry _classEntry(
+  String id,
+  Map<String, Object?> classRules, {
+  String slug = 'wizard',
+}) => ContentEntry.fromJson(<String, Object?>{
       'id': id,
       'type': 'class',
-      'slug': 'wizard',
+      'slug': slug,
       'name': id,
       'body': <Object?>[],
       'revision': 1,

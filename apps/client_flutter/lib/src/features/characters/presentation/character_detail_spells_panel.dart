@@ -8,9 +8,11 @@ class _SpellsPanel extends StatefulWidget {
     this.onUpdateRuntime,
     this.onSaveCharacter,
     this.packagePriorities = const <String, int>{},
+    this.ruleOverrides = RuleOverrideIndex.empty,
     this.sources = const <String, RuleFieldSource>{},
     this.conflicts = const <RuleOverrideConflict>[],
     this.originLabels = const <String, String>{},
+    this.entryOriginId,
     this.onDisableOverride,
     this.onResolveConflicts,
   });
@@ -21,10 +23,16 @@ class _SpellsPanel extends StatefulWidget {
   final CharacterSaveCallback? onSaveCharacter;
   final Map<String, int> packagePriorities;
 
+  /// 跨包职业规则声明索引（决策 D3）：回退解析必须看得见勘误包（L）。
+  final RuleOverrideIndex ruleOverrides;
+
   /// 列级来源快照（`data.classRuleSources`，任务 9 消费）。
   final Map<String, RuleFieldSource> sources;
   final List<RuleOverrideConflict> conflicts;
   final Map<String, String> originLabels;
+
+  /// 角色自身条目的 originId：来源是它时不显示关闭按钮（C）。
+  final String? entryOriginId;
   final Future<void> Function(String originId)? onDisableOverride;
   final Future<void> Function(List<RuleOverrideConflict> conflicts)?
   onResolveConflicts;
@@ -289,8 +297,12 @@ class _SpellsPanelState extends State<_SpellsPanel> {
     );
   }
 
-  /// 法术位上限：先看角色创建时持久化的 `data.spellSlots`（按条目规则结算过），
-  /// 否则用条目身份 / 展示名解析规则档案（"未声明"就是空表，不猜）。
+  /// 法术位上限：先看角色创建 / 再派生时持久化的 `data.spellSlots`。
+  ///
+  /// 判据是**键是否存在**（H），不是"值是否非空"：键存在就是"已经派生过"——空表
+  /// `{}` 的含义是"没有法术位"（例如关闭了声明 `spellcasting` 的来源），绝不回退
+  /// 到 [_fallbackClassRules] 把被关闭来源的旧值读回来。只有老角色（这个键根本没
+  /// 派生过）才回退解析规则档案。
   Map<String, int> _slotMaximums() {
     final derived = widget.character.dataMap['spellSlots'];
     if (derived is Map) {
@@ -305,38 +317,27 @@ class _SpellsPanelState extends State<_SpellsPanel> {
     return _fallbackClassRules().spellSlots(widget.character.level);
   }
 
-  /// 角色持久化的职业条目身份（老角色可能只有展示名）。
-  String? _classEntryId() {
-    final identity = widget.character.dataMap['classIdentity'];
-    return identity is Map ? identity['entryId'] as String? : null;
-  }
-
+  /// 施法属性：同样按**键是否存在**判断（H）。键存在且为 `null` = 规则侧
+  /// **未声明**施法属性（关闭来源后的正常结果），不得再回退解析——那会把被关闭
+  /// 来源的 `ability` 读回来，与同屏的"无"自相矛盾。
   String? _spellcastingAbility() {
-    final derived = widget.character.dataMap['spellcastingAbility'];
-    if (derived is String && Dnd5eRules.abilityLabels.containsKey(derived)) {
-      return derived;
+    if (widget.character.dataMap.containsKey('spellcastingAbility')) {
+      final derived = widget.character.dataMap['spellcastingAbility'];
+      return derived is String && Dnd5eRules.abilityLabels.containsKey(derived)
+          ? derived
+          : null;
     }
     if (!DeclaredLevels.isDeclared(widget.character)) return null;
     return _fallbackClassRules().spellcastingAbility;
   }
 
-  /// 老角色（没有持久化派生快照）的回退解析：必须带上用户的覆盖选择与包优先级,
-  /// 否则"关闭覆盖"在这条路径上不生效（0.4-1）。
-  ResolvedClassRules _fallbackClassRules() {
-    final entryId = _classEntryId();
-    final overrides = CharacterRuleOverrides.fromCharacter(widget.character);
-    return Dnd5eRules.resolveClassRules(
-      entryId: entryId,
-      classSummary: widget.character.classSummary,
-      entryPriority:
-          widget.packagePriorities[RuleOverrideDeclaration.packageIdOf(
-            entryId ?? '',
-          )] ??
-          0,
-      disabledOriginIds: overrides.disabledOriginIds,
-      pinnedOrigins: overrides.pinned,
-    );
-  }
+  /// 老角色（没有持久化派生快照）的回退解析：与短休判定走**同一个共享实现**
+  /// [_resolveRulesWithOverrides]（带覆盖 + 包优先级），不在这里再写第二份。
+  ResolvedClassRules _fallbackClassRules() => _resolveRulesWithOverrides(
+    widget.character,
+    widget.packagePriorities,
+    overrides: widget.ruleOverrides,
+  );
 
   /// 只渲染**快照里真有来源**的列，避免每一列都显示"来源未知"的噪音。
   Widget _sourceChips(List<String> fields) {
@@ -355,6 +356,7 @@ class _SpellsPanelState extends State<_SpellsPanel> {
               field: field,
               source: widget.sources[field],
               originLabels: widget.originLabels,
+              entryOriginId: widget.entryOriginId,
               onDisableOverride: widget.onDisableOverride,
             ),
         ],

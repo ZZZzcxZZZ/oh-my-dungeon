@@ -2,10 +2,23 @@
 part of 'character_detail_page.dart';
 
 class _RuntimePanel extends StatefulWidget {
-  const _RuntimePanel({required this.character, this.onUpdateRuntime});
+  const _RuntimePanel({
+    required this.character,
+    this.onUpdateRuntime,
+    this.packagePriorities = const <String, int>{},
+    this.ruleOverrides = RuleOverrideIndex.empty,
+  });
 
   final CharacterSheet character;
   final CharacterRuntimeUpdate? onUpdateRuntime;
+
+  /// 包 id → priority（决策 D2）：短休的契约魔法判定必须与建档 / 再派生同一份，
+  /// 否则同一条覆盖在数值与行为两侧得到不同解释（L）。
+  final Map<String, int> packagePriorities;
+
+  /// 跨包职业规则声明索引（决策 D3）：短休判定必须看得见勘误包声明的
+  /// `spellcasting.archetype`，否则"关闭该勘误来源"在行为路径上无效（L）。
+  final RuleOverrideIndex ruleOverrides;
 
   @override
   State<_RuntimePanel> createState() => _RuntimePanelState();
@@ -303,15 +316,17 @@ class _RuntimePanelState extends State<_RuntimePanel> {
 
   Future<void> _takeShortRest() {
     // 邪术师契约魔法在短休恢复全部法术位；其他职业短休不回法术位。
-    final classSummary = widget.character.classSummary;
-    final identity = widget.character.dataMap['classIdentity'];
-    final usesPactMagic = Dnd5eRules.resolveClassRules(
-      entryId: identity is Map ? identity['entryId'] as String? : null,
-      classSummary: classSummary,
-    ).usesPactMagic;
-    final Map<String, int>? spellSlotsUsed = usesPactMagic
+    // 判定与取值共用**同一份**带用户覆盖的解析结果（L）：只解析一次，否则关闭了声明
+    // `archetype: pact` 的来源后，短休仍按旧规则恢复全部法术位——同屏数值已按覆盖
+    // 解析，行为没有。
+    final rules = _resolveRulesWithOverrides(
+      widget.character,
+      widget.packagePriorities,
+      overrides: widget.ruleOverrides,
+    );
+    final Map<String, int>? spellSlotsUsed = rules.usesPactMagic
         ? Dnd5eRules.spellSlotsAfterRest(
-            classSummary: classSummary,
+            rules: rules,
             used: widget.character.spellSlotsUsed,
             longRest: false,
           )

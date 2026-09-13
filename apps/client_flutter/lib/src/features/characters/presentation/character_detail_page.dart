@@ -12,6 +12,7 @@ import '../domain/character_profile.dart';
 import '../domain/character_quick_edit_service.dart';
 import '../domain/character_rule_overrides.dart';
 import '../domain/declared_levels.dart';
+import '../domain/rule_override_index.dart';
 import '../domain/dnd5e_rules.dart';
 import '../domain/weapon_attack_derivation.dart';
 import '../../rules/domain/rule_field_path.dart';
@@ -53,7 +54,9 @@ typedef CharacterInventoryUpdate =
 
 typedef CharacterRollCallback = void Function(CharacterRollEvent event);
 typedef CharacterSaveCallback = Future<bool> Function(CharacterSheet character);
-typedef CharacterUpgradeCallback = Future<CharacterSheet?> Function();
+typedef CharacterUpgradeCallback = Future<CharacterSheet?> Function(
+  CharacterSheet character,
+);
 typedef CharacterRulesReapplyCallback =
     Future<CharacterSheet?> Function(CharacterSheet character);
 
@@ -172,12 +175,35 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
   List<RuleOverrideConflict> _ruleConflicts() =>
       RuleOverrideConflicts.fromData(_character.dataMap['classRuleConflicts']);
 
+  /// 用户已关闭的覆盖来源（`data.ruleOverrides.disabledOriginIds`）：卡片据此渲染
+  /// 「已关闭的来源」区并给出恢复入口（C）。读写只在 [CharacterRuleOverrides] 一处。
+  Set<String> _disabledOverrideIds() =>
+      CharacterRuleOverrides.fromCharacter(_character).disabledOriginIds;
+
+  /// 角色**自己那条**职业条目的 originId（`data.classIdentity.entryId`）。来源是它
+  /// 时不是"覆盖"（解析器无条件包含自身条目），因此不显示关闭按钮（C）。
+  String? _entryOriginId() {
+    final identity = _character.dataMap['classIdentity'];
+    final entryId = identity is Map ? identity['entryId'] : null;
+    return entryId is String && entryId.trim().isNotEmpty ? entryId : null;
+  }
+
   /// 关闭某条覆盖并**重新派生**（唯一实现）：写 `data.ruleOverrides` → 通知上层
   /// 用 `CharacterRuleProjector` 重算 → 保存。UI 自己不算规则数值。
   Future<void> _disableOverride(String originId) async {
     final overrides = CharacterRuleOverrides.fromCharacter(_character);
     final data = Map<String, Object?>.from(_character.dataMap)
       ..['ruleOverrides'] = overrides.disable(originId).toData();
+    setState(() => _character = _character.copyWith(data: data));
+    await _reapplyAfterOverrideChange();
+  }
+
+  /// 恢复一条被关闭的来源（[CharacterRuleOverrides.enable] 的 UI 入口，C）：
+  /// 与 [_disableOverride] 同一条"写 → 再派生 → 保存"链路。
+  Future<void> _enableOverride(String originId) async {
+    final overrides = CharacterRuleOverrides.fromCharacter(_character);
+    final data = Map<String, Object?>.from(_character.dataMap)
+      ..['ruleOverrides'] = overrides.enable(originId).toData();
     setState(() => _character = _character.copyWith(data: data));
     await _reapplyAfterOverrideChange();
   }
@@ -221,6 +247,12 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
       _character,
       widget.contentEntries,
     );
+    // 跨包职业规则声明索引（决策 D3）：与再派生（`CharacterRuleProjector`）用同一份
+    // 输入构造，详情页里任何"临时解析一次"的行为路径都看得见勘误包（L）。
+    final ruleOverrides = RuleOverrideIndex.fromEntries(
+      effectiveContentEntries,
+      widget.packagePriorities,
+    );
     return CharacterSheetShell(
       title: _character.name,
       header: _CharacterHeader(character: _character),
@@ -247,6 +279,8 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
           child: _SheetTab(
             child: _RuntimePanel(
               character: _character,
+              packagePriorities: widget.packagePriorities,
+              ruleOverrides: ruleOverrides,
               onUpdateRuntime: widget.onUpdateRuntime == null
                   ? null
                   : _updateRuntime,
@@ -305,9 +339,11 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
                   ? null
                   : _saveCharacter,
               packagePriorities: widget.packagePriorities,
+              ruleOverrides: ruleOverrides,
               sources: _ruleSources(),
               conflicts: _ruleConflicts(),
               originLabels: _originLabels(),
+              entryOriginId: _entryOriginId(),
               onDisableOverride: _canEditOverrides ? _disableOverride : null,
               onResolveConflicts: _canEditOverrides ? _resolveConflicts : null,
             ),
@@ -341,6 +377,7 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
               sources: _ruleSources(),
               conflicts: _ruleConflicts(),
               originLabels: _originLabels(),
+              entryOriginId: _entryOriginId(),
               onDisableOverride: _canEditOverrides ? _disableOverride : null,
               onResolveConflicts: _canEditOverrides ? _resolveConflicts : null,
             ),
@@ -372,7 +409,14 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
                   : _saveCharacter,
               sources: _ruleSources(),
               originLabels: _originLabels(),
+              entryOriginId: _entryOriginId(),
+              disabledOriginIds: _disabledOverrideIds(),
+              resourceNames: {
+                for (final resource in _character.classResources)
+                  resource.id: resource.name,
+              },
               onDisableOverride: _canEditOverrides ? _disableOverride : null,
+              onEnableOverride: _canEditOverrides ? _enableOverride : null,
             ),
           ),
         ),
@@ -462,8 +506,12 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
     return success;
   }
 
+  /// 打开升级页。**必须把当前角色传上去**（A）：`onUpgrade` 若捕获打开详情页时的
+  /// 旧快照，用户在详情页刚做出的选择（关闭来源 / pin 某列，写在
+  /// `data.ruleOverrides`）会在升级再派生时被静默还原——升级走的是角色数据里的
+  /// `data.ruleOverrides`，不是闭包捕获的那份。
   Future<void> _upgrade() async {
-    final upgraded = await widget.onUpgrade?.call();
+    final upgraded = await widget.onUpgrade?.call(_character);
     if (mounted && upgraded != null) setState(() => _character = upgraded);
   }
 }

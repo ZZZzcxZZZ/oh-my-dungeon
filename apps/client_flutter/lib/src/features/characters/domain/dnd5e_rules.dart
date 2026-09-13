@@ -11,7 +11,7 @@ import 'rule_override_index.dart';
 /// D&D 5e (2024) 规则查询门面。
 ///
 /// **所有随职业变化的数值只来自档案**：内置档案（[profile]）与角色所用条目的
-/// `structured.classRules` 做字段级合并（[resolveClassRules]），未声明即不猜。
+/// `structured.classRules` 做列级合并（[resolveClassRules]），未声明即不猜。
 /// 本文件里**不存在**以职业名（中文或英文）为键的规则表，也没有任何职业名子串
 /// 匹配（契约 §10 第 1 条）。
 ///
@@ -414,13 +414,17 @@ class Dnd5eRules {
   }
 
   /// 休息后仍处于消耗状态的法术位：长休清空；契约魔法短休同样清空。
+  ///
+  /// [rules] 必须是**已解析**的职业规则（调用方用自己的口径解析一次后传进来）：
+  /// 本方法**不得**再自己 `resolveClassRules`——那会丢掉条目 id / 包 priority /
+  /// 用户覆盖（`disabled` / `pinned`），让"关闭声明 `archetype: pact` 的来源"在
+  /// 行为路径上不生效（L）。
   static Map<String, int> spellSlotsAfterRest({
-    required String classSummary,
+    required ResolvedClassRules rules,
     required Map<String, int> used,
     required bool longRest,
   }) {
     if (longRest) return const {};
-    final rules = resolveClassRules(entryId: null, classSummary: classSummary);
     if (rules.usesPactMagic) return const {};
     return Map<String, int>.unmodifiable(used);
   }

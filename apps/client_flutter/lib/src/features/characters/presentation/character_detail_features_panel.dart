@@ -353,7 +353,11 @@ class _ProfilePanel extends StatefulWidget {
     this.onSaveCharacter,
     this.sources = const <String, RuleFieldSource>{},
     this.originLabels = const <String, String>{},
+    this.entryOriginId,
+    this.disabledOriginIds = const <String>{},
+    this.resourceNames = const <String, String>{},
     this.onDisableOverride,
+    this.onEnableOverride,
   });
 
   final CharacterSheet character;
@@ -362,7 +366,16 @@ class _ProfilePanel extends StatefulWidget {
   /// 列级来源快照（`data.classRuleSources`，任务 9 的集中管理面）。
   final Map<String, RuleFieldSource> sources;
   final Map<String, String> originLabels;
+
+  /// 角色自身条目的 originId（不是覆盖，C）与被关闭的来源（恢复入口，C）。
+  final String? entryOriginId;
+  final Set<String> disabledOriginIds;
+
+  /// 资源 id → 资源展示名（K）。
+  final Map<String, String> resourceNames;
+
   final Future<void> Function(String originId)? onDisableOverride;
+  final Future<void> Function(String originId)? onEnableOverride;
 
   @override
   State<_ProfilePanel> createState() => _ProfilePanelState();
@@ -450,11 +463,15 @@ class _ProfilePanelState extends State<_ProfilePanel> {
         _profileField('backstory', '背景故事', enabled: enabled, lines: 6),
         _profileField('privateNotes', '私人笔记', enabled: enabled, lines: 5),
         const SizedBox(height: 8),
-        // 规则来源的集中管理面：每一列取自哪里、可逐条回退内置档案（任务 9）。
+        // 规则来源的集中管理面：每一列取自哪里、可逐条关闭覆盖并恢复（任务 9）。
         RuleSourceListCard(
           sources: widget.sources,
           originLabels: widget.originLabels,
+          entryOriginId: widget.entryOriginId,
+          disabledOriginIds: widget.disabledOriginIds,
+          resourceNames: widget.resourceNames,
           onDisableOverride: widget.onDisableOverride,
+          onEnableOverride: widget.onEnableOverride,
         ),
         if (!enabled) const Text('当前角色为只读；从本地角色列表打开后可直接编辑。'),
       ],

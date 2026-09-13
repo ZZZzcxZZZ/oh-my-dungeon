@@ -498,7 +498,7 @@ PHB 2024 官方表格）：
 | 骰子细节 | 优势/劣势只允许二选一，未实现"同时存在即抵消"；攻击掷出天然 20 不自动重击翻倍伤害 |
 | 职业资源的效果 | 只追踪"用了几次 / 怎么恢复"（10 个职业 13 项资源的上限与恢复语义**已建模**）；资源池的**具体效果未结算**：引导神力选项、野性形态数据与形态切换、术法点转换法术位、圣疗治疗结算、魔法诡计恢复法术位、诗人激励骰的授予与消耗 |
 | 伤害抗性与免疫 | `conditionResistance` grant 已从契约移除，抗性/免疫结算**未建模** |
-| 选择系统（计划 2，已实现） | `repeatable` / `countsToward` / `requires` / `group` / `help` 与内联选项 `grants` **已实现**（§9.2.3）。能力边界：`requires` 的 `ability` 门槛按**入参基础属性**判定（由其它选择授予的属性加值不计入门槛）；`spellbook` 池无独立数值列，只受选择自身 `maximum` 约束；PHB 提取器已产出 `optionType: "spell"` 选择（D8）与背景技能 grant（D10）|
+| 选择系统（计划 2，已实现） | `repeatable` / `countsToward` / `requires` / `group` / `help` 与内联选项 `grants` **已实现**（§9.2.3）。能力边界：`requires` 的 `ability` 门槛按**入参基础属性**判定（由其它选择授予的属性加值不计入门槛；门槛读的是**授予前**的值，因此某选择的 `grants` 改的正是它 `requires` 那项属性时**不构成不动点**，判据以 `_gateBuildFor` 为唯一口径）；`spellbook` 池无独立数值列，只受选择自身 `maximum` 约束；PHB 提取器已产出 `optionType: "spell"` 选择（D8）与背景技能 grant（D10）|
 | 规则来源没有等级维度（S3 决策 D5） | 表列**逐级**回退会产出"1–19 级来自档案、20 级来自条目"的数值，但来源只如实记在**最高 tier 的声明者**一条上（如 `spellcasting.prepared`），不做 `spellcasting.prepared@20`；逐级细节需要时由调用方读表自己比 |
 | `recovery` 不逐级合并（S3 决策 D5） | `resources[].recovery` 的常量形态与 `{"table": …}` 形态是同一条来源路径，整列由"声明过 `recovery` 的最高 tier"负责，**不**逐级借用更低 tier 的恢复表（恢复语义是枚举而不是可加的数值） |
 | `resources: []` 不再清空档案资源（S3） | 空数组只表示"本块没有资源声明"；要清空档案同名资源必须显式声明 `classRules.mode: "replace"` |
@@ -1895,9 +1895,13 @@ Material 3 设计系统契约（`DESIGN.md` 与契约测试/golden）；自托�
 （短休契约魔法判定、动作面板法术豁免 DC）；关闭覆盖后 5 个派生快照键（`spellSlots` /
 `spellcastingAbility` / `preparedSpellLimit` / `classResources` / `actions`）**显式清空**，
 不再残留被关闭来源的旧数值。
-**未完成**：作者 GUI 与 `.dndpack` 导出（S4），以及 PHB 提取器产出 `optionType: "spell"` 选择与
-背景条目驱动技能授予（§11）——见 §7.7 与
-`docs/archive/plans/2026-09-10-rules-contract-core.md` 的「待办」段（历史执行记录）。
+**S4 / D8 / D10（2026-09-13）**：作者 GUI 最小形态——类型下拉 +
+`structured` / `rules` JSON 边写边校验 + 唯一写入边界 `LocalHomebrewContentService`
+（新建 / 编辑 / 删除，编辑保留描述框之外的块）与 `.dndpack` 导出（`DndPackExporter`
+组包、`previewDndPack` 自校验后再落盘）；PHB 提取器按职业自己的 `maximumSpellLevel`
+表产出 `optionType: "spell"` 选择并新增第四个额度池 `cantrips`（决策 D8）；
+背景技能改由条目 `rules.grants` 驱动、删除中文名预设（决策 D10）。
+**可视化规则表单与"基于已有条目创建覆盖"仍未做**，现状见规格 §11.4。
 
 ### 实测基线（2026-09-13）
 

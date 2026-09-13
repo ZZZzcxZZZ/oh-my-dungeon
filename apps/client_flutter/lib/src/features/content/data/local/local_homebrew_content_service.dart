@@ -157,7 +157,6 @@ class LocalHomebrewContentService {
     CharacterRuleDefinition? rules,
     ContentEntry? existing,
   }) {
-    final cleanDescription = description.trim();
     return ContentEntry(
       id: id,
       type: type,
@@ -165,9 +164,7 @@ class LocalHomebrewContentService {
       name: name.trim(),
       aliases: existing?.aliases ?? const [],
       summary: summary.trim(),
-      body: [
-        if (cleanDescription.isNotEmpty) ParagraphBlock(text: cleanDescription),
-      ],
+      body: _mergedBody(existing: existing, description: description.trim()),
       structured: structured,
       tags: tags
           .map((tag) => tag.trim())
@@ -179,6 +176,35 @@ class LocalHomebrewContentService {
       rules: rules,
       revision: revision,
     );
+  }
+
+  /// `description` 只是**段落文本**，而 `body` 还能装标题、列表、表格等块。
+  ///
+  /// 编辑既有条目时必须把描述框承载不了的块原样留下：那些块在 GUI 里看不见，
+  /// 一旦丢弃，作者"改个名字再保存"就静默删掉了自己的富文本。段落则折叠成
+  /// 这一个描述框——替换第一个旧段落的位置（没有旧段落就追加到末尾），其余块
+  /// 保持原有顺序；描述清空 = 删掉全部段落、仅保留其它块。
+  static List<ContentBlock> _mergedBody({
+    required ContentEntry? existing,
+    required String description,
+  }) {
+    final replacement = description.isEmpty
+        ? null
+        : ParagraphBlock(text: description);
+    final body = <ContentBlock>[];
+    var placed = false;
+    for (final block in existing?.body ?? const <ContentBlock>[]) {
+      if (block is ParagraphBlock) {
+        if (!placed) {
+          if (replacement != null) body.add(replacement);
+          placed = true;
+        }
+        continue;
+      }
+      body.add(block);
+    }
+    if (!placed && replacement != null) body.add(replacement);
+    return body;
   }
 
   Future<String> _availableSlug(String type, String name) async {

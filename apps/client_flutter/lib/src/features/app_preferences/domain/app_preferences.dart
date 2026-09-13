@@ -56,7 +56,7 @@ class AppPreferences {
   final bool logCharacterRuntimeChanges;
   final bool groupConsecutiveChatMessages;
 
-  /// Task 1.3 新增自定义项 — 详见 docs/superpowers/plans/2026-07-23-user-feedback-integration-hardening.md
+  /// Task 1.3 新增自定义项（原计划文档已归档删除，见 docs/archive/README.md 的清理记录）
   /// 默认掷骰模式：'normal' | 'advantage' | 'disadvantage'
   final String defaultRollMode;
 

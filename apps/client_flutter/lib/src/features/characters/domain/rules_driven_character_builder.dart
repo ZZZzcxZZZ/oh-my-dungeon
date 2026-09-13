@@ -378,6 +378,11 @@ class RulesDrivenCharacterBuilder {
   ///
   /// [build] 与 [baseAbilitiesFrom] **必须**用同一份输入：否则减加值与叠加加值用的
   /// 不是同一份账，再派生会重复叠加。
+  ///
+  /// 回退分支把缺失属性按档案默认值（10）补齐，因此"未提供某属性"在回退路径按默认值
+  /// 参与门槛判定，而显式 `requiresSatisfied` 对**缺键**判 false；显式
+  /// `build.abilities` 路径完全不受影响（[build] 原样返回）。补齐是必要的：引擎在
+  /// 求值 `formula` 时读的是这份属性表，缺键会让公式拿不到值。
   CharacterBuild _gateBuildFor(
     CharacterBuild build,
     Map<String, Object?> abilities,

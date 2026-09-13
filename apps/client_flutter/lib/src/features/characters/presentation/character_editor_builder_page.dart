@@ -68,9 +68,10 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
   final Set<String> _selectedItemRefs = {};
   final Map<String, List<String>> _ruleChoices = {};
 
-  /// **背景预设**技能（`_presetSkillsForBackground`）。它只由背景决定，不是规则
-  /// 选择：职业声明了 `optionType: "skill"` 时它是锁定的背景身份（`fixed`），
-  /// 没有职业选择时（既有行为）它就是可编辑的技能集合本身。
+  /// 背景授予的技能（`backgroundSkillProficiencies`：读背景条目自己的
+  /// `rules.grants`，没有中文名预设）。它只由背景决定，不是规则选择：
+  /// 职业声明了 `optionType: "skill"` 时它是锁定的背景身份（`fixed`），
+  /// 没有职业选择时它就是可编辑的技能集合本身。
   late Set<String> _backgroundSkillProficiencies;
   late Map<String, int> _abilityScores;
   late Map<String, TextEditingController> _abilityControllers;

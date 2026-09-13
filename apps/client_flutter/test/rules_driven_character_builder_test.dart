@@ -1481,8 +1481,8 @@ void main() {
     );
 
     expect(draft.skills['察觉'], isTrue, reason: '规则选择经自动授予进 skills');
-    expect(draft.skills['运动'], isTrue, reason: '背景预设仍生效');
-    expect(draft.skills['威吓'], isTrue, reason: '背景预设仍生效');
+    expect(draft.skills['运动'], isTrue, reason: '背景条目 rules.grants 仍生效');
+    expect(draft.skills['威吓'], isTrue, reason: '背景条目 rules.grants 仍生效');
     expect(draft.skills['求生'], isFalse);
   });
 

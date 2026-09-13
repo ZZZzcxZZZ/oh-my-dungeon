@@ -186,6 +186,47 @@ class Phb2024V2ToolsTest(unittest.TestCase):
         self.assertEqual(extractor.spell_level_bands({}), [])
         self.assertEqual(extractor.spell_level_bands([1, 2, 3]), [])
 
+    def test_spell_choices_follow_the_caster_mode(self) -> None:
+        """`spell_choices` 的池归属随施法模式走：`prepared` / `known` 都要覆盖。
+
+        真实 PHB 2024 的 8 个施法职业模式**全是 `prepared`**，所以 `known` 路径
+        只能靠合成输入验证——否则那条分支永远没有用例。
+        """
+        prepared = extractor.spell_choices(
+            {
+                "mode": "prepared",
+                "listTags": ["法师"],
+                "maximumSpellLevel": {"1": 1, "3": 2},
+            }
+        )
+        self.assertEqual([level for level, _ in prepared], [1, 1, 3])
+        self.assertEqual(prepared[0][1]["id"], "spell-cantrips")
+        self.assertEqual(prepared[0][1]["countsToward"], "cantrips")
+        self.assertEqual(prepared[0][1]["maximumOptionLevel"], 0)
+        self.assertEqual(prepared[1][1]["countsToward"], "prepared")
+        self.assertEqual(prepared[1][1]["maximumOptionLevel"], 1)
+
+        known = extractor.spell_choices(
+            {
+                "mode": "known",
+                "listTags": ["魔契师"],
+                "maximumSpellLevel": {"1": 1, "3": 2},
+            }
+        )
+        self.assertEqual(
+            [choice["countsToward"] for _, choice in known],
+            ["cantrips", "known", "known"],
+        )
+        self.assertIn("已知上限", known[1][1]["help"])
+        self.assertIn("准备上限", prepared[1][1]["help"])
+
+        # 缺 listTags / 模式不认识 / 输入不是映射 → 不产出"选不到任何法术"的空选择。
+        self.assertEqual(extractor.spell_choices({"mode": "known"}), [])
+        self.assertEqual(
+            extractor.spell_choices({"mode": "spontaneous", "listTags": ["法师"]}), []
+        )
+        self.assertEqual(extractor.spell_choices("not-a-map"), [])
+
     def test_extracted_spellcasters_emit_spell_choices(self) -> None:
         """8 个施法职业都产出 `optionType: "spell"` 的选择（决策 D8）。
 

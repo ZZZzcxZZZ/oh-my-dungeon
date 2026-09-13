@@ -667,6 +667,69 @@ def spell_level_bands(table: Any) -> list[tuple[int, int]]:
     return bands
 
 
+def spell_choices(spellcasting: Any) -> list[tuple[int, dict[str, Any]]]:
+    """`spellcasting` 类规则 → `optionType: "spell"` 选择（决策 D8，**唯一实现**）。
+
+    返回 `(解锁等级, 选择)`：一条戏法在最前（环阶 0 / `countsToward: "cantrips"`，
+    额度来自职业 `cantrips` 列），随后每个"环阶解锁点"一条（`maximumOptionLevel` =
+    该环阶，`countsToward` = 该职业施法模式的池：`prepared` → `prepared`、
+    `known` → `known`）。调用方负责把选择挂到对应等级的 `progression` 步骤上。
+
+    缺少 `listTags`、模式不是 `prepared` / `known`、或输入不是映射时返回空列表：
+    绝不产出运行期"选不到任何法术"的空选择。
+    """
+    if not isinstance(spellcasting, dict):
+        return []
+    list_tags = [tag for tag in (spellcasting.get("listTags") or []) if tag]
+    mode = spellcasting.get("mode")
+    if not list_tags or mode not in ("prepared", "known"):
+        return []
+    pool = "known" if mode == "known" else "prepared"
+    choices: list[tuple[int, dict[str, Any]]] = [
+        (
+            1,
+            {
+                "id": "spell-cantrips",
+                "label": "戏法",
+                "optionType": "spell",
+                "minimum": 0,
+                # 上限由 `countsToward: "cantrips"` 池决定；`maximum` 只是形状兜底
+                # （池未声明时不会静默变成"不限"，仍受这个数字约束）。
+                "maximum": 20,
+                "optionTags": list_tags,
+                "maximumOptionLevel": 0,
+                "countsToward": "cantrips",
+                "builderStep": "spells",
+                "group": "戏法",
+                "help": "戏法自本法术列表选择，不占准备上限；数量由职业的戏法列逐级决定。",
+            },
+        )
+    ]
+    for spell_level, unlock_level in spell_level_bands(
+        spellcasting.get("maximumSpellLevel")
+    ):
+        choices.append(
+            (
+                unlock_level,
+                {
+                    "id": f"spell-level-{spell_level}",
+                    "label": f"{spell_level} 环法术",
+                    "optionType": "spell",
+                    "minimum": 0,
+                    "maximum": 20,
+                    "optionTags": list_tags,
+                    "maximumOptionLevel": spell_level,
+                    "countsToward": pool,
+                    "builderStep": "spells",
+                    "group": f"{spell_level} 环",
+                    "help": f"{spell_level} 环法术自本法术列表选择，数量计入"
+                    f"{'已知' if pool == 'known' else '准备'}上限。",
+                },
+            )
+        )
+    return choices
+
+
 # 职业特性表 → progression（1-20 级）
 # --------------------------------------------------------------------------- #
 def parse_progression_table(soup: BeautifulSoup, class_slug: str,
@@ -873,59 +936,17 @@ def extract_class(cls_name: str) -> tuple[dict[str, Any] | None,
         })
 
     # 法术选择（决策 D8）：按 `spellcasting.listTags` 生成 `optionType: "spell"` 的选择。
-    # 一条戏法（环阶 0，`countsToward: "cantrips"`：额度来自职业 `cantrips` 列）+
-    # 每个"环阶解锁点"一条（`maximumOptionLevel` = 该环阶，`countsToward` = `prepared`
-    # 池：额度来自职业 `prepared` 列）。这样规则书的法术表由**数据**承担，客户端不再
-    # 只能靠 `spellcasting` 的数值列"知道有法术位却选不了法术"。
+    # 形状与池归属由 `spell_choices` 唯一决定；这里只负责把它们挂到对应等级的步骤上。
     if spellcasting and progression:
-        list_tags = [tag for tag in (spellcasting.get("listTags") or []) if tag]
-        mode = spellcasting.get("mode")
-        if list_tags and mode in ("prepared", "known"):
-            pool = "known" if mode == "known" else "prepared"
-            level1 = next((p for p in progression if 1 in p["levels"]), None)
-            if level1 is None:
-                level1 = {"levels": [1]}
-                progression.append(level1)
+        for unlock_level, choice in spell_choices(spellcasting):
+            step = next(
+                (p for p in progression if unlock_level in p["levels"]), None
+            )
+            if step is None:
+                step = {"levels": [unlock_level]}
+                progression.append(step)
                 progression.sort(key=lambda p: p["levels"][0])
-            level1.setdefault("choices", []).append({
-                "id": "spell-cantrips",
-                "label": "戏法",
-                "optionType": "spell",
-                "minimum": 0,
-                # 上限由 `countsToward: "cantrips"` 池决定；`maximum` 只是形状兜底
-                # （池未声明时不会静默变成"不限"，仍受这个数字约束）。
-                "maximum": 20,
-                "optionTags": list_tags,
-                "maximumOptionLevel": 0,
-                "countsToward": "cantrips",
-                "builderStep": "spells",
-                "group": "戏法",
-                "help": "戏法自本法术列表选择，不占准备上限；数量由职业的戏法列逐级决定。",
-            })
-            for spell_level, unlock_level in spell_level_bands(
-                spellcasting.get("maximumSpellLevel")
-            ):
-                step = next(
-                    (p for p in progression if unlock_level in p["levels"]), None
-                )
-                if step is None:
-                    step = {"levels": [unlock_level]}
-                    progression.append(step)
-                    progression.sort(key=lambda p: p["levels"][0])
-                step.setdefault("choices", []).append({
-                    "id": f"spell-level-{spell_level}",
-                    "label": f"{spell_level} 环法术",
-                    "optionType": "spell",
-                    "minimum": 0,
-                    "maximum": 20,
-                    "optionTags": list_tags,
-                    "maximumOptionLevel": spell_level,
-                    "countsToward": pool,
-                    "builderStep": "spells",
-                    "group": f"{spell_level} 环",
-                    "help": f"{spell_level} 环法术自本法术列表选择，数量计入"
-                            f"{'已知' if pool == 'known' else '准备'}上限。",
-                })
+            step.setdefault("choices", []).append(choice)
 
     # 法术位数值只存在于客户端内置档案；条目只声明类规则与 progression。
     rules: dict[str, Any] = {}

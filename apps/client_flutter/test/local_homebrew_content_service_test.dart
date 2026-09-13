@@ -1,5 +1,7 @@
 import 'package:dnd_table_client/src/features/content/data/local/local_homebrew_content_service.dart';
 import 'package:dnd_table_client/src/features/content/data/local/content_repository.dart';
+import 'package:dnd_table_client/src/features/content/domain/content_block.dart';
+import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/content_test_support.dart';
@@ -134,5 +136,63 @@ void main() {
       ),
       throwsA(isA<LocalHomebrewValidationException>()),
     );
+  });
+
+  test('update 不会删掉描述框承载不了的块（标题 / 列表）', () async {
+    final repository = MemoryContentRepository();
+    final service = LocalHomebrewContentService(repository: repository);
+    final created = await service.create(
+      type: 'item',
+      name: '银钥匙',
+      description: '旧描述。',
+      structured: const {'homebrewEffect': '微光'},
+    );
+
+    // 历史数据 / 导入器留下的富文本块：服务是唯一写入边界，但既有条目可能带
+    // 标题、列表等描述框装不下的块，直接落库模拟这种输入。
+    await repository.upsertPackageEntry(
+      manifest: LocalHomebrewContentService.packageManifest,
+      entry: ContentEntry(
+        id: created.id,
+        type: created.type,
+        slug: created.slug,
+        name: created.name,
+        revision: created.revision,
+        structured: created.structured,
+        body: const [
+          HeadingBlock(text: '银钥匙'),
+          ParagraphBlock(text: '旧描述。'),
+          ListBlock(items: ['微光', '轻便']),
+        ],
+      ),
+    );
+    final seeded = (await repository.getByKey(created.id))!;
+    expect(seeded.body, hasLength(3));
+
+    final updated = await service.update(
+      existing: seeded,
+      name: '银钥匙',
+      description: '新描述。',
+      structured: seeded.structured,
+    );
+
+    // 段落被这一个描述框替换（只剩一段），标题与列表原样保留且顺序不变。
+    expect(updated.body, hasLength(3));
+    expect(updated.body[0], isA<HeadingBlock>());
+    expect(updated.body[1], isA<ParagraphBlock>());
+    expect((updated.body[1] as ParagraphBlock).text, '新描述。');
+    expect(updated.body[2], isA<ListBlock>());
+    expect((updated.body[2] as ListBlock).items, ['微光', '轻便']);
+
+    // 描述清空 = 删掉全部段落，非段落块仍然保留。
+    final cleared = await service.update(
+      existing: updated,
+      name: updated.name,
+      description: '   ',
+      structured: updated.structured,
+    );
+    expect(cleared.body, hasLength(2));
+    expect(cleared.body[0], isA<HeadingBlock>());
+    expect(cleared.body[1], isA<ListBlock>());
   });
 }

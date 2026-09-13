@@ -1037,7 +1037,8 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 
 ### 11.3 明确不在范围
 
-- **S4（本轮已做一部分，见 §11.4）**：作者 GUI 的**完整形态**（可视化规则表单、基于已有条目创建覆盖、`.dndpack` 导出）。
+- **S4 的剩余部分（见 §11.4）**：可视化规则表单、基于已有条目创建覆盖。
+  新建 / 编辑 / 删除 UI 与 `.dndpack` 导出**已完成**（不再是"不在范围"）。
 - **C 场景（永久排除）**：自定义技能 / 属性清单、自定义 AC 公式（护甲敏捷上限、无甲防御）、自定义休息与恢复语义。
 - **已建模，不要再重复建模**：12 职业的资源池**计数与恢复语义**（含随等级变化的恢复）、法术位与准备上限、HP / AC / 速度 / 属性加值。
 
@@ -1046,8 +1047,8 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | 部分 | 状态 |
 |---|---|
 | 导入侧（`.json` / `.dndpack` 预览、批量导入、诊断报告） | 完整 |
-| 领域服务（`LocalHomebrewContentService.create/update/delete` + `ContentSchemaRegistry.validateForCreation`） | 有实现与单测，**UI 已接线**（新建 / 编辑 / 删除条目对话框） |
-| `.dndpack` **导出** | 已实现（`LocalHomebrewContentService.exportDndPack`：manifest + entries + 校验后落盘） |
+| 领域服务（`LocalHomebrewContentService.create/update/delete` + `ContentSchemaRegistry.validateForCreation`） | 有实现与单测，**UI 已接线**（新建 / 编辑 / 删除条目对话框）；编辑时保留描述框之外的块（`_mergedBody`：标题、列表等不被"改个名字再保存"静默删掉） |
+| `.dndpack` **导出** | 已实现（`DndPackExporter.build` 组 manifest + entries + 既有资产，再经 `previewDndPack` 自校验；落盘由资料包设置页的 `FilePicker.saveFile` 完成。往返用例见 `dndpack_exporter_test.dart`） |
 | 可视化规则表单（把 `structured.classRules` / `rules` 做成填表界面） | **未做**：仍以 JSON 编辑器 + schema 校验承担（作者直接写契约 JSON，校验即时反馈） |
 
 ## 12. 建议实现阶段（**历史记录**，P0–P6 已全部执行）

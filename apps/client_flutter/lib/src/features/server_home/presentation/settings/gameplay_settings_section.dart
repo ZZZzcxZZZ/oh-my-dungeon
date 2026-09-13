@@ -5,7 +5,7 @@ import 'settings_section.dart';
 
 /// 游戏与跑团：默认掷骰模式、消息密度、字体缩放、HP 警戒阈值、快捷骰预设.
 ///
-/// Task 1.3 新增项 — 参考 docs/superpowers/plans/2026-07-23-user-feedback-integration-hardening.md。
+/// Task 1.3 新增项（原计划文档已归档删除，见 docs/archive/README.md 的清理记录）。
 /// Task 3.2: 快捷骰预设编辑器 (quickDicePresets) 与组合式骰子编辑器联动.
 class GameplaySettingsSection extends StatefulWidget {
   const GameplaySettingsSection({required this.controller, super.key});

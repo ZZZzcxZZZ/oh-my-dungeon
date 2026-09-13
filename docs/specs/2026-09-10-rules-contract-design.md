@@ -534,7 +534,7 @@ class RuleFieldSource {
 > 唯一实现点：候选枚举 `RuleChoiceSemantics.candidatesFor`、规范化
 > `normalizeSelection`、自动授予 `autoGrantsFor`、前置判定 `requiresSatisfied`、额度
 > `RuleChoiceQuota.effectiveMaximum`。实现计划见
-> [`plans/2026-09-12-choice-system-runtime.md`](../plans/2026-09-12-choice-system-runtime.md)。
+> [`archive/plans/2026-09-12-choice-system-runtime.md`](../archive/plans/2026-09-12-choice-system-runtime.md)。
 > **仍未落地**（§11）：PHB 提取器尚未产出 `optionType: "spell"` 的选择（运行时已支持该类
 > 选择，只是提取器把法术选择交给 `classRules.spellcasting` 数值承担）；背景条目驱动技能授予
 > 已由 D10 改为**背景条目自己的 `rules.grants`**（`kind: "proficiency"` + `target: "skill:<档案规范名>"`）；

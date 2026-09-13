@@ -1,5 +1,12 @@
 # 规则契约核心（P0–P2）实现计划
 
+> **历史执行记录（2026-09-13 归档）。** 本计划的任务已全部执行完毕（P0–P6 见规格 §11.1）。
+> 其中的代码片段、行号与当时的 HEAD 都是快照，**可能已经过时**；
+> 当前契约以
+> [`docs/specs/2026-09-10-rules-contract-design.md`](../../specs/2026-09-10-rules-contract-design.md)
+> 与 [`docs/README.md`](../../README.md) 为准，本文件只用于追溯决策与执行顺序。
+
+
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
 **目标：** 把 D&D 2024 规则数值从 Dart 代码搬进随包发布的内置规则档案，删除全部中文职业名子串匹配，并让"完全自制的职业条目"只靠 `structured.classRules` 就能产出正确的 HP / 豁免 / 技能选择 / 法术位 / 职业资源 / 准备法术上限。

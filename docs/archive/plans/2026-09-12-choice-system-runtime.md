@@ -1,5 +1,12 @@
 # 选择系统运行时语义（P5）实现计划
 
+> **历史执行记录（2026-09-13 归档）。** 本计划的任务已全部执行完毕；D8 / D10 由后续批次落地，见文末「决策」的事后注记。
+> 其中的代码片段、行号与当时的 HEAD 都是快照，**可能已经过时**；
+> 当前契约以
+> [`docs/specs/2026-09-10-rules-contract-design.md`](../../specs/2026-09-10-rules-contract-design.md)
+> 与 [`docs/README.md`](../../README.md) 为准，本文件只用于追溯决策与执行顺序。
+
+
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
 **目标：** 把规格 §3.10 的选择系统从"声明即导入报错"改成**真正生效的运行时语义**：内联选项的 `grants` 选中即应用（含字符串简写自动授予）、`repeatable` 可重复选取、`countsToward` 计入共享额度池、`requires` 前置条件隐藏/阻塞并在 UI 说明原因、`group`/`help` 落到选择面板、编辑器的选择状态由 `Set` 改为**有序 `List`**（顺序即声明顺序，可表达"同一选项重复 N 次"）、`optionType: "spell"` 走法术池、装备 A/B 写入 `inventory`/`currency`；同时把 `invalidAutoGrant` 落地为字符串简写无法推断 grants 时的导入 error。

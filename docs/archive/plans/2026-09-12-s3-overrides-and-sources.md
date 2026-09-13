@@ -1,5 +1,12 @@
 # S3「覆盖 / 勘误声明与来源可追溯」实现计划
 
+> **历史执行记录（2026-09-13 归档）。** 本计划的 13 个任务与后续修复批次已全部执行完毕，见文末「事后注记」。
+> 其中的代码片段、行号与当时的 HEAD 都是快照，**可能已经过时**；
+> 当前契约以
+> [`docs/specs/2026-09-10-rules-contract-design.md`](../../specs/2026-09-10-rules-contract-design.md)
+> 与 [`docs/README.md`](../../README.md) 为准，本文件只用于追溯决策与执行顺序。
+
+
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
 **目标：** 把「条目声明 ∪ 内置档案」的**字段级合并**升级为**列级合并**（`spellcasting` 按列、`resources` 按 `id` 再按列），把**来源可追溯**升级到列级并真正被角色页与导入报告消费，并在此基础上落地 S3 的三件事：`classRules.mode: "patch" | "replace"` 声明、可配置 `priority`（含 Drift `schemaVersion` 13→14 迁移）、跨包覆盖冲突的提示与选择、"关闭覆盖回退内置"。

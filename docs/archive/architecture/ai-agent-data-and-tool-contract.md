@@ -570,7 +570,7 @@ monster / companion`。YAML 保存 HP、AC、速度、属性、模板引用等�
 流程，不得创建只读的 Markdown 旁路模型。
 
 完整格式和资料模板契约见
-[本地资料包格式 v2](../content/content-package-format-v2.md#character-模板与character-markdown)。
+[本地资料包格式 v2](../../README.md)。
 
 ## 12. 当前实现差距
 

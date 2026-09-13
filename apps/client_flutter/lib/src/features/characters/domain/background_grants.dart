@@ -29,6 +29,8 @@ Set<String> backgroundSkillProficiencies({
   );
   final ledger = engine.evaluate(
     CharacterBuild(
+      // 背景授予是**固定**的（不随等级变化），等级取 1 只为让逐级步骤里的授予
+      // （若有）全部参与；技能熟练本身没有等级维度。
       level: 1,
       selections: <String, String>{'background': backgroundEntryId},
     ),

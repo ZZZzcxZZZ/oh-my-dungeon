@@ -1897,7 +1897,7 @@ Material 3 设计系统契约（`DESIGN.md` 与契约测试/golden）；自托�
 不再残留被关闭来源的旧数值。
 **未完成**：作者 GUI 与 `.dndpack` 导出（S4），以及 PHB 提取器产出 `optionType: "spell"` 选择与
 背景条目驱动技能授予（§11）——见 §7.7 与
-`docs/plans/2026-09-10-rules-contract-core.md` 的「待办」段。
+`docs/archive/plans/2026-09-10-rules-contract-core.md` 的「待办」段（历史执行记录）。
 
 ### 实测基线（2026-09-13）
 
@@ -1922,6 +1922,8 @@ Material 3 设计系统契约（`DESIGN.md` 与契约测试/golden）；自托�
 ## 17. 归档说明
 
 - 2026-07-29：100 份旧路线、Agent prompt、交接报告、计划与规格移入 `archive/`。
+- 2026-09-13：三份**已执行完的实现计划**（`docs/plans/`）移入 `docs/archive/plans/` 并加历史头——它们的任务与修复批次全部完成，代码片段与行号
+  是当时快照，不应再作为实现依据；决策结论已落进规格 §11 的决策记录与 §7.7。
 - 2026-09-10（本轮）：文档收敛为**本文件一份**，其余全部归档：
   - `archive/architecture/`、`archive/content/`、`archive/deployment/`、
     `archive/development/`、`archive/engineering/`、`archive/acceptance/`、

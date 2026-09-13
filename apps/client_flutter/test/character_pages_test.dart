@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character_edit_draft.dart';
+import 'package:dnd_table_client/src/features/characters/domain/dnd5e_rules.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_detail_page.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_editor_page.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_block.dart';
@@ -1836,26 +1837,66 @@ void main() {
     expect(find.textContaining('链甲、巨剑'), findsOneWidget);
   });
 
-  // M：向导内头部 HP 预览 / 等级区生命骰 / 法术配额必须与职业规则摘要**同一口径**。
-  // 条目声明的 hitDie: 12 必须同时出现在头部摘要与等级区（旧实现里头部自己按
-  // "条目 id 查不到内容仓库"的路径解析，会退回内置档案 d6，同屏自相矛盾）。
-  testWidgets('standard build header HP and level chips share one class-rule resolution (M)', (
+  // M（P0-2.5 区分度版）：向导内头部 HP 预览 / 等级区生命骰 / 法术配额必须走
+  // **同一份**带包 priority + 跨包索引的解析结果。夹具刻意让"角色自己那条"的包
+  // priority 更高（alpha 50 vs beta 10），因此只有**把 priority 传下去**才会赢；
+  // 不带 priority（自身条目落回 tier 100）会让 tier 110 的勘误反过来压过它。
+  testWidgets('standard build rides the higher-priority cross-package rules (M/P0-2.5)', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(1200, 1400);
+    tester.view.physicalSize = const Size(1200, 1600);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    final jumboKnight = ContentEntry.fromJson(<String, Object?>{
-      'id': 'test:class/jumbo-knight',
+    // 同一个 slug（`tough`）的两个包：alpha 是角色选中的那条（priority 50），
+    // beta 是勘误（priority 10）。alpha 必须赢：hitDie 8 / prepared 3。
+    final ownClass = ContentEntry.fromJson(<String, Object?>{
+      'id': 'alpha:class/tough',
       'type': 'class',
-      'slug': 'jumbo-knight',
-      'name': '巨魔骑士',
+      'slug': 'tough',
+      'name': '磐石骑士',
       'body': <Object?>[],
       'revision': 1,
       'structured': <String, Object?>{
-        'classRules': <String, Object?>{'hitDie': 12},
+        'classRules': <String, Object?>{
+          'hitDie': 8,
+          'spellcasting': <String, Object?>{
+            'mode': 'prepared',
+            'ability': 'int',
+            'prepared': <String, Object?>{'1': 3},
+          },
+        },
+      },
+      'rules': <String, Object?>{
+        'choices': <Object?>[
+          <String, Object?>{
+            'id': 'spellbook',
+            'label': '法术书',
+            'optionType': 'spell',
+            'minimum': 0,
+            'maximum': 5,
+            'countsToward': 'prepared',
+            'optionTags': <Object?>['spell-list:mage'],
+          },
+        ],
+      },
+    });
+    final errata = ContentEntry.fromJson(<String, Object?>{
+      'id': 'beta:class/tough',
+      'type': 'class',
+      'slug': 'tough',
+      'name': '磐石骑士勘误',
+      'body': <Object?>[],
+      'revision': 1,
+      'structured': <String, Object?>{
+        'classRules': <String, Object?>{
+          'hitDie': 12,
+          'spellcasting': <String, Object?>{
+            'mode': 'prepared',
+            'prepared': <String, Object?>{'1': 9},
+          },
+        },
       },
     });
 
@@ -1863,32 +1904,170 @@ void main() {
       MaterialApp(
         home: CharacterEditorPage(
           defaultCreationMethod: 'standard',
-          contentEntries: [jumboKnight],
-          packagePriorities: const {'test': 0},
+          contentEntries: [ownClass, errata],
+          packagePriorities: const {'alpha': 50, 'beta': 10},
           onSubmit: (_) async => true,
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(ChoiceChip, '巨魔骑士'));
+    await tester.tap(find.widgetWithText(ChoiceChip, '磐石骑士'));
     await tester.pumpAndSettle();
 
-    // CON 10（+0）1 级 d12 → 平均 7 + 1 = 8；但这里断言的是"两处同值"。
-    expect(find.text('d12'), findsOneWidget, reason: '职业规则摘要用条目声明的生命骰');
-    // 头部摘要与等级区各一处 HP：两处必须相等（旧实现头部退回档案 d6 → 'HP 5'）。
-    final hpTexts = tester
-        .widgetList<Text>(find.byWidgetPredicate((widget) => widget is Text))
-        .map((text) => text.data)
-        .whereType<String>()
-        .where((value) => value.startsWith('HP '))
-        .toList();
-    expect(hpTexts, isNotEmpty);
-    expect(
-      hpTexts.toSet(),
-      hasLength(1),
-      reason: '头部 HP 预览与等级区 HP 必须同一口径：$hpTexts',
+    // 先从属性步骤读出向导实际使用的 CON，再算出"alpha(d8)"与"beta(d12)"两个候选
+    // 1 级 HP（2024：1 级 = 满骰 + 体质调整值）。两个候选必然不同，否则用例空转。
+    await _goToBuilderStep(tester, 3, '属性');
+    final conScore = int.parse(
+      tester
+          .widget<TextField>(
+            find.byKey(const Key('standard-ability-con-field')),
+          )
+          .controller!
+          .text,
     );
+    final ownHp = Dnd5eRules.averageHitPointsForHitDie(
+      hitDie: 8,
+      level: 1,
+      constitution: conScore,
+    );
+    final errataHp = Dnd5eRules.averageHitPointsForHitDie(
+      hitDie: 12,
+      level: 1,
+      constitution: conScore,
+    );
+    expect(ownHp, isNot(errataHp), reason: '两个候选必须不同，用例才有区分度');
+
+    await _goToBuilderStep(tester, 0, '职业');
+    // 等级区生命骰（走 `classRules`）。
+    expect(
+      find.text('HP $ownHp'),
+      findsOneWidget,
+      reason: '等级区 HP 必须用高 priority 的 alpha（d8），不是 beta 的 d12',
+    );
+    expect(find.text('HP $errataHp'), findsNothing);
+    // 头部 HP 预览（同一个 `classRules`）。
+    expect(
+      _hpSummaryValue(tester),
+      '$ownHp',
+      reason: '头部 HP 预览必须与等级区同一口径',
+    );
+
+    // 向导法术配额（`RuleChoiceQuota.limitsFor(rules: _resolveClassRules(...))`）：
+    // 额度 5 与 prepared 池上限取小 → alpha 的 3（beta 会是 9 → 5）。
+    await _goToBuilderStep(tester, 6, '法术');
+    expect(
+      find.text('已选 0/3'),
+      findsOneWidget,
+      reason: '法术配额必须用高 priority 的 alpha（prepared 3）',
+    );
+    expect(find.text('已选 0/5'), findsNothing);
+  });
+
+  // M（跨包索引必填）：反向夹具——**勘误包的 priority 更高**时，向导必须以勘误的
+  // 数值为准（与 `RulesDrivenCharacterBuilder` 落库结果一致）。不带
+  // `overrides:`（看不见别的包的声明）就会退回自身条目的 d8 / prepared 3。
+  testWidgets('standard build sees a higher-priority errata from another package (M)', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    ContentEntry entry(
+      String packageId,
+      String name,
+      int hitDie,
+      int prepared,
+    ) => ContentEntry.fromJson(<String, Object?>{
+      'id': '$packageId:class/tough',
+      'type': 'class',
+      'slug': 'tough',
+      'name': name,
+      'body': <Object?>[],
+      'revision': 1,
+      'structured': <String, Object?>{
+        'classRules': <String, Object?>{
+          'hitDie': hitDie,
+          'spellcasting': <String, Object?>{
+            'mode': 'prepared',
+            'ability': 'int',
+            'prepared': <String, Object?>{'1': prepared},
+          },
+        },
+      },
+      'rules': <String, Object?>{
+        'choices': <Object?>[
+          <String, Object?>{
+            'id': 'spellbook',
+            'label': '法术书',
+            'optionType': 'spell',
+            'minimum': 0,
+            'maximum': 5,
+            'countsToward': 'prepared',
+            'optionTags': <Object?>['spell-list:mage'],
+          },
+        ],
+      },
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          contentEntries: [
+            entry('alpha', '磐石骑士', 8, 3),
+            entry('beta', '磐石骑士勘误', 12, 9),
+          ],
+          // 勘误包 priority 更高 ⇒ beta tier 150 > 自身条目 tier 100。
+          packagePriorities: const {'alpha': 0, 'beta': 50},
+          onSubmit: (_) async => true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(ChoiceChip, '磐石骑士'));
+    await tester.pumpAndSettle();
+
+    await _goToBuilderStep(tester, 3, '属性');
+    final conScore = int.parse(
+      tester
+          .widget<TextField>(
+            find.byKey(const Key('standard-ability-con-field')),
+          )
+          .controller!
+          .text,
+    );
+    final errataHp = Dnd5eRules.averageHitPointsForHitDie(
+      hitDie: 12,
+      level: 1,
+      constitution: conScore,
+    );
+    final ownHp = Dnd5eRules.averageHitPointsForHitDie(
+      hitDie: 8,
+      level: 1,
+      constitution: conScore,
+    );
+    expect(errataHp, isNot(ownHp));
+
+    await _goToBuilderStep(tester, 0, '职业');
+    expect(
+      find.text('HP $errataHp'),
+      findsOneWidget,
+      reason: '勘误 priority 更高 ⇒ 等级区 HP 用 errata 的 d12',
+    );
+    expect(find.text('HP $ownHp'), findsNothing);
+    expect(_hpSummaryValue(tester), '$errataHp');
+
+    await _goToBuilderStep(tester, 6, '法术');
+    expect(
+      find.text('已选 0/5'),
+      findsOneWidget,
+      reason: '勘误 priority 更高 ⇒ prepared 9 与额度 5 取小 = 5',
+    );
+    expect(find.text('已选 0/3'), findsNothing);
   });
 
   // 阻塞项 2：`optionType: "skill"` 的内联选择由专门的技能选择器承担，通用条目
@@ -2662,6 +2841,29 @@ const _validPngDataUrl =
 final Uint8List _validPngBytes = base64Decode(
   _validPngDataUrl.substring(_validPngDataUrl.indexOf(',') + 1),
 );
+
+/// 读头部摘要里 `label == 'HP'` 那个指标的数值。
+///
+/// `_SummaryMetric` 的 Column 恰好两个 Text（先 value 后 label），因此从最近的
+/// 祖先 Column 往外找第一个满足该形状的即可——比按文本猜数字稳。
+String _hpSummaryValue(WidgetTester tester) {
+  final columns = find.ancestor(
+    of: find.text('HP'),
+    matching: find.byType(Column),
+  );
+  for (final candidate in columns.evaluate()) {
+    final texts = find
+        .descendant(
+          of: find.byElementPredicate((element) => element == candidate),
+          matching: find.byType(Text),
+        )
+        .evaluate()
+        .map((element) => (element.widget as Text).data)
+        .toList();
+    if (texts.length == 2 && texts[1] == 'HP') return texts[0]!;
+  }
+  throw StateError('未找到头部 HP 摘要指标');
+}
 
 Future<void> _goToBuilderStep(
   WidgetTester tester,

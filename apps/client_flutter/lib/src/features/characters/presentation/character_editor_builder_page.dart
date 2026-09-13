@@ -265,10 +265,8 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         summary: summary,
         review: review,
         level: _level,
-        className: _className,
-        classEntry: _entryById(_classEntryId),
-        // 同屏一个口径（M）：头部 HP 预览必须用编辑器**已解析**（带 disabled /
-        // pinned / 包 priority）的职业规则，不得自己再解析一次。
+        // 同屏一个口径（M）：头部 HP 预览用向导页**唯一**的 `_resolveClassRules`
+        // （带 structured.classRules 与包 priority），本组件不得自行解析。
         classRules: _resolveClassRules(_classEntryId),
         abilities: _abilityScores,
         selectedSpells: _selectedSpellRefs.length,
@@ -668,9 +666,10 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         .firstOrNull;
   }
 
-  /// 向导内职业规则的**唯一**解析口径（M）：带包 priority（决策 D2）与条目自身的
-  /// `structured.classRules`，与 `character_editor_page._resolveClassRules` 和再派生
-  /// 同源。本页的头部 HP 预览、等级区生命骰、法术配额都必须走它，不得各自再调
+  /// 向导内职业规则的**唯一**解析口径（M）：带包 priority（决策 D2）、条目自身的
+  /// `structured.classRules` 与**跨包声明索引**（决策 D3），与
+  /// `RulesDrivenCharacterBuilder`（向导落库路径）同源。本页的头部 HP 预览、
+  /// 等级区生命骰、法术配额都必须走它，不得各自再调
   /// `Dnd5eRules.resolveClassRules`。
   ///
   /// 标准创建向导只在**新建**角色时出现（编辑老角色走完整表单），因此这里没有
@@ -681,6 +680,9 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       entryId: entry?.id,
       classSummary: entry?.name ?? _className,
       structured: entry?.structured ?? const <String, Object?>{},
+      // 不带这份索引就看不见别的包对**同一 slug** 的勘误 / 补丁，预览会与
+      // `RulesDrivenCharacterBuilder` 的落库结果不同（"向导显示 d8、落库变 d12"）。
+      overrides: _ruleOverrides,
       entryPriority:
           widget.packagePriorities[RuleOverrideDeclaration.packageIdOf(
             entry?.id ?? '',
@@ -688,6 +690,25 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
           0,
     );
   }
+
+  /// 跨包职业规则声明索引（决策 D3）：**唯一的**构造点，按输入身份缓存——
+  /// 每次 build 都重建会为每个条目重复 `ClassRuleSet.parse`。
+  RuleOverrideIndex get _ruleOverrides {
+    if (!identical(_ruleOverridesSource, widget.contentEntries) ||
+        !identical(_ruleOverridesPriorities, widget.packagePriorities)) {
+      _ruleOverridesSource = widget.contentEntries;
+      _ruleOverridesPriorities = widget.packagePriorities;
+      _ruleOverridesCache = RuleOverrideIndex.fromEntries(
+        widget.contentEntries,
+        widget.packagePriorities,
+      );
+    }
+    return _ruleOverridesCache!;
+  }
+
+  List<ContentEntry>? _ruleOverridesSource;
+  Map<String, int>? _ruleOverridesPriorities;
+  RuleOverrideIndex? _ruleOverridesCache;
 
   String? _entryIdFor(String type, String name) {
     for (final entry in widget.contentEntries) {

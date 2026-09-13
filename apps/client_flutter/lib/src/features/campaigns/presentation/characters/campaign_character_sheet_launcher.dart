@@ -67,7 +67,10 @@ Future<void> openCampaignCharacterSheet({
     currentUserId: controller.currentUserId,
     canEditAnyCharacter: canEditAnyCharacter,
   );
-  final contentEntries = await _loadContentEntries(contentRepository);
+  // 条目与包 priority **一起**加载（同一处 loader）：campaign 视图里的
+  // `RuleOverrideIndex` 也要用与本地建档同一份 tier，否则 priority 40 的勘误
+  // 压不过自身条目（决策 D2 / 任务 9）。
+  final content = await _loadContent(contentRepository);
   if (!context.mounted) return;
 
   await Navigator.of(context).push<void>(
@@ -76,7 +79,8 @@ Future<void> openCampaignCharacterSheet({
         controller: controller,
         characterId: character.id,
         canEdit: canEdit,
-        contentEntries: contentEntries,
+        contentEntries: content.entries,
+        packagePriorities: content.packagePriorities,
         sink: sink,
         returnToChatAfterRoll: returnToChatAfterRoll,
       ),
@@ -90,6 +94,7 @@ class CampaignCharacterFullSheetPage extends StatefulWidget {
     required this.characterId,
     required this.canEdit,
     required this.contentEntries,
+    this.packagePriorities = const <String, int>{},
     this.sink,
     this.returnToChatAfterRoll = false,
     super.key,
@@ -99,6 +104,10 @@ class CampaignCharacterFullSheetPage extends StatefulWidget {
   final String characterId;
   final bool canEdit;
   final List<ContentEntry> contentEntries;
+
+  /// 包 id → priority（决策 D2）：campaign 角色卡的规则解析必须与本地建档
+  /// **同一份** tier，否则勘误 / 覆盖在 campaign 视图里失效。
+  final Map<String, int> packagePriorities;
   final CampaignActionSink? sink;
   final bool returnToChatAfterRoll;
 
@@ -185,6 +194,7 @@ class _CampaignCharacterFullSheetPageState
       key: const Key('campaign-character-full-sheet'),
       character: character,
       contentEntries: widget.contentEntries,
+      packagePriorities: widget.packagePriorities,
       sink: widget.sink,
       returnToChatAfterRoll: widget.returnToChatAfterRoll,
       onUpdateRuntime: widget.canEdit
@@ -229,14 +239,28 @@ class _CampaignCharacterFullSheetPageState
   }
 }
 
-Future<List<ContentEntry>> _loadContentEntries(
-  ContentRepository? repository,
-) async {
-  if (repository == null) return const [];
+/// 一次加载 campaign 角色卡需要的**全部**内容侧输入：条目与包 priority。
+///
+/// **唯一 loader**：条目与 priority 必须成对加载（调用方不许各自再查一次），否则
+/// 两处会读到不一致的 tier（决策 D2）。
+Future<({List<ContentEntry> entries, Map<String, int> packagePriorities})>
+_loadContent(ContentRepository? repository) async {
+  if (repository == null) {
+    return (
+      entries: const <ContentEntry>[],
+      packagePriorities: const <String, int>{},
+    );
+  }
   try {
-    return await repository.search(const ContentQuery());
+    return (
+      entries: await repository.search(const ContentQuery()),
+      packagePriorities: await repository.packagePriorities(),
+    );
   } catch (_) {
-    return const [];
+    return (
+      entries: const <ContentEntry>[],
+      packagePriorities: const <String, int>{},
+    );
   }
 }
 

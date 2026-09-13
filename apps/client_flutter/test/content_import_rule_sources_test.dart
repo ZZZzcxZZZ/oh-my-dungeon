@@ -103,9 +103,61 @@ void main() {
       findsNothing,
       reason: '不得退回裸包 id / 不得再用 split(\':\').first',
     );
+    expect(find.byKey(const Key('import-preview-confirm')), findsOneWidget);
+  });
+
+  // 建议 9：确认按钮的 key 是**中性**的（挂在通用"确认导入"上），且在有 / 无
+  // `classRuleSources` 两种内容分支里都存在——测试不该"恰好"才点得到。
+  testWidgets('确认导入 key 在有 / 无规则来源两个分支都存在', (tester) async {
+    Future<void> pumpPreview({required bool withClassEntry}) async {
+      final report = await importer.previewJson(
+        packageJson(
+          id: 'patch-pack',
+          // 无 `classRuleSources` 的分支：包里根本没有 class 条目
+          // （`report.classRuleSources` 是空 map，摘要区整块不渲染）。
+          entry: withClassEntry
+              ? classEntry(
+                  packageId: 'patch-pack',
+                  slug: 'wizard',
+                  classRules: {
+                    'spellcasting': {
+                      'prepared': {'5': 9},
+                    },
+                  },
+                )
+              : <String, Object?>{
+                  'id': 'patch-pack:spell/bolt',
+                  'type': 'spell',
+                  'slug': 'bolt',
+                  'name': '光弹',
+                  'body': <Object?>[],
+                  'revision': 1,
+                },
+        ),
+      );
+      expect(report.valid, isTrue, reason: '${report.errors}');
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ContentImportPreviewDialog(
+            report: report,
+            onConfirm: () async {},
+          ),
+        ),
+      );
+    }
+
+    // 有来源：摘要区渲染。
+    await pumpPreview(withClassEntry: true);
+    expect(find.byKey(const Key('import-preview-sources')), findsOneWidget);
+    expect(find.byKey(const Key('import-preview-confirm')), findsOneWidget);
+
+    // 无来源：摘要区不渲染，但确认按钮仍在（同一个 key）。
+    await pumpPreview(withClassEntry: false);
+    expect(find.byKey(const Key('import-preview-sources')), findsNothing);
     expect(
-      find.byKey(const Key('import-preview-sources-confirm')),
+      find.byKey(const Key('import-preview-confirm')),
       findsOneWidget,
+      reason: '确认按钮与"是否展示来源"无关，key 必须中性且两分支都在',
     );
   });
 

@@ -90,7 +90,10 @@ class ContentImportPreviewDialog extends StatelessWidget {
             child: const Text('取消'),
           ),
           FilledButton(
-            key: const Key('import-preview-sources-confirm'),
+            // 中性 key（不是 `…-sources-confirm`）：这个按钮是**通用**的"确认导入"，
+            // 与"是否展示了规则来源"无关——`actions` 在有无 `classRuleSources` 的
+            // 两种内容分支里都渲染，测试不该"恰好"才点得到它。
+            key: const Key('import-preview-confirm'),
             onPressed: () async {
               await onConfirm();
               if (!context.mounted) return;

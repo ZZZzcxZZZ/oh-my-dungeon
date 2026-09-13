@@ -15,6 +15,7 @@ import '../domain/declared_levels.dart';
 import '../domain/dnd5e_rules.dart';
 import '../domain/equipment_cost.dart';
 import '../domain/quick_build.dart';
+import '../domain/rule_override_index.dart';
 import '../domain/rules_driven_character_builder.dart';
 import '../domain/spell_selection_policy.dart';
 import '../domain/structured_class_rules.dart';

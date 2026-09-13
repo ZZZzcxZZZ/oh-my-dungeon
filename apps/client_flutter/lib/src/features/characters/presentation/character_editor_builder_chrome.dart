@@ -148,9 +148,7 @@ class _BuilderSummaryPanel extends StatelessWidget {
     required this.summary,
     required this.review,
     required this.level,
-    required this.className,
-    required this.classEntry,
-    this.classRules,
+    required this.classRules,
     required this.abilities,
     required this.selectedSpells,
     required this.selectedItems,
@@ -160,13 +158,11 @@ class _BuilderSummaryPanel extends StatelessWidget {
   final String summary;
   final _StandardBuildReview review;
   final int level;
-  final String className;
-  final ContentEntry? classEntry;
 
-  /// **已解析**的职业规则（由编辑器页面 `_resolveClassRules` 传入，带 disabled /
-  /// pinned / 包 priority）。为 null 时退回按条目自身解析只是兜底，正常渲染路径必须
-  /// 传——否则头部 HP 预览与编辑器其它位置（等级区、法术配额）口径不同（M）。
-  final ResolvedClassRules? classRules;
+  /// **已解析**的职业规则，由调用方（向导页唯一的 `_resolveClassRules`）传入。
+  ///
+  /// **必填**：本组件不得自行解析——那会与同屏的等级区 / 法术配额口径分叉（M）。
+  final ResolvedClassRules classRules;
   final Map<String, int> abilities;
   final int selectedSpells;
   final int selectedItems;
@@ -174,21 +170,14 @@ class _BuilderSummaryPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolved =
-        classRules ??
-        Dnd5eRules.resolveClassRules(
-          entryId: classEntry?.id,
-          classSummary: classEntry?.name ?? className,
-          structured: classEntry?.structured ?? const <String, Object?>{},
-        );
-    final hp = resolved.hitDie == null
+    final hp = classRules.hitDie == null
         ? (Dnd5eRules.abilityModifier(
                     Dnd5eRules.abilityScore(abilities, 'con'),
                   ) *
                   level.clamp(1, 20))
               .clamp(1, 1 << 30)
         : Dnd5eRules.averageHitPointsForHitDie(
-            hitDie: resolved.hitDie!,
+            hitDie: classRules.hitDie!,
             level: level,
             constitution: Dnd5eRules.abilityScore(abilities, 'con'),
           );

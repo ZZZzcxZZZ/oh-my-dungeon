@@ -272,4 +272,55 @@ void main() {
     ).previewDndPack(reExport.bytes);
     expect(reReport.valid, isTrue, reason: '${reReport.errors}');
   });
+
+  test('资源是"待补齐补丁"：缺 name/maximum 且档案无同 id 时报 incompleteResourcePatch', () async {
+    final repository = MemoryContentRepository();
+    Future<void> seed(Map<String, Object?> classRules) =>
+        repository.upsertPackageEntry(
+          manifest: LocalHomebrewContentService.packageManifest,
+          entry: ContentEntry.fromJson({
+            'id': 'local-homebrew:class/star-knight',
+            'type': 'class',
+            'slug': 'star-knight',
+            'name': '星骑士',
+            'body': <Object?>[],
+            'revision': 1,
+            'structured': <String, Object?>{'classRules': classRules},
+          }),
+        );
+
+    // 表单"添加资源"的默认形状 = 只声明 id：形状层合法（`ClassRuleSet.parse` 无
+    // error），但档案里没有同 id 资源可补齐，真实导出链会判 `incompleteResourcePatch`。
+    // 这正是"新资源是待补齐补丁"的契约含义——不是可以一路存到导出才炸的合法终态。
+    await seed({
+      'hitDie': 10,
+      'resources': [
+        {'id': 'resource-1'},
+      ],
+    });
+    await expectLater(
+      DndPackExporter(repository: repository).build(
+        packageId: LocalHomebrewContentService.packageId,
+      ),
+      throwsA(
+        isA<DndPackExportException>().having(
+          (error) => error.report.errors.first.message,
+          'message',
+          contains('incompleteResourcePatch'),
+        ),
+      ),
+    );
+
+    // 补齐 name + maximum 后即可导出（作者必须把补丁写完）。
+    await seed({
+      'hitDie': 10,
+      'resources': [
+        {'id': 'resource-1', 'name': '专注点', 'maximum': 3},
+      ],
+    });
+    final export = await DndPackExporter(
+      repository: repository,
+    ).build(packageId: LocalHomebrewContentService.packageId);
+    expect(export.report.valid, isTrue, reason: '${export.report.errors}');
+  });
 }

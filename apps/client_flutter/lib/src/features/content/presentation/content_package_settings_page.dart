@@ -108,12 +108,11 @@ class _ContentPackageSettingsPageState
     };
     final candidates = <ContentEntry>[
       for (final entry in all)
+        // 自制包自己的条目由 `takenKeys` 排除：它们每个都占着自己的对齐键。
+        // 不必再写 `id.startsWith(packageId:)`——生产装配下 id 带 `local:` 前缀，
+        // 那个条件要么恒真、要么与 takenKeys 完全重复；包被停用时 `search` 也根本
+        // 不会返回这些条目（`packages.enabled` 过滤）。
         if (entry.structured['classRules'] is Map &&
-            // 生产装配下 `search` 返回的 id 带 `local:` 前缀，必须按**规范 id**
-            // 判断，否则这个条件恒真（真正排除自制条目的是下面的 takenKeys）。
-            !canonicalContentEntryId(
-              entry.id,
-            ).startsWith('${LocalHomebrewContentService.packageId}:') &&
             !takenKeys.contains(contentEntryAlignmentKey(entry.id)))
           entry,
     ];

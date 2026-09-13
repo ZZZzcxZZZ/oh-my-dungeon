@@ -1172,4 +1172,269 @@ void main() {
       expect(rules.spellcasting?.declares('prepared'), isTrue);
     });
   });
+
+  // P0-2.2：`_sameTierDropped` 的 **tier 过滤**——只有被 replace 丢弃的**同 tier**
+  // 声明才作为 pin 的候选保留。更低 tier 被截断是 D4 的设计语义（"不提供任何列"），
+  // pin 也不许把它复活。
+  group('被 replace 丢弃的声明只有同 tier 才能被 pin 复活（P0-2.2）', () {
+    RuleOverrideDeclaration replacer({int priority = 50}) =>
+        RuleOverrideDeclaration.package(
+          originId: 'replacer:class/wizard',
+          packageId: 'replacer',
+          priority: priority,
+          entryId: 'replacer:class/wizard',
+          rules: rulesOf({
+            'mode': 'replace',
+            'hitDie': 10,
+            'spellcasting': {
+              'mode': 'prepared',
+              'prepared': {'5': 7},
+            },
+          }),
+        );
+
+    ResolvedClassRules resolve({
+      required int patchPriority,
+      Map<String, String> pinnedOrigins = const <String, String>{},
+    }) => RuleProfileResolver.resolveClassRules(
+      profile: profile,
+      slug: 'wizard',
+      entryRules: null,
+      entryId: null,
+      declarations: [
+        replacer(),
+        declaration('patch:class/wizard', {
+          'hitDie': 8,
+          'spellcasting': {
+            'prepared': {'5': 9},
+          },
+        }, priority: patchPriority),
+      ],
+      pinnedOrigins: pinnedOrigins,
+    );
+
+    test('同 tier patch 被 pin 后生效（对照组）', () {
+      final merged = resolve(
+        patchPriority: 50,
+        pinnedOrigins: const {'spellcasting.prepared': 'patch:class/wizard'},
+      );
+      expect(merged.preparedLimit(5), 9);
+      expect(
+        merged.sourceOf('spellcasting.prepared')!.originId,
+        'patch:class/wizard',
+      );
+    });
+
+    test('**更低 tier** patch 即使被 pin 也不生效（D4：更低 tier 不提供任何列）', () {
+      final merged = resolve(
+        patchPriority: 0,
+        pinnedOrigins: const {'spellcasting.prepared': 'patch:class/wizard'},
+      );
+      expect(
+        merged.preparedLimit(5),
+        7,
+        reason: 'pin 救不回被更高 tier replace 截断的更低 tier 声明',
+      );
+      expect(
+        merged.sourceOf('spellcasting.prepared')!.originId,
+        'replacer:class/wizard',
+      );
+    });
+  });
+
+  // P0-2.3：`_PinContext.targetFor` 的 fallback 分支必须带 `declares` 守卫——
+  // pin 指向"被 disabled 剔除但**不声明该列**"的来源时，该列取不到它（回退正常链），
+  // 且**不抑制**该列的冲突。
+  group('pin 的 fallback 只认声明了该列的来源（P0-2.3）', () {
+    test('pin 指向不声明该列的 disabled 来源：回退正常链且冲突照旧提示', () {
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: null,
+        entryId: null,
+        declarations: [
+          // 同 tier 真冲突：alpha vs zeta 抢 spellcasting.prepared。
+          declaration('alpha:class/wizard', {
+            'spellcasting': {
+              'mode': 'prepared',
+              'prepared': {'5': 9},
+            },
+          }, priority: 10),
+          declaration('zeta:class/wizard', {
+            'spellcasting': {
+              'prepared': {'5': 11},
+            },
+          }, priority: 10),
+          // disabled 且只声明 hitDie：被 pin 到 prepared 时不能顶替。
+          declaration('broken:class/wizard', {'hitDie': 12}, priority: 10),
+        ],
+        disabledOriginIds: const {'broken'},
+        pinnedOrigins: const {'spellcasting.prepared': 'broken:class/wizard'},
+      );
+
+      expect(
+        merged.preparedLimit(5),
+        9,
+        reason: 'pin 目标不声明该列 → 落回正常链（alpha 升序首位）',
+      );
+      expect(
+        merged.sourceOf('spellcasting.prepared')!.originId,
+        'alpha:class/wizard',
+      );
+      expect(
+        merged.conflicts.map((c) => c.field),
+        contains('spellcasting.prepared'),
+        reason: 'pin 没解决该列（目标不声明它）→ 冲突必须照旧提示',
+      );
+    });
+
+    test('pin 指向声明了该列的 disabled 来源：该列取到它且冲突消失（对照组）', () {
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: null,
+        entryId: null,
+        declarations: [
+          declaration('alpha:class/wizard', {
+            'spellcasting': {
+              'mode': 'prepared',
+              'prepared': {'5': 9},
+            },
+          }, priority: 10),
+          declaration('zeta:class/wizard', {
+            'spellcasting': {
+              'prepared': {'5': 13},
+            },
+          }, priority: 10),
+        ],
+        disabledOriginIds: const {'zeta'},
+        pinnedOrigins: const {'spellcasting.prepared': 'zeta:class/wizard'},
+      );
+      expect(merged.preparedLimit(5), 13);
+      expect(
+        merged.sourceOf('spellcasting.prepared')!.originId,
+        'zeta:class/wizard',
+      );
+      expect(
+        merged.conflicts.where((c) => c.field == 'spellcasting.prepared'),
+        isEmpty,
+      );
+    });
+  });
+
+  // P0-2.4：`RuleOverrideOrder.orderedConflicts` 的**首条优先**（同 field 只留先登记
+  // 的那条）。夹具让同一 field 同时出现"真实同 tier 冲突"（更高 tier 的两个包）与
+  // "replace 丢弃冲突"（同 tier 的 replace vs 被丢弃 patch）。
+  group('同 field 的真实冲突与 replace-drop 冲突：保留先登记的一条（P0-2.4）', () {
+    test('真实冲突（更高 tier）先登记 → 保留它，丢弃 replace-drop 那条', () {
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: null,
+        entryId: null,
+        declarations: [
+          // tier 200：两个包真冲突，各自声明 spellcasting.prepared。
+          declaration('alpha:class/wizard', {
+            'spellcasting': {
+              'mode': 'prepared',
+              'prepared': {'5': 9},
+            },
+          }, priority: 100),
+          declaration('zeta:class/wizard', {
+            'spellcasting': {
+              'prepared': {'5': 11},
+            },
+          }, priority: 100),
+          // tier 150：replace 独占 + 同 tier patch 被丢弃（也会为同一列登记 drop 冲突）。
+          RuleOverrideDeclaration.package(
+            originId: 'replacer:class/wizard',
+            packageId: 'replacer',
+            priority: 50,
+            entryId: 'replacer:class/wizard',
+            rules: rulesOf({
+              'mode': 'replace',
+              'spellcasting': {
+                'mode': 'prepared',
+                'prepared': {'5': 7},
+              },
+            }),
+          ),
+          declaration('patch:class/wizard', {
+            'spellcasting': {
+              'prepared': {'5': 15},
+            },
+          }, priority: 50),
+        ],
+      );
+
+      final prepared = merged.conflicts.singleWhere(
+        (conflict) => conflict.field == 'spellcasting.prepared',
+      );
+      expect(
+        prepared.tier,
+        kEntryTier + 100,
+        reason: '真实同 tier 冲突（tier 200）在合并阶段先登记，drop 冲突被去重丢弃',
+      );
+      expect(prepared.effectiveOriginId, 'alpha:class/wizard');
+      expect(prepared.originIds, [
+        'alpha:class/wizard',
+        'zeta:class/wizard',
+      ]);
+      // drop 冲突那条确实被生成过（否则本用例测不到"首条优先"）：它若被保留，
+      // tier 会是 150 且 originIds 含 patch。
+      expect(
+        merged.conflicts.where(
+          (conflict) => conflict.originIds.contains('patch:class/wizard'),
+        ),
+        isEmpty,
+        reason: '同 field 只留首条：drop 冲突被丢弃',
+      );
+    });
+  });
+
+  // 建议 8：读入侧把 `originIds` 排序 + 去重 + 丢空串（写入侧恒升序的承诺对旧数据
+  // 也要成立，且 UI 不该出现空标签）。
+  group('RuleOverrideConflict.fromJson 归一化 originIds（建议 8）', () {
+    test('乱序 / 重复 / 空串 → 排序 + 去重 + 丢掉空串', () {
+      final conflict = RuleOverrideConflict.fromJson(<String, Object?>{
+        'field': 'hitDie',
+        'tier': 100,
+        'originIds': <Object?>['zeta:class/wizard', 'alpha:class/wizard', '', '  ', 'zeta:class/wizard'],
+        'effectiveOriginId': 'alpha:class/wizard',
+      });
+      expect(conflict, isNotNull);
+      expect(conflict!.originIds, [
+        'alpha:class/wizard',
+        'zeta:class/wizard',
+      ]);
+    });
+
+    test('归一化后不足两个来源 → 降级为"没有冲突"', () {
+      expect(
+        RuleOverrideConflict.fromJson(<String, Object?>{
+          'field': 'hitDie',
+          'tier': 100,
+          'originIds': <Object?>['alpha:class/wizard', '', 'alpha:class/wizard'],
+          'effectiveOriginId': 'alpha:class/wizard',
+        }),
+        isNull,
+        reason: '去重后只剩一个来源，不是冲突',
+      );
+    });
+
+    test('effectiveOriginId 仍在归一化后的集合里 → 保留（含首尾空白）', () {
+      final conflict = RuleOverrideConflict.fromJson(<String, Object?>{
+        'field': 'hitDie',
+        'tier': 100,
+        'originIds': <Object?>[' zeta:class/wizard ', 'alpha:class/wizard'],
+        'effectiveOriginId': '  zeta:class/wizard  ',
+      });
+      expect(conflict, isNotNull);
+      expect(conflict!.originIds, [
+        'alpha:class/wizard',
+        'zeta:class/wizard',
+      ]);
+      expect(conflict.effectiveOriginId, 'zeta:class/wizard');
+    });
+  });
 }

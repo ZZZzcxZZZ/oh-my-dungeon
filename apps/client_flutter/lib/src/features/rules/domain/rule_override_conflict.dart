@@ -4,6 +4,7 @@
 // 由 `RuleProfileResolver` 在列级合并时登记，写进角色数据 `data.classRuleConflicts`，
 // 由角色页提示并由用户选择保留哪个来源（`CharacterRuleOverrides.pinned`）。
 import 'rule_field_path.dart';
+import 'rule_override_priority.dart';
 
 /// 同一 tier 的多个来源抢同一列时的记录（契约 S3、决策 D6）。
 ///
@@ -48,6 +49,11 @@ class RuleOverrideConflict {
   ///
   /// 结构校验除形状外还要求 `effectiveOriginId ∈ originIds`：否则界面会把
   /// "生效来源"显示成一个根本没参与该列竞争的名字。
+  ///
+  /// 读入侧把 `originIds` **排序 + 去重 + 丢掉空串**
+  /// （[RuleOverrideOrder.orderedOriginIds] 是排序的唯一实现）：写入侧恒升序，但
+  /// 旧数据 / 手改数据可能乱序或带空串——那会让 UI 出现"空标签"，也破坏
+  /// "恒升序"这个文档承诺。
   static RuleOverrideConflict? fromJson(Object? raw) {
     if (raw is! Map) return null;
     final field = '${raw['field'] ?? ''}'.trim();
@@ -60,12 +66,15 @@ class RuleOverrideConflict {
         rawOrigins is! List) {
       return null;
     }
-    final origins = [for (final origin in rawOrigins) '$origin'];
+    final origins = RuleOverrideOrder.orderedOriginIds(<String>[
+      for (final origin in rawOrigins)
+        if ('$origin'.trim().isNotEmpty) '$origin'.trim(),
+    ]);
     if (origins.length < 2 || !origins.contains(effective)) return null;
     return RuleOverrideConflict(
       field: field,
       tier: tier,
-      originIds: List<String>.unmodifiable(origins),
+      originIds: origins,
       effectiveOriginId: effective,
     );
   }

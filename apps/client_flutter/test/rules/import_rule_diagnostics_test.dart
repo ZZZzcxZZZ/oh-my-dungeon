@@ -12,44 +12,8 @@ import 'package:dnd_table_client/src/features/content/domain/content_import_repo
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/content_test_support.dart';
+import 'package_json_test_support.dart';
 import 'rule_profile_test_support.dart';
-
-/// 构造一个单 class 条目的包文档；`structured` 缺省即"未声明 classRules"。
-String packageJson({
-  required Map<String, Object?> entry,
-  num formatVersion = 3,
-  String id = 'diag-pack',
-  Object? globalAbilities,
-  Object? globalSkills,
-  Object? priority,
-}) => jsonEncode({
-  'formatVersion': formatVersion,
-  'id': id,
-  'name': 'Diag pack',
-  'version': '1.0.0',
-  'locale': 'zh-CN',
-  'system': 'dnd5e-2024',
-  'entryCount': 1,
-  'priority': ?priority,
-  'abilities': ?globalAbilities,
-  'skills': ?globalSkills,
-  'entries': [entry],
-});
-
-Map<String, Object?> classEntry({
-  String slug = 'homebrew-sage',
-  Map<String, Object?>? structured,
-  Map<String, Object?>? rules,
-}) => {
-  'id': 'diag-pack:class/$slug',
-  'type': 'class',
-  'slug': slug,
-  'name': 'Diag class',
-  'body': <Object?>[],
-  'revision': 1,
-  'structured': ?structured,
-  'rules': ?rules,
-};
 
 void main() {
   late MemoryContentRepository repository;

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../characters/domain/declared_levels.dart';
+import '../../rules/domain/rule_field_path.dart';
+import '../../rules/domain/rule_profile.dart';
 import '../domain/content_import_report.dart';
 import 'widgets/content_diagnostic_list.dart';
 
@@ -43,6 +45,32 @@ class ContentImportPreviewDialog extends StatelessWidget {
                 ),
               ),
             ],
+            // 列级来源摘要（契约 §3.7）：只提示每个条目的列最终取自哪里，不阻断
+            // 确认。展示名的唯一实现是 [RuleFieldPath.labelFor]；"来源 id → 展示名"
+            // 只用包 id（包名在 manifest 里就是 report.packageName），不引第二套
+            // label 表。
+            if (report.classRuleSources.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Column(
+                key: const Key('import-preview-sources'),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('规则来源', style: theme.textTheme.titleSmall),
+                  for (final entry in report.classRuleSources.entries)
+                    for (final source in entry.value)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '${entry.key} · ${RuleFieldPath.labelFor(source.field)}'
+                          ' ← ${source.tier == kBuiltinTier ? '内置档案' : entry.key.split(':').first}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                ],
+              ),
+            ],
             // 规则契约的 warning 级诊断：只提示，不阻断导入。
             if (report.warnings.isNotEmpty) ...[
               const SizedBox(height: 12),
@@ -60,6 +88,7 @@ class ContentImportPreviewDialog extends StatelessWidget {
             child: const Text('取消'),
           ),
           FilledButton(
+            key: const Key('import-preview-sources-confirm'),
             onPressed: () async {
               await onConfirm();
               if (!context.mounted) return;

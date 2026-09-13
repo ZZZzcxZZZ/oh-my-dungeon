@@ -13,6 +13,7 @@ import '../../../characters/domain/dnd5e_rules.dart';
 import '../../../rules/domain/character_rule_definition.dart';
 import '../../../rules/domain/class_rule_set.dart';
 import '../../../rules/domain/rule_diagnostic.dart';
+import '../../../rules/domain/rule_profile.dart';
 import '../../../rules/domain/rule_profile_resolver.dart';
 import '../../../rules/domain/rule_values.dart';
 import '../local/content_repository.dart';
@@ -183,6 +184,7 @@ class ContentPackageImporter {
     return _buildReport(
       errors: errors,
       warnings: warnings,
+      classRuleSources: parsedReport.classRuleSources,
       contentHash: contentHash,
       formatVersion: parsedReport.formatVersion,
       packageId: parsedReport.packageId,
@@ -201,6 +203,9 @@ class ContentPackageImporter {
     final errors = <ContentValidationError>[];
     final warnings = <ContentValidationError>[];
     final assets = <String, Uint8List>{};
+    // 每个 class 条目的列级来源（契约 §3.7）；由 [_validateStructuredClassRules]
+    // 经生产解析链收集，`previewJson` 持有后带进报告。
+    final classRuleSources = <String, List<RuleFieldSource>>{};
     final contentHash = sha256.convert(utf8.encode(jsonStr)).toString();
 
     Object? parsed;
@@ -501,6 +506,8 @@ class ContentPackageImporter {
           name: '${parsedEntryJson['name'] ?? ''}',
           rawClassRules: rawClassRules,
           entryRuleDefinition: parsedEntries[i]?.rules,
+          priority: priority,
+          classRuleSources: classRuleSources,
           path: '$entryPath.structured.classRules',
           errors: errors,
           warnings: warnings,
@@ -563,6 +570,7 @@ class ContentPackageImporter {
     return _buildReport(
       errors: errors,
       warnings: warnings,
+      classRuleSources: classRuleSources,
       contentHash: contentHash,
       formatVersion: formatVersion,
       packageId: packageId,
@@ -701,6 +709,8 @@ class ContentPackageImporter {
     required String name,
     required Object? rawClassRules,
     required CharacterRuleDefinition? entryRuleDefinition,
+    required int priority,
+    required Map<String, List<RuleFieldSource>> classRuleSources,
     required String path,
     required List<ContentValidationError> errors,
     required List<ContentValidationError> warnings,
@@ -738,6 +748,21 @@ class ContentPackageImporter {
         path: path,
         diagnostics: diagnostics,
       );
+
+      // 来源摘要（契约 §3.7）：**复用生产解析链**，不另写一份合并。
+      // 导入预览阶段的语义是"只看这个包 + 内置档案"，因此不接跨包索引
+      // （冲突是运行期概念：导入单个包时看不到别的包）。
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: Dnd5eRules.profile,
+        slug: slug,
+        entryRules: entryRules,
+        entryId: entryId.isEmpty ? null : entryId,
+        entryPriority: priority,
+      );
+      classRuleSources[entryId] = [
+        for (final field in merged.fieldSources.keys.toList()..sort())
+          merged.fieldSources[field]!,
+      ];
     } else if (rawClassRules != null) {
       errors.add(
         ContentValidationError(
@@ -928,6 +953,7 @@ class ContentPackageImporter {
   ContentImportReport _buildReport({
     required List<ContentValidationError> errors,
     List<ContentValidationError> warnings = const [],
+    Map<String, List<RuleFieldSource>> classRuleSources = const {},
     required String contentHash,
     required int formatVersion,
     required String packageId,
@@ -953,6 +979,7 @@ class ContentPackageImporter {
       entries: entries,
       errors: errors,
       warnings: warnings,
+      classRuleSources: classRuleSources,
       assets: assets,
       contentHash: contentHash,
     );

@@ -26,4 +26,31 @@ void main() {
     // 前后空白先裁掉
     expect(canonicalContentEntryId('  local:x  '), 'x');
   });
+
+  test('contentEntryAlignmentKey：末段 + 小写，先剥传输前缀', () {
+    expect(contentEntryAlignmentKey('builtin:class/fighter'), 'fighter');
+    expect(
+      contentEntryAlignmentKey('local-homebrew:class/fighter'),
+      'fighter',
+      reason: '覆盖创建与跨包分组必须同键',
+    );
+    // 组合仓库读取时的前缀：不剥就永远对不上内置条目。
+    expect(
+      contentEntryAlignmentKey('local:local-homebrew:class/Fighter'),
+      'fighter',
+    );
+    expect(
+      contentEntryAlignmentKey('campaign:c1:errata:class/wizard'),
+      'wizard',
+      reason: '战役视图与本地视图同一口径（包 id 允许含 `:`）',
+    );
+    // 没有 `/` 时末段就是整串（含包 id）；空串返回空串。
+    expect(contentEntryAlignmentKey('builtin:custom'), 'builtin:custom');
+    expect(
+      contentEntryAlignmentKey('local:local-homebrew:custom'),
+      'local-homebrew:custom',
+    );
+    expect(contentEntryAlignmentKey(''), '');
+    expect(contentEntryAlignmentKey('  class/  '), '');
+  });
 }

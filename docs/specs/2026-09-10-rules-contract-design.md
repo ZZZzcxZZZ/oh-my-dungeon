@@ -394,11 +394,14 @@ cantrips      = cantrips[L]                                        // 同上
    列级判据只有一处（`ClassSpellcasting.declares` / `ClassResourceRule.declares`，解析时填充 `fields`），
    列级取值只有一处（`RuleProfileResolver._pickColumn`）。
    对齐键的规范口径是**条目 id 的最后一段**（`<packageId>:class/<slug>` → `<slug>`，
-   规范化 `trim().toLowerCase()`；唯一实现点 `Dnd5eRules.resolveClassSlug`，条目里的展示字段
-   `slug` **不**参与数值继承）。
-   条目**跨包分组**与"基于已有条目创建覆盖"共用同一个函数
-   `contentEntryAlignmentKey`（先剥 `local:` / `campaign:<cid>:` 传输前缀，再取末段），
-   因此作者不需要知道战役视图的 id 前缀，GUI 钉上的对齐键与运行期分组永远一致。
+   规范化 `trim().toLowerCase()`），条目里的展示字段 `slug` **不**参与数值继承。
+   该口径只有一处实现：`contentEntryAlignmentKey`（先剥 `local:` / `campaign:<cid>:`
+   传输前缀，再取末段）。三个调用方共用它——`RuleOverrideIndex` 的跨包分组、
+   `LocalHomebrewContentService.create(overrideOf:)` 的"基于已有条目创建覆盖"、
+   `Dnd5eRules` 的 `_slugFor`（**有 id 时**按末段取 slug）。因此作者不需要知道战役
+   视图的 id 前缀，GUI 钉上的对齐键与运行期分组永远一致。
+   `Dnd5eRules.resolveClassSlug` 是**另一个入口**：它在"有 id"时转调同一口径，
+   在"只有展示名"时按 `classAliases` 匹配（见下一条）——两者分工不同，不得互相替代。
    只有"展示名"可用时（老角色卡/快速创建），允许按 `classAliases` **精确相等**或
    **`<别名><分隔符>` 前缀**（分隔符限 `（` `(` 空格 `-` `/`）匹配，例如 `战士（奥法骑士）` → `fighter`。
    **禁止裸子串匹配**（`星界游侠` 不得命中 `游侠`）。
@@ -1052,10 +1055,10 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | 部分 | 状态 |
 |---|---|
 | 导入侧（`.json` / `.dndpack` 预览、批量导入、诊断报告） | 完整 |
-| 领域服务（`LocalHomebrewContentService.create/update/delete` + `ContentSchemaRegistry.validateForCreation`） | 有实现与单测，**UI 已接线**（新建 / 编辑 / 删除条目对话框）；编辑时保留描述框之外的块（`_mergedBody`：标题、列表等不被"改个名字再保存"静默删掉） |
-| `.dndpack` **导出** | 已实现（`DndPackExporter.build` 组 manifest + entries + 既有资产，再经 `previewDndPack` 自校验；落盘由资料包设置页的 `FilePicker.saveFile` 完成。往返用例见 `dndpack_exporter_test.dart`） |
-| **可视化规则表单** | 已实现（`HomebrewClassRuleForm`：`classRules` 的 `hitDie` / `savingThrowAbilities` / `mode` / `spellcasting.ability` / `resources[]`，`rules.progression[]` 的等级集合与 `grants[]`）。表单**不持有状态**：两段 JSON 仍是唯一事实来源，JSON 非法时表单拒绝渲染并提示切回 JSON；`Table` / `MaxSpec` 形态与 `rules.choices` 不伪造字段类型，仍写 JSON |
-| **基于已有条目创建覆盖** | 已实现（资料包设置页「基于现有条目创建覆盖」→ 选来源 → 编辑器预填并把**对齐键**（id 末段，[`contentEntryAlignmentKey`]）钉在来源上；`create(overrideOf:)` 拒绝同键重复，类型随来源锁定）。候选 = 参与合并链的 `class` 条目（有 `classRules`），已被覆盖的键不再出现 |
+| 领域服务（`LocalHomebrewContentService.create/update/delete` + `ContentSchemaRegistry.validateForCreation`） | 有实现与单测，**UI 已接线**（新建 / 编辑 / 删除条目对话框）；编辑时保留描述框之外的块（`_mergedBody`：标题、列表等不被"改个名字再保存"静默删掉）。占用检测走 `search` + **规范 id** 比较：生产装配的 `CampaignAwareContentRepository` 只认 `local:` / `campaign:<cid>:` 前缀键，用 `getByKey` 会让"重名加后缀"和"同键覆盖检测"双双失效（重名直接覆盖前一条） |
+| `.dndpack` **导出** | 已实现（`DndPackExporter.build` 组 manifest + entries + 既有资产，再经 `previewDndPack` 自校验；落盘由资料包设置页的 `FilePicker.saveFile` 完成。往返用例见 `dndpack_exporter_test.dart`）。导出前把组合仓库加的**传输前缀**从条目 id、`relations[].targetId` 与 `rules` 里的条目引用上剥掉（`canonicalContentEntryId` + `mapRuleEntryReferences`，与仓储加前缀共用同一遍历）——否则真实导入器会判 `entry ID … must start with "<packageId>:"` / 引用不存在，导出必然失败 |
+| **可视化规则表单** | 已实现（`HomebrewClassRuleForm`：`classRules` 的 `hitDie` / `savingThrowAbilities` / `mode` / `spellcasting.ability` / `resources[]`，`rules.progression[]` 的等级集合与 `grants[]`）。表单**不持有状态**：两段 JSON 仍是唯一事实来源，JSON 非法时表单拒绝渲染并提示切回 JSON；`Table` / `MaxSpec` 形态与 `rules.choices` 不伪造字段类型，仍写 JSON（表形态的 `recovery` 只读展示，不提供可一键替换成常量的下拉） |
+| **基于已有条目创建覆盖** | 已实现（资料包设置页「基于现有条目创建覆盖」→ 选来源 → 编辑器预填并把**对齐键**（id 末段，`contentEntryAlignmentKey`）钉在来源上；`create(overrideOf:)` 拒绝同键重复与类型不符，要求结果声明非空 `classRules`）。候选 = 参与合并链的 `class` 条目（有 `classRules`），已被覆盖的键不再出现。**边界**：列级合并链只消费 `classRules`；覆盖条目自己的 `rules`（progression / choices / grants）只在角色**直接指向该条目**时才生效 |
 | `rules.choices` 的可视化编辑 | **未做**：选择 / 选项 / `requires` / `group` 仍以 JSON 编辑器 + 即时校验承担（§9.2.3 的形状是嵌套的，做成表单等于再造一层选择 DSL） |
 
 ## 12. 建议实现阶段（**历史记录**，P0–P6 已全部执行）

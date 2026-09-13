@@ -105,6 +105,80 @@ String? ruleGrantValueAndFormulaPath(
   return null;
 }
 
+/// 遍历 `rules` JSON 里**所有指向条目的引用**并逐个交给 [transform] 改写。
+///
+/// 覆盖：`grants[].entryId`、`choices[].optionEntryIds` / `recommendedEntryIds`，
+/// 以及 `progression[]` 内嵌的同两类（`progression[].grants[]` /
+/// `progression[].choices[]`）。字段清单以本函数为**唯一实现点**。
+///
+/// 两个调用者方向相反，但遍历只能有一份：
+/// - `CampaignAwareContentRepository` 给本地引用加 `local:` / `campaign:<cid>:` 前缀；
+/// - `.dndpack` 导出再把前缀剥回包格式——否则导入期 `validateRuleReferences`
+///   会把这些引用判成"包内不存在的条目"（error），导出的包自己都导不回来。
+///
+/// 未识别的键原样保留：这里只改写引用，不做规范化。
+Map<String, Object?> mapRuleEntryReferences(
+  Map<String, Object?> source,
+  String Function(String entryId) transform,
+) {
+  Map<String, Object?> rewriteGrant(Object? raw) {
+    final grant = Map<String, Object?>.from(raw! as Map);
+    final entryId = grant['entryId'];
+    if (entryId is String) grant['entryId'] = transform(entryId);
+    return grant;
+  }
+
+  Map<String, Object?> rewriteChoice(Object? raw) {
+    final choice = Map<String, Object?>.from(raw! as Map);
+    final optionIds = choice['optionEntryIds'];
+    if (optionIds is List) {
+      choice['optionEntryIds'] = <String>[
+        for (final id in optionIds) transform('$id'),
+      ];
+    }
+    final recommendedIds = choice['recommendedEntryIds'];
+    if (recommendedIds is List) {
+      choice['recommendedEntryIds'] = <String>[
+        for (final id in recommendedIds) transform('$id'),
+      ];
+    }
+    return choice;
+  }
+
+  List<Map<String, Object?>> rewriteList(
+    Object? raw,
+    Map<String, Object?> Function(Object? raw) rewrite,
+  ) {
+    if (raw is! List) return const <Map<String, Object?>>[];
+    return raw.whereType<Map>().map(rewrite).toList(growable: false);
+  }
+
+  final result = Map<String, Object?>.from(source);
+  if (source['grants'] is List) {
+    result['grants'] = rewriteList(source['grants'], rewriteGrant);
+  }
+  if (source['choices'] is List) {
+    result['choices'] = rewriteList(source['choices'], rewriteChoice);
+  }
+  final progression = source['progression'];
+  if (progression is List) {
+    result['progression'] = <Map<String, Object?>>[
+      for (final rawStep in progression.whereType<Map>())
+        () {
+          final step = Map<String, Object?>.from(rawStep);
+          if (step['grants'] is List) {
+            step['grants'] = rewriteList(step['grants'], rewriteGrant);
+          }
+          if (step['choices'] is List) {
+            step['choices'] = rewriteList(step['choices'], rewriteChoice);
+          }
+          return step;
+        }(),
+    ];
+  }
+  return result;
+}
+
 class RuleGrantDefinition {
   const RuleGrantDefinition({
     required this.id,

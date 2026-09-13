@@ -30,16 +30,17 @@ class HomebrewEntryDraft {
   final Map<String, Object?>? rules;
 }
 
-/// 自制条目的新建 / 编辑对话框（S4 的作者 GUI 最小形态）。
+/// 自制条目的新建 / 编辑对话框（S4 的作者 GUI）。
 ///
-/// 定位：**契约 JSON 的可视化外壳**，不是"把所有字段都做成表单"的完整作者体验。
-/// 它做三件必须做好的事：
+/// 定位：**契约 JSON 的可视化外壳**。它做四件必须做好的事：
 /// 1. 类型从 `ContentSchemaRegistry.creatableSchemas` 选（不手写字符串）；
-/// 2. `structured` / `rules` 用 JSON 编辑，**边写边校验**（解析错误、schema 错误、
-///    服务层错误都就地显示，不弹 SnackBar 让人找不到字段）；
-/// 3. 保存走 [LocalHomebrewContentService]（唯一写入边界），失败保持在对话框里。
+/// 2. `class` 类型默认进 [HomebrewClassRuleForm]（`classRules` + `progression` 填表），
+///    其余形状与 `rules.choices` 切到 JSON 编辑，**边写边校验**（解析错误、schema
+///    错误、服务层错误都就地显示，不弹 SnackBar 让人找不到字段）；
+/// 3. `overrideOf` 非空 = 基于既有条目创建覆盖（类型锁定、对齐键钉住）；
+/// 4. 保存走 [LocalHomebrewContentService]（唯一写入边界），失败保持在对话框里。
 ///
-/// 可视化规则表单（把 `classRules` / `choices` 做成填表界面）属后续工作，见规格 §11.4。
+/// `rules.choices` 的可视化编辑仍是后续工作，见规格 §11.4。
 class HomebrewEntryEditorDialog extends StatefulWidget {
   const HomebrewEntryEditorDialog({
     required this.service,
@@ -227,7 +228,10 @@ class _HomebrewEntryEditorDialogState extends State<HomebrewEntryEditorDialog> {
                   child: Text(
                     '对齐键「${contentEntryAlignmentKey(source?.id ?? '')}」已钉在来源条目上：'
                     '本地包 tier 100 高于内置 0，声明过的列按契约 §3.6 覆盖来源，'
-                    '未声明的列仍用来源的值。',
+                    '未声明的列仍用来源的值。\n'
+                    '注意：列级合并链只消费 classRules；本条目自己的 rules（progression / '
+                    'choices / grants）只有在角色**直接指向本条目**时才生效——仍指向来源'
+                    '条目的角色读不到它们。',
                     key: const Key('homebrew-entry-override-hint'),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,

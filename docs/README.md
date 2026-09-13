@@ -502,6 +502,7 @@ PHB 2024 官方表格）：
 | 规则来源没有等级维度（S3 决策 D5） | 表列**逐级**回退会产出"1–19 级来自档案、20 级来自条目"的数值，但来源只如实记在**最高 tier 的声明者**一条上（如 `spellcasting.prepared`），不做 `spellcasting.prepared@20`；逐级细节需要时由调用方读表自己比 |
 | `recovery` 不逐级合并（S3 决策 D5） | `resources[].recovery` 的常量形态与 `{"table": …}` 形态是同一条来源路径，整列由"声明过 `recovery` 的最高 tier"负责，**不**逐级借用更低 tier 的恢复表（恢复语义是枚举而不是可加的数值） |
 | `resources: []` 不再清空档案资源（S3） | 空数组只表示"本块没有资源声明"；要清空档案同名资源必须显式声明 `classRules.mode: "replace"` |
+| 覆盖条目的 `rules` 不参与合并（S4） | 列级合并链只消费 `classRules`；覆盖条目自己的 `rules.progression` / `rules.choices` / `grants` 只在角色**直接指向该条目**时才生效，仍指向来源条目的角色读不到它们（覆盖编辑器里有同样的提示） |
 | 专精（Expertise） | 技能加值只有熟练/非熟练两档，无 ×2 专精 |
 | 多职业 | 不支持多职业等级与法术位合并 |
 | XP 与升级 | 无经验值系统；等级由用户维护，升级按 +1 级规划（内容包驱动可选内容） |
@@ -1446,8 +1447,10 @@ tier（含内置档案）的同 `id` 资源；若**档案没有同 id 资源可�
   （生命骰、豁免、合并模式、施法属性、职业资源、等级步骤与授予），表单没建模的形状
   （`Table` / `MaxSpec` / `rules.choices`）切到「JSON」标签写，两段 JSON 仍是唯一事实
   来源；「基于现有条目创建覆盖」把新条目的**对齐键**（id 末段）钉在来源条目上，
-  未声明的列仍继承来源；「导出 .dndpack」先用真实导入器自校验再落盘。编辑既有条目时
-  描述框之外的块（标题 / 列表等）原样保留。
+  未声明的列仍继承来源（覆盖链只消费 `classRules`，条目自己的 `rules` 只在角色直接
+  指向该条目时生效）；「导出 .dndpack」先用真实导入器自校验再落盘，并把组合仓库加的
+  `local:` / `campaign:<cid>:` 传输前缀从条目 id、关系目标与 `rules` 引用上剥掉
+  （前缀不属于包格式）。编辑既有条目时描述框之外的块（标题 / 列表等）原样保留。
 - 服务端另有独立的 `CampaignEntryValidatorService`（校验更弱：非空、10 种区块类型、
   禁止 overlay 字段），仅用于战役私有条目。
 - 检索支持类型、来源、标签、收藏等筛选；条目详情由区块渲染器呈现
@@ -1917,7 +1920,7 @@ Material 3 设计系统契约（`DESIGN.md` 与契约测试/golden）；自托�
 | 项 | 结果 |
 |---|---|
 | `flutter analyze` | 0 问题 |
-| `flutter test` | **1621 通过 / 6 跳过**（3 条 golden 默认跳过 + 3 条依赖 `--dart-define` 私有包路径的用例；跳过点与上一基线同一组） |
+| `flutter test` | **1626 通过 / 6 跳过**（3 条 golden 默认跳过 + 3 条依赖 `--dart-define` 私有包路径的用例；跳过点与上一基线同一组） |
 | 服务端 `npm run lint` + `npm test` | 24 套件 / 355 测试通过，0 跳过 |
 | `npm run test:scripts` | **44 通过**（4 个脚本测试套件 + drift worker 产物清单校验；本地有 `private-imports/` 时 0 跳过，公开 CI 上 9 条提取类用例自行 skip） |
 | `npm run lint:design` | 0 error / 0 warning（1 条 token 统计 info） |

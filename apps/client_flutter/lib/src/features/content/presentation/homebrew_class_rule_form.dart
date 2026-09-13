@@ -430,10 +430,11 @@ class HomebrewClassRuleForm extends StatelessWidget {
                     fieldKey: Key('homebrew-form-resource-$index-name'),
                     value: '${resource['name'] ?? ''}',
                     label: '名称',
-                    onChanged: (value) => patch(
-                      'name',
-                      value.trim().isEmpty ? null : value.trim(),
-                    ),
+                    // 名称是给人看的自由文本：**不做 trim**，否则每敲一个空格就被写回
+                    // 的裁剪值吃掉（光标重置，词中间的空格永远打不出来）。
+                    // id / target / value 这些"令牌"字段仍然 trim——空白不属于它们的值。
+                    onChanged: (value) =>
+                        patch('name', value.isEmpty ? null : value),
                   ),
                 ),
                 IconButton(
@@ -471,16 +472,36 @@ class HomebrewClassRuleForm extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _JsonDropdown(
-                    fieldKey: Key('homebrew-form-resource-$index-recovery'),
-                    value: recovery is String &&
-                            recoveryLabels.containsKey(recovery)
-                        ? recovery
-                        : 'longRest',
-                    label: '恢复',
-                    items: recoveryLabels,
-                    onChanged: (value) => patch('recovery', value),
-                  ),
+                  // 表形态（`{"table": {...}}`）**不伪装成"长休"**：下拉框若把未知形态
+                  // 兜底成某个枚举值，作者点一下就会把整张恢复表替换成一个常量
+                  // （§11.4：Table 形态仍走 JSON，表单不伪造字段类型）。
+                  child: recovery is Map
+                      ? InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: '恢复（表格形态）',
+                            helperText: '仍走 JSON；表单不替换它',
+                          ),
+                          child: Text(
+                            jsonEncode(recovery),
+                            key: Key(
+                              'homebrew-form-resource-$index-recovery-table',
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        )
+                      : _JsonDropdown(
+                          fieldKey: Key(
+                            'homebrew-form-resource-$index-recovery',
+                          ),
+                          value:
+                              recovery is String &&
+                                  recoveryLabels.containsKey(recovery)
+                              ? recovery
+                              : 'longRest',
+                          label: '恢复',
+                          items: recoveryLabels,
+                          onChanged: (value) => patch('recovery', value),
+                        ),
                 ),
                 const SizedBox(width: 8),
                 SizedBox(

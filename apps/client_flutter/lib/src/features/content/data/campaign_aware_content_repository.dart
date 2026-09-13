@@ -352,6 +352,10 @@ class CampaignAwareContentRepository implements ContentRepository {
     return contentEntryMatchesFacets(entry, query.facets);
   }
 
+  /// 给 `rules` 里所有条目引用加传输前缀（`local:` / `campaign:<cid>:`）。
+  ///
+  /// 遍历本身只有一处实现（[mapRuleEntryReferences]）——导出侧用同一个函数把前缀
+  /// 剥回去，两边字段清单不会分叉。
   Map<String, Object?> _rebaseRuleReferences(
     Map<String, Object?> source,
     String Function(String entryId) rebase,
@@ -364,61 +368,6 @@ class CampaignAwareContentRepository implements ContentRepository {
       return rebase(entryId);
     }
 
-    Map<String, Object?> rewriteGrant(Object? raw) {
-      final grant = Map<String, Object?>.from(raw! as Map);
-      final entryId = grant['entryId'];
-      if (entryId is String) grant['entryId'] = rebaseOnce(entryId);
-      return grant;
-    }
-
-    Map<String, Object?> rewriteChoice(Object? raw) {
-      final choice = Map<String, Object?>.from(raw! as Map);
-      final optionIds = choice['optionEntryIds'];
-      if (optionIds is List) {
-        choice['optionEntryIds'] = [
-          for (final id in optionIds) rebaseOnce('$id'),
-        ];
-      }
-      final recommendedIds = choice['recommendedEntryIds'];
-      if (recommendedIds is List) {
-        choice['recommendedEntryIds'] = [
-          for (final id in recommendedIds) rebaseOnce('$id'),
-        ];
-      }
-      return choice;
-    }
-
-    List<Map<String, Object?>> rewriteList(
-      Object? raw,
-      Map<String, Object?> Function(Object? raw) rewrite,
-    ) {
-      if (raw is! List) return const [];
-      return raw.whereType<Map>().map(rewrite).toList(growable: false);
-    }
-
-    final result = Map<String, Object?>.from(source);
-    if (source['grants'] is List) {
-      result['grants'] = rewriteList(source['grants'], rewriteGrant);
-    }
-    if (source['choices'] is List) {
-      result['choices'] = rewriteList(source['choices'], rewriteChoice);
-    }
-    final progression = source['progression'];
-    if (progression is List) {
-      result['progression'] = [
-        for (final rawStep in progression.whereType<Map>())
-          () {
-            final step = Map<String, Object?>.from(rawStep);
-            if (step['grants'] is List) {
-              step['grants'] = rewriteList(step['grants'], rewriteGrant);
-            }
-            if (step['choices'] is List) {
-              step['choices'] = rewriteList(step['choices'], rewriteChoice);
-            }
-            return step;
-          }(),
-      ];
-    }
-    return result;
+    return mapRuleEntryReferences(source, rebaseOnce);
   }
 }

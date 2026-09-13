@@ -1,3 +1,4 @@
+import 'package:dnd_table_client/src/features/content/data/campaign_aware_content_repository.dart';
 import 'package:dnd_table_client/src/features/content/data/export/dndpack_exporter.dart';
 import 'package:dnd_table_client/src/features/content/data/import/content_package_importer.dart';
 import 'package:dnd_table_client/src/features/content/data/local/content_repository.dart';
@@ -6,6 +7,7 @@ import 'package:dnd_table_client/src/features/content/domain/content_entry.dart'
 import 'package:dnd_table_client/src/features/content/domain/content_package_manifest.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/campaign_test_support.dart';
 import 'support/content_test_support.dart';
 
 void main() {
@@ -132,6 +134,89 @@ void main() {
     await expectLater(
       DndPackExporter(repository: repository).build(packageId: 'nope'),
       throwsA(isA<StateError>()),
+    );
+  });
+
+  test('生产装配（组合仓库）下导出可用：传输前缀被剥回包格式', () async {
+    final local = MemoryContentRepository();
+    // main_shell 注入设置页的正是这个组合仓库：读取时给本地条目 id、关系目标与
+    // rules 引用加 `local:` 前缀。导出若不剥回去，真实导入器会直接判 error。
+    final aware = CampaignAwareContentRepository(
+      local: local,
+      campaign: MemoryCampaignCacheRepository(),
+      activeCampaignId: () => null,
+    );
+    Future<void> seed(Map<String, Object?> json) => local.upsertPackageEntry(
+      manifest: LocalHomebrewContentService.packageManifest,
+      entry: ContentEntry.fromJson(json),
+    );
+    await seed({
+      'id': 'local-homebrew:classFeature/star',
+      'type': 'classFeature',
+      'slug': 'star',
+      'name': '星辉',
+      'body': <Object?>[],
+      'revision': 1,
+      'structured': <String, Object?>{'class': 'star-knight', 'level': 1},
+    });
+    await seed({
+      'id': 'local-homebrew:class/star-knight',
+      'type': 'class',
+      'slug': 'star-knight',
+      'name': '星骑士',
+      'body': <Object?>[],
+      'revision': 1,
+      'structured': <String, Object?>{
+        'classRules': <String, Object?>{'hitDie': 10},
+      },
+      'relations': <Object?>[
+        {'type': 'related', 'targetId': 'local-homebrew:classFeature/star'},
+      ],
+      'rules': <String, Object?>{
+        'progression': <Object?>[
+          {
+            'levels': [1],
+            'grants': [
+              {
+                'id': 'g1',
+                'kind': 'feature',
+                'entryId': 'local-homebrew:classFeature/star',
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    final export = await DndPackExporter(
+      repository: aware,
+      importer: ContentPackageImporter(local),
+    ).build(packageId: LocalHomebrewContentService.packageId);
+
+    final target = MemoryContentRepository();
+    final importer = ContentPackageImporter(target);
+    final report = await importer.previewDndPack(export.bytes);
+    expect(report.valid, isTrue, reason: '${report.errors}');
+    await importer.importReport(report);
+
+    final entries = await target.search(const ContentQuery());
+    expect(
+      entries.map((entry) => entry.id).toList()..sort(),
+      <String>[
+        'local-homebrew:class/star-knight',
+        'local-homebrew:classFeature/star',
+      ],
+    );
+    final knight = entries.firstWhere((entry) => entry.type == 'class');
+    expect(
+      knight.relations.single.targetId,
+      'local-homebrew:classFeature/star',
+      reason: '关系目标也必须剥回包格式',
+    );
+    expect(
+      knight.rules!.progression.single.grants.single.entryId,
+      'local-homebrew:classFeature/star',
+      reason: 'rules 里的条目引用同样不能被传输前缀带进包',
     );
   });
 }

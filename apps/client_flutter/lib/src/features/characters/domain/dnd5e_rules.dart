@@ -343,7 +343,9 @@ class Dnd5eRules {
   }) {
     final id = entryId?.trim() ?? '';
     if (id.isNotEmpty) {
-      final slug = id.split('/').last.trim().toLowerCase();
+      // 有 id 时口径就是"末段"（先剥 `local:` / `campaign:<cid>:` 传输前缀）：
+      // 唯一实现在 `contentEntryAlignmentKey`，与跨包分组、创建覆盖同源。
+      final slug = contentEntryAlignmentKey(id);
       if (slug.isNotEmpty) return slug;
     }
     final normalized = classSummary.trim().toLowerCase();

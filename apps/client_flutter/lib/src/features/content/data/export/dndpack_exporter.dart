@@ -3,7 +3,10 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 
+import '../../domain/content_entry.dart';
+import '../../domain/content_entry_id.dart';
 import '../../domain/content_import_report.dart';
+import '../../../rules/domain/character_rule_definition.dart';
 import '../import/content_package_importer.dart';
 import '../local/content_repository.dart';
 
@@ -71,7 +74,12 @@ class DndPackExporter {
     if (manifest == null) {
       throw StateError('资料包不存在：$packageId');
     }
-    final entries = await repository.search(ContentQuery(packageId: packageId));
+    final entries = <ContentEntry>[
+      for (final entry in await repository.search(
+        ContentQuery(packageId: packageId),
+      ))
+        _canonicalEntry(entry),
+    ];
     if (entries.isEmpty) {
       throw StateError('资料包没有条目，无从导出：$packageId');
     }
@@ -121,6 +129,48 @@ class DndPackExporter {
       fileName: '${manifest.id}.dndpack',
       bytes: bytes,
       report: report,
+    );
+  }
+
+  /// 把仓储边界加上的**传输前缀**（`local:` / `campaign:<cid>:`）剥回包格式。
+  ///
+  /// 生产装配里注入的是 `CampaignAwareContentRepository`：它读取时给条目 id、
+  /// `relations[].targetId` 和 `rules` 里的条目引用都加了前缀。这些前缀**不属于**
+  /// 包格式，直接序列化会被真实导入器判为 error（条目 id 前缀不符、`relation
+  /// target … does not exist in package`、`validateRuleReferences`）——也就是
+  /// "GUI 里导出必然失败"。
+  ///
+  /// 剥前缀只有 `canonicalContentEntryId` 一处实现，引用遍历只有
+  /// `mapRuleEntryReferences` 一处实现（与给引用加前缀的仓储共用）。
+  /// `body` 里的 `EntryLinkBlock.targetId` 未被打前缀，因此原样带出即与
+  /// 规范化后的条目 id 对齐。
+  static ContentEntry _canonicalEntry(ContentEntry entry) {
+    final rules = entry.rules;
+    return ContentEntry(
+      id: canonicalContentEntryId(entry.id),
+      type: entry.type,
+      slug: entry.slug,
+      name: entry.name,
+      body: entry.body,
+      revision: entry.revision,
+      aliases: entry.aliases,
+      summary: entry.summary,
+      structured: entry.structured,
+      tags: entry.tags,
+      source: entry.source,
+      origin: entry.origin,
+      relations: <ContentRelation>[
+        for (final relation in entry.relations)
+          ContentRelation(
+            type: relation.type,
+            targetId: canonicalContentEntryId(relation.targetId),
+          ),
+      ],
+      rules: rules == null
+          ? null
+          : CharacterRuleDefinition.fromJson(
+              mapRuleEntryReferences(rules.toJson(), canonicalContentEntryId),
+            ),
     );
   }
 }

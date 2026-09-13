@@ -57,6 +57,11 @@ class LocalHomebrewContentService {
     /// 改个名字就对不上来源，覆盖链永远不生效。
     ContentEntry? overrideOf,
   }) async {
+    if (overrideOf != null && type != overrideOf.type) {
+      throw LocalHomebrewValidationException(<String>[
+        '覆盖的 type 必须与来源一致（来源 ${overrideOf.type}，收到 $type）',
+      ]);
+    }
     final alignmentKey = overrideOf == null
         ? null
         : contentEntryAlignmentKey(overrideOf.id);
@@ -78,12 +83,14 @@ class LocalHomebrewContentService {
         '覆盖必须声明 classRules：否则它不参与列级合并链（契约 §3.8）',
       ]);
     }
-    final slug =
-        alignmentKey ?? await _availableSlug(validated.normalizedType, name);
+    final taken = await _takenEntryIds();
+    final slug = alignmentKey ?? _availableSlug(validated.normalizedType, name, taken);
     final id = '$packageId:${validated.normalizedType}/$slug';
-    if (alignmentKey != null && await _repository.getByKey(id) != null) {
+    if (taken.contains(id)) {
       throw LocalHomebrewValidationException(<String>[
-        '已存在同键条目 $id：直接编辑它即可，不要再建一条覆盖',
+        alignmentKey != null
+            ? '已存在同键条目 $id：直接编辑它即可，不要再建一条覆盖'
+            : '条目 $id 已存在：请换一个名称',
       ]);
     }
     final entry = _buildEntry(
@@ -239,11 +246,27 @@ class LocalHomebrewContentService {
     return body;
   }
 
-  Future<String> _availableSlug(String type, String name) async {
+  /// 本包**已占用的条目 id**（规范形式，已剥传输前缀）。
+  ///
+  /// 不能用 `getByKey('$packageId:…')`：生产装配注入的是
+  /// `CampaignAwareContentRepository`，它只解析 `local:` / `campaign:<cid>:` 前缀键，
+  /// 无前缀键一律返回 null。那样"重名后缀"与"同键覆盖检测"会双双失效——重名直接
+  /// 覆盖前一条（数据丢失）、同键覆盖静默替换。用 `search` + 规范 id 比较，与仓储
+  /// 边界无关。
+  Future<Set<String>> _takenEntryIds() async {
+    final entries = await _repository.search(
+      const ContentQuery(packageId: packageId),
+    );
+    return <String>{
+      for (final entry in entries) canonicalContentEntryId(entry.id),
+    };
+  }
+
+  String _availableSlug(String type, String name, Set<String> taken) {
     final base = _slugify(name);
     var candidate = base;
     var suffix = 2;
-    while (await _repository.getByKey('$packageId:$type/$candidate') != null) {
+    while (taken.contains('$packageId:$type/$candidate')) {
       candidate = '$base-${suffix++}';
     }
     return candidate;

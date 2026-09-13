@@ -247,8 +247,70 @@ void main() {
     expect(_decode(host.rules.text).containsKey('progression'), isFalse);
   });
 
-  testWidgets('JSON 不是合法对象：表单拒绝渲染并提示切回 JSON', (tester) async {
-    tester.view.physicalSize = const Size(1400, 1400);
+  testWidgets('表形态的 recovery 不伪装成长休，也不会被一次点选写坏', (tester) async {
+    final host = await pumpForm(
+      tester,
+      structured: {
+        'classRules': {
+          'resources': [
+            {
+              'id': 'focus',
+              'name': '专注点',
+              'recovery': {
+                'table': {'1': 'longRest', '5': 'shortRest'},
+              },
+            },
+          ],
+        },
+      },
+      rules: const {},
+    );
+
+    expect(
+      find.byKey(const Key('homebrew-form-resource-0-recovery-table')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('homebrew-form-resource-0-recovery')),
+      findsNothing,
+      reason: '表形态不提供可点选的下拉框，避免一键把整张表替换成常量',
+    );
+    expect(find.text('长休'), findsNothing);
+    expect(find.textContaining('shortRest'), findsOneWidget);
+
+    final resource =
+        ((_decode(host.structured.text)['classRules']! as Map)['resources']!
+                as List)
+            .single
+        as Map<String, Object?>;
+    expect(resource['recovery'], {
+      'table': {'1': 'longRest', '5': 'shortRest'},
+    });
+  });
+
+  testWidgets('名称字段不做 trim 写回，词中/词尾空格保留', (tester) async {
+    final host = await pumpForm(tester, structured: const {}, rules: const {});
+    await tapKey(tester, const Key('homebrew-form-add-resource'));
+    final finder = find.byKey(const Key('homebrew-form-resource-0-name'));
+    await tester.enterText(finder, '专 注 ');
+    await tester.pumpAndSettle();
+
+    final resource =
+        ((_decode(host.structured.text)['classRules']! as Map)['resources']!
+                as List)
+            .single
+        as Map<String, Object?>;
+    expect(resource['name'], '专 注 ', reason: '自由文本原样写回，不裁剪');
+    // 若写回时 trim，父级重建会把 controller 文本改回裁剪值（光标重置），
+    // 于是词中间的空格永远打不出来。
+    expect(
+      tester.widget<TextFormField>(finder).controller!.text,
+      '专 注 ',
+      reason: 'controller 不被裁剪后的值重置',
+    );
+  });
+
+  testWidgets('JSON 不是合法对象：表单拒绝渲染并提示切回 JSON', (tester) async {    tester.view.physicalSize = const Size(1400, 1400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(

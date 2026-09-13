@@ -1,3 +1,4 @@
+import 'package:dnd_table_client/src/features/content/data/campaign_aware_content_repository.dart';
 import 'package:dnd_table_client/src/features/content/data/local/local_homebrew_content_service.dart';
 import 'package:dnd_table_client/src/features/content/data/local/content_repository.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_block.dart';
@@ -5,6 +6,7 @@ import 'package:dnd_table_client/src/features/content/domain/content_entry.dart'
 import 'package:dnd_table_client/src/features/content/domain/content_entry_id.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/campaign_test_support.dart';
 import 'support/content_test_support.dart';
 
 void main() {
@@ -286,6 +288,70 @@ void main() {
         ),
       ),
       throwsA(isA<LocalHomebrewValidationException>()),
+    );
+
+    // 类型必须与来源一致：静默忽略调用方传的 type 会让"覆盖"落到另一条对齐键上。
+    await expectLater(
+      service.create(
+        type: 'spell',
+        name: '类型不符',
+        structured: const {
+          'classRules': {'hitDie': 8},
+        },
+        overrideOf: source,
+      ),
+      throwsA(isA<LocalHomebrewValidationException>()),
+    );
+  });
+
+  test('组合仓库（生产装配）下重名加后缀、同键覆盖被拒，不静默覆盖', () async {
+    final local = MemoryContentRepository();
+    final aware = CampaignAwareContentRepository(
+      local: local,
+      campaign: MemoryCampaignCacheRepository(),
+      activeCampaignId: () => null,
+    );
+    final service = LocalHomebrewContentService(repository: aware);
+
+    // 重名：组合仓库的 `getByKey('local-homebrew:…')` 恒为 null（它只认带前缀的键），
+    // 若还用 getByKey 判断占用，第二条会拿到同一个 id 直接覆盖第一条。
+    final first = await service.create(type: 'custom', name: '同名');
+    final second = await service.create(type: 'custom', name: '同名');
+    expect(first.id, 'local-homebrew:custom/同名');
+    expect(second.id, 'local-homebrew:custom/同名-2');
+    expect(await aware.search(const ContentQuery()), hasLength(2));
+
+    final classEntry = await service.create(
+      type: 'class',
+      name: '星骑士',
+      structured: const {
+        'classRules': {'hitDie': 12},
+      },
+    );
+    expect(classEntry.id, 'local-homebrew:class/星骑士');
+
+    // 覆盖：来源是从组合仓库读到的条目（id 带 `local:` 前缀），它的对齐键已被本包
+    // 占着。旧实现用 `getByKey` 判重（组合仓库对无前缀键恒返回 null）会把这唯一一条
+    // 静默覆盖；现在必须报错，而且原条目一个字段都不能变。
+    final source = (await aware.search(
+      const ContentQuery(type: 'class'),
+    )).single;
+    await expectLater(
+      service.create(
+        type: 'class',
+        name: '星骑士覆盖',
+        structured: const {
+          'classRules': {'hitDie': 8},
+        },
+        overrideOf: source,
+      ),
+      throwsA(isA<LocalHomebrewValidationException>()),
+    );
+    final kept = (await aware.search(const ContentQuery(type: 'class'))).single;
+    expect(
+      (kept.structured['classRules']! as Map)['hitDie'],
+      12,
+      reason: '被拒的覆盖没有改掉已有条目',
     );
   });
 }

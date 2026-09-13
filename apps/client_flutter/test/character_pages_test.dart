@@ -1648,7 +1648,23 @@ void main() {
     );
     await _goToBuilderStep(tester, 4, '熟练');
 
-    // 锁定的技能仍显示在网格里（用户看得到），但点它不会改状态。
+    // 锁定的技能仍显示在网格里（用户看得到），但 **chip 本身是 disabled**：
+    // 断言 onSelected == null，而不是只断言"点了之后结果没变"——后者在
+    // "引擎仍按背景授予"时恒真，咬不住 UI（审查变异 c 的盲区）。
+    final lockedChip = tester.widget<FilterChip>(
+      find.byKey(const Key('standard-skill-运动-chip')),
+    );
+    expect(lockedChip.onSelected, isNull, reason: '背景声明的技能不可取消');
+    expect(
+      find.ancestor(
+        of: find.byKey(const Key('standard-skill-运动-chip')),
+        matching: find.byType(Tooltip),
+      ),
+      findsOneWidget,
+      reason: '锁定的 chip 必须说明原因（disabled 不可聚焦）',
+    );
+
+    // 点它不会改状态（disabled chip 不响应）。
     await tester.tap(find.byKey(const Key('standard-skill-运动-chip')));
     await tester.pumpAndSettle();
     await _goToBuilderStep(tester, 8, '审核');

@@ -3110,7 +3110,7 @@ git commit -m "test(rules): 选择系统端到端验收并更新示例包新写�
 1) **§7.7 已知限制表**的"选择系统（计划 2）"行改为：
    > `repeatable` / `countsToward` / `requires` / `group` / `help` 与内联选项 `grants` **已实现**；`requires` 的 `ability` 门槛按**入参基础属性**判定（由其它选择授予的属性加值不计入门槛）；`spellbook` 池无独立数值列，只受选择自身 `maximum` 约束。
 2) **§7.7 行为变化清单**追加第 13 条：
-   > 13. 选择系统运行时语义落地：内联选项与字符串简写选中即生效（自动授予）；`repeatable` 允许同一选项选多次；`countsToward` 计入共享额度池；`requires` 不满足时选择不可用并说明原因；技能选择改由 `rules.progression[].choices` 的 `optionType: "skill"` 承担并写入 `build.choices`（背景技能仍由背景预设承担）。
+   > 13. 选择系统运行时语义落地：内联选项与字符串简写选中即生效（自动授予）；`repeatable` 允许同一选项选多次；`countsToward` 计入共享额度池；`requires` 不满足时选择不可用并说明原因；技能选择改由 `rules.progression[].choices` 的 `optionType: "skill"` 承担并写入 `build.choices`（背景技能由**背景条目自身的 `rules`** 承担——见 D10 的事后注记）。
 3) **§9.2.3** 的 `choices` 段重写为完整字段表（`id`/`label`/`optionType`/`minimum`/`maximum`/`options`/`optionEntryIds`/`optionTags`/`maximumOptionLevel`/`recommendedEntryIds`/`repeatable`/`countsToward`/`requires`/`group`/`help`/`builderStep`），并写明自动授予表（含 `data.value` 口径）与 `invalidAutoGrant`；删掉"声明了但还无法消费的字段一律拒收"整段。
 4) **§9.2.5 error 清单**：删 `unsupportedChoiceField`，`invalidCountsToward` / `invalidRequires` 描述改为取值/引用校验，补 `invalidAutoGrant`。
 5) **§2 / §16**：如果列出了"未完成：选择系统（计划 2）"（第 1206 行附近），改为已完成并指向 §9.2.3。
@@ -3222,4 +3222,4 @@ git commit -m "docs: 同步选择系统运行时语义的契约与行为变化"
 | **D7** | **必修**：`builderStep: "abilities"`(步骤 3) 与 `"details"`(步骤 7) 当前没有 `ruleChoiceWidgets`，示例包的 `asi-or-feat` 在创建向导里根本不显示；摘掉"专门 UI 免检"后会变成"看不见却阻塞创建"。任务 6b 必须修掉，并加结构守卫测试（每个允许的 `builderStep` 都必须真的渲染选择区）。 |
 | **D8** | **降范围**：`optionType: "spell"` 的**运行时支持**照计划实现（法术池、`alwaysPreparedEntryIds`）；但**改提取器让它产出 `optionType:"spell"` 选择**不在本轮——PHB 包的法术选择现在由 `classRules.spellcasting` 正确承担，改提取器是另一大块且不影响正确性。规格 §11 明确记为延后（并说明"运行时已支持、只是 PHB 提取器未产出"）。 |
 | **D9** | 采纳计划：`manualOverrides.spells.preparedEntryIds`（用户手动准备）与 `alwaysPreparedEntryIds`（选择派生的自动准备）都是**去重集合**，重复选取的**次数**只保留在有序的 `build.choices` 里。批次 C+D 审查后修订：派生只写 `alwaysPreparedEntryIds`，读取侧按**并集**判定"已准备"（规格 §3.11 A3 已同步）。 |
-| **D10** | **不在本轮**：背景技能仍由 `_presetSkillsForBackground` 的中文名预设提供（不走背景条目的 `rules`）。列入 §11 延后项，注明"背景条目驱动技能授予"属后续工作。 |
+| **D10** | ~~**不在本轮**：背景技能仍由 `_presetSkillsForBackground` 的中文名预设提供。~~ **事后注记（2026-09-13）**：已落地——提取器为 16 个背景产出 `rules.grants`（`kind: "proficiency"` + `target: "skill:<档案规范名>"`），客户端删除两张中文名预设表与「未知背景发士兵技能」兜底，新增 `backgroundSkillProficiencies`（唯一读取口径）。 |

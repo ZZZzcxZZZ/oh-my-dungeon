@@ -76,19 +76,7 @@ class RulesDrivenCharacterBuilder {
       build,
       classSummaryFallback: classSummaryFallback,
     );
-    // `requires` 的门禁输入是 `CharacterBuild.abilities`（决策 D4：门槛读**基础属性**）。
-    // 调用方只传了 `abilities:` 参数（没在 `CharacterBuild` 里再写一份）时，它就是空的
-    // ——那时 `ability` 形式的 `requires` 会**静默**把所有候选判为不满足、把选项的授予
-    // 悄悄丢掉。空则回退到本方法的 `abilities` 参数；显式传入 `build.abilities` 的调用方
-    // （构建器/项目器）语义完全不变。
-    final gateBuild = build.abilities.isEmpty
-        ? CharacterBuild(
-            level: build.level,
-            selections: build.selections,
-            choices: build.choices,
-            abilities: abilities,
-          )
-        : build;
+    final gateBuild = _gateBuildFor(build, abilities);
     final ledger = _engine.evaluate(
       gateBuild,
       poolLimits: RuleChoiceQuota.limitsFor(
@@ -369,13 +357,41 @@ class RulesDrivenCharacterBuilder {
     // 的选择同样不产出 grants，减加值必须看到同一份账，否则减法不是精确逆。
     final classRules = _classRulesFor(build);
     final ledger = _engine.evaluate(
-      build,
+      // **与 [build] 同一份门禁输入**（见 [_gateBuildFor]）：两条路径的门槛判据一旦
+      // 分叉，"减法"就不是精确逆——一边按门槛发出 `kind: ability` 加值、另一边按空
+      // 门槛不发，旧存档再派生就会每次多叠一份。
+      _gateBuildFor(build, normalized),
       poolLimits: RuleChoiceQuota.limitsFor(
         rules: classRules,
         level: build.level,
       ),
     );
     return _subtract(normalized, _abilityGrantBonuses(ledger));
+  }
+
+  /// `requires` 门禁输入的唯一解析（决策 D4）。
+  ///
+  /// 门槛读的是**基础属性**，但对**旧存档**（`data['build']` 没有 `abilities`）来说，
+  /// 角色卡上的当前属性是唯一可用真相：那时回退到调用方传进来的属性表。全新派生时
+  /// 二者相同，因此只有"旧存档 + 门槛型选择"这一条路径受影响，结果从"静默丢失加值"
+  /// 变成"按当前属性判定"。
+  ///
+  /// [build] 与 [baseAbilitiesFrom] **必须**用同一份输入：否则减加值与叠加加值用的
+  /// 不是同一份账，再派生会重复叠加。
+  CharacterBuild _gateBuildFor(
+    CharacterBuild build,
+    Map<String, Object?> abilities,
+  ) {
+    if (build.abilities.isNotEmpty) return build;
+    return CharacterBuild(
+      level: build.level,
+      selections: build.selections,
+      choices: build.choices,
+      abilities: <String, int>{
+        for (final key in Dnd5eRules.defaultAbilities.keys)
+          key: Dnd5eRules.abilityScore(abilities, key),
+      },
+    );
   }
 
   /// [build] 所选职业的解析后职业规则（角色自身条目 ∪ 跨包声明 ∪ 档案），供额度池

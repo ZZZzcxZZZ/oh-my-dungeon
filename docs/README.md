@@ -405,7 +405,8 @@ PHB 2024 官方表格）：
   客户端离线 `CharacterController.adjustHitPoints`、详情页 HP 调整、
   `POST /characters/:id/hp`、`POST /campaigns/:id/characters/:id/hp`；
 - 快速创建（`QuickBuildService`）：12 职业属性预设、**12 职业豁免熟练**、
-  **2024 背景技能**（罪犯 = 巧手 + 隐匿，贤者 = 奥秘 + 历史，侍祭 = 洞悉 + 宗教，
+  **2024 背景技能**（来自背景条目 `rules.grants` 的 `proficiency` 授予——D10；例如
+  罪犯 = 巧手 + 隐匿，贤者 = 奥秘 + 历史，侍祭 = 洞悉 + 宗教，
   士兵 = 运动 + 威吓）、资源恢复规则写入角色数据；
 - 战役：邀请码过期/次数/幂等校验、公开邀请固定加入为 `player`、
   检定请求只能由目标角色响应、角色发布与绑定权限、档案创建者权限。
@@ -432,7 +433,7 @@ PHB 2024 官方表格）：
    `manualOverrides.spells.alwaysPreparedEntryIds`。导入期不再"存在即拒收"，改为真正的
    取值/引用校验（`invalidCountsToward` / `invalidRequires` / `invalidAutoGrant`，§9.2.3）。
    技能选择由 `rules.progression[].choices` 的 `optionType: "skill"` 承担并写入
-   `build.choices`（背景技能仍由背景预设承担）。
+   `build.choices`；背景技能由**背景条目的 `rules`** 承担（D10），不与技能选择混同。
 9. **新增 8 个职业的资源池追踪**（连同原有的战士、野蛮人共 10 个职业、13 项资源）——
    能力增加，不是回归；老角色首次打开时由项目器补齐。
 10. 武器攻击改为读取物品条目自身的 `structured`（`damage` / `category` / `finesse`），
@@ -1903,7 +1904,7 @@ Material 3 设计系统契约（`DESIGN.md` 与契约测试/golden）；自托�
 | 项 | 结果 |
 |---|---|
 | `flutter analyze` | 0 问题 |
-| `flutter test` | **1599 通过 / 6 跳过**（3 条 golden 默认跳过 + 3 条依赖 `--dart-define` 私有包路径的用例；跳过点与上一基线同一组） |
+| `flutter test` | **1612 通过 / 6 跳过**（3 条 golden 默认跳过 + 3 条依赖 `--dart-define` 私有包路径的用例；跳过点与上一基线同一组） |
 | 服务端 `npm run lint` + `npm test` | 24 套件 / 355 测试通过，0 跳过 |
 | `npm run test:scripts` | **43 通过**（4 个脚本测试套件 + drift worker 产物清单校验；本地有 `private-imports/` 时 0 跳过，公开 CI 上 9 条提取类用例自行 skip） |
 | `npm run lint:design` | 0 error / 0 warning（1 条 token 统计 info） |

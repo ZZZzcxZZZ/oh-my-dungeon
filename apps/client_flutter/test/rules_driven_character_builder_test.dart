@@ -209,6 +209,83 @@ void main() {
     expect(draft.skills['察觉'], isTrue);
   });
 
+  test('旧存档（build 无 abilities）再派生不重复叠加门槛型 ability 加值', () {
+    // 审查实证的漂移：`baseAbilitiesFrom`（减加值）与 `build`（叠加加值）若用不同
+    // 门禁输入——一边按门槛发、一边按空门槛不发——旧存档每次再派生都会多叠一份。
+    final entry = ContentEntry.fromJson(<String, Object?>{
+      'id': 'test:class/gated-ability',
+      'type': 'class',
+      'slug': 'gated-ability',
+      'name': '门槛属性职业',
+      'body': <Object?>[],
+      'revision': 1,
+      'structured': <String, Object?>{
+        'classRules': <String, Object?>{'hitDie': 8},
+      },
+      'rules': <String, Object?>{
+        'choices': <Object?>[
+          <String, Object?>{
+            'id': 'focus',
+            'label': '专长',
+            'optionType': 'feat',
+            'minimum': 1,
+            'maximum': 1,
+            'options': <Object?>[
+              <String, Object?>{
+                'id': 'might',
+                'label': '力量强化',
+                'grants': <Object?>[
+                  <String, Object?>{
+                    'id': 'might-str',
+                    'kind': 'ability',
+                    'target': 'str',
+                    'value': 2,
+                  },
+                ],
+              },
+            ],
+            'requires': <Object?>[
+              <String, Object?>{'ability': 'wis', 'minimum': 13},
+            ],
+          },
+        ],
+      },
+    });
+    final builder = RulesDrivenCharacterBuilder(
+      entries: <String, ContentEntry>{entry.id: entry},
+    );
+    // 旧存档：`CharacterBuild` 里没有 `abilities`（老版本没记录基础属性）。
+    const oldSave = CharacterBuild(
+      level: 1,
+      selections: <String, String>{'class': 'test:class/gated-ability'},
+      choices: <String, List<String>>{
+        'test:class/gated-ability#focus': <String>['might'],
+      },
+    );
+    // 角色卡上的当前属性已经含那份 +2（力量 14）。
+    const finalAbilities = <String, Object?>{
+      'str': 14,
+      'dex': 10,
+      'con': 10,
+      'int': 10,
+      'wis': 14,
+      'cha': 10,
+    };
+
+    final base = builder.baseAbilitiesFrom(finalAbilities, oldSave);
+    expect(base['str'], 12, reason: '门槛满足 → 加值被如实减掉（精确逆）');
+    final rebuilt = builder.build(
+      name: 'Nia',
+      build: oldSave,
+      abilities: base,
+    );
+    expect(
+      rebuilt.abilities['str'],
+      14,
+      reason: '再派生回到 14，不重复叠加',
+    );
+  });
+
   test('requires(ability) 门禁读 CharacterBuild.abilities；为空时回退到 abilities 参数', () {
     // 回归：只传 `build(abilities:)` 而没在 `CharacterBuild` 里再写一份时，
     // `requires: [{ability: wis, minimum: 13}]` 会静默把选项的授予丢掉。

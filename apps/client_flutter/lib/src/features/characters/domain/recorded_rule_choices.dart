@@ -1,5 +1,6 @@
 import '../../content/domain/content_entry.dart';
 import '../../rules/domain/character_rule_definition.dart';
+import '../../rules/domain/rule_override_declaration.dart';
 import 'character.dart';
 
 /// 一条"角色选了什么"的记录（`data['choices']` 的读取结果）。
@@ -171,10 +172,17 @@ String _optionLabel(
   if (definition?.optionType == 'skill') return optionId;
   final entry = byId[optionId];
   if (entry != null) return entry.name;
-  // 落库的选项 id 可能是条目 id，也可能只是对齐键（末段）：按末段回退匹配。
+  // 落库的选项 id 可能是条目 id，也可能只是对齐键（末段）：按末段回退匹配，
+  // 但**只在同一个包内**找——跨包同末段（两个包都有 `class/wizard`）时取到别的包的
+  // 展示名比显示原 id 更糟（那是编造）。包 id 派生只有 `packageIdOf` 一处。
   final tail = optionId.contains('/') ? optionId.split('/').last : optionId;
+  final optionPackage = RuleOverrideDeclaration.packageIdOf(optionId);
   for (final candidate in byId.values) {
-    if (candidate.id.split('/').last == tail) return candidate.name;
+    if (candidate.id.split('/').last != tail) continue;
+    if (RuleOverrideDeclaration.packageIdOf(candidate.id) != optionPackage) {
+      continue;
+    }
+    return candidate.name;
   }
   return optionId;
 }

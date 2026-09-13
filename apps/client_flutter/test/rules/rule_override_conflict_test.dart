@@ -683,6 +683,45 @@ void main() {
       expect(conflict.effectiveOriginId, 'alpha:class/wizard');
     });
 
+    test('slots 表列同样：沿用值遮住别人显式写下的等级 → 登记', () {
+      // `_slotTableLevels` 的 `at` 也必须铺到 20 级（与 `_intTableLevels` 对称），
+      // 否则法术位表的"沿用遮住显式值"观察不到。
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: null,
+        entryId: null,
+        declarations: [
+          declaration('alpha:class/wizard', {
+            'spellcasting': {
+              'mode': 'prepared',
+              'ability': 'int',
+              'slots': {
+                '5': {'1': 4},
+              },
+            },
+          }, priority: 10),
+          declaration('zeta:class/wizard', {
+            'spellcasting': {
+              'mode': 'prepared',
+              'ability': 'int',
+              'slots': {
+                '10': {'1': 9},
+              },
+            },
+          }, priority: 10),
+        ],
+      );
+      expect(merged.spellSlots(10), {'1': 4}, reason: 'alpha 的沿用值在 10 级生效');
+      final conflict = merged.conflicts.singleWhere(
+        (item) => item.field == RuleFieldPath.spellcasting('slots'),
+      );
+      expect(conflict.originIds, <String>[
+        'alpha:class/wizard',
+        'zeta:class/wizard',
+      ]);
+    });
+
     test('沿用值与别人的显式值相同 → 不登记（互补且不冲突）', () {
       final merged = RuleProfileResolver.resolveClassRules(
         profile: profile,

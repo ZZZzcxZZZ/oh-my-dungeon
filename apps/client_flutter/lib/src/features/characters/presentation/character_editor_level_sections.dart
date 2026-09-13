@@ -618,7 +618,7 @@ class _SkillProficiencySection extends StatelessWidget {
                       final isSelected = selected.contains(skill.name);
                       final atLimit =
                           constrained && chosen.length >= (maximum ?? 0);
-                      return FilterChip(
+                      final chip = FilterChip(
                         key: Key('standard-skill-${skill.name}-chip'),
                         avatar: isFixed
                             ? const Icon(Icons.lock_outline, size: 16)
@@ -638,6 +638,15 @@ class _SkillProficiencySection extends StatelessWidget {
                                 ),
                               ),
                       );
+                      // 锁定的 chip 是 disabled、不可聚焦：必须给出**为什么**，
+                      // 否则作者会以为是界面坏了（也是审查指出的可用性缺口）。
+                      return isFixed
+                          ? Tooltip(
+                              message: '该技能熟练由背景条目声明，不能在这里取消；'
+                                  '要改请改背景条目本身。',
+                              child: chip,
+                            )
+                          : chip;
                     },
                   ),
               ],

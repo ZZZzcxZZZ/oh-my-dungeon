@@ -4075,3 +4075,28 @@ git commit -m "test(rules): 覆盖 / 勘误场景端到端验收
 规格 §3.6「列级来源无法产生」、§3.7「整字段粒度 / 本轮 UI 未消费」、§3.8「没有 priority」、
 §11 的 S3 行、§5 新增 code；`docs/README.md` §5.1（`schemaVersion` 13 → 14）、§7.7、§9.2、§16；
 以及 §3.12 里 `content_character_rules_view.dart` 的路径漏了 `widgets/`。
+
+
+---
+
+## 事后注记（2026-09-13 收口）
+
+**任务 1–13 全部落地**，另有 4 个修复批次（C1 / C2 / C3 / 验证后修复）来自**独立审查**：
+
+| 批次 | commit | 修掉的真缺陷（都是静默数值或静默丢失） |
+|---|---|---|
+| C1 | `16b3f54` `268173f` `bb296f3` | pin 整链越权（pin 一列会连带提升整条来源）、旧备份恢复因非空列回滚、冲突判定过宽 |
+| C2 | `1155180` `a0f43e2` `5f228b7` `c372c00` | **派生快照残留被关闭来源的旧数值**（H，主路径静默错误）、冲突对话框把未改动列静默 pin、`isDisabled` 两套实现语义分叉、`_maximumLevels` 跨形态同值误报冲突、编辑器/向导/短休漏带 priority 或覆盖 |
+| C3 | `bab2111` `e02ea09` `f2081d4` | `classResources` getter 把"已派生为空"当"未派生"回退到**不带覆盖**的解析、6 处测试盲区（mutating 实现不红）、战役视图 priority 失效 |
+| 验证后 | `8dc5290` | `CampaignAwareContentRepository.packagePriorities()` 键不带 `local:` / `campaign:` 前缀 → 战役装配下 priority 静默归零；`QuickBuildService` 不带 entries/priority/覆盖 → 同 slug 两包时与规则驱动路径分叉；`spellSaveDc` 自解析（与 L 同类） |
+
+**偏离计划的决策**：D6 的"取后者"改为"取升序首位"（与实现一致）；`replace` 未声明的列**不登记**冲突
+（D4 语义：未声明就是未声明）；pin 可逐列取回被同 tier `replace` 丢弃的 `patch`；`_withoutPinSolvedConflicts`
+（pin 已决定的列不再提示冲突）；`quick_build` 也写入 `classRuleSources`/`classRuleConflicts`。
+
+**收口基线**：`npm run check` EXIT=0（客户端 **1582 通过 / 6 跳过**，服务端 24 套件 / 355）、
+`npm run test:scripts` 38 OK、`npm run lint:design` 0 error / 0 warning、
+`npm run validate:phb-private` PASS；`origin/main` = `40eb04f`。
+
+**仍未做**：S4 作者 GUI 与 `.dndpack` 导出；PHB 提取器产出 `optionType: "spell"` 选择；
+背景条目驱动技能授予；战役视图覆盖 id 的前缀口径统一（见 §7.7 已知限制）。

@@ -374,18 +374,28 @@ cantrips      = cantrips[L]                                        // 同上
 这样"属性提升在 4/8/12/16 级各来一次"只写一份，不需要第二套语法。
 `hitPoints` 的 `formula` 与 `resource.maximum` 共用同一封闭语法与同一求值器；`ability` 只接受 `value`（理由见上表）。
 
-### 3.6 解析链（字段级）
+### 3.6 解析链（列级）
 
-输入：角色所选职业的 `ContentEntry`（来自 `build.selections['class']`，或老角色 `data.classIdentity`）。
+输入：角色所选职业的 `ContentEntry`（来自 `build.selections['class']`，或老角色 `data.classIdentity`），
+以及**所有已启用包**对该职业对齐键的声明（跨包勘误，见 §3.8）。
 
 1. **条目自身声明**：该条目 `structured.classRules`（规范化后的字段）。
-2. **档案补齐**：对仍缺失的字段，按该条目的**对齐键**查询内置档案。对齐键的规范口径是
-   **条目 id 的最后一段**（`<packageId>:class/<slug>` → `<slug>`，规范化 `trim().toLowerCase()`；
-   唯一实现点 `Dnd5eRules.resolveClassSlug`，条目里的展示字段 `slug` **不**参与数值继承）。
+2. **逐列合并**：全部声明按 tier 从高到低排序（§3.8），**逐列**向下回退到更低 tier；
+   声明的排他性由该块的 `classRules.mode` 决定（`patch` 默认 / `replace` 见 §3.8）。
+   **列级合并（S3 起）**：条目声明过哪一列，该列就由该条负责；未声明的列继续向下回退
+   （内置档案或其他包的声明）。`spellcasting` 逐列合并（`mode` / `ability` / `listTags` /
+   `archetype` / `slots` / `slotLevel` / `prepared` / `cantrips` / `maximumSpellLevel`），
+   `resources` 按 `id` 合、同 `id` 再逐列合并（`name` / `maximum` / `recovery` / `startsAtLevel`），
+   `hitDie` / `savingThrowAbilities` 维持整值合并。
+   列级判据只有一处（`ClassSpellcasting.declares` / `ClassResourceRule.declares`，解析时填充 `fields`），
+   列级取值只有一处（`RuleProfileResolver._pickColumn`）。
+   对齐键的规范口径是**条目 id 的最后一段**（`<packageId>:class/<slug>` → `<slug>`，
+   规范化 `trim().toLowerCase()`；唯一实现点 `Dnd5eRules.resolveClassSlug`，条目里的展示字段
+   `slug` **不**参与数值继承）。
    只有"展示名"可用时（老角色卡/快速创建），允许按 `classAliases` **精确相等**或
    **`<别名><分隔符>` 前缀**（分隔符限 `（` `(` 空格 `-` `/`）匹配，例如 `战士（奥法骑士）` → `fighter`。
-   **禁止裸子串匹配**（`星界游侠` 不得命中 `游侠`）。字段级合并。
-3. **未声明即不猜**：仍缺失的字段视为"未声明"：
+   **禁止裸子串匹配**（`星界游侠` 不得命中 `游侠`）。
+3. **未声明即不猜**：仍缺失的**列**视为"未声明"：
    - `hitDie` 缺失 → HP 仅按体质调整值计（最低 1），并在角色页与导入报告给出该职业的"未声明"提示；
    - `savingThrowAbilities` 缺失 → 无豁免熟练；
    - `spellcasting` 缺失或 `mode: "none"` → 无法术位、无准备上限、无施法属性；
@@ -396,32 +406,58 @@ cantrips      = cantrips[L]                                        // 同上
 
 ### 3.7 来源可追溯
 
-`ResolvedClassRules`（字段级合并的产物）为每个职业的每个字段记录来源：
+`ResolvedClassRules`（列级合并的产物）为每个职业的每一列记录来源：
 
 ```dart
 class RuleFieldSource {
-  final String field;      // 'hitDie' | 'savingThrowAbilities' | 'spellcasting' | 'resources'（**整字段粒度**）
+  final String field;      // 列级路径，由 RuleFieldPath 唯一产出：
+                           // 'hitDie' | 'savingThrowAbilities'
+                           // | 'spellcasting.<列>'  例 'spellcasting.prepared'
+                           // | 'resources.<id>.<列>' 例 'resources.rage.maximum'
   final String originId;   // 'builtin:dnd5e-2024' | '<entryId>'
-  final int tier;          // 0 内置档案 / 100 条目声明
+  final int tier;          // 0 内置档案 / 100 + package.priority 包声明（§3.8）
 }
 ```
 
-来源的粒度是**顶层字段级**（`spellcasting` 是整字段，不细分到 `spellcasting.slots`）：字段级合并本身就是
-整 `spellcasting` 替换，因此列级来源在本契约下无法产生。S3 若要"只覆盖 prepared、保留档案 slots"，
-必须先把合并粒度改到列级——这是一条**已知限制**，S3 之前必须决策。
+路径的**唯一**定义是 `RuleFieldPath`（`spellcastingColumns` / `resourceColumns`；
+`kSpellcastingFields` / `kResourceFields` 直接由它派生，因此"能解析的键"与"能记来源的列"
+不会各写一份而漂移）。写入只有一个出口（`RuleProfileResolver._writeSource`），
+读取只有一个入口（`ResolvedClassRules.sourceOf`），展示名只有一个实现
+（`RuleFieldPath.labelFor`）。
 
-本次只在**数据层**记录来源（`ResolvedClassRules.fieldSources`），角色页与导入报告**尚未消费**
-（"该数值来自内置档案"还是"来自本职业条目"的显示留待后续计划）；S3 用它实现"被哪个包覆盖 /
-关掉覆盖回退"。
+**已知限制**：来源路径**没有等级维度**。决策 D5 的表列逐级合并会产出"1–19 级来自档案、
+20 级来自条目"的数值，但来源只如实记在**最高 tier 的声明者**一条上
+（`spellcasting.prepared`），不做 `spellcasting.prepared@20` 这类逐级来源路径。
 
-### 3.8 优先级（本次范围）
+来源已被消费（S3 起）：角色页的法术位面板与资源面板（§4.2）、资料页的「规则来源」卡、
+导入报告（`ContentImportReport.classRuleSources`）与导入预览都读 `fieldSources`；
+角色数据持久化 `data.classRuleSources` 与 `data.classRuleConflicts`（§3.8）。
 
-**只有两级：内置档案 < 角色所用条目的声明。** 理由：一个角色只引用它自己那一个职业条目
-（`classIdentity.entryId`），所以包与包之间在**本阶段**不会对同一角色产生冲突——
-只有"条目没声明、档案有"这一种补齐关系，以及"条目声明了、档案也有"这一种覆盖关系。
+### 3.8 优先级（按 tier 排序的 N 条声明）
 
-因此本轮**不引入** `priority` 字段、不做全局条目扫描、也没有 Drift 迁移。
-S3 的 patch/replace 才需要跨包优先级与冲突 UI（届时一条 errata 才能作用于**已指向别的包条目**的角色）。
+**两级已推广为按 tier 排序的 N 条声明**：
+
+- 内置档案 = tier 0（`kBuiltinTier`）；
+- 包声明 = `100 + package.priority`（manifest 的 `priority`，0..1000，缺省 0）。
+  缺省 0 ⇒ tier 恒为 100 —— **不写 priority 的包行为与引入前完全一致**。
+- 同 tier 的排序：`replace` 先于 `patch` → 角色自己的条目 → originId 升序（结果可复现，
+  唯一实现点 `RuleOverrideOrder.ordered`）；
+- **同 tier 多来源抢同一列 = 覆盖冲突**：生效值取排序首位，同时登记
+  `RuleOverrideConflict{field, tier, originIds, effectiveOriginId}`，在角色页提示，
+  用户可显式选定来源（`data.ruleOverrides.pinned`）或关闭某条覆盖
+  （`data.ruleOverrides.disabledOriginIds`）。冲突**不是导入 error**：导入单个包时看不到
+  别的包，冲突不是该包的错。
+  **两个不变量**：`originIds` 里每个来源都必须**声明了该列**，`effectiveOriginId` 必须是
+  其中之一（否则界面会给出"选了也不生效"的选项）。用户 pin 的优先级最高、且只作用于该列：
+  它可以逐列取回被同 tier `replace` 丢弃的 `patch` 声明。
+- `classRules.mode: "replace"` 表示"自己就是该职业的全部真相"：更低 tier（含内置档案）
+  不再提供任何列，未声明的列一律"未声明"；`patch`（缺省）才是逐列向下回退。
+  **同 tier** 的 `patch` 也会被 `replace` 丢弃，但只在 `replace` **也声明了**该列时登记冲突
+  （此时用户可 pin 到该 patch 逐列恢复）；`replace` 未声明的列**不登记**冲突——按 D4
+  "未声明就是未声明"，角色页如实显示"未声明"而不是静默换一个数值。
+- **跨包声明按对齐键分组**：`RuleOverrideIndex` 从已启用包的 `class` 条目 + 包优先级构建，
+  因此一个包可以给"已指向别的包条目"的角色打勘误。不做全局条目扫描（仍然只有对齐键相等的
+  条目参与）。
 
 ### 3.9 无兼容层：旧契约不读取，提取器同步重写
 
@@ -673,7 +709,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 
 | 组件 | 文件 | 职责 |
 |---|---|---|
-| `RuleProfile` | `features/rules/domain/rule_profile.dart` | 不可变；`abilities`、`skills`、`progressions`、`classes(slug → ClassRuleSet)`、`aliases`；纯查询（档案侧 `classRules(key)` / `progression(name)`）。解析后的职业查询在 `ResolvedClassRules`：`hitDie`、`savingThrowAbilities`、`spellcasting`、`resources`、`fieldSources`（**只供数据层/测试读取，本轮 UI 未消费**，见 §3.7）与 `spellSlots(level)`、`preparedLimit(level)`、`cantripLimit(level)`、`maxSpellLevel(level)`、`resourcesAt(level, abilities)`、`spellcastingAbility`、`usesPactMagic`、`declaredMinLevel` / `declaredMaxLevel`。**契约魔法法术位的环阶由 `spellSlots(level)` 的键承载**（`pact` 原型展开成 `{"3": 2}` 这种形状），因此不再有独立的 `pactSlotLevel(level)`（实现期删除：与 `maxSpellLevel` 同源同值、无生产调用点） |
+| `RuleProfile` | `features/rules/domain/rule_profile.dart` | 不可变；`abilities`、`skills`、`progressions`、`classes(slug → ClassRuleSet)`、`aliases`；纯查询（档案侧 `classRules(key)` / `progression(name)`）。解析后的职业查询在 `ResolvedClassRules`：`hitDie`、`savingThrowAbilities`、`spellcasting`、`resources`、`fieldSources`（**列级来源**，`sourceOf(path)` 读取；角色页 / 导入报告已消费，见 §3.7）与 `conflicts`（同 tier 抢同一列的登记，§3.8）与 `spellSlots(level)`、`preparedLimit(level)`、`cantripLimit(level)`、`maxSpellLevel(level)`、`resourcesAt(level, abilities)`、`spellcastingAbility`、`usesPactMagic`、`declaredMinLevel` / `declaredMaxLevel`。**契约魔法法术位的环阶由 `spellSlots(level)` 的键承载**（`pact` 原型展开成 `{"3": 2}` 这种形状），因此不再有独立的 `pactSlotLevel(level)`（实现期删除：与 `maxSpellLevel` 同源同值、无生产调用点） |
 | `ClassRuleSet` / `ClassSpellcasting` / `ClassResourceRule` / `MaxSpec` | 同上 | 值对象，含 `fromJson`/校验钩子 |
 | `RuleProfileResolver` | `features/rules/domain/rule_profile_resolver.dart` | 纯函数：`resolveBuiltin(档案 JSON)`、`resolveClassRules(profile, slug, entryRules, entryId)`、`validateEntryClassRules(...)` → `RuleProfile` / `ResolvedClassRules` + `RuleDiagnostic` |
 | `RuleDiagnostic` | 同上 | `{path, severity, code, message}`；导入器把它翻译成 `ContentValidationError`（error）或导入警告（warning） |
@@ -756,6 +792,14 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `invalidRequires` | `requires` 元素形状非法（两形态混写 / 缺 `minimum` / 多余字段——判据是纯函数 `validateRuleRequiresJson` **一处**，解析层 `fromJson` 与导入期原始遍共用它，导入期 path 精确到出错字段）、引用的 `choice` 不在同一 `sourceEntryId` 或其 `featureOf` / `subclassOf` 祖先内、`option` 不在该选择的候选集（`candidatesFor`，取作用域内所有同名选择定义的**并集**，与运行期一致）里、`ability` 不在 `abilities`、`minimum` 非正 | `requires 引用的选择 "spellbook-x" 不存在（invalidRequires）` |
 | `invalidCountsToward` | `countsToward` 不在 `spellbook`/`known`/`prepared` 且非 `null` | `countsToward 必须是 spellbook / known / prepared 或省略（invalidCountsToward）` |
 | `invalidAutoGrant` | 字符串简写无法为该 `optionType` 推断 grants 且未显式写 `grants`（条目类型的字符串元素）；或值类型候选没有显式 `grants` 时自动推断失败（`ability` 的 `data.value` 非正整数） | `optionType "classFeature" 的选项 "星界之势" 缺少 grants，且无法自动推断（invalidAutoGrant）` |
+| `invalidMergeMode` | `classRules.mode` 不在 `patch` / `replace`（**不是** `spellcasting.mode` 的取值域） | `classRules.mode 只接受 patch / replace；若想声明法术选择模型，请写在 spellcasting.mode（prepared / known / none）` |
+| `invalidPriority` | manifest 的 `priority` 不是 0..1000 的整数 | `priority 必须是 0..1000 的整数，缺省为 0（invalidPriority）` |
+| `incompleteResourcePatch` | 条目资源是补丁声明（缺 `name` / `maximum`），且**内置档案没有同 id 资源可补齐** | `资源 "unknown-resource" 是补丁声明（缺 name / maximum），但内置档案没有同 id 资源可补齐` |
+
+> **`overrideConflict` 不是导入 error**：解析期同 tier 多来源抢同一列时由
+> `ResolvedClassRules.conflicts` / 角色数据 `data.classRuleConflicts` 承载，只在运行期解析结果
+> 与角色页提示里出现，**不进** `ContentImportReport.errors`——导入单个包时看不到别的包，
+> 冲突不是该包的错（§3.8）。
 
 > **`unsupportedChoiceField` 已退役**（计划 2，2026-09-12）：`repeatable` / `group` / `help` /
 > 内联选项 `grants` 现在都有真实运行时消费，导入期**放行**并按上面的取值/引用规则校验
@@ -770,7 +814,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 
 | code | 条件 |
 |---|---|
-| `missingCoreField` | 职业条目缺 `hitDie`；或施法职业（条目 `rules` 有 `optionType: "spell"` 的选择，`mode` 无从得知）整块缺 `spellcasting` **且档案也没有同 slug 职业提供**（字段级继承，§3.6）——角色卡对应数值将缺省 |
+| `missingCoreField` | 职业条目缺 `hitDie`；或施法职业（条目 `rules` 有 `optionType: "spell"` 的选择，`mode` 无从得知）整块缺 `spellcasting` **且没有任何更高 tier 的声明提供它，内置档案也没有同 slug 职业提供**（列级继承，§3.6）——角色卡对应数值将缺省 |
 | `missingPreparedColumn` | 施法职业未声明 `prepared`（原型**不提供**该列，见 §3.1/§3.3；编辑器不限制数量） |
 | `ignoredGlobalList` | 包自带了 `abilities` / `skills` 清单（内置档案为唯一权威，该清单被忽略） |
 | `unresolvedClassRule` | 条目没有任何可用规则来源（既无 `classRules` 也无档案匹配） |
@@ -896,6 +940,10 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
    `import_rule_diagnostics_test.dart` 覆盖；`invalidAutoGrant` 已落地（字符串简写无法推断
    自动授予，或 `ability` 选项的 `data.value` 非正整数），条目类型/值类型两条触发路径各有用例。
    原 `unsupportedChoiceField` 已退役（无产生点），规格与 README 清单均已移除。
+   **S3 补充**：`invalidMergeMode` / `invalidPriority` / `incompleteResourcePatch` 各有用例；
+   `overrideConflict` **不是导入诊断**（只在运行期由 `ResolvedClassRules.conflicts` /
+   `data.classRuleConflicts` 承载），因此**不**出现在 `ContentImportReport.errors`，
+   其行为由列级合并与冲突用例覆盖。
 6. `npm run check`、`npm run test:scripts`、`npm run lint:design` 全绿。
    **状态：本轮达成**（`npm run lint:design` 已复跑；其余属阶段门）。
 7. `docs/README.md` §9.2 含完整自制职业示例（含选择与法术选择），且示例可被测试中的合成包复用（文档与实现不脱节）。
@@ -913,6 +961,27 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
    - 技能/法术选择只由显式选择承担 → `rules_driven_character_builder_test.dart`。
    **边界**：PHB 提取器尚未产出 `optionType: "spell"` 的选择（运行时已支持，见 §11）；
    背景技能仍走中文名预设（决策 D10）。
+9. **S3（覆盖 / 勘误与来源可追溯，§3.6–§3.8）**：
+   - **列级合并**：条目只覆盖 `spellcasting.prepared` 时 `slots` / `mode` / `ability` 仍来自内置档案
+     （`spellcasting_column_merge_test.dart` 的核心验收）；
+   - **`resources` 按 id 合、同 id 再逐列合**，补丁资源缺 `name` / `maximum` 时按档案补齐，
+     补不齐则 `incompleteResourcePatch` 整包拒绝；
+   - **`classRules.mode: "patch" | "replace"`**：`replace` 不再向更低 tier 取任何列
+     （`class_merge_mode_test.dart` / `import_rule_diagnostics_test.dart`）；
+   - **manifest `priority`**：`tier = 100 + priority`（0..1000，缺省 0 ⇒ 与引入前逐项相同）
+     （`rule_override_priority_test.dart`）；Drift `schemaVersion` 13→14 迁移在
+     `app_database_test.dart`，**旧备份恢复**（缺列 / `null` 按默认值补齐，不回滚事务）在
+     `local_data_archive_service_test.dart`；
+   - **列级来源被消费**：角色页（法术位 / 资源 / 「规则来源」卡）与导入报告 / 导入预览都读
+     `fieldSources`（`character_rule_sources_ui_test.dart`、`content_import_rule_sources_test.dart`）；
+   - **覆盖冲突可提示、可显式改选**：不变量"每个 `originIds` 都声明了该列、`effectiveOriginId`
+     必为其中之一"；pin 只作用于该列并可逐列取回被同 tier `replace` 丢弃的 `patch`
+     （`rule_override_conflict_test.dart`）；
+   - **关闭覆盖回退更低 tier（含内置档案）并重派生**：`data.ruleOverrides` 单点读写，
+     关闭后**派生快照一并清空/替换**（不残留被关闭来源的旧数值），可用恢复入口撤销
+     （`character_rule_sources_ui_test.dart`）；
+   - **场景 D 端到端**（两包：base 自制职业 + errata 只改它的列）：
+     `s3_override_end_to_end_test.dart`。
 
 ---
 
@@ -934,10 +1003,17 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 > 自动授予、`repeatable`、`countsToward`、`requires`、`group` / `help`、编辑器选择面板改造、
 > 装备 A/B 写入 `inventory`）与 `invalidAutoGrant` 诊断。见 §3.10 与
 > [`plans/2026-09-12-choice-system-runtime.md`](../plans/2026-09-12-choice-system-runtime.md)。
+>
+> 已由 S3 落地并从本清单移出：**列级合并**（§3.6；`spellcasting` 逐列、`resources` 按 id 再逐列，
+> 实现于 `RuleProfileResolver`）、**列级来源被消费**（§3.7；角色页法术位 / 资源 / 资料页「规则来源」
+> 卡 + 导入报告与预览）、`classRules.mode: "patch" | "replace"`（§3.8；`ClassMergeMode`）、
+> **可配置 `priority`**（manifest 0..1000 缺省 0、tier = 100 + priority、Drift `schemaVersion`
+> 13→14 迁移）、**跨包覆盖冲突的提示与选择**（§3.8；`RuleOverrideConflict` +
+> `data.ruleOverrides.pinned`）、**关闭覆盖回退内置**（`data.ruleOverrides.disabledOriginIds`）。
+> 见 [`plans/2026-09-12-s3-overrides-and-sources.md`](../plans/2026-09-12-s3-overrides-and-sources.md)。
 
 **其余不在本次范围**：
 
-- **S3**：`mode: "patch" | "replace"` 声明、可配置 `priority` 字段（含 Drift 迁移）、覆盖冲突 UI、关闭覆盖回退内置。
 - **S4**：作者 GUI 的**完整形态**（可视化规则表单、基于已有条目创建覆盖、`.dndpack` 导出）。本轮只保证
   契约与引擎支持全部能力、编辑器能渲染并应用选择结果；把它做成"填表即得"的完整体验属于 S4。
 - **C 场景**：自定义技能/属性清单、自定义 AC 公式（护甲敏捷上限、无甲防御）、自定义休息与恢复语义。

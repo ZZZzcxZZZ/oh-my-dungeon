@@ -166,6 +166,10 @@ Flutter 客户端 ──HTTP(/api)──▶ NestJS 服务端 ──Prisma──�
 > **注意**：不存在 `VaultOutbox` / `VaultCursors` / `VaultDevices` / `VaultSyncConflicts`
 > 等表，也不存在 Drift 的偏好表——**偏好存于 SharedPreferences**。同步出站与游标统一由
 > `SyncOutbox` / `SyncCursors` 承担，Vault 的实体版本由 `VaultEntityRevisions` 记录。
+>
+> v14（S3）：`LocalContentPackages` 增加 `priority`（内容包优先级，0..1000，缺省 0）。
+> 旧备份恢复时四个后加列（`priority` / `rulesJson` / `relationsJson` / `markdownDirty`）
+> 缺失或为 `null` 一律按默认值补齐（`_archiveColumnDefaults`），不因非空约束回滚整笔事务。
 
 ### 5.2 服务端数据库（Prisma）
 
@@ -352,8 +356,8 @@ canBindCharacter   canManageMembershipBinding  canSpeakAsCharacter
 HP/AC、资源与休息语义）仍在
 `apps/client_flutter/lib/src/features/characters/domain/dnd5e_rules.dart`；
 内容条目的规则值经 `structured_class_rules.dart`（只读过渡适配器）与
-`Dnd5eRules.resolveClassRules` 做「条目声明 ∪ 档案」的**字段级合并**
-（条目优先，tier 100 > tier 0），派生在 `rules_driven_character_builder.dart` /
+`Dnd5eRules.resolveClassRules` 做「条目声明 ∪ 档案」的**列级合并**
+（按 tier 从高到低排序后逐列回退，见 §9.2.1），派生在 `rules_driven_character_builder.dart` /
 `quick_build.dart`。UI 不得自行复刻规则运算。对外契约见 §9.2，实现规格见
 [`specs/2026-09-10-rules-contract-design.md`](specs/2026-09-10-rules-contract-design.md)。
 
@@ -438,11 +442,42 @@ PHB 2024 官方表格）：
 12. **1/3 施法者不再按子职名推导法术位**：`战士（奥法骑士）` 只解析到母职业 `fighter`，
     法术位为空；子职施法必须由**条目**显式声明 `archetype: "third-caster"`。老存档里由旧
     推导得到的既有数据会表现为"消失"（未声明，不是 `0`）。
+13. **列级合并（S3，2026-09-12）**：`spellcasting` 由"整字段替换"改为**逐列**合并，
+    `resources` 按 `id` 合、同 `id` 再逐列合并。条目只覆盖 `spellcasting.prepared` 时
+    `slots` / `mode` / `ability` 仍来自内置档案，**不再被清空**；来源从顶层字段细化到列。
+14. **引入 `priority`（S3）**：manifest 的 `priority`（0..1000，缺省 0）把包声明的 tier 变成
+    `100 + priority`；**缺省 0 时行为与引入前逐项相同**。`local_content_packages` 相应有
+    Drift `schemaVersion` 13→14 迁移，旧备份恢复按默认值补列（§5.1）。
+15. **`classRules.mode: "replace"` 的新语义（S3）**：声明"自己就是该职业的全部真相"——
+    更低 tier（含内置档案）不再提供任何列，未声明的列一律"未声明"。`patch`（缺省）才是
+    逐列向下回退，既有包不受影响。
+16. **关闭覆盖会清空相关的派生快照（S3 修复）**：`spellSlots` / `spellcastingAbility` /
+    `preparedSpellLimit` / `classResources` / `actions` 改为**无条件写入**——再派生得到"空"
+    时显式清空（`{}` / `[]` / `null`），不再残留被关闭来源的旧数值。此前会出现"来源已显示
+    内置档案、数值还是旧包"的自相矛盾（详情页优先读这些快照）。
 
-**来源可追溯**：`ResolvedClassRules.fieldSources` 为每个职业的每个顶层规则字段记录来源
-（`RuleFieldSource{field, originId, tier}`：`builtin:dnd5e-2024` = tier 0，条目 id = tier 100）。
-本轮**只在数据层记录**（字段级合并的产物），角色页与导入报告**尚未消费**它；
-后续计划（S3）用它实现"被哪个包覆盖 / 关掉覆盖回退"。
+**来源可追溯（S3 起列级且已被消费）**：`ResolvedClassRules.fieldSources` 为每个职业的**每一列**
+记录来源（`RuleFieldSource{field, originId, tier}`：`builtin:dnd5e-2024` = tier 0，
+条目 id = tier 100 或 `100 + 包 priority`）。`field` 是列级路径，唯一由 `RuleFieldPath` 产出：
+`hitDie` / `savingThrowAbilities` / `spellcasting.<列>`（如 `spellcasting.prepared`）/
+`resources.<id>.<列>`（如 `resources.rage.maximum`）。
+
+消费方：**角色页**的法术位面板与资源面板逐列显示"该数值来自内置档案 / 来自哪个包"、资料页的
+「规则来源」卡（`widgets/rule_source_list.dart`），以及**导入报告与导入预览**
+（`ContentImportReport.classRuleSources`，以次级样式列出"字段 ← 来源"，不阻断确认）。
+角色数据持久化三个键：
+
+| 键 | 内容 | 用途 |
+|---|---|---|
+| `data.classRuleSources` | 列 → 来源（`RuleFieldSourceMap`） | 角色卡显示来源、升级页重派生比对 |
+| `data.classRuleConflicts` | 同 tier 抢同一列的登记（`RuleOverrideConflict`） | 角色页冲突横幅 + 选择对话框 |
+| `data.ruleOverrides` | `pinned`（按**列**显式选定来源）/ `disabledOriginIds`（按**来源**关闭覆盖：条目 id 或包 id，影响该来源在**所有列**的覆盖） | 关闭后**回退到更低 tier（含内置档案）**并重派生；角色页提供「已关闭的来源」与恢复入口 |
+
+冲突只在**运行期**登记，不是导入 error（导入单个包时看不到别的包）；无用户选择时生效值取
+`RuleOverrideOrder.ordered` 首位（**确定性**，可复现）。两个不变量：冲突的每个来源都**声明了
+该列**，`effectiveOriginId` 必为其中之一（界面不会给出"选了也不生效"的选项）。用户 pin 是
+最高优先级且**只作用于该列**，可逐列取回被同 tier `replace` 丢弃的 `patch` 声明；`replace`
+**未声明**的列不登记冲突——按 D4 显示"未声明"，而不是静默换一个数值。
 
 **已知限制（当前未实现，按设计取舍记录）**：
 
@@ -457,6 +492,10 @@ PHB 2024 官方表格）：
 | 职业资源的效果 | 只追踪"用了几次 / 怎么恢复"（10 个职业 13 项资源的上限与恢复语义**已建模**）；资源池的**具体效果未结算**：引导神力选项、野性形态数据与形态切换、术法点转换法术位、圣疗治疗结算、魔法诡计恢复法术位、诗人激励骰的授予与消耗 |
 | 伤害抗性与免疫 | `conditionResistance` grant 已从契约移除，抗性/免疫结算**未建模** |
 | 选择系统（计划 2，已实现） | `repeatable` / `countsToward` / `requires` / `group` / `help` 与内联选项 `grants` **已实现**（§9.2.3）。能力边界：`requires` 的 `ability` 门槛按**入参基础属性**判定（由其它选择授予的属性加值不计入门槛）；`spellbook` 池无独立数值列，只受选择自身 `maximum` 约束；PHB 提取器尚未产出 `optionType: "spell"` 选择（运行时已支持）；背景技能仍走中文名预设 |
+| 规则来源没有等级维度（S3 决策 D5） | 表列**逐级**回退会产出"1–19 级来自档案、20 级来自条目"的数值，但来源只如实记在**最高 tier 的声明者**一条上（如 `spellcasting.prepared`），不做 `spellcasting.prepared@20`；逐级细节需要时由调用方读表自己比 |
+| 同 tier 的"沿用"与"显式值"（S3 决策 D5 / D6） | 同一 tier 内 A 在同级**沿用**的值可以盖住 B 在同级写下的显式值而**不登记冲突**（如 A 写 `{"5": 9}` 在 10 级沿用、B 写 `{"10": 11}`）：冲突判据是"作者声明的等级区间有交集"，沿用不属于声明区间。这是确定性 tie-break（tier → replace → 自身条目 → originId 升序）的已知代价，用户仍可用 `data.ruleOverrides.pinned` 显式改选 |
+| `recovery` 不逐级合并（S3 决策 D5） | `resources[].recovery` 的常量形态与 `{"table": …}` 形态是同一条来源路径，整列由"声明过 `recovery` 的最高 tier"负责，**不**逐级借用更低 tier 的恢复表（恢复语义是枚举而不是可加的数值） |
+| `resources: []` 不再清空档案资源（S3） | 空数组只表示"本块没有资源声明"；要清空档案同名资源必须显式声明 `classRules.mode: "replace"` |
 | 专精（Expertise） | 技能加值只有熟练/非熟练两档，无 ×2 专精 |
 | 多职业 | 不支持多职业等级与法术位合并 |
 | XP 与升级 | 无经验值系统；等级由用户维护，升级按 +1 级规划（内容包驱动可选内容） |
@@ -540,6 +579,9 @@ PHB 2024 官方表格）：
 
 - `manifest.json` 必填 `formatVersion`（**只接受 `3`**）、`id`、`name`、`version`、`locale`、
   `system`（白名单 `dnd5e-2024`）、`entryCount`；`entryCount` 必须等于 `entries.length`。
+  可选 `priority`：**0..1000 的整数，缺省 0**，决定包声明的规则 tier（`100 + priority`，见 §9.2.1）；
+  非整数 / 越界报 `invalidPriority` 并整包拒绝。
+- `manifest.priority` 与条目自带展示顺序无关，只影响**同 tier 抢同一规则列**时的胜出与冲突提示。
 - entry 必填 `id`（须以 `<packageId>:` 开头且不可重复）、`type`、`slug`、`name`、`body`、
   `revision`；`body` 是区块数组；结构化字段放 `structured`。
 - `relations` 枚举：`subclassOf` / `featureOf` / `spellOf` / `requires` / `replaces` /
@@ -569,18 +611,24 @@ PHB 2024 官方表格）：
 `preparedSpellcasting` 开关、`spellSlot:<n>` / `classResource:<id>` grant、已移除的
 `resource` / `conditionResistance` / `note` grant）**不再有读取路径**，导入即报 error。
 
-#### 9.2.1 规则解析只有两级
+#### 9.2.1 规则解析：按 tier 排序的 N 条声明
 
 | tier | 来源 | 说明 |
 |---|---|---|
 | 0 | 内置档案 `apps/client_flutter/assets/rules/dnd5e-2024.rules.json`（`rulebookVersion: 1`） | 随客户端发布，**只含数值与枚举**，不含规则书正文 |
-| 100 | 角色所用职业条目的 `structured.classRules` | 条目声明，字段级覆盖档案 |
+| 100 + `priority` | 条目 `structured.classRules` | 包声明；`priority` 来自 manifest（0..1000，缺省 0，见 §9.1） |
 
-- **没有 `priority` 字段，也没有全局条目扫描。** 一个角色只引用它自己的那一个职业条目
-  （`data.classIdentity.entryId`），本阶段不存在"包与包抢同一个职业"的冲突。
-- 解析 = 「条目声明 ∪ 档案同对齐键职业」的**字段级合并**，条目声明优先；来源粒度是
-  顶层字段（`hitDie` / `savingThrowAbilities` / `spellcasting` / `resources`），
-  `spellcasting` 是**整字段替换**。
+- **没有全局条目扫描。** 参与合并的只有**对齐键相等**的条目：角色自己的职业条目
+  （`data.classIdentity.entryId`）以及已启用包里对齐键相同的 `class` 条目（跨包勘误）。
+  缺省 `priority: 0` 时 tier 恒为 100，**行为与引入 `priority` 之前逐项相同**。
+- 解析 = 这些声明按 tier 从高到低排序后的**逐列合并**（`patch` 缺省逐列向下回退；
+  `classRules.mode: "replace"` 表示不再向更低 tier 取任何列）。来源粒度是**列**：
+  `spellcasting.<列>`（如 `spellcasting.prepared`）、`resources.<id>.<列>`
+  （如 `resources.rage.maximum`）；`hitDie` / `savingThrowAbilities` 是整值列。
+- **同 tier 多个来源抢同一列 = 覆盖冲突**（只在运行期登记，**不是导入 error**）：生效值取
+  排序首位（`replace` 先于 `patch` → 角色自己的条目 → originId 升序，结果可复现），
+  同时角色页给出冲突横幅，用户可以显式选定来源（`data.ruleOverrides.pinned`）或
+  **关闭某条覆盖**（`data.ruleOverrides.disabledOriginIds`，关闭后回退到更低 tier 含内置档案）。
 - 档案按条目 **id 末段**命中 12 个核心英文 slug（`<packageId>:class/<slug>` 的最后一段，
   规范化 `trim().toLowerCase()`；条目里的 `slug` 展示字段不参与数值继承，规范见
   `Dnd5eRules.resolveClassSlug`）。只有展示名时按 `classAliases` **精确相等**或
@@ -593,16 +641,17 @@ PHB 2024 官方表格）：
   精确相等或「别名 + 分隔符」前缀，**禁止裸子串**），补写一次 `data.classIdentity`
   （含 `declaredLevels`）；匹配不到就标记未声明并提示。
 
-#### 9.2.2 `classRules`：职业只有 4 个数值字段
+#### 9.2.2 `classRules`：4 个数值字段 + 合并声明 `mode`
 
 | 字段 | 类型 | 语义 |
 |---|---|---|
 | `hitDie` | int | 生命骰面数，只写整数且必须是 `4` / `6` / `8` / `10` / `12`（`d10` 写作 `10`） |
 | `savingThrowAbilities` | string[] | 豁免熟练，元素 ∈ `str` / `dex` / `con` / `int` / `wis` / `cha` |
-| `spellcasting` | object | 见下表 |
-| `resources` | object[] | 见下表 |
+| `spellcasting` | object | 见下表；**逐列合并** |
+| `resources` | object[] | 见下表；按 `id` 合、同 `id` 再逐列合并 |
+| `mode` | `"patch"` / `"replace"` | 可选，默认 `"patch"`。`patch` = 未声明的列继续向更低 tier 回退；`replace` = 本块是该职业的全部真相，更低 tier（含内置档案）不再提供任何列。非法值报 `invalidMergeMode`（**注意**：`spellcasting.mode` 才是法术选择模型，两者不同） |
 
-`spellcasting` 的字段（全部可缺省；缺省即"未声明"，不猜测）：
+`spellcasting` 的字段（全部可缺省；缺省即"未声明"，不猜测。**每个字段都是一列，独立合并**）：
 
 | 字段 | 语义 |
 |---|---|
@@ -620,11 +669,16 @@ PHB 2024 官方表格）：
 
 | 字段 | 语义 |
 |---|---|
-| `id` / `name` | 必填；`id` 在同一职业内唯一 |
-| `maximum` | 三选一：整数（与等级无关）／`{"formula": "level" \| "ability:cha" \| "2*level" \| "7", "minimum": 1}`／`{"table": <Table<int>>}` |
-| `recovery` | `"shortRest"` / `"shortRestOne"` / `"longRest"` / `"none"`（默认 `longRest`），也可以写成随等级变化的表 |
+| `id` / `name` | `id` 必填且在同一职业内唯一；`name` 在**补丁声明**里可省略（见下） |
+| `maximum` | 三选一：整数（与等级无关）／`{"formula": "level" \| "ability:cha" \| "2*level" \| "7", "minimum": 1}`／`{"table": <Table<int>>}`；补丁声明里可省略 |
+| `recovery` | `"shortRest"` / `"shortRestOne"` / `"longRest"` / `"none"`（默认 `longRest`），也可以写成随等级变化的表。**跨 tier 时整列由最高 tier 的声明者负责，不逐级合并**（§7.7 已知限制） |
 | `startsAtLevel` | 可选，默认 1；低于它的等级**不存在**该资源 |
 | `description` | 可选，一句话说明（不得放规则书正文） |
+
+**补丁资源**：`resources[]` 里缺 `name` 或 `maximum` 的条目按"只覆盖这几列"处理，其余列沿用更低
+tier（含内置档案）的同 `id` 资源；若**档案没有同 id 资源可补齐**，导入报
+`incompleteResourcePatch` 并整包拒绝（不会静默产出上限为 `0` 的假资源）。`resources: []`
+只表示"本块没有资源声明"，**不清空**档案资源——要替换全部资源请用 `classRules.mode: "replace"`。
 
 技能选择、法术选择、特性、熟练、装备，以及"按等级生效的效果"（`hitPoints` / `ability`）
 **都不在 `classRules` 里**，只有一种写法：`rules`（见 §9.2.3）。
@@ -697,8 +751,9 @@ PHB 2024 官方表格）：
 
 | 严重度 | 行为 | 主要 code |
 |---|---|---|
-| error | **阻断整包**、不写入本地库，`path` 精确到字段 | 格式与档案：`unsupportedFormatVersion`、`unknownField`、`invalidHitDie`、`unknownAbility`、`invalidSpellcastingMode`、`unknownArchetype`、`invalidTable`、`invalidMaxSpec`、`duplicateResourceId`、`invalidRecovery`、`unknownGrantKind`、`builtinSlugRequiresExplicitRules`；选择：`unknownOptionType`、`invalidChoiceRange`、`invalidOptionRef`、`duplicateOptionId`、`invalidValueOption`、`unknownSkill`、`invalidSkillCount`、`invalidCountsToward`、`invalidRequires`、`invalidAutoGrant` |
+| error | **阻断整包**、不写入本地库，`path` 精确到字段 | 格式与档案：`unsupportedFormatVersion`、`invalidPriority`、`unknownField`、`invalidHitDie`、`unknownAbility`、`invalidSpellcastingMode`、`invalidMergeMode`、`unknownArchetype`、`invalidTable`、`invalidMaxSpec`、`duplicateResourceId`、`incompleteResourcePatch`、`invalidRecovery`、`unknownGrantKind`、`builtinSlugRequiresExplicitRules`；选择：`unknownOptionType`、`invalidChoiceRange`、`invalidOptionRef`、`duplicateOptionId`、`invalidValueOption`、`unknownSkill`、`invalidSkillCount`、`invalidCountsToward`、`invalidRequires`、`invalidAutoGrant` |
 | warning | 在导入预览中以次级样式列出，**不阻断确认** | `missingCoreField`、`missingPreparedColumn`、`ignoredGlobalList`、`unresolvedClassRule`、`zeroLevelResource` |
+| 运行期提示（**不是**导入诊断） | 解析时同 tier 多来源抢同一列 → 登记 `RuleOverrideConflict`，角色页提示并可改选 | `overrideConflict`（不出现于 `ContentImportReport.errors`：导入单包时看不到别的包，冲突不是该包的错） |
 
 - 旧格式一律按 error 处理并提示用新版工具重新生成/重新提取；包自带的 `abilities` / `skills`
   清单被忽略（内置档案是唯一权威），只给 `ignoredGlobalList` warning。
@@ -1010,13 +1065,14 @@ dart run build_runner build --delete-conflicting-outputs
 `web/` 下的额外入口（drift WASM worker）不走 build_runner，单独有编译与清单校验流程，
 见 §14.5。
 
-### 12.5 CI（`.github/workflows/ci.yml`，5 个 job）
+### 12.5 CI（`.github/workflows/ci.yml`，6 个 job）
 
 | job | 内容 |
 |---|---|
 | `server` | Node 22 → `npm ci` → `npm run lint` → `npm test` |
 | `client` | Flutter stable → `pub get` → `analyze` → `test` |
 | `design` | `npm ci` → `npm run lint:design`（DESIGN.md 契约） |
+| `scripts` | Python → `npm run test:scripts`（脚本层测试 + drift worker 产物清单校验；无 `private-imports/` 时提取类用例自行 skip） |
 | `golden` | 固定 Flutter `3.41.4` → `flutter test --tags golden --dart-define=GOLDEN_TESTS=true` |
 | `docker` | `docker compose config`（仅校验编排，不构建镜像） |
 
@@ -1066,7 +1122,10 @@ pwsh -File scripts/build_private_client.ps1 -Target apk -BuildArgs @(
 - 流程：聚合三包 → 覆盖 `bundled_content.json` → `flutter build` → **finally 恢复 `{}`**
 - 内嵌默认服务器由 `BundledDefaultServerSeeder` 消费（仅发布构建启用；测试与公开构建保持
   「无服务器」语义）
-- 另有 `scripts/build-private-test-apk.ps1`（打包 APK 到 `dist/android/`）。
+- 另有 `scripts/build-private-test-apk.ps1`（打包 APK 到 `dist/android/`）：默认转发
+  `--release --dart-define=BUNDLED_DEFAULT_SERVER=true`，因此产物**内嵌默认服务器**
+  （地址取 `DEFAULT_SERVER_BASE_URL` 的缺省值；换地址就传 `-BuildArgs`，例如
+  `-BuildArgs '--release','--dart-define=BUNDLED_DEFAULT_SERVER=true','--dart-define=DEFAULT_SERVER_BASE_URL=http://host:3000'`）。
   私有 Web 预览走 `scripts/static_preview_server.py`（本地静态服务 + 到后端的反向代理，
   见 §13 上面的 `preview:client`）。
 
@@ -1222,7 +1281,7 @@ git diff --check
 
 ## 16. 当前状态与验收基线
 
-**版本** `0.1` · **更新时间** `2026-09-12`
+**版本** `0.1` · **更新时间** `2026-09-13`
 
 ### 已完成能力
 
@@ -1234,24 +1293,34 @@ Material 3 设计系统契约（`DESIGN.md` 与契约测试/golden）；自托�
 （离线 Prisma 引擎 + 部署包脚本）。
 
 **规则契约（2026-09-10 ~ 09-12 新增）**：内置规则档案（`assets/rules/dnd5e-2024.rules.json`）+
-条目声明两级解析（无 priority、无全局扫描）、资料包格式唯一版本 `formatVersion: 3`、
-职业规则 4 字段（`hitDie` / `savingThrowAbilities` / `spellcasting` / `resources`）、
+条目声明按 **tier 排序的多声明列级合并**（tier = `100 + 包 priority`，缺省 0；仍无全局条目扫描）、
+资料包格式唯一版本 `formatVersion: 3`、职业规则 4 字段 + `mode: patch/replace`
+（`hitDie` / `savingThrowAbilities` / `spellcasting` / `resources`）、
 `rules.progression[].levels` 多等级步骤、声明范围（部分声明为一等公民）在全部相关 GUI 可见、
 导入期规则诊断（error 阻断整包 / warning 只提示）、PHB 2024 私有包按新契约重提取。
 **选择系统运行时语义（计划 2，2026-09-12 完成）**：内联选项与字符串简写选中即生效、
 `repeatable` / `countsToward` / `requires` / `group` / `help` 全部落地、`optionType: "spell"`
 走法术池、装备 A/B 写入 `inventory` / `currency`、编辑器三处选择界面共用 `RuleChoiceSection`；
 导入期从"存在即拒收"收窄为取值/引用校验并新增 `invalidAutoGrant`（§9.2.3）。
-**未完成**：`patch`/`replace` 与来源显示（S3）、作者 GUI 与 `.dndpack` 导出（S4），
-以及 PHB 提取器产出 `optionType: "spell"` 选择与背景条目驱动技能授予（§11）——见 §7.7 与
+**S3（2026-09-13 完成）**：列级合并（`spellcasting` 逐列、`resources` 按 id 再逐列）、
+`classRules.mode: patch/replace`、manifest `priority` 与 Drift 13→14 迁移、列级来源被角色页与
+导入报告消费、跨包覆盖冲突的提示与显式改选、关闭覆盖回退内置（§7.7、§9.2.1）。
+包 `priority` 贯通全部解析口径：建档/升级（`RulesDrivenCharacterBuilder` / `CharacterRuleProjector`
+/ `CharacterUpgradePlanner`）、创建向导与快速创建（`QuickBuildService`）、编辑器同屏、战役角色卡
+（`CampaignAwareContentRepository` 的 `local:` / `campaign:<cid>:` 前缀键）、以及行为路径
+（短休契约魔法判定、动作面板法术豁免 DC）；关闭覆盖后 5 个派生快照键（`spellSlots` /
+`spellcastingAbility` / `preparedSpellLimit` / `classResources` / `actions`）**显式清空**，
+不再残留被关闭来源的旧数值。
+**未完成**：作者 GUI 与 `.dndpack` 导出（S4），以及 PHB 提取器产出 `optionType: "spell"` 选择与
+背景条目驱动技能授予（§11）——见 §7.7 与
 `docs/plans/2026-09-10-rules-contract-core.md` 的「待办」段。
 
-### 实测基线（2026-09-12）
+### 实测基线（2026-09-13）
 
 | 项 | 结果 |
 |---|---|
 | `flutter analyze` | 0 问题 |
-| `flutter test` | **1391 通过 / 6 跳过**（3 条 golden 默认跳过 + 3 条依赖 `--dart-define` 私有包路径的用例） |
+| `flutter test` | **1582 通过 / 6 跳过**（3 条 golden 默认跳过 + 3 条依赖 `--dart-define` 私有包路径的用例；跳过点与上一基线同一组） |
 | 服务端 `npm run lint` + `npm test` | 24 套件 / 355 测试通过，0 跳过 |
 | `npm run test:scripts` | **38 通过**（4 个脚本测试套件 + drift worker 产物清单校验；本地有 `private-imports/` 时 0 跳过，公开 CI 上 9 条提取类用例自行 skip） |
 | `npm run lint:design` | 0 error / 0 warning（1 条 token 统计 info） |

@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:dnd_table_client/src/features/content/presentation/homebrew_class_rule_form.dart';
 import 'package:dnd_table_client/src/features/rules/domain/character_rule_definition.dart';
+import 'package:dnd_table_client/src/features/rules/domain/class_rule_set.dart';
+import 'package:dnd_table_client/src/features/rules/domain/rule_diagnostic.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -308,6 +310,61 @@ void main() {
       '专 注 ',
       reason: 'controller 不被裁剪后的值重置',
     );
+  });
+
+  testWidgets('添加资源产出的默认形状本身合法（不写空 name）', (tester) async {
+    final host = await pumpForm(tester, structured: const {}, rules: const {});
+    await tapKey(tester, const Key('homebrew-form-add-resource'));
+
+    final classRules = _decode(host.structured.text)['classRules']!
+        as Map<String, Object?>;
+    final resource =
+        (classRules['resources']! as List).single as Map<String, Object?>;
+    expect(resource.containsKey('name'), isFalse, reason: '缺省 = patch 未声明');
+    // 契约层直接解析一次：默认产物不能是导入期才炸的 error（`name: ""` 就是）。
+    final diagnostics = <RuleDiagnostic>[];
+    ClassRuleSet.parse(
+      classRules,
+      path: r'$',
+      diagnostics: diagnostics,
+      abilities: kDefaultAbilities,
+    );
+    expect(
+      diagnostics.where((item) => item.severity == RuleSeverity.error),
+      isEmpty,
+      reason: '${diagnostics.map((item) => item.message)}',
+    );
+  });
+
+  testWidgets('删除中间资源后，剩下的行不会显示上一行的值', (tester) async {
+    final host = await pumpForm(
+      tester,
+      structured: {
+        'classRules': {
+          'resources': [
+            {'id': 'a', 'name': 'alpha'},
+            {'id': 'b', 'name': 'beta'},
+          ],
+        },
+      },
+      rules: const {},
+    );
+
+    await tapKey(tester, const Key('homebrew-form-resource-0-remove'));
+
+    final nameField = find.byKey(const Key('homebrew-form-resource-0-name'));
+    expect(
+      tester.widget<TextFormField>(nameField).controller!.text,
+      'beta',
+      reason: '行位移后 controller 必须同步成新行（否则显示上一行的值）',
+    );
+    final resources =
+        ((_decode(host.structured.text)['classRules']! as Map)['resources']!
+                as List)
+            .map((item) => Map<String, Object?>.from(item as Map))
+            .toList();
+    expect(resources.single['id'], 'b');
+    expect(resources.single['name'], 'beta');
   });
 
   testWidgets('JSON 不是合法对象：表单拒绝渲染并提示切回 JSON', (tester) async {    tester.view.physicalSize = const Size(1400, 1400);

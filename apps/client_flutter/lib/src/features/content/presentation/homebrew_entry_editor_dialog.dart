@@ -106,9 +106,14 @@ class _HomebrewEntryEditorDialogState extends State<HomebrewEntryEditorDialog> {
           : const JsonEncoder.withIndent('  ').convert(source.structured),
     );
     _rules = TextEditingController(
-      text: source?.rules == null
+      // 覆盖模式**不预填来源的 rules**：来源通常属于别的包，它的 grants / choices 会
+      // 引用来源包内的条目，带进本地包后这个包就再也导不出去（导入器要求引用在本包内）。
+      // 何况列级合并链只消费 classRules——覆盖自己的 rules 只在角色直接指向它时生效。
+      text: widget.existing?.rules == null
           ? '{}'
-          : const JsonEncoder.withIndent('  ').convert(source!.rules!.toJson()),
+          : const JsonEncoder.withIndent(
+              '  ',
+            ).convert(widget.existing!.rules!.toJson()),
     );
   }
 

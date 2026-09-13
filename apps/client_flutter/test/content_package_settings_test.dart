@@ -372,10 +372,56 @@ void main() {
         'version': '1.0.0',
         'locale': 'zh-CN',
         'system': 'dnd5e-2024',
-        'entryCount': 1,
-        'entries': [testFighterEntry().toJson()],
+        'entryCount': 3,
+        'entries': [
+          {
+            'id': 'example:class/fighter',
+            'type': 'class',
+            'slug': 'fighter',
+            'name': '战士',
+            'body': <Object?>[],
+            'revision': 1,
+            'structured': {
+              'classRules': {'hitDie': 10},
+            },
+            'rules': {
+              'progression': [
+                {
+                  'levels': [1],
+                  'grants': [
+                    {
+                      'id': 'g1',
+                      'kind': 'feature',
+                      // 指向**来源包内**的条目：预填进本地包就再也导不出去（S-1）。
+                      'entryId': 'example:classFeature/second-wind',
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+          {
+            'id': 'example:classFeature/second-wind',
+            'type': 'classFeature',
+            'slug': 'second-wind',
+            'name': '回气',
+            'body': <Object?>[],
+            'revision': 1,
+            'structured': {'class': 'fighter', 'level': 1},
+          },
+          {
+            // 没有 classRules 的职业：不参与列级合并链，不作为覆盖来源。
+            'id': 'example:class/no-rules',
+            'type': 'class',
+            'slug': 'no-rules',
+            'name': '无规则职业',
+            'body': <Object?>[],
+            'revision': 1,
+          },
+        ],
       }),
     );
+    expect(report.valid, isTrue, reason: '${report.errors}');
     await importer.importReport(report);
 
     await tester.pumpWidget(
@@ -394,6 +440,11 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('选择要覆盖的条目'), findsOneWidget);
+    expect(
+      find.byKey(const Key('homebrew-override-source-example:class/no-rules')),
+      findsNothing,
+      reason: '没有 classRules 的职业不参与合并链',
+    );
     await tester.tap(
       find.byKey(const Key('homebrew-override-source-example:class/fighter')),
     );
@@ -413,6 +464,25 @@ void main() {
     );
     expect(find.text('d10'), findsOneWidget, reason: '预填来源的 hitDie');
 
+    // 但 **不预填来源的 rules**：来源 grants/choices 会引用来源包内的条目，
+    // 带进本地包后这个包就再也导不出去（S-1）。
+    final jsonSegment = find.descendant(
+      of: find.byKey(const Key('homebrew-entry-editor-mode')),
+      matching: find.text('JSON'),
+    );
+    await tester.ensureVisible(jsonSegment);
+    await tester.pumpAndSettle();
+    await tester.tap(jsonSegment);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('homebrew-entry-rules')))
+          .controller!
+          .text
+          .trim(),
+      '{}',
+    );
+
     await tester.tap(find.byKey(const Key('homebrew-entry-save')));
     await tester.pumpAndSettle();
 
@@ -424,6 +494,11 @@ void main() {
     expect(
       contentEntryAlignmentKey(entries.single.id),
       contentEntryAlignmentKey('example:class/fighter'),
+    );
+    expect(
+      entries.single.rules!.progression,
+      isEmpty,
+      reason: '覆盖不继承来源的 progression（跨包引用会让本包不可导出）',
     );
     // 已存在同键覆盖后，来源从候选里消失（再点只会提示没有可覆盖的条目）。
     await tester.tap(

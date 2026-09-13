@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import '../../campaigns/data/local/campaign_cache_repository.dart';
 import '../../campaigns/domain/campaign_change.dart';
 import '../domain/content_entry.dart';
+import '../domain/content_entry_id.dart';
 import '../domain/content_package_manifest.dart';
 import '../../rules/domain/character_rule_definition.dart';
 import 'local/content_repository.dart';
@@ -240,7 +241,15 @@ class CampaignAwareContentRepository implements ContentRepository {
   /// Spec §资料库 GUI 增强: 编辑时把组合 Repository 暴露的 entryKey
   /// (带 `local:` 前缀) 还原回本地 Repository 的原始 key, 再交给本地
   /// Repository 写入. 其余字段保持不变.
+  ///
+  /// **写方向也必须剥前缀**：读取时给 `relations[].targetId` 与 `rules` 里的条目引用
+  /// 都加了 `local:` / `campaign:<cid>:`，作者在编辑器里保存时若原样写回，本地库就会
+  /// 存下 `local:local-homebrew:…`；再读一次变成两层前缀，而导出只剥一层 → 该包的
+  /// 导出从此永久失败（真实导入器判 `relation target … does not exist`），本地关系
+  /// 目标也成了非法 id。剥前缀与引用遍历都复用同一份实现
+  /// （`canonicalContentEntryId` + `mapRuleEntryReferences`）。
   ContentEntry _stripOrigin(ContentEntry entry, String originalKey) {
+    final rules = entry.rules;
     return ContentEntry(
       id: originalKey,
       type: entry.type,
@@ -253,8 +262,18 @@ class CampaignAwareContentRepository implements ContentRepository {
       structured: entry.structured,
       tags: entry.tags,
       source: entry.source,
-      relations: entry.relations,
-      rules: entry.rules,
+      relations: <ContentRelation>[
+        for (final relation in entry.relations)
+          ContentRelation(
+            type: relation.type,
+            targetId: canonicalContentEntryId(relation.targetId),
+          ),
+      ],
+      rules: rules == null
+          ? null
+          : CharacterRuleDefinition.fromJson(
+              mapRuleEntryReferences(rules.toJson(), canonicalContentEntryId),
+            ),
     );
   }
 

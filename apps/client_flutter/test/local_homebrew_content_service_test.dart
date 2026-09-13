@@ -353,5 +353,19 @@ void main() {
       12,
       reason: '被拒的覆盖没有改掉已有条目',
     );
+
+    // 停用"我的自制内容"包后占用检测仍然有效：`search` 会按 `packages.enabled`
+    // 过滤（这时它什么都查不到），用它做判重就会退回"重名静默覆盖"。
+    await local.setPackageEnabled(LocalHomebrewContentService.packageId, false);
+    expect(await aware.search(const ContentQuery()), isEmpty);
+    final third = await service.create(type: 'custom', name: '同名');
+    expect(third.id, 'local-homebrew:custom/同名-3');
+    for (final id in <String>[
+      'local-homebrew:custom/同名',
+      'local-homebrew:custom/同名-2',
+      'local-homebrew:custom/同名-3',
+    ]) {
+      expect(await local.getByKey(id), isNotNull, reason: '$id 都应还在');
+    }
   });
 }

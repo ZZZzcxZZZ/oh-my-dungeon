@@ -183,6 +183,17 @@ void main() {
                 'entryId': 'local-homebrew:classFeature/star',
               },
             ],
+            'choices': [
+              {
+                'id': 'pick',
+                'label': '挑一个特性',
+                'optionType': 'classFeature',
+                'minimum': 1,
+                'maximum': 1,
+                'optionEntryIds': ['local-homebrew:classFeature/star'],
+                'recommendedEntryIds': ['local-homebrew:classFeature/star'],
+              },
+            ],
           },
         ],
       },
@@ -218,5 +229,47 @@ void main() {
       'local-homebrew:classFeature/star',
       reason: 'rules 里的条目引用同样不能被传输前缀带进包',
     );
+    expect(
+      knight.rules!.progression.single.choices.single.optionEntryIds,
+      <String>['local-homebrew:classFeature/star'],
+    );
+    expect(
+      knight.rules!.progression.single.choices.single.recommendedEntryIds,
+      <String>['local-homebrew:classFeature/star'],
+    );
+
+    // 写方向（评审阻塞 B-1）：作者在设置页「编辑」保存后，本地库必须仍然存**规范 id**。
+    // 组合仓库读取时给 relations / rules 引用加前缀，保存时若不剥回去，本地就会存下
+    // `local:local-homebrew:…`；再读一次变两层前缀、导出只剥一层 → 该包从此导不出去。
+    final service = LocalHomebrewContentService(repository: aware);
+    final editing = (await aware.search(const ContentQuery(type: 'class'))).single;
+    await service.update(
+      existing: editing,
+      name: '星骑士（改名）',
+      structured: editing.structured,
+    );
+    final stored = (await local.getByKey('local-homebrew:class/star-knight'))!;
+    expect(
+      stored.relations.single.targetId,
+      'local-homebrew:classFeature/star',
+      reason: '本地库不能存带传输前缀的关系目标',
+    );
+    expect(
+      stored.rules!.progression.single.grants.single.entryId,
+      'local-homebrew:classFeature/star',
+    );
+    expect(
+      stored.rules!.progression.single.choices.single.optionEntryIds,
+      <String>['local-homebrew:classFeature/star'],
+    );
+
+    final reExport = await DndPackExporter(
+      repository: aware,
+      importer: ContentPackageImporter(local),
+    ).build(packageId: LocalHomebrewContentService.packageId);
+    final reReport = await ContentPackageImporter(
+      MemoryContentRepository(),
+    ).previewDndPack(reExport.bytes);
+    expect(reReport.valid, isTrue, reason: '${reReport.errors}');
   });
 }

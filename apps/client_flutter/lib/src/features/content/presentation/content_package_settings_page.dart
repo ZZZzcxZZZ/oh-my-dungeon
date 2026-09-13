@@ -109,7 +109,11 @@ class _ContentPackageSettingsPageState
     final candidates = <ContentEntry>[
       for (final entry in all)
         if (entry.structured['classRules'] is Map &&
-            !entry.id.startsWith('${LocalHomebrewContentService.packageId}:') &&
+            // 生产装配下 `search` 返回的 id 带 `local:` 前缀，必须按**规范 id**
+            // 判断，否则这个条件恒真（真正排除自制条目的是下面的 takenKeys）。
+            !canonicalContentEntryId(
+              entry.id,
+            ).startsWith('${LocalHomebrewContentService.packageId}:') &&
             !takenKeys.contains(contentEntryAlignmentKey(entry.id)))
           entry,
     ];

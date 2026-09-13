@@ -83,10 +83,10 @@ class LocalHomebrewContentService {
         '覆盖必须声明 classRules：否则它不参与列级合并链（契约 §3.8）',
       ]);
     }
-    final taken = await _takenEntryIds();
-    final slug = alignmentKey ?? _availableSlug(validated.normalizedType, name, taken);
+    final slug =
+        alignmentKey ?? await _availableSlug(validated.normalizedType, name);
     final id = '$packageId:${validated.normalizedType}/$slug';
-    if (taken.contains(id)) {
+    if (await _entryExists(id)) {
       throw LocalHomebrewValidationException(<String>[
         alignmentKey != null
             ? '已存在同键条目 $id：直接编辑它即可，不要再建一条覆盖'
@@ -246,27 +246,24 @@ class LocalHomebrewContentService {
     return body;
   }
 
-  /// 本包**已占用的条目 id**（规范形式，已剥传输前缀）。
+  /// 本包是否已经有这个**规范 id** 的条目。
   ///
-  /// 不能用 `getByKey('$packageId:…')`：生产装配注入的是
-  /// `CampaignAwareContentRepository`，它只解析 `local:` / `campaign:<cid>:` 前缀键，
-  /// 无前缀键一律返回 null。那样"重名后缀"与"同键覆盖检测"会双双失效——重名直接
-  /// 覆盖前一条（数据丢失）、同键覆盖静默替换。用 `search` + 规范 id 比较，与仓储
-  /// 边界无关。
-  Future<Set<String>> _takenEntryIds() async {
-    final entries = await _repository.search(
-      const ContentQuery(packageId: packageId),
-    );
-    return <String>{
-      for (final entry in entries) canonicalContentEntryId(entry.id),
-    };
+  /// 不能用 `search(packageId:)`：它强制 `packages.enabled == true`，作者把"我的自制
+  /// 内容"包停用后，"重名加后缀"与"同键覆盖检测"就会双双失效——重名直接覆盖前一条
+  /// （数据丢失），正是这里要消灭的。`getByKey` 不按 enabled 过滤，但组合仓库只认
+  /// 带传输前缀的键（`local:` / `campaign:<cid>:`），所以两种写法都问一次：
+  /// 无前缀服务本地仓库与既有测试，`local:` 前缀服务组合仓库。前缀口径仍由
+  /// `canonicalContentEntryId` 定义，这里不新增第二套。
+  Future<bool> _entryExists(String canonicalId) async {
+    if (await _repository.getByKey(canonicalId) != null) return true;
+    return await _repository.getByKey('local:$canonicalId') != null;
   }
 
-  String _availableSlug(String type, String name, Set<String> taken) {
+  Future<String> _availableSlug(String type, String name) async {
     final base = _slugify(name);
     var candidate = base;
     var suffix = 2;
-    while (taken.contains('$packageId:$type/$candidate')) {
+    while (await _entryExists('$packageId:$type/$candidate')) {
       candidate = '$base-${suffix++}';
     }
     return candidate;

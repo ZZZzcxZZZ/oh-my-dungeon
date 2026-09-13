@@ -19,6 +19,10 @@ import '../../rules/domain/character_rule_definition.dart';
 /// `spellcasting` 的 `slots` / `prepared` / `cantrips` / `maximumSpellLevel` /
 /// `archetype` / `listTags`、`resources[].maximum` 的 `formula`/`table` 形态、
 /// `rules.choices` 与条目级 `rules.grants`（见 §9.2.2 / §9.2.3）。
+///
+/// **空白口径**：自由文本（资源 `name`）原样写回，不做 trim——每次按键都写回裁剪值
+/// 会把光标重置，词中间的空格永远打不出来。令牌字段（`id` / `target` / `value` /
+/// 数字）仍然 trim：空白不属于它们的值。
 class HomebrewClassRuleForm extends StatelessWidget {
   const HomebrewClassRuleForm({
     required this.structuredJson,
@@ -355,9 +359,12 @@ class HomebrewClassRuleForm extends StatelessWidget {
         _resourceRow(context, structured, classRules, resources, index),
       TextButton.icon(
         key: const Key('homebrew-form-add-resource'),
+        // 不写 `name`：缺省 = patch 未声明（合法，可被低 tier 补齐）；而 `name: ""`
+        // 是契约 error（`ClassRuleSet` 要求非空字符串），会让"添加资源"这个动作本身
+        // 产出一个要到导出 / 角色解析时才炸的中间态。
         onPressed: () => _patchResources(structured, classRules, [
           ...resources,
-          <String, Object?>{'id': _freeResourceId(resources), 'name': ''},
+          <String, Object?>{'id': _freeResourceId(resources)},
         ]),
         icon: const Icon(Icons.add),
         label: const Text('添加资源'),
@@ -479,7 +486,7 @@ class HomebrewClassRuleForm extends StatelessWidget {
                       ? InputDecorator(
                           decoration: const InputDecoration(
                             labelText: '恢复（表格形态）',
-                            helperText: '仍走 JSON；表单不替换它',
+                            helperText: '切到上方「JSON」标签修改；表单不替换它',
                           ),
                           child: Text(
                             jsonEncode(recovery),

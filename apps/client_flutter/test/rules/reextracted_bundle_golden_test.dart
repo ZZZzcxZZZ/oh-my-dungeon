@@ -5,7 +5,7 @@
 // `test/tooling/private_content_package_validation_test.dart` 的私有路径约定一致）。
 //
 // oracle 数值全部是**独立字面量**（来自内置档案 / SRD 5.2 官方表，见
-// `docs/plans/2026-09-10-rules-contract-core.md` 任务 10b 的 oracle 表），
+// `docs/archive/plans/2026-09-10-rules-contract-core.md` 任务 10b 的 oracle 表——历史执行记录），
 // **不从生产常量派生**——否则提取器与测试会一起错。
 import 'dart:convert';
 import 'dart:io';

@@ -131,9 +131,9 @@ class _SpellsPanelState extends State<_SpellsPanel> {
                     ),
                 ],
               ),
-              _sourceChips(const <String>[
-                'spellcasting.mode',
-                'spellcasting.ability',
+              _sourceChips(<String>[
+                RuleFieldPath.spellcasting('mode'),
+                RuleFieldPath.spellcasting('ability'),
               ]),
             ],
           ),
@@ -160,9 +160,9 @@ class _SpellsPanelState extends State<_SpellsPanel> {
                     onConsume: () => _adjustSlot(entry.key, 1),
                     onRecover: () => _adjustSlot(entry.key, -1),
                   ),
-              _sourceChips(const <String>[
-                'spellcasting.slots',
-                'spellcasting.prepared',
+              _sourceChips(<String>[
+                RuleFieldPath.spellcasting('slots'),
+                RuleFieldPath.spellcasting('prepared'),
               ]),
             ],
           ),

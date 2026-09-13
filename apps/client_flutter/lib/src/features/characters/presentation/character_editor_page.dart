@@ -260,6 +260,8 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
       return _StandardBuildPage(
         contentEntries: widget.contentEntries,
         onSubmit: _submitQuickBuild,
+        // 包 priority 必须带进向导：HP 预览 / 生命骰 / 法术配额与建档同一口径（M）。
+        packagePriorities: widget.packagePriorities,
         onPickImage: widget.onPickImage,
         onContinueToFullSheet: () {
           setState(() => _flow = _CreationFlow.fullSheet);

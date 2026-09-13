@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../characters/domain/declared_levels.dart';
 import '../../rules/domain/rule_field_path.dart';
+import '../../rules/domain/rule_override_declaration.dart';
 import '../../rules/domain/rule_profile.dart';
 import '../domain/content_import_report.dart';
 import 'widgets/content_diagnostic_list.dart';
@@ -47,8 +48,9 @@ class ContentImportPreviewDialog extends StatelessWidget {
             ],
             // 列级来源摘要（契约 §3.7）：只提示每个条目的列最终取自哪里，不阻断
             // 确认。展示名的唯一实现是 [RuleFieldPath.labelFor]；"来源 id → 展示名"
-            // 只用包 id（包名在 manifest 里就是 report.packageName），不引第二套
-            // label 表。
+            // 优先用**包名**（manifest 的 `name` 就是 [report].packageName），包名
+            // 为空时才退回包 id——包 id 派生只有 `packageIdOf` 一处（按最后一个 `:`
+            // 切分），不在这里 `split(':').first`。
             if (report.classRuleSources.isNotEmpty) ...[
               const SizedBox(height: 12),
               Column(
@@ -62,7 +64,7 @@ class ContentImportPreviewDialog extends StatelessWidget {
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
                           '${entry.key} · ${RuleFieldPath.labelFor(source.field)}'
-                          ' ← ${source.tier == kBuiltinTier ? '内置档案' : entry.key.split(':').first}',
+                          ' ← ${source.tier == kBuiltinTier ? '内置档案' : _sourceLabel(source.originId)}',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
@@ -129,5 +131,17 @@ class ContentImportPreviewDialog extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// 非内置来源的展示名：**包名优先**（manifest 的 `name`），空则退回该来源的包 id。
+  ///
+  /// 包 id 派生只有 [RuleOverrideDeclaration.packageIdOf] 一处（按最后一个 `:`
+  /// 切分，包 id 允许含 `:`）；这里不再 `split(':').first`——那会把
+  /// `my:pack:class/wizard` 显示成 `my`。
+  String _sourceLabel(String originId) {
+    final packageName = report.packageName.trim();
+    return packageName.isNotEmpty
+        ? packageName
+        : RuleOverrideDeclaration.packageIdOf(originId);
   }
 }

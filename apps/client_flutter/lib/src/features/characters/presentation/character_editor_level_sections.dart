@@ -6,6 +6,7 @@ class _LevelProgressionSection extends StatelessWidget {
     required this.level,
     required this.className,
     required this.classEntry,
+    this.classRules,
     required this.abilities,
     required this.onChanged,
   });
@@ -13,16 +14,22 @@ class _LevelProgressionSection extends StatelessWidget {
   final int level;
   final String className;
   final ContentEntry? classEntry;
+
+  /// **已解析**的职业规则（由编辑器页面 `_resolveClassRules` 传入，带 disabled /
+  /// pinned / 包 priority）；null 时退回按条目自身解析只是兜底（M）。
+  final ResolvedClassRules? classRules;
   final Map<String, int> abilities;
   final ValueChanged<int> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final classRules = Dnd5eRules.resolveClassRules(
-      entryId: classEntry?.id,
-      classSummary: classEntry?.name ?? className,
-      structured: classEntry?.structured ?? const <String, Object?>{},
-    );
+    final resolved =
+        classRules ??
+        Dnd5eRules.resolveClassRules(
+          entryId: classEntry?.id,
+          classSummary: classEntry?.name ?? className,
+          structured: classEntry?.structured ?? const <String, Object?>{},
+        );
     // §3.12：声明范围只有一种口径，与 Builder 写入值同源（[DeclaredLevels.fromEntry]）；
     // 滑杆据此区分已声明 / 未声明区间。
     final declaredLevels = DeclaredLevels.fromEntry(classEntry);
@@ -57,7 +64,7 @@ class _LevelProgressionSection extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   _LevelSummaryChips(
-                    rules: classRules,
+                    rules: resolved,
                     level: level,
                     abilities: abilities,
                   ),

@@ -72,6 +72,8 @@ void main() {
     final report = await importer.previewJson(
       packageJson(
         id: 'patch-pack',
+        // 包名与包 id 不同：预览必须显示**包名**（F）。
+        name: '勘误合集',
         entry: classEntry(
           packageId: 'patch-pack',
           slug: 'wizard',
@@ -90,9 +92,47 @@ void main() {
     );
     expect(find.byKey(const Key('import-preview-sources')), findsOneWidget);
     expect(find.textContaining('内置档案'), findsWidgets);
+    // 非内置来源显示**包名**，不是裸包 id（F）：`patch-pack` 不得出现在来源文案里。
+    expect(
+      find.textContaining('勘误合集'),
+      findsWidgets,
+      reason: '来源展示名取 report.packageName',
+    );
+    expect(
+      find.textContaining('← patch-pack'),
+      findsNothing,
+      reason: '不得退回裸包 id / 不得再用 split(\':\').first',
+    );
     expect(
       find.byKey(const Key('import-preview-sources-confirm')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('包名只有空白时退回 packageIdOf 派生的包 id（按最后一个冒号切分）', (tester) async {
+    // 包 id 含 `:` 且包名只有空白（`previewJson` 要求 `name` 是非空字符串，空白串
+    // 合法但**展示**上要退回包 id）：退回的必须是 `my:pack`，不是 `my`（F）。
+    final report = await importer.previewJson(
+      packageJson(
+        id: 'my:pack',
+        name: '   ',
+        entry: classEntry(
+          packageId: 'my:pack',
+          slug: 'wizard',
+          classRules: {
+            'spellcasting': {
+              'prepared': {'5': 9},
+            },
+          },
+        ),
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ContentImportPreviewDialog(report: report, onConfirm: () async {}),
+      ),
+    );
+    expect(find.textContaining('← my:pack'), findsWidgets);
+    expect(find.textContaining('← my '), findsNothing);
   });
 }

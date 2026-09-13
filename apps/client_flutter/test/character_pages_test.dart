@@ -1836,6 +1836,61 @@ void main() {
     expect(find.textContaining('链甲、巨剑'), findsOneWidget);
   });
 
+  // M：向导内头部 HP 预览 / 等级区生命骰 / 法术配额必须与职业规则摘要**同一口径**。
+  // 条目声明的 hitDie: 12 必须同时出现在头部摘要与等级区（旧实现里头部自己按
+  // "条目 id 查不到内容仓库"的路径解析，会退回内置档案 d6，同屏自相矛盾）。
+  testWidgets('standard build header HP and level chips share one class-rule resolution (M)', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final jumboKnight = ContentEntry.fromJson(<String, Object?>{
+      'id': 'test:class/jumbo-knight',
+      'type': 'class',
+      'slug': 'jumbo-knight',
+      'name': '巨魔骑士',
+      'body': <Object?>[],
+      'revision': 1,
+      'structured': <String, Object?>{
+        'classRules': <String, Object?>{'hitDie': 12},
+      },
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          contentEntries: [jumboKnight],
+          packagePriorities: const {'test': 0},
+          onSubmit: (_) async => true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(ChoiceChip, '巨魔骑士'));
+    await tester.pumpAndSettle();
+
+    // CON 10（+0）1 级 d12 → 平均 7 + 1 = 8；但这里断言的是"两处同值"。
+    expect(find.text('d12'), findsOneWidget, reason: '职业规则摘要用条目声明的生命骰');
+    // 头部摘要与等级区各一处 HP：两处必须相等（旧实现头部退回档案 d6 → 'HP 5'）。
+    final hpTexts = tester
+        .widgetList<Text>(find.byWidgetPredicate((widget) => widget is Text))
+        .map((text) => text.data)
+        .whereType<String>()
+        .where((value) => value.startsWith('HP '))
+        .toList();
+    expect(hpTexts, isNotEmpty);
+    expect(
+      hpTexts.toSet(),
+      hasLength(1),
+      reason: '头部 HP 预览与等级区 HP 必须同一口径：$hpTexts',
+    );
+  });
+
   // 阻塞项 2：`optionType: "skill"` 的内联选择由专门的技能选择器承担，通用条目
   // 选项卡片不得把它渲染成"资料库中缺少 skill 选项。"的红色假错误；同时技能仍然
   // 可选、仍然写进草稿。

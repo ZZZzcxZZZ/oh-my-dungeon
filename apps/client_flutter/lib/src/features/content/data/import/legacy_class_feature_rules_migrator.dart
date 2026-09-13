@@ -1,6 +1,7 @@
 import '../../domain/content_block.dart';
 import '../../domain/content_entry.dart';
 import '../../../rules/domain/character_rule_definition.dart';
+import '../../../rules/domain/rule_override_declaration.dart';
 
 /// Converts the early `structured.features` class format into executable rules.
 class LegacyClassFeatureRulesMigrator {
@@ -236,7 +237,9 @@ class LegacyClassFeatureRulesMigrator {
     int ordinal,
     Set<String> reservedIds,
   ) {
-    final packageId = classEntry.id.split(':').first;
+    // 包 id 派生只有 `RuleOverrideDeclaration.packageIdOf` 一处（按**最后一个** `:`
+    // 切分，包 id 允许含 `:`）；这里不再 `split(':').first`。
+    final packageId = RuleOverrideDeclaration.packageIdOf(classEntry.id);
     final base = '$packageId:class-feature/${classEntry.slug}-$level-$ordinal';
     if (!reservedIds.contains(base)) return base;
     var suffix = 2;

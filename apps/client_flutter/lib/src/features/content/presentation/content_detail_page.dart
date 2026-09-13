@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../rules/domain/rule_override_declaration.dart';
 import '../data/local/content_repository.dart';
 import '../domain/content_entry.dart';
 import 'content_library_controller.dart';
@@ -75,7 +76,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
       List<ContentEntry> features = const [];
       List<ContentEntry> subclasses = const [];
       if (entry != null && entry.type == 'class') {
-        final packageId = entry.id.split(':').first;
+        final packageId = RuleOverrideDeclaration.packageIdOf(entry.id);
         final allFeatures = await widget.controller.repository.search(
           ContentQuery(type: 'classFeature', packageId: packageId),
         );
@@ -182,7 +183,7 @@ class _ContentDetailPageState extends State<ContentDetailPage> {
     }
 
     final definition = ContentTypeRegistry.defaults().definitionFor(entry.type);
-    final packageId = entry.id.split(':').first;
+    final packageId = RuleOverrideDeclaration.packageIdOf(entry.id);
 
     return Scaffold(
       appBar: AppBar(

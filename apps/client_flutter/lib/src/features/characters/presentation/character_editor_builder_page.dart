@@ -6,12 +6,17 @@ class _StandardBuildPage extends StatefulWidget {
     required this.contentEntries,
     required this.onSubmit,
     required this.onContinueToFullSheet,
+    this.packagePriorities = const <String, int>{},
     this.onPickImage,
   });
 
   final List<ContentEntry> contentEntries;
   final Future<void> Function(QuickBuildSelection draft) onSubmit;
   final VoidCallback onContinueToFullSheet;
+
+  /// 包 id → priority（决策 D2）：向导内的 HP 预览 / 生命骰 / 法术配额必须与建档、
+  /// 快速创建用**同一份**优先级，否则同一角色在向导与落库后数字不同（M）。
+  final Map<String, int> packagePriorities;
   final Future<({Uint8List bytes, String mimeType})?> Function()? onPickImage;
 
   @override
@@ -262,6 +267,9 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         level: _level,
         className: _className,
         classEntry: _entryById(_classEntryId),
+        // 同屏一个口径（M）：头部 HP 预览必须用编辑器**已解析**（带 disabled /
+        // pinned / 包 priority）的职业规则，不得自己再解析一次。
+        classRules: _resolveClassRules(_classEntryId),
         abilities: _abilityScores,
         selectedSpells: _selectedSpellRefs.length,
         selectedItems: _selectedItemRefs.length,
@@ -398,6 +406,8 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
             level: _level,
             className: _className,
             classEntry: _entryById(_classEntryId),
+            // 等级区生命骰与编辑器其它位置**同一口径**（M）。
+            classRules: _resolveClassRules(_classEntryId),
             abilities: _abilityScores,
             onChanged: (value) => setState(() {
               _level = value;
@@ -658,6 +668,27 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         .firstOrNull;
   }
 
+  /// 向导内职业规则的**唯一**解析口径（M）：带包 priority（决策 D2）与条目自身的
+  /// `structured.classRules`，与 `character_editor_page._resolveClassRules` 和再派生
+  /// 同源。本页的头部 HP 预览、等级区生命骰、法术配额都必须走它，不得各自再调
+  /// `Dnd5eRules.resolveClassRules`。
+  ///
+  /// 标准创建向导只在**新建**角色时出现（编辑老角色走完整表单），因此这里没有
+  /// `data.ruleOverrides` 可带；`disabled` / `pinned` 为空是正确语义，不是遗漏。
+  ResolvedClassRules _resolveClassRules(String? entryId) {
+    final entry = _entryById(entryId);
+    return Dnd5eRules.resolveClassRules(
+      entryId: entry?.id,
+      classSummary: entry?.name ?? _className,
+      structured: entry?.structured ?? const <String, Object?>{},
+      entryPriority:
+          widget.packagePriorities[RuleOverrideDeclaration.packageIdOf(
+            entry?.id ?? '',
+          )] ??
+          0,
+    );
+  }
+
   String? _entryIdFor(String type, String name) {
     for (final entry in widget.contentEntries) {
       if (entry.type == type && entry.name.trim() == name.trim()) {
@@ -895,12 +926,9 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
         .toList(growable: false);
     if (spellChoices.isEmpty) return const <Widget>[];
     final poolLimits = RuleChoiceQuota.limitsFor(
-      rules: Dnd5eRules.resolveClassRules(
-        entryId: _classEntryId,
-        classSummary: _className,
-        structured:
-            _entryById(_classEntryId)?.structured ?? const <String, Object?>{},
-      ),
+      // 校验路径也必须是**已解析**（带 disabled / pinned / 包 priority）的规则（M）：
+      // 否则用户关闭某来源后，"还能选几个"仍按旧规则计算。
+      rules: _resolveClassRules(_classEntryId),
       level: _level,
     );
     return [

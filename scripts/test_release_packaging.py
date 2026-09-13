@@ -140,7 +140,10 @@ class ReleasePackagingTest(unittest.TestCase):
 
         self.assertIn("private-test-all-bundle.json", script)
         self.assertIn("ohmydungeon-0.1-private-test.apk", script)
-        self.assertIn("flutter build apk --release", script)
+        # 构建参数必须**转发**（不能写死 `--release`），否则内嵌默认服务器的开关传不进去；
+        # 没有它，装出来的私有 APK 启动时一个服务器档案都没有（用户得手动加地址）。
+        self.assertIn("flutter build apk @BuildArgs", script)
+        self.assertIn("--dart-define=BUNDLED_DEFAULT_SERVER=true", script)
         self.assertIn("gradle-repositories.init.gradle", script)
         self.assertIn("init.d", script)
         self.assertIn("finally", script)

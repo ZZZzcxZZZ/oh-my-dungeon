@@ -1,7 +1,19 @@
 [CmdletBinding()]
 param(
   [string]$ContentBundlePath,
-  [string]$OutputDirectory
+  [string]$OutputDirectory,
+  # Build flags forwarded to `flutter build apk`.
+  #
+  # The private test APK is a distribution build: it must embed the bundled default
+  # server (`BundledDefaultServerSeeder`), otherwise the installed app starts with no
+  # server profile at all and the user has to add the address by hand. The seeder is
+  # gated behind `BUNDLED_DEFAULT_SERVER` (see docs/README.md 13.3), and the address
+  # default lives in `bundled_default_server_seeder.dart`
+  # (`DEFAULT_SERVER_BASE_URL`, overridable with a second `--dart-define`).
+  [string[]]$BuildArgs = @(
+    '--release',
+    '--dart-define=BUNDLED_DEFAULT_SERVER=true'
+  )
 )
 
 $ErrorActionPreference = "Stop"
@@ -42,7 +54,7 @@ try {
 
   Push-Location $clientDir
   try {
-    flutter build apk --release
+    flutter build apk @BuildArgs
   } finally {
     Pop-Location
   }

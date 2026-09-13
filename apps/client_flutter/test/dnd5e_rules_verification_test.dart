@@ -152,7 +152,10 @@ void main() {
       expect(Dnd5eRules.initiativeBonus(abilities), 3);
       expect(
         Dnd5eRules.spellSaveDc(
-          classSummary: '法师',
+          rules: Dnd5eRules.resolveClassRules(
+            entryId: null,
+            classSummary: '法师',
+          ),
           abilities: abilities,
           level: 5,
         ),
@@ -160,7 +163,10 @@ void main() {
       );
       expect(
         Dnd5eRules.spellSaveDc(
-          classSummary: '战士',
+          rules: Dnd5eRules.resolveClassRules(
+            entryId: null,
+            classSummary: '战士',
+          ),
           abilities: abilities,
           level: 5,
         ),

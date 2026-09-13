@@ -5,6 +5,8 @@ class _ActionsPanel extends StatefulWidget {
   const _ActionsPanel({
     required this.character,
     this.contentEntries = const <ContentEntry>[],
+    this.packagePriorities = const <String, int>{},
+    this.ruleOverrides = RuleOverrideIndex.empty,
     this.diceRoller,
     this.onRoll,
     this.onSaveCharacter,
@@ -12,6 +14,13 @@ class _ActionsPanel extends StatefulWidget {
 
   final CharacterSheet character;
   final List<ContentEntry> contentEntries;
+
+  /// 包 id → priority 与跨包声明索引：法术豁免 DC 必须与本页其它面板**同一口径**
+  /// 解析（[ _resolveRulesWithOverrides ]），否则"勘误把施法属性改成别的属性"时
+  /// 动作面板按旧属性算 DC、法术面板显示新属性（同屏自相矛盾）。
+  final Map<String, int> packagePriorities;
+  final RuleOverrideIndex ruleOverrides;
+
   final DiceRoller? diceRoller;
   final CharacterRollCallback? onRoll;
   final CharacterSaveCallback? onSaveCharacter;
@@ -33,7 +42,11 @@ class _ActionsPanelState extends State<_ActionsPanel> {
     );
     final ruleActions = CharacterOverrideResolver.resolve(character).actions;
     final spellSaveDc = Dnd5eRules.spellSaveDc(
-      classSummary: character.classSummary,
+      rules: _resolveRulesWithOverrides(
+        character,
+        widget.packagePriorities,
+        overrides: widget.ruleOverrides,
+      ),
       abilities: character.abilityMap,
       level: character.level,
     );

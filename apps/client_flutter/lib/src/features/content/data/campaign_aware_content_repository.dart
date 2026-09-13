@@ -35,8 +35,28 @@ class CampaignAwareContentRepository implements ContentRepository {
 
   /// 优先级是本地包元数据（S3 决策 D2）：战役缓存里的条目没有独立 priority 列，
   /// 一律走本地仓库的投影。
+  ///
+  /// **键必须与本仓库重写后的条目 id 同源**：`search()` 把本地条目 id 重写成
+  /// `local:<id>`、战役条目重写成 `campaign:<campaignId>:<id>`，而规则层是用
+  /// `RuleOverrideDeclaration.packageIdOf(entryId)`（按最后一个冒号切分）去查这张表，
+  /// 于是 `local:errata:class/wizard` → `local:errata`。只返回**原始**包 id 时这一查必然
+  /// 落空 → priority 静默变 0（tier 退回 100），campaign 视图与创建向导的数值分叉。
+  /// 因此同时给出三种键：原始包 id（本地仓库与既有测试的口径）、`local:` 前缀、
+  /// 当前战役的 `campaign:<cid>:` 前缀。**重写 id 与重写键都只有这一处实现。**
   @override
-  Future<Map<String, int>> packagePriorities() => local.packagePriorities();
+  Future<Map<String, int>> packagePriorities() async {
+    final base = await local.packagePriorities();
+    if (base.isEmpty) return base;
+    final campaignId = activeCampaignId();
+    return <String, int>{
+      for (final entry in base.entries) ...<String, int>{
+        entry.key: entry.value,
+        _localKey(entry.key): entry.value,
+        if (campaignId != null && campaignId.isNotEmpty)
+          _campaignKey(campaignId, entry.key): entry.value,
+      },
+    };
+  }
 
   @override
   Future<List<ContentEntry>> search(ContentQuery query) async {

@@ -198,6 +198,55 @@ void main() {
       ]);
     });
 
+    test('只有 structured.classRules 的条目也吃跨包 priority：与规则驱动路径同源', () {
+      // 应修 1 的回归用例：这条路径（`rules` 块为空 → QuickBuildService）曾经不带
+      // 包 priority 与跨包索引，同 slug 两个包时会与 `RulesDrivenCharacterBuilder`
+      // 给出不同数值（向导显示 d8、落库 d12）。
+      ContentEntry classEntry(String id, int hitDie) =>
+          ContentEntry.fromJson(<String, Object?>{
+            'id': id,
+            'type': 'class',
+            'slug': 'tester',
+            'name': '测试职业',
+            'body': <Object?>[],
+            'revision': 1,
+            'structured': <String, Object?>{
+              'classRules': <String, Object?>{'hitDie': hitDie},
+            },
+          });
+
+      final base = classEntry('alpha:class/tester', 8);
+      final errata = classEntry('beta:class/tester', 12);
+      final entries = <String, ContentEntry>{
+        base.id: base,
+        errata.id: errata,
+      };
+
+      final draft = QuickBuildService.build(
+        QuickBuildSelection(
+          name: 'Nia',
+          className: '测试职业',
+          species: '人类',
+          background: '士兵',
+          level: 3,
+          classEntry: base,
+          classEntryId: base.id,
+          entries: entries,
+          packagePriorities: const <String, int>{'beta': 50},
+        ),
+      );
+
+      // beta 的 priority 50 ⇒ tier 150 压过角色自身条目（tier 100）。
+      expect(draft.data['hitDie'], 12);
+      final sources = draft.data['classRuleSources']! as Map;
+      expect(
+        (sources['hitDie']! as Map)['originId'],
+        'beta:class/tester',
+        reason: '来源必须如实记成赢得该列的勘误包条目',
+      );
+      expect((sources['hitDie']! as Map)['tier'], 150);
+    });
+
     test('拿不到条目（只有展示名）时声明范围是"未声明"，不编造区间', () {
       const selection = QuickBuildSelection(
         name: 'Nia',

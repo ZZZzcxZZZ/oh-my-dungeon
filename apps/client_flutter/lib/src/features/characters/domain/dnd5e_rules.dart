@@ -400,15 +400,18 @@ class Dnd5eRules {
   static int? hitDieFor({String? entryId, required String classSummary}) =>
       resolveClassRules(entryId: entryId, classSummary: classSummary).hitDie;
 
+  /// 法术豁免 DC。
+  ///
+  /// [rules] 必须是**已解析**的职业规则（调用方用自己的口径解析一次后传进来）：
+  /// 与 [spellSlotsAfterRest] 同一约定——本方法**不得**再自己 `resolveClassRules`，
+  /// 否则会丢掉条目 id / 包 priority / 用户覆盖（`disabled` / `pinned`），
+  /// 让"勘误改了施法属性"在动作面板上不生效（动作面板显示旧属性、法术面板显示新属性）。
   static int? spellSaveDc({
-    required String classSummary,
+    required ResolvedClassRules rules,
     required Map<String, Object?> abilities,
     required int level,
   }) {
-    final ability = resolveClassRules(
-      entryId: null,
-      classSummary: classSummary,
-    ).spellcastingAbility;
+    final ability = rules.spellcastingAbility;
     if (ability == null) return null;
     return 8 + proficiencyBonus(level) + abilityBonus(abilities, ability);
   }

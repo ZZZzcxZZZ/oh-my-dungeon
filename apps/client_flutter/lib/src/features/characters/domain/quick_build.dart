@@ -1,9 +1,12 @@
 import 'equipment_bundle_items.dart';
 import '../../content/domain/content_entry.dart';
+import '../../rules/domain/rule_override_conflict.dart';
+import '../../rules/domain/rule_override_declaration.dart';
 import '../../rules/domain/rule_profile.dart';
 import 'character_edit_draft.dart';
 import 'declared_levels.dart';
 import 'dnd5e_rules.dart';
+import 'rule_override_index.dart';
 
 class QuickBuildSelection {
   const QuickBuildSelection({
@@ -30,6 +33,10 @@ class QuickBuildSelection {
     this.backstory = '',
     this.privateNotes = '',
     this.customSpells = const <Map<String, Object?>>[],
+    this.entries = const <String, ContentEntry>{},
+    this.packagePriorities = const <String, int>{},
+    this.disabledOriginIds = const <String>{},
+    this.pinnedOrigins = const <String, String>{},
   });
 
   final String name;
@@ -62,6 +69,18 @@ class QuickBuildSelection {
   final String backstory;
   final String privateNotes;
   final List<Map<String, Object?>> customSpells;
+
+  /// 全部候选条目（键 = 条目 id）：跨包职业规则声明索引要用它建
+  /// （`RuleOverrideIndex.fromEntries`），否则勘误包声明的列在这条路径上看不见。
+  ///
+  /// 与 [packagePriorities] / [disabledOriginIds] / [pinnedOrigins] 一起保证
+  /// "向导显示的数值"与"落库的数值"来自**同一份**规则解析：这条路径
+  /// （`hasStructuredRules == false`：条目只有 `structured.classRules`、没有 `rules` 块）
+  /// 曾经不带 priority / 索引，同 slug 两包时会出现"向导显示 d8、落库 d12"。
+  final Map<String, ContentEntry> entries;
+  final Map<String, int> packagePriorities;
+  final Set<String> disabledOriginIds;
+  final Map<String, String> pinnedOrigins;
 
   Map<String, Object?> get storyData => {
     'appearance': appearance.trim(),
@@ -103,6 +122,10 @@ class QuickBuildService {
       entry: selection.classEntry,
       entryId: selection.classEntryId,
       classSummary: selection.className,
+      entries: selection.entries,
+      packagePriorities: selection.packagePriorities,
+      disabledOriginIds: selection.disabledOriginIds,
+      pinnedOrigins: selection.pinnedOrigins,
     );
     final abilities =
         selection.abilities ??
@@ -191,6 +214,12 @@ class QuickBuildService {
         },
         'hitDie': classRules.hitDie,
         'savingThrowAbilities': classRules.savingThrowAbilities.toList(),
+        // 列级来源与冲突：本路径现在与 `RulesDrivenCharacterBuilder` 用**同一套**
+        // 输入（entries + priority + 覆盖）解析，因此也必须写下同一份来源快照，
+        // 否则快速创建出来的角色在再次派生之前，角色页每一列都显示"来源未知"，
+        // 用户无法判断某个数值来自内置档案还是某个勘误包。
+        'classRuleSources': RuleFieldSourceMap.toData(classRules.fieldSources),
+        'classRuleConflicts': RuleOverrideConflicts.toData(classRules.conflicts),
         // 派生快照与 `RulesDrivenCharacterBuilder` **同一口径**：无条件写入
         // （空表 / 空列表 / null 也写），消费方按键是否存在判断"是否已派生"。
         'spellSlots': classRules.spellSlots(selection.level),
@@ -222,21 +251,40 @@ class QuickBuildService {
   /// 有条目时把 `structured.classRules` 一并带上：快速创建与创建向导读到的
   /// 数值因此完全一致（列级合并的唯一实现在 [Dnd5eRules.resolveClassRules]）。
   ///
-  /// **不带 `disabledOriginIds` / `pinnedOrigins` / `entryPriority` 的理由**：
-  /// 本方法由 `QuickBuildService.build` 调用，只服务 `hasStructuredRules == false`
-  /// 的**新建**角色——此时角色数据还不存在，`data.ruleOverrides` 无从谈起（用户尚
-  /// 未做出任何覆盖选择）；而跨包声明索引（`RuleOverrideIndex`）也不在这条路径上，
-  /// 因此没有同 tier 竞争者，`entryPriority` 改不了任何取值 / 来源。需要覆盖语义的
-  /// 路径一律走 `RulesDrivenCharacterBuilder`（它接收完整的覆盖输入）。
+  /// **必须带上 `entries` / `packagePriorities` / 覆盖输入**：本方法服务的是
+  /// `hasStructuredRules == false`（条目只有 `structured.classRules`、没有 `rules` 块）
+  /// 的路径，而"哪一份声明赢"由包 priority 与跨包索引决定。不带它们时同 slug 两个包
+  /// 会给出不同数值（向导预览 d8、落库 d12，反之亦然），与 `RulesDrivenCharacterBuilder`
+  /// 分叉——那条路径的输入是同一套（决策 D2/D3）。
   static ResolvedClassRules _classRules({
     required ContentEntry? entry,
     required String? entryId,
     required String classSummary,
-  }) => Dnd5eRules.resolveClassRules(
-    entryId: entry?.id ?? entryId,
-    classSummary: entry?.name ?? classSummary,
-    structured: entry?.structured ?? const <String, Object?>{},
-  );
+    required Map<String, ContentEntry> entries,
+    required Map<String, int> packagePriorities,
+    required Set<String> disabledOriginIds,
+    required Map<String, String> pinnedOrigins,
+  }) {
+    final resolvedEntryId = entry?.id ?? entryId;
+    return Dnd5eRules.resolveClassRules(
+      entryId: resolvedEntryId,
+      classSummary: entry?.name ?? classSummary,
+      structured: entry?.structured ?? const <String, Object?>{},
+      overrides: entries.isEmpty
+          ? null
+          : RuleOverrideIndex.fromEntries(
+              entries.values,
+              packagePriorities,
+            ),
+      entryPriority:
+          packagePriorities[RuleOverrideDeclaration.packageIdOf(
+            resolvedEntryId ?? '',
+          )] ??
+          0,
+      disabledOriginIds: disabledOriginIds,
+      pinnedOrigins: pinnedOrigins,
+    );
+  }
 
   /// 未声明生命骰（自制职业）时只按体质调整值计，且总生命至少 1（§3.6 第 3 步）。
   static int _averageHitPoints({

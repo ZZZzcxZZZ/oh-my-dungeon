@@ -9,6 +9,8 @@ import 'package:dnd_table_client/src/features/campaigns/presentation/characters/
 import 'package:dnd_table_client/src/features/characters/domain/dnd5e_rules.dart';
 import 'package:dnd_table_client/src/features/characters/domain/rule_override_index.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_detail_page.dart';
+import 'package:dnd_table_client/src/features/content/data/campaign_aware_content_repository.dart';
+import 'package:dnd_table_client/src/features/content/data/local/content_repository.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_package_manifest.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_override_declaration.dart';
@@ -40,9 +42,18 @@ ContentEntry _classEntry(String id) => ContentEntry.fromJson(<String, Object?>{
 
 void main() {
   testWidgets('campaign 角色卡拿到包 priority，tier 与本地一致（P0-2.6）', (tester) async {
-    final repository = MemoryContentRepository();
+    // 生产装配：UI 拿到的是 CampaignAwareContentRepository（条目 id 会被重写成
+    // `local:<id>` / `campaign:<cid>:<id>`）。用裸 MemoryContentRepository 会让
+    // `packageIdOf(entryId)` 恰好等于原始包 id，从而**绕过**真实的前缀问题
+    // （C3 的旧版用例就是这么假绿的）。
+    final repository = CampaignAwareContentRepository(
+      local: MemoryContentRepository(),
+      campaign: MemoryCampaignCacheRepository(),
+      activeCampaignId: () => 'c1',
+    );
+    final local = repository.local as MemoryContentRepository;
     // 装一个 priority = 40 的勘误包（与本地 `packagePriorities()` 同源投影）。
-    await repository.upsertPackageEntry(
+    await local.upsertPackageEntry(
       manifest: const ContentPackageManifest(
         formatVersion: 3,
         id: 'errata',
@@ -55,6 +66,20 @@ void main() {
       ),
       entry: _classEntry('errata:class/wizard'),
     );
+
+    // 前置断言：仓库确实重写了 id，且优先级表覆盖重写后的键（否则下面的 tier 检查
+    // 会因为"恰好没前缀"而失去意义）。
+    final entries = await repository.search(const ContentQuery());
+    expect(
+      entries.map((entry) => entry.id),
+      contains('local:errata:class/wizard'),
+      reason: '生产装配下条目 id 带 local: 前缀',
+    );
+    final priorities = await repository.packagePriorities();
+    expect(priorities['errata'], _errataPriority);
+    expect(priorities['local:errata'], _errataPriority,
+        reason: '包优先级表的键必须与重写后的条目 id 同源');
+    expect(priorities['campaign:c1:errata'], _errataPriority);
 
     final controller = CampaignCharacterController(
       cacheRepository: MemoryCampaignCacheRepository(
@@ -137,6 +162,40 @@ void main() {
       kEntryTier + _errataPriority,
       reason: 'priority 40 的勘误必须是 tier 140',
     );
+    // 来源 originId 用的是**这份输入里的条目 id**：campaign 装配下带 `local:` 前缀
+    // （与页面显示、`data.ruleOverrides` 的写入口径自洽）。不带前缀的等价性由下一个
+    // 用例在本地装配下断言。
+    expect(
+      resolved.sourceOf('spellcasting.prepared')!.originId,
+      'local:errata:class/wizard',
+    );
+  });
+
+  test('本地装配下同一份优先级表给出同一个 tier（前缀不改变结论）', () async {
+    final local = MemoryContentRepository();
+    await local.upsertPackageEntry(
+      manifest: const ContentPackageManifest(
+        formatVersion: 3,
+        id: 'errata',
+        name: '勘误包',
+        version: '1.0.0',
+        locale: 'zh-CN',
+        system: 'dnd5e-2024',
+        entryCount: 1,
+        priority: _errataPriority,
+      ),
+      entry: _classEntry('errata:class/wizard'),
+    );
+    final resolved = Dnd5eRules.resolveClassRules(
+      entryId: 'base:class/wizard',
+      classSummary: '法师',
+      overrides: RuleOverrideIndex.fromEntries(
+        await local.search(const ContentQuery()),
+        await local.packagePriorities(),
+      ),
+      entryPriority: 0,
+    );
+    expect(resolved.sourceOf('spellcasting.prepared')!.tier, kEntryTier + _errataPriority);
     expect(
       resolved.sourceOf('spellcasting.prepared')!.originId,
       'errata:class/wizard',

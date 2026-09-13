@@ -136,7 +136,10 @@ void main() {
       );
       expect(
         Dnd5eRules.spellSaveDc(
-          classSummary: 'Ranger',
+          rules: Dnd5eRules.resolveClassRules(
+            entryId: null,
+            classSummary: 'Ranger',
+          ),
           abilities: abilities,
           level: 3,
         ),

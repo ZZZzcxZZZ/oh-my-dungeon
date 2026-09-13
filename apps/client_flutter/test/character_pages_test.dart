@@ -2700,6 +2700,70 @@ void main() {
     },
   );
 
+  testWidgets('actions panel 的法术豁免 DC 与本页其它面板同一口径（吃跨包 priority）', (
+    tester,
+  ) async {
+    // 角色自身条目声明 int 施法（int 10 → +0）；勘误包 priority 50 把施法属性改成 cha。
+    // 修复前 `spellSaveDc` 自己 `resolveClassRules(entryId: null, …)`，既看不到勘误、
+    // 也不带 priority → 动作面板按 int 算 DC，与法术面板显示的 cha 自相矛盾。
+    ContentEntry classEntry(String id, String ability) =>
+        ContentEntry.fromJson(<String, Object?>{
+          'id': id,
+          'type': 'class',
+          'slug': 'tester',
+          'name': '测试职业',
+          'body': <Object?>[],
+          'revision': 1,
+          'structured': <String, Object?>{
+            'classRules': <String, Object?>{
+              'hitDie': 10,
+              'spellcasting': <String, Object?>{
+                'mode': 'prepared',
+                'ability': ability,
+                'prepared': <String, int>{'1': 2},
+              },
+            },
+          },
+        });
+
+    final base = classEntry('base:class/tester', 'int');
+    final errata = classEntry('errata:class/tester', 'cha');
+    final character = _character.copyWith(
+      level: 5,
+      classSummary: '测试职业',
+      abilities: const <String, Object?>{
+        'str': 10,
+        'dex': 10,
+        'con': 10,
+        'int': 10,
+        'wis': 10,
+        'cha': 18,
+      },
+      data: <String, Object?>{
+        'classIdentity': <String, Object?>{
+          'entryId': 'base:class/tester',
+          'slug': 'tester',
+          'declared': true,
+        },
+      },
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterDetailPage(
+          character: character,
+          contentEntries: <ContentEntry>[base, errata],
+          packagePriorities: const <String, int>{'errata': 50},
+          initialTab: 'actions',
+        ),
+      ),
+    );
+
+    // 等级 5 → 熟练 +3；cha 18 → +4 ⇒ DC 15（若仍按 int 10 算就是 11）。
+    expect(find.text('法术豁免 DC 15'), findsOneWidget);
+    expect(find.text('法术豁免 DC 11'), findsNothing);
+  });
+
   testWidgets('actions panel renders rule actions with compact rows', (
     tester,
   ) async {

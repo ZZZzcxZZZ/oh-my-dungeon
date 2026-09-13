@@ -316,6 +316,8 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
             child: _ActionsPanel(
               character: _character,
               contentEntries: effectiveContentEntries,
+              packagePriorities: widget.packagePriorities,
+              ruleOverrides: ruleOverrides,
               diceRoller: widget.diceRoller,
               onRoll: effectiveRoll,
               onSaveCharacter: widget.onSaveCharacter == null

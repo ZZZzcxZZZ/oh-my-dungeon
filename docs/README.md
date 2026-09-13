@@ -474,7 +474,10 @@ PHB 2024 官方表格）：
 | `data.ruleOverrides` | `pinned`（按**列**显式选定来源）/ `disabledOriginIds`（按**来源**关闭覆盖：条目 id 或包 id，影响该来源在**所有列**的覆盖） | 关闭后**回退到更低 tier（含内置档案）**并重派生；角色页提供「已关闭的来源」与恢复入口 |
 
 冲突只在**运行期**登记，不是导入 error（导入单个包时看不到别的包）；无用户选择时生效值取
-`RuleOverrideOrder.ordered` 首位（**确定性**，可复现）。两个不变量：冲突的每个来源都**声明了
+`RuleOverrideOrder.ordered` 首位（**确定性**，可复现）。覆盖选择（`disabledOriginIds` /
+`pinned`）与来源快照里的 `originId` 一律是**规范 id**（`canonicalContentEntryId` 剥掉战役视图的
+`local:` / `campaign:<cid>:` 传输前缀，唯一实现），因此同一角色在**本地角色列表**与**战役角色卡**
+两个入口看到同一份覆盖状态、同一组来源标签；老数据里带前缀的写法在读取时归一化，向后兼容。两个不变量：冲突的每个来源都**声明了
 该列**，`effectiveOriginId` 必为其中之一（界面不会给出"选了也不生效"的选项）。用户 pin 是
 最高优先级且**只作用于该列**，可逐列取回被同 tier `replace` 丢弃的 `patch` 声明；`replace`
 **未声明**的列不登记冲突——按 D4 显示"未声明"，而不是静默换一个数值。
@@ -496,7 +499,6 @@ PHB 2024 官方表格）：
 | 同 tier 的"沿用"与"显式值"（S3 决策 D5 / D6） | 同一 tier 内 A 在同级**沿用**的值可以盖住 B 在同级写下的显式值而**不登记冲突**（如 A 写 `{"5": 9}` 在 10 级沿用、B 写 `{"10": 11}`）：冲突判据是"作者声明的等级区间有交集"，沿用不属于声明区间。这是确定性 tie-break（tier → replace → 自身条目 → originId 升序）的已知代价，用户仍可用 `data.ruleOverrides.pinned` 显式改选 |
 | `recovery` 不逐级合并（S3 决策 D5） | `resources[].recovery` 的常量形态与 `{"table": …}` 形态是同一条来源路径，整列由"声明过 `recovery` 的最高 tier"负责，**不**逐级借用更低 tier 的恢复表（恢复语义是枚举而不是可加的数值） |
 | `resources: []` 不再清空档案资源（S3） | 空数组只表示"本块没有资源声明"；要清空档案同名资源必须显式声明 `classRules.mode: "replace"` |
-| 战役视图里的覆盖 id 带前缀（S3） | `CampaignAwareContentRepository` 把条目 id 重写成 `local:<id>` / `campaign:<cid>:<id>`，因此 campaign 角色卡里 `data.ruleOverrides` 记下的是**带前缀**的来源 id；同一个角色在本地视图（无前缀）打开时，这组 id 不再匹配，关闭覆盖的状态不会跨视图继承。数值解析本身两边一致（`packagePriorities()` 同时提供三种键），这是持久化口径尚未统一的设计欠账 |
 | 专精（Expertise） | 技能加值只有熟练/非熟练两档，无 ×2 专精 |
 | 多职业 | 不支持多职业等级与法术位合并 |
 | XP 与升级 | 无经验值系统；等级由用户维护，升级按 +1 级规划（内容包驱动可选内容） |

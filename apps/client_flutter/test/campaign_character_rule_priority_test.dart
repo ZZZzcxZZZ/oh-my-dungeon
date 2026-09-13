@@ -6,6 +6,7 @@
 // 勘误压不过自身条目（短休 `archetype: pact` 判定也随之与本地不一致）。
 import 'package:dnd_table_client/src/features/campaigns/presentation/characters/campaign_character_controller.dart';
 import 'package:dnd_table_client/src/features/campaigns/presentation/characters/campaign_character_sheet_launcher.dart';
+import 'package:dnd_table_client/src/features/characters/domain/character_rule_overrides.dart';
 import 'package:dnd_table_client/src/features/characters/domain/dnd5e_rules.dart';
 import 'package:dnd_table_client/src/features/characters/domain/rule_override_index.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_detail_page.dart';
@@ -154,12 +155,12 @@ void main() {
       kEntryTier + _errataPriority,
       reason: 'priority 40 的勘误必须是 tier 140',
     );
-    // 来源 originId 用的是**这份输入里的条目 id**：campaign 装配下带 `local:` 前缀
-    // （与页面显示、`data.ruleOverrides` 的写入口径自洽）。不带前缀的等价性由下一个
-    // 用例在本地装配下断言。
+    // 来源 originId 是**规范 id**（剥掉战役视图的 `local:` / `campaign:<cid>:` 传输
+    // 前缀）：否则同一个角色在本地 / 战役两个入口打开时，来源标签、覆盖匹配
+    // （disabled / pinned）都会分裂成两套 id（S3 已知限制，已修）。
     expect(
       resolved.sourceOf('spellcasting.prepared')!.originId,
-      'local:errata:class/wizard',
+      'errata:class/wizard',
     );
   });
 
@@ -185,6 +186,88 @@ void main() {
     // 不产生二次前缀这种无意义键。
     expect(priorities.containsKey('local:local:errata'), isFalse);
     expect(priorities.containsKey('campaign:c1:local:errata'), isFalse);
+  });
+
+  test('覆盖选择跨视图一致：本地写的 id 在战役视图同样生效，反之亦然', () async {
+    // 战役视图：条目 id 带 `local:` 前缀。
+    final campaignRepository = await _repositoryWithErrata();
+    final campaignEntries = await campaignRepository.search(const ContentQuery());
+    final priorities = await campaignRepository.packagePriorities();
+    expect(
+      campaignEntries.map((entry) => entry.id),
+      contains('local:errata:class/wizard'),
+      reason: '前置：战役装配下条目 id 确实带前缀',
+    );
+    const rebasedClassEntry = 'local:base:class/wizard';
+
+    ResolvedClassRules resolveWith(Set<String> disabled) =>
+        Dnd5eRules.resolveClassRules(
+          entryId: rebasedClassEntry,
+          classSummary: '法师',
+          overrides: RuleOverrideIndex.fromEntries(campaignEntries, priorities),
+          entryPriority: priorities['base'] ?? 0,
+          disabledOriginIds: disabled,
+        );
+
+    // 1) 不关闭 → 勘误生效，来源是规范 id。
+    final errataApplies = resolveWith(const <String>{});
+    expect(errataApplies.sourceOf('spellcasting.prepared')!.originId, 'errata:class/wizard');
+    expect(errataApplies.sourceOf('spellcasting.prepared')!.tier, kEntryTier + _errataPriority);
+
+    // 2) **本地视图写下的规范 id** 在战役视图同样生效（这正是旧行为的缺口）。
+    final canonicalDisabled = CharacterRuleOverrides.fromData(<String, Object?>{
+      'disabledOriginIds': <String>['errata:class/wizard'],
+    });
+    expect(canonicalDisabled.disabledOriginIds, <String>{'errata:class/wizard'});
+    expect(
+      resolveWith(canonicalDisabled.disabledOriginIds)
+          .sourceOf('spellcasting.prepared')!
+          .tier,
+      isNot(kEntryTier + _errataPriority),
+      reason: '关掉勘误来源后不得再按 tier 140 生效',
+    );
+
+    // 3) 老数据里带前缀的写法经 `fromData` 归一化后**同一结果**（向后兼容）。
+    final legacyDisabled = CharacterRuleOverrides.fromData(<String, Object?>{
+      'disabledOriginIds': <String>['local:errata:class/wizard'],
+    });
+    expect(legacyDisabled.disabledOriginIds, <String>{'errata:class/wizard'});
+    expect(
+      resolveWith(legacyDisabled.disabledOriginIds)
+          .sourceOf('spellcasting.prepared')!
+          .originId,
+      resolveWith(canonicalDisabled.disabledOriginIds)
+          .sourceOf('spellcasting.prepared')!
+          .originId,
+    );
+
+    // 4) 角色自身条目的 tie-break 也跨视图成立：前缀形态的 entryId 仍被认作"自己的条目"
+    //    （自身条目的 tier = 100 + entryPriority，这里 50 压过勘误的 priority 40）。
+    final ownEntryWins = Dnd5eRules.resolveClassRules(
+      entryId: rebasedClassEntry,
+      classSummary: '法师',
+      structured: const <String, Object?>{
+        'classRules': <String, Object?>{
+          'hitDie': 10,
+          'spellcasting': <String, Object?>{
+            'mode': 'prepared',
+            'ability': 'int',
+            'prepared': <String, int>{'5': 2},
+          },
+        },
+      },
+      overrides: RuleOverrideIndex.fromEntries(campaignEntries, priorities),
+      entryPriority: 50,
+    );
+    expect(
+      ownEntryWins.sourceOf('spellcasting.prepared')!.originId,
+      'base:class/wizard',
+      reason: '自身条目 originId 也是规范 id；entryPriority 压过勘误的 priority 40',
+    );
+    expect(
+      ownEntryWins.sourceOf('spellcasting.prepared')!.tier,
+      kEntryTier + 50,
+    );
   });
 
   test('本地装配下同一份优先级表给出同一个 tier（前缀不改变结论）', () async {

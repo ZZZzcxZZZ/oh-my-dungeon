@@ -1,4 +1,5 @@
 // S3 决策 D6：角色对"跨包规则覆盖"的选择的**唯一**读取 / 写入实现。
+import '../../content/domain/content_entry_id.dart';
 import '../../rules/domain/rule_override_declaration.dart';
 import '../../rules/domain/rule_override_priority.dart';
 import 'character.dart';
@@ -32,9 +33,17 @@ class CharacterRuleOverrides {
   /// `TypeError` 并让整张角色卡打不开。
   static CharacterRuleOverrides fromData(Object? raw) {
     if (raw is! Map) return empty;
+    // 读入就把 id 归一化：老数据里可能存着战役视图的 `local:` / `campaign:<cid>:`
+    // 前缀，归一化后同一份选择在两个视图下都生效（写入侧同样只存规范 id）。
     return CharacterRuleOverrides(
-      disabledOriginIds: _stringSet(raw['disabledOriginIds']),
-      pinned: _stringMap(raw['pinned']),
+      disabledOriginIds: <String>{
+        for (final id in _stringSet(raw['disabledOriginIds']))
+          canonicalContentEntryId(id),
+      },
+      pinned: <String, String>{
+        for (final entry in _stringMap(raw['pinned']).entries)
+          entry.key: canonicalContentEntryId(entry.value),
+      },
     );
   }
 
@@ -66,7 +75,7 @@ class CharacterRuleOverrides {
 
   /// 关闭一个覆盖来源（幂等）。[originId] 可以是条目 id 或包 id。
   CharacterRuleOverrides disable(String originId) {
-    final trimmed = originId.trim();
+    final trimmed = canonicalContentEntryId(originId);
     if (trimmed.isEmpty) return this;
     return CharacterRuleOverrides(
       disabledOriginIds: <String>{...disabledOriginIds, trimmed},
@@ -77,20 +86,19 @@ class CharacterRuleOverrides {
   /// 重新打开（幂等）：无论传的是条目 id 还是包 id，都清掉该来源（含它所属包的
   /// 全部条目）的禁用记录。
   CharacterRuleOverrides enable(String originId) => CharacterRuleOverrides(
-    disabledOriginIds: <String>{...disabledOriginIds}
-      ..removeWhere(
-        (value) =>
-            value == originId ||
-            value == _packageId(originId) ||
-            _packageId(value) == originId,
-      ),
+    disabledOriginIds: <String>{...disabledOriginIds}..removeWhere(
+      (value) =>
+          value == canonicalContentEntryId(originId) ||
+          value == _packageId(canonicalContentEntryId(originId)) ||
+          _packageId(value) == canonicalContentEntryId(originId),
+    ),
     pinned: pinned,
   );
 
   /// 为某一列显式选定来源（冲突选择的落库形状）。
   CharacterRuleOverrides pin(String field, String originId) {
     final trimmedField = field.trim();
-    final trimmedOrigin = originId.trim();
+    final trimmedOrigin = canonicalContentEntryId(originId);
     if (trimmedField.isEmpty || trimmedOrigin.isEmpty) return this;
     return CharacterRuleOverrides(
       disabledOriginIds: disabledOriginIds,

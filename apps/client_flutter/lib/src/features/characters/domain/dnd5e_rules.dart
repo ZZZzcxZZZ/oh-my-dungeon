@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
+import '../../content/domain/content_entry_id.dart';
 import '../../rules/domain/class_rule_set.dart';
 import '../../rules/domain/rule_diagnostic.dart';
 import '../../rules/domain/rule_math.dart' as rule_math;
@@ -292,7 +293,13 @@ class Dnd5eRules {
     Set<String> disabledOriginIds = const <String>{},
     Map<String, String> pinnedOrigins = const <String, String>{},
   }) {
-    final slug = _slugFor(entryId: entryId, classSummary: classSummary);
+    // **规范 id 的唯一入口**：战役视图的条目 id 带 `local:` / `campaign:<cid>:` 前缀，
+    // 而来源快照、覆盖匹配（disabled / pinned）与角色自身条目身份都必须跨视图一致。
+    // 规则层保持纯净（不认识传输前缀），因此归一化只在本入口做一次。
+    final canonicalEntryId = entryId == null
+        ? null
+        : canonicalContentEntryId(entryId);
+    final slug = _slugFor(entryId: canonicalEntryId, classSummary: classSummary);
     final rawClassRules = structured['classRules'];
     final entryRules = rawClassRules is Map
         ? ClassRuleSet.parse(
@@ -308,9 +315,9 @@ class Dnd5eRules {
       profile: profile,
       slug: slug,
       entryRules: entryRules,
-      entryId: entryId,
+      entryId: canonicalEntryId,
       declarations:
-          overrides?.declarationsFor(slug, excludeEntryId: entryId) ??
+          overrides?.declarationsFor(slug, excludeEntryId: canonicalEntryId) ??
           const <RuleOverrideDeclaration>[],
       entryPriority: entryPriority,
       disabledOriginIds: disabledOriginIds,

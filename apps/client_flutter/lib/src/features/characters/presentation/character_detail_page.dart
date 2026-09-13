@@ -11,6 +11,7 @@ import '../domain/character_override_resolver.dart';
 import '../domain/character_profile.dart';
 import '../domain/character_quick_edit_service.dart';
 import '../domain/character_rule_overrides.dart';
+import '../../content/domain/content_entry_id.dart';
 import '../domain/recorded_rule_choices.dart';
 import '../domain/declared_levels.dart';
 import '../domain/rule_override_index.dart';
@@ -156,9 +157,12 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
   Map<String, String> _originLabels() {
     final labels = <String, String>{kBuiltinOriginId: '内置档案'};
     for (final entry in widget.contentEntries) {
-      final packageId = RuleOverrideDeclaration.packageIdOf(entry.id);
+      // 键用**规范 id**（剥掉战役视图的传输前缀），与来源快照 / 冲突里的
+      // originId 同一口径，否则战役视图下标签会退回裸 id。
+      final canonicalId = canonicalContentEntryId(entry.id);
+      final packageId = RuleOverrideDeclaration.packageIdOf(canonicalId);
       final packageName = widget.packageNames[packageId];
-      labels[entry.id] = packageName == null || packageName.isEmpty
+      labels[canonicalId] = packageName == null || packageName.isEmpty
           ? entry.name
           : '$packageName · ${entry.name}';
     }
@@ -186,7 +190,10 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
   String? _entryOriginId() {
     final identity = _character.dataMap['classIdentity'];
     final entryId = identity is Map ? identity['entryId'] : null;
-    return entryId is String && entryId.trim().isNotEmpty ? entryId : null;
+    if (entryId is! String || entryId.trim().isEmpty) return null;
+    // 规范 id：来源快照里的 originId 已归一化（角色自身条目不显示关闭按钮，
+    // 这个比较必须与它同一口径，否则战役视图下会显示一个点了没反应的按钮）。
+    return canonicalContentEntryId(entryId);
   }
 
   /// 关闭某条覆盖并**重新派生**（唯一实现）：写 `data.ruleOverrides` → 通知上层

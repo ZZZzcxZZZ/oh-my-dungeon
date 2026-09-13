@@ -1,5 +1,6 @@
 // S3 决策 D3：跨包职业规则声明的索引（对齐键 = 条目 id 末段，与内置档案同一套）。
 import '../../content/domain/content_entry.dart';
+import '../../content/domain/content_entry_id.dart';
 import '../../rules/domain/class_rule_set.dart';
 import '../../rules/domain/rule_diagnostic.dart';
 import '../../rules/domain/rule_override_declaration.dart';
@@ -49,14 +50,18 @@ class RuleOverrideIndex {
       } catch (_) {
         continue;
       }
-      final packageId = RuleOverrideDeclaration.packageIdOf(entry.id);
+      // 统一到**规范 id**：战役视图的条目 id 带 `local:` / `campaign:<cid>:` 前缀，
+      // 而用户的覆盖选择与角色自身条目身份必须跨视图一致（`canonicalContentEntryId`
+      // 是唯一实现）。
+      final canonicalId = canonicalContentEntryId(entry.id);
+      final packageId = RuleOverrideDeclaration.packageIdOf(canonicalId);
       (bySlug[slug] ??= <RuleOverrideDeclaration>[]).add(
         RuleOverrideDeclaration.package(
-          originId: entry.id,
+          originId: canonicalId,
           packageId: packageId,
           priority: packagePriorities[packageId] ?? 0,
           rules: rules,
-          entryId: entry.id,
+          entryId: canonicalId,
         ),
       );
     }

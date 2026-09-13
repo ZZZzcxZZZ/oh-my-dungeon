@@ -462,6 +462,11 @@ class RuleFieldSource {
 - **跨包声明按对齐键分组**：`RuleOverrideIndex` 从已启用包的 `class` 条目 + 包优先级构建，
   因此一个包可以给"已指向别的包条目"的角色打勘误。不做全局条目扫描（仍然只有对齐键相等的
   条目参与）。
+- **id 口径**：声明的 `originId`、来源快照与用户的覆盖选择（`disabledOriginIds` / `pinned`）
+  一律用**规范 id**——战役视图的条目 id 带 `local:` / `campaign:<campaignId>:` 传输前缀
+  （`CampaignAwareContentRepository`），归一化只在 `canonicalContentEntryId` 一处，且
+  `Dnd5eRules.resolveClassRules` 是唯一入口。这样同一角色在本地与战役两个视图下的覆盖
+  匹配、来源标签与自身条目判定完全一致。
 
 ### 3.9 无兼容层：旧契约不读取，提取器同步重写
 

@@ -3,8 +3,10 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import '../../rules/domain/class_rule_set.dart';
 import '../../rules/domain/rule_diagnostic.dart';
 import '../../rules/domain/rule_math.dart' as rule_math;
+import '../../rules/domain/rule_override_declaration.dart';
 import '../../rules/domain/rule_profile.dart';
 import '../../rules/domain/rule_profile_resolver.dart';
+import 'rule_override_index.dart';
 
 /// D&D 5e (2024) 规则查询门面。
 ///
@@ -269,15 +271,26 @@ class Dnd5eRules {
 
   // ── 职业规则解析（唯一的职业身份入口） ──
 
-  /// 由一个职业条目解析出的规则形态（条目声明 ∪ 内置档案，条目优先）。
+  /// 由角色所用职业条目 + 跨包声明解析出的规则形态（§3.6、S3 决策 D2/D3/D4/D6）。
   ///
   /// `classSummary` 只用于**过渡期**把老角色的散文展示名解析成 slug
   /// （见 [_slugFor]）；条目身份以 [entryId] 为准，规则判断只认解析出的 slug。
+  ///
+  /// [overrides] 是"已启用包的 class 条目 + 包优先级"的索引（决策 D3）：解析器
+  /// 按对齐键（条目 id 末段）合并其它包的补丁 / 勘误声明。[entryPriority] 是角色
+  /// **自己那条**条目所属包的 priority——它与 [overrides] 里的声明参与**同一套**
+  /// tier 排序（否则角色自己的条目恒为 tier 100，会被 priority 更低的勘误压过）。
+  ///
+  /// 所有新参数都有默认值：既有调用点（只用角色自身条目 vs 档案）原样编译且行为不变。
   static ResolvedClassRules resolveClassRules({
     required String? entryId,
     required String classSummary,
     Map<String, Object?> structured = const <String, Object?>{},
     List<RuleDiagnostic>? diagnostics,
+    RuleOverrideIndex? overrides,
+    int entryPriority = 0,
+    Set<String> disabledOriginIds = const <String>{},
+    Map<String, String> pinnedOrigins = const <String, String>{},
   }) {
     final slug = _slugFor(entryId: entryId, classSummary: classSummary);
     final rawClassRules = structured['classRules'];
@@ -296,6 +309,12 @@ class Dnd5eRules {
       slug: slug,
       entryRules: entryRules,
       entryId: entryId,
+      declarations:
+          overrides?.declarationsFor(slug, excludeEntryId: entryId) ??
+          const <RuleOverrideDeclaration>[],
+      entryPriority: entryPriority,
+      disabledOriginIds: disabledOriginIds,
+      pinnedOrigins: pinnedOrigins,
     );
   }
 

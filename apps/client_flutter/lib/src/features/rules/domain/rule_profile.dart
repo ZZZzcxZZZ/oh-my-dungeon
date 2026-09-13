@@ -7,6 +7,7 @@
 //   因此没有原型回退路径。
 // - `maxSpellLevel`：自身表 → 原型表 → null。
 import 'class_rule_set.dart';
+import 'rule_override_conflict.dart';
 import 'rule_values.dart';
 
 /// 内置档案的来源 id（tier 0）。条目声明的来源是条目 id（tier 100，§3.7、§3.8）。
@@ -164,6 +165,7 @@ class ResolvedClassRules {
     this.spellcasting,
     this.resources = const [],
     this.fieldSources = const {},
+    this.conflicts = const <RuleOverrideConflict>[],
     this.archetype,
     this.entryRules,
     this.archiveRules,
@@ -175,6 +177,10 @@ class ResolvedClassRules {
   final List<ClassResourceRule> resources;
   final ClassProgression? archetype;
   final Map<String, RuleFieldSource> fieldSources;
+
+  /// 同 tier 多来源抢同一列的记录（决策 D6）：去重后按字段路径升序。
+  /// 空表示没有冲突；非空由角色页提示并由用户选择（`CharacterRuleOverrides.pinned`）。
+  final List<RuleOverrideConflict> conflicts;
 
   /// 该列最终取自哪里（契约 §3.7；键是 [RuleFieldPath] 的字段路径）。
   /// 未声明 / 未记录时返回 null（**不猜**，界面据此显示"来源未知"）。

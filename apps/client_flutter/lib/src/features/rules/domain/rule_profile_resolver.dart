@@ -13,6 +13,7 @@
 import 'class_rule_set.dart';
 import 'rule_diagnostic.dart';
 import 'rule_field_path.dart';
+import 'rule_override_conflict.dart';
 import 'rule_override_declaration.dart';
 import 'rule_override_priority.dart';
 import 'rule_profile.dart';
@@ -652,42 +653,76 @@ abstract final class RuleProfileResolver {
     );
   }
 
-  /// 条目声明 ∪ 档案（条目优先，**顶层字段 + 列级**，§3.6、§3.7、§3.8、S3 决策 D5）。
+  /// 多条职业声明 ∪ 内置档案的合并（**顶层字段 + 列级 + 表列逐级**，§3.6、§3.7、
+  /// §3.8、S3 决策 D2/D4/D5/D6）。
   ///
-  /// 合并顺序在代码与注释里写死：**先做 tier 之间（条目 vs 档案）的逐列 / 逐级
-  /// 合并**，得到该职业自身的各列；**之后**才由 [ResolvedClassRules] 按 §3.3 决定
-  /// "该列在某个等级未声明时是否回退 `archetype`"。两级关系不混在一起。
+  /// 合并顺序在代码与注释里写死：
+  /// 1. 组装**包声明层**（角色自身条目 + [declarations]），按 [RuleOverrideOrder]
+  ///    排序（tier 降序 → replace 优先 → 角色自身条目优先 → originId 升序）；
+  /// 2. 应用用户 pin（显式选择，语义上高于 priority）；
+  /// 3. 追加内置档案（tier 0）后统一做 `replace` 截断（D4，唯一实现在
+  ///    [RuleOverrideOrder.truncate]）——只有这样，更高 tier 的 replace 才能把
+  ///    索引里更低 tier 的包声明与档案一起截掉；
+  /// 4. 逐列 / 逐级取值，并登记同 tier 多来源冲突（D6）。
+  ///
+  /// **之后**才由 [ResolvedClassRules] 按 §3.3 决定"该列在某个等级未声明时是否
+  /// 回退 `archetype`"。两级关系不混在一起。
+  ///
+  /// 所有参数都有默认值：既有调用点（角色自身条目 vs 档案）原样编译且行为不变。
   static ResolvedClassRules resolveClassRules({
     required RuleProfile profile,
     required String slug,
     required ClassRuleSet? entryRules,
     String? entryId,
+    List<RuleOverrideDeclaration> declarations =
+        const <RuleOverrideDeclaration>[],
+    int entryPriority = 0,
+    String? characterEntryId,
+    Set<String> disabledOriginIds = const <String>{},
+    Map<String, String> pinnedOrigins = const <String, String>{},
   }) {
     final fromArchive = profile.classRules(slug);
     final entryOrigin = entryId ?? '<entry>';
     final sources = <String, RuleFieldSource>{};
+    final conflicts = <RuleOverrideConflict>[];
 
-    final entry = entryRules == null
-        ? null
-        : RuleOverrideDeclaration.package(
-            originId: entryOrigin,
-            packageId: RuleOverrideDeclaration.packageIdOf(entryOrigin),
-            entryId: entryId,
-            rules: entryRules,
-          );
-    final archive = fromArchive == null
-        ? null
-        : RuleOverrideDeclaration.builtin(fromArchive);
-    // 排序 + `replace` 截断的唯一实现在 RuleOverrideOrder（决策 D1/D4/D6），
-    // 解析器不再自己写第二处 sort。
-    final ordered = RuleOverrideOrder.effective(
-      <RuleOverrideDeclaration>[?entry, ?archive],
-      characterEntryId: entryId,
+    // 1) 包声明层：角色自己的职业条目 + 索引里的其它包声明。内置档案不在这里，
+    //    它由第 3 步追加，才能被 replace 一起截断。
+    final packages = <RuleOverrideDeclaration>[
+      if (entryRules != null)
+        RuleOverrideDeclaration.package(
+          originId: entryOrigin,
+          packageId: RuleOverrideDeclaration.packageIdOf(entryOrigin),
+          priority: entryPriority,
+          rules: entryRules,
+          entryId: entryId,
+        ),
+      for (final declaration in declarations)
+        // 关闭覆盖（决策 D6 / 任务 10）：条目 id 或包 id 命中都算"关掉整个包"。
+        // 角色自己的条目不是"覆盖"，不受这个开关影响。
+        if (!disabledOriginIds.contains(declaration.originId) &&
+            !disabledOriginIds.contains(declaration.packageId) &&
+            declaration.originId != entryId)
+          declaration,
+    ];
+
+    // 2) 排序 + 用户 pin 的唯一入口；解析器不自己写第二处 sort。
+    final ranked = RuleOverrideOrder.ordered(
+      packages,
+      characterEntryId: characterEntryId ?? entryId,
     );
+    final pinnedRanked = _applyPinned(ranked, pinnedOrigins);
+
+    // 3) 追加内置档案并按 D4 统一截断（截断逻辑只有 RuleOverrideOrder.truncate 一处）。
+    final ordered = RuleOverrideOrder.truncate(<RuleOverrideDeclaration>[
+      ...pinnedRanked,
+      if (fromArchive != null) RuleOverrideDeclaration.builtin(fromArchive),
+    ]);
 
     final spellcasting = _mergeSpellcasting(
       declarations: ordered,
       sources: sources,
+      conflicts: conflicts,
     );
     // 声明范围（§3.12）的唯一口径在 ResolvedClassRules 里：合并后实际生效的
     // 条目各表 ∪ 档案各表。档案侧**只在合并链里确实还贡献列**时才并入——
@@ -702,6 +737,7 @@ abstract final class RuleProfileResolver {
         declares: (rules) => rules.declares('hitDie'),
         read: (rules) => rules.hitDie,
         sources: sources,
+        conflicts: conflicts,
       ).value,
       savingThrowAbilities:
           _pickColumn<Set<String>>(
@@ -710,15 +746,53 @@ abstract final class RuleProfileResolver {
             declares: (rules) => rules.declares('savingThrowAbilities'),
             read: (rules) => rules.savingThrowAbilities,
             sources: sources,
+            conflicts: conflicts,
           ).value ??
           const {},
       spellcasting: spellcasting,
-      resources: _mergeResources(declarations: ordered, sources: sources),
+      resources: _mergeResources(
+        declarations: ordered,
+        sources: sources,
+        conflicts: conflicts,
+      ),
       archetype: profile.progression(spellcasting?.archetype),
       fieldSources: sources,
+      conflicts: _dedupeConflicts(conflicts),
       entryRules: entryRules,
       archiveRules: declaredArchiveRules,
     );
+  }
+
+  /// 用户 pin 的来源整体提前（唯一实现）。pin 的键是列路径、值是来源 id；
+  /// 只影响**该列**，但把"在任意 pinned 列上被选中的来源"整体提前是安全的：
+  /// 列级取值只认"声明了该列"的第一个声明，未声明该列的 pinned 来源不会抢占
+  /// 别的列。pin 是用户的显式选择，语义上高于 priority。
+  static List<RuleOverrideDeclaration> _applyPinned(
+    List<RuleOverrideDeclaration> ranked,
+    Map<String, String> pinnedOrigins,
+  ) {
+    if (pinnedOrigins.isEmpty) return ranked;
+    final pinned = pinnedOrigins.values.toSet();
+    return List<RuleOverrideDeclaration>.unmodifiable(<RuleOverrideDeclaration>[
+      for (final declaration in ranked)
+        if (pinned.contains(declaration.originId)) declaration,
+      for (final declaration in ranked)
+        if (!pinned.contains(declaration.originId)) declaration,
+    ]);
+  }
+
+  /// 冲突去重 + 按字段路径升序（同一列只会命中一次 [_recordConflict]，去重是防御）。
+  static List<RuleOverrideConflict> _dedupeConflicts(
+    List<RuleOverrideConflict> conflicts,
+  ) {
+    final byField = <String, RuleOverrideConflict>{};
+    for (final conflict in conflicts) {
+      byField.putIfAbsent(conflict.field, () => conflict);
+    }
+    final fields = byField.keys.toList()..sort();
+    return List<RuleOverrideConflict>.unmodifiable(<RuleOverrideConflict>[
+      for (final field in fields) byField[field]!,
+    ]);
   }
 }
 
@@ -726,26 +800,28 @@ abstract final class RuleProfileResolver {
 /// `spellcasting.mode|ability|listTags|archetype` / `resources` 的合键等）。
 ///
 /// [declarations] 必须已按优先级**从高到低**排好（排序的唯一实现在
-/// `RuleOverrideOrder.effective`，本文件不排序）。取"第一个声明过该列"的声明的值
+/// `RuleOverrideOrder.ordered`，本文件不排序）。取"第一个声明过该列"的声明的值
 /// 即生效值；全都未声明 → `(value: null)`。
 /// **显式 null 也算声明**（`archetype: null` = 清空该列），因此判据只看
 /// `declares`，绝不看"值是否为 null"。
+/// 同 tier 多来源抢同一列时由 [_recordConflict] 如实登记（决策 D6）。
 _ColumnPick<T> _pickColumn<T>({
   required String field,
   required List<RuleOverrideDeclaration> declarations,
   required bool Function(ClassRuleSet rules) declares,
   required T? Function(ClassRuleSet rules) read,
   required Map<String, RuleFieldSource> sources,
+  required List<RuleOverrideConflict> conflicts,
 }) {
-  for (final declaration in declarations) {
-    if (!declares(declaration.rules)) continue;
-    _writeSource(sources, field, declaration.originId, declaration.tier);
-    return _ColumnPick(
-      value: read(declaration.rules),
-      originId: declaration.originId,
-    );
-  }
-  return const _ColumnPick(value: null, originId: null);
+  final declaring = <RuleOverrideDeclaration>[
+    for (final declaration in declarations)
+      if (declares(declaration.rules)) declaration,
+  ];
+  _recordConflict(field, declaring, conflicts);
+  if (declaring.isEmpty) return const _ColumnPick(value: null, originId: null);
+  final winner = declaring.first;
+  _writeSource(sources, field, winner.originId, winner.tier);
+  return _ColumnPick(value: read(winner.rules), originId: winner.originId);
 }
 
 /// `Table<T>` 列的取值 + 来源（决策 D5）：值走 [mergeRuleTableLevels]（逐级合并的
@@ -753,23 +829,56 @@ _ColumnPick<T> _pickColumn<T>({
 ///
 /// 逐级的来源细节（"1..19 级来自档案、20 级来自条目"）不在本批次：§3.7 的来源粒度
 /// 是列，`RuleFieldPath` 也没有等级维度。列级来源 = 该列的最高 tier 声明者。
+///
+/// 同 tier 多来源声明同一表列时同样登记冲突（D6）：逐级合并取排序首位声明的等级，
+/// 但"另一个同 tier 来源也声明了这列"必须让用户看见。
 Map<int, T> _pickTableColumn<T>({
   required String field,
   required List<RuleOverrideDeclaration> declarations,
   required bool Function(ClassRuleSet rules) declares,
   required T? Function(ClassRuleSet rules, int level) read,
   required Map<String, RuleFieldSource> sources,
+  required List<RuleOverrideConflict> conflicts,
 }) {
-  final readers = <T? Function(int level)>[];
-  RuleOverrideDeclaration? owner;
-  for (final declaration in declarations) {
-    if (!declares(declaration.rules)) continue;
-    owner ??= declaration;
-    readers.add((level) => read(declaration.rules, level));
-  }
-  if (owner == null) return const {};
+  final declaring = <RuleOverrideDeclaration>[
+    for (final declaration in declarations)
+      if (declares(declaration.rules)) declaration,
+  ];
+  _recordConflict(field, declaring, conflicts);
+  if (declaring.isEmpty) return const {};
+  final owner = declaring.first;
   _writeSource(sources, field, owner.originId, owner.tier);
-  return mergeRuleTableLevels<T>(readers);
+  return mergeRuleTableLevels<T>([
+    for (final declaration in declaring)
+      (level) => read(declaration.rules, level),
+  ]);
+}
+
+/// 同 tier 多来源抢同一列的**唯一**登记点（决策 D6）。
+///
+/// [declaring] 必须已按优先级从高到低排好（[RuleOverrideOrder.ordered]）。生效值
+/// 是排序首位（可复现：等价于包 id 字典序**最小**者），但其余同 tier 来源必须如实
+/// 记录，不许静默丢弃；**不同 tier 只是覆盖，不是冲突**。
+void _recordConflict(
+  String field,
+  List<RuleOverrideDeclaration> declaring,
+  List<RuleOverrideConflict> conflicts,
+) {
+  if (declaring.isEmpty) return;
+  final tier = declaring.first.tier;
+  final sameTierOrigins = <String>[
+    for (final declaration in declaring)
+      if (declaration.tier == tier) declaration.originId,
+  ];
+  if (sameTierOrigins.length < 2) return;
+  conflicts.add(
+    RuleOverrideConflict(
+      field: field,
+      tier: tier,
+      originIds: List<String>.unmodifiable(sameTierOrigins),
+      effectiveOriginId: declaring.first.originId,
+    ),
+  );
 }
 
 class _ColumnPick<T> {
@@ -789,9 +898,9 @@ void _writeSource(
   sources[field] = RuleFieldSource(field: field, originId: originId, tier: tier);
 }
 
-/// tier 之间（条目 vs 档案）的 `spellcasting` 列级 + 表列逐级合并（§3.6、D5）。
+/// 按优先级排好的多条声明之间的 `spellcasting` 列级 + 表列逐级合并（§3.6、D5）。
 ///
-/// - 双方都没有 `spellcasting` → null（不产生来源）；
+/// - 所有声明都没有 `spellcasting` → null（不产生来源）；
 /// - 标量列逐列取"高优先级且声明过该列"的一侧（`mode` / `ability` / `listTags` /
 ///   `archetype`）；
 /// - 表列（`slots` / `slotLevel` / `prepared` / `cantrips` / `maximumSpellLevel`）
@@ -802,6 +911,7 @@ void _writeSource(
 ClassSpellcasting? _mergeSpellcasting({
   required List<RuleOverrideDeclaration> declarations,
   required Map<String, RuleFieldSource> sources,
+  required List<RuleOverrideConflict> conflicts,
 }) {
   ClassSpellcasting? spellcastingOf(ClassRuleSet rules) => rules.spellcasting;
   bool declaresColumn(ClassRuleSet rules, String column) =>
@@ -820,6 +930,7 @@ ClassSpellcasting? _mergeSpellcasting({
         declares: (rules) => declaresColumn(rules, name),
         read: (rules) => read(spellcastingOf(rules)!),
         sources: sources,
+        conflicts: conflicts,
       ).value;
 
   IntTable? intTable(String name, IntTable? Function(ClassSpellcasting) read) =>
@@ -830,6 +941,7 @@ ClassSpellcasting? _mergeSpellcasting({
           declares: (rules) => declaresColumn(rules, name),
           read: (rules, level) => read(spellcastingOf(rules)!)?.at(level),
           sources: sources,
+          conflicts: conflicts,
         ),
       );
 
@@ -839,6 +951,7 @@ ClassSpellcasting? _mergeSpellcasting({
     declares: (rules) => declaresColumn(rules, 'slots'),
     read: (rules, level) => spellcastingOf(rules)!.slots?.at(level),
     sources: sources,
+    conflicts: conflicts,
   );
 
   return ClassSpellcasting(
@@ -861,7 +974,7 @@ ClassSpellcasting? _mergeSpellcasting({
   );
 }
 
-/// tier 之间（条目 vs 档案）的 `resources` 合并（§3.4、§3.6 + 决策 D5）：
+/// 按优先级排好的多条声明之间的 `resources` 合并（§3.4、§3.6 + 决策 D5）：
 /// **按 `id` 合**，同 `id` 再按列。
 ///
 /// - `id` 的出现顺序按"优先级从高到低"稳定排列（高 tier 新增的资源排在前面）；
@@ -881,6 +994,7 @@ ClassSpellcasting? _mergeSpellcasting({
 List<ClassResourceRule> _mergeResources({
   required List<RuleOverrideDeclaration> declarations,
   required Map<String, RuleFieldSource> sources,
+  required List<RuleOverrideConflict> conflicts,
 }) {
   final ids = <String>[];
   for (final declaration in declarations) {
@@ -901,6 +1015,7 @@ List<ClassResourceRule> _mergeResources({
           declares: (rules) => declares(rules, name),
           read: (rules) => read(_resourceOf(rules, id)!),
           sources: sources,
+          conflicts: conflicts,
         ).value;
 
     // 常量形态与表形态是**同一条来源路径**（§3.4 的双表示歧义）：两者必须
@@ -914,6 +1029,7 @@ List<ClassResourceRule> _mergeResources({
         return (constant: rule.recovery, table: rule.recoveryTable);
       },
       sources: sources,
+      conflicts: conflicts,
     ).value;
 
     // `description` 没有数值语义：取最高 tier 声明的非空值，**不记来源**。
@@ -934,6 +1050,7 @@ List<ClassResourceRule> _mergeResources({
           id: id,
           declarations: declarations,
           sources: sources,
+          conflicts: conflicts,
         ),
         recovery: recovery?.constant,
         recoveryTable: recovery?.table,
@@ -975,6 +1092,7 @@ MaxSpec? _mergeResourceMaximum({
   required String id,
   required List<RuleOverrideDeclaration> declarations,
   required Map<String, RuleFieldSource> sources,
+  required List<RuleOverrideConflict> conflicts,
 }) {
   final field = RuleFieldPath.resource(id, 'maximum');
   final contributors = <RuleOverrideDeclaration>[];
@@ -984,6 +1102,8 @@ MaxSpec? _mergeResourceMaximum({
     contributors.add(declaration);
   }
   if (contributors.isEmpty) return null;
+  // 同 tier 多来源抢 `maximum` 也如实登记（D6）；生效值仍是排序首位 + 逐级回退。
+  _recordConflict(field, contributors, conflicts);
   final owner = contributors.first;
   _writeSource(sources, field, owner.originId, owner.tier);
 

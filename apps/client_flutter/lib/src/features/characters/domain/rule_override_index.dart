@@ -63,17 +63,23 @@ class RuleOverrideIndex {
     return RuleOverrideIndex(bySlug);
   }
 
-  /// 该对齐键上的**其它**包声明（已按优先级从高到低排好、已做 `replace` 截断）。
+  /// 该对齐键上的**其它**包声明（已按优先级从高到低排好，**未做 `replace` 截断**）。
+  ///
+  /// 截断必须由调用方在"合入角色自身条目 / 内置档案"之后统一做
+  /// （`RuleOverrideOrder.truncate`）：在这里先截断会漏掉"更高 tier 的 replace
+  /// 截掉本索引 + 档案"的场景。
+  ///
+  /// [excludeEntryId] 是角色自己的条目（它由调用方作为 `entryRules` 传入，避免同一
+  /// 来源出现两次）。**这里不再传 `characterEntryId` 给排序**：排除之后那个
+  /// "角色自己的条目优先"的 tie-break 永远不可能触发，是死参；tie-break 由解析器
+  /// 在合入自身条目后统一处理。
   List<RuleOverrideDeclaration> declarationsFor(
     String slug, {
     String? excludeEntryId,
-  }) {
-    final all = _bySlug[slug.trim().toLowerCase()] ?? const [];
-    return RuleOverrideOrder.effective(
-      all.where((d) => d.originId != excludeEntryId),
-      characterEntryId: excludeEntryId,
-    );
-  }
+  }) => RuleOverrideOrder.ordered(
+    (_bySlug[slug.trim().toLowerCase()] ?? const <RuleOverrideDeclaration>[])
+        .where((declaration) => declaration.originId != excludeEntryId),
+  );
 
   /// 对齐键 = 条目 id 末段（与运行期继承内置数值的键**同源**）。
   static String _alignmentKeyOf(String entryId) {

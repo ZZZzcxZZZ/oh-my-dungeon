@@ -843,6 +843,210 @@ void main() {
       expect(submitted!.skills['察觉'], isTrue);
     });
   });
+
+  // S3 任务 8：真实导入器 + Builder 的多声明端到端（决策 D2/D4/D5/D6）。
+  group('多声明合并端到端（S3 任务 8）', () {
+    test('replace + 高 priority 勘误：档案被截断、勘误生效，来源/冲突落库', () async {
+      final entries = await _importSyntheticPackages([
+        (
+          id: 'base-pack',
+          entries: [
+            _classEntryJson(
+              packageId: 'base-pack',
+              slug: 'wizard',
+              classRules: const {
+                'mode': 'replace',
+                'hitDie': 6,
+                'spellcasting': {'mode': 'prepared', 'ability': 'int'},
+              },
+            ),
+          ],
+        ),
+        (
+          id: 'errata-pack',
+          entries: [
+            _classEntryJson(
+              packageId: 'errata-pack',
+              slug: 'wizard',
+              classRules: const {
+                'spellcasting': {
+                  'prepared': {'5': 9},
+                },
+              },
+            ),
+          ],
+        ),
+      ]);
+
+      final draft = RulesDrivenCharacterBuilder(
+        entries: entries,
+        packagePriorities: const <String, int>{'errata-pack': 40},
+      ).build(
+        name: '勘误试炼者',
+        build: const CharacterBuild(
+          level: 5,
+          selections: {'class': 'base-pack:class/wizard'},
+        ),
+        abilities: _sampleAbilities,
+      );
+
+      // 勘误 tier 140 > 条目 tier 100：prepared 5 级 = 9。
+      expect(draft.data['preparedSpellLimit'], 9);
+      // replace（D4）：档案 wizard 5 级本有 slots，这里必须"未声明"而不是回退档案。
+      expect(
+        draft.data.containsKey('spellSlots'),
+        isFalse,
+        reason: 'replace 独占：更低 tier 的档案不提供任何列',
+      );
+      final sources = draft.data['classRuleSources']! as Map;
+      expect(
+        ((sources['spellcasting.prepared']! as Map)['originId']),
+        'errata-pack:class/wizard',
+      );
+      expect((sources['spellcasting.prepared']! as Map)['tier'], 140);
+      expect(
+        (sources['hitDie']! as Map)['originId'],
+        'base-pack:class/wizard',
+        reason: 'hitDie 仍来自 replace 条目自身',
+      );
+      expect(draft.data['classRuleConflicts'], isEmpty, reason: '不同 tier 不算冲突');
+    });
+
+    test('角色自身条目按包 priority 参与排序（entryPriority 传递链）', () async {
+      final entries = await _importSyntheticPackages([
+        (
+          id: 'base-pack',
+          entries: [
+            _classEntryJson(
+              packageId: 'base-pack',
+              slug: 'wizard',
+              classRules: const {
+                'spellcasting': {
+                  'mode': 'prepared',
+                  // `mode != none` 时 `ability` 必填（契约 §3.3 / §5）；
+                  // 缺了它导入器直接报 unknownAbility，包根本进不来。
+                  'ability': 'int',
+                  'prepared': {'5': 7},
+                },
+              },
+            ),
+          ],
+        ),
+        (
+          id: 'errata-pack',
+          entries: [
+            _classEntryJson(
+              packageId: 'errata-pack',
+              slug: 'wizard',
+              classRules: const {
+                'spellcasting': {
+                  'prepared': {'5': 9},
+                },
+              },
+            ),
+          ],
+        ),
+      ]);
+
+      // 角色自己的包 priority 50 > 勘误包 40：自己那条必须赢。旧实现里
+      // `resolveClassRules` 不传 entryPriority，角色自身条目恒 tier 100 会被压过。
+      final draft = RulesDrivenCharacterBuilder(
+        entries: entries,
+        packagePriorities: const <String, int>{
+          'base-pack': 50,
+          'errata-pack': 40,
+        },
+      ).build(
+        name: '优先试炼者',
+        build: const CharacterBuild(
+          level: 5,
+          selections: {'class': 'base-pack:class/wizard'},
+        ),
+        abilities: _sampleAbilities,
+      );
+
+      expect(draft.data['preparedSpellLimit'], 7, reason: 'entryPriority 50 胜出');
+      final sources = draft.data['classRuleSources']! as Map;
+      expect(
+        ((sources['spellcasting.prepared']! as Map)['originId']),
+        'base-pack:class/wizard',
+      );
+      expect((sources['spellcasting.prepared']! as Map)['tier'], 150);
+      expect(draft.data['classRuleConflicts'], isEmpty);
+    });
+
+    test('同 tier 两包抢同一列：冲突落库，取值按包 id 字典序确定性回退', () async {
+      final entries = await _importSyntheticPackages([
+        (
+          id: 'base-pack',
+          entries: [
+            _classEntryJson(
+              packageId: 'base-pack',
+              slug: 'wizard',
+              classRules: const {
+                // `mode != none` 时 `ability` 必填（契约 §3.3 / §5）：本条只声明
+                // mode（不声明 prepared 表），是"角色自身条目没声明该列"的前提。
+                'spellcasting': {'mode': 'prepared', 'ability': 'int'},
+              },
+            ),
+          ],
+        ),
+        (
+          id: 'zeta-pack',
+          entries: [
+            _classEntryJson(
+              packageId: 'zeta-pack',
+              slug: 'wizard',
+              classRules: const {
+                'spellcasting': {
+                  'prepared': {'5': 11},
+                },
+              },
+            ),
+          ],
+        ),
+        (
+          id: 'alpha-pack',
+          entries: [
+            _classEntryJson(
+              packageId: 'alpha-pack',
+              slug: 'wizard',
+              classRules: const {
+                'spellcasting': {
+                  'prepared': {'5': 9},
+                },
+              },
+            ),
+          ],
+        ),
+      ]);
+
+      final draft = RulesDrivenCharacterBuilder(
+        entries: entries,
+      ).build(
+        name: '冲突试炼者',
+        build: const CharacterBuild(
+          level: 5,
+          selections: {'class': 'base-pack:class/wizard'},
+        ),
+        abilities: _sampleAbilities,
+      );
+
+      // 角色自身条目没声明 prepared：两个外部包同 tier（都是 100），
+      // 确定性回退 = 包 id 字典序最小者（alpha）。
+      expect(draft.data['preparedSpellLimit'], 9);
+      final conflicts = draft.data['classRuleConflicts']! as List;
+      expect(conflicts, hasLength(1));
+      final conflict = Map<String, Object?>.from(conflicts.single as Map);
+      expect(conflict['field'], 'spellcasting.prepared');
+      expect(conflict['tier'], 100);
+      expect(conflict['originIds'], [
+        'alpha-pack:class/wizard',
+        'zeta-pack:class/wizard',
+      ]);
+      expect(conflict['effectiveOriginId'], 'alpha-pack:class/wizard');
+    });
+  });
 }
 
 Future<void> _goToDesktopStep(WidgetTester tester, int index) async {
@@ -938,6 +1142,53 @@ Map<String, Object?> _syntheticClassJson({
   'structured': {'classRules': classRules},
   'rules': rules,
 };
+
+/// 单个 `class` 条目（真实导入器接受的最小形状）；[packageId] 必须与条目 id 前缀一致。
+Map<String, Object?> _classEntryJson({
+  required String packageId,
+  required String slug,
+  required Map<String, Object?> classRules,
+}) => {
+  'id': '$packageId:class/$slug',
+  'type': 'class',
+  'slug': slug,
+  'name': '$slug（$packageId）',
+  'body': <Object?>[],
+  'revision': 1,
+  'structured': {'classRules': classRules},
+};
+
+/// 逐个导入多个合成包（每个包一个 manifest id / 一份 priority），返回合并后的条目表。
+/// 真实 [ContentPackageImporter]：每个包都必须被导入器接受。
+Future<Map<String, ContentEntry>> _importSyntheticPackages(
+  List<({String id, List<Map<String, Object?>> entries})> packages,
+) async {
+  final all = <String, ContentEntry>{};
+  for (final package in packages) {
+    final report = await ContentPackageImporter(MemoryContentRepository())
+        .previewJson(
+          jsonEncode({
+            'formatVersion': 3,
+            'id': package.id,
+            'name': package.id,
+            'version': '1.0.0',
+            'locale': 'zh-CN',
+            'system': 'dnd5e-2024',
+            'entryCount': package.entries.length,
+            'entries': package.entries,
+          }),
+        );
+    expect(
+      report.valid,
+      isTrue,
+      reason: [
+        for (final error in report.errors) '${error.path}: ${error.message}',
+      ].join('; '),
+    );
+    all.addAll({for (final entry in report.entries) entry.id: entry});
+  }
+  return all;
+}
 
 Map<String, Object?> _syntheticFeatureJson(
   String slug,

@@ -37,20 +37,28 @@ abstract final class RuleOverrideOrder {
     return List<RuleOverrideDeclaration>.unmodifiable(sorted);
   }
 
-  /// `replace` 截断（D4）：在 [ordered] 的结果上，第一条 `mode: replace` 之后的
+  /// `replace` 截断（D4）：在**已排序**的链上，第一条 `mode: replace` 之后的
   /// 声明全部丢弃——更低 tier（含内置档案）不再提供任何列 / 等级。
-  static List<RuleOverrideDeclaration> effective(
-    Iterable<RuleOverrideDeclaration> declarations, {
-    String? characterEntryId,
-  }) {
+  ///
+  /// [effective] 是"排序 + 截断"的完整入口；本方法只在调用方需要**先做排序后的
+  /// 调整再截断**时使用（解析器要先应用用户 pin，再追加内置档案统一截断）。
+  /// 截断逻辑本身仍只有这一处实现。
+  static List<RuleOverrideDeclaration> truncate(
+    Iterable<RuleOverrideDeclaration> orderedDeclarations,
+  ) {
     final result = <RuleOverrideDeclaration>[];
-    for (final declaration in ordered(
-      declarations,
-      characterEntryId: characterEntryId,
-    )) {
+    for (final declaration in orderedDeclarations) {
       result.add(declaration);
       if (declaration.rules.mode == ClassMergeMode.replace) break;
     }
     return List<RuleOverrideDeclaration>.unmodifiable(result);
   }
+
+  /// `replace` 截断（D4）：排序后取 [truncate]。
+  static List<RuleOverrideDeclaration> effective(
+    Iterable<RuleOverrideDeclaration> declarations, {
+    String? characterEntryId,
+  }) => truncate(
+    ordered(declarations, characterEntryId: characterEntryId),
+  );
 }

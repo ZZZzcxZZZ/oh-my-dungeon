@@ -4,15 +4,23 @@ import 'character.dart';
 import 'character_content_reference.dart';
 import 'character_manual_overrides.dart';
 import 'character_profile.dart';
+import 'character_rule_overrides.dart';
 import 'declared_levels.dart';
 import 'dnd5e_rules.dart';
 import 'rules_driven_character_builder.dart';
 
 /// Recomputes derived rule snapshots for characters saved before rules existed.
 class CharacterRuleProjector {
-  const CharacterRuleProjector({required this.entries});
+  const CharacterRuleProjector({
+    required this.entries,
+    this.packagePriorities = const <String, int>{},
+  });
 
   final Map<String, ContentEntry> entries;
+
+  /// 包 id → priority（决策 D2）：再派生必须与建档用**同一份**优先级，
+  /// 否则"打开角色页"会把数值改回与建档时不同的结果。缺省空 = 全部 priority 0。
+  final Map<String, int> packagePriorities;
 
   CharacterSheet project(CharacterSheet character) {
     final rawBuild = character.dataMap['build'];
@@ -26,7 +34,16 @@ class CharacterRuleProjector {
       return _withClassIdentity(character);
     }
 
-    final builder = RulesDrivenCharacterBuilder(entries: entries);
+    // S3 决策 D6：用户对覆盖的选择（关闭来源 / pin 某列）从角色数据读**一次**，
+    // 交给 builder 构造——`build` 与 `baseAbilitiesFrom` 因此看到同一份规则。
+    // 读写在 `CharacterRuleOverrides` 一处，不在页面或这里手拼 `ruleOverrides`。
+    final overrides = CharacterRuleOverrides.fromCharacter(character);
+    final builder = RulesDrivenCharacterBuilder(
+      entries: entries,
+      packagePriorities: packagePriorities,
+      disabledOriginIds: overrides.disabledOriginIds,
+      pinnedOrigins: overrides.pinned,
+    );
     // 再派生必须用**基础属性**：角色卡上的 `abilities` 已含生效中的
     // `kind: ability` 加值，直接回传会每次派生都再叠加一遍（缺陷 4）。
     // 减加值的唯一实现在 [RulesDrivenCharacterBuilder.baseAbilitiesFrom]。
@@ -88,6 +105,11 @@ class CharacterRuleProjector {
       'savingThrowAbilities',
       'classResources',
       'actions',
+      // S3 决策 D6：来源与冲突随再派生刷新（用户关闭覆盖 / pin 来源后必须看到新值）。
+      // 它们与 `choices` / `manualOverrides` 一样是**派生快照**，不承载用户状态；
+      // 用户状态在 `data.ruleOverrides`（本函数只读）。
+      'classRuleSources',
+      'classRuleConflicts',
     ]) {
       if (derivedData.containsKey(key)) mergedData[key] = derivedData[key];
     }

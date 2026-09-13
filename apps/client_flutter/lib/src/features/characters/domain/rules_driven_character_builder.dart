@@ -5,6 +5,8 @@ import '../../rules/domain/character_rules_engine.dart';
 import '../../rules/domain/rule_choice_quota.dart';
 import '../../rules/domain/rule_choice_semantics.dart';
 import '../../rules/domain/rule_math.dart' as rule_math;
+import '../../rules/domain/rule_override_conflict.dart';
+import '../../rules/domain/rule_override_declaration.dart';
 import '../../rules/domain/rule_profile.dart';
 import '../../rules/domain/rule_values.dart';
 import 'character_content_reference.dart';
@@ -12,13 +14,38 @@ import 'character_edit_draft.dart';
 import 'declared_levels.dart';
 import 'dnd5e_rules.dart';
 import 'equipment_bundle_items.dart';
+import 'rule_override_index.dart';
 import 'structured_class_rules.dart';
 
 class RulesDrivenCharacterBuilder {
-  RulesDrivenCharacterBuilder({required this.entries})
-    : _engine = CharacterRulesEngine(entries: entries);
+  RulesDrivenCharacterBuilder({
+    required this.entries,
+    Map<String, int> packagePriorities = const <String, int>{},
+    this.disabledOriginIds = const <String>{},
+    this.pinnedOrigins = const <String, String>{},
+  }) : _packagePriorities = packagePriorities,
+       _overrides = RuleOverrideIndex.fromEntries(
+         entries.values,
+         packagePriorities,
+       ),
+       _engine = CharacterRulesEngine(entries: entries);
 
   final Map<String, ContentEntry> entries;
+
+  /// 包 id → priority（决策 D2）：既用来给索引里的声明定 tier，也用来给角色
+  /// **自己那条**条目定 `entryPriority`（否则它恒为 tier 100，会被低 priority 的
+  /// 勘误压过）。
+  final Map<String, int> _packagePriorities;
+
+  /// 跨包职业规则声明索引（决策 D3）。
+  final RuleOverrideIndex _overrides;
+
+  /// 用户显式关掉的覆盖来源 / 为某列显式选定的来源（决策 D6）。构造时从角色读一次，
+  /// `build` 与 [baseAbilitiesFrom] 共用同一份——两处各读一次会让"属性加值的逆运算"
+  /// 与派生账看到不同的规则。
+  final Set<String> disabledOriginIds;
+  final Map<String, String> pinnedOrigins;
+
   final CharacterRulesEngine _engine;
 
   CharacterEditDraft build({
@@ -238,6 +265,11 @@ class RulesDrivenCharacterBuilder {
         },
         'hitDie': classRules.hitDie,
         'savingThrowAbilities': classRules.savingThrowAbilities.toList(),
+        // S3 决策 D6：列级来源与"同 tier 多来源抢同一列"的冲突随角色持久化。
+        // 形状归一化 / 排序各只有一处（RuleFieldSourceMap / RuleOverrideConflicts），
+        // 页面与再派生都读这两个键。
+        'classRuleSources': RuleFieldSourceMap.toData(classRules.fieldSources),
+        'classRuleConflicts': RuleOverrideConflicts.toData(classRules.conflicts),
         if (spellSlots.isNotEmpty) 'spellSlots': spellSlots,
         if (classRules.spellcastingAbility case final String ability)
           'spellcastingAbility': ability,
@@ -312,15 +344,26 @@ class RulesDrivenCharacterBuilder {
     return _subtract(normalized, _abilityGrantBonuses(ledger));
   }
 
-  /// [build] 所选职业的解析后职业规则（条目声明 ∪ 档案），供额度池等数值使用。
-  /// 唯一入口仍是 [Dnd5eRules.resolveClassRules]；本方法只是把同一份三参数调用
-  /// 收口，避免 `build` / `baseAbilitiesFrom` 各写一遍。
+  /// [build] 所选职业的解析后职业规则（角色自身条目 ∪ 跨包声明 ∪ 档案），供额度池
+  /// 等数值使用。唯一入口仍是 [Dnd5eRules.resolveClassRules]；本方法只是把同一份
+  /// 调用收口，避免 `build` / `baseAbilitiesFrom` 各写一遍。
+  ///
+  /// `entryPriority` 取角色**自己那条**条目所属包的 priority——它与索引里的其它
+  /// 声明参与同一套 tier 排序（决策 D2/D3）；`disabledOriginIds` / `pinnedOrigins`
+  /// 来自构造时读取的角色数据（[CharacterRuleOverrides]）。
   ResolvedClassRules _classRulesFor(CharacterBuild build) {
     final classEntry = _selectedEntry(build, 'class');
+    final entryId = classEntry?.id;
     return Dnd5eRules.resolveClassRules(
-      entryId: classEntry?.id,
+      entryId: entryId,
       classSummary: classEntry?.name ?? '',
       structured: classEntry?.structured ?? const <String, Object?>{},
+      overrides: _overrides,
+      entryPriority:
+          _packagePriorities[RuleOverrideDeclaration.packageIdOf(entryId ?? '')] ??
+          0,
+      disabledOriginIds: disabledOriginIds,
+      pinnedOrigins: pinnedOrigins,
     );
   }
 

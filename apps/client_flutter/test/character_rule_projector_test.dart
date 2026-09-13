@@ -383,6 +383,98 @@ void main() {
     expect(profile['backstory'], '老兵', reason: '嵌套合并只改 languages');
     expect(profile['appearance'], '高个', reason: '嵌套合并只改 languages');
   });
+
+  // S3 任务 8：来源与冲突随再派生刷新，但 `data.ruleOverrides` 是**用户状态**，
+  // 只能由 UI 经 `CharacterRuleOverrides` 写入——再派生不得覆盖它。
+  test('再派生刷新 classRuleSources / classRuleConflicts，保留 data.ruleOverrides', () {
+    final classEntry = ContentEntry.fromJson({
+      'id': 'test:class/wizard',
+      'type': 'class',
+      'slug': 'wizard',
+      'name': '法师',
+      'body': <Map<String, Object?>>[],
+      'revision': 1,
+      'structured': {
+        'classRules': {
+          'hitDie': 6,
+          'spellcasting': {
+            'mode': 'prepared',
+            'prepared': {'1': 2},
+          },
+        },
+      },
+    });
+    final errata = ContentEntry.fromJson({
+      'id': 'errata:class/wizard',
+      'type': 'class',
+      'slug': 'wizard',
+      'name': '法师勘误',
+      'body': <Map<String, Object?>>[],
+      'revision': 1,
+      'structured': {
+        'classRules': {
+          'spellcasting': {
+            'prepared': {'1': 9},
+          },
+        },
+      },
+    });
+    final legacy =
+        CharacterSheet.local(
+          id: 'legacy-wizard',
+          name: '旧法师',
+          level: 1,
+          classSummary: '法师',
+        ).copyWith(
+          data: <String, Object?>{
+            'build': <String, Object?>{
+              'level': 1,
+              'selections': <String, Object?>{'class': 'test:class/wizard'},
+              'choices': <String, Object?>{},
+            },
+            // 用户状态：关掉一个来源、pin 某列。
+            'ruleOverrides': <String, Object?>{
+              'disabledOriginIds': <String>['some-pack'],
+              'pinned': <String, Object?>{
+                'spellcasting.prepared': 'errata:class/wizard',
+              },
+            },
+            // 过期快照：再派生必须刷新，不能被 `containsKey` 判定为"已存在"。
+            'classRuleSources': <String, Object?>{
+              'stale': <String, Object?>{
+                'field': 'stale',
+                'originId': 'stale',
+                'tier': 1,
+              },
+            },
+          },
+        );
+
+    final projected = CharacterRuleProjector(
+      entries: {classEntry.id: classEntry, errata.id: errata},
+      packagePriorities: const <String, int>{'errata': 40},
+    ).project(legacy);
+
+    expect(
+      projected.dataMap['ruleOverrides'],
+      <String, Object?>{
+        'disabledOriginIds': <String>['some-pack'],
+        'pinned': <String, Object?>{
+          'spellcasting.prepared': 'errata:class/wizard',
+        },
+      },
+      reason: '再派生只读 ruleOverrides，绝不覆盖用户状态',
+    );
+    final sources = projected.dataMap['classRuleSources']! as Map;
+    expect(sources, isNot(contains('stale')), reason: '过期快照必须被刷新');
+    expect(
+      ((sources['spellcasting.prepared']! as Map)['originId']),
+      'errata:class/wizard',
+      reason: 'priority 40 的勘误 tier 更高，来源随之刷新',
+    );
+    expect(projected.dataMap['classRuleConflicts'], isEmpty);
+    expect(projected.dataMap['preparedSpellLimit'], 9);
+  });
 }
 
 ContentEntry _entry({

@@ -336,5 +336,48 @@ void main() {
         expect(draft.notes, isNot(contains('不向队友公开真实姓氏')));
       },
     );
+
+    // 应修 7：快速创建是**第二条**派生快照写入路径，必须与
+    // `RulesDrivenCharacterBuilder` 同一口径——无条件写入（空表 / 空列表 / null
+    // 也写），消费方按键是否存在判断"是否已派生"。
+    test('无施法 / 无资源的职业也显式写入派生快照（应修 7）', () {
+      final plain = ContentEntry.fromJson(<String, Object?>{
+        'id': 'test:class/plain',
+        'type': 'class',
+        'slug': 'plain',
+        'name': '素人',
+        'body': <Object?>[],
+        'revision': 1,
+        // 无 spellcasting、无 resources，且 slug 不在内置档案里。
+        'structured': <String, Object?>{'classRules': <String, Object?>{}},
+      });
+
+      final draft = QuickBuildService.build(
+        QuickBuildSelection(
+          name: '凡人',
+          className: '素人',
+          species: '人类',
+          background: '平民',
+          level: 1,
+          classEntry: plain,
+        ),
+      );
+
+      expect(draft.data.containsKey('spellSlots'), isTrue);
+      expect(draft.data['spellSlots'], isEmpty);
+      expect(draft.data.containsKey('spellcastingAbility'), isTrue);
+      expect(draft.data['spellcastingAbility'], isNull);
+      expect(draft.data.containsKey('preparedSpellLimit'), isTrue);
+      expect(draft.data['preparedSpellLimit'], isNull);
+      expect(draft.data.containsKey('classResources'), isTrue);
+      expect(draft.data['classResources'], isEmpty);
+      // `runtime.classResourcesUsed` 是**运行期状态**，不是派生快照：没有资源时
+      // 不该被写成空表。
+      expect(
+        draft.data.containsKey('runtime'),
+        isFalse,
+        reason: '运行期状态只在确实有资源时初始化',
+      );
+    });
   });
 }

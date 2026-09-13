@@ -165,4 +165,61 @@ void main() {
     expect(derived.data['preparedSpellLimit'], 9);
     expect(derived.data['classResources'], isNotEmpty);
   });
+
+  // P0-1：`CharacterSheet.classResources` 的判据必须是"键是否存在"。`replace` 独占
+  // 截断档案后 `data.classResources == []`（已派生且为空），按"值非空"判断会回退解析、
+  // 把**被截断来源**的资源再算回来（资源面板 / 短休长休按钮 / 列表页同屏矛盾）。
+  group('classResources getter 按"键是否存在"判断（P0-1）', () {
+    ContentEntry barbarianEntry({required bool replace}) => _classEntry(
+      'base:class/barbarian',
+      <String, Object?>{
+        if (replace) 'mode': 'replace',
+        'hitDie': 12,
+      },
+    );
+
+    CharacterSheet barbarian({required bool replace}) {
+      final entry = barbarianEntry(replace: replace);
+      final draft = RulesDrivenCharacterBuilder(
+        entries: {entry.id: entry},
+      ).build(
+        name: '野蛮人',
+        build: const CharacterBuild(
+          level: 1,
+          selections: {'class': 'base:class/barbarian'},
+        ),
+        abilities: Dnd5eRules.defaultAbilities,
+      );
+      return CharacterSheet.local(
+        id: 'barbarian',
+        name: '野蛮人',
+        level: 1,
+        classSummary: 'barbarian',
+      ).copyWith(data: draft.data);
+    }
+
+    test('未用 replace 时档案的狂暴资源照常派生（对照组，证明夹具有效）', () {
+      final character = barbarian(replace: false);
+      expect(character.dataMap['classResources'], isNotEmpty);
+      expect(character.classResources, isNotEmpty);
+      expect(
+        character.classResources.map((resource) => resource.id),
+        contains('rage'),
+      );
+    });
+
+    test('replace 截断档案后：data 是空表，getter 也是空（不回退算回被截断的资源）', () {
+      final character = barbarian(replace: true);
+      expect(
+        character.dataMap['classResources'],
+        isEmpty,
+        reason: 'H：派生快照无条件写入，replace 后就是空表',
+      );
+      expect(
+        character.classResources,
+        isEmpty,
+        reason: '键已存在（= 已派生）→ 绝不回退把档案的 rage 算回来',
+      );
+    });
+  });
 }

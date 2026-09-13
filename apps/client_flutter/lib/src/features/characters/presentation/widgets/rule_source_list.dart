@@ -358,9 +358,14 @@ class RuleSourceListCard extends StatelessWidget {
                       ),
                     ),
                     if (onEnableOverride != null)
-                      TextButton(
-                        onPressed: () => onEnableOverride!(originId),
-                        child: const Text('恢复'),
+                      // 与邻居"关闭该来源的覆盖"一致都带 Tooltip：说明恢复的作用域
+                      // 是**整条来源**（它在所有列上的覆盖会一起回来）。
+                      Tooltip(
+                        message: '会恢复该来源在所有列上的覆盖',
+                        child: TextButton(
+                          onPressed: () => onEnableOverride!(originId),
+                          child: const Text('恢复'),
+                        ),
                       ),
                   ],
                 ),

@@ -613,6 +613,8 @@ void main() {
 
       expect(find.text('已关闭的来源'), findsOneWidget);
       expect(find.byKey(const Key('disabled-origin-errata')), findsOneWidget);
+      // 建议 10：恢复按钮与邻居"关闭该来源的覆盖"一致都带 Tooltip。
+      expect(find.byTooltip('会恢复该来源在所有列上的覆盖'), findsOneWidget);
 
       await tester.ensureVisible(find.text('恢复'));
       await tester.pumpAndSettle();
@@ -781,6 +783,53 @@ void main() {
         updates.last,
         containsPair('spellSlotsUsed', <String, int>{}),
         reason: '勘误把施法进阶改成 pact（契约魔法）⇒ 短休恢复全部法术位',
+      );
+    });
+
+    // P0-2.1：法术面板的两个派生快照消费点必须按**键是否存在**判断"是否已派生"。
+    // 夹具让回退路径（档案 wizard）确有法术位与施法属性，因此"改回按类型 / 非空
+    // 判断"会让下面的断言红。
+    testWidgets('空法术位表 / null 施法属性不回退读回档案值（P0-2.1）', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CharacterDetailPage(
+            initialTab: 'spells',
+            character: CharacterSheet.local(
+              id: 'wizard',
+              name: '关闭来源后的法师',
+              level: 1,
+              classSummary: '法师',
+            ).copyWith(
+              data: <String, Object?>{
+                'classIdentity': <String, Object?>{
+                  'entryId': 'base:class/wizard',
+                  'slug': 'wizard',
+                  'declared': true,
+                  'declaredLevels': <String, Object?>{'min': 1, 'max': 20},
+                },
+                // 已派生且"为空 / 未声明"——关闭声明 spellcasting 的来源后的正常结果。
+                'spellSlots': <String, Object?>{},
+                'spellcastingAbility': null,
+              },
+            ),
+            contentEntries: const [],
+            // 面板的早退分支（"暂无法术引用"）需要可编辑权限才会继续渲染。
+            onSaveCharacter: (character) async => true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('施法属性 无'),
+        findsOneWidget,
+        reason: '键存在且为 null = 未声明施法属性，不得回退档案（会显示"智力"）',
+      );
+      expect(find.text('施法属性 智力'), findsNothing);
+      expect(
+        find.text('暂无法术位'),
+        findsOneWidget,
+        reason: '键存在且为空表 = 无法术位，不得回退档案（会渲染 1/2 环法术位行）',
       );
     });
   });

@@ -191,27 +191,28 @@ class QuickBuildService {
         },
         'hitDie': classRules.hitDie,
         'savingThrowAbilities': classRules.savingThrowAbilities.toList(),
+        // 派生快照与 `RulesDrivenCharacterBuilder` **同一口径**：无条件写入
+        // （空表 / 空列表 / null 也写），消费方按键是否存在判断"是否已派生"。
         'spellSlots': classRules.spellSlots(selection.level),
-        if (classRules.spellcastingAbility case final String ability)
-          'spellcastingAbility': ability,
-        if (classRules.preparedLimit(selection.level) case final int limit)
-          'preparedSpellLimit': limit,
-        if (classResources.isNotEmpty) ...{
-          'classResources': [
-            for (final resource in classResources)
-              {
-                'id': resource.id,
-                'name': resource.name,
-                'maximum': resource.maximum,
-                'recovery': resource.recovery,
-              },
-          ],
+        'spellcastingAbility': classRules.spellcastingAbility,
+        'preparedSpellLimit': classRules.preparedLimit(selection.level),
+        'classResources': [
+          for (final resource in classResources)
+            {
+              'id': resource.id,
+              'name': resource.name,
+              'maximum': resource.maximum,
+              'recovery': resource.recovery,
+            },
+        ],
+        // `runtime.classResourcesUsed` 是**运行期状态**（不是派生快照）：只在确实
+        // 有资源时初始化，不写空表。
+        if (classResources.isNotEmpty)
           'runtime': {
             'classResourcesUsed': {
               for (final resource in classResources) resource.id: 0,
             },
           },
-        },
       },
     );
   }
@@ -220,6 +221,13 @@ class QuickBuildService {
   ///
   /// 有条目时把 `structured.classRules` 一并带上：快速创建与创建向导读到的
   /// 数值因此完全一致（列级合并的唯一实现在 [Dnd5eRules.resolveClassRules]）。
+  ///
+  /// **不带 `disabledOriginIds` / `pinnedOrigins` / `entryPriority` 的理由**：
+  /// 本方法由 `QuickBuildService.build` 调用，只服务 `hasStructuredRules == false`
+  /// 的**新建**角色——此时角色数据还不存在，`data.ruleOverrides` 无从谈起（用户尚
+  /// 未做出任何覆盖选择）；而跨包声明索引（`RuleOverrideIndex`）也不在这条路径上，
+  /// 因此没有同 tier 竞争者，`entryPriority` 改不了任何取值 / 来源。需要覆盖语义的
+  /// 路径一律走 `RulesDrivenCharacterBuilder`（它接收完整的覆盖输入）。
   static ResolvedClassRules _classRules({
     required ContentEntry? entry,
     required String? entryId,

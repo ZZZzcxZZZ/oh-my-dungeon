@@ -141,16 +141,24 @@ class CharacterSheet {
   }
 
   /// 角色卡上的职业资源。优先级：
-  /// 1. `data.classResources`（创建时按条目规则快照写下的显式清单）；
-  /// 2. 职业身份已声明（[DeclaredLevels.isDeclared]）且 `slug` 非空时，用条目身份
-  ///    重新解析规则档案（老角色回填后也能算出资源）；
+  /// 1. `data.classResources` 这个**键存在**（创建 / 再派生写下的显式清单，哪怕是
+  ///    空表）→ 就是它，"已派生且为空"表示**没有资源**，绝不回退；
+  /// 2. 键**从未派生过**（老角色）且职业身份已声明（[DeclaredLevels.isDeclared]）、
+  ///    `slug` 非空时，用条目身份重新解析档案（老角色回填后也能算出资源）；
   /// 3. 项目器标记"未声明"（`declared == false`）/ 没有身份块 / `slug` 为空 → 空列表。
+  ///
+  /// **判据必须是"键是否存在"，不是"值是否非空"**：`RulesDrivenCharacterBuilder`
+  /// 无条件写这个键（空列表也写），关闭声明某资源的来源后 `data.classResources`
+  /// 变成 `[]`——按非空判断会回退到第 2 条、把**被关闭来源**的资源再算回来，
+  /// 与同屏已刷新的 `classRuleSources` 自相矛盾。
+  ///
+  /// 第 2 条**只服务从未派生过的老角色**；覆盖（`disabled` / `pinned`）能否生效，
+  /// 取决于投影器是否已经写过这个键。
   ///
   /// 第 2 条**必须**传 [abilityMap]：`formula: ability:<key>` 的上限由属性决定
   /// （如 CHA 16 的诗人激励 = 3）。
   List<Dnd5eClassResource> get classResources {
-    final explicit = _explicitClassResources();
-    if (explicit.isNotEmpty) return explicit;
+    if (dataMap.containsKey('classResources')) return _explicitClassResources();
     if (!DeclaredLevels.isDeclared(this)) return const [];
     final identity = _classIdentity();
     final slug = '${identity?['slug'] ?? ''}'.trim();

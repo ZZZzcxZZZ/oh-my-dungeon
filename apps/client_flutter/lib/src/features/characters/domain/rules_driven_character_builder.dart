@@ -60,15 +60,37 @@ class RulesDrivenCharacterBuilder {
     List<String> extraSpellRefs = const <String>[],
     List<String> extraItemRefs = const <String>[],
     List<String> skillProficiencies = const <String>[],
+    /// 只有**展示名**、资料库里没有对应条目时的兜底（向导允许先选名字）。
+    /// 条目存在时一律以条目为准（§3.6：条目身份优先）；条目不存在且没有兜底才留空。
+    /// 背景条目也可能带 `rules`（决策 D10 的熟练授予），因此"有任意条目带 rules 就走
+    /// 本构建器"的门禁在只有背景条目时同样成立——那时职业展示名只能来自这里。
+    String? classSummaryFallback,
+    String? raceSummaryFallback,
   }) {
     final classEntry = _selectedEntry(build, 'class');
     final speciesEntry = _selectedEntry(build, 'species');
     final backgroundEntry = _selectedEntry(build, 'background');
     // 职业数值的唯一入口：条目身份优先，`structured.classRules` 覆盖档案（§3.6、§3.7）。
     // 与 [baseAbilitiesFrom] 共用 [_classRulesFor]，避免两处各写一份三参数调用。
-    final classRules = _classRulesFor(build);
-    final ledger = _engine.evaluate(
+    final classRules = _classRulesFor(
       build,
+      classSummaryFallback: classSummaryFallback,
+    );
+    // `requires` 的门禁输入是 `CharacterBuild.abilities`（决策 D4：门槛读**基础属性**）。
+    // 调用方只传了 `abilities:` 参数（没在 `CharacterBuild` 里再写一份）时，它就是空的
+    // ——那时 `ability` 形式的 `requires` 会**静默**把所有候选判为不满足、把选项的授予
+    // 悄悄丢掉。空则回退到本方法的 `abilities` 参数；显式传入 `build.abilities` 的调用方
+    // （构建器/项目器）语义完全不变。
+    final gateBuild = build.abilities.isEmpty
+        ? CharacterBuild(
+            level: build.level,
+            selections: build.selections,
+            choices: build.choices,
+            abilities: abilities,
+          )
+        : build;
+    final ledger = _engine.evaluate(
+      gateBuild,
       poolLimits: RuleChoiceQuota.limitsFor(
         rules: classRules,
         level: build.level,
@@ -189,8 +211,8 @@ class RulesDrivenCharacterBuilder {
     return CharacterEditDraft(
       name: name.trim(),
       level: build.level,
-      classSummary: classEntry?.name ?? '',
-      raceSummary: speciesEntry?.name ?? '',
+      classSummary: classEntry?.name ?? classSummaryFallback ?? '',
+      raceSummary: speciesEntry?.name ?? raceSummaryFallback ?? '',
       currentHp: maxHp,
       maxHp: maxHp,
       armorClass: Dnd5eRules.baseArmorClass(effectiveAbilities) + armorBonus,
@@ -363,12 +385,15 @@ class RulesDrivenCharacterBuilder {
   /// `entryPriority` 取角色**自己那条**条目所属包的 priority——它与索引里的其它
   /// 声明参与同一套 tier 排序（决策 D2/D3）；`disabledOriginIds` / `pinnedOrigins`
   /// 来自构造时读取的角色数据（[CharacterRuleOverrides]）。
-  ResolvedClassRules _classRulesFor(CharacterBuild build) {
+  ResolvedClassRules _classRulesFor(
+    CharacterBuild build, {
+    String? classSummaryFallback,
+  }) {
     final classEntry = _selectedEntry(build, 'class');
     final entryId = classEntry?.id;
     return Dnd5eRules.resolveClassRules(
       entryId: entryId,
-      classSummary: classEntry?.name ?? '',
+      classSummary: classEntry?.name ?? classSummaryFallback ?? '',
       structured: classEntry?.structured ?? const <String, Object?>{},
       overrides: _overrides,
       entryPriority:

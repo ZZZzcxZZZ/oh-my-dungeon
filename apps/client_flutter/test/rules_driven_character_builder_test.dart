@@ -209,6 +209,80 @@ void main() {
     expect(draft.skills['察觉'], isTrue);
   });
 
+  test('requires(ability) 门禁读 CharacterBuild.abilities；为空时回退到 abilities 参数', () {
+    // 回归：只传 `build(abilities:)` 而没在 `CharacterBuild` 里再写一份时，
+    // `requires: [{ability: wis, minimum: 13}]` 会静默把选项的授予丢掉。
+    final entry = ContentEntry.fromJson(<String, Object?>{
+      'id': 'test:class/gated',
+      'type': 'class',
+      'slug': 'gated',
+      'name': '受门槛职业',
+      'body': <Object?>[],
+      'revision': 1,
+      'structured': <String, Object?>{
+        'classRules': <String, Object?>{'hitDie': 8},
+      },
+      'rules': <String, Object?>{
+        'progression': <Object?>[
+          <String, Object?>{
+            'levels': <int>[1],
+            'choices': <Object?>[
+              <String, Object?>{
+                'id': 'focus',
+                'label': '专长',
+                'optionType': 'feat',
+                'minimum': 1,
+                'maximum': 1,
+                'options': <Object?>[
+                  <String, Object?>{
+                    'id': 'pathfinder',
+                    'label': '寻路者',
+                    'grants': <Object?>[
+                      <String, Object?>{
+                        'id': 'p1',
+                        'kind': 'speed',
+                        'label': '+5 尺',
+                        'value': 5,
+                      },
+                    ],
+                  },
+                ],
+                'requires': <Object?>[
+                  <String, Object?>{'ability': 'wis', 'minimum': 13},
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    });
+    final builder = RulesDrivenCharacterBuilder(
+      entries: <String, ContentEntry>{entry.id: entry},
+    );
+
+    CharacterEditDraft buildWith(int wisdom) => builder.build(
+      name: 'Nia',
+      build: const CharacterBuild(
+        level: 1,
+        selections: <String, String>{'class': 'test:class/gated'},
+        choices: <String, List<String>>{
+          'test:class/gated#focus': <String>['pathfinder'],
+        },
+      ),
+      abilities: <String, int>{
+        'str': 10,
+        'dex': 10,
+        'con': 10,
+        'int': 10,
+        'wis': wisdom,
+        'cha': 10,
+      },
+    );
+
+    expect(buildWith(14).speed, kBaseWalkingSpeed + 5, reason: '满足门槛 → 授予生效');
+    expect(buildWith(10).speed, kBaseWalkingSpeed, reason: '不满足门槛 → 授予不生效');
+  });
+
   test('kind: ability 的合法 target 生效，非法 target 跳过（判据是档案 abilities）', () {
     // 导入期按档案 `abilities` 放行 target；运行期必须用同一份集合。
     // 合法 target（`str`）不加值会让"导入放行、运行期静默丢弃"变成真 bug；

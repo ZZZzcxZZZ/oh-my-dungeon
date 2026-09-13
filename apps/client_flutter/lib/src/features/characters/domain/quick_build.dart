@@ -3,6 +3,7 @@ import '../../content/domain/content_entry.dart';
 import '../../rules/domain/rule_override_conflict.dart';
 import '../../rules/domain/rule_override_declaration.dart';
 import '../../rules/domain/rule_profile.dart';
+import 'background_grants.dart';
 import 'character_edit_draft.dart';
 import 'declared_levels.dart';
 import 'dnd5e_rules.dart';
@@ -170,10 +171,7 @@ class QuickBuildService {
       initiativeBonus: Dnd5eRules.initiativeBonus(abilities),
       abilities: Map<String, int>.from(abilities),
       saves: saves,
-      skills: _skills(
-        selection.background,
-        skillProficiencies: selection.skillProficiencies,
-      ),
+      skills: _skills(selection),
       inventory: [
         ..._inventory(slug),
         for (final item in selection.itemRefs)
@@ -404,36 +402,23 @@ class QuickBuildService {
   };
 
   static Map<String, bool> _skills(
-    String background, {
-    List<String>? skillProficiencies,
-  }) {
+    QuickBuildSelection selection,
+  ) {
     final skills = {for (final skill in Dnd5eRules.skills) skill.name: false};
-    if (skillProficiencies != null) {
-      for (final skillName in skillProficiencies) {
-        final trimmed = skillName.trim();
-        if (skills.containsKey(trimmed)) {
-          skills[trimmed] = true;
-        }
+    final explicit = selection.skillProficiencies;
+    // 显式传入的优先（创建向导把技能选择与背景授予合并后传进来）；
+    // 没传时按**背景条目自己的 rules** 取（决策 D10，唯一读取口径），
+    // 不再按背景中文名硬编码、也不再给未知背景发一套士兵技能。
+    final names = explicit ??
+        backgroundSkillProficiencies(
+          entries: selection.entries.values,
+          backgroundEntryId: selection.backgroundEntryId,
+        ).toList();
+    for (final skillName in names) {
+      final trimmed = skillName.trim();
+      if (skills.containsKey(trimmed)) {
+        skills[trimmed] = true;
       }
-      return skills;
-    }
-
-    final normalized = background.toLowerCase();
-    if (normalized.contains('贤者') || normalized.contains('sage')) {
-      skills['奥秘'] = true;
-      skills['历史'] = true;
-    } else if (normalized.contains('罪犯') || normalized.contains('criminal')) {
-      // 2024 罪犯背景：巧手 + 隐匿（2014 才是欺瞒 + 隐匿）。
-      skills['巧手'] = true;
-      skills['隐匿'] = true;
-    } else if (normalized.contains('侍祭') ||
-        normalized.contains('侍僧') ||
-        normalized.contains('acolyte')) {
-      skills['洞悉'] = true;
-      skills['宗教'] = true;
-    } else {
-      skills['运动'] = true;
-      skills['威吓'] = true;
     }
     return skills;
   }

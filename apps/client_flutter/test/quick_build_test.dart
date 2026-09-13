@@ -2,15 +2,43 @@ import 'package:dnd_table_client/src/features/characters/domain/quick_build.dart
 import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+/// 背景条目夹具：背景技能由条目自己的 `rules.grants` 承载（决策 D10）。
+///
+/// 关键字是 `kind: "proficiency"` + `target: "skill:<档案规范名>"`，与技能选择
+/// 自动授予同一种形状；客户端不再有任何"按背景中文名硬编码技能"的预设表。
+ContentEntry _backgroundEntry(String slug, List<String> skills) =>
+    ContentEntry.fromJson(<String, Object?>{
+      'id': 'test:background/$slug',
+      'type': 'background',
+      'slug': slug,
+      'name': slug,
+      'body': <Object?>[],
+      'revision': 1,
+      'rules': <String, Object?>{
+        'grants': <Object?>[
+          for (final skill in skills)
+            <String, Object?>{
+              'id': '$slug-skill-$skill',
+              'kind': 'proficiency',
+              'target': 'skill:$skill',
+              'label': skill,
+            },
+        ],
+      },
+    });
+
 void main() {
   group('QuickBuildService', () {
     test('builds a playable D&D 2024 fighter draft', () {
-      const selection = QuickBuildSelection(
+      final soldier = _backgroundEntry('soldier', <String>['运动', '威吓']);
+      final selection = QuickBuildSelection(
         name: 'Kara',
         className: '战士',
         species: '人类',
         background: '士兵',
         level: 1,
+        backgroundEntryId: soldier.id,
+        entries: <String, ContentEntry>{soldier.id: soldier},
       );
 
       final draft = QuickBuildService.build(selection);
@@ -31,12 +59,15 @@ void main() {
     });
 
     test('uses class and background presets for casters and scholars', () {
-      const selection = QuickBuildSelection(
+      final sage = _backgroundEntry('sage', <String>['奥秘', '历史']);
+      final selection = QuickBuildSelection(
         name: 'Mira',
         className: '法师',
         species: '精灵',
         background: '贤者',
         level: 3,
+        backgroundEntryId: sage.id,
+        entries: <String, ContentEntry>{sage.id: sage},
       );
 
       final draft = QuickBuildService.build(selection);
@@ -50,12 +81,15 @@ void main() {
     });
 
     test('uses core class presets for bilingual content labels', () {
-      const selection = QuickBuildSelection(
+      final sage = _backgroundEntry('sage', <String>['奥秘', '历史']);
+      final selection = QuickBuildSelection(
         name: 'Mira',
         className: '法师 / Wizard',
         species: '精灵 / Elf',
         background: '贤者 / Sage',
         level: 3,
+        backgroundEntryId: sage.id,
+        entries: <String, ContentEntry>{sage.id: sage},
       );
 
       final draft = QuickBuildService.build(selection);
@@ -321,21 +355,50 @@ void main() {
       });
     });
 
-    test('uses 2024 background skill proficiencies', () {
+    test('背景技能由背景条目的 proficiency grant 决定（D10）', () {
+      final criminal = _backgroundEntry('criminal', <String>['巧手', '隐匿']);
       final draft = QuickBuildService.build(
-        const QuickBuildSelection(
+        QuickBuildSelection(
           name: 'Vex',
           className: '游荡者',
           species: '人类',
           background: '罪犯',
           level: 1,
+          backgroundEntryId: criminal.id,
+          entries: <String, ContentEntry>{criminal.id: criminal},
         ),
       );
 
-      // 2024 罪犯背景：巧手 + 隐匿（2014 为欺瞒 + 隐匿）
+      // 2024 罪犯背景：巧手 + 隐匿（2014 为欺瞒 + 隐匿）；条目怎么写就怎么算。
       expect(draft.skills['巧手'], isTrue);
       expect(draft.skills['隐匿'], isTrue);
       expect(draft.skills['欺瞒'], isFalse);
+    });
+
+    test('背景没声明技能熟练 → 一个都不发（未声明即不猜，D10）', () {
+      // 旧实现按背景中文名硬编码，并且**未知背景发一套士兵技能**（运动 / 威吓）。
+      // 那条兜底是猜测：背景条目不声明就应该是"没有技能熟练"。
+      final homebrew = ContentEntry.fromJson(<String, Object?>{
+        'id': 'test:background/homebrew',
+        'type': 'background',
+        'slug': 'homebrew',
+        'name': '自制背景',
+        'body': <Object?>[],
+        'revision': 1,
+      });
+      final draft = QuickBuildService.build(
+        QuickBuildSelection(
+          name: 'Nia',
+          className: '战士',
+          species: '人类',
+          background: '自制背景',
+          level: 1,
+          backgroundEntryId: homebrew.id,
+          entries: <String, ContentEntry>{homebrew.id: homebrew},
+        ),
+      );
+
+      expect(draft.skills.values.where((granted) => granted), isEmpty);
     });
 
     test('barbarian hit points use the d12 hit die', () {

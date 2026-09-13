@@ -750,11 +750,29 @@ void main() {
                 ],
               },
             ),
+            // 背景技能由条目自己的 `rules.grants` 承载（决策 D10）：士兵 = 运动、
+            // 威吓。旧实现按背景**中文名**硬编码在客户端，条目给了空 rules 也能"生效"
+            // ——那正是 D10 要消掉的口径。
             _entry(
               id: 'guide:background/soldier',
               type: 'background',
               name: '士兵',
-              rules: const {},
+              rules: const {
+                'grants': [
+                  {
+                    'id': 'soldier-skill-运动',
+                    'kind': 'proficiency',
+                    'label': '运动',
+                    'target': 'skill:运动',
+                  },
+                  {
+                    'id': 'soldier-skill-威吓',
+                    'kind': 'proficiency',
+                    'label': '威吓',
+                    'target': 'skill:威吓',
+                  },
+                ],
+              },
             ),
             _entry(
               id: 'guide:species/human',
@@ -1261,7 +1279,23 @@ void main() {
               id: 'guide:background/soldier',
               type: 'background',
               name: '士兵',
-              rules: const {},
+              // 背景技能由条目自己的 rules.grants 承载（决策 D10）：士兵 = 运动、威吓。
+              rules: const {
+                'grants': [
+                  {
+                    'id': 'soldier-skill-运动',
+                    'kind': 'proficiency',
+                    'label': '运动',
+                    'target': 'skill:运动',
+                  },
+                  {
+                    'id': 'soldier-skill-威吓',
+                    'kind': 'proficiency',
+                    'label': '威吓',
+                    'target': 'skill:威吓',
+                  },
+                ],
+              },
             ),
             _entry(
               id: 'guide:species/human',
@@ -1307,9 +1341,10 @@ void main() {
     expect(submitted!.skills['求生'], isTrue, reason: '自动授予进 skills');
     expect(submitted!.skills['察觉'], isTrue, reason: '自动授予进 skills');
     expect(submitted!.skills['隐匿'], isFalse);
-    // 背景预设仍走 `skillProficiencies`（士兵 = 运动、威吓），不与技能选择混同。
-    expect(submitted!.skills['运动'], isTrue, reason: '背景预设仍在');
-    expect(submitted!.skills['威吓'], isTrue, reason: '背景预设仍在');
+    // 背景授予（士兵 = 运动、威吓）走**条目的 rules**，与技能选择互不混同：
+    // 背景技能不在 `data['choices']` 里（那是选择），但仍进 skills。
+    expect(submitted!.skills['运动'], isTrue, reason: '背景条目的熟练授予生效');
+    expect(submitted!.skills['威吓'], isTrue, reason: '背景条目的熟练授予生效');
   });
 
   // 任务 7：技能选择不再有"专门 UI 免检"——未完成时必须阻塞创建，
@@ -2004,4 +2039,5 @@ ContentEntry _entry({
     'relations': relations,
     'tags': tags,
   });
+
 }

@@ -158,7 +158,13 @@
                 }
               ],
               "builderStep": "class",
-              "group": "专长"
+              "group": "专长",
+              "requires": [
+                {
+                  "ability": "wis",
+                  "minimum": 13
+                }
+              ]
             }
           ]
         },

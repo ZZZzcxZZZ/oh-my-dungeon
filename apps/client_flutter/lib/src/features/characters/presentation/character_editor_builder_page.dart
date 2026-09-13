@@ -136,7 +136,7 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     _classEntryId = _entryIdFor('class', _className);
     _speciesEntryId = _entryIdFor('species', _species);
     _backgroundEntryId = _entryIdFor('background', _background);
-    _backgroundSkillProficiencies = _presetSkillsForBackground(_background);
+    _backgroundSkillProficiencies = _backgroundSkillsFor(_backgroundEntryId);
     _abilityScores = _presetAbilitiesForClass(_className);
     _abilityControllers = {
       for (final entry in Dnd5eRules.abilityLabels.entries)
@@ -431,7 +431,9 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
             onSelected: (value) => setState(() {
               _background = value;
               _backgroundEntryId = _entryIdFor('background', value);
-              _backgroundSkillProficiencies = _presetSkillsForBackground(value);
+              _backgroundSkillProficiencies = _backgroundSkillsFor(
+                _backgroundEntryId,
+              );
               _applyRecommendedRuleChoices();
             }),
           ),
@@ -1070,6 +1072,10 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
       return [
         _SkillProficiencySection(
           selected: _backgroundSkillProficiencies.toList(growable: false),
+          // 存在背景条目且它声明了技能熟练时，那两条是**背景的事实**（决策 D10）：
+          // 传 `fixed` 让它们不可取消——旧实现允许点掉，但点掉也不会生效
+          // （引擎仍按条目授予），是个静默 no-op 的控件。要改就改背景条目本身。
+          fixed: _backgroundSkillProficiencies,
           onChanged: (next) =>
               setState(() => _backgroundSkillProficiencies = next.toSet()),
         ),
@@ -1188,19 +1194,12 @@ class _StandardBuildPageState extends State<_StandardBuildPage> {
     _setAbilityScores(scores);
   }
 
-  Set<String> _presetSkillsForBackground(String background) {
-    final normalized = background.toLowerCase();
-    if (normalized.contains('贤者') || normalized.contains('sage')) {
-      return {'奥秘', '历史'};
-    }
-    if (normalized.contains('罪犯') || normalized.contains('criminal')) {
-      return {'欺瞒', '隐匿'};
-    }
-    if (normalized.contains('侍僧') ||
-        normalized.contains('侍祭') ||
-        normalized.contains('acolyte')) {
-      return {'洞悉', '宗教'};
-    }
-    return {'运动', '威吓'};
-  }
+  /// 背景技能来自**背景条目自己的 rules**（决策 D10，唯一读取口径在
+  /// `backgroundSkillProficiencies`）。条目没声明就是"没有技能熟练"——
+  /// 旧的"按背景中文名硬编码 + 未知背景发士兵技能"是猜测，已删除。
+  Set<String> _backgroundSkillsFor(String? backgroundEntryId) =>
+      backgroundSkillProficiencies(
+        entries: widget.contentEntries,
+        backgroundEntryId: backgroundEntryId,
+      );
 }

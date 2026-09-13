@@ -380,6 +380,34 @@ def parse_saving_throws(value: str) -> list[str]:
     return [key for _, key in found]
 
 
+def parse_fixed_skills(value: str) -> list[str]:
+    """'洞悉与宗教' / '驯兽和自然' / '特技和察觉' → 档案规范技能名列表。
+
+    背景授予的是**固定**技能熟练（不是"任选 N 项"），所以没有 count/options 结构，
+    直接产出名字列表。分隔符在源文里有 `与` / `和` / `、` / 逗号四种。
+
+    未知名字**不静默丢弃也不静默放行**：记入 MANUAL_REVIEW 并跳过——下游
+    `kind: "proficiency"` 的 `target` 只认档案规范名，放行未知名字会变成运行期
+    永远不生效的静默 no-op。"""
+    names: list[str] = []
+    for raw in re.split(r"[与和、,，]|\s+", value or ""):
+        raw = raw.strip()
+        if not raw:
+            continue
+        mapped = SKILL_NAME_ALIASES.get(raw, raw)
+        if mapped not in ALL_SKILLS:
+            MANUAL_REVIEW.append({
+                "type": "unknown-background-skill-name",
+                "raw": raw,
+                "mapped": mapped,
+                "reason": "background skill not in canonical archive skill list",
+            })
+            continue
+        if mapped not in names:
+            names.append(mapped)
+    return names
+
+
 def parse_skill_choice(value: str) -> dict[str, Any] | None:
     """'选择2项：驯兽、运动、威吓' → {'count':2,'options':[...]}
        '任选3项（见第一章）'      → {'count':3,'options':ALL_SKILLS}
@@ -1411,12 +1439,30 @@ def extract_backgrounds() -> list[dict[str, Any]]:
         if stat_fields:
             body.insert(0, {"type": "statBlock", "fields": stat_fields})
 
+        # 背景技能改由 `rules` 承载（决策 D10）：`kind: "proficiency"` +
+        # `target: "skill:<档案规范名>"`，与技能选择的自动授予同一种形状。
+        # 客户端因此不再需要"按背景中文名硬编码技能"的预设表，未声明的背景就是
+        # "没有技能熟练"（§3.6 未声明即不猜），而不是悄悄发一套士兵的技能。
+        background_skills = parse_fixed_skills(str(structured.get("skills", "")))
+        rules: dict[str, Any] = {}
+        if background_skills:
+            rules["grants"] = [
+                {
+                    "id": f"{slug}-skill-{index}",
+                    "kind": "proficiency",
+                    "label": skill_name,
+                    "target": f"skill:{skill_name}",
+                }
+                for index, skill_name in enumerate(background_skills, start=1)
+            ]
+
         entry = make_entry(
             "background", slug, name, body,
             structured=structured,
             tags=[],
             aliases=[en_name] if en_name else [],
             summary=f"背景 · {name}",
+            rules=rules or None,
             source_path=str(path),
         )
         items.append(entry)

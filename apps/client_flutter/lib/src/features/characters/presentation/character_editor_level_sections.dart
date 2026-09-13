@@ -611,7 +611,10 @@ class _SkillProficiencySection extends StatelessWidget {
                 for (final skill in displayedSkills)
                   Builder(
                     builder: (context) {
-                      final isFixed = constrained && fixed.contains(skill.name);
+                      // `fixed` 一律锁定：它现在承载"**背景条目自己声明**的技能熟练"
+                      // （决策 D10）。背景没声明时 `fixed` 为空，网格照旧可自由编辑
+                      // （公开构建没有背景条目，用户自己挑）。
+                      final isFixed = fixed.contains(skill.name);
                       final isSelected = selected.contains(skill.name);
                       final atLimit =
                           constrained && chosen.length >= (maximum ?? 0);

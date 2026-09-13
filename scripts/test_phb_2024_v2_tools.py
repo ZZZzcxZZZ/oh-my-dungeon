@@ -139,6 +139,72 @@ class Phb2024V2ToolsTest(unittest.TestCase):
             classes[cls_name] = entry
         return classes
 
+    def test_background_skills_are_parsed_into_proficiency_grants(self) -> None:
+        """背景技能由 `rules.grants` 承载（决策 D10），不再依赖客户端的中文名预设。
+
+        源文的技能串用 `与` / `和` / `、`，且含译名差异（特技→杂技、游说→说服、
+        医疗→医药）。未知名字必须**记入 MANUAL_REVIEW 并跳过**：放行未知名字会变成
+        运行期永不生效的静默 no-op（客户端的 `skill:<名>` 只认档案规范名）。
+        """
+        self.assertEqual(
+            extractor.parse_fixed_skills("洞悉与宗教"), ["洞悉", "宗教"]
+        )
+        self.assertEqual(
+            extractor.parse_fixed_skills("驯兽和自然"), ["驯兽", "自然"]
+        )
+        self.assertEqual(
+            extractor.parse_fixed_skills("特技和察觉"), ["杂技", "察觉"]
+        )
+        self.assertEqual(
+            extractor.parse_fixed_skills("游说、医疗"), ["说服", "医药"]
+        )
+        # 去重：同一个技能写两次只授一次。
+        self.assertEqual(
+            extractor.parse_fixed_skills("隐匿和隐匿"), ["隐匿"]
+        )
+        # 未知名字：跳过 + 记账，不静默。
+        self.assertEqual(
+            extractor.parse_fixed_skills("未知技能和察觉"), ["察觉"]
+        )
+        self.assertEqual(
+            [item["type"] for item in extractor.MANUAL_REVIEW],
+            ["unknown-background-skill-name"],
+        )
+        self.assertEqual(extractor.MANUAL_REVIEW[0]["raw"], "未知技能")
+
+    def test_extracted_backgrounds_declare_skill_grants(self) -> None:
+        """真实源文里 16 个背景都必须产出 `skill:<档案规范名>` 的熟练 grant。"""
+        _require_private_phb_source()
+        backgrounds = extractor.extract_backgrounds()
+        self.assertGreaterEqual(len(backgrounds), 16)
+        checked = 0
+        for entry in backgrounds:
+            skills = extractor.parse_fixed_skills(
+                str((entry.get("structured") or {}).get("skills", ""))
+            )
+            if not skills:
+                continue
+            checked += 1
+            grants = (entry.get("rules") or {}).get("grants") or []
+            self.assertEqual(
+                [grant["target"] for grant in grants],
+                [f"skill:{name}" for name in skills],
+                entry["id"],
+            )
+            for grant in grants:
+                self.assertEqual(grant["kind"], "proficiency", entry["id"])
+                self.assertIn(
+                    grant["target"].removeprefix("skill:"),
+                    extractor.ALL_SKILLS,
+                    entry["id"],
+                )
+        self.assertGreaterEqual(checked, 16, "至少 16 个背景带技能熟练")
+        self.assertEqual(
+            [item for item in extractor.MANUAL_REVIEW],
+            [],
+            "真实源文的背景技能名必须全部收敛到档案规范名",
+        )
+
     def test_feature_alias_matches_translation_variant(self) -> None:
         self.assertEqual(
             extractor._match_feature_slug(

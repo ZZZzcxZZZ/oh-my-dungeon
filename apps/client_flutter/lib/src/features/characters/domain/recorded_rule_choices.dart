@@ -47,6 +47,9 @@ class RecordedRuleChoice {
 /// `data['choices']` 的**唯一读取方**（写入方是 `RulesDrivenCharacterBuilder` 的
 /// `recordedChoices`：键 = 生效单元键 `{sourceEntryId}#{choiceId}[#level]`）。
 ///
+/// 展示顺序：先按**来源条目的展示名**（跨来源稳定），同来源内按**等级**，再按选择在
+/// 条目里的**声明序**（与创建向导的步骤顺序一致），最后用 `choiceId` 兜底保证确定性。
+///
 /// 标签解析顺序（绝不臆造）：
 /// 1. 内联选项（`options[].label`）；
 /// 2. `optionType: "skill"` → 选项 id 就是技能名；

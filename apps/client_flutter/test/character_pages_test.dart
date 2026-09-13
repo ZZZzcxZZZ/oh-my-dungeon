@@ -1396,6 +1396,11 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: CharacterEditorPage(
+          // 背景技能来自背景条目（D10）：本用例选的是「贤者」，所以给它一个
+          // 声明了 奥秘 / 历史 的背景条目，技能断言才有据可依。
+          contentEntries: <ContentEntry>[
+            _backgroundEntryFixture('sage', '贤者', <String>['奥秘', '历史']),
+          ],
           onSubmit: (draft) async {
             submitted = draft;
             return true;
@@ -1577,6 +1582,11 @@ void main() {
       MaterialApp(
         home: CharacterEditorPage(
           defaultCreationMethod: 'standard',
+          // 背景**不声明**技能熟练（自制背景的常见情形）：技能网格因此可自由编辑。
+          // 条目一旦声明，那几条就是背景的事实、在网格里锁定（决策 D10，见下一个用例）。
+          contentEntries: <ContentEntry>[
+            _backgroundEntryFixture('homebrew', '士兵', <String>[]),
+          ],
           onSubmit: (draft) async {
             submitted = draft;
             return true;
@@ -1604,10 +1614,54 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(submitted, isNotNull);
-    expect(submitted!.skills['运动'], isFalse);
-    expect(submitted!.skills['威吓'], isTrue);
+    expect(submitted!.skills['运动'], isTrue);
+    expect(submitted!.skills['欺瞒'], isFalse);
     expect(submitted!.skills['察觉'], isTrue);
     expect(submitted!.skills['隐匿'], isTrue);
+  });
+
+  testWidgets('背景条目声明的技能熟练在网格里锁定，不能点掉（D10）', (tester) async {
+    tester.view.physicalSize = const Size(1200, 1500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    CharacterEditDraft? submitted;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterEditorPage(
+          defaultCreationMethod: 'standard',
+          contentEntries: <ContentEntry>[
+            _backgroundEntryFixture('soldier', '士兵', <String>['运动', '威吓']),
+          ],
+          onSubmit: (draft) async {
+            submitted = draft;
+            return true;
+          },
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('standard-character-name-field')),
+      'Nia',
+    );
+    await _goToBuilderStep(tester, 4, '熟练');
+
+    // 锁定的技能仍显示在网格里（用户看得到），但点它不会改状态。
+    await tester.tap(find.byKey(const Key('standard-skill-运动-chip')));
+    await tester.pumpAndSettle();
+    await _goToBuilderStep(tester, 8, '审核');
+    await tester.tap(find.widgetWithText(FilledButton, '创建角色'));
+    await tester.pumpAndSettle();
+
+    expect(submitted, isNotNull);
+    expect(
+      submitted!.skills['运动'],
+      isTrue,
+      reason: '背景条目声明的技能熟练不可取消（旧实现能点掉但引擎仍会授予）',
+    );
+    expect(submitted!.skills['威吓'], isTrue);
   });
 
   testWidgets('standard build can use content library choices', (tester) async {
@@ -1711,7 +1765,12 @@ void main() {
       MaterialApp(
         home: CharacterEditorPage(
           defaultCreationMethod: 'standard',
-          contentEntries: [fighter],
+          contentEntries: <ContentEntry>[
+            fighter,
+            // 该用例断言背景技能（运动 / 威吓）——D10 之后它们来自背景条目的 rules，
+            // 所以这里补一个声明了这两条熟练的士兵背景。
+            _backgroundEntryFixture('soldier', '士兵', <String>['运动', '威吓']),
+          ],
           onSubmit: (draft) async {
             submitted = draft;
             return true;
@@ -1806,7 +1865,11 @@ void main() {
       MaterialApp(
         home: CharacterEditorPage(
           defaultCreationMethod: 'standard',
-          contentEntries: [_fighterRulesContent],
+          contentEntries: <ContentEntry>[
+            _fighterRulesContent,
+            // 断言里的"背景 2"来自背景条目声明的技能熟练（D10）。
+            _backgroundEntryFixture('soldier', '士兵', <String>['运动', '威吓']),
+          ],
           onSubmit: (_) async => true,
         ),
       ),
@@ -3006,6 +3069,35 @@ Future<void> _goToBuilderStep(
   }
   await tester.pumpAndSettle();
 }
+
+/// 背景条目夹具（决策 D10）：背景技能来自条目 `rules.grants` 的
+/// `kind: "proficiency"` + `target: "skill:<档案规范名>"`，向导按**条目名**匹配。
+///
+/// id 必须是规范的 `<packageId>:<type>/<slug>` 形状（只允许 ASCII），展示名才用中文
+/// ——向导的 `_entryIdFor(type, name)` 就是按 `entry.name` 匹配的。
+ContentEntry _backgroundEntryFixture(
+  String slug,
+  String name,
+  List<String> skills,
+) => ContentEntry.fromJson(<String, Object?>{
+  'id': 'test:background/$slug',
+  'type': 'background',
+  'slug': slug,
+  'name': name,
+  'body': <Object?>[],
+  'revision': 1,
+  'rules': <String, Object?>{
+    'grants': <Object?>[
+      for (final skill in skills)
+        <String, Object?>{
+          'id': '$slug-skill-$skill',
+          'kind': 'proficiency',
+          'target': 'skill:$skill',
+          'label': skill,
+        },
+    ],
+  },
+});
 
 const _character = CharacterSheet(
   id: 'char-1',

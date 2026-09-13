@@ -12,6 +12,7 @@ import '../domain/character_manual_overrides.dart';
 import '../domain/character_rule_overrides.dart';
 import '../domain/class_rule_summary.dart';
 import '../domain/declared_levels.dart';
+import '../domain/background_grants.dart';
 import '../domain/dnd5e_rules.dart';
 import '../domain/equipment_cost.dart';
 import '../domain/quick_build.dart';
@@ -921,6 +922,8 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
               extraItemRefs: quickDraft.itemRefs,
               skillProficiencies:
                   quickDraft.skillProficiencies ?? const <String>[],
+              classSummaryFallback: quickDraft.className,
+              raceSummaryFallback: quickDraft.species,
             )
           : QuickBuildService.build(
               QuickBuildSelection(

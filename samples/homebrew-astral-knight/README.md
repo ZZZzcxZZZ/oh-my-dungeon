@@ -51,11 +51,21 @@ Compress-Archive -Path samples/homebrew-astral-knight/manifest.json,
 `apps/client_flutter/test/rules/homebrew_class_end_to_end_test.dart`（真实建角色 + 数值核对）
 守卫——包写坏就会红。
 
-**选择系统的运行时字段已经全部落地并生效**（计划 2，2026-09-12）：`repeatable`（2 级祈唤可重复选取）、
-`group` / `help`（选择面板分组标题与说明）、`countsToward`（共享额度池）、`requires`（前置不满足
-则不可选）、内联 `options[].grants`（选中即生效）。本包**已在用**这些字段；导入期只做取值/引用校验
-（`invalidCountsToward` / `invalidRequires` / `invalidAutoGrant` / `invalidOptionRef` …），
-不再"存在即拒收"（契约 §5.1 的 `unsupportedChoiceField` 已退役）。
+**选择系统的运行时字段已经全部落地并生效**（计划 2，2026-09-12）。本包实际用到的是
+`repeatable`（2 级祈唤可重复选取）、`group` / `help`（选择面板分组标题与说明）、
+`optionType: "spell"` + `maximumOptionLevel`（法术选择）、`optionType: "subclass"`（子职）、
+`equipmentBundle`（装备 A/B）与内联 `options`（值选项，**本包的值选项只给描述、没有 `grants`**）。
+
+**本包没有用到的两个字段**（能力已实现，示例在别处）：
+
+| 字段 | 谁在演示 |
+|---|---|
+| 内联 `options[].grants`（值选项选中即生效）与 `requires`（前置门槛） | `samples/homebrew-partial-class/`（`docs/README.md` §9.2.6 逐字展示） |
+| `countsToward`（法术计入 `prepared` / `known` / `spellbook` 池） | 契约表 §9.2.3；仓库示例包暂未演示（它只对法术选择有意义） |
+
+导入期对这些字段只做取值/引用校验（`invalidCountsToward` / `invalidRequires` /
+`invalidAutoGrant` / `invalidOptionRef` …），不再"存在即拒收"（契约 §5.1 的
+`unsupportedChoiceField` 已退役）。
 
 `docs/README.md` §9.2.7 逐字嵌入了本包的 `manifest.json`、职业条目、一条法术条目与一条特性条目，
 并由 `scripts/test_release_packaging.py::test_readme_examples_match_tracked_samples` 做 JSON 深比较

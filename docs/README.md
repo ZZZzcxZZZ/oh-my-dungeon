@@ -919,7 +919,13 @@ tier（含内置档案）的同 `id` 资源；若**档案没有同 id 资源可�
               }
             ],
             "builderStep": "class",
-            "group": "专长"
+            "group": "专长",
+            "requires": [
+              {
+                "ability": "wis",
+                "minimum": 13
+              }
+            ]
           }
         ]
       },
@@ -962,6 +968,7 @@ tier（含内置档案）的同 `id` 资源；若**档案没有同 id 资源可�
 | 技能选择（唯一写法） | `optionType: "skill"` + `options` 字符串数组 + `builderStep: "proficiencies"` |
 | 值选项（不建条目） | `optionType: "feat"` + 内联 `options[]`，每个选项自带 `grants` |
 | 值选项的授予生效 | `field-medic` 的 `kind: "hitPoints"`、`pathfinder` 的 `kind: "speed"` |
+| 值选项的前置门槛 | `wayfinder-focus` 的 `requires: [{"ability": "wis", "minimum": 13}]`：感知不足时该选项不可选（界面给原因） |
 
 把清单与条目分别保存为 `manifest.json` / `entries.json`（`entryCount` 必须与 entries 数量一致），
 压缩成 `.dndpack` 即可导入。**更完整的职业包**（法术选择、可重复选取、子职、装备 A/B、
@@ -998,9 +1005,10 @@ tier（含内置档案）的同 `id` 资源；若**档案没有同 id 资源可�
 ```
 
 **② 完整职业条目**（`classRules` 四个数值字段、逐级资源、`rules.progression` 的
-`levels` 数组与全部选择——技能 / 值选项（内联 `options` 与 `grants`）/ 装备 A·B /
-戏法（`optionType: "spell"` + `maximumOptionLevel: 0`）/ 可重复祈唤（`repeatable` + `group`）/
-子职 / 专长）：
+`levels` 数组与全部选择——技能 / 值选项（内联 `options`，本包**只给描述**）/ 装备 A·B /
+戏法（`optionType: "spell"` + `maximumOptionLevel: 0`）/ 可重复祈唤（`repeatable` + `group` + `help`）/
+子职 / 专长。**内联 `options[].grants` 与 `requires` 的演示在 §9.2.6 的
+`samples/homebrew-partial-class`**）：
 
 <!-- from:samples/homebrew-astral-knight/entries.json#astral-knight:class/astral-knight -->
 ```json
@@ -1895,9 +1903,9 @@ Material 3 设计系统契约（`DESIGN.md` 与契约测试/golden）；自托�
 | 项 | 结果 |
 |---|---|
 | `flutter analyze` | 0 问题 |
-| `flutter test` | **1583 通过 / 6 跳过**（3 条 golden 默认跳过 + 3 条依赖 `--dart-define` 私有包路径的用例；跳过点与上一基线同一组） |
+| `flutter test` | **1597 通过 / 6 跳过**（3 条 golden 默认跳过 + 3 条依赖 `--dart-define` 私有包路径的用例；跳过点与上一基线同一组） |
 | 服务端 `npm run lint` + `npm test` | 24 套件 / 355 测试通过，0 跳过 |
-| `npm run test:scripts` | **38 通过**（4 个脚本测试套件 + drift worker 产物清单校验；本地有 `private-imports/` 时 0 跳过，公开 CI 上 9 条提取类用例自行 skip） |
+| `npm run test:scripts` | **41 通过**（4 个脚本测试套件 + drift worker 产物清单校验；本地有 `private-imports/` 时 0 跳过，公开 CI 上 9 条提取类用例自行 skip） |
 | `npm run lint:design` | 0 error / 0 warning（1 条 token 统计 info） |
 | `npm run validate:phb-private` | 通过（校验器 + 真实导入器 3 个用例） |
 | CI | 6 个 job：`server` / `client` / `design` / `golden` / `docker` / `scripts` |

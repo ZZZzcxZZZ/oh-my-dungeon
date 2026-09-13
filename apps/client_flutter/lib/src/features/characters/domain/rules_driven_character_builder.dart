@@ -270,34 +270,37 @@ class RulesDrivenCharacterBuilder {
         // 页面与再派生都读这两个键。
         'classRuleSources': RuleFieldSourceMap.toData(classRules.fieldSources),
         'classRuleConflicts': RuleOverrideConflicts.toData(classRules.conflicts),
-        if (spellSlots.isNotEmpty) 'spellSlots': spellSlots,
-        if (classRules.spellcastingAbility case final String ability)
-          'spellcastingAbility': ability,
-        if (classRules.preparedLimit(build.level) case final int preparedLimit)
-          'preparedSpellLimit': preparedLimit,
-        if (StructuredClassRules.startingEquipmentChoice(classEntry)
-            case final StartingEquipmentChoice equipmentChoice)
-          'startingEquipmentMaximum': equipmentChoice.maximum,
-        if (classResources.isNotEmpty)
-          'classResources': [
-            for (final resource in classResources)
-              {
-                'id': resource.id,
-                'name': resource.name,
-                'maximum': resource.maximum,
-                'recovery': resource.recovery,
-              },
-          ],
-        if (actions.isNotEmpty)
-          'actions': [
-            for (final action in actions)
-              {
-                'id': action.id,
-                'name': action.label,
-                if (action.entryId != null) 'entryId': action.entryId,
-                if (action.formula != null) 'formula': action.formula,
-              },
-          ],
+        // 派生快照**无条件写入**（H）：只在有值时才写会让"关闭来源后再派生"留下
+        // 旧包的数值（`hitDie` 变 null 而 `spellSlots` 还是旧值），来源与数值自相
+        // 矛盾。派生结果为空也要显式清空（空表 `{}` / 空列表 `[]` / 无值 `null`），
+        // 消费方据此按**键是否存在**判断"是否已派生"，绝不按"值是否非空"回退。
+        'spellSlots': spellSlots,
+        'spellcastingAbility': classRules.spellcastingAbility,
+        'preparedSpellLimit': classRules.preparedLimit(build.level),
+        'startingEquipmentMaximum': switch (
+          StructuredClassRules.startingEquipmentChoice(classEntry)
+        ) {
+          final StartingEquipmentChoice equipmentChoice => equipmentChoice.maximum,
+          _ => null,
+        },
+        'classResources': [
+          for (final resource in classResources)
+            {
+              'id': resource.id,
+              'name': resource.name,
+              'maximum': resource.maximum,
+              'recovery': resource.recovery,
+            },
+        ],
+        'actions': [
+          for (final action in actions)
+            {
+              'id': action.id,
+              'name': action.label,
+              if (action.entryId != null) 'entryId': action.entryId,
+              if (action.formula != null) 'formula': action.formula,
+            },
+        ],
         'runtime': {
           if (classResources.isNotEmpty)
             'classResourcesUsed': {

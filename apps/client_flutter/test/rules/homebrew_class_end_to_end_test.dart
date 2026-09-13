@@ -893,9 +893,12 @@ void main() {
       // 勘误 tier 140 > 条目 tier 100：prepared 5 级 = 9。
       expect(draft.data['preparedSpellLimit'], 9);
       // replace（D4）：档案 wizard 5 级本有 slots，这里必须"未声明"而不是回退档案。
+      // 派生快照**无条件写入**（H）：键存在、值为空表就是"未声明"；消费方按**键是否
+      // 存在**判断"是否已派生"，因此断言从"键不存在"收紧为"键存在且为空"。
+      expect(draft.data.containsKey('spellSlots'), isTrue);
       expect(
-        draft.data.containsKey('spellSlots'),
-        isFalse,
+        draft.data['spellSlots'],
+        isEmpty,
         reason: 'replace 独占：更低 tier 的档案不提供任何列',
       );
       final sources = draft.data['classRuleSources']! as Map;

@@ -43,8 +43,10 @@ abstract final class RuleOverrideOrder {
   /// `replace` 截断（D4）：在**已排序**的链上，第一条 `mode: replace` 之后的
   /// 声明全部丢弃——更低 tier（含内置档案）不再提供任何列 / 等级。
   ///
-  /// [effective] 是"排序 + 截断"的完整入口；本方法只在调用方需要**先做排序后的
-  /// 调整再截断**时使用（解析器要先应用用户 pin，再追加内置档案统一截断）。
+  /// 调用方**必须**先把内置档案合入链、并让用户的 pin 逐列生效，再做**一次**
+  /// 统一截断：[effective] 只是"排序 + 截断"的完整语义入口，不是解析器的调用路径。
+  /// pin 不是"截断前重排整条链"——它按列在截断**之后**生效（被同 tier `replace`
+  /// 丢弃的声明因此要作为 pin 的候选保留在 `_PinContext.fallbacks` 里）。
   /// 截断逻辑本身仍只有这一处实现。
   static List<RuleOverrideDeclaration> truncate(
     Iterable<RuleOverrideDeclaration> orderedDeclarations,
@@ -59,10 +61,11 @@ abstract final class RuleOverrideOrder {
 
   /// `replace` 截断（D4）：排序后取 [truncate]。
   ///
-  /// **保留理由**：lib 内的合并链不用它（解析器要先追加内置档案再统一 [truncate]），
-  /// 但"排序 + 截断"是 D4 的完整语义，`truncate` 单独无法表达"排在最前的 replace
-  /// 独占"，因此保留这个纯函数入口，仅供测试直接验证 D4（[visibleForTesting]）。
-  /// 生产路径不得改走它——pin 与内置档案必须在截断前合入。
+  /// **保留理由**：lib 内的合并链不用它（解析器要先合入内置档案再统一 [truncate]，
+  /// 用户的 pin 在截断**之后**按列生效），但"排序 + 截断"是 D4 的完整语义，
+  /// `truncate` 单独无法表达"排在最前的 replace 独占"，因此保留这个纯函数入口，
+  /// 仅供测试直接验证 D4（[visibleForTesting]）。
+  /// 生产路径不得改走它——内置档案必须在截断前合入，否则 replace 截不到档案。
   @visibleForTesting
   static List<RuleOverrideDeclaration> effective(
     Iterable<RuleOverrideDeclaration> declarations, {
@@ -76,6 +79,28 @@ abstract final class RuleOverrideOrder {
   static List<String> orderedOriginIds(Iterable<String> originIds) {
     final sorted = originIds.toSet().toList()..sort();
     return List<String>.unmodifiable(sorted);
+  }
+
+  /// 某个来源是否被用户的"关闭覆盖"关掉（决策 D6）：**三向匹配**，与 originId
+  /// 传的是条目 id 还是包 id 无关。
+  ///
+  /// - `originId` 精确命中禁用集合；
+  /// - `originId` 所属的包 id 命中禁用集合（关掉整个包）；
+  /// - 禁用集合里某个**条目 id** 的包 id 等于 `originId`（`originId` 本身是包 id）。
+  ///
+  /// **唯一实现**：解析器（剔除来源、pin 豁免 disabled）与
+  /// `CharacterRuleOverrides.isDisabled` 都调这里，绝不各自内联一份两向 / 三向匹配
+  /// ——`disabled={'errata:class/druid'}` 时用包 id `'errata'` 查询必须同样为 true，
+  /// 否则同一条用户选择会在两处得到不同解释。
+  static bool isDisabled(Set<String> disabledOriginIds, String originId) {
+    if (disabledOriginIds.contains(originId)) return true;
+    final packageId = RuleOverrideDeclaration.packageIdOf(originId);
+    if (packageId.isNotEmpty && disabledOriginIds.contains(packageId)) {
+      return true;
+    }
+    return disabledOriginIds.any(
+      (value) => RuleOverrideDeclaration.packageIdOf(value) == originId,
+    );
   }
 
   /// 冲突表的去重 + 排序（**唯一排序点**，任务 13 门禁要求解析器内没有 `.sort(`）：

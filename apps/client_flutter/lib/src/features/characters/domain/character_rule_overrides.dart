@@ -1,5 +1,6 @@
 // S3 决策 D6：角色对"跨包规则覆盖"的选择的**唯一**读取 / 写入实现。
 import '../../rules/domain/rule_override_declaration.dart';
+import '../../rules/domain/rule_override_priority.dart';
 import 'character.dart';
 
 /// 角色数据 `data.ruleOverrides` 的唯一读写实现（契约 S3、决策 D6）。
@@ -56,16 +57,12 @@ class CharacterRuleOverrides {
       },
   };
 
-  /// 该来源是否被关掉：条目 id 精确命中、它所属包 id 命中，或某个被禁用的条目
-  /// 就属于 [originId] 这个包——三个方向都算（[originId] 可以是条目 id 或包 id）。
-  bool isDisabled(String originId) {
-    if (disabledOriginIds.contains(originId)) return true;
-    final packageId = _packageId(originId);
-    if (packageId.isNotEmpty && disabledOriginIds.contains(packageId)) {
-      return true;
-    }
-    return disabledOriginIds.any((value) => _packageId(value) == originId);
-  }
+  /// 该来源是否被关掉。[originId] 可以是条目 id 或包 id，三向匹配的**唯一实现**
+  /// 在 [RuleOverrideOrder.isDisabled]（解析器剔除来源 / pin 豁免 disabled 走的是
+  /// 同一份），本方法只是薄封装——绝不在这里再内联第二份匹配，否则同一条用户选择
+  /// 会在页面与派生结果里得到不同解释。
+  bool isDisabled(String originId) =>
+      RuleOverrideOrder.isDisabled(disabledOriginIds, originId);
 
   /// 关闭一个覆盖来源（幂等）。[originId] 可以是条目 id 或包 id。
   CharacterRuleOverrides disable(String originId) {

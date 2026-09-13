@@ -101,6 +101,7 @@ class CharacterRuleProjector {
       'spellSlots',
       'spellcastingAbility',
       'preparedSpellLimit',
+      'startingEquipmentMaximum',
       'hitDie',
       'savingThrowAbilities',
       'classResources',

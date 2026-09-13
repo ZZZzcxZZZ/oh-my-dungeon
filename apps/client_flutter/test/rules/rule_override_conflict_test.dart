@@ -11,8 +11,10 @@
 import 'package:dnd_table_client/src/features/characters/domain/rule_override_index.dart';
 import 'package:dnd_table_client/src/features/rules/domain/class_rule_set.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_diagnostic.dart';
+import 'package:dnd_table_client/src/features/rules/domain/rule_field_path.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_override_conflict.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_override_declaration.dart';
+import 'package:dnd_table_client/src/features/rules/domain/rule_override_priority.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_profile.dart';
 import 'package:dnd_table_client/src/features/rules/domain/rule_profile_resolver.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -711,7 +713,52 @@ void main() {
   });
 
   group('replace 截掉同 tier patch 不静默（0.4-4）', () {
-    test('被同 tier replace 丢弃的 patch：每一列都有一条可见冲突', () {
+    test('被同 tier replace 丢弃的 patch：replace 也声明的列才有冲突', () {
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: null,
+        entryId: null,
+        declarations: [
+          // replace 声明 hitDie 与 spellcasting.prepared 两列。
+          RuleOverrideDeclaration.package(
+            originId: 'replacer:class/wizard',
+            packageId: 'replacer',
+            priority: 50,
+            entryId: 'replacer:class/wizard',
+            rules: rulesOf({
+              'mode': 'replace',
+              'hitDie': 10,
+              'spellcasting': {
+                'mode': 'prepared',
+                'prepared': {'5': 7},
+              },
+            }),
+          ),
+          declaration('patch:class/wizard', {
+            'hitDie': 8,
+            'spellcasting': {
+              'prepared': {'5': 9},
+            },
+          }, priority: 50),
+        ],
+      );
+
+      // replace 独占：patch 的列一个都不生效。
+      expect(merged.hitDie, 10);
+      expect(merged.preparedLimit(5), 7, reason: 'replace 自己声明了该列');
+      // 被丢弃这件事可见：**replace 也声明过**的每一列都有冲突记录。
+      final fields = merged.conflicts.map((c) => c.field).toList();
+      expect(fields, contains('hitDie'));
+      expect(fields, contains('spellcasting.prepared'));
+      for (final conflict in merged.conflicts) {
+        expect(conflict.effectiveOriginId, 'replacer:class/wizard');
+        expect(conflict.originIds, contains('patch:class/wizard'));
+        expect(conflict.originIds, contains('replacer:class/wizard'));
+      }
+    });
+
+    test('replace 未声明的列不登记冲突（D4：未声明即未声明）', () {
       final merged = RuleProfileResolver.resolveClassRules(
         profile: profile,
         slug: 'wizard',
@@ -734,17 +781,67 @@ void main() {
         ],
       );
 
-      // replace 独占：patch 的列一个都不生效。
       expect(merged.hitDie, 10);
-      expect(merged.preparedLimit(5), isNull);
-      // 但被丢弃这件事可见：patch 声明过的每一列都有冲突记录，生效者 = replace。
+      expect(
+        merged.preparedLimit(5),
+        isNull,
+        reason: 'replace 未声明 spellcasting.prepared：该列就是未声明',
+      );
       final fields = merged.conflicts.map((c) => c.field).toList();
       expect(fields, contains('hitDie'));
-      expect(fields, contains('spellcasting.prepared'));
-      for (final conflict in merged.conflicts) {
-        expect(conflict.effectiveOriginId, 'replacer:class/wizard');
-        expect(conflict.originIds, contains('patch:class/wizard'));
-      }
+      expect(
+        fields,
+        isNot(contains('spellcasting.prepared')),
+        reason: 'replace 未声明的列不登记冲突（不变量：冲突来源必须声明该列）',
+      );
+    });
+
+    test('pin 到被 replace 丢弃的同 tier patch：该列按 patch 取值、冲突消失', () {
+      final declarations = <RuleOverrideDeclaration>[
+        RuleOverrideDeclaration.package(
+          originId: 'replacer:class/wizard',
+          packageId: 'replacer',
+          priority: 50,
+          entryId: 'replacer:class/wizard',
+          rules: rulesOf({
+            'mode': 'replace',
+            'hitDie': 10,
+            'spellcasting': {
+              'mode': 'prepared',
+              'prepared': {'5': 7},
+            },
+          }),
+        ),
+        declaration('patch:class/wizard', {
+          'hitDie': 8,
+          'spellcasting': {
+            'prepared': {'5': 9},
+          },
+        }, priority: 50),
+      ];
+
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: null,
+        entryId: null,
+        declarations: declarations,
+        pinnedOrigins: const {'spellcasting.prepared': 'patch:class/wizard'},
+      );
+
+      expect(merged.preparedLimit(5), 9, reason: 'pin 只作用于该列');
+      expect(
+        merged.sourceOf('spellcasting.prepared')!.originId,
+        'patch:class/wizard',
+      );
+      expect(
+        merged.conflicts.map((c) => c.field),
+        isNot(contains('spellcasting.prepared')),
+        reason: 'pin 就是用户对该列的答案，冲突消失',
+      );
+      // pin 一列**不得**连带该来源声明的其它列：hitDie 仍由 replace 独占。
+      expect(merged.hitDie, 10);
+      expect(merged.conflicts.map((c) => c.field), contains('hitDie'));
     });
 
     test('更低 tier 被 replace 截断是 D4 设计语义，不记冲突', () {
@@ -766,6 +863,313 @@ void main() {
       );
       expect(merged.hitDie, 10);
       expect(merged.conflicts, isEmpty);
+    });
+  });
+
+  // 新增不变量（B）：**每条冲突的每个 `originId` 都必须声明了该列，
+  // `effectiveOriginId` 必须是其中之一。** 判据与 `_declaredColumnPaths` 同源：
+  // `RuleFieldPath` 解析列路径 + `ClassRuleSet.declares`。
+  group('不变量：冲突来源必须声明该列（B）', () {
+    /// `field` 路径 → "该规则块是否声明了这一列" 的判据（唯一实现）。
+    bool declaresField(ClassRuleSet rules, String field) {
+      if (field == RuleFieldPath.hitDie) return rules.declares('hitDie');
+      if (field == RuleFieldPath.savingThrowAbilities) {
+        return rules.declares('savingThrowAbilities');
+      }
+      if (field.startsWith(RuleFieldPath.spellcastingPrefix)) {
+        final column = field.substring(RuleFieldPath.spellcastingPrefix.length);
+        if (!RuleFieldPath.spellcastingColumns.contains(column)) return false;
+        return rules.spellcasting?.declares(column) ?? false;
+      }
+      final resource = RuleFieldPath.parseResource(field);
+      if (resource == null ||
+          !RuleFieldPath.resourceColumns.contains(resource.column)) {
+        return false;
+      }
+      for (final rule in rules.resources) {
+        if (rule.id == resource.id && rule.declares(resource.column)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    /// 该 fixture 里**每个**冲突都对全部来源断言不变量。
+    void expectInvariant(
+      ResolvedClassRules merged,
+      Map<String, ClassRuleSet> rulesByOrigin,
+    ) {
+      for (final conflict in merged.conflicts) {
+        expect(
+          conflict.originIds,
+          contains(conflict.effectiveOriginId),
+          reason: '${conflict.field}: 生效来源必须参与该列竞争',
+        );
+        for (final originId in conflict.originIds) {
+          final rules = rulesByOrigin[originId];
+          expect(rules, isNotNull, reason: '未知来源 $originId');
+          expect(
+            declaresField(rules!, conflict.field),
+            isTrue,
+            reason: '${conflict.field}: 来源 $originId 并没有声明该列（不变量违反）',
+          );
+        }
+      }
+    }
+
+    /// `resolveClassRules`（`entryRules` 走 `entryId` 同一个 originId）。
+    ResolvedClassRules resolve({
+      required String slug,
+      ClassRuleSet? entryRules,
+      String? entryId,
+      required List<RuleOverrideDeclaration> declarations,
+      Map<String, String> pinnedOrigins = const <String, String>{},
+    }) => RuleProfileResolver.resolveClassRules(
+      profile: profile,
+      slug: slug,
+      entryRules: entryRules,
+      entryId: entryId,
+      declarations: declarations,
+      pinnedOrigins: pinnedOrigins,
+    );
+
+    test('同 tier 抢同一列（标量 / 表 / 资源 maximum）', () {
+      final alpha = declaration('alpha:class/wizard', {
+        'hitDie': 8,
+        'spellcasting': {
+          'mode': 'prepared',
+          'prepared': {'5': 9},
+        },
+        'resources': [
+          {'id': 'x', 'name': 'X', 'maximum': {'table': {'1': 2}}},
+        ],
+      }, priority: 7);
+      final zeta = declaration('zeta:class/wizard', {
+        'hitDie': 10,
+        'spellcasting': {
+          'prepared': {'5': 11},
+        },
+        'resources': [
+          {'id': 'x', 'maximum': 3},
+        ],
+      }, priority: 7);
+      final merged = resolve(
+        slug: 'wizard',
+        declarations: [alpha, zeta],
+      );
+      expect(merged.conflicts, isNotEmpty, reason: 'fixture 必须真的产生冲突');
+      expectInvariant(merged, {
+        alpha.originId: alpha.rules,
+        zeta.originId: zeta.rules,
+      });
+    });
+
+    test('角色自身条目 + 同 tier 包声明', () {
+      final own = rulesOf({
+        'hitDie': 6,
+        'spellcasting': {
+          'mode': 'prepared',
+          'prepared': {'5': 7},
+        },
+      });
+      final other = declaration('alpha:class/wizard', {
+        'hitDie': 8,
+        'spellcasting': {
+          'prepared': {'5': 9},
+        },
+      });
+      final merged = resolve(
+        slug: 'wizard',
+        entryRules: own,
+        entryId: 'zown-pack:class/wizard',
+        declarations: [other],
+      );
+      expect(merged.conflicts, isNotEmpty, reason: 'fixture 必须真的产生冲突');
+      expectInvariant(merged, {
+        'zown-pack:class/wizard': own,
+        other.originId: other.rules,
+      });
+    });
+
+    test('replace 截掉同 tier patch（含 pin 到被丢弃 patch 的情况）', () {
+      final replacer = RuleOverrideDeclaration.package(
+        originId: 'replacer:class/wizard',
+        packageId: 'replacer',
+        priority: 50,
+        entryId: 'replacer:class/wizard',
+        rules: rulesOf({
+          'mode': 'replace',
+          'hitDie': 10,
+          'spellcasting': {
+            'mode': 'prepared',
+            'prepared': {'5': 7},
+          },
+        }),
+      );
+      final patch = declaration('patch:class/wizard', {
+        'hitDie': 8,
+        'spellcasting': {
+          'prepared': {'5': 9},
+        },
+      }, priority: 50);
+      final rulesByOrigin = <String, ClassRuleSet>{
+        replacer.originId: replacer.rules,
+        patch.originId: patch.rules,
+      };
+
+      for (final pinned in const <Map<String, String>>[
+        <String, String>{},
+        <String, String>{'spellcasting.prepared': 'patch:class/wizard'},
+        <String, String>{'hitDie': 'patch:class/wizard'},
+      ]) {
+        final merged = resolve(
+          slug: 'wizard',
+          declarations: [replacer, patch],
+          pinnedOrigins: pinned,
+        );
+        expectInvariant(merged, rulesByOrigin);
+      }
+    });
+
+    test('多个被丢弃 patch 声明同一列：合并成一条冲突、来源取并集（K）', () {
+      final replacer = RuleOverrideDeclaration.package(
+        originId: 'replacer:class/wizard',
+        packageId: 'replacer',
+        priority: 50,
+        entryId: 'replacer:class/wizard',
+        rules: rulesOf({
+          'mode': 'replace',
+          'hitDie': 10,
+          'spellcasting': {
+            'mode': 'prepared',
+            'prepared': {'5': 7},
+          },
+        }),
+      );
+      final merged = resolve(
+        slug: 'wizard',
+        declarations: [
+          replacer,
+          declaration('beta:class/wizard', {
+            'spellcasting': {
+              'prepared': {'5': 11},
+            },
+          }, priority: 50),
+          declaration('alpha:class/wizard', {
+            'spellcasting': {
+              'prepared': {'5': 13},
+            },
+          }, priority: 50),
+        ],
+      );
+      final prepared = merged.conflicts.singleWhere(
+        (conflict) => conflict.field == 'spellcasting.prepared',
+      );
+      expect(
+        prepared.originIds,
+        [
+          'alpha:class/wizard',
+          'beta:class/wizard',
+          'replacer:class/wizard',
+        ],
+        reason: '同一列只登记一条冲突，来源取并集且恒升序（不丢来源）',
+      );
+      expect(prepared.effectiveOriginId, 'replacer:class/wizard');
+    });
+  });
+
+  // D：`maximum` 的常量按数值参与比较——"常量 2"与"整表都是 2"不再误报冲突。
+  group('maximum 跨形态比较（D）', () {
+    String conflictFieldsOf(Object? left, Object? right) {
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: null,
+        entryId: null,
+        declarations: [
+          declaration('alpha:class/wizard', {
+            'resources': [
+              {'id': 'x', 'name': 'X', 'maximum': left},
+            ],
+          }, priority: 0),
+          declaration('zeta:class/wizard', {
+            'resources': [
+              {'id': 'x', 'maximum': right},
+            ],
+          }, priority: 0),
+        ],
+      );
+      return merged.conflicts.map((c) => c.field).join(',');
+    }
+
+    test('"常量 2"与"1..20 全为 2 的表"逐级同值 → 不登记冲突', () {
+      expect(
+        conflictFieldsOf(2, {
+          'table': {for (var level = 1; level <= 20; level++) '$level': 2},
+        }),
+        isEmpty,
+        reason: '同值不因形态不同而误报冲突',
+      );
+    });
+
+    test('"常量 2"与"常量 3"取值不同 → 登记冲突', () {
+      expect(conflictFieldsOf(2, 3), 'resources.x.maximum');
+    });
+  });
+
+  // J：`disabled` 的两种写法（条目 id / 包 id）必须得到同一结果。
+  group('disable 的两种写法行为一致（J）', () {
+    final rules = rulesOf({
+      'spellcasting': {
+        'mode': 'prepared',
+        'prepared': {'5': 11},
+      },
+    });
+
+    ResolvedClassRules disabledAs(String disabled) =>
+        RuleProfileResolver.resolveClassRules(
+          profile: profile,
+          slug: 'wizard',
+          entryRules: null,
+          entryId: null,
+          declarations: [
+            declaration('zeta:class/wizard', {
+              'spellcasting': {
+                'mode': 'prepared',
+                'prepared': {'5': 11},
+              },
+            }, priority: 40),
+          ],
+          disabledOriginIds: {disabled},
+        );
+
+    test('disable 条目 id 与 disable 包 id 解析结果完全相同', () {
+      final byEntryId = disabledAs('zeta:class/wizard');
+      final byPackageId = disabledAs('zeta');
+      expect(byEntryId.preparedLimit(5), byPackageId.preparedLimit(5));
+      expect(
+        byEntryId.preparedLimit(5),
+        9,
+        reason: '回退内置档案（5 级 9），不是被关闭来源的 11',
+      );
+      expect(
+        byEntryId.sourceOf('spellcasting.prepared')!.originId,
+        byPackageId.sourceOf('spellcasting.prepared')!.originId,
+      );
+      // 三向匹配的唯一实现：包 id 查询条目 id 的禁用记录也为 true。
+      expect(
+        RuleOverrideOrder.isDisabled({'zeta:class/wizard'}, 'zeta'),
+        isTrue,
+      );
+      expect(RuleOverrideOrder.isDisabled({'zeta'}, 'zeta:class/wizard'), isTrue);
+      expect(
+        RuleOverrideOrder.isDisabled({'other'}, 'zeta:class/wizard'),
+        isFalse,
+      );
+    });
+
+    test('规则块本身确实声明了该列（fixture 有效性）', () {
+      expect(rules.spellcasting?.declares('prepared'), isTrue);
     });
   });
 }

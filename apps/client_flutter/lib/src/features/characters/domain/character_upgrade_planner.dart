@@ -158,6 +158,7 @@ class CharacterUpgradePlanner {
       'spellSlots',
       'spellcastingAbility',
       'preparedSpellLimit',
+      'startingEquipmentMaximum',
       'hitDie',
       'savingThrowAbilities',
       'classResources',

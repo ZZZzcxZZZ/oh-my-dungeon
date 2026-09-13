@@ -465,7 +465,10 @@ void main() {
     expect(draft.data['preparedSpellLimit'], 4);
   });
 
-  test('omits preparedSpellLimit without a prepared table', () {
+  // H：派生快照**无条件写入**。以前"没有值就不写键"，消费方按 `containsKey`
+  // 判断"是否已派生"时会把键缺失当成"未派生"而回退解析，正是关闭来源后读回旧值的
+  // 根因。因此这里断言的是"键存在且显式表示无值"，不是"键不存在"。
+  test('无准备表 / 无法术位时也显式写入派生快照（键存在 = 已派生）', () {
     final classEntry = _entry(
       id: 'test:class/barbarian',
       type: 'class',
@@ -508,9 +511,25 @@ void main() {
           },
         );
 
-    expect(draft.data.containsKey('preparedSpellLimit'), isFalse);
-    expect(draft.data.containsKey('spellSlots'), isFalse);
-    expect(draft.data.containsKey('spellcastingAbility'), isFalse);
+    expect(draft.data.containsKey('preparedSpellLimit'), isTrue);
+    expect(draft.data['preparedSpellLimit'], isNull);
+    expect(draft.data.containsKey('spellcastingAbility'), isTrue);
+    expect(draft.data['spellcastingAbility'], isNull);
+    expect(draft.data.containsKey('spellSlots'), isTrue);
+    expect(draft.data['spellSlots'], isEmpty);
+    expect(draft.data.containsKey('startingEquipmentMaximum'), isTrue);
+    expect(draft.data['startingEquipmentMaximum'], isNull);
+    // 档案 barbarian 确实有"狂暴"资源：这里断言的是"键无条件存在 + 内容正确"。
+    expect(draft.data.containsKey('classResources'), isTrue);
+    expect(draft.data['classResources'], [
+      {
+        'id': 'rage',
+        'name': '狂暴',
+        'maximum': 2,
+        'recovery': 'shortRestOne',
+      },
+    ]);
+    expect(draft.data.containsKey('actions'), isTrue);
     // 条目没有规则块 → 档案按条目 id 最后一段（barbarian）补齐。
     expect(draft.data['hitDie'], 12);
     expect(draft.data['classIdentity'], {

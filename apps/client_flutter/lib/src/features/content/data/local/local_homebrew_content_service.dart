@@ -1,6 +1,7 @@
 import '../../domain/content_block.dart';
 import '../../domain/content_entry.dart';
 import '../../domain/content_package_manifest.dart';
+import '../../../rules/domain/character_rule_definition.dart';
 import '../../domain/content_schema_registry.dart';
 import 'content_repository.dart';
 
@@ -24,8 +25,10 @@ class LocalHomebrewContentService {
   }) : _repository = repository;
 
   static const packageId = 'local-homebrew';
+  /// 本地自制内容包的清单行。**`formatVersion` 必须是 3**：契约只有一个包格式版本，
+  /// 导出 `.dndpack` 时直接把它写进 `manifest.json`，写 1 会产出自己都导不回的包。
   static const packageManifest = ContentPackageManifest(
-    formatVersion: 1,
+    formatVersion: 3,
     id: packageId,
     name: '我的自制内容',
     version: '1.0.0',
@@ -45,6 +48,9 @@ class LocalHomebrewContentService {
     String description = '',
     Map<String, Object?> structured = const {},
     List<String> tags = const [],
+    /// 条目自己的 `rules`（`progression` / `choices` / `grants`，契约 §3.2）。
+    /// 传 `null` = 不声明；传 `{}` = 显式声明为空（清空）。
+    Map<String, Object?>? rules,
   }) async {
     final validated = _validate(type: type, name: name, structured: structured);
     final slug = await _availableSlug(validated.normalizedType, name);
@@ -57,6 +63,7 @@ class LocalHomebrewContentService {
       description: description,
       structured: validated.normalizedStructured,
       tags: tags,
+      rules: _parseRules(rules),
       revision: 1,
     );
     await _repository.upsertPackageEntry(
@@ -73,6 +80,8 @@ class LocalHomebrewContentService {
     String description = '',
     Map<String, Object?> structured = const {},
     List<String> tags = const [],
+    /// `null` = 保留既有 `rules`；`{}` = 清空；其余按 JSON 解析（形状非法即报错）。
+    Map<String, Object?>? rules,
   }) async {
     _requireOwned(existing);
     final validated = _validate(
@@ -89,6 +98,7 @@ class LocalHomebrewContentService {
       description: description,
       structured: validated.normalizedStructured,
       tags: tags,
+      rules: rules == null ? existing.rules : _parseRules(rules),
       revision: existing.revision + 1,
       existing: existing,
     );
@@ -102,6 +112,20 @@ class LocalHomebrewContentService {
   Future<void> delete(ContentEntry entry) async {
     _requireOwned(entry);
     await _repository.deletePackageEntry(entry.id);
+  }
+
+  /// `rules` 原始 JSON → [CharacterRuleDefinition]（**唯一解析点**）。
+  ///
+  /// 形状非法（缺 `id`/`kind`、类型不符……）时抛
+  /// [LocalHomebrewValidationException]，把底层异常原文带给作者；绝不静默丢弃
+  /// `rules`——那会让作者以为"写了就生效"，而角色卡上什么都没有。
+  CharacterRuleDefinition? _parseRules(Map<String, Object?>? rules) {
+    if (rules == null) return null;
+    try {
+      return CharacterRuleDefinition.fromJson(rules);
+    } catch (error) {
+      throw LocalHomebrewValidationException(<String>['rules 形状不合法：$error']);
+    }
   }
 
   ContentSchemaValidationResult _validate({
@@ -130,6 +154,7 @@ class LocalHomebrewContentService {
     required Map<String, Object?> structured,
     required List<String> tags,
     required int revision,
+    CharacterRuleDefinition? rules,
     ContentEntry? existing,
   }) {
     final cleanDescription = description.trim();
@@ -151,7 +176,7 @@ class LocalHomebrewContentService {
           .toList(),
       source: const ContentSource(label: '我的自制内容'),
       relations: existing?.relations ?? const [],
-      rules: existing?.rules,
+      rules: rules,
       revision: revision,
     );
   }

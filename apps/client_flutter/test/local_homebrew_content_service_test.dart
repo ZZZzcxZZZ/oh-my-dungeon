@@ -82,4 +82,57 @@ void main() {
     expect(await repository.getByKey(deleted.id), isNull);
     expect(await repository.getByKey(kept.id), isNotNull);
   });
+  test('包清单行必须是 formatVersion 3（导出/导入共用同一契约）', () {
+    expect(LocalHomebrewContentService.packageManifest.formatVersion, 3);
+  });
+
+  test('rules 可写可清：create 落库、update 传 {} 清空、形状非法即报错', () async {
+    final repository = MemoryContentRepository();
+    final service = LocalHomebrewContentService(repository: repository);
+
+    final entry = await service.create(
+      type: 'class',
+      name: '自制职业',
+      structured: const {
+        'classRules': {'hitDie': 10},
+      },
+      rules: const {
+        'progression': [
+          {
+            'levels': [1],
+            'grants': [
+              {'id': 'g1', 'kind': 'proficiency', 'target': 'skill:运动'},
+            ],
+          },
+        ],
+      },
+    );
+    expect(entry.rules, isNotNull);
+    expect(entry.rules!.progression.single.levels, [1]);
+    expect(entry.rules!.progression.single.grants.single.target, 'skill:运动');
+
+    // update 传 rules: {} = 清空（而不是"保留旧值"——作者要能删掉规则）。
+    final cleared = await service.update(
+      existing: entry,
+      name: entry.name,
+      structured: entry.structured,
+      rules: const <String, Object?>{},
+    );
+    expect(cleared.rules!.progression, isEmpty);
+    expect(cleared.rules!.choices, isEmpty);
+
+    // 形状非法 → 明确报错，绝不静默丢弃 rules。
+    await expectLater(
+      service.create(
+        type: 'class',
+        name: '坏规则职业',
+        rules: const {
+          'progression': [
+            {'levels': ['一'], 'grants': []},
+          ],
+        },
+      ),
+      throwsA(isA<LocalHomebrewValidationException>()),
+    );
+  });
 }

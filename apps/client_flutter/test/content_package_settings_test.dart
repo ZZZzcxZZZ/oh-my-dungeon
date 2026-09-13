@@ -5,6 +5,8 @@ import 'package:dnd_table_client/src/features/content/data/local/content_reposit
 import 'package:dnd_table_client/src/features/content/domain/content_file_picker.dart';
 import 'package:dnd_table_client/src/features/content/presentation/content_package_settings_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:dnd_table_client/src/features/content/data/local/local_homebrew_content_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/content_test_support.dart';
@@ -187,6 +189,8 @@ void main() {
 
     // "清除所有本地资料包" 入口可见。
     expect(find.text('清除所有本地资料包'), findsOneWidget);
+    // 新增的「我的自制内容」卡片会把入口推到视口外：先滚到可见再点。
+    await tester.ensureVisible(find.text('清除所有本地资料包'));
     await tester.tap(find.text('清除所有本地资料包'));
     await tester.pumpAndSettle();
 
@@ -300,4 +304,123 @@ void main() {
       expect(packages.map((p) => p.id), containsAll(['alpha', 'beta']));
     },
   );
+  testWidgets('新建自制条目：类型/名称/structured/rules 落到 local-homebrew 包', (tester) async {
+    final repository = MemoryContentRepository();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ContentPackageSettingsPage(
+          repository: repository,
+          importer: ContentPackageImporter(repository),
+          filePicker: MemoryContentFilePicker(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('homebrew-entry-create-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('新建自制条目'), findsOneWidget);
+
+    // 类型下拉显式选 class：默认类型是第一个可创建类型（spell），它要求
+    // level / school 这些必填字段，不属于本用例要验证的东西。
+    await tester.tap(find.byKey(const Key('homebrew-entry-type')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('职业（class）').last);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('homebrew-entry-name')),
+      '织星者',
+    );
+    await tester.enterText(
+      find.byKey(const Key('homebrew-entry-structured')),
+      '{"classRules": {"hitDie": 8}}',
+    );
+    await tester.enterText(
+      find.byKey(const Key('homebrew-entry-rules')),
+      '{"progression": [{"levels": [1], "grants": ['
+      '{"id": "g1", "kind": "proficiency", "target": "skill:运动"}]}]}',
+    );
+    await tester.tap(find.byKey(const Key('homebrew-entry-save')));
+    await tester.pumpAndSettle();
+
+    // 对话框关闭 + 列表出现新条目。
+    expect(find.text('新建自制条目'), findsNothing);
+    final entries = await repository.search(
+      const ContentQuery(packageId: LocalHomebrewContentService.packageId),
+    );
+    expect(entries, hasLength(1));
+    expect(entries.single.name, '织星者');
+    expect(entries.single.rules!.progression.single.grants.single.target, 'skill:运动');
+    expect(find.byKey(const Key('homebrew-export-dndpack-button')), findsOneWidget);
+  });
+
+  testWidgets('structured 不是合法 JSON → 就地报错、对话框不关、什么都没写', (tester) async {
+    final repository = MemoryContentRepository();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ContentPackageSettingsPage(
+          repository: repository,
+          importer: ContentPackageImporter(repository),
+          filePicker: MemoryContentFilePicker(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('homebrew-entry-create-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('homebrew-entry-name')), '坏的');
+    await tester.enterText(
+      find.byKey(const Key('homebrew-entry-structured')),
+      '{not json',
+    );
+    await tester.tap(find.byKey(const Key('homebrew-entry-save')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('homebrew-entry-errors')), findsOneWidget);
+    expect(find.textContaining('不是合法 JSON'), findsOneWidget);
+    expect(find.text('新建自制条目'), findsOneWidget, reason: '出错不关对话框');
+    expect(await repository.search(const ContentQuery()), isEmpty);
+  });
+
+  testWidgets('导出 .dndpack：产物能被真实导入器读回，文件名与条目数正确', (tester) async {
+    final repository = MemoryContentRepository();
+    final importer = ContentPackageImporter(repository);
+    final service = LocalHomebrewContentService(repository: repository);
+    await service.create(
+      type: 'spell',
+      name: '星火',
+      structured: const {'level': 0, 'school': '塑能'},
+    );
+
+    String? exportedName;
+    Uint8List? exportedBytes;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ContentPackageSettingsPage(
+          repository: repository,
+          importer: importer,
+          filePicker: MemoryContentFilePicker(),
+          onExportDndPack: (fileName, bytes) async {
+            exportedName = fileName;
+            exportedBytes = bytes;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('homebrew-export-dndpack-button')));
+    await tester.pumpAndSettle();
+
+    expect(exportedName, 'local-homebrew.dndpack');
+    expect(exportedBytes, isNotNull);
+    final report = await ContentPackageImporter(
+      MemoryContentRepository(),
+    ).previewDndPack(exportedBytes!);
+    expect(report.valid, isTrue, reason: '${report.errors}');
+    expect(report.entryCount, 1);
+    expect(find.textContaining('已导出'), findsOneWidget);
+  });
 }

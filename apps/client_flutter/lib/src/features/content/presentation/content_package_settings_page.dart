@@ -3,25 +3,38 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
+
+import '../data/export/dndpack_exporter.dart';
 import '../data/import/content_package_importer.dart';
 import '../data/local/content_repository.dart';
+import '../data/local/local_homebrew_content_service.dart';
+import '../domain/content_entry.dart';
 import '../domain/content_file_picker.dart';
 import '../domain/content_import_report.dart';
 import '../domain/content_package_manifest.dart';
 import 'batch_import_wizard_dialog.dart';
 import 'content_import_preview_dialog.dart';
+import 'homebrew_entry_editor_dialog.dart';
 
 class ContentPackageSettingsPage extends StatefulWidget {
   const ContentPackageSettingsPage({
     required this.repository,
     required this.importer,
     required this.filePicker,
+    this.onExportDndPack,
     super.key,
   });
 
   final ContentRepository repository;
   final ContentPackageImporter importer;
   final ContentFilePicker filePicker;
+
+  /// 导出 `.dndpack` 时的落盘方式。默认走 `FilePicker.saveFile`（与角色卡导出同一
+  /// 入口）；测试注入一个记录器，就能在不碰文件系统的前提下断言产物。
+  final Future<void> Function(String fileName, Uint8List bytes)? onExportDndPack;
 
   @override
   State<ContentPackageSettingsPage> createState() =>
@@ -32,7 +45,12 @@ class _ContentPackageSettingsPageState
     extends State<ContentPackageSettingsPage> {
   List<ContentPackageManifest> _packages = const [];
   Map<String, bool> _enabled = {};
+  List<ContentEntry> _homebrewEntries = const [];
+  bool _exporting = false;
   StreamSubscription<List<ContentPackageManifest>>? _sub;
+
+  LocalHomebrewContentService get _homebrew =>
+      LocalHomebrewContentService(repository: widget.repository);
 
   @override
   void initState() {
@@ -50,7 +68,93 @@ class _ContentPackageSettingsPageState
       _packages = packages;
       _enabled = enabled;
     });
+    await _reloadHomebrewEntries();
   }
+
+  Future<void> _reloadHomebrewEntries() async {
+    final entries = await widget.repository.search(
+      const ContentQuery(packageId: LocalHomebrewContentService.packageId),
+    );
+    if (!mounted) return;
+    setState(() => _homebrewEntries = entries);
+  }
+
+  /// 新建 / 编辑自制条目（作者 GUI 的唯一入口；写入走 `LocalHomebrewContentService`）。
+  Future<void> _editHomebrewEntry([ContentEntry? existing]) async {
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (_) => HomebrewEntryEditorDialog(
+        service: _homebrew,
+        existing: existing,
+      ),
+    );
+    if (saved == true) await _reloadHomebrewEntries();
+  }
+
+  Future<void> _deleteHomebrewEntry(ContentEntry entry) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除自制条目'),
+        content: Text('将删除「${entry.name}」，此操作不可撤销。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+              foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _homebrew.delete(entry);
+    await _reloadHomebrewEntries();
+    messenger.showSnackBar(SnackBar(content: Text('已删除「${entry.name}」')));
+  }
+
+  /// 导出自制内容为 `.dndpack`（S4）。产物先经**真实导入器**自校验，
+  /// 不合法时把字段级错误显示出来，而不是写一个导不回来的包。
+  Future<void> _exportHomebrewDndPack() async {
+    if (_homebrewEntries.isEmpty || _exporting) return;
+    setState(() => _exporting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final export = await DndPackExporter(
+        repository: widget.repository,
+        importer: widget.importer,
+      ).build(packageId: LocalHomebrewContentService.packageId);
+      final save = widget.onExportDndPack ?? _saveBytesWithPicker;
+      await save(export.fileName, export.bytes);
+      messenger.showSnackBar(
+        SnackBar(content: Text('已导出 ${export.fileName}（${export.report.entryCount} 个条目）')),
+      );
+    } on DndPackExportException catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('导出被拦下：${error.message}')),
+      );
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text('导出失败：$error')));
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  Future<void> _saveBytesWithPicker(String fileName, Uint8List bytes) =>
+      FilePicker.platform.saveFile(
+        dialogTitle: '导出资料包',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: const ['dndpack'],
+        bytes: bytes,
+      );
 
   @override
   void dispose() {
@@ -189,6 +293,75 @@ class _ContentPackageSettingsPageState
               onPressed: _pickMultipleAndPreview,
               icon: const Icon(Icons.folder_open_outlined),
               label: const Text('批量导入'),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '我的自制内容',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
+                        TextButton.icon(
+                          key: const Key('homebrew-entry-create-button'),
+                          onPressed: () => _editHomebrewEntry(),
+                          icon: const Icon(Icons.add),
+                          label: const Text('新建条目'),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '自制条目与导入的资料包共用同一套契约与校验；导出为 .dndpack 前会先用真实导入器自校验。',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (_homebrewEntries.isEmpty)
+                      const Text('还没有自制条目。')
+                    else
+                      for (final entry in _homebrewEntries)
+                        ListTile(
+                          key: Key('homebrew-entry-${entry.slug}'),
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(entry.name),
+                          subtitle: Text('${entry.type} · ${entry.slug}'),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: '编辑',
+                                icon: const Icon(Icons.edit_outlined),
+                                onPressed: () => _editHomebrewEntry(entry),
+                              ),
+                              IconButton(
+                                tooltip: '删除',
+                                icon: const Icon(Icons.delete_outline),
+                                onPressed: () => _deleteHomebrewEntry(entry),
+                              ),
+                            ],
+                          ),
+                        ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      key: const Key('homebrew-export-dndpack-button'),
+                      onPressed: _homebrewEntries.isEmpty || _exporting
+                          ? null
+                          : _exportHomebrewDndPack,
+                      icon: const Icon(Icons.archive_outlined),
+                      label: const Text('导出 .dndpack'),
+                    ),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 16),
             for (final package in _packages)

@@ -619,6 +619,90 @@ void main() {
     expect(draft.maxHp, 14, reason: '档案 d12 + CON 14（+2）');
   });
 
+  test('cantrips 池：戏法列 1 → 只落库 1 个戏法，其余进 pending（决策 D8）', () {
+    final classEntry = _entry(
+      id: 'test:class/cantrip-keeper',
+      type: 'class',
+      name: 'Cantrip Keeper',
+      structured: const {
+        'classRules': {
+          'hitDie': 6,
+          'spellcasting': {
+            'mode': 'prepared',
+            'ability': 'int',
+            'archetype': 'full-caster',
+            // 职业自身的戏法列：1 级 1 个 → 戏法池的唯一额度来源。
+            'cantrips': [1],
+            'prepared': [2],
+          },
+        },
+      },
+      rules: const {
+        'choices': [
+          {
+            'id': 'cantrips',
+            'label': '戏法',
+            'optionType': 'spell',
+            'minimum': 0,
+            'maximum': 20,
+            'maximumOptionLevel': 0,
+            'countsToward': 'cantrips',
+            'optionTags': ['spell-list:mage'],
+          },
+        ],
+      },
+    );
+    final spells = [
+      for (final suffix in const ['a', 'b'])
+        _entry(
+          id: 'test:spell/cantrip-$suffix',
+          type: 'spell',
+          name: '戏法 $suffix',
+          tags: const ['spell-list:mage'],
+          structured: const {'level': 0},
+          rules: const {},
+        ),
+    ];
+    final entries = <String, ContentEntry>{
+      classEntry.id: classEntry,
+      for (final spell in spells) spell.id: spell,
+    };
+
+    final draft = RulesDrivenCharacterBuilder(entries: entries).build(
+      name: 'Mira',
+      build: const CharacterBuild(
+        level: 1,
+        selections: {'class': 'test:class/cantrip-keeper'},
+        choices: {
+          'test:class/cantrip-keeper#cantrips': [
+            'test:spell/cantrip-a',
+            'test:spell/cantrip-b',
+          ],
+        },
+      ),
+      abilities: const {
+        'str': 8,
+        'dex': 14,
+        'con': 14,
+        'int': 16,
+        'wis': 12,
+        'cha': 10,
+      },
+    );
+
+    final recorded = (draft.data['choices']! as Map).cast<String, Object?>();
+    expect(
+      recorded['test:class/cantrip-keeper#cantrips'],
+      <String>['test:spell/cantrip-a'],
+      reason: '戏法列只给 1 个额度：第二个进 pending，不落库',
+    );
+    expect(
+      (draft.data['pendingChoices']! as List).length,
+      1,
+      reason: '超池的选中值必须如实进 pending，不静默丢弃',
+    );
+  });
+
   test('countsToward 的池上限进派生：准备表 2 → 只落库 2 个，其余进 pending（决策 D3）', () {
     final classEntry = _entry(
       id: 'test:class/keeper',

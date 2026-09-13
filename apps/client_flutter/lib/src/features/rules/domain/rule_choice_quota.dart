@@ -26,8 +26,13 @@ abstract final class RuleChoiceQuota {
     required int level,
   }) {
     final prepared = rules.preparedLimit(level);
-    if (prepared == null) return const <String, int>{};
-    return <String, int>{'prepared': prepared, 'known': prepared};
+    final cantrips = rules.cantripLimit(level);
+    return <String, int>{
+      if (prepared != null) ...<String, int>{'prepared': prepared, 'known': prepared},
+      // 戏法数量来自职业 `cantrips` 列（决策 D8）：列未声明时不进表 → 该池不额
+      // 外约束（选择自身的 `maximum` 仍然生效），绝不凭空编造一个数。
+      'cantrips': ?cantrips,
+    };
   }
 
   /// 某个选择在池已被占用 [usedByOthers] 之后的**有效上限**：

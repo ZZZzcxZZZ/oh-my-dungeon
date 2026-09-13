@@ -172,6 +172,63 @@ class Phb2024V2ToolsTest(unittest.TestCase):
         )
         self.assertEqual(extractor.MANUAL_REVIEW[0]["raw"], "未知技能")
 
+    def test_spell_level_bands_track_unlock_levels(self) -> None:
+        """`maximumSpellLevel` → 环阶解锁点（决策 D8 的"环阶带"）。"""
+        self.assertEqual(
+            extractor.spell_level_bands({"1": 1, "3": 2, "5": 3}),
+            [(1, 1), (2, 3), (3, 5)],
+        )
+        # 0 / 缺失 = 未解锁；取值重复的等级不重复生成。
+        self.assertEqual(
+            extractor.spell_level_bands({"1": 0, "2": 1, "3": 1, "5": 2}),
+            [(1, 2), (2, 5)],
+        )
+        self.assertEqual(extractor.spell_level_bands({}), [])
+        self.assertEqual(extractor.spell_level_bands([1, 2, 3]), [])
+
+    def test_extracted_spellcasters_emit_spell_choices(self) -> None:
+        """8 个施法职业都产出 `optionType: "spell"` 的选择（决策 D8）。
+
+        - 每个施法者一条戏法选择（`maximumOptionLevel: 0` + `countsToward: "cantrips"`）；
+        - 每个"环阶解锁点"一条（`maximumOptionLevel` = 该环阶，`countsToward: "prepared"`）；
+        - `optionTags` 必须等于 `spellcasting.listTags`（否则运行期选不到任何法术）。
+        """
+        _require_private_phb_source()
+        extractor.SLUG_SEEN.clear()
+        extractor.CLASS_ENTRY_SLUGS.clear()
+        checked = 0
+        for cls_name in extractor.CLASS_DIRS:
+            entry, _, _ = extractor.extract_class(cls_name)
+            self.assertIsNotNone(entry, cls_name)
+            structured = entry.get("structured") or {}
+            spellcasting = (structured.get("classRules") or {}).get("spellcasting")
+            choices = [
+                choice
+                for step in (entry.get("rules") or {}).get("progression", [])
+                for choice in step.get("choices", [])
+                if choice.get("optionType") == "spell"
+            ]
+            if not spellcasting:
+                self.assertEqual(choices, [], cls_name)
+                continue
+            checked += 1
+            list_tags = spellcasting.get("listTags")
+            cantrips = [c for c in choices if c.get("maximumOptionLevel") == 0]
+            self.assertEqual(len(cantrips), 1, cls_name)
+            self.assertEqual(cantrips[0]["countsToward"], "cantrips", cls_name)
+            self.assertEqual(cantrips[0]["optionTags"], list_tags, cls_name)
+            bands = extractor.spell_level_bands(spellcasting.get("maximumSpellLevel"))
+            levelled = [c for c in choices if c.get("maximumOptionLevel") != 0]
+            self.assertEqual(
+                [c["maximumOptionLevel"] for c in levelled],
+                [band[0] for band in bands],
+                cls_name,
+            )
+            for choice in levelled:
+                self.assertEqual(choice["countsToward"], "prepared", cls_name)
+                self.assertEqual(choice["optionTags"], list_tags, cls_name)
+        self.assertEqual(checked, 8, "8 个施法职业都应产出法术选择")
+
     def test_extracted_backgrounds_declare_skill_grants(self) -> None:
         """真实源文里 16 个背景都必须产出 `skill:<档案规范名>` 的熟练 grant。"""
         _require_private_phb_source()

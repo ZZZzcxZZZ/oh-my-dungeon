@@ -426,8 +426,8 @@ PHB 2024 官方表格）：
 7. 自制职业可以只靠 `classRules` 声明规则；未声明字段显示"未声明"而非猜测。
 8. **选择系统运行时语义落地**（计划 2，2026-09-12）：内联选项与字符串简写选中即生效
    （自动授予熟练/属性加值）；`repeatable` 允许同一选项选多次并按其次数结算 `grants`；
-   `countsToward` 计入共享额度池（`prepared` / `known` 取职业 `prepared` 列，`spellbook`
-   无独立数值列 → 不限）；`requires` 不满足时该选择/选项不可用并在界面说明原因；`group` /
+   `countsToward` 计入共享额度池（`prepared` / `known` 取职业 `prepared` 列、`cantrips` 取
+   `cantrips` 列、`spellbook` 无独立数值列 → 不限）；`requires` 不满足时该选择/选项不可用并在界面说明原因；`group` /
    `help` 落到选择面板；`optionType: "spell"` 走法术池并把选中值镜像进
    `manualOverrides.spells.alwaysPreparedEntryIds`。导入期不再"存在即拒收"，改为真正的
    取值/引用校验（`invalidCountsToward` / `invalidRequires` / `invalidAutoGrant`，§9.2.3）。
@@ -497,7 +497,7 @@ PHB 2024 官方表格）：
 | 骰子细节 | 优势/劣势只允许二选一，未实现"同时存在即抵消"；攻击掷出天然 20 不自动重击翻倍伤害 |
 | 职业资源的效果 | 只追踪"用了几次 / 怎么恢复"（10 个职业 13 项资源的上限与恢复语义**已建模**）；资源池的**具体效果未结算**：引导神力选项、野性形态数据与形态切换、术法点转换法术位、圣疗治疗结算、魔法诡计恢复法术位、诗人激励骰的授予与消耗 |
 | 伤害抗性与免疫 | `conditionResistance` grant 已从契约移除，抗性/免疫结算**未建模** |
-| 选择系统（计划 2，已实现） | `repeatable` / `countsToward` / `requires` / `group` / `help` 与内联选项 `grants` **已实现**（§9.2.3）。能力边界：`requires` 的 `ability` 门槛按**入参基础属性**判定（由其它选择授予的属性加值不计入门槛）；`spellbook` 池无独立数值列，只受选择自身 `maximum` 约束；PHB 提取器尚未产出 `optionType: "spell"` 选择（运行时已支持）；背景技能仍走中文名预设 |
+| 选择系统（计划 2，已实现） | `repeatable` / `countsToward` / `requires` / `group` / `help` 与内联选项 `grants` **已实现**（§9.2.3）。能力边界：`requires` 的 `ability` 门槛按**入参基础属性**判定（由其它选择授予的属性加值不计入门槛）；`spellbook` 池无独立数值列，只受选择自身 `maximum` 约束；PHB 提取器已产出 `optionType: "spell"` 选择（D8）与背景技能 grant（D10）|
 | 规则来源没有等级维度（S3 决策 D5） | 表列**逐级**回退会产出"1–19 级来自档案、20 级来自条目"的数值，但来源只如实记在**最高 tier 的声明者**一条上（如 `spellcasting.prepared`），不做 `spellcasting.prepared@20`；逐级细节需要时由调用方读表自己比 |
 | `recovery` 不逐级合并（S3 决策 D5） | `resources[].recovery` 的常量形态与 `{"table": …}` 形态是同一条来源路径，整列由"声明过 `recovery` 的最高 tier"负责，**不**逐级借用更低 tier 的恢复表（恢复语义是枚举而不是可加的数值） |
 | `resources: []` 不再清空档案资源（S3） | 空数组只表示"本块没有资源声明"；要清空档案同名资源必须显式声明 `classRules.mode: "replace"` |
@@ -718,7 +718,7 @@ tier（含内置档案）的同 `id` 资源；若**档案没有同 id 资源可�
 | `maximumOptionLevel` | int? | 条目选项的等级上限（0–9） |
 | `recommendedEntryIds` | string[] | 推荐项，界面预选 |
 | `repeatable` | bool，默认 `false` | 同一 option id 可被选多次；`maximum` 随之成为**次数上限**，每次选取独立结算 `grants` |
-| `countsToward` | `"spellbook"` / `"known"` / `"prepared"` / `null` | 计入哪个数量池；`null` = 不占池，只受 `maximum`。`prepared` / `known` 取职业 `spellcasting.prepared` 列，`spellbook` 无独立数值列（不限） |
+| `countsToward` | `"spellbook"` / `"known"` / `"prepared"` / `"cantrips"` / `null` | 计入哪个数量池；`null` = 不占池，只受 `maximum`。`prepared` / `known` 取职业 `spellcasting.prepared` 列，**`cantrips` 取 `spellcasting.cantrips` 列（逐级不同）**，`spellbook` 无独立数值列（不限） |
 | `requires` | object[] | `{choice, option?}` 或 `{ability, minimum}`；两形态字段互斥、ability 形态必须有正整数 `minimum`，混写/多余字段/缺字段/非法取值导入报精确到字段的 `invalidRequires`。不满足时选择（或 `options[].requires` 的选项）不可用并说明原因，已选值进 pending 不静默丢弃 |
 | `group` / `help` | string? | 分组标题与帮助文案（呈现在选择面板；技能网格与法术池两种专用渲染器同样渲染 `group`，组标题样式只有一处实现） |
 | `builderStep` | string | 创建向导步骤提示（`allowedBuilderSteps`）。**值类型/专用 UI 例外**：`skill` 恒在「熟练」步骤、`spell` 恒在「法术」步骤，位置只由 `optionType` 决定（`builderStep` 被忽略） |
@@ -1903,9 +1903,9 @@ Material 3 设计系统契约（`DESIGN.md` 与契约测试/golden）；自托�
 | 项 | 结果 |
 |---|---|
 | `flutter analyze` | 0 问题 |
-| `flutter test` | **1597 通过 / 6 跳过**（3 条 golden 默认跳过 + 3 条依赖 `--dart-define` 私有包路径的用例；跳过点与上一基线同一组） |
+| `flutter test` | **1599 通过 / 6 跳过**（3 条 golden 默认跳过 + 3 条依赖 `--dart-define` 私有包路径的用例；跳过点与上一基线同一组） |
 | 服务端 `npm run lint` + `npm test` | 24 套件 / 355 测试通过，0 跳过 |
-| `npm run test:scripts` | **41 通过**（4 个脚本测试套件 + drift worker 产物清单校验；本地有 `private-imports/` 时 0 跳过，公开 CI 上 9 条提取类用例自行 skip） |
+| `npm run test:scripts` | **43 通过**（4 个脚本测试套件 + drift worker 产物清单校验；本地有 `private-imports/` 时 0 跳过，公开 CI 上 9 条提取类用例自行 skip） |
 | `npm run lint:design` | 0 error / 0 warning（1 条 token 统计 info） |
 | `npm run validate:phb-private` | 通过（校验器 + 真实导入器 3 个用例） |
 | CI | 6 个 job：`server` / `client` / `design` / `golden` / `docker` / `scripts` |

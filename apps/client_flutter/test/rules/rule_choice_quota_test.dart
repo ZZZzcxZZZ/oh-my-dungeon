@@ -83,8 +83,20 @@ void main() {
 
     // 法师 1 级 prepared = 4（`assets/rules/dnd5e-2024.rules.json`，
     // 见 `builtin_rule_profile_test.dart` 的同表断言）。
-    expect(limits, {'prepared': 4, 'known': 4});
+    // 法师 1 级 cantrips = 3（决策 D8 新增的池；见 `assets/rules/…` 同表断言）。
+    expect(limits, {'prepared': 4, 'known': 4, 'cantrips': 3});
     expect(limits.containsKey('spellbook'), isFalse);
+  });
+
+  test('limitsFor：cantrips 池取职业 cantrips 列，逐级不同（D8）', () {
+    final wizard = Dnd5eRules.resolveClassRules(
+      entryId: 'x:class/wizard',
+      classSummary: '法师',
+    );
+
+    // 法师 1 级 3 个戏法、4 级 4 个（官方表；`builtin_rule_profile_test` 同源）。
+    expect(RuleChoiceQuota.limitsFor(rules: wizard, level: 1)['cantrips'], 3);
+    expect(RuleChoiceQuota.limitsFor(rules: wizard, level: 4)['cantrips'], 4);
   });
 
   test('limitsFor：未声明准备上限的职业（非施法者）返回空表', () {
@@ -93,7 +105,11 @@ void main() {
       classSummary: '战士',
     );
 
-    expect(RuleChoiceQuota.limitsFor(rules: fighter, level: 1), isEmpty);
+    expect(
+      RuleChoiceQuota.limitsFor(rules: fighter, level: 1),
+      isEmpty,
+      reason: 'prepared 与 cantrips 两列都没有 → 空表，绝不编造 0',
+    );
   });
 
   test('limitsFor：施法者高等级沿用档案的 prepared 表', () {

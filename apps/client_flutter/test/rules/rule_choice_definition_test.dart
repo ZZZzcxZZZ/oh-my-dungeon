@@ -50,9 +50,11 @@ void main() {
     });
 
     test('countsToward 取值判据只有一处（isCountsTowardPool）', () {
-      expect(kCountsTowardPools, {'spellbook', 'known', 'prepared'});
+      // 四个池：`prepared`/`known` 取职业 prepared 列、`cantrips` 取 cantrips 列
+      // （决策 D8）、`spellbook` 无独立数值列（`kUnlimitedCountsTowardPools`）。
+      expect(kCountsTowardPools, {'spellbook', 'known', 'prepared', 'cantrips'});
       expect(isCountsTowardPool(null), isTrue);
-      for (final pool in ['spellbook', 'known', 'prepared']) {
+      for (final pool in ['spellbook', 'known', 'prepared', 'cantrips']) {
         expect(isCountsTowardPool(pool), isTrue, reason: pool);
       }
       expect(isCountsTowardPool('rituals'), isFalse);

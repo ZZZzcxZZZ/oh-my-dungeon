@@ -645,6 +645,28 @@ def _parse_table_int(row: list[str], index: int | None) -> int | None:
 
 
 # --------------------------------------------------------------------------- #
+def spell_level_bands(table: Any) -> list[tuple[int, int]]:
+    """`maximumSpellLevel` 表 → `[(环阶, 首次解锁等级)]`（决策 D8）。
+
+    只保留**取值第一次上升**的那些等级：它正好是"能选到更高环阶法术"的解锁点，
+    每个解锁点生成一条 `optionType: "spell"` 的选择（`maximumOptionLevel` = 该环阶），
+    额度由 `countsToward` 的池（职业 `prepared` 列）逐级决定。
+
+    低等级条目里出现 0 / 缺失都不生成（未解锁），值重复的等级不重复生成。
+    """
+    if not isinstance(table, dict):
+        return []
+    bands: list[tuple[int, int]] = []
+    highest = 0
+    for level in sorted(int(key) for key in table):
+        raw = table.get(str(level))
+        value = int(raw) if isinstance(raw, (int, float)) else 0
+        if value > highest:
+            highest = value
+            bands.append((value, level))
+    return bands
+
+
 # 职业特性表 → progression（1-20 级）
 # --------------------------------------------------------------------------- #
 def parse_progression_table(soup: BeautifulSoup, class_slug: str,
@@ -755,6 +777,7 @@ def extract_class(cls_name: str) -> tuple[dict[str, Any] | None,
     # 技能熟练原文转成 1 级步骤上的一条 optionType: "skill" choice（见下方 progression）。
     skill_choice = parse_skill_choice(raw_fields.get("skills", ""))
     casting_ability = CASTING_CLASSES.get(cls_name)
+    spellcasting: dict[str, Any] | None = None
     if casting_ability:
         spellcasting = parse_spell_selection_table(
             soup,
@@ -848,6 +871,61 @@ def extract_class(cls_name: str) -> tuple[dict[str, Any] | None,
             "minimum": 1,
             "maximum": 1,
         })
+
+    # 法术选择（决策 D8）：按 `spellcasting.listTags` 生成 `optionType: "spell"` 的选择。
+    # 一条戏法（环阶 0，`countsToward: "cantrips"`：额度来自职业 `cantrips` 列）+
+    # 每个"环阶解锁点"一条（`maximumOptionLevel` = 该环阶，`countsToward` = `prepared`
+    # 池：额度来自职业 `prepared` 列）。这样规则书的法术表由**数据**承担，客户端不再
+    # 只能靠 `spellcasting` 的数值列"知道有法术位却选不了法术"。
+    if spellcasting and progression:
+        list_tags = [tag for tag in (spellcasting.get("listTags") or []) if tag]
+        mode = spellcasting.get("mode")
+        if list_tags and mode in ("prepared", "known"):
+            pool = "known" if mode == "known" else "prepared"
+            level1 = next((p for p in progression if 1 in p["levels"]), None)
+            if level1 is None:
+                level1 = {"levels": [1]}
+                progression.append(level1)
+                progression.sort(key=lambda p: p["levels"][0])
+            level1.setdefault("choices", []).append({
+                "id": "spell-cantrips",
+                "label": "戏法",
+                "optionType": "spell",
+                "minimum": 0,
+                # 上限由 `countsToward: "cantrips"` 池决定；`maximum` 只是形状兜底
+                # （池未声明时不会静默变成"不限"，仍受这个数字约束）。
+                "maximum": 20,
+                "optionTags": list_tags,
+                "maximumOptionLevel": 0,
+                "countsToward": "cantrips",
+                "builderStep": "spells",
+                "group": "戏法",
+                "help": "戏法自本法术列表选择，不占准备上限；数量由职业的戏法列逐级决定。",
+            })
+            for spell_level, unlock_level in spell_level_bands(
+                spellcasting.get("maximumSpellLevel")
+            ):
+                step = next(
+                    (p for p in progression if unlock_level in p["levels"]), None
+                )
+                if step is None:
+                    step = {"levels": [unlock_level]}
+                    progression.append(step)
+                    progression.sort(key=lambda p: p["levels"][0])
+                step.setdefault("choices", []).append({
+                    "id": f"spell-level-{spell_level}",
+                    "label": f"{spell_level} 环法术",
+                    "optionType": "spell",
+                    "minimum": 0,
+                    "maximum": 20,
+                    "optionTags": list_tags,
+                    "maximumOptionLevel": spell_level,
+                    "countsToward": pool,
+                    "builderStep": "spells",
+                    "group": f"{spell_level} 环",
+                    "help": f"{spell_level} 环法术自本法术列表选择，数量计入"
+                            f"{'已知' if pool == 'known' else '准备'}上限。",
+                })
 
     # 法术位数值只存在于客户端内置档案；条目只声明类规则与 progression。
     rules: dict[str, Any] = {}

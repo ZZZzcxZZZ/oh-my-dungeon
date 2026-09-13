@@ -1842,6 +1842,11 @@ void main() {
       expect((await reportFor({'countsToward': 'prepared'})).valid, isTrue);
       expect((await reportFor({'countsToward': 'spellbook'})).valid, isTrue);
       expect((await reportFor({'countsToward': 'known'})).valid, isTrue);
+      expect(
+        (await reportFor({'countsToward': 'cantrips'})).valid,
+        isTrue,
+        reason: '戏法池（决策 D8）：额度来自职业 cantrips 列',
+      );
       expect((await reportFor({})).valid, isTrue, reason: '省略合法');
 
       final bad = await reportFor({'countsToward': 'rituals'});

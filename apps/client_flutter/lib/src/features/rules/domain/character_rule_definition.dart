@@ -175,7 +175,11 @@ class RuleGrantDefinition {
 /// 这是取值集合的**唯一实现点**：解析层用它抛 [FormatException]，导入期也据它报
 /// 精确到字段的 `invalidCountsToward`（`rule_choice_validation.dart` 的
 /// `validateRawChoice` 调 [isCountsTowardPool]）。两处不得各写一份白名单。
-const kCountsTowardPools = <String>{'spellbook', 'known', 'prepared'};
+/// 合法池名（契约 §3.10.2，决策 D3 + D8）：
+/// - `prepared` / `known` 共用职业 `prepared` 列（2024 的"准备/已知"数量）；
+/// - `cantrips` 用职业 `cantrips` 列（戏法数量，逐级不同）；
+/// - `spellbook` 没有对应数值列 → 显式标注为无限池。
+const kCountsTowardPools = <String>{'spellbook', 'known', 'prepared', 'cantrips'};
 
 /// `null`（省略 = 不占上限）与三个池名合法；其它（含非字符串）非法。
 bool isCountsTowardPool(Object? value) =>

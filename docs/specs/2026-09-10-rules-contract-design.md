@@ -592,7 +592,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `maximumOptionLevel` | int? | 条目选项的等级上限（0–9） |
 | `recommendedEntryIds` | string[] | 推荐项，UI 预选 |
 | `repeatable` | bool，默认 `false` | 同一 option id 可被选多次（上限仍由 `maximum` 约束） |
-| `countsToward` | string? 或 `null` | 法术选择计入哪个数量池（`spellbook`/`known`/`prepared`）；`null` = 不占上限 |
+| `countsToward` | string? 或 `null` | 法术选择计入哪个数量池（`spellbook`/`known`/`prepared`/`cantrips`）；`null` = 不占上限 |
 | `requires` | object[] | 前置依赖：`{choice, option}` 或 `{ability, minimum}`；两种形态字段互斥，混写或多余字段一律报错；不满足时**隐藏**该选择或选项 |
 | `group` / `help` | string? | 分组标题与帮助文案（呈现用，无规则语义） |
 | `builderStep` | string | 归属创建向导步骤（沿用 `allowedBuilderSteps`）。**值类型 / 专用 UI 选择例外**：见下 |
@@ -620,7 +620,8 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 
 - **`countsToward` 的额度来源**（D1/D3）：池是**具名额度**。`prepared` 与 `known` 共用职业
   `classRules.spellcasting.prepared` 逐级表（客户端只有这一列"已知/准备"数值）；
-  `spellbook` **没有独立数值列 → 无上限**（只受选择自身 `maximum` 约束）；省略 / `null` 不占池。
+  `spellbook` **没有独立数值列 → 无上限**（只受选择自身 `maximum` 约束）；`cantrips` 取职业
+  `spellcasting.cantrips` 列（**戏法数量逐级不同**，D8）；省略 / `null` 不占池。
   选择声明的 `maximum` 与池的剩余额度取小，超额部分进 pending 并在界面说明原因。
 - **`requires` 的能力门槛读入参基础属性**（D2/D4）：用 `CharacterBuild.abilities`（玩家输入的
   属性值），**不是**结算后的有效属性——否则「选择」与「前置」互相引用、求值没有不动点。
@@ -805,7 +806,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | `duplicateOptionId` | 同一选择内 inline 选项 id 重复，或 id 与条目选项冲突 | `选项 id "asi" 重复` |
 | `invalidValueOption` | 值类型选择里出现条目选项字段（`optionEntryIds`/`optionTags`），或值类型选择未写内联 `options` | `值类型选择不允许 optionEntryIds` |
 | `invalidRequires` | `requires` 元素形状非法（两形态混写 / 缺 `minimum` / 多余字段——判据是纯函数 `validateRuleRequiresJson` **一处**，解析层 `fromJson` 与导入期原始遍共用它，导入期 path 精确到出错字段）、引用的 `choice` 不在同一 `sourceEntryId` 或其 `featureOf` / `subclassOf` 祖先内、`option` 不在该选择的候选集（`candidatesFor`，取作用域内所有同名选择定义的**并集**，与运行期一致）里、`ability` 不在 `abilities`、`minimum` 非正 | `requires 引用的选择 "spellbook-x" 不存在（invalidRequires）` |
-| `invalidCountsToward` | `countsToward` 不在 `spellbook`/`known`/`prepared` 且非 `null` | `countsToward 必须是 spellbook / known / prepared 或省略（invalidCountsToward）` |
+| `invalidCountsToward` | `countsToward` 不在 `spellbook`/`known`/`prepared`/`cantrips` 且非 `null` | `countsToward 必须是 spellbook / known / prepared / cantrips 或省略（invalidCountsToward）` |
 | `invalidAutoGrant` | 字符串简写无法为该 `optionType` 推断 grants 且未显式写 `grants`（条目类型的字符串元素）；或值类型候选没有显式 `grants` 时自动推断失败（`ability` 的 `data.value` 非正整数） | `optionType "classFeature" 的选项 "星界之势" 缺少 grants，且无法自动推断（invalidAutoGrant）` |
 | `invalidMergeMode` | `classRules.mode` 不在 `patch` / `replace`（**不是** `spellcasting.mode` 的取值域） | `classRules.mode 只接受 patch / replace；若想声明法术选择模型，请写在 spellcasting.mode（prepared / known / none）` |
 | `invalidPriority` | manifest 的 `priority` 不是 0..1000 的整数 | `priority 必须是 0..1000 的整数，缺省为 0（invalidPriority）` |
@@ -1004,11 +1005,6 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 
 **本轮延后（由后续计划承接）**：
 
-- **PHB 提取器产出 `optionType: "spell"` 选择 —— 后续脚本工作承接**（决策 D8）：选择系统的
-  **运行时**已支持显式法术选择（法术池、`countsToward`、`alwaysPreparedEntryIds`，见 §3.10、
-  §3.11 A3）；但 `scripts/extract_phb_2024_v2.py` 目前把 PHB 的法术选择交给
-  `classRules.spellcasting` 的数值表承担，**未按规则书表格生成 `optionType: "spell"` 的选择**。
-  补齐提取器是脚本侧后续工作，不影响客户端正确性。
 - **背景条目驱动技能授予 —— 后续工作承接**（决策 D10）：背景技能仍由
   `_presetSkillsForBackground` 的**中文名预设**提供，不走背景条目的 `rules`。
 - **文档收口 —— 计划 3 承接**：`docs/README.md` §9.2 的**完整**自制职业示例（含选择与法术选择）
@@ -1018,6 +1014,12 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 > 自动授予、`repeatable`、`countsToward`、`requires`、`group` / `help`、编辑器选择面板改造、
 > 装备 A/B 写入 `inventory`）与 `invalidAutoGrant` 诊断。见 §3.10 与
 > [`plans/2026-09-12-choice-system-runtime.md`](../plans/2026-09-12-choice-system-runtime.md)。
+>
+> 已由 D8 落地并从本清单移出：**PHB 提取器产出 `optionType: "spell"` 选择**——
+> `extract_phb_2024_v2.py` 为 8 个施法职业各生成一条戏法选择（`maximumOptionLevel: 0` +
+> `countsToward: "cantrips"`）与每个"环阶解锁点"一条选择（`maximumOptionLevel` = 该环阶 +
+> `countsToward: "prepared"`），`optionTags` 取该职业的 `listTags`；`cantrips` 作为第四个
+> 额度池进入契约（额度来自职业 `cantrips` 列）。私有包重提取后 `validate:phb-private` PASS。
 >
 > 已由 S3 落地并从本清单移出：**列级合并**（§3.6；`spellcasting` 逐列、`resources` 按 id 再逐列，
 > 实现于 `RuleProfileResolver`）、**列级来源被消费**（§3.7；角色页法术位 / 资源 / 资料页「规则来源」

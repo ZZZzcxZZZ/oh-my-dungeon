@@ -621,6 +621,66 @@ void main() {
       expect(merged.conflicts, isEmpty, reason: '[10,10] 与 [5,5] 不相交');
     });
 
+    test('沿用值遮住别人显式写下的等级 → 必须登记（否则用户写的值静默不生效）', () {
+      // alpha（字典序在前 → 生效）只写 5 级，zeta 显式写 10 级：
+      // D5 的逐级合并里 alpha 在 10 级**沿用** 5 级的值（9），把 zeta 显式写的 11
+      // 压住了。旧判据"声明区间相交"看不到这种情况（[5,5] ∩ [10,10] = ∅），于是
+      // 作者写下的 11 静默不生效、也没有任何提示。
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: null,
+        entryId: null,
+        declarations: [
+          declaration('alpha:class/wizard', {
+            'spellcasting': {
+              'prepared': {'5': 9},
+            },
+          }, priority: 10),
+          declaration('zeta:class/wizard', {
+            'spellcasting': {
+              'prepared': {'10': 11},
+            },
+          }, priority: 10),
+        ],
+      );
+      expect(merged.preparedLimit(5), 9);
+      expect(merged.preparedLimit(10), 9, reason: 'alpha 的沿用值在 10 级生效');
+      final conflict = merged.conflicts.singleWhere(
+        (item) => item.field == RuleFieldPath.spellcasting('prepared'),
+      );
+      expect(conflict.tier, kEntryTier + 10);
+      expect(conflict.originIds, <String>['alpha:class/wizard', 'zeta:class/wizard']);
+      expect(conflict.effectiveOriginId, 'alpha:class/wizard');
+    });
+
+    test('沿用值与别人的显式值相同 → 不登记（互补且不冲突）', () {
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: null,
+        entryId: null,
+        declarations: [
+          declaration('alpha:class/wizard', {
+            'spellcasting': {
+              'prepared': {'5': 9},
+            },
+          }, priority: 10),
+          declaration('zeta:class/wizard', {
+            'spellcasting': {
+              'prepared': {'10': 9},
+            },
+          }, priority: 10),
+        ],
+      );
+      expect(merged.preparedLimit(10), 9);
+      expect(
+        merged.conflicts,
+        isEmpty,
+        reason: 'alpha 在 10 级沿用 9，与 zeta 显式写的 9 同值 → 无可争',
+      );
+    });
+
     test('同 tier 同列且区间相交、取值不同 → 登记（来源恒升序）', () {
       final merged = RuleProfileResolver.resolveClassRules(
         profile: profile,

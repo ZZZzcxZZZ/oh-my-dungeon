@@ -474,7 +474,10 @@ PHB 2024 官方表格）：
 | `data.ruleOverrides` | `pinned`（按**列**显式选定来源）/ `disabledOriginIds`（按**来源**关闭覆盖：条目 id 或包 id，影响该来源在**所有列**的覆盖） | 关闭后**回退到更低 tier（含内置档案）**并重派生；角色页提供「已关闭的来源」与恢复入口 |
 
 冲突只在**运行期**登记，不是导入 error（导入单个包时看不到别的包）；无用户选择时生效值取
-`RuleOverrideOrder.ordered` 首位（**确定性**，可复现）。覆盖选择（`disabledOriginIds` /
+`RuleOverrideOrder.ordered` 首位（**确定性**，可复现）。判据是**"更低优先级那条显式写下的等级，
+被更高优先级声明在该级的有效值（显式或沿用）遮住且取值不同"**：只改不同等级且互不遮挡（真互补）
+不登记——例如 A 只写 5 级、B 显式写 10 级，而 A 排在前面时，A 在 10 级**沿用**的值会压住 B 写的值，
+这种情况必须提示，不能让作者写下的数值静默不生效。覆盖选择（`disabledOriginIds` /
 `pinned`）与来源快照里的 `originId` 一律是**规范 id**（`canonicalContentEntryId` 剥掉战役视图的
 `local:` / `campaign:<cid>:` 传输前缀，唯一实现），因此同一角色在**本地角色列表**与**战役角色卡**
 两个入口看到同一份覆盖状态、同一组来源标签；老数据里带前缀的写法在读取时归一化，向后兼容。两个不变量：冲突的每个来源都**声明了
@@ -496,7 +499,6 @@ PHB 2024 官方表格）：
 | 伤害抗性与免疫 | `conditionResistance` grant 已从契约移除，抗性/免疫结算**未建模** |
 | 选择系统（计划 2，已实现） | `repeatable` / `countsToward` / `requires` / `group` / `help` 与内联选项 `grants` **已实现**（§9.2.3）。能力边界：`requires` 的 `ability` 门槛按**入参基础属性**判定（由其它选择授予的属性加值不计入门槛）；`spellbook` 池无独立数值列，只受选择自身 `maximum` 约束；PHB 提取器尚未产出 `optionType: "spell"` 选择（运行时已支持）；背景技能仍走中文名预设 |
 | 规则来源没有等级维度（S3 决策 D5） | 表列**逐级**回退会产出"1–19 级来自档案、20 级来自条目"的数值，但来源只如实记在**最高 tier 的声明者**一条上（如 `spellcasting.prepared`），不做 `spellcasting.prepared@20`；逐级细节需要时由调用方读表自己比 |
-| 同 tier 的"沿用"与"显式值"（S3 决策 D5 / D6） | 同一 tier 内 A 在同级**沿用**的值可以盖住 B 在同级写下的显式值而**不登记冲突**（如 A 写 `{"5": 9}` 在 10 级沿用、B 写 `{"10": 11}`）：冲突判据是"作者声明的等级区间有交集"，沿用不属于声明区间。这是确定性 tie-break（tier → replace → 自身条目 → originId 升序）的已知代价，用户仍可用 `data.ruleOverrides.pinned` 显式改选 |
 | `recovery` 不逐级合并（S3 决策 D5） | `resources[].recovery` 的常量形态与 `{"table": …}` 形态是同一条来源路径，整列由"声明过 `recovery` 的最高 tier"负责，**不**逐级借用更低 tier 的恢复表（恢复语义是枚举而不是可加的数值） |
 | `resources: []` 不再清空档案资源（S3） | 空数组只表示"本块没有资源声明"；要清空档案同名资源必须显式声明 `classRules.mode: "replace"` |
 | 专精（Expertise） | 技能加值只有熟练/非熟练两档，无 ×2 专精 |

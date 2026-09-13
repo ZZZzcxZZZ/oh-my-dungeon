@@ -1003,9 +1003,10 @@ _ColumnPick<T> _pickColumn<T>({
       field: field,
       declaring: declaring,
       conflicts: conflicts,
-      levelsOf: (declaration) => <int, Object?>{
-        _scalarLevel: read(declaration.rules),
-      },
+      probe: (declaration) => (
+        at: <int, Object?>{_scalarLevel: read(declaration.rules)},
+        declared: const <int>{_scalarLevel},
+      ),
       equals: equals,
     );
   }
@@ -1022,14 +1023,16 @@ _ColumnPick<T> _pickColumn<T>({
 /// 逐级的来源细节（"1..19 级来自档案、20 级来自条目"）不在本批次：§3.7 的来源粒度
 /// 是列，`RuleFieldPath` 也没有等级维度。列级来源 = 该列的最高 tier 声明者。
 ///
-/// 同 tier 多来源声明同一表列时按 D6 登记冲突：**声明区间有交集**且交集上取值
-/// 不同才算（"我改 5 级、你改 20 级"是互补，不是冲突）。
+/// 同 tier 多来源声明同一表列时按 D6 登记冲突：判据是"更低优先级那条**显式写下**的
+/// 等级，被更高优先级声明在该级的**有效值（含沿用）**遮住且取值不同"
+/// （见 [_hasShadowedExplicitValue]）。两人只改不同等级时仍是互补，不登记。
 Map<int, T> _pickTableColumn<T>({
   required String field,
   required List<RuleOverrideDeclaration> declarations,
   required bool Function(ClassRuleSet rules) declares,
   required T? Function(ClassRuleSet rules, int level) read,
-  required Map<int, Object?> Function(ClassRuleSet rules) levelsOf,
+  required ({Map<int, Object?> at, Set<int> declared}) Function(ClassRuleSet rules)
+  probe,
   required Map<String, RuleFieldSource> sources,
   required List<RuleOverrideConflict> conflicts,
   _PinContext pin = const _PinContext(),
@@ -1043,7 +1046,7 @@ Map<int, T> _pickTableColumn<T>({
       field: field,
       declaring: declaring,
       conflicts: conflicts,
-      levelsOf: (declaration) => levelsOf(declaration.rules),
+      probe: (declaration) => probe(declaration.rules),
       equals: _sameValue,
     );
   }
@@ -1062,11 +1065,13 @@ const _scalarLevel = 0;
 
 /// 同 tier 多来源抢同一列的**唯一**登记点（决策 D6）。
 ///
-/// 判定（D6 原文）收紧为：**同 tier + 同列 + 声明区间有交集 + 该交集上取值不同**。
-/// - 标量列：区间是单一取值点（[_scalarLevel]），取值不同即冲突；
-/// - 表列：区间是作者写下的 `[minLevel, maxLevel]`（`Table` 高于最后声明等级的
-///   "沿用"不是新声明，§3.12），交集上逐级比较，任一级取值不同即冲突；
-/// - 同值、或只改**不同等级**（区间不相交）都不算冲突——否则 UI 会被互补声明淹没。
+/// 判定：**同 tier + 同列 + 更低优先级那条显式写下的某个等级被更高优先级声明在该级的
+/// 有效值（显式或沿用）遮住且取值不同**（[_hasShadowedExplicitValue]）。
+/// - 标量列：等级维度只有一个取值点（[_scalarLevel]），取值不同即冲突；
+/// - 表列：只看**显式写下的等级**（`declared`）；高优先级声明的显式等级本就生效，
+///   低优先级的"沿用"不是新声明（§3.12），因此"我改 5 级、你改 20 级"这种**互补**
+///   不会被登记——但"我改 5 级、你改 20 级"里若**我排在前面**，我的沿用会把你显式写的
+///   20 级压住，那就必须提示（作者写下的值不会生效，属静默数值错误）。
 ///
 /// [declaring] 必须已按优先级从高到低排好（[RuleOverrideOrder.ordered]）且**未经
 /// pin 重排**。生效值取排序首位（可复现：等价于包 id 字典序**最小**者），来源列表
@@ -1075,8 +1080,10 @@ void _recordConflict({
   required String field,
   required List<RuleOverrideDeclaration> declaring,
   required List<RuleOverrideConflict> conflicts,
-  required Map<int, Object?> Function(RuleOverrideDeclaration declaration)
-  levelsOf,
+  required ({Map<int, Object?> at, Set<int> declared}) Function(
+    RuleOverrideDeclaration declaration,
+  )
+  probe,
   required bool Function(Object? a, Object? b) equals,
 }) {
   if (declaring.length < 2) return;
@@ -1086,11 +1093,10 @@ void _recordConflict({
       if (declaration.tier == tier) declaration,
   ];
   if (sameTier.length < 2) return;
-  final probes = <String, Map<int, Object?>>{
-    for (final declaration in sameTier)
-      declaration.originId: levelsOf(declaration),
+  final probes = <String, ({Map<int, Object?> at, Set<int> declared})>{
+    for (final declaration in sameTier) declaration.originId: probe(declaration),
   };
-  if (!_hasDifferingValueOnIntersection(sameTier, probes, equals)) return;
+  if (!_hasShadowedExplicitValue(sameTier, probes, equals)) return;
   conflicts.add(
     RuleOverrideConflict(
       field: field,
@@ -1103,20 +1109,30 @@ void _recordConflict({
   );
 }
 
-/// "声明区间有交集 + 交集上取值不同"的**唯一**比较实现（D6）。
-bool _hasDifferingValueOnIntersection(
-  List<RuleOverrideDeclaration> sameTier,
-  Map<String, Map<int, Object?>> probes,
+/// "显式值被更高优先级的沿用值遮住"的**唯一**比较实现（D6）。
+///
+/// [ordered] 已按优先级从高到低排好。[probes] 的 `at` 是该声明在**每个等级**上的
+/// 有效值（表列含"高于最后声明等级则沿用"、低于最早声明等级则不存在），`declared`
+/// 是作者**显式写下**的等级集合。
+///
+/// 只朝一个方向查：低优先级声明的显式等级，若与排在前面的某条声明在该级的有效值
+/// 不同，说明作者写下的值不会生效——这是用户必须看见的"静默被压住"。
+bool _hasShadowedExplicitValue(
+  List<RuleOverrideDeclaration> ordered,
+  Map<String, ({Map<int, Object?> at, Set<int> declared})> probes,
   bool Function(Object? a, Object? b) equals,
 ) {
-  for (var i = 0; i < sameTier.length; i++) {
-    final left = probes[sameTier[i].originId]!;
-    if (left.isEmpty) continue;
-    for (var j = i + 1; j < sameTier.length; j++) {
-      final right = probes[sameTier[j].originId]!;
-      for (final entry in left.entries) {
-        if (!right.containsKey(entry.key)) continue;
-        if (!equals(entry.value, right[entry.key])) return true;
+  for (var i = 0; i < ordered.length; i++) {
+    final higher = probes[ordered[i].originId]!;
+    if (higher.at.isEmpty) continue;
+    for (var j = i + 1; j < ordered.length; j++) {
+      final lower = probes[ordered[j].originId]!;
+      for (final level in lower.declared) {
+        final shadow = higher.at[level];
+        if (shadow == null) continue;
+        final declared = lower.at[level];
+        if (declared == null) continue;
+        if (!equals(shadow, declared)) return true;
       }
     }
   }
@@ -1143,31 +1159,50 @@ bool _sameValue(Object? a, Object? b) {
 
 /// 表列在"作者写下的区间"上逐级取值（冲突判定的**唯一**取样实现）。区间外的
 /// "沿用最后声明值"不参与比较（它不是新的声明，§3.12）。
-Map<int, Object?> _intTableLevels(IntTable? table) => table == null
-    ? const <int, Object?>{}
-    : <int, Object?>{
-        for (var level = table.minLevel; level <= table.maxLevel; level++)
-          level: table.at(level),
-      };
+({Map<int, Object?> at, Set<int> declared}) _intTableLevels(IntTable? table) {
+  if (table == null) {
+    return (at: const <int, Object?>{}, declared: const <int>{});
+  }
+  return (
+    // `at` 覆盖到 20 级：高于最后声明等级要**沿用**（与 `mergeRuleTableLevels`
+    // 的取值一致），否则"沿用值遮住别人的显式值"这种情形根本观察不到。
+    at: <int, Object?>{
+      for (var level = table.minLevel; level <= 20; level++)
+        level: table.at(level),
+    },
+    declared: <int>{
+      for (var level = table.minLevel; level <= table.maxLevel; level++) level,
+    },
+  );
+}
 
 /// [SlotTable] 版本的 [_intTableLevels]。
-Map<int, Object?> _slotTableLevels(SlotTable? table) => table == null
-    ? const <int, Object?>{}
-    : <int, Object?>{
-        for (var level = table.minLevel; level <= table.maxLevel; level++)
-          level: table.at(level),
-      };
+({Map<int, Object?> at, Set<int> declared}) _slotTableLevels(SlotTable? table) {
+  if (table == null) {
+    return (at: const <int, Object?>{}, declared: const <int>{});
+  }
+  return (
+    at: <int, Object?>{
+      for (var level = table.minLevel; level <= 20; level++)
+        level: table.at(level),
+    },
+    declared: <int>{
+      for (var level = table.minLevel; level <= table.maxLevel; level++) level,
+    },
+  );
+}
 
 /// `resources.<id>.maximum` 的冲突取样（**唯一**实现）：表形态按作者写下的区间
-/// 逐级取值；常量 / 公式没有等级维度，覆盖 1..20 并用同一份规范值参与比较
-/// （因此"常量 vs 表"、"两个不同常量"都能被判定为不同取值）。
+/// 逐级取值（并沿用）；常量 / 公式没有等级维度，覆盖 1..20 且**每一级都算显式**。
 ///
 /// **常量按数值铺 1..20**（不是字符串）：常量 `2` 与"整表都是 2"因此在每一级都
 /// 逐值相等 → 不再因形态不同误报冲突。公式保留字符串规范键（`formula` 的求值随
 /// 等级 / 属性变化，直接当常量展开会把两条不同公式误判成同值，故保守处理）。
 /// 两类的 `minimum` 都进比较键：它改变最终结算值。
-Map<int, Object?> _maximumLevels(MaxSpec? spec) {
-  if (spec == null) return const <int, Object?>{};
+({Map<int, Object?> at, Set<int> declared}) _maximumLevels(MaxSpec? spec) {
+  if (spec == null) {
+    return (at: const <int, Object?>{}, declared: const <int>{});
+  }
   final table = spec.table;
   if (table != null) return _intTableLevels(table);
   final Object? canonical = switch (spec) {
@@ -1176,9 +1211,12 @@ Map<int, Object?> _maximumLevels(MaxSpec? spec) {
     MaxSpec(value: final int value) => value,
     _ => null,
   };
-  return <int, Object?>{
-    for (var level = 1; level <= 20; level++) level: canonical,
-  };
+  return (
+    at: <int, Object?>{
+      for (var level = 1; level <= 20; level++) level: canonical,
+    },
+    declared: <int>{for (var level = 1; level <= 20; level++) level},
+  );
 }
 
 /// `recovery` 的冲突取样（**唯一**实现）：常量形态与表形态是同一条来源路径
@@ -1257,9 +1295,11 @@ ClassSpellcasting? _mergeSpellcasting({
           declarations: declarations,
           declares: (rules) => declaresColumn(rules, name),
           read: (rules, level) => read(spellcastingOf(rules)!)?.at(level),
-          levelsOf: (rules) {
+          probe: (rules) {
             final spellcasting = spellcastingOf(rules);
-            return _intTableLevels(spellcasting == null ? null : read(spellcasting));
+            return _intTableLevels(
+              spellcasting == null ? null : read(spellcasting),
+            );
           },
           sources: sources,
           conflicts: conflicts,
@@ -1272,7 +1312,7 @@ ClassSpellcasting? _mergeSpellcasting({
     declarations: declarations,
     declares: (rules) => declaresColumn(rules, 'slots'),
     read: (rules, level) => spellcastingOf(rules)!.slots?.at(level),
-    levelsOf: (rules) => _slotTableLevels(spellcastingOf(rules)?.slots),
+    probe: (rules) => _slotTableLevels(spellcastingOf(rules)?.slots),
     sources: sources,
     conflicts: conflicts,
     pin: pin,
@@ -1440,7 +1480,7 @@ MaxSpec? _mergeResourceMaximum({
       field: field,
       declaring: contributors,
       conflicts: conflicts,
-      levelsOf: (declaration) =>
+      probe: (declaration) =>
           _maximumLevels(_resourceOf(declaration.rules, id)?.maximum),
       equals: _sameValue,
     );

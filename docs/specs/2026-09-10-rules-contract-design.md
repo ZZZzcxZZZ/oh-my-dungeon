@@ -451,6 +451,8 @@ class RuleFieldSource {
   用户可显式选定来源（`data.ruleOverrides.pinned`）或关闭某条覆盖
   （`data.ruleOverrides.disabledOriginIds`）。冲突**不是导入 error**：导入单个包时看不到
   别的包，冲突不是该包的错。
+  **判据**：更低优先级那条**显式写下**的等级，被更高优先级声明在**该级的有效值**（显式或
+  高于其最后声明等级的"沿用"）遮住且取值不同 → 登记；只改不同等级且互不遮挡（真互补）不登记。
   **两个不变量**：`originIds` 里每个来源都必须**声明了该列**，`effectiveOriginId` 必须是
   其中之一（否则界面会给出"选了也不生效"的选项）。用户 pin 的优先级最高、且只作用于该列：
   它可以逐列取回被同 tier `replace` 丢弃的 `patch` 声明。

@@ -2771,28 +2771,20 @@ abstract final class RuleOverrideConflicts {
           declaration,
     ];
 
-    // 2) 排序 + `replace` 截断（唯一排序点）。用户 pin 的来源提到最前——pin 是
-    //    显式选择，语义上高于 priority；pin 同时豁免 disabledOriginIds
-    //    （用户刚刚选定的来源不应因为旧的禁用记录而消失）。
-    final ranked = RuleOverrideOrder.effective(
-      packages,
-      characterEntryId: characterEntryId ?? entryId,
-    );
-    final ordered = applyPinned(ranked, pinnedOrigins);
-
-    // 3) 追加内置档案，并让 `replace` 把它一起截掉（replace 的核心语义）。
-    final chain = <RuleOverrideDeclaration>[
-      ...ordered,
+    // 2) 排序 + `replace` 截断（唯一排序点）。**不要**在这里按 pin 重排整条链：
+    //    pin 只影响被 pin 的那一列（见任务 8 审查项 0.1 的修正）。被 `disabled`
+    //    关掉、但被 pin 选中的来源作为"仅这些列"的候选单独保留（pin 豁免
+    //    disabled），不参与 `replace` 截断。
+    final ranked = RuleOverrideOrder.ordered(packages, characterEntryId: entryId);
+    final ordered = RuleOverrideOrder.truncate(<RuleOverrideDeclaration>[
+      ...ranked,
       if (fromArchive != null) RuleOverrideDeclaration.builtin(fromArchive),
-    ];
-    final effectiveChain = <RuleOverrideDeclaration>[];
-    for (final declaration in chain) {
-      effectiveChain.add(declaration);
-      if (declaration.rules.mode == ClassMergeMode.replace) break;
-    }
+    ]);
+    // pin 的按列优先在 `_pickColumn` / `_pickTableColumn` /
+    // `_mergeResourceMaximum` 内完成（`_PinContext`），解析器不重排链。
 
     final spellcasting = _mergeSpellcasting(
-      chain: effectiveChain,
+      chain: ordered,
       sources: sources,
       conflicts: conflicts,
     );
@@ -2800,7 +2792,7 @@ abstract final class RuleOverrideConflicts {
     return ResolvedClassRules(
       hitDie: _pickColumn<int>(
         field: RuleFieldPath.hitDie,
-        declarations: effectiveChain,
+        declarations: ordered,
         declares: (rules) => rules.declares('hitDie'),
         read: (rules) => rules.hitDie,
         sources: sources,
@@ -2808,7 +2800,7 @@ abstract final class RuleOverrideConflicts {
       ).value,
       savingThrowAbilities: _pickColumn<Set<String>>(
         field: RuleFieldPath.savingThrowAbilities,
-        declarations: effectiveChain,
+        declarations: ordered,
         declares: (rules) => rules.declares('savingThrowAbilities'),
         read: (rules) => rules.savingThrowAbilities,
         sources: sources,
@@ -2829,21 +2821,32 @@ abstract final class RuleOverrideConflicts {
     );
   }
 
-  /// 用户 pin 的来源提到最前（唯一实现）。pin 的键是列路径、值是来源 id；
-  /// pin 只影响**该列**，因此实现为"按来源重排整条链"会过度：这里把
-  /// "在任意 pinned 列上被选中的来源"整体提前，其余保持 `ranked` 顺序。
-  /// 列级精确性由 `_pickColumn` 保证：它只认"声明了该列"的第一条声明。
-  static List<RuleOverrideDeclaration> applyPinned(
-    List<RuleOverrideDeclaration> ranked,
-    Map<String, String> pinnedOrigins,
+  /// 用户 pin 的来源**只在被 pin 的那一列的候选里置顶**（唯一实现）。
+  ///
+  /// ⚠️ **本段是批次 B 的原始草稿，已作废**：把"在任意 pinned 列上被选中的
+  /// 来源"整体提前是**错的**——`_pickColumn` 取的是"声明了该列"的第一个声明，
+  /// 但同一来源往往同时声明了别的列（`hitDie` / `savingThrowAbilities` /
+  /// `spellcasting.*`），整条提前会让那些列也一起抢到最高位，`effectiveOriginId`
+  /// 与冲突随之静默改变。**只 pin 一列就改动别的列，属静默改值**。
+  ///
+  /// 正确实现（已落地）：`pinnedOrigins`（列路径 → originId）传进
+  /// `_pickColumn` / `_pickTableColumn` / `_mergeResourceMaximum`，在**声明了该列**
+  /// 的候选里把被 pin 的来源置顶；被 `disabled` 剔除的来源若被 pin 选中，只作为
+  /// **这些列**的候选保留（"pin 豁免 disabled"）。pin 命中的列不再登记冲突
+  /// （用户已做出选择）。解析器不重排整条链。
+  static List<RuleOverrideDeclaration> pinnedFirst(
+    List<RuleOverrideDeclaration> declaring,
+    String? pinnedOriginId,
   ) {
-    if (pinnedOrigins.isEmpty) return ranked;
-    final pinned = pinnedOrigins.values.toSet();
+    if (pinnedOriginId == null) return declaring;
+    final index = declaring.indexWhere(
+      (declaration) => declaration.originId == pinnedOriginId,
+    );
+    if (index <= 0) return declaring;
     return List<RuleOverrideDeclaration>.unmodifiable([
-      for (final declaration in ranked)
-        if (pinned.contains(declaration.originId)) declaration,
-      for (final declaration in ranked)
-        if (!pinned.contains(declaration.originId)) declaration,
+      declaring[index],
+      ...declaring.sublist(0, index),
+      ...declaring.sublist(index + 1),
     ]);
   }
 
@@ -2868,6 +2871,14 @@ abstract final class RuleOverrideConflicts {
 > 函数体里直接用 `chain`，把冲突收集器透传给 `_pickColumn`，`declares` / `read` 闭包不变。
 > 任务 7 步骤 5 已经把 `_OrderedDeclaration` 收敛成 `RuleOverrideDeclaration`，
 > 本任务不再引入第二种声明类型。
+>
+> **已落地时修正（任务 8 审查项 0.3 / 0.4-8）**：
+> - 冲突判定不再是"同 tier 同列即登记"，而是 **同 tier + 同列 + 声明区间有交集 +
+>   该交集上取值不同**（标量列按整值比较）；同值、只改不同等级都不登记。
+> - `originIds` 恒按 `originId` 升序（`RuleOverrideOrder.orderedOriginIds`）。
+> - `_dedupeConflicts` **不留在解析器里**：排序 / 去重的唯一实现是
+>   `RuleOverrideOrder.orderedConflicts`（任务 13 门禁要求
+>   `rule_profile_resolver.dart` 内没有 sort 调用）。
 
 `_pickColumn` 增加冲突登记（同 tier 的多来源声明同列）：
 
@@ -3381,6 +3392,12 @@ git commit -m "feat(characters): 角色页显示列级规则来源与覆盖冲�
 - 修改：`apps/client_flutter/lib/src/features/characters/presentation/character_detail_page.dart`
 - 修改：`apps/client_flutter/lib/src/features/characters/presentation/characters_tab_page.dart`
 - 测试：`apps/client_flutter/test/character_rule_sources_ui_test.dart`（追加 group）
+
+> **API 已按任务 8 审查项 0.4-6 落地**（本任务按实际 API 写调用方）：
+> mutator 名是 `disable(originId)` / `enable(originId)` / `pin(field, originId)`
+> （不是 `disabled` / `enabled`）；`fromData(Object?)` 是形状归一化的唯一实现
+> （`fromJson` 只是兼容入口）；`toData()` **只写非空键**；`fromData` 遇非 String
+> 键降级为"没有覆盖"而不是抛。下面片段里的 `disabled(...)` 一律读作 `disable(...)`。
 
 - [ ] **步骤 1：写失败测试**
 

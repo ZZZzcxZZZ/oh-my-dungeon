@@ -1,5 +1,8 @@
-// S3 决策 D1 / D4 / D6：优先级排序与 `replace` 截断的**唯一**实现。
+// S3 决策 D1 / D4 / D6：优先级排序、`replace` 截断与冲突表排序的**唯一**实现。
+import 'package:meta/meta.dart';
+
 import 'class_rule_set.dart';
+import 'rule_override_conflict.dart';
 import 'rule_override_declaration.dart';
 
 /// 优先级排序与 `replace` 截断的**唯一**实现（契约 S3）。
@@ -55,10 +58,38 @@ abstract final class RuleOverrideOrder {
   }
 
   /// `replace` 截断（D4）：排序后取 [truncate]。
+  ///
+  /// **保留理由**：lib 内的合并链不用它（解析器要先追加内置档案再统一 [truncate]），
+  /// 但"排序 + 截断"是 D4 的完整语义，`truncate` 单独无法表达"排在最前的 replace
+  /// 独占"，因此保留这个纯函数入口，仅供测试直接验证 D4（[visibleForTesting]）。
+  /// 生产路径不得改走它——pin 与内置档案必须在截断前合入。
+  @visibleForTesting
   static List<RuleOverrideDeclaration> effective(
     Iterable<RuleOverrideDeclaration> declarations, {
     String? characterEntryId,
-  }) => truncate(
-    ordered(declarations, characterEntryId: characterEntryId),
-  );
+  }) => truncate(ordered(declarations, characterEntryId: characterEntryId));
+
+  /// 冲突来源 id 的展示顺序（**唯一排序点**）：按 originId 升序，去重。
+  ///
+  /// 冲突的 `originIds` 因此恒升序——同一个冲突每次派生写出的 JSON 完全一致，
+  /// `effectiveOriginId`（排序首位胜出者）也能直接与它对照阅读。
+  static List<String> orderedOriginIds(Iterable<String> originIds) {
+    final sorted = originIds.toSet().toList()..sort();
+    return List<String>.unmodifiable(sorted);
+  }
+
+  /// 冲突表的去重 + 排序（**唯一排序点**，任务 13 门禁要求解析器内没有 `.sort(`）：
+  /// 同一列只保留首条（先到者优先），整体按字段路径升序。
+  static List<RuleOverrideConflict> orderedConflicts(
+    Iterable<RuleOverrideConflict> conflicts,
+  ) {
+    final byField = <String, RuleOverrideConflict>{};
+    for (final conflict in conflicts) {
+      byField.putIfAbsent(conflict.field, () => conflict);
+    }
+    final fields = byField.keys.toList()..sort();
+    return List<RuleOverrideConflict>.unmodifiable(<RuleOverrideConflict>[
+      for (final field in fields) byField[field]!,
+    ]);
+  }
 }

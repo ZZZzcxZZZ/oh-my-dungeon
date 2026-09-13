@@ -432,5 +432,340 @@ void main() {
         hasLength(1),
       );
     });
+
+    test('effectiveOriginId 不在 originIds 里 → 降级为"没有冲突"', () {
+      expect(
+        RuleOverrideConflict.fromJson(<String, Object?>{
+          'field': 'hitDie',
+          'tier': 100,
+          'originIds': ['alpha:class/wizard', 'zeta:class/wizard'],
+          'effectiveOriginId': 'ghost:class/wizard',
+        }),
+        isNull,
+        reason: '界面绝不能把"生效来源"显示成没参与该列竞争的名字',
+      );
+      // originIds 恒升序，但 effectiveOriginId 由排序首位决定（角色自身条目优先时
+      // 可以不是首个元素）——因此判据是 contains，而不是 == first。
+      final conflict = RuleOverrideConflict.fromJson(<String, Object?>{
+        'field': 'hitDie',
+        'tier': 100,
+        'originIds': ['alpha-pack:class/wizard', 'zown-pack:class/wizard'],
+        'effectiveOriginId': 'zown-pack:class/wizard',
+      });
+      expect(conflict, isNotNull);
+      expect(conflict!.originIds.first, 'alpha-pack:class/wizard');
+    });
+  });
+
+  group('用户 pin 只影响被 pin 的那一列（0.1 阻塞项）', () {
+    test('pin prepared 不改变同一来源声明的 hitDie', () {
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: null,
+        entryId: null,
+        declarations: [
+          declaration('alpha:class/wizard', {
+            'hitDie': 8,
+            'spellcasting': {
+              'prepared': {'5': 9},
+            },
+          }, priority: 40),
+          declaration('zeta:class/wizard', {
+            'hitDie': 10,
+            'spellcasting': {
+              'prepared': {'5': 11},
+            },
+          }, priority: 40),
+        ],
+        pinnedOrigins: const {'spellcasting.prepared': 'zeta:class/wizard'},
+      );
+
+      // 被 pin 的列生效值来自被 pin 的来源。
+      expect(merged.preparedLimit(5), 11);
+      expect(
+        merged.sourceOf('spellcasting.prepared')!.originId,
+        'zeta:class/wizard',
+      );
+      // pin 一列**不得**连带该来源声明的其它列：hitDie 仍由 alpha 胜出。
+      expect(merged.hitDie, 8);
+      expect(merged.sourceOf('hitDie')!.originId, 'alpha:class/wizard');
+    });
+
+    test('pin 一列不会在未 pin 的列上制造冲突', () {
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: null,
+        entryId: null,
+        declarations: [
+          declaration('alpha:class/wizard', {
+            'hitDie': 8,
+            'spellcasting': {
+              'prepared': {'5': 9},
+            },
+          }, priority: 40),
+          declaration('zeta:class/wizard', {
+            'hitDie': 10,
+            'spellcasting': {
+              'prepared': {'5': 11},
+            },
+          }, priority: 40),
+        ],
+        pinnedOrigins: const {'spellcasting.prepared': 'zeta:class/wizard'},
+      );
+
+      // hitDie 仍是真正的同 tier 冲突（8 vs 10），与 pin 无关。
+      expect(merged.conflicts.map((c) => c.field), ['hitDie']);
+      // prepared 已由用户 pin 解决，不再提示冲突。
+      expect(
+        merged.conflicts.where((c) => c.field == 'spellcasting.prepared'),
+        isEmpty,
+      );
+    });
+
+    test('pin 豁免 disabled：被关闭的来源只要被 pin 仍在该列生效', () {
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: null,
+        entryId: null,
+        declarations: [
+          declaration('zeta:class/wizard', {
+            'spellcasting': {
+              'prepared': {'5': 11},
+            },
+          }, priority: 40),
+        ],
+        disabledOriginIds: const {'zeta'},
+        pinnedOrigins: const {'spellcasting.prepared': 'zeta:class/wizard'},
+      );
+      expect(merged.preparedLimit(5), 11, reason: 'pin 是比 disabled 更晚的用户选择');
+      expect(
+        merged.sourceOf('spellcasting.prepared')!.originId,
+        'zeta:class/wizard',
+      );
+
+      // 没有 pin 时 disabled 生效：回退档案（5 级 9）。
+      final disabledOnly = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: null,
+        entryId: null,
+        declarations: [
+          declaration('zeta:class/wizard', {
+            'spellcasting': {
+              'prepared': {'5': 11},
+            },
+          }, priority: 40),
+        ],
+        disabledOriginIds: const {'zeta'},
+      );
+      expect(disabledOnly.preparedLimit(5), 9);
+      expect(
+        disabledOnly.sourceOf('spellcasting.prepared')!.originId,
+        kBuiltinOriginId,
+      );
+    });
+  });
+
+  group('冲突判定收紧为"同 tier + 同列 + 区间有交集 + 取值不同"（0.3）', () {
+    test('同值不登记', () {
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: null,
+        entryId: null,
+        declarations: [
+          declaration('alpha:class/wizard', {
+            'spellcasting': {
+              'prepared': {'5': 9},
+            },
+          }, priority: 10),
+          declaration('zeta:class/wizard', {
+            'spellcasting': {
+              'prepared': {'5': 9},
+            },
+          }, priority: 10),
+        ],
+      );
+      expect(merged.preparedLimit(5), 9);
+      expect(merged.conflicts, isEmpty, reason: '同值不是冲突');
+    });
+
+    test('只改不同等级（声明区间不相交）不登记', () {
+      // 更高排序位的那条声明 10 级、低排序位的声明 5 级：两条区间 [10,10] 与
+      // [5,5] 不相交，D5 逐级合并后 5 级来自后者、10 级来自前者，互补生效。
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: null,
+        entryId: null,
+        declarations: [
+          declaration('alpha:class/wizard', {
+            'spellcasting': {
+              'prepared': {'10': 11},
+            },
+          }, priority: 10),
+          declaration('zeta:class/wizard', {
+            'spellcasting': {
+              'prepared': {'5': 9},
+            },
+          }, priority: 10),
+        ],
+      );
+      expect(merged.preparedLimit(5), 9);
+      expect(merged.preparedLimit(10), 11, reason: '两级互补，D5 逐级合并');
+      expect(merged.conflicts, isEmpty, reason: '[10,10] 与 [5,5] 不相交');
+    });
+
+    test('同 tier 同列且区间相交、取值不同 → 登记（来源恒升序）', () {
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: null,
+        entryId: null,
+        declarations: [
+          declaration('alpha:class/wizard', {
+            'spellcasting': {
+              'prepared': {'5': 9, '10': 10},
+            },
+          }, priority: 10),
+          declaration('zeta:class/wizard', {
+            'spellcasting': {
+              'prepared': {'5': 11},
+            },
+          }, priority: 10),
+        ],
+      );
+      expect(merged.conflicts, hasLength(1));
+      final conflict = merged.conflicts.single;
+      expect(conflict.field, 'spellcasting.prepared');
+      expect(conflict.originIds, [
+        'alpha:class/wizard',
+        'zeta:class/wizard',
+      ]);
+      expect(conflict.effectiveOriginId, 'alpha:class/wizard');
+    });
+
+    test('同 tier 标量列同值不登记、不同值登记', () {
+      String fieldOf(Map<String, Object?> a, Map<String, Object?> b) {
+        final merged = RuleProfileResolver.resolveClassRules(
+          profile: profile,
+          slug: 'wizard',
+          entryRules: null,
+          entryId: null,
+          declarations: [
+            declaration('alpha:class/wizard', a, priority: 3),
+            declaration('zeta:class/wizard', b, priority: 3),
+          ],
+        );
+        return merged.conflicts.map((c) => c.field).join(',');
+      }
+
+      expect(
+        fieldOf({
+          'savingThrowAbilities': ['int', 'wis'],
+        }, {
+          'savingThrowAbilities': ['wis', 'int'],
+        }),
+        isEmpty,
+        reason: 'Set 内容相同不算冲突（内建 == 只看引用，必须走内容比较）',
+      );
+      expect(
+        fieldOf({'hitDie': 6}, {'hitDie': 8}),
+        'hitDie',
+      );
+    });
+  });
+
+  group('originIds 恒升序（0.4-3）', () {
+    test('同 tier 角色自身条目优先时，effectiveOriginId 仍 ∈ originIds', () {
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: rulesOf({
+          'spellcasting': {
+            'mode': 'prepared',
+            'prepared': {'5': 7},
+          },
+        }),
+        entryId: 'zown-pack:class/wizard',
+        declarations: [
+          declaration('alpha-pack:class/wizard', {
+            'spellcasting': {
+              'prepared': {'5': 9},
+            },
+          }),
+        ],
+      );
+      final conflict = merged.conflicts.single;
+      expect(conflict.originIds, [
+        'alpha-pack:class/wizard',
+        'zown-pack:class/wizard',
+      ], reason: 'originIds 恒按 originId 升序');
+      expect(conflict.effectiveOriginId, 'zown-pack:class/wizard');
+      expect(conflict.originIds, contains(conflict.effectiveOriginId));
+      expect(conflict.effectiveOriginId, isNot(conflict.originIds.first));
+    });
+  });
+
+  group('replace 截掉同 tier patch 不静默（0.4-4）', () {
+    test('被同 tier replace 丢弃的 patch：每一列都有一条可见冲突', () {
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: null,
+        entryId: null,
+        declarations: [
+          RuleOverrideDeclaration.package(
+            originId: 'replacer:class/wizard',
+            packageId: 'replacer',
+            priority: 50,
+            entryId: 'replacer:class/wizard',
+            rules: rulesOf({'mode': 'replace', 'hitDie': 10}),
+          ),
+          declaration('patch:class/wizard', {
+            'hitDie': 8,
+            'spellcasting': {
+              'prepared': {'5': 9},
+            },
+          }, priority: 50),
+        ],
+      );
+
+      // replace 独占：patch 的列一个都不生效。
+      expect(merged.hitDie, 10);
+      expect(merged.preparedLimit(5), isNull);
+      // 但被丢弃这件事可见：patch 声明过的每一列都有冲突记录，生效者 = replace。
+      final fields = merged.conflicts.map((c) => c.field).toList();
+      expect(fields, contains('hitDie'));
+      expect(fields, contains('spellcasting.prepared'));
+      for (final conflict in merged.conflicts) {
+        expect(conflict.effectiveOriginId, 'replacer:class/wizard');
+        expect(conflict.originIds, contains('patch:class/wizard'));
+      }
+    });
+
+    test('更低 tier 被 replace 截断是 D4 设计语义，不记冲突', () {
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: null,
+        entryId: null,
+        declarations: [
+          RuleOverrideDeclaration.package(
+            originId: 'replacer:class/wizard',
+            packageId: 'replacer',
+            priority: 50,
+            entryId: 'replacer:class/wizard',
+            rules: rulesOf({'mode': 'replace', 'hitDie': 10}),
+          ),
+          declaration('low:class/wizard', {'hitDie': 8}, priority: 0),
+        ],
+      );
+      expect(merged.hitDie, 10);
+      expect(merged.conflicts, isEmpty);
+    });
   });
 }

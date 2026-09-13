@@ -177,17 +177,19 @@ class DriftLocalDataArchiveService implements LocalDataArchiveService {
             .into(db.localContentPackages)
             .insert(
               LocalContentPackageRow.fromJson(
-                _withPackagePriorityDefault(rawRow),
+                _withArchiveColumnDefaults('localContentPackages', rawRow),
               ).toCompanion(true),
             );
       }
       // Restore LocalContentEntries.
-      for (final rowJson
-          in (databaseJson['localContentEntries'] as List)
-              .cast<Map<String, Object?>>()) {
+      for (final rawRow in databaseJson['localContentEntries'] as List) {
         await db
             .into(db.localContentEntries)
-            .insert(LocalContentEntryRow.fromJson(rowJson).toCompanion(true));
+            .insert(
+              LocalContentEntryRow.fromJson(
+                _withArchiveColumnDefaults('localContentEntries', rawRow),
+              ).toCompanion(true),
+            );
       }
       // Restore LocalContentAssets (metadata only — bytes restored below).
       for (final rowJson
@@ -230,12 +232,14 @@ class DriftLocalDataArchiveService implements LocalDataArchiveService {
             .insert(ContentReadHistoryRow.fromJson(rowJson).toCompanion(true));
       }
       // Restore Characters.
-      for (final rowJson
-          in (databaseJson['characters'] as List)
-              .cast<Map<String, Object?>>()) {
+      for (final rawRow in databaseJson['characters'] as List) {
         await db
             .into(db.characters)
-            .insert(CharacterRow.fromJson(rowJson).toCompanion(true));
+            .insert(
+              CharacterRow.fromJson(
+                _withArchiveColumnDefaults('characters', rawRow),
+              ).toCompanion(true),
+            );
       }
       // Restore CharacterContentRefs.
       for (final rowJson
@@ -266,18 +270,47 @@ class DriftLocalDataArchiveService implements LocalDataArchiveService {
   }
 }
 
-/// 归档兼容：`local_content_packages.priority` 是 schemaVersion 14 才引入的
-/// **非空**列（默认 0）。v13 及更早导出的 `database.json` 没有该键，生成的
-/// `LocalContentPackageRow.fromJson` 会对缺失键执行 `null as int` 抛 `TypeError`，
-/// 让整个 restore 事务回滚 —— 升级后旧备份将无法恢复。
+/// 归档兼容：把"归档早于某列引入"时**缺失的非空列**补上建表默认值。
 ///
-/// 恢复前补默认值 0（tier 仍为 100，老备份的数值语义不变）。**不把该列改可空**：
-/// 列可空会让 `packagePriorities()` / tier 计算 / 查询到处处理 null，而迁移已经
-/// 保证库内该列非空；可空等于把这个不变量扩散到整个读取链。
-Map<String, Object?> _withPackagePriorityDefault(Object? raw) {
-  final row = raw is Map
-      ? Map<String, Object?>.from(raw)
-      : <String, Object?>{};
-  row.putIfAbsent('priority', () => 0);
+/// 生成的 `fromJson` 对非空列执行 `serializer.fromJson<T>(json[key])`（硬转），
+/// 缺失键或显式 `null` 都会抛 `TypeError`，让整个 restore 事务回滚——升级后旧
+/// 备份将无法恢复。
+///
+/// **唯一映射**（表名 → `{列名: 默认值}`）：新增兼容列只在这里加一行，不在
+/// restore 的每个循环里各打一次补丁。已覆盖：
+/// - `local_content_packages.priority`（v14 引入，默认 0 ⇒ tier 仍为 100，数值不变）；
+/// - `local_content_entries.rulesJson`（v6 引入，默认 `{}`）；
+/// - `local_content_entries.relationsJson`（v7 引入，默认 `[]`）；
+/// - `characters.markdownDirty`（v11 引入，默认 false）。
+///
+/// **不把这些列改可空**：列可空会让 `packagePriorities()` / tier 计算 / 查询到处
+/// 处理 null，而迁移已经保证库内该列非空；可空等于把这个不变量扩散到整个读取链。
+const _archiveColumnDefaults = <String, Map<String, Object?>>{
+  'localContentPackages': <String, Object?>{'priority': 0},
+  'localContentEntries': <String, Object?>{
+    'rulesJson': '{}',
+    'relationsJson': '[]',
+  },
+  'characters': <String, Object?>{'markdownDirty': false},
+};
+
+/// 按表补缺失非空列的默认值（**唯一实现**）。
+///
+/// - 缺失键**或显式 `null`** 都补默认值（`{"priority": null}` 也来自旧归档的
+///   字段裁剪，不能让它继续抛）；
+/// - 非 Map 行**不降级成 `{}`**：那会掩盖归档损坏并把错误推迟到更难定位的地方，
+///   这里直接抛出带表名的错误（restore 事务因此回滚，用户看到的是明确原因）。
+Map<String, Object?> _withArchiveColumnDefaults(String table, Object? raw) {
+  if (raw is! Map) {
+    throw FormatException('归档表 $table 的行必须是对象，实际为 ${raw.runtimeType}');
+  }
+  final row = Map<String, Object?>.from(raw);
+  final defaults = _archiveColumnDefaults[table];
+  if (defaults == null) return row;
+  for (final entry in defaults.entries) {
+    if (!row.containsKey(entry.key) || row[entry.key] == null) {
+      row[entry.key] = entry.value;
+    }
+  }
   return row;
 }

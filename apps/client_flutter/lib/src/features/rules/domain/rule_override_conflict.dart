@@ -23,10 +23,14 @@ class RuleOverrideConflict {
   /// 冲突所在的 tier（同 tier 才会冲突；不同 tier 只是覆盖）。
   final int tier;
 
-  /// 同 tier 抢这一列的全部来源 id，按 [RuleOverrideOrder] 排序（长度 ≥ 2）。
+  /// 同 tier 抢这一列的全部来源 id，**恒按 originId 升序**（排序的唯一实现是
+  /// `RuleOverrideOrder.orderedOriginIds`），长度 ≥ 2。
   final List<String> originIds;
 
-  /// 无用户选择时的确定性胜出者（`originIds.first`）。
+  /// 无用户选择时的确定性胜出者（排序首位）。通常等于 [originIds] 的首个元素；
+  /// 唯一例外是"同 tier 时角色自身条目优先"的 tie-break——角色自己的条目即使
+  /// originId 字典序更大也胜出。因此判据是 `originIds.contains(effectiveOriginId)`，
+  /// **不是** `effectiveOriginId == originIds.first`。
   final String effectiveOriginId;
 
   /// 字段展示名（中文标签唯一实现在 [RuleFieldPath.labelFor]）。
@@ -41,6 +45,9 @@ class RuleOverrideConflict {
 
   /// 坏数据返回 null：冲突是"附加信息"，读不回来时按"没有冲突"处理，
   /// 绝不猜一个来源（与 [RuleFieldSource.fromJson] 同一降级策略）。
+  ///
+  /// 结构校验除形状外还要求 `effectiveOriginId ∈ originIds`：否则界面会把
+  /// "生效来源"显示成一个根本没参与该列竞争的名字。
   static RuleOverrideConflict? fromJson(Object? raw) {
     if (raw is! Map) return null;
     final field = '${raw['field'] ?? ''}'.trim();
@@ -54,7 +61,7 @@ class RuleOverrideConflict {
       return null;
     }
     final origins = [for (final origin in rawOrigins) '$origin'];
-    if (origins.length < 2) return null;
+    if (origins.length < 2 || !origins.contains(effective)) return null;
     return RuleOverrideConflict(
       field: field,
       tier: tier,

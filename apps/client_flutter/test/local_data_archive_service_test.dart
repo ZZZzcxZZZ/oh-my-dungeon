@@ -125,11 +125,13 @@ Future<void> seedBackupFixture(AppDatabase db) async {
       );
 }
 
-/// Rewrites a v14 export into the **v13 shape**: removes the
-/// `local_content_packages.priority` key (the column was introduced in
-/// schemaVersion 14) and recomputes the manifest sha256 so the archive still
-/// previews as valid. This is the on-disk shape a pre-v14 client exported.
-Uint8List stripPackagePriorityForLegacyArchive(Uint8List bytes) {
+/// Rewrites a v14 export into an **older on-disk shape** by mutating the given
+/// tables' rows, then recomputes the manifest sha256 so the archive still
+/// previews as valid.
+Uint8List rewriteArchiveDatabase(
+  Uint8List bytes,
+  Map<String, void Function(Map<String, Object?> row)> mutate,
+) {
   final archive = ZipDecoder().decodeBytes(bytes);
   final databaseJson =
       jsonDecode(
@@ -138,14 +140,13 @@ Uint8List stripPackagePriorityForLegacyArchive(Uint8List bytes) {
             ),
           )
           as Map<String, Object?>;
-  final packages = <Map<String, Object?>>[
-    for (final row in (databaseJson['localContentPackages'] as List))
-      Map<String, Object?>.from(row as Map)..remove('priority'),
-  ];
-  final rewritten = <String, Object?>{
-    ...databaseJson,
-    'localContentPackages': packages,
-  };
+  final rewritten = <String, Object?>{...databaseJson};
+  for (final entry in mutate.entries) {
+    rewritten[entry.key] = <Map<String, Object?>>[
+      for (final row in (databaseJson[entry.key] as List))
+        _mutatedRow(row, entry.value),
+    ];
+  }
   final databaseBytes = Uint8List.fromList(utf8.encode(jsonEncode(rewritten)));
 
   final manifestJson =
@@ -167,6 +168,56 @@ Uint8List stripPackagePriorityForLegacyArchive(Uint8List bytes) {
     rebuilt.addFile(ArchiveFile.bytes(file.name, file.content as List<int>));
   }
   return Uint8List.fromList(ZipEncoder().encode(rebuilt));
+}
+
+/// Removes the given non-null columns per table (the on-disk shape an older
+/// client exported before those columns existed).
+Uint8List stripLegacyColumnsForArchive(
+  Uint8List bytes,
+  Map<String, Set<String>> removals,
+) => rewriteArchiveDatabase(bytes, <String, void Function(Map<String, Object?>)>{
+  for (final entry in removals.entries)
+    entry.key: (row) => row.removeWhere((key, _) => entry.value.contains(key)),
+});
+
+/// Rewrites a v14 export into the **v13 shape**: removes the
+/// `local_content_packages.priority` key (the column was introduced in
+/// schemaVersion 14). This is the on-disk shape a pre-v14 client exported.
+Uint8List stripPackagePriorityForLegacyArchive(Uint8List bytes) =>
+    stripLegacyColumnsForArchive(bytes, const <String, Set<String>>{
+      'localContentPackages': {'priority'},
+    });
+
+Map<String, Object?> _mutatedRow(
+  Object? row,
+  void Function(Map<String, Object?> row) mutate,
+) {
+  final normalized = Map<String, Object?>.from(row as Map);
+  mutate(normalized);
+  return normalized;
+}
+
+/// Restores an archive whose named columns were stripped, then hands the target
+/// database to [verify].
+Future<void> expectLegacyColumnDefaults(
+  Map<String, Set<String>> removals,
+  Future<void> Function(AppDatabase target) verify,
+) async {
+  final source = AppDatabase.forTesting(NativeDatabase.memory());
+  final target = AppDatabase.forTesting(NativeDatabase.memory());
+  await seedBackupFixture(source);
+  final legacyBytes = stripLegacyColumnsForArchive(
+    await DriftLocalDataArchiveService(source).exportArchive(),
+    removals,
+  );
+  final preview = await DriftLocalDataArchiveService(
+    target,
+  ).previewArchive(legacyBytes);
+  expect(preview.valid, isTrue, reason: preview.error ?? '');
+  await DriftLocalDataArchiveService(target).restoreArchive(preview);
+  await verify(target);
+  await source.close();
+  await target.close();
 }
 
 void main() {
@@ -258,6 +309,180 @@ void main() {
       expect(packages.single.id, 'example');
       // Old backups keep the "priority 0 ⇒ tier 100" behavior (D2).
       expect(packages.single.priority, 0);
+
+      await source.close();
+      await target.close();
+    });
+
+    // 0.2 阻塞项：同一条 `fromJson` 路径上还有三个"归档早于该列"的非空列，
+    // 缺失时同样抛 `TypeError` 并回滚整个 restore。四列共用一处归一化。
+    test('restores a v5 archive without entries.rulesJson, defaulting to {}', () async {
+      await expectLegacyColumnDefaults(
+        const <String, Set<String>>{
+          'localContentEntries': {'rulesJson'},
+        },
+        (target) async {
+          final entries = await target.select(target.localContentEntries).get();
+          expect(entries.single.entryKey, 'example:spell/fireball');
+          expect(entries.single.rulesJson, '{}');
+          // 其它列不受影响。
+          expect(entries.single.relationsJson, '[]');
+        },
+      );
+    });
+
+    test(
+      'restores a v6 archive without entries.relationsJson, defaulting to []',
+      () async {
+        await expectLegacyColumnDefaults(
+          const <String, Set<String>>{
+            'localContentEntries': {'relationsJson'},
+          },
+          (target) async {
+            final entries = await target
+                .select(target.localContentEntries)
+                .get();
+            expect(entries.single.relationsJson, '[]');
+            expect(entries.single.rulesJson, '{}');
+          },
+        );
+      },
+    );
+
+    test(
+      'restores a v10 archive without characters.markdownDirty, defaulting to false',
+      () async {
+        await expectLegacyColumnDefaults(
+          const <String, Set<String>>{
+            'characters': {'markdownDirty'},
+          },
+          (target) async {
+            final characters = await target.select(target.characters).get();
+            expect(characters.single.id, 'char-1');
+            expect(characters.single.markdownDirty, isFalse);
+          },
+        );
+      },
+    );
+
+    test(
+      'restores an archive missing all four compat columns at once',
+      () async {
+        await expectLegacyColumnDefaults(
+          const <String, Set<String>>{
+            'localContentPackages': {'priority'},
+            'localContentEntries': {'rulesJson', 'relationsJson'},
+            'characters': {'markdownDirty'},
+          },
+          (target) async {
+            expect(
+              (await target.select(target.localContentPackages).get()).single
+                  .priority,
+              0,
+            );
+            final entry = (await target.select(
+              target.localContentEntries,
+            ).get()).single;
+            expect(entry.rulesJson, '{}');
+            expect(entry.relationsJson, '[]');
+            expect(
+              (await target.select(target.characters).get())
+                  .single
+                  .markdownDirty,
+              isFalse,
+            );
+          },
+        );
+      },
+    );
+
+    test('treats an explicit null compat column as missing', () async {
+      final source = AppDatabase.forTesting(NativeDatabase.memory());
+      final target = AppDatabase.forTesting(NativeDatabase.memory());
+      await seedBackupFixture(source);
+      final legacyBytes = rewriteArchiveDatabase(
+        await DriftLocalDataArchiveService(source).exportArchive(),
+        <String, void Function(Map<String, Object?>)>{
+          'localContentPackages': (row) => row['priority'] = null,
+        },
+      );
+      final decoded = ZipDecoder().decodeBytes(legacyBytes);
+      expect(
+        utf8.decode(decoded.findFile('database.json')!.content as List<int>),
+        contains('"priority":null'),
+      );
+
+      final preview = await DriftLocalDataArchiveService(
+        target,
+      ).previewArchive(legacyBytes);
+      expect(preview.valid, isTrue, reason: preview.error ?? '');
+      await DriftLocalDataArchiveService(target).restoreArchive(preview);
+      expect(
+        (await target.select(target.localContentPackages).get()).single.priority,
+        0,
+      );
+
+      await source.close();
+      await target.close();
+    });
+
+    test('rejects a non-object row with a table-naming error', () async {
+      final source = AppDatabase.forTesting(NativeDatabase.memory());
+      final target = AppDatabase.forTesting(NativeDatabase.memory());
+      await seedBackupFixture(source);
+      final sourceService = DriftLocalDataArchiveService(source);
+      final targetService = DriftLocalDataArchiveService(target);
+
+      // 把 characters 表整行换成字符串：归一化必须抛出带表名的错误，而不是把
+      // 坏行降级成 `{}` 继续（那会掩盖归档损坏）。
+      final bytes = await sourceService.exportArchive();
+      final archive = ZipDecoder().decodeBytes(bytes);
+      final databaseJson =
+          jsonDecode(
+                utf8.decode(
+                  archive.findFile('database.json')!.content as List<int>,
+                ),
+              )
+              as Map<String, Object?>;
+      final rewritten = <String, Object?>{
+        ...databaseJson,
+        'characters': <Object?>['not-a-row'],
+      };
+      final databaseBytes = Uint8List.fromList(
+        utf8.encode(jsonEncode(rewritten)),
+      );
+      final manifestJson =
+          jsonDecode(
+                utf8.decode(
+                  archive.findFile('manifest.json')!.content as List<int>,
+                ),
+              )
+              as Map<String, Object?>;
+      manifestJson['sha256'] = sha256.convert(databaseBytes).toString();
+      final rebuilt = Archive()
+        ..addFile(ArchiveFile.bytes('database.json', databaseBytes))
+        ..addFile(
+          ArchiveFile.bytes(
+            'manifest.json',
+            utf8.encode(jsonEncode(manifestJson)),
+          ),
+        );
+      final corrupted = Uint8List.fromList(ZipEncoder().encode(rebuilt));
+
+      final preview = await targetService.previewArchive(corrupted);
+      expect(preview.valid, isTrue, reason: preview.error ?? '');
+      await expectLater(
+        targetService.restoreArchive(preview),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('characters'),
+          ),
+        ),
+      );
+      // 整个 restore 事务回滚：目标库仍为空。
+      expect(await target.select(target.characters).get(), isEmpty);
 
       await source.close();
       await target.close();

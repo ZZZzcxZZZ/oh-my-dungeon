@@ -475,6 +475,93 @@ void main() {
     expect(projected.dataMap['classRuleConflicts'], isEmpty);
     expect(projected.dataMap['preparedSpellLimit'], 9);
   });
+
+  // 0.4-10：连续派生两次必须逐键相等（含来源与冲突快照）。否则"打开角色页"
+  // 每次都会改动派生数值 / 冲突列表，用户看到的是抖动而不是规则。
+  test('连续派生两次：来源 / 冲突 / 派生数值逐键相等', () {
+    ContentEntry classEntry(String id, Map<String, Object?> classRules) =>
+        ContentEntry.fromJson({
+          'id': id,
+          'type': 'class',
+          'slug': 'wizard',
+          'name': id,
+          'body': <Map<String, Object?>>[],
+          'revision': 1,
+          'structured': <String, Object?>{'classRules': classRules},
+        });
+
+    final entries = <String, ContentEntry>{
+      'base:class/wizard': classEntry('base:class/wizard', {
+        'hitDie': 6,
+        'savingThrowAbilities': ['int', 'wis'],
+        'spellcasting': {
+          'mode': 'prepared',
+          'ability': 'int',
+          'prepared': {'1': 2},
+        },
+      }),
+      'alpha:class/wizard': classEntry('alpha:class/wizard', {
+        'spellcasting': {
+          'prepared': {'1': 9},
+        },
+      }),
+      'zeta:class/wizard': classEntry('zeta:class/wizard', {
+        'spellcasting': {
+          'prepared': {'1': 11},
+        },
+      }),
+    };
+    final character =
+        CharacterSheet.local(
+          id: 'twice-wizard',
+          name: '两遍法师',
+          level: 1,
+          classSummary: '法师',
+        ).copyWith(
+          data: <String, Object?>{
+            'build': <String, Object?>{
+              'level': 1,
+              'selections': <String, Object?>{'class': 'base:class/wizard'},
+              'choices': <String, Object?>{},
+            },
+          },
+        );
+
+    final projector = CharacterRuleProjector(
+      entries: entries,
+      packagePriorities: const <String, int>{'alpha': 10, 'zeta': 10},
+    );
+    final once = projector.project(character);
+    final twice = projector.project(once);
+
+    // 冲突真实存在（两个同 tier 包抢 prepared），否则这条用例没有测到目标。
+    expect(once.dataMap['classRuleConflicts'], isNotEmpty);
+    expect(
+      (once.dataMap['classRuleConflicts']! as List).single,
+      containsPair('field', 'spellcasting.prepared'),
+    );
+
+    for (final key in const <String>[
+      'classRuleSources',
+      'classRuleConflicts',
+      'preparedSpellLimit',
+      'hitDie',
+      'savingThrowAbilities',
+      'spellSlots',
+      'spellcastingAbility',
+      'classResources',
+      'actions',
+    ]) {
+      expect(
+        twice.dataMap[key],
+        equals(once.dataMap[key]),
+        reason: '派生快照 $key 必须在第二次派生后逐键相等',
+      );
+    }
+    expect(twice.maxHp, once.maxHp);
+    expect(twice.armorClass, once.armorClass);
+    expect(twice.abilityMap, once.abilityMap);
+  });
 }
 
 ContentEntry _entry({

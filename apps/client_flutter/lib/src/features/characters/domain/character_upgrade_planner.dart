@@ -2,6 +2,7 @@ import '../../content/domain/content_entry.dart';
 import '../../rules/domain/character_build.dart';
 import '../../rules/domain/character_rules_engine.dart';
 import '../../rules/domain/rule_choice_quota.dart';
+import '../../rules/domain/rule_override_declaration.dart';
 import 'character.dart';
 import 'character_content_reference.dart';
 import 'character_manual_overrides.dart';
@@ -53,10 +54,24 @@ class CharacterUpgradePlan {
 }
 
 class CharacterUpgradePlanner {
-  CharacterUpgradePlanner({required this.entries})
-    : _engine = CharacterRulesEngine(entries: entries);
+  CharacterUpgradePlanner({
+    required this.entries,
+    this.packagePriorities = const <String, int>{},
+    this.disabledOriginIds = const <String>{},
+    this.pinnedOrigins = const <String, String>{},
+  }) : _engine = CharacterRulesEngine(entries: entries);
 
   final Map<String, ContentEntry> entries;
+
+  /// 包 id → priority（决策 D2）：升级再派生必须与建档 / 打开角色页用**同一份**
+  /// 优先级，否则升级后的数值与建档时不同（"打开就变"）。
+  final Map<String, int> packagePriorities;
+
+  /// 用户对覆盖的选择（决策 D6）：升级再派生必须一并带上，否则"关闭覆盖"会在
+  /// 升级时被**静默还原**（0.4-1）。
+  final Set<String> disabledOriginIds;
+  final Map<String, String> pinnedOrigins;
+
   final CharacterRulesEngine _engine;
 
   CharacterUpgradePlan plan(CharacterSheet character) {
@@ -113,7 +128,12 @@ class CharacterUpgradePlanner {
       throw StateError('The level-up plan is stale.');
     }
 
-    final builder = RulesDrivenCharacterBuilder(entries: entries);
+    final builder = RulesDrivenCharacterBuilder(
+      entries: entries,
+      packagePriorities: packagePriorities,
+      disabledOriginIds: disabledOriginIds,
+      pinnedOrigins: pinnedOrigins,
+    );
     final derived = builder.build(
       name: character.name,
       build: plan.build,
@@ -137,8 +157,15 @@ class CharacterUpgradePlanner {
       'pendingChoices',
       'spellSlots',
       'spellcastingAbility',
+      'preparedSpellLimit',
+      'hitDie',
+      'savingThrowAbilities',
       'classResources',
       'actions',
+      // S3 决策 D6 / 0.4-1：来源与冲突是**派生快照**，升级再派生必须一并刷新，
+      // 否则用户关闭覆盖后升级会看到过期的来源 / 冲突列表。
+      'classRuleSources',
+      'classRuleConflicts',
     ]) {
       if (derived.data.containsKey(key)) mergedData[key] = derived.data[key];
     }
@@ -252,11 +279,15 @@ class CharacterUpgradePlanner {
     if (build.abilities.isNotEmpty) return build.abilities;
     return RulesDrivenCharacterBuilder(
       entries: entries,
+      packagePriorities: packagePriorities,
+      disabledOriginIds: disabledOriginIds,
+      pinnedOrigins: pinnedOrigins,
     ).baseAbilitiesFrom(character.abilityMap, build);
   }
 
   /// `countsToward` 的池上限（决策 D3）：数值来源只有
   /// [RuleChoiceQuota.limitsFor] 一处；这里负责把 [build] 所选职业解析出来。
+  /// overrides / 包 priority 与再派生**同一口径**（0.4-1）。
   Map<String, int> _poolLimits(CharacterBuild build) {
     final classEntry = entries[build.selections['class']];
     return RuleChoiceQuota.limitsFor(
@@ -264,6 +295,13 @@ class CharacterUpgradePlanner {
         entryId: classEntry?.id,
         classSummary: classEntry?.name ?? '',
         structured: classEntry?.structured ?? const <String, Object?>{},
+        entryPriority:
+            packagePriorities[RuleOverrideDeclaration.packageIdOf(
+              classEntry?.id ?? '',
+            )] ??
+            0,
+        disabledOriginIds: disabledOriginIds,
+        pinnedOrigins: pinnedOrigins,
       ),
       level: build.level,
     );

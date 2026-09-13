@@ -56,10 +56,16 @@ class CharacterRuleOverrides {
       },
   };
 
-  /// 该来源是否被关掉（条目 id 或它所属包 id 命中都算）。
-  bool isDisabled(String originId) =>
-      disabledOriginIds.contains(originId) ||
-      disabledOriginIds.contains(_packageId(originId));
+  /// 该来源是否被关掉：条目 id 精确命中、它所属包 id 命中，或某个被禁用的条目
+  /// 就属于 [originId] 这个包——三个方向都算（[originId] 可以是条目 id 或包 id）。
+  bool isDisabled(String originId) {
+    if (disabledOriginIds.contains(originId)) return true;
+    final packageId = _packageId(originId);
+    if (packageId.isNotEmpty && disabledOriginIds.contains(packageId)) {
+      return true;
+    }
+    return disabledOriginIds.any((value) => _packageId(value) == originId);
+  }
 
   /// 关闭一个覆盖来源（幂等）。[originId] 可以是条目 id 或包 id。
   CharacterRuleOverrides disable(String originId) {
@@ -71,11 +77,15 @@ class CharacterRuleOverrides {
     );
   }
 
-  /// 重新打开（幂等）：条目 id 与它所属包 id 的禁用记录都清掉。
+  /// 重新打开（幂等）：无论传的是条目 id 还是包 id，都清掉该来源（含它所属包的
+  /// 全部条目）的禁用记录。
   CharacterRuleOverrides enable(String originId) => CharacterRuleOverrides(
     disabledOriginIds: <String>{...disabledOriginIds}
       ..removeWhere(
-        (value) => value == originId || value == _packageId(originId),
+        (value) =>
+            value == originId ||
+            value == _packageId(originId) ||
+            _packageId(value) == originId,
       ),
     pinned: pinned,
   );

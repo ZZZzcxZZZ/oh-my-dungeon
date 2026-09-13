@@ -3312,18 +3312,30 @@ class RuleOverrideConflictBanner extends StatelessWidget {
   /// 重新派生规则快照（关闭覆盖 / 解决冲突后调用）。
   ///
   /// 新增独立 typedef（与 `onUpgrade` 同形状但语义不同，不复用名字）：
-  /// `typedef CharacterRulesReapplyCallback = Future<CharacterSheet?> Function();`
+  /// `typedef CharacterRulesReapplyCallback = Future<CharacterSheet?> Function(CharacterSheet character);`
+  ///
+  /// **实现时修正**：回调必须**接收当前角色**（刚被写过 `data.ruleOverrides` 的
+  /// 那一份）。若按原稿的无参 `Future<CharacterSheet?> Function()` 并捕获打开页面
+  /// 时的旧角色，`CharacterRuleProjector` 读到的仍是**旧** `ruleOverrides`——用户的
+  /// "关闭覆盖 / 选择来源"会在再派生时被静默还原。下方 `_openDetailPage` 片段里的
+  /// `() => _reapplyRules(projectedCharacter, …)` 因此读作
+  /// `(updated) => _reapplyRules(updated, …)`。
   final CharacterRulesReapplyCallback? onReapplyRules;
 ```
 
 `build()` 里组装 `originLabels` 的**唯一**实现（放进一个私有方法）：
 
 ```dart
-  /// 来源 id → 展示名（唯一实现）：内置档案固定文案，条目 id 用"包名 · 条目名"。
+  /// 来源 id → 展示名（唯一实现）：内置档案固定文案；条目 id 用"包名 · 条目名"；
+  /// 包 id → 包名（`ruleOriginLabel` 在条目 id 查不到时退回包 id）。
   Map<String, String> _originLabels() {
     final labels = <String, String>{kBuiltinOriginId: '内置档案'};
     for (final entry in widget.contentEntries) {
-      labels[entry.id] = entry.name;
+      final packageId = RuleOverrideDeclaration.packageIdOf(entry.id);
+      final packageName = widget.packageNames[packageId];
+      labels[entry.id] = packageName == null || packageName.isEmpty
+          ? entry.name
+          : '$packageName · ${entry.name}';
     }
     for (final entry in widget.packageNames.entries) {
       labels.putIfAbsent(entry.key, () => entry.value);

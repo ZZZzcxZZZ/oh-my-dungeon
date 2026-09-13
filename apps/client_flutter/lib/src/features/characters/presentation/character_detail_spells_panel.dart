@@ -7,12 +7,27 @@ class _SpellsPanel extends StatefulWidget {
     required this.contentEntries,
     this.onUpdateRuntime,
     this.onSaveCharacter,
+    this.packagePriorities = const <String, int>{},
+    this.sources = const <String, RuleFieldSource>{},
+    this.conflicts = const <RuleOverrideConflict>[],
+    this.originLabels = const <String, String>{},
+    this.onDisableOverride,
+    this.onResolveConflicts,
   });
 
   final CharacterSheet character;
   final List<ContentEntry> contentEntries;
   final CharacterRuntimeUpdate? onUpdateRuntime;
   final CharacterSaveCallback? onSaveCharacter;
+  final Map<String, int> packagePriorities;
+
+  /// 列级来源快照（`data.classRuleSources`，任务 9 消费）。
+  final Map<String, RuleFieldSource> sources;
+  final List<RuleOverrideConflict> conflicts;
+  final Map<String, String> originLabels;
+  final Future<void> Function(String originId)? onDisableOverride;
+  final Future<void> Function(List<RuleOverrideConflict> conflicts)?
+  onResolveConflicts;
 
   @override
   State<_SpellsPanel> createState() => _SpellsPanelState();
@@ -90,44 +105,67 @@ class _SpellsPanelState extends State<_SpellsPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 冲突提示条置顶：同 tier 多来源抢同一列时用户必须看见并能选择（D6）。
+        RuleOverrideConflictBanner(
+          conflicts: widget.conflicts,
+          originLabels: widget.originLabels,
+          onResolve: widget.onResolveConflicts,
+        ),
         _Section(
           title: '施法概览',
           icon: Icons.auto_fix_high_outlined,
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Chip(label: Text('施法属性 $abilityLabel')),
-              if (saveDc != null) Chip(label: Text('法术豁免 DC $saveDc')),
-              if (spellAttack != null)
-                Chip(
-                  label: Text('法术攻击 ${Dnd5eRules.formatModifier(spellAttack)}'),
-                ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  Chip(label: Text('施法属性 $abilityLabel')),
+                  if (saveDc != null) Chip(label: Text('法术豁免 DC $saveDc')),
+                  if (spellAttack != null)
+                    Chip(
+                      label: Text(
+                        '法术攻击 ${Dnd5eRules.formatModifier(spellAttack)}',
+                      ),
+                    ),
+                ],
+              ),
+              _sourceChips(const <String>[
+                'spellcasting.mode',
+                'spellcasting.ability',
+              ]),
             ],
           ),
         ),
         _Section(
           title: '法术位',
           icon: Icons.hourglass_bottom_outlined,
-          child: slotMaximums.isEmpty
-              ? _emptyClassValueNotice(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (slotMaximums.isEmpty)
+                _emptyClassValueNotice(
                   rangeLevelLabel: rangeLevelLabel,
                   levelUndeclared: levelUndeclared,
                   emptyLabel: '暂无法术位',
                   style: Theme.of(context).textTheme.bodyMedium,
                 )
-              : Column(
-                  children: [
-                    for (final entry in _sortedSlotEntries(slotMaximums))
-                      _SpellSlotLine(
-                        level: entry.key,
-                        used: _slotsUsed[entry.key] ?? 0,
-                        maximum: entry.value,
-                        onConsume: () => _adjustSlot(entry.key, 1),
-                        onRecover: () => _adjustSlot(entry.key, -1),
-                      ),
-                  ],
-                ),
+              else
+                for (final entry in _sortedSlotEntries(slotMaximums))
+                  _SpellSlotLine(
+                    level: entry.key,
+                    used: _slotsUsed[entry.key] ?? 0,
+                    maximum: entry.value,
+                    onConsume: () => _adjustSlot(entry.key, 1),
+                    onRecover: () => _adjustSlot(entry.key, -1),
+                  ),
+              _sourceChips(const <String>[
+                'spellcasting.slots',
+                'spellcasting.prepared',
+              ]),
+            ],
+          ),
         ),
         _Section(
           title: '已知与已准备法术',
@@ -264,10 +302,7 @@ class _SpellsPanelState extends State<_SpellsPanel> {
       };
     }
     if (!DeclaredLevels.isDeclared(widget.character)) return const {};
-    return Dnd5eRules.resolveClassRules(
-      entryId: _classEntryId(),
-      classSummary: widget.character.classSummary,
-    ).spellSlots(widget.character.level);
+    return _fallbackClassRules().spellSlots(widget.character.level);
   }
 
   /// 角色持久化的职业条目身份（老角色可能只有展示名）。
@@ -282,10 +317,49 @@ class _SpellsPanelState extends State<_SpellsPanel> {
       return derived;
     }
     if (!DeclaredLevels.isDeclared(widget.character)) return null;
+    return _fallbackClassRules().spellcastingAbility;
+  }
+
+  /// 老角色（没有持久化派生快照）的回退解析：必须带上用户的覆盖选择与包优先级,
+  /// 否则"关闭覆盖"在这条路径上不生效（0.4-1）。
+  ResolvedClassRules _fallbackClassRules() {
+    final entryId = _classEntryId();
+    final overrides = CharacterRuleOverrides.fromCharacter(widget.character);
     return Dnd5eRules.resolveClassRules(
-      entryId: _classEntryId(),
+      entryId: entryId,
       classSummary: widget.character.classSummary,
-    ).spellcastingAbility;
+      entryPriority:
+          widget.packagePriorities[RuleOverrideDeclaration.packageIdOf(
+            entryId ?? '',
+          )] ??
+          0,
+      disabledOriginIds: overrides.disabledOriginIds,
+      pinnedOrigins: overrides.pinned,
+    );
+  }
+
+  /// 只渲染**快照里真有来源**的列，避免每一列都显示"来源未知"的噪音。
+  Widget _sourceChips(List<String> fields) {
+    final known = <String>[
+      for (final field in fields)
+        if (widget.sources.containsKey(field)) field,
+    ];
+    if (known.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final field in known)
+            RuleSourceChip(
+              field: field,
+              source: widget.sources[field],
+              originLabels: widget.originLabels,
+              onDisableOverride: widget.onDisableOverride,
+            ),
+        ],
+      ),
+    );
   }
 
   Future<void> _adjustSlot(String level, int delta) async {

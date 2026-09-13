@@ -9,6 +9,7 @@ import '../domain/ability_score_generator.dart';
 import '../domain/character.dart';
 import '../domain/character_edit_draft.dart';
 import '../domain/character_manual_overrides.dart';
+import '../domain/character_rule_overrides.dart';
 import '../domain/class_rule_summary.dart';
 import '../domain/declared_levels.dart';
 import '../domain/dnd5e_rules.dart';
@@ -26,6 +27,7 @@ import '../../rules/domain/character_rules_engine.dart';
 import '../../rules/domain/rule_choice_quota.dart';
 import '../../rules/domain/rule_choice_resolver.dart';
 import '../../rules/domain/rule_choice_semantics.dart';
+import '../../rules/domain/rule_override_declaration.dart';
 import '../../rules/domain/rule_profile.dart';
 import 'widgets/character_builder_shell.dart';
 import 'widgets/declared_level_banner.dart';
@@ -46,6 +48,7 @@ class CharacterEditorPage extends StatefulWidget {
     this.initialCharacter,
     this.defaultCreationMethod = 'choose',
     this.contentEntries = const [],
+    this.packagePriorities = const <String, int>{},
     this.onPickImage,
     super.key,
   });
@@ -53,6 +56,10 @@ class CharacterEditorPage extends StatefulWidget {
   final CharacterSheet? initialCharacter;
   final String defaultCreationMethod;
   final List<ContentEntry> contentEntries;
+
+  /// 包 id → priority（决策 D2）：编辑器里的"再次派生"必须与建档 / 打开角色页
+  /// 用同一份优先级，否则编辑器会算出与角色页不同的数值（0.4-1）。
+  final Map<String, int> packagePriorities;
   final Future<bool> Function(CharacterEditDraft draft) onSubmit;
 
   /// 选择头像图片的回调。返回 `(bytes, mimeType)` 或 `null`（用户取消）。
@@ -583,11 +590,28 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
   /// 不再把原始 id 传进去（那会让预览与落库走两条解析路径）。不猜职业。
   ResolvedClassRules _resolveClassRules(String? entryId) {
     final entry = entryId == null ? null : _entryById(entryId);
+    final overrides = _ruleOverrides;
     return Dnd5eRules.resolveClassRules(
       entryId: entry?.id,
       classSummary: entry?.name ?? '',
       structured: entry?.structured ?? const <String, Object?>{},
+      entryPriority:
+          widget.packagePriorities[RuleOverrideDeclaration.packageIdOf(
+            entry?.id ?? '',
+          )] ??
+          0,
+      disabledOriginIds: overrides.disabledOriginIds,
+      pinnedOrigins: overrides.pinned,
     );
+  }
+
+  /// 用户对覆盖的选择（决策 D6）。编辑器必须带上，否则"关闭覆盖"在再次派生时
+  /// 被静默还原（0.4-1）。
+  CharacterRuleOverrides get _ruleOverrides {
+    final character = widget.initialCharacter;
+    return character == null
+        ? CharacterRuleOverrides.empty
+        : CharacterRuleOverrides.fromCharacter(character);
   }
 
   ContentEntry? _entryById(String entryId) {
@@ -712,6 +736,9 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
     };
     final builder = RulesDrivenCharacterBuilder(
       entries: {for (final entry in widget.contentEntries) entry.id: entry},
+      packagePriorities: widget.packagePriorities,
+      disabledOriginIds: _ruleOverrides.disabledOriginIds,
+      pinnedOrigins: _ruleOverrides.pinned,
     );
     // 再派生必须用**基础属性**：`_abilityControllers` 里是已含生效加值的最终值，
     // 直接回传会让同一份 `kind: ability` 授予再叠加一次（缺陷 4）。减加值的唯一
@@ -865,7 +892,12 @@ class _CharacterEditorPageState extends State<CharacterEditorPage> {
       // 决策 D4），也作为派生的入参——两处必须是同一份，否则门槛与结算不同口径。
       final quickAbilities = quickDraft.abilities ?? Dnd5eRules.defaultAbilities;
       final baseDraft = hasStructuredRules
-          ? RulesDrivenCharacterBuilder(entries: entries).build(
+          ? RulesDrivenCharacterBuilder(
+              entries: entries,
+              packagePriorities: widget.packagePriorities,
+              disabledOriginIds: _ruleOverrides.disabledOriginIds,
+              pinnedOrigins: _ruleOverrides.pinned,
+            ).build(
               name: name,
               build: CharacterBuild(
                 level: quickDraft.level,

@@ -19,6 +19,7 @@ import '../data/local/character_sync_conflict_repository.dart';
 import '../data/character_markdown_codec.dart';
 import '../data/character_repository.dart';
 import '../domain/character.dart';
+import '../domain/character_rule_overrides.dart';
 import '../domain/character_rule_projector.dart';
 import '../domain/dnd5e_rules.dart';
 import '../domain/monster_template_factory.dart';
@@ -600,12 +601,15 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
 
     final initialDraft = MonsterTemplateFactory.fromEntry(selected);
     final preview = initialDraft.toLocalCharacter();
+    final packagePriorities = await repository.packagePriorities();
+    if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (context) => CharacterEditorPage(
           initialCharacter: preview,
           contentEntries: monsters,
+          packagePriorities: packagePriorities,
           onPickImage: _pickAvatarImage,
           onSubmit: (draft) async {
             final success = await widget.controller.createCharacter(draft);
@@ -750,8 +754,10 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     final repository =
         widget.localContentRepository ?? widget.contentRepository;
     List<ContentEntry> contentEntries = const [];
+    var packagePriorities = const <String, int>{};
     if (repository != null) {
       contentEntries = await repository.search(const ContentQuery());
+      packagePriorities = await repository.packagePriorities();
     }
     if (!mounted) return;
     await Navigator.of(context).push<void>(
@@ -759,6 +765,7 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
         builder: (context) => CharacterEditorPage(
           defaultCreationMethod: 'standard',
           contentEntries: contentEntries,
+          packagePriorities: packagePriorities,
           onPickImage: _pickAvatarImage,
           onSubmit: (draft) async {
             final success = await widget.controller.createCharacter(draft);
@@ -784,9 +791,21 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     final contentEntries = repository == null
         ? const <ContentEntry>[]
         : await repository.search(const ContentQuery());
+    // 包优先级与包名：再派生必须与建档 / 详情页用**同一份**（D2 / 任务 9）。
+    final packagePriorities = repository == null
+        ? const <String, int>{}
+        : await repository.packagePriorities();
+    final packageNames = repository == null
+        ? const <String, String>{}
+        : {
+            for (final package in await repository.watchPackages().first)
+              package.id: package.name,
+          };
     if (!mounted) return;
+    final entryMap = {for (final entry in contentEntries) entry.id: entry};
     final projectedCharacter = CharacterRuleProjector(
-      entries: {for (final entry in contentEntries) entry.id: entry},
+      entries: entryMap,
+      packagePriorities: packagePriorities,
     ).project(character);
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
@@ -794,9 +813,22 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
           character: projectedCharacter,
           contentEntries: contentEntries,
           onSaveCharacter: widget.controller.updateCharacter,
+          packagePriorities: packagePriorities,
+          packageNames: packageNames,
+          // 关闭覆盖 / 解决冲突后的**唯一**再派生入口：与打开详情页同一条链路
+          // （读条目 → 读包优先级 → CharacterRuleProjector → 保存）。
+          onReapplyRules: (updated) => _reapplyRules(
+            updated,
+            entryMap,
+            packagePriorities,
+          ),
           onUpgrade: projectedCharacter.level >= 20
               ? null
-              : () => _openUpgradePage(projectedCharacter, contentEntries),
+              : () => _openUpgradePage(
+                  projectedCharacter,
+                  contentEntries,
+                  packagePriorities,
+                ),
           initialTab:
               widget
                   .appPreferencesController
@@ -865,12 +897,16 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     final contentEntries = repository == null
         ? const <ContentEntry>[]
         : await repository.search(const ContentQuery());
+    final packagePriorities = repository == null
+        ? const <String, int>{}
+        : await repository.packagePriorities();
     if (!mounted) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (context) => CharacterEditorPage(
           initialCharacter: character,
           contentEntries: contentEntries,
+          packagePriorities: packagePriorities,
           onPickImage: _pickAvatarImage,
           onSubmit: (draft) async {
             final updated = character.copyWith(
@@ -911,9 +947,25 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
     );
   }
 
+  /// 再派生的**唯一**实现（关闭覆盖 / 解决冲突后调用）：复用打开详情页的同一条
+  /// 链路（读条目 → 读包优先级 → `CharacterRuleProjector`），并把结果落库。
+  Future<CharacterSheet?> _reapplyRules(
+    CharacterSheet character,
+    Map<String, ContentEntry> entries,
+    Map<String, int> packagePriorities,
+  ) async {
+    final projected = CharacterRuleProjector(
+      entries: entries,
+      packagePriorities: packagePriorities,
+    ).project(character);
+    await widget.controller.updateCharacter(projected);
+    return projected;
+  }
+
   Future<CharacterSheet?> _openUpgradePage(
     CharacterSheet character, [
     List<ContentEntry>? loadedEntries,
+    Map<String, int>? loadedPackagePriorities,
   ]) async {
     final repository =
         widget.contentRepository ?? widget.localContentRepository;
@@ -922,12 +974,22 @@ class _CharactersTabPageState extends State<CharactersTabPage> {
         (repository == null
             ? const <ContentEntry>[]
             : await repository.search(const ContentQuery()));
+    final packagePriorities =
+        loadedPackagePriorities ??
+        (repository == null
+            ? const <String, int>{}
+            : await repository.packagePriorities());
     if (!mounted) return null;
+    // 用户对覆盖的选择必须带到升级页，否则"关闭覆盖"会在升级时被静默还原（0.4-1）。
+    final overrides = CharacterRuleOverrides.fromCharacter(character);
     return Navigator.of(context).push<CharacterSheet>(
       MaterialPageRoute<CharacterSheet>(
         builder: (context) => CharacterUpgradePage(
           character: character,
           contentEntries: contentEntries,
+          packagePriorities: packagePriorities,
+          disabledOriginIds: overrides.disabledOriginIds,
+          pinnedOrigins: overrides.pinned,
           onApply: widget.controller.updateCharacter,
         ),
       ),

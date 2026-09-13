@@ -10,11 +10,17 @@ import '../domain/character_manual_overrides.dart';
 import '../domain/character_override_resolver.dart';
 import '../domain/character_profile.dart';
 import '../domain/character_quick_edit_service.dart';
+import '../domain/character_rule_overrides.dart';
 import '../domain/declared_levels.dart';
 import '../domain/dnd5e_rules.dart';
 import '../domain/weapon_attack_derivation.dart';
+import '../../rules/domain/rule_field_path.dart';
+import '../../rules/domain/rule_override_conflict.dart';
+import '../../rules/domain/rule_override_declaration.dart';
+import '../../rules/domain/rule_profile.dart';
 import 'widgets/character_sheet_shell.dart';
 import 'widgets/declared_level_banner.dart';
+import 'widgets/rule_source_list.dart';
 import '../../../core/presentation/dialog_sizes.dart';
 import '../../../core/widgets/empty_state.dart';
 
@@ -48,6 +54,8 @@ typedef CharacterInventoryUpdate =
 typedef CharacterRollCallback = void Function(CharacterRollEvent event);
 typedef CharacterSaveCallback = Future<bool> Function(CharacterSheet character);
 typedef CharacterUpgradeCallback = Future<CharacterSheet?> Function();
+typedef CharacterRulesReapplyCallback =
+    Future<CharacterSheet?> Function(CharacterSheet character);
 
 class CharacterRollEvent {
   const CharacterRollEvent({
@@ -90,6 +98,9 @@ class CharacterDetailPage extends StatefulWidget {
     this.sink,
     this.returnToChatAfterRoll = false,
     this.initialTab = 'overview',
+    this.packagePriorities = const <String, int>{},
+    this.packageNames = const <String, String>{},
+    this.onReapplyRules,
     super.key,
   });
 
@@ -105,6 +116,17 @@ class CharacterDetailPage extends StatefulWidget {
   final CampaignActionSink? sink;
   final bool returnToChatAfterRoll;
   final String initialTab;
+
+  /// 包 id → priority（来自 `ContentRepository.packagePriorities()`）：关闭覆盖 /
+  /// 解决冲突后重新投影响使用与建档**同一份**优先级。
+  final Map<String, int> packagePriorities;
+
+  /// 包 id → 展示名，用于把来源 id 翻译成人类可读标签。
+  final Map<String, String> packageNames;
+
+  /// 重新派生规则快照（关闭覆盖 / 解决冲突后调用）。回调**接收当前角色**——
+  /// 它刚被写过 `data.ruleOverrides`，捕获打开页面时的旧角色会丢掉这次选择。
+  final CharacterRulesReapplyCallback? onReapplyRules;
 
   @override
   State<CharacterDetailPage> createState() => _CharacterDetailPageState();
@@ -124,6 +146,70 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.character != widget.character) _character = widget.character;
   }
+
+  /// 来源 id → 展示名（**唯一实现**）：内置档案固定文案；条目 id 用
+  /// "包名 · 条目名"；包 id → 包名（[ruleOriginLabel] 会在条目 id 查不到时退回）。
+  Map<String, String> _originLabels() {
+    final labels = <String, String>{kBuiltinOriginId: '内置档案'};
+    for (final entry in widget.contentEntries) {
+      final packageId = RuleOverrideDeclaration.packageIdOf(entry.id);
+      final packageName = widget.packageNames[packageId];
+      labels[entry.id] = packageName == null || packageName.isEmpty
+          ? entry.name
+          : '$packageName · ${entry.name}';
+    }
+    for (final entry in widget.packageNames.entries) {
+      labels.putIfAbsent(entry.key, () => entry.value);
+    }
+    return labels;
+  }
+
+  /// 列级来源快照（`data.classRuleSources`），未派生时为空（不猜）。
+  Map<String, RuleFieldSource> _ruleSources() =>
+      RuleFieldSourceMap.fromData(_character.dataMap['classRuleSources']);
+
+  /// 冲突快照（`data.classRuleConflicts`），坏数据降级为空表。
+  List<RuleOverrideConflict> _ruleConflicts() =>
+      RuleOverrideConflicts.fromData(_character.dataMap['classRuleConflicts']);
+
+  /// 关闭某条覆盖并**重新派生**（唯一实现）：写 `data.ruleOverrides` → 通知上层
+  /// 用 `CharacterRuleProjector` 重算 → 保存。UI 自己不算规则数值。
+  Future<void> _disableOverride(String originId) async {
+    final overrides = CharacterRuleOverrides.fromCharacter(_character);
+    final data = Map<String, Object?>.from(_character.dataMap)
+      ..['ruleOverrides'] = overrides.disable(originId).toData();
+    setState(() => _character = _character.copyWith(data: data));
+    await _reapplyAfterOverrideChange();
+  }
+
+  /// 冲突选择的结果落库（`pinned`：列路径 → 用户选定的来源），然后重新派生。
+  Future<void> _resolveConflicts(
+    List<RuleOverrideConflict> conflicts,
+  ) async {
+    var overrides = CharacterRuleOverrides.fromCharacter(_character);
+    for (final conflict in conflicts) {
+      overrides = overrides.pin(conflict.field, conflict.effectiveOriginId);
+    }
+    final data = Map<String, Object?>.from(_character.dataMap)
+      ..['ruleOverrides'] = overrides.toData();
+    setState(() => _character = _character.copyWith(data: data));
+    await _reapplyAfterOverrideChange();
+  }
+
+  Future<void> _reapplyAfterOverrideChange() async {
+    final callback = widget.onReapplyRules;
+    if (callback != null) {
+      final reapplied = await callback(_character);
+      if (reapplied != null && mounted) {
+        setState(() => _character = reapplied);
+      }
+      return;
+    }
+    await widget.onSaveCharacter?.call(_character);
+  }
+
+  bool get _canEditOverrides =>
+      widget.onReapplyRules != null || widget.onSaveCharacter != null;
 
   @override
   Widget build(BuildContext context) {
@@ -218,6 +304,12 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
               onSaveCharacter: widget.onSaveCharacter == null
                   ? null
                   : _saveCharacter,
+              packagePriorities: widget.packagePriorities,
+              sources: _ruleSources(),
+              conflicts: _ruleConflicts(),
+              originLabels: _originLabels(),
+              onDisableOverride: _canEditOverrides ? _disableOverride : null,
+              onResolveConflicts: _canEditOverrides ? _resolveConflicts : null,
             ),
           ),
         ),
@@ -246,6 +338,11 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
               onSaveCharacter: widget.onSaveCharacter == null
                   ? null
                   : _saveCharacter,
+              sources: _ruleSources(),
+              conflicts: _ruleConflicts(),
+              originLabels: _originLabels(),
+              onDisableOverride: _canEditOverrides ? _disableOverride : null,
+              onResolveConflicts: _canEditOverrides ? _resolveConflicts : null,
             ),
           ),
         ),
@@ -273,6 +370,9 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
               onSaveCharacter: widget.onSaveCharacter == null
                   ? null
                   : _saveCharacter,
+              sources: _ruleSources(),
+              originLabels: _originLabels(),
+              onDisableOverride: _canEditOverrides ? _disableOverride : null,
             ),
           ),
         ),

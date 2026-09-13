@@ -16,12 +16,21 @@ class CharacterUpgradePage extends StatefulWidget {
     required this.character,
     required this.contentEntries,
     required this.onApply,
+    this.packagePriorities = const <String, int>{},
+    this.disabledOriginIds = const <String>{},
+    this.pinnedOrigins = const <String, String>{},
     super.key,
   });
 
   final CharacterSheet character;
   final List<ContentEntry> contentEntries;
   final CharacterUpgradeApply onApply;
+
+  /// 包 id → priority 与用户对覆盖的选择（决策 D2 / D6）：升级再派生必须与建档
+  /// 同一口径，否则"关闭覆盖"会在升级时被静默还原（0.4-1）。
+  final Map<String, int> packagePriorities;
+  final Set<String> disabledOriginIds;
+  final Map<String, String> pinnedOrigins;
 
   @override
   State<CharacterUpgradePage> createState() => _CharacterUpgradePageState();
@@ -40,7 +49,12 @@ class _CharacterUpgradePageState extends State<CharacterUpgradePage> {
     _entries = <String, ContentEntry>{
       for (final entry in widget.contentEntries) entry.id: entry,
     };
-    _planner = CharacterUpgradePlanner(entries: _entries);
+    _planner = CharacterUpgradePlanner(
+      entries: _entries,
+      packagePriorities: widget.packagePriorities,
+      disabledOriginIds: widget.disabledOriginIds,
+      pinnedOrigins: widget.pinnedOrigins,
+    );
     try {
       _plan = _planner.plan(widget.character);
     } on StateError catch (error) {

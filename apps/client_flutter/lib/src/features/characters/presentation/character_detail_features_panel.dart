@@ -348,10 +348,21 @@ IconData _characterSectionIcon(String title) {
 }
 
 class _ProfilePanel extends StatefulWidget {
-  const _ProfilePanel({required this.character, this.onSaveCharacter});
+  const _ProfilePanel({
+    required this.character,
+    this.onSaveCharacter,
+    this.sources = const <String, RuleFieldSource>{},
+    this.originLabels = const <String, String>{},
+    this.onDisableOverride,
+  });
 
   final CharacterSheet character;
   final CharacterSaveCallback? onSaveCharacter;
+
+  /// 列级来源快照（`data.classRuleSources`，任务 9 的集中管理面）。
+  final Map<String, RuleFieldSource> sources;
+  final Map<String, String> originLabels;
+  final Future<void> Function(String originId)? onDisableOverride;
 
   @override
   State<_ProfilePanel> createState() => _ProfilePanelState();
@@ -438,6 +449,13 @@ class _ProfilePanelState extends State<_ProfilePanel> {
         _profileField('languages', '语言', enabled: enabled),
         _profileField('backstory', '背景故事', enabled: enabled, lines: 6),
         _profileField('privateNotes', '私人笔记', enabled: enabled, lines: 5),
+        const SizedBox(height: 8),
+        // 规则来源的集中管理面：每一列取自哪里、可逐条回退内置档案（任务 9）。
+        RuleSourceListCard(
+          sources: widget.sources,
+          originLabels: widget.originLabels,
+          onDisableOverride: widget.onDisableOverride,
+        ),
         if (!enabled) const Text('当前角色为只读；从本地角色列表打开后可直接编辑。'),
       ],
     );

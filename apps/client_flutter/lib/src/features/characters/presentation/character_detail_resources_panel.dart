@@ -6,11 +6,24 @@ class _ResourcesPanel extends StatefulWidget {
     required this.character,
     this.onUpdateRuntime,
     this.onSaveCharacter,
+    this.sources = const <String, RuleFieldSource>{},
+    this.conflicts = const <RuleOverrideConflict>[],
+    this.originLabels = const <String, String>{},
+    this.onDisableOverride,
+    this.onResolveConflicts,
   });
 
   final CharacterSheet character;
   final CharacterRuntimeUpdate? onUpdateRuntime;
   final CharacterSaveCallback? onSaveCharacter;
+
+  /// 列级来源快照（`data.classRuleSources`，任务 9 消费）。
+  final Map<String, RuleFieldSource> sources;
+  final List<RuleOverrideConflict> conflicts;
+  final Map<String, String> originLabels;
+  final Future<void> Function(String originId)? onDisableOverride;
+  final Future<void> Function(List<RuleOverrideConflict> conflicts)?
+  onResolveConflicts;
 
   @override
   State<_ResourcesPanel> createState() => _ResourcesPanelState();
@@ -52,89 +65,130 @@ class _ResourcesPanelState extends State<_ResourcesPanel> {
       isDeclared: DeclaredLevels.isDeclared(widget.character),
     );
     final levelUndeclared = declaredLevels.undeclares(widget.character.level);
-    return _Section(
-      title: '职业资源',
-      icon: Icons.bolt_outlined,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (_resources.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  FilledButton.tonalIcon(
-                    onPressed: () => _restoreResources(longRest: false),
-                    icon: const Icon(Icons.bedtime_outlined),
-                    label: const Text('恢复短休资源'),
-                  ),
-                  FilledButton.icon(
-                    onPressed: () => _restoreResources(longRest: true),
-                    icon: const Icon(Icons.night_shelter_outlined),
-                    label: const Text('恢复长休资源'),
-                  ),
-                ],
-              ),
-            ),
-          if (_resources.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: _emptyClassValueNotice(
-                rangeLevelLabel: rangeLevelLabel,
-                levelUndeclared: levelUndeclared,
-                emptyLabel: '暂无可追踪资源',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            )
-          else
-            LayoutBuilder(
-              builder: (context, constraints) {
-                const gap = 12.0;
-                final columns = constraints.maxWidth >= 900
-                    ? 3
-                    : constraints.maxWidth >= 600
-                    ? 2
-                    : 1;
-                final width =
-                    (constraints.maxWidth - gap * (columns - 1)) / columns;
-                return Wrap(
-                  spacing: gap,
-                  runSpacing: gap,
-                  children: [
-                    for (final resource in _resources)
-                      SizedBox(
-                        width: width,
-                        child: _ClassResourceLine(
-                          resource: resource,
-                          current:
-                              resource.maximum -
-                              (_classResourcesUsed[resource.id] ?? 0),
-                          onSetCurrent: (value) =>
-                              _setResourceCurrent(resource, value),
-                          onEdit: widget.onSaveCharacter == null
-                              ? null
-                              : () => _editResource(resource),
-                          onDelete: widget.onSaveCharacter == null
-                              ? null
-                              : () => _deleteResource(resource),
-                        ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 冲突提示条置顶（D6 / 任务 9）。
+        RuleOverrideConflictBanner(
+          conflicts: widget.conflicts,
+          originLabels: widget.originLabels,
+          onResolve: widget.onResolveConflicts,
+        ),
+        _Section(
+          title: '职业资源',
+          icon: Icons.bolt_outlined,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_resources.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilledButton.tonalIcon(
+                        onPressed: () => _restoreResources(longRest: false),
+                        icon: const Icon(Icons.bedtime_outlined),
+                        label: const Text('恢复短休资源'),
                       ),
-                  ],
-                );
-              },
-            ),
-          if (widget.onSaveCharacter != null) ...[
-            const SizedBox(height: 16),
-            FilledButton.tonalIcon(
-              onPressed: _addResource,
-              icon: const Icon(Icons.add),
-              label: const Text('添加资源'),
-            ),
-          ],
-        ],
-      ),
+                      FilledButton.icon(
+                        onPressed: () => _restoreResources(longRest: true),
+                        icon: const Icon(Icons.night_shelter_outlined),
+                        label: const Text('恢复长休资源'),
+                      ),
+                    ],
+                  ),
+                ),
+              if (_resources.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: _emptyClassValueNotice(
+                    rangeLevelLabel: rangeLevelLabel,
+                    levelUndeclared: levelUndeclared,
+                    emptyLabel: '暂无可追踪资源',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                )
+              else
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    const gap = 12.0;
+                    final columns = constraints.maxWidth >= 900
+                        ? 3
+                        : constraints.maxWidth >= 600
+                        ? 2
+                        : 1;
+                    final width =
+                        (constraints.maxWidth - gap * (columns - 1)) / columns;
+                    return Wrap(
+                      spacing: gap,
+                      runSpacing: gap,
+                      children: [
+                        for (final resource in _resources)
+                          SizedBox(
+                            width: width,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _ClassResourceLine(
+                                  resource: resource,
+                                  current:
+                                      resource.maximum -
+                                      (_classResourcesUsed[resource.id] ?? 0),
+                                  onSetCurrent: (value) =>
+                                      _setResourceCurrent(resource, value),
+                                  onEdit: widget.onSaveCharacter == null
+                                      ? null
+                                      : () => _editResource(resource),
+                                  onDelete: widget.onSaveCharacter == null
+                                      ? null
+                                      : () => _deleteResource(resource),
+                                ),
+                                _sourceChips(resource.id),
+                              ],
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+              if (widget.onSaveCharacter != null) ...[
+                const SizedBox(height: 16),
+                FilledButton.tonalIcon(
+                  onPressed: _addResource,
+                  icon: const Icon(Icons.add),
+                  label: const Text('添加资源'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 每条资源的列级来源徽标（只渲染快照里真有来源的列）。
+  Widget _sourceChips(String resourceId) {
+    final known = <String>[
+      for (final column in const <String>['maximum', 'recovery'])
+        if (widget.sources.containsKey(
+          RuleFieldPath.resource(resourceId, column),
+        ))
+          RuleFieldPath.resource(resourceId, column),
+    ];
+    if (known.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final field in known)
+          RuleSourceChip(
+            field: field,
+            source: widget.sources[field],
+            originLabels: widget.originLabels,
+            onDisableOverride: widget.onDisableOverride,
+          ),
+      ],
     );
   }
 

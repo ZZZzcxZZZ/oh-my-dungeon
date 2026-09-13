@@ -4,6 +4,7 @@ import 'package:dnd_table_client/src/features/characters/domain/character.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character_rule_overrides.dart';
 import 'package:dnd_table_client/src/features/characters/domain/character_upgrade_planner.dart';
 import 'package:dnd_table_client/src/features/characters/domain/dnd5e_rules.dart';
+import 'package:dnd_table_client/src/features/characters/domain/recorded_rule_choices.dart';
 import 'package:dnd_table_client/src/features/characters/domain/rule_override_index.dart';
 import 'package:dnd_table_client/src/features/characters/domain/rules_driven_character_builder.dart';
 import 'package:dnd_table_client/src/features/characters/presentation/character_detail_page.dart';
@@ -124,6 +125,41 @@ void main() {
         findsOneWidget,
         reason: '按钮按列显示，但 disable(originId) 按整条来源生效',
       );
+    });
+  });
+
+  group('RuleChoiceListCard', () {
+    testWidgets('列出已记录的规则选择（含不产生数值的记录型选项）', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: RuleChoiceListCard(
+              choices: <RecordedRuleChoice>[
+                RecordedRuleChoice(
+                  sourceEntryId: 'astral-knight:class/astral-knight',
+                  sourceName: '星界骑士',
+                  choiceId: 'fighting-style',
+                  level: 1,
+                  choiceLabel: '选择一项战斗风格',
+                  optionIds: <String>['astral-poise'],
+                  optionLabels: <String>['星界之势'],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      expect(find.text('规则选择'), findsOneWidget);
+      expect(find.text('星界骑士 · 选择一项战斗风格（1 级）：星界之势'), findsOneWidget);
+    });
+
+    testWidgets('没有记录时给出空态而不是空白卡片', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: RuleChoiceListCard(choices: <RecordedRuleChoice>[])),
+        ),
+      );
+      expect(find.text('当前角色没有记录规则选择。'), findsOneWidget);
     });
   });
 

@@ -166,9 +166,9 @@ class RulesDrivenCharacterBuilder {
     // **全部**规则选择的落库镜像：与 `build.choices` 同形（键 = 生效单元键），
     // 含条目选择与记录型值类型选择；**不做数值派生**。
     //
-    // 注意：`data['choices']` 目前在 `lib` 内**没有读取方**（角色卡读
-    // `data['build']['choices']` / `data['resolvedGrants']`）——读取方待接入
-    // （计划 2 批次 E 之后的内容显示），这里先保证"每个生效单元都有落库记录"。
+    // 读取方：`recordedRuleChoices`（`characters/domain/recorded_rule_choices.dart`）
+    // 把它渲染成角色卡的「规则选择」卡——这样**记录型选择**（值选项、不产生 grant
+    // 的风格选择）在角色卡上可见；数值派生仍只由本构建器负责，两件事不混。
     final recordedChoices = <String, List<String>>{
       for (final entry in ledger.resolvedChoices.entries) entry.key: entry.value,
     };

@@ -356,6 +356,7 @@ class _ProfilePanel extends StatefulWidget {
     this.entryOriginId,
     this.disabledOriginIds = const <String>{},
     this.resourceNames = const <String, String>{},
+    this.recordedChoices = const <RecordedRuleChoice>[],
     this.onDisableOverride,
     this.onEnableOverride,
   });
@@ -373,6 +374,9 @@ class _ProfilePanel extends StatefulWidget {
 
   /// 资源 id → 资源展示名（K）。
   final Map<String, String> resourceNames;
+
+  /// `data['choices']` 的读取结果（唯一读取方 `recordedRuleChoices`）。
+  final List<RecordedRuleChoice> recordedChoices;
 
   final Future<void> Function(String originId)? onDisableOverride;
   final Future<void> Function(String originId)? onEnableOverride;
@@ -473,6 +477,8 @@ class _ProfilePanelState extends State<_ProfilePanel> {
           onDisableOverride: widget.onDisableOverride,
           onEnableOverride: widget.onEnableOverride,
         ),
+        const SizedBox(height: 12),
+        RuleChoiceListCard(choices: widget.recordedChoices),
         if (!enabled) const Text('当前角色为只读；从本地角色列表打开后可直接编辑。'),
       ],
     );

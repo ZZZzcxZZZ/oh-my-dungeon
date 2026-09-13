@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/presentation/dialog_sizes.dart';
+import '../../domain/recorded_rule_choices.dart';
 import '../../../rules/domain/rule_field_path.dart';
 import '../../../rules/domain/rule_override_conflict.dart';
 import '../../../rules/domain/rule_override_declaration.dart';
@@ -381,5 +382,63 @@ class RuleSourceListCard extends StatelessWidget {
   String? _resourceNameOf(String field) {
     final parsed = RuleFieldPath.parseResource(field);
     return parsed == null ? null : resourceNames[parsed.id];
+  }
+}
+
+/// 「规则选择」卡：角色创建 / 升级时**选定**的规则选择（含不产生数值的记录型选项）。
+///
+/// 与 [RuleSourceListCard]（每个数值列取自哪里）互补：这一张回答"我选了什么"，
+/// 数据来自角色落库的 `data['choices']`（读取实现唯一：`recordedRuleChoices`）。
+class RuleChoiceListCard extends StatelessWidget {
+  const RuleChoiceListCard({required this.choices, super.key});
+
+  final List<RecordedRuleChoice> choices;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card.outlined(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('规则选择', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              '创建与升级时选定的规则选择；含只记录、不产生数值的选项。',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (choices.isEmpty)
+              Text('当前角色没有记录规则选择。', style: theme.textTheme.bodyMedium)
+            else
+              for (final choice in choices)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.check_circle_outline, size: 16),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          choice.summary,
+                          key: Key(
+                            'recorded-choice-${choice.sourceEntryId}'
+                            '#${choice.choiceId}',
+                          ),
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
   }
 }

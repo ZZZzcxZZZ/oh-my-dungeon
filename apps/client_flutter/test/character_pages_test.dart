@@ -2700,6 +2700,62 @@ void main() {
     },
   );
 
+  testWidgets('角色资料页显示已记录的规则选择（data[\'choices\'] 的读取方）', (tester) async {
+    // builder 的 TODO 只到"落库镜像"为止：这里钉住读取方——角色卡必须能看到
+    // 用户选过什么，尤其是**不产生数值**的记录型选项（值选项 / 战斗风格）。
+    final classEntry = ContentEntry.fromJson(<String, Object?>{
+      'id': 'demo:class/starweaver',
+      'type': 'class',
+      'slug': 'starweaver',
+      'name': '织星者',
+      'body': <Object?>[],
+      'revision': 1,
+      'rules': <String, Object?>{
+        'progression': <Object?>[
+          <String, Object?>{
+            'levels': <int>[1],
+            'choices': <Object?>[
+              <String, Object?>{
+                'id': 'style',
+                'label': '选择一项战斗风格',
+                'optionType': 'feat',
+                'minimum': 1,
+                'maximum': 1,
+                'options': <Object?>[
+                  <String, Object?>{
+                    'id': 'poise',
+                    'label': '星界之势',
+                    'description': '示例说明。',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    });
+    final character = _character.copyWith(
+      data: <String, Object?>{
+        'choices': <String, Object?>{
+          'demo:class/starweaver#style#1': <String>['poise'],
+        },
+      },
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CharacterDetailPage(
+          character: character,
+          contentEntries: <ContentEntry>[classEntry],
+          initialTab: 'profile',
+        ),
+      ),
+    );
+
+    expect(find.text('规则选择'), findsOneWidget);
+    expect(find.text('织星者 · 选择一项战斗风格（1 级）：星界之势'), findsOneWidget);
+  });
+
   testWidgets('actions panel 的法术豁免 DC 与本页其它面板同一口径（吃跨包 priority）', (
     tester,
   ) async {

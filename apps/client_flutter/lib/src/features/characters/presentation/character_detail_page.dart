@@ -11,6 +11,7 @@ import '../domain/character_override_resolver.dart';
 import '../domain/character_profile.dart';
 import '../domain/character_quick_edit_service.dart';
 import '../domain/character_rule_overrides.dart';
+import '../domain/recorded_rule_choices.dart';
 import '../domain/declared_levels.dart';
 import '../domain/rule_override_index.dart';
 import '../domain/dnd5e_rules.dart';
@@ -417,6 +418,10 @@ class _CharacterDetailPageState extends State<CharacterDetailPage> {
                 for (final resource in _character.classResources)
                   resource.id: resource.name,
               },
+              recordedChoices: recordedRuleChoices(
+                character: _character,
+                entries: effectiveContentEntries,
+              ),
               onDisableOverride: _canEditOverrides ? _disableOverride : null,
               onEnableOverride: _canEditOverrides ? _enableOverride : null,
             ),

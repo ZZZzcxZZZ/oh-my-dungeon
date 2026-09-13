@@ -1,5 +1,6 @@
 import '../../domain/content_block.dart';
 import '../../domain/content_entry.dart';
+import '../../domain/content_entry_id.dart';
 import '../../domain/content_package_manifest.dart';
 import '../../../rules/domain/character_rule_definition.dart';
 import '../../domain/content_schema_registry.dart';
@@ -51,11 +52,32 @@ class LocalHomebrewContentService {
     /// 条目自己的 `rules`（`progression` / `choices` / `grants`，契约 §3.2）。
     /// 传 `null` = 不声明；传 `{}` = 显式声明为空（清空）。
     Map<String, Object?>? rules,
+    /// 基于某条既有条目创建**覆盖**（S4）：新条目的对齐键（id 末段，契约 D3）钉在
+    /// 来源条目上，类型也随之取来源条目的类型。**不再**按名称生成 slug——否则作者
+    /// 改个名字就对不上来源，覆盖链永远不生效。
+    ContentEntry? overrideOf,
   }) async {
-    final validated = _validate(type: type, name: name, structured: structured);
-    final slug = await _availableSlug(validated.normalizedType, name);
+    final alignmentKey = overrideOf == null
+        ? null
+        : contentEntryAlignmentKey(overrideOf.id);
+    if (alignmentKey != null && alignmentKey.isEmpty) {
+      throw const LocalHomebrewValidationException(['覆盖来源的条目标识为空']);
+    }
+    final validated = _validate(
+      type: overrideOf?.type ?? type,
+      name: name,
+      structured: structured,
+    );
+    final slug =
+        alignmentKey ?? await _availableSlug(validated.normalizedType, name);
+    final id = '$packageId:${validated.normalizedType}/$slug';
+    if (alignmentKey != null && await _repository.getByKey(id) != null) {
+      throw LocalHomebrewValidationException(<String>[
+        '已存在同键条目 $id：直接编辑它即可，不要再建一条覆盖',
+      ]);
+    }
     final entry = _buildEntry(
-      id: '$packageId:${validated.normalizedType}/$slug',
+      id: id,
       type: validated.normalizedType,
       slug: slug,
       name: name,

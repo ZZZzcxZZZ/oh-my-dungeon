@@ -1441,6 +1441,13 @@ tier（含内置档案）的同 `id` 资源；若**档案没有同 id 资源可�
 
 - 客户端：自制内容与导入包**共用同一套类型注册与校验**（`ContentSchemaRegistry`，
   含类型/必填/数据类型/范围/枚举校验）。
+- 作者 GUI（资料包设置页「我的自制内容」）：新建 / 编辑 / 删除走
+  `LocalHomebrewContentService` 这一唯一写入边界；`class` 类型默认是**可视化表单**
+  （生命骰、豁免、合并模式、施法属性、职业资源、等级步骤与授予），表单没建模的形状
+  （`Table` / `MaxSpec` / `rules.choices`）切到「JSON」标签写，两段 JSON 仍是唯一事实
+  来源；「基于现有条目创建覆盖」把新条目的**对齐键**（id 末段）钉在来源条目上，
+  未声明的列仍继承来源；「导出 .dndpack」先用真实导入器自校验再落盘。编辑既有条目时
+  描述框之外的块（标题 / 列表等）原样保留。
 - 服务端另有独立的 `CampaignEntryValidatorService`（校验更弱：非空、10 种区块类型、
   禁止 overlay 字段），仅用于战役私有条目。
 - 检索支持类型、来源、标签、收藏等筛选；条目详情由区块渲染器呈现
@@ -1895,22 +1902,24 @@ Material 3 设计系统契约（`DESIGN.md` 与契约测试/golden）；自托�
 （短休契约魔法判定、动作面板法术豁免 DC）；关闭覆盖后 5 个派生快照键（`spellSlots` /
 `spellcastingAbility` / `preparedSpellLimit` / `classResources` / `actions`）**显式清空**，
 不再残留被关闭来源的旧数值。
-**S4 / D8 / D10（2026-09-13）**：作者 GUI 最小形态——类型下拉 +
-`structured` / `rules` JSON 边写边校验 + 唯一写入边界 `LocalHomebrewContentService`
-（新建 / 编辑 / 删除，编辑保留描述框之外的块）与 `.dndpack` 导出（`DndPackExporter`
-组包、`previewDndPack` 自校验后再落盘）；PHB 提取器按职业自己的 `maximumSpellLevel`
+**S4 / D8 / D10（2026-09-13）**：作者 GUI——类型下拉 + 唯一写入边界
+`LocalHomebrewContentService`（新建 / 编辑 / 删除，编辑保留描述框之外的块）、
+`class` 类型的**可视化规则表单**（`classRules` + `progression`，其余形状切 JSON；
+表单不持有状态，两段 JSON 仍是唯一事实来源）、**「基于现有条目创建覆盖」**
+（对齐键钉在来源条目上）与 `.dndpack` 导出（`DndPackExporter` 组包、
+`previewDndPack` 自校验后再落盘）；PHB 提取器按职业自己的 `maximumSpellLevel`
 表产出 `optionType: "spell"` 选择并新增第四个额度池 `cantrips`（决策 D8）；
 背景技能改由条目 `rules.grants` 驱动、删除中文名预设（决策 D10）。
-**可视化规则表单与"基于已有条目创建覆盖"仍未做**，现状见规格 §11.4。
+**仍未做**：`rules.choices` 的可视化编辑（选择 / 选项 / `requires` 仍写 JSON），见规格 §11.4。
 
 ### 实测基线（2026-09-13）
 
 | 项 | 结果 |
 |---|---|
 | `flutter analyze` | 0 问题 |
-| `flutter test` | **1612 通过 / 6 跳过**（3 条 golden 默认跳过 + 3 条依赖 `--dart-define` 私有包路径的用例；跳过点与上一基线同一组） |
+| `flutter test` | **1621 通过 / 6 跳过**（3 条 golden 默认跳过 + 3 条依赖 `--dart-define` 私有包路径的用例；跳过点与上一基线同一组） |
 | 服务端 `npm run lint` + `npm test` | 24 套件 / 355 测试通过，0 跳过 |
-| `npm run test:scripts` | **43 通过**（4 个脚本测试套件 + drift worker 产物清单校验；本地有 `private-imports/` 时 0 跳过，公开 CI 上 9 条提取类用例自行 skip） |
+| `npm run test:scripts` | **44 通过**（4 个脚本测试套件 + drift worker 产物清单校验；本地有 `private-imports/` 时 0 跳过，公开 CI 上 9 条提取类用例自行 skip） |
 | `npm run lint:design` | 0 error / 0 warning（1 条 token 统计 info） |
 | `npm run validate:phb-private` | 通过（校验器 + 真实导入器 3 个用例） |
 | CI | 6 个 job：`server` / `client` / `design` / `golden` / `docker` / `scripts` |

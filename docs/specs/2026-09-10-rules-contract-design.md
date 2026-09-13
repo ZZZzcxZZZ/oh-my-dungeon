@@ -396,6 +396,9 @@ cantrips      = cantrips[L]                                        // 同上
    对齐键的规范口径是**条目 id 的最后一段**（`<packageId>:class/<slug>` → `<slug>`，
    规范化 `trim().toLowerCase()`；唯一实现点 `Dnd5eRules.resolveClassSlug`，条目里的展示字段
    `slug` **不**参与数值继承）。
+   条目**跨包分组**与"基于已有条目创建覆盖"共用同一个函数
+   `contentEntryAlignmentKey`（先剥 `local:` / `campaign:<cid>:` 传输前缀，再取末段），
+   因此作者不需要知道战役视图的 id 前缀，GUI 钉上的对齐键与运行期分组永远一致。
    只有"展示名"可用时（老角色卡/快速创建），允许按 `classAliases` **精确相等**或
    **`<别名><分隔符>` 前缀**（分隔符限 `（` `(` 空格 `-` `/`）匹配，例如 `战士（奥法骑士）` → `fighter`。
    **禁止裸子串匹配**（`星界游侠` 不得命中 `游侠`）。
@@ -1016,6 +1019,7 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | PHB 提取器产出 `optionType: "spell"` 选择 + 第四个额度池 `cantrips` | §3.10.2；决策 D8（提取器按职业自己的 `maximumSpellLevel` 表算"环阶解锁点"，不重复官方表） |
 | 背景技能由**条目 `rules`** 驱动（取代中文名预设；未声明即不猜） | §3.6；决策 D10 |
 | 文档收口：`docs/README.md` §9.2.6/§9.2.7 的示例与仓库示例包**逐字同源**且被守卫（§10.7） | 计划 3；`test_readme_examples_match_tracked_samples` |
+| S4 作者 GUI：`classRules` + `progression` 可视化表单、基于已有条目创建覆盖（对齐键钉在来源上）、`.dndpack` 导出 | §11.4；`homebrew_class_rule_form.dart` / `content_package_settings_page.dart` / `LocalHomebrewContentService.create(overrideOf:)` |
 
 ### 11.2 仍未建模的规则能力（**决策记录**）
 
@@ -1037,8 +1041,9 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 
 ### 11.3 明确不在范围
 
-- **S4 的剩余部分（见 §11.4）**：可视化规则表单、基于已有条目创建覆盖。
-  新建 / 编辑 / 删除 UI 与 `.dndpack` 导出**已完成**（不再是"不在范围"）。
+- **S4 的剩余部分（见 §11.4）**：`rules.choices` 的可视化编辑。
+  新建 / 编辑 / 删除 UI、`classRules` + `progression` 可视化表单、基于已有条目创建覆盖、
+  `.dndpack` 导出**已完成**（不再列为"不在范围"）。
 - **C 场景（永久排除）**：自定义技能 / 属性清单、自定义 AC 公式（护甲敏捷上限、无甲防御）、自定义休息与恢复语义。
 - **已建模，不要再重复建模**：12 职业的资源池**计数与恢复语义**（含随等级变化的恢复）、法术位与准备上限、HP / AC / 速度 / 属性加值。
 
@@ -1049,7 +1054,9 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | 导入侧（`.json` / `.dndpack` 预览、批量导入、诊断报告） | 完整 |
 | 领域服务（`LocalHomebrewContentService.create/update/delete` + `ContentSchemaRegistry.validateForCreation`） | 有实现与单测，**UI 已接线**（新建 / 编辑 / 删除条目对话框）；编辑时保留描述框之外的块（`_mergedBody`：标题、列表等不被"改个名字再保存"静默删掉） |
 | `.dndpack` **导出** | 已实现（`DndPackExporter.build` 组 manifest + entries + 既有资产，再经 `previewDndPack` 自校验；落盘由资料包设置页的 `FilePicker.saveFile` 完成。往返用例见 `dndpack_exporter_test.dart`） |
-| 可视化规则表单（把 `structured.classRules` / `rules` 做成填表界面） | **未做**：仍以 JSON 编辑器 + schema 校验承担（作者直接写契约 JSON，校验即时反馈） |
+| **可视化规则表单** | 已实现（`HomebrewClassRuleForm`：`classRules` 的 `hitDie` / `savingThrowAbilities` / `mode` / `spellcasting.ability` / `resources[]`，`rules.progression[]` 的等级集合与 `grants[]`）。表单**不持有状态**：两段 JSON 仍是唯一事实来源，JSON 非法时表单拒绝渲染并提示切回 JSON；`Table` / `MaxSpec` 形态与 `rules.choices` 不伪造字段类型，仍写 JSON |
+| **基于已有条目创建覆盖** | 已实现（资料包设置页「基于现有条目创建覆盖」→ 选来源 → 编辑器预填并把**对齐键**（id 末段，[`contentEntryAlignmentKey`]）钉在来源上；`create(overrideOf:)` 拒绝同键重复，类型随来源锁定）。候选 = 参与合并链的 `class` 条目（有 `classRules`），已被覆盖的键不再出现 |
+| `rules.choices` 的可视化编辑 | **未做**：选择 / 选项 / `requires` / `group` 仍以 JSON 编辑器 + 即时校验承担（§9.2.3 的形状是嵌套的，做成表单等于再造一层选择 DSL） |
 
 ## 12. 建议实现阶段（**历史记录**，P0–P6 已全部执行）
 

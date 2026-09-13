@@ -1,0 +1,273 @@
+import 'dart:convert';
+
+import 'package:dnd_table_client/src/features/content/presentation/homebrew_class_rule_form.dart';
+import 'package:dnd_table_client/src/features/rules/domain/character_rule_definition.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+/// 表单的宿主：两段 JSON 文本就是唯一事实来源（与作者对话框同一形状）。
+class _Host extends StatefulWidget {
+  const _Host({required this.structured, required this.rules});
+
+  final String structured;
+  final String rules;
+
+  @override
+  State<_Host> createState() => _HostState();
+}
+
+class _HostState extends State<_Host> {
+  late final TextEditingController structured = TextEditingController(
+    text: widget.structured,
+  );
+  late final TextEditingController rules = TextEditingController(
+    text: widget.rules,
+  );
+
+  @override
+  void dispose() {
+    structured.dispose();
+    rules.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    home: Scaffold(
+      body: SingleChildScrollView(
+        child: HomebrewClassRuleForm(
+          structuredJson: () => structured.text,
+          rulesJson: () => rules.text,
+          onChanged: (structured, rules) => setState(() {
+            this.structured.text = structured;
+            this.rules.text = rules;
+          }),
+        ),
+      ),
+    ),
+  );
+}
+
+Map<String, Object?> _decode(String text) =>
+    Map<String, Object?>.from(jsonDecode(text) as Map);
+
+void main() {
+  Future<_HostState> pumpForm(
+    WidgetTester tester, {
+    required Map<String, Object?> structured,
+    required Map<String, Object?> rules,
+  }) async {
+    tester.view.physicalSize = const Size(1400, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _Host(
+        structured: jsonEncode(structured),
+        rules: jsonEncode(rules),
+      ),
+    );
+    await tester.pumpAndSettle();
+    return tester.state<_HostState>(find.byType(_Host));
+  }
+
+  Future<void> tapKey(WidgetTester tester, Key key) async {
+    final finder = find.byKey(key);
+    await tester.ensureVisible(finder);
+    await tester.pumpAndSettle();
+    await tester.tap(finder);
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('现有 classRules / progression 渲染成控件（不是"空白表单"）', (tester) async {
+    await pumpForm(
+      tester,
+      structured: {
+        'classRules': {
+          'hitDie': 8,
+          'savingThrowAbilities': ['con', 'wis'],
+          'spellcasting': {'ability': 'int'},
+          'resources': [
+            {'id': 'focus', 'name': '专注点', 'maximum': 3, 'recovery': 'shortRest'},
+          ],
+        },
+      },
+      rules: {
+        'progression': [
+          {
+            'levels': [1, 3],
+            'grants': [
+              {'id': 'g1', 'kind': 'ability', 'target': 'str', 'value': 2},
+            ],
+          },
+        ],
+      },
+    );
+
+    // 生命骰显示 d8、施法属性显示智力（受控下拉读的就是 JSON 的值）。
+    expect(find.text('d8'), findsOneWidget);
+    expect(find.text('智力'), findsWidgets, reason: 'DropDownButton 会为选中项渲染两次');
+    expect(find.text('专注点'), findsOneWidget);
+    expect(find.text('等级 1、3'), findsOneWidget);
+    expect(find.byKey(const Key('homebrew-form-save-con')), findsOneWidget);
+    expect(
+      tester.widget<FilterChip>(find.byKey(const Key('homebrew-form-save-con'))).selected,
+      isTrue,
+    );
+    expect(
+      tester.widget<FilterChip>(find.byKey(const Key('homebrew-form-step-0-level-3'))).selected,
+      isTrue,
+    );
+    expect(find.byKey(const Key('homebrew-form-save-warning')), findsNothing);
+  });
+
+  testWidgets('改生命骰 / 豁免 / 施法属性 → 只动 classRules 的对应列', (tester) async {
+    final host = await pumpForm(
+      tester,
+      structured: {
+        'classRules': {
+          'hitDie': 8,
+          'savingThrowAbilities': ['con', 'wis'],
+          // 表单不认识的列必须原样保留（Table / MaxSpec 形态仍归 JSON）。
+          'spellcasting': {
+            'ability': 'int',
+            'prepared': {
+              'table': {'1': 4, '2': 5},
+            },
+          },
+        },
+      },
+      rules: const {},
+    );
+
+    await tapKey(tester, const Key('homebrew-form-hit-die'));
+    await tester.tap(find.text('d10').last);
+    await tester.pumpAndSettle();
+    await tapKey(tester, const Key('homebrew-form-save-dex'));
+    // 三项豁免 → 就地问责"恰好两项"（不静默保存一个导入期必被拦下的声明）。
+    expect(find.byKey(const Key('homebrew-form-save-warning')), findsOneWidget);
+    await tapKey(tester, const Key('homebrew-form-spell-ability'));
+    await tester.tap(find.text('感知').last);
+    await tester.pumpAndSettle();
+
+    final classRules = _decode(host.structured.text)['classRules']!
+        as Map<String, Object?>;
+    expect(classRules['hitDie'], 10);
+    expect(classRules['savingThrowAbilities'], ['con', 'wis', 'dex']);
+    final spellcasting = classRules['spellcasting']! as Map<String, Object?>;
+    expect(spellcasting['ability'], 'wis');
+    expect(
+      spellcasting['prepared'],
+      {
+        'table': {'1': 4, '2': 5},
+      },
+      reason: '表单没建模的列必须原样带回去',
+    );
+
+    // 取消一个豁免 → 回到两项，警告消失。
+    await tapKey(tester, const Key('homebrew-form-save-con'));
+    expect(find.byKey(const Key('homebrew-form-save-warning')), findsNothing);
+  });
+
+  testWidgets('添加资源：id / 名称 / 整数上限 / 恢复写进 resources[]', (tester) async {
+    final host = await pumpForm(
+      tester,
+      structured: const {},
+      rules: const {},
+    );
+
+    await tapKey(tester, const Key('homebrew-form-add-resource'));
+    await tester.enterText(
+      find.byKey(const Key('homebrew-form-resource-0-id')),
+      'focus',
+    );
+    await tester.enterText(
+      find.byKey(const Key('homebrew-form-resource-0-name')),
+      '专注点',
+    );
+    await tester.enterText(
+      find.byKey(const Key('homebrew-form-resource-0-maximum')),
+      '3',
+    );
+    await tester.pumpAndSettle();
+    await tapKey(tester, const Key('homebrew-form-resource-0-recovery'));
+    await tester.tap(find.text('短休').last);
+    await tester.pumpAndSettle();
+
+    final classRules = _decode(host.structured.text)['classRules']!
+        as Map<String, Object?>;
+    final resources = classRules['resources']! as List<Object?>;
+    final resource = resources.single as Map<String, Object?>;
+    expect(resource['id'], 'focus');
+    expect(resource['name'], '专注点');
+    expect(resource['maximum'], 3);
+    expect(resource['recovery'], 'shortRest');
+
+    // 删掉唯一资源 → classRules 整块不再声明（不写 `resources: []`，空数组
+    // 在契约里是"本块没有声明"，语义不同）。
+    await tapKey(tester, const Key('homebrew-form-resource-0-remove'));
+    expect(_decode(host.structured.text).containsKey('classRules'), isFalse);
+  });
+
+  testWidgets('等级步骤与授予：等级多选 + kind/target/value 写进 progression', (tester) async {
+    final host = await pumpForm(
+      tester,
+      structured: const {},
+      rules: const {},
+    );
+
+    await tapKey(tester, const Key('homebrew-form-add-step'));
+    await tapKey(tester, const Key('homebrew-form-step-0-level-5'));
+    await tapKey(tester, const Key('homebrew-form-step-0-add-grant'));
+    await tapKey(tester, const Key('homebrew-form-grant-0-kind'));
+    await tester.tap(find.text('熟练').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('homebrew-form-grant-0-target')),
+      'skill:察觉',
+    );
+    await tester.enterText(
+      find.byKey(const Key('homebrew-form-grant-0-value')),
+      '0',
+    );
+    await tester.pumpAndSettle();
+
+    final rules = _decode(host.rules.text);
+    final step = (rules['progression']! as List<Object?>).single
+        as Map<String, Object?>;
+    expect(step['levels'], [1, 5]);
+    final grant = (step['grants']! as List<Object?>).single
+        as Map<String, Object?>;
+    expect(grant['kind'], 'proficiency');
+    expect(grant['target'], 'skill:察觉');
+    expect(grant['value'], 0);
+    expect(grant['id'], isNotEmpty);
+
+    // 删除步骤 → progression 整个键消失（不写空数组）。
+    await tapKey(tester, const Key('homebrew-form-step-0-remove'));
+    expect(_decode(host.rules.text).containsKey('progression'), isFalse);
+  });
+
+  testWidgets('JSON 不是合法对象：表单拒绝渲染并提示切回 JSON', (tester) async {
+    tester.view.physicalSize = const Size(1400, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      const _Host(structured: '{not json', rules: '{}'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('homebrew-form-invalid-json')), findsOneWidget);
+    expect(find.byKey(const Key('homebrew-form-hit-die')), findsNothing);
+  });
+
+  test('grantKindLabels 覆盖全部 RuleGrantKind（单一来源守卫）', () {
+    expect(
+      HomebrewClassRuleForm.grantKindLabels.keys.toSet(),
+      RuleGrantKind.values.toSet(),
+    );
+    expect(
+      HomebrewClassRuleForm.abilityLabels.keys.toSet(),
+      {'str', 'dex', 'con', 'int', 'wis', 'cha'},
+    );
+  });
+}

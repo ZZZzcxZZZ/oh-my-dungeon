@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../data/local/local_homebrew_content_service.dart';
 import '../domain/content_block.dart';
 import '../domain/content_entry.dart';
+import '../domain/content_entry_id.dart';
+import 'homebrew_class_rule_form.dart';
 
 /// 作者 GUI 的一次提交（S4）：`structured` 与 `rules` 都按作者写的 JSON 传出去，
 /// 由 [LocalHomebrewContentService] 负责解析、校验与落库。
@@ -42,6 +44,7 @@ class HomebrewEntryEditorDialog extends StatefulWidget {
   const HomebrewEntryEditorDialog({
     required this.service,
     this.existing,
+    this.overrideOf,
     super.key,
   });
 
@@ -49,6 +52,14 @@ class HomebrewEntryEditorDialog extends StatefulWidget {
 
   /// 非空 = 编辑模式（类型不可改，`rules` 留空表示保留原值）。
   final ContentEntry? existing;
+
+  /// 非空 = 「基于已有条目创建覆盖」（S4）：类型锁定为来源条目的类型，对齐键
+  /// （id 末段，契约 D3）钉在来源上，写入走
+  /// `LocalHomebrewContentService.create(overrideOf:)`。
+  final ContentEntry? overrideOf;
+
+  /// 预填来源：编辑既有条目优先，其次是"要覆盖的那一条"。
+  ContentEntry? get source => existing ?? overrideOf;
 
   @override
   State<HomebrewEntryEditorDialog> createState() =>
@@ -65,30 +76,38 @@ class _HomebrewEntryEditorDialogState extends State<HomebrewEntryEditorDialog> {
   List<String> _errors = const [];
   bool _saving = false;
 
+  /// 「表单 / JSON」开关（仅 `class` 类型）。表单不持有状态，写回的是同两段 JSON。
+  bool _visualForm = true;
+
   bool get _isEditing => widget.existing != null;
+
+  bool get _isOverride => widget.overrideOf != null;
+
+  /// 编辑与覆盖都不允许改类型：前者类型是条目身份，后者必须与来源同类型才能对齐。
+  bool get _typeLocked => _isEditing || _isOverride;
 
   @override
   void initState() {
     super.initState();
-    final existing = widget.existing;
+    final source = widget.source;
     final creatable = widget.service.registry.creatableSchemas
         .map((schema) => schema.type)
         .toList(growable: false);
-    _type = existing?.type ?? (creatable.isEmpty ? '' : creatable.first);
-    _name = TextEditingController(text: existing?.name ?? '');
-    _summary = TextEditingController(text: existing?.summary ?? '');
+    _type = source?.type ?? (creatable.isEmpty ? '' : creatable.first);
+    _name = TextEditingController(text: source?.name ?? '');
+    _summary = TextEditingController(text: source?.summary ?? '');
     _description = TextEditingController(
-      text: existing == null ? '' : _descriptionOf(existing),
+      text: source == null ? '' : _descriptionOf(source),
     );
     _structured = TextEditingController(
-      text: existing == null
+      text: source == null
           ? '{}'
-          : const JsonEncoder.withIndent('  ').convert(existing.structured),
+          : const JsonEncoder.withIndent('  ').convert(source.structured),
     );
     _rules = TextEditingController(
-      text: existing?.rules == null
+      text: source?.rules == null
           ? '{}'
-          : const JsonEncoder.withIndent('  ').convert(existing!.rules!.toJson()),
+          : const JsonEncoder.withIndent('  ').convert(source!.rules!.toJson()),
     );
   }
 
@@ -151,6 +170,7 @@ class _HomebrewEntryEditorDialogState extends State<HomebrewEntryEditorDialog> {
           description: _description.text,
           structured: structured,
           rules: rules,
+          overrideOf: widget.overrideOf,
         );
       } else {
         await widget.service.update(
@@ -185,8 +205,15 @@ class _HomebrewEntryEditorDialogState extends State<HomebrewEntryEditorDialog> {
     final creatable = widget.service.registry.creatableSchemas.toList(
       growable: false,
     );
+    final source = widget.source;
     return AlertDialog(
-      title: Text(_isEditing ? '编辑自制条目' : '新建自制条目'),
+      title: Text(
+        _isEditing
+            ? '编辑自制条目'
+            : _isOverride
+            ? '创建覆盖：${source?.name ?? ''}'
+            : '新建自制条目',
+      ),
       content: SizedBox(
         width: 560,
         child: SingleChildScrollView(
@@ -194,6 +221,19 @@ class _HomebrewEntryEditorDialogState extends State<HomebrewEntryEditorDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (_isOverride)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    '对齐键「${contentEntryAlignmentKey(source?.id ?? '')}」已钉在来源条目上：'
+                    '本地包 tier 100 高于内置 0，声明过的列按契约 §3.6 覆盖来源，'
+                    '未声明的列仍用来源的值。',
+                    key: const Key('homebrew-entry-override-hint'),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
               DropdownButtonFormField<String>(
                 key: const Key('homebrew-entry-type'),
                 initialValue: _type.isEmpty ? null : _type,
@@ -205,7 +245,7 @@ class _HomebrewEntryEditorDialogState extends State<HomebrewEntryEditorDialog> {
                       child: Text('${schema.label}（${schema.type}）'),
                     ),
                 ],
-                onChanged: _isEditing
+                onChanged: _typeLocked
                     ? null
                     : (value) => setState(() => _type = value ?? _type),
               ),
@@ -230,29 +270,65 @@ class _HomebrewEntryEditorDialogState extends State<HomebrewEntryEditorDialog> {
                 decoration: const InputDecoration(labelText: '描述（可选）'),
               ),
               const SizedBox(height: 16),
-              Text('structured（契约 §9.2：数值与枚举）',
-                  style: theme.textTheme.titleSmall),
-              const SizedBox(height: 4),
-              TextField(
-                key: const Key('homebrew-entry-structured'),
-                controller: _structured,
-                minLines: 6,
-                maxLines: 12,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-                decoration: const InputDecoration(border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 16),
-              Text('rules（可选：progression / choices / grants）',
-                  style: theme.textTheme.titleSmall),
-              const SizedBox(height: 4),
-              TextField(
-                key: const Key('homebrew-entry-rules'),
-                controller: _rules,
-                minLines: 6,
-                maxLines: 12,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-                decoration: const InputDecoration(border: OutlineInputBorder()),
-              ),
+              if (_type == 'class') ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '职业规则（可视化表单 / JSON）',
+                        style: theme.textTheme.titleSmall,
+                      ),
+                    ),
+                    SegmentedButton<bool>(
+                      key: const Key('homebrew-entry-editor-mode'),
+                      segments: const [
+                        ButtonSegment(value: true, label: Text('表单')),
+                        ButtonSegment(value: false, label: Text('JSON')),
+                      ],
+                      selected: <bool>{_visualForm},
+                      onSelectionChanged: (selection) =>
+                          setState(() => _visualForm = selection.first),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
+              if (_type == 'class' && _visualForm)
+                HomebrewClassRuleForm(
+                  structuredJson: () => _structured.text,
+                  rulesJson: () => _rules.text,
+                  onChanged: (structured, rules) => setState(() {
+                    _structured.text = structured;
+                    _rules.text = rules;
+                  }),
+                )
+              else ...[
+                Text('structured（契约 §9.2：数值与枚举）',
+                    style: theme.textTheme.titleSmall),
+                const SizedBox(height: 4),
+                TextField(
+                  key: const Key('homebrew-entry-structured'),
+                  controller: _structured,
+                  minLines: 6,
+                  maxLines: 12,
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  decoration:
+                      const InputDecoration(border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 16),
+                Text('rules（可选：progression / choices / grants）',
+                    style: theme.textTheme.titleSmall),
+                const SizedBox(height: 4),
+                TextField(
+                  key: const Key('homebrew-entry-rules'),
+                  controller: _rules,
+                  minLines: 6,
+                  maxLines: 12,
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  decoration:
+                      const InputDecoration(border: OutlineInputBorder()),
+                ),
+              ],
               if (_errors.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Column(

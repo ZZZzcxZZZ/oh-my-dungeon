@@ -26,3 +26,18 @@ String canonicalContentEntryId(String id) {
   }
   return value;
 }
+
+/// **对齐键**（契约 D3）：条目 id 的**末段**（最后一个 `/` 之后），小写。
+///
+/// 覆盖链按它分组：`builtin:class/fighter` 与 `local-homebrew:class/fighter`
+/// 因此同键，一条只改 `spellcasting.prepared` 的勘误就能作用于已经指向内置条目的
+/// 角色。先做 [canonicalContentEntryId] 归一化（`local:` / `campaign:<cid>:` 前缀
+/// 不参与末段，但统一口径只有一处）。
+///
+/// 这是该口径的**唯一实现点**：`RuleOverrideIndex` 的分组与
+/// `LocalHomebrewContentService.create(overrideOf:)` 的"基于已有条目创建覆盖"共用。
+String contentEntryAlignmentKey(String id) {
+  final segments = canonicalContentEntryId(id).split('/');
+  final last = segments.isEmpty ? '' : segments.last;
+  return last.trim().toLowerCase();
+}

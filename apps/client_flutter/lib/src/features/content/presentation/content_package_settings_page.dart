@@ -12,6 +12,7 @@ import '../data/import/content_package_importer.dart';
 import '../data/local/content_repository.dart';
 import '../data/local/local_homebrew_content_service.dart';
 import '../domain/content_entry.dart';
+import '../domain/content_entry_id.dart';
 import '../domain/content_file_picker.dart';
 import '../domain/content_import_report.dart';
 import '../domain/content_package_manifest.dart';
@@ -80,15 +81,62 @@ class _ContentPackageSettingsPageState
   }
 
   /// 新建 / 编辑自制条目（作者 GUI 的唯一入口；写入走 `LocalHomebrewContentService`）。
-  Future<void> _editHomebrewEntry([ContentEntry? existing]) async {
+  Future<void> _editHomebrewEntry([
+    ContentEntry? existing,
+    ContentEntry? overrideOf,
+  ]) async {
     final saved = await showDialog<bool>(
       context: context,
       builder: (_) => HomebrewEntryEditorDialog(
         service: _homebrew,
         existing: existing,
+        overrideOf: overrideOf,
       ),
     );
     if (saved == true) await _reloadHomebrewEntries();
+  }
+
+  /// 「基于已有条目创建覆盖」（S4）：先选来源条目，再把它的字段预填进编辑器。
+  ///
+  /// 候选 = 参与列级合并链的条目（`type: class` 且有 `structured.classRules`，
+  /// 契约 D3）；自制包自己的条目已经在链上，不作为来源。
+  Future<void> _createOverrideFromExisting() async {
+    final all = await widget.repository.search(const ContentQuery(type: 'class'));
+    if (!mounted) return;
+    final takenKeys = <String>{
+      for (final entry in _homebrewEntries) contentEntryAlignmentKey(entry.id),
+    };
+    final candidates = <ContentEntry>[
+      for (final entry in all)
+        if (entry.structured['classRules'] is Map &&
+            !entry.id.startsWith('${LocalHomebrewContentService.packageId}:') &&
+            !takenKeys.contains(contentEntryAlignmentKey(entry.id)))
+          entry,
+    ];
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('没有可覆盖的职业条目：先导入带 classRules 的资料包，或该键已有自制覆盖'),
+        ),
+      );
+      return;
+    }
+    final picked = await showDialog<ContentEntry>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('选择要覆盖的条目'),
+        children: [
+          for (final entry in candidates)
+            SimpleDialogOption(
+              key: Key('homebrew-override-source-${entry.id}'),
+              onPressed: () => Navigator.of(dialogContext).pop(entry),
+              child: Text('${entry.name}（${entry.id}）'),
+            ),
+        ],
+      ),
+    );
+    if (picked == null || !mounted) return;
+    await _editHomebrewEntry(null, picked);
   }
 
   Future<void> _deleteHomebrewEntry(ContentEntry entry) async {
@@ -314,6 +362,12 @@ class _ContentPackageSettingsPageState
                           onPressed: () => _editHomebrewEntry(),
                           icon: const Icon(Icons.add),
                           label: const Text('新建条目'),
+                        ),
+                        TextButton.icon(
+                          key: const Key('homebrew-entry-create-override-button'),
+                          onPressed: _createOverrideFromExisting,
+                          icon: const Icon(Icons.copy_all_outlined),
+                          label: const Text('基于现有条目创建覆盖'),
                         ),
                       ],
                     ),

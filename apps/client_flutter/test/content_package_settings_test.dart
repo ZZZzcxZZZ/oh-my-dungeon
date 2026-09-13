@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:dnd_table_client/src/features/content/data/import/content_package_importer.dart';
 import 'package:dnd_table_client/src/features/content/data/local/content_repository.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_file_picker.dart';
+import 'package:dnd_table_client/src/features/content/domain/content_entry_id.dart';
 import 'package:dnd_table_client/src/features/content/presentation/content_package_settings_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -328,6 +329,11 @@ void main() {
     await tester.tap(find.text('职业（class）').last);
     await tester.pumpAndSettle();
 
+    // class 默认进可视化表单；这条用例验证的是 JSON 通道仍然可用（表单见
+    // homebrew_class_rule_form_test.dart 与下面的覆盖用例）。
+    await tester.tap(find.text('JSON'));
+    await tester.pumpAndSettle();
+
     await tester.enterText(
       find.byKey(const Key('homebrew-entry-name')),
       '织星者',
@@ -353,6 +359,79 @@ void main() {
     expect(entries.single.name, '织星者');
     expect(entries.single.rules!.progression.single.grants.single.target, 'skill:运动');
     expect(find.byKey(const Key('homebrew-export-dndpack-button')), findsOneWidget);
+  });
+
+  testWidgets('基于现有条目创建覆盖：对齐键钉在来源条目上（S4）', (tester) async {
+    final repository = MemoryContentRepository();
+    final importer = ContentPackageImporter(repository);
+    final report = await importer.previewJson(
+      jsonEncode({
+        'formatVersion': 3,
+        'id': 'example',
+        'name': 'Example',
+        'version': '1.0.0',
+        'locale': 'zh-CN',
+        'system': 'dnd5e-2024',
+        'entryCount': 1,
+        'entries': [testFighterEntry().toJson()],
+      }),
+    );
+    await importer.importReport(report);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ContentPackageSettingsPage(
+          repository: repository,
+          importer: importer,
+          filePicker: MemoryContentFilePicker(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const Key('homebrew-entry-create-override-button')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('选择要覆盖的条目'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const Key('homebrew-override-source-example:class/fighter')),
+    );
+    await tester.pumpAndSettle();
+
+    // 覆盖模式：标题点明来源、对齐键提示在位、类型锁定、来源 classRules 预填。
+    expect(find.text('创建覆盖：战士'), findsOneWidget);
+    expect(find.byKey(const Key('homebrew-entry-override-hint')), findsOneWidget);
+    expect(
+      tester
+          .widget<DropdownButtonFormField<String>>(
+            find.byKey(const Key('homebrew-entry-type')),
+          )
+          .onChanged,
+      isNull,
+      reason: '覆盖必须与来源同类型',
+    );
+    expect(find.text('d10'), findsOneWidget, reason: '预填来源的 hitDie');
+
+    await tester.tap(find.byKey(const Key('homebrew-entry-save')));
+    await tester.pumpAndSettle();
+
+    final entries = await repository.search(
+      const ContentQuery(packageId: LocalHomebrewContentService.packageId),
+    );
+    expect(entries, hasLength(1));
+    expect(entries.single.id, 'local-homebrew:class/fighter');
+    expect(
+      contentEntryAlignmentKey(entries.single.id),
+      contentEntryAlignmentKey('example:class/fighter'),
+    );
+    // 已存在同键覆盖后，来源从候选里消失（再点只会提示没有可覆盖的条目）。
+    await tester.tap(
+      find.byKey(const Key('homebrew-entry-create-override-button')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('选择要覆盖的条目'), findsNothing);
+    expect(find.textContaining('没有可覆盖的职业条目'), findsOneWidget);
   });
 
   testWidgets('structured 不是合法 JSON → 就地报错、对话框不关、什么都没写', (tester) async {

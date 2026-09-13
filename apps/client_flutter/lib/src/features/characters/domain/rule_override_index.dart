@@ -37,7 +37,7 @@ class RuleOverrideIndex {
       if (entry.type != 'class') continue;
       final raw = entry.structured['classRules'];
       if (raw is! Map) continue;
-      final slug = _alignmentKeyOf(entry.id);
+      final slug = contentEntryAlignmentKey(entry.id);
       if (slug.isEmpty) continue;
       final ClassRuleSet rules;
       try {
@@ -85,10 +85,4 @@ class RuleOverrideIndex {
     (_bySlug[slug.trim().toLowerCase()] ?? const <RuleOverrideDeclaration>[])
         .where((declaration) => declaration.originId != excludeEntryId),
   );
-
-  /// 对齐键 = 条目 id 末段（与运行期继承内置数值的键**同源**）。
-  static String _alignmentKeyOf(String entryId) {
-    final segments = entryId.split('/');
-    return segments.isEmpty ? '' : segments.last.trim().toLowerCase();
-  }
 }

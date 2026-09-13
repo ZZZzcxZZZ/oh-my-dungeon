@@ -2,6 +2,7 @@ import 'package:dnd_table_client/src/features/content/data/local/local_homebrew_
 import 'package:dnd_table_client/src/features/content/data/local/content_repository.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_block.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
+import 'package:dnd_table_client/src/features/content/domain/content_entry_id.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/content_test_support.dart';
@@ -194,5 +195,69 @@ void main() {
     expect(cleared.body, hasLength(2));
     expect(cleared.body[0], isA<HeadingBlock>());
     expect(cleared.body[1], isA<ListBlock>());
+  });
+
+  test('create(overrideOf:) 把对齐键钉在来源条目上，不按名字生成 slug', () async {
+    final repository = MemoryContentRepository();
+    final service = LocalHomebrewContentService(repository: repository);
+    const source = ContentEntry(
+      id: 'builtin:class/fighter',
+      type: 'class',
+      slug: 'fighter',
+      name: '战士',
+      body: <ContentBlock>[],
+      revision: 1,
+      structured: <String, Object?>{
+        'classRules': <String, Object?>{'hitDie': 10},
+      },
+    );
+
+    final override = await service.create(
+      type: 'class',
+      name: '战士（自制）',
+      structured: const {
+        'classRules': {'hitDie': 12},
+      },
+      overrideOf: source,
+    );
+
+    // 名字是中文，若按 `_slugify(name)` 生成 slug 就永远对不上来源。
+    expect(override.slug, 'fighter');
+    expect(override.id, 'local-homebrew:class/fighter');
+    expect(
+      contentEntryAlignmentKey(override.id),
+      contentEntryAlignmentKey(source.id),
+    );
+    expect(override.type, 'class', reason: '类型随来源，保证同一条合并链');
+
+    // 同键再建一条 = 拒绝：两条自制覆盖抢同一列只能靠 originId 排序，作者无法预期。
+    await expectLater(
+      service.create(
+        type: 'class',
+        name: '又一条',
+        structured: const {
+          'classRules': {'hitDie': 8},
+        },
+        overrideOf: source,
+      ),
+      throwsA(isA<LocalHomebrewValidationException>()),
+    );
+
+    // 来源 id 没有对齐键（空末段）→ 明确报错，而不是生成 `local-homebrew:class/`。
+    await expectLater(
+      service.create(
+        type: 'class',
+        name: '无键',
+        overrideOf: const ContentEntry(
+          id: '',
+          type: 'class',
+          slug: '',
+          name: '',
+          body: <ContentBlock>[],
+          revision: 1,
+        ),
+      ),
+      throwsA(isA<LocalHomebrewValidationException>()),
+    );
   });
 }

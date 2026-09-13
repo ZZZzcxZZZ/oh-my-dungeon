@@ -40,46 +40,38 @@ ContentEntry _classEntry(String id) => ContentEntry.fromJson(<String, Object?>{
   },
 });
 
+/// 生产装配：条目 id 会被重写成 `local:<id>` / `campaign:<cid>:<id>`。
+///
+/// 用裸 `MemoryContentRepository` 会让 `packageIdOf(entryId)` 恰好等于原始包 id，
+/// 从而**绕过**真实的前缀问题（C3 的旧版用例就是这么假绿的）。
+Future<CampaignAwareContentRepository> _repositoryWithErrata() async {
+  final repository = CampaignAwareContentRepository(
+    local: MemoryContentRepository(),
+    campaign: MemoryCampaignCacheRepository(),
+    activeCampaignId: () => 'c1',
+  );
+  await (repository.local as MemoryContentRepository).upsertPackageEntry(
+    manifest: const ContentPackageManifest(
+      formatVersion: 3,
+      id: 'errata',
+      name: '勘误包',
+      version: '1.0.0',
+      locale: 'zh-CN',
+      system: 'dnd5e-2024',
+      entryCount: 1,
+      priority: _errataPriority,
+    ),
+    entry: _classEntry('errata:class/wizard'),
+  );
+  return repository;
+}
+
 void main() {
   testWidgets('campaign 角色卡拿到包 priority，tier 与本地一致（P0-2.6）', (tester) async {
-    // 生产装配：UI 拿到的是 CampaignAwareContentRepository（条目 id 会被重写成
-    // `local:<id>` / `campaign:<cid>:<id>`）。用裸 MemoryContentRepository 会让
-    // `packageIdOf(entryId)` 恰好等于原始包 id，从而**绕过**真实的前缀问题
-    // （C3 的旧版用例就是这么假绿的）。
-    final repository = CampaignAwareContentRepository(
-      local: MemoryContentRepository(),
-      campaign: MemoryCampaignCacheRepository(),
-      activeCampaignId: () => 'c1',
-    );
-    final local = repository.local as MemoryContentRepository;
-    // 装一个 priority = 40 的勘误包（与本地 `packagePriorities()` 同源投影）。
-    await local.upsertPackageEntry(
-      manifest: const ContentPackageManifest(
-        formatVersion: 3,
-        id: 'errata',
-        name: '勘误包',
-        version: '1.0.0',
-        locale: 'zh-CN',
-        system: 'dnd5e-2024',
-        entryCount: 1,
-        priority: _errataPriority,
-      ),
-      entry: _classEntry('errata:class/wizard'),
-    );
-
-    // 前置断言：仓库确实重写了 id，且优先级表覆盖重写后的键（否则下面的 tier 检查
-    // 会因为"恰好没前缀"而失去意义）。
-    final entries = await repository.search(const ContentQuery());
-    expect(
-      entries.map((entry) => entry.id),
-      contains('local:errata:class/wizard'),
-      reason: '生产装配下条目 id 带 local: 前缀',
-    );
-    final priorities = await repository.packagePriorities();
-    expect(priorities['errata'], _errataPriority);
-    expect(priorities['local:errata'], _errataPriority,
-        reason: '包优先级表的键必须与重写后的条目 id 同源');
-    expect(priorities['campaign:c1:errata'], _errataPriority);
+    // 生产装配（条目 id 会带前缀）。其余前置断言拆在下一个用例里：这样本用例的
+    // tier 断言本身就是第一个失败点，变异"优先级表不带前缀键"能直接咬到它，
+    // 而不是被前置断言抢先挡下。
+    final repository = await _repositoryWithErrata();
 
     final controller = CampaignCharacterController(
       cacheRepository: MemoryCampaignCacheRepository(
@@ -169,6 +161,30 @@ void main() {
       resolved.sourceOf('spellcasting.prepared')!.originId,
       'local:errata:class/wizard',
     );
+  });
+
+  test('包优先级表的键与重写后的条目 id 同源（前缀归一化只有一处）', () async {
+    final repository = await _repositoryWithErrata();
+
+    final entries = await repository.search(const ContentQuery());
+    expect(
+      entries.map((entry) => entry.id),
+      contains('local:errata:class/wizard'),
+      reason: '生产装配下条目 id 带 local: 前缀',
+    );
+
+    final priorities = await repository.packagePriorities();
+    // 三种键并存：原始包 id（本地仓库与既有调用点的口径）、本地前缀、当前战役前缀。
+    expect(priorities['errata'], _errataPriority);
+    expect(
+      priorities['local:errata'],
+      _errataPriority,
+      reason: '规则层用 packageIdOf(local:errata:class/wizard) 查表，键必须同源',
+    );
+    expect(priorities['campaign:c1:errata'], _errataPriority);
+    // 不产生二次前缀这种无意义键。
+    expect(priorities.containsKey('local:local:errata'), isFalse);
+    expect(priorities.containsKey('campaign:c1:local:errata'), isFalse);
   });
 
   test('本地装配下同一份优先级表给出同一个 tier（前缀不改变结论）', () async {

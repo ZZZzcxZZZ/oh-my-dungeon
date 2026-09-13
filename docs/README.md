@@ -1321,7 +1321,7 @@ Material 3 设计系统契约（`DESIGN.md` 与契约测试/golden）；自托�
 | 项 | 结果 |
 |---|---|
 | `flutter analyze` | 0 问题 |
-| `flutter test` | **1582 通过 / 6 跳过**（3 条 golden 默认跳过 + 3 条依赖 `--dart-define` 私有包路径的用例；跳过点与上一基线同一组） |
+| `flutter test` | **1583 通过 / 6 跳过**（3 条 golden 默认跳过 + 3 条依赖 `--dart-define` 私有包路径的用例；跳过点与上一基线同一组） |
 | 服务端 `npm run lint` + `npm test` | 24 套件 / 355 测试通过，0 跳过 |
 | `npm run test:scripts` | **38 通过**（4 个脚本测试套件 + drift worker 产物清单校验；本地有 `private-imports/` 时 0 跳过，公开 CI 上 9 条提取类用例自行 skip） |
 | `npm run lint:design` | 0 error / 0 warning（1 条 token 统计 info） |

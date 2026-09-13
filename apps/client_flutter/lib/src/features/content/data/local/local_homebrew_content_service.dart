@@ -68,6 +68,16 @@ class LocalHomebrewContentService {
       name: name,
       structured: structured,
     );
+    // 「覆盖」必须真的参与列级合并链：只收 `structured.classRules` 是映射的条目
+    // （§3.8）。清空/不声明 classRules 的产物只会占住对齐键却什么都不覆盖——
+    // 作者以为生效了，实际链上根本没有它。
+    final overrideClassRules = validated.normalizedStructured['classRules'];
+    if (overrideOf != null &&
+        (overrideClassRules is! Map || overrideClassRules.isEmpty)) {
+      throw const LocalHomebrewValidationException(<String>[
+        '覆盖必须声明 classRules：否则它不参与列级合并链（契约 §3.8）',
+      ]);
+    }
     final slug =
         alignmentKey ?? await _availableSlug(validated.normalizedType, name);
     final id = '$packageId:${validated.normalizedType}/$slug';

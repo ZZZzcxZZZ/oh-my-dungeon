@@ -243,6 +243,34 @@ void main() {
       throwsA(isA<LocalHomebrewValidationException>()),
     );
 
+    // 清空 classRules 的"覆盖"不参与合并链（RuleOverrideIndex 只收有 classRules 的
+    // class 条目）：占了对齐键却什么都不覆盖比报错更糟，必须拦下。
+    const wizard = ContentEntry(
+      id: 'builtin:class/wizard',
+      type: 'class',
+      slug: 'wizard',
+      name: '法师',
+      body: <ContentBlock>[],
+      revision: 1,
+    );
+    await expectLater(
+      service.create(
+        type: 'class',
+        name: '空覆盖',
+        structured: const {
+          'classRules': <String, Object?>{},
+        },
+        overrideOf: wizard,
+      ),
+      throwsA(
+        isA<LocalHomebrewValidationException>().having(
+          (error) => error.errors.join('\n'),
+          'errors',
+          contains('classRules'),
+        ),
+      ),
+    );
+
     // 来源 id 没有对齐键（空末段）→ 明确报错，而不是生成 `local-homebrew:class/`。
     await expectLater(
       service.create(

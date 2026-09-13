@@ -1128,11 +1128,13 @@ bool _hasShadowedExplicitValue(
     for (var j = i + 1; j < ordered.length; j++) {
       final lower = probes[ordered[j].originId]!;
       for (final level in lower.declared) {
-        final shadow = higher.at[level];
-        if (shadow == null) continue;
-        final declared = lower.at[level];
-        if (declared == null) continue;
-        if (!equals(shadow, declared)) return true;
+        // 判据看的是**键是否存在**，不是"值是否为 null"：显式 `null` 是一次声明
+        // （`spellcasting.archetype: null` = 清空该列，§3.3/§3.8），而"低于最早声明
+        // 等级"才是不存在。用 `at[level] == null` 会把"清空"误当成"没有值"，
+        // 于是"高优先级清空该列、低优先级却写了值"这种冲突会静默漏报。
+        if (!higher.at.containsKey(level)) continue;
+        if (!lower.at.containsKey(level)) continue;
+        if (!equals(higher.at[level], lower.at[level])) return true;
       }
     }
   }

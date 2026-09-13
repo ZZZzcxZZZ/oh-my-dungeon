@@ -654,6 +654,35 @@ void main() {
       expect(conflict.effectiveOriginId, 'alpha:class/wizard');
     });
 
+    test('显式 null（清空该列）也算一次声明：被更高优先级遮住必须登记', () {
+      // 回归用例：`at[level] == null` 既可能是"该级没有值"，也可能是**显式 null**
+      // （`archetype: null` = 清空该列）。判据必须看"键是否存在"，否则
+      // "alpha 清空 / zeta 写了值"这种同 tier 冲突会静默漏报。
+      final merged = RuleProfileResolver.resolveClassRules(
+        profile: profile,
+        slug: 'wizard',
+        entryRules: null,
+        entryId: null,
+        declarations: [
+          declaration('alpha:class/wizard', {
+            'spellcasting': {'archetype': null},
+          }, priority: 10),
+          declaration('zeta:class/wizard', {
+            'spellcasting': {'archetype': 'full-caster'},
+          }, priority: 10),
+        ],
+      );
+      expect(merged.spellcasting?.archetype, isNull, reason: 'alpha 排前 → 清空生效');
+      final conflict = merged.conflicts.singleWhere(
+        (item) => item.field == RuleFieldPath.spellcasting('archetype'),
+      );
+      expect(conflict.originIds, <String>[
+        'alpha:class/wizard',
+        'zeta:class/wizard',
+      ]);
+      expect(conflict.effectiveOriginId, 'alpha:class/wizard');
+    });
+
     test('沿用值与别人的显式值相同 → 不登记（互补且不冲突）', () {
       final merged = RuleProfileResolver.resolveClassRules(
         profile: profile,

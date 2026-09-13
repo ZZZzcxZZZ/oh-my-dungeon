@@ -453,6 +453,8 @@ class RuleFieldSource {
   别的包，冲突不是该包的错。
   **判据**：更低优先级那条**显式写下**的等级，被更高优先级声明在**该级的有效值**（显式或
   高于其最后声明等级的"沿用"）遮住且取值不同 → 登记；只改不同等级且互不遮挡（真互补）不登记。
+  资源的 `maximum` 常量 / 公式没有等级维度，比较时按"**每一级都算显式声明**"展开
+  （与"整表都写同一个值"因此逐级同值 → 不误报）。
   **两个不变量**：`originIds` 里每个来源都必须**声明了该列**，`effectiveOriginId` 必须是
   其中之一（否则界面会给出"选了也不生效"的选项）。用户 pin 的优先级最高、且只作用于该列：
   它可以逐列取回被同 tier `replace` 丢弃的 `patch` 声明。
@@ -466,8 +468,10 @@ class RuleFieldSource {
   条目参与）。
 - **id 口径**：声明的 `originId`、来源快照与用户的覆盖选择（`disabledOriginIds` / `pinned`）
   一律用**规范 id**——战役视图的条目 id 带 `local:` / `campaign:<campaignId>:` 传输前缀
-  （`CampaignAwareContentRepository`），归一化只在 `canonicalContentEntryId` 一处，且
-  `Dnd5eRules.resolveClassRules` 是唯一入口。这样同一角色在本地与战役两个视图下的覆盖
+  （`CampaignAwareContentRepository`）。**覆盖 id 口径**的归一化只有
+  `canonicalContentEntryId` 一处，且 `Dnd5eRules.resolveClassRules` 是唯一入口；
+  仓库在别处仍要按前缀查原始键（`getByKey` / `_rebaseRuleReferences` /
+  `local_homebrew_content_service` 的归属校验），那些是**条目查取**，不是第二份覆盖 id 口径。这样同一角色在本地与战役两个视图下的覆盖
   匹配、来源标签与自身条目判定完全一致。
 
 ### 3.9 无兼容层：旧契约不读取，提取器同步重写

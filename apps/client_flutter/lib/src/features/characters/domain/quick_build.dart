@@ -219,7 +219,7 @@ class QuickBuildService {
   /// 展示名 / 条目 id → 档案规则（唯一入口，UI 不再按职业名分支）。
   ///
   /// 有条目时把 `structured.classRules` 一并带上：快速创建与创建向导读到的
-  /// 数值因此完全一致（字段级合并的唯一实现在 [Dnd5eRules.resolveClassRules]）。
+  /// 数值因此完全一致（列级合并的唯一实现在 [Dnd5eRules.resolveClassRules]）。
   static ResolvedClassRules _classRules({
     required ContentEntry? entry,
     required String? entryId,

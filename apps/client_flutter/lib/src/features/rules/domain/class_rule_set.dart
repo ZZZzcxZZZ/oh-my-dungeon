@@ -271,7 +271,7 @@ class ClassRuleSet {
   final ClassSpellcasting? spellcasting;
   final List<ClassResourceRule> resources;
 
-  /// 条目显式声明过的字段名，用于字段级合并。
+  /// 条目显式声明过的字段名，用于列级合并。
   final Set<String> fields;
 
   bool declares(String field) => fields.contains(field);

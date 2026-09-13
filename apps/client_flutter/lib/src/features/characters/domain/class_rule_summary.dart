@@ -18,7 +18,7 @@ typedef ClassRuleSummaryValues = ({
 ///
 /// 这是职业规则值进入展示层的**唯一口径**：
 /// - 生命骰 / 豁免熟练只经 [StructuredClassRules]（内部委托
-///   [Dnd5eRules.resolveClassRules]，条目声明 ∪ 内置档案，字段级合并）；
+///   [Dnd5eRules.resolveClassRules]，条目声明 ∪ 内置档案，列级合并）；
 /// - 技能选择只经 [StructuredClassRules.skillChoice]（`rules` 里
 ///   `optionType == 'skill'` 的选择）。
 ///

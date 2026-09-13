@@ -1,6 +1,6 @@
 // `RuleProfile` 与"条目声明 ∪ 内置档案"的解析结果（§3.1、§3.7、§3.8、§3.12）。
 //
-// 字段级合并的读取语义集中在这里：
+// 列级合并的读取语义集中在这里：
 // - `spellSlots`：条目**已声明**的等级整级替换（显式空表 `{}` 也算已声明），
 //   只有 `at` 返回 null（未声明）才回退原型（§3.3、§3.12）。
 // - `preparedLimit` / `cantripLimit`：**只看职业自身**。原型不承载这两列（§3.1），
@@ -159,7 +159,7 @@ class ResolvedResource {
   final String recovery;
 }
 
-/// 条目声明 ∪ 内置档案（条目优先，字段级）之后的职业规则（§3.6、§3.7）。
+/// 条目声明 ∪ 内置档案（条目优先，列级）之后的职业规则（§3.6、§3.7）。
 class ResolvedClassRules {
   const ResolvedClassRules({
     this.hitDie,

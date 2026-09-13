@@ -106,7 +106,7 @@ abstract final class StructuredClassRules {
     return StartingEquipmentChoice(maximum: maximum);
   }
 
-  /// 条目声明 ∪ 内置档案（条目优先，字段级）。身份只认条目 id 的最后一段，
+  /// 条目声明 ∪ 内置档案（条目优先，列级）。身份只认条目 id 的最后一段，
   /// `classSummary` 仅用于过渡期把老角色的散文展示名对齐到 slug。
   static ResolvedClassRules _resolved(ContentEntry? entry) {
     if (entry == null) {

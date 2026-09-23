@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../../rules/domain/character_rule_definition.dart';
+import 'homebrew_choice_form.dart';
 
 /// 「职业规则」的**可视化表单**（S4）：`structured.classRules` + `rules.progression`。
 ///
@@ -15,10 +16,10 @@ import '../../rules/domain/character_rule_definition.dart';
 /// - `resources[]`：`id` / `name` / 整数 `maximum` / `recovery` / `startsAtLevel`；
 /// - `rules.progression[]`：等级集合 + `grants[]`（`kind` / `target` / `value`）。
 ///
-/// **仍写 JSON**（形状是 `Table` / `MaxSpec` / 嵌套选择，表单不伪造字段类型）：
+/// **仍写 JSON**（形状是 `Table` / `MaxSpec`，表单不伪造字段类型）：
 /// `spellcasting` 的 `slots` / `prepared` / `cantrips` / `maximumSpellLevel` /
 /// `archetype` / `listTags`、`resources[].maximum` 的 `formula`/`table` 形态、
-/// `rules.choices` 与条目级 `rules.grants`（见 §9.2.2 / §9.2.3）。
+/// 内联选项的任意 `data` 与条目级 `rules.grants`（见 §9.2.2 / §9.2.3）。
 ///
 /// **空白口径**：自由文本（资源 `name`）原样写回，不做 trim——每次按键都写回裁剪值
 /// 会把光标重置，词中间的空格永远打不出来。令牌字段（`id` / `target` / `value` /
@@ -196,6 +197,17 @@ class HomebrewClassRuleForm extends StatelessWidget {
     onChanged(structuredJson(), _encode(next));
   }
 
+  void _patchTopChoices(List<Map<String, Object?>> choices) {
+    final next = _decode(rulesJson());
+    if (next == null) return;
+    if (choices.isEmpty) {
+      next.remove('choices');
+    } else {
+      next['choices'] = choices;
+    }
+    onChanged(structuredJson(), _encode(next));
+  }
+
   // ------------------------------------------------------------------ 构建
   @override
   Widget build(BuildContext context) {
@@ -232,10 +244,16 @@ class HomebrewClassRuleForm extends StatelessWidget {
           icon: const Icon(Icons.add),
           label: const Text('添加等级步骤'),
         ),
+        const Divider(height: 28),
+        _sectionTitle(theme, '条目选择（rules.choices）'),
+        HomebrewChoiceForm(
+          scope: 'root',
+          readRaw: () => _decode(rulesJson())?['choices'],
+          onChanged: _patchTopChoices,
+        ),
         const SizedBox(height: 8),
         Text(
-          '法术位 / 上限表（Table / MaxSpec）与 rules.choices 仍写 JSON：'
-          '它们的形状不是扁平字段，表单不伪造字段类型。',
+          '法术位 / 上限表（Table / MaxSpec）与自定义 data 仍可在 JSON 中编辑。',
           style: theme.textTheme.bodySmall,
         ),
       ],
@@ -564,7 +582,10 @@ class HomebrewClassRuleForm extends StatelessWidget {
     final levels = _levelsOf(step);
     final grants = _grantsOf(step);
     void patchStep(String key, Object? value) {
-      final next = <Map<String, Object?>>[...steps];
+      final latestRules = _decode(rulesJson());
+      if (latestRules == null) return;
+      final next = _stepsOf(latestRules);
+      if (index >= next.length) return;
       final item = Map<String, Object?>.from(next[index]);
       if (value == null) {
         item.remove(key);
@@ -572,7 +593,7 @@ class HomebrewClassRuleForm extends StatelessWidget {
         item[key] = value;
       }
       next[index] = item;
-      _patchRules(rules, next);
+      _patchRules(latestRules, next);
     }
 
     return Card(
@@ -647,6 +668,21 @@ class HomebrewClassRuleForm extends StatelessWidget {
               },
               icon: const Icon(Icons.add),
               label: const Text('添加授予'),
+            ),
+            const SizedBox(height: 8),
+            Text('此等级可选内容', style: theme.textTheme.bodySmall),
+            HomebrewChoiceForm(
+              scope: 'step-$index',
+              readRaw: () {
+                final latestRules = _decode(rulesJson());
+                if (latestRules == null) return null;
+                final current = _stepsOf(latestRules);
+                return index < current.length ? current[index]['choices'] : null;
+              },
+              onChanged: (choices) => patchStep(
+                'choices',
+                choices.isEmpty ? null : choices,
+              ),
             ),
           ],
         ),

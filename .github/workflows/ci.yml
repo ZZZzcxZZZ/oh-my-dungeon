@@ -59,8 +59,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # setup-python 同时提供 `python` 与 `python3`：`test:scripts` 用前者，
-      # `check:drift-worker` 用后者，两个命令名都要存在。
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # package.json 的 Python 入口按平台选解释器。
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

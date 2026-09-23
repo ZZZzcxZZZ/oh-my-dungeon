@@ -5,6 +5,9 @@ import 'package:dnd_table_client/src/features/content/data/local/content_reposit
 import 'package:dnd_table_client/src/features/content/domain/content_file_picker.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_entry_id.dart';
 import 'package:dnd_table_client/src/features/content/presentation/content_package_settings_page.dart';
+import 'package:dnd_table_client/src/features/content/presentation/homebrew_class_rule_form.dart';
+import 'package:dnd_table_client/src/features/characters/domain/rules_driven_character_builder.dart';
+import 'package:dnd_table_client/src/features/rules/domain/character_build.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:dnd_table_client/src/features/content/data/local/local_homebrew_content_service.dart';
@@ -305,7 +308,9 @@ void main() {
       expect(packages.map((p) => p.id), containsAll(['alpha', 'beta']));
     },
   );
-  testWidgets('新建自制条目：类型/名称/structured/rules 落到 local-homebrew 包', (tester) async {
+  testWidgets('新建自制条目：类型/名称/structured/rules 落到 local-homebrew 包', (
+    tester,
+  ) async {
     final repository = MemoryContentRepository();
     await tester.pumpWidget(
       MaterialApp(
@@ -334,10 +339,7 @@ void main() {
     await tester.tap(find.text('JSON'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(
-      find.byKey(const Key('homebrew-entry-name')),
-      '织星者',
-    );
+    await tester.enterText(find.byKey(const Key('homebrew-entry-name')), '织星者');
     await tester.enterText(
       find.byKey(const Key('homebrew-entry-structured')),
       '{"classRules": {"hitDie": 8}}',
@@ -357,8 +359,212 @@ void main() {
     );
     expect(entries, hasLength(1));
     expect(entries.single.name, '织星者');
-    expect(entries.single.rules!.progression.single.grants.single.target, 'skill:运动');
-    expect(find.byKey(const Key('homebrew-export-dndpack-button')), findsOneWidget);
+    expect(
+      entries.single.rules!.progression.single.grants.single.target,
+      'skill:运动',
+    );
+    expect(
+      find.byKey(const Key('homebrew-export-dndpack-button')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('编辑完整 JSON 删除字段后，导出的资料包不带回旧字段或丢失标签', (tester) async {
+    final repository = MemoryContentRepository();
+    final service = LocalHomebrewContentService(repository: repository);
+    final created = await service.create(
+      type: 'item',
+      name: '银钥匙',
+      structured: const {'category': '奇物', 'homebrewEffect': '微光'},
+      tags: const ['任务道具'],
+    );
+    Uint8List? exportedBytes;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ContentPackageSettingsPage(
+          repository: repository,
+          importer: ContentPackageImporter(repository),
+          filePicker: MemoryContentFilePicker(),
+          onExportDndPack: (_, bytes) async => exportedBytes = bytes,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const Key('homebrew-entry-银钥匙')),
+        matching: find.byTooltip('编辑'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('homebrew-entry-structured')),
+      '{"category":"奇物"}',
+    );
+    await tester.tap(find.byKey(const Key('homebrew-entry-save')));
+    await tester.pumpAndSettle();
+    expect((await repository.getByKey(created.id))?.structured, {
+      'category': '奇物',
+    });
+
+    await tester.tap(find.byKey(const Key('homebrew-export-dndpack-button')));
+    await tester.pumpAndSettle();
+    expect(exportedBytes, isNotNull);
+    final imported = MemoryContentRepository();
+    final importer = ContentPackageImporter(imported);
+    final report = await importer.previewDndPack(exportedBytes!);
+    expect(report.valid, isTrue, reason: '${report.errors}');
+    await importer.importReport(report);
+    final roundTripped = await imported.getByKey(created.id);
+    expect(roundTripped?.structured, {'category': '奇物'});
+    expect(roundTripped?.tags, ['任务道具']);
+  });
+
+  testWidgets('非职业自制条目也能用表单编辑顶层选择', (tester) async {
+    final repository = MemoryContentRepository();
+    final service = LocalHomebrewContentService(repository: repository);
+    final entry = await service.create(type: 'custom', name: '自制来历');
+    await tester.pumpWidget(MaterialApp(
+      home: ContentPackageSettingsPage(
+        repository: repository,
+        importer: ContentPackageImporter(repository),
+        filePicker: MemoryContentFilePicker(),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(
+      of: find.byKey(const Key('homebrew-entry-自制来历')),
+      matching: find.byTooltip('编辑'),
+    ));
+    await tester.pumpAndSettle();
+
+    final add = find.byKey(const Key('homebrew-choice-root-add'));
+    await tester.ensureVisible(add);
+    await tester.tap(add);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('homebrew-choice-root-0-id')), 'origin-skill',
+    );
+    await tester.enterText(
+      find.byKey(const Key('homebrew-choice-root-0-type')), 'skill',
+    );
+    await tester.tap(find.byKey(const Key('homebrew-entry-save')));
+    await tester.pumpAndSettle();
+
+    final updated = await repository.getByKey(entry.id);
+    expect(updated?.rules?.choices.single.id, 'origin-skill');
+  });
+
+  testWidgets('非职业 JSON 编辑后的选择表单即时读取同一份数据', (tester) async {
+    final repository = MemoryContentRepository();
+    await LocalHomebrewContentService(repository: repository)
+        .create(type: 'custom', name: '自制来历');
+    await tester.pumpWidget(MaterialApp(
+      home: ContentPackageSettingsPage(
+        repository: repository,
+        importer: ContentPackageImporter(repository),
+        filePicker: MemoryContentFilePicker(),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(
+      of: find.byKey(const Key('homebrew-entry-自制来历')),
+      matching: find.byTooltip('编辑'),
+    ));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('homebrew-entry-rules')),
+      '{"choices":[{"id":"arcana","label":"奥秘选择","optionType":"skill"}]}',
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('homebrew-choice-root-0-tile')), findsOneWidget);
+    expect(find.text('奥秘选择'), findsWidgets);
+  });
+
+  testWidgets('职业等级选择表单保存后可导出、重导入并用于建卡', (tester) async {
+    final repository = MemoryContentRepository();
+    final created = await LocalHomebrewContentService(repository: repository)
+        .create(
+      type: 'class',
+      name: '星骑士',
+      structured: const {'classRules': {'hitDie': 8}},
+    );
+    Uint8List? exportedBytes;
+    await tester.pumpWidget(MaterialApp(
+      home: ContentPackageSettingsPage(
+        repository: repository,
+        importer: ContentPackageImporter(repository),
+        filePicker: MemoryContentFilePicker(),
+        onExportDndPack: (_, bytes) async => exportedBytes = bytes,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(
+      of: find.byKey(const Key('homebrew-entry-星骑士')),
+      matching: find.byTooltip('编辑'),
+    ));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('homebrew-form-add-step')));
+    await tester.tap(find.byKey(const Key('homebrew-form-add-step')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('homebrew-choice-step-0-add')));
+    await tester.tap(find.byKey(const Key('homebrew-choice-step-0-add')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('homebrew-choice-step-0-0-id')), 'skill-pick',
+    );
+    await tester.enterText(
+      find.byKey(const Key('homebrew-choice-step-0-0-type')), 'skill',
+    );
+    String choiceType() {
+      final form = tester.widget<HomebrewClassRuleForm>(
+          find.byType(HomebrewClassRuleForm));
+      final rules = jsonDecode(form.rulesJson()) as Map;
+      final step = (rules['progression'] as List).single as Map;
+      return ((step['choices'] as List).single as Map)['optionType'] as String;
+    }
+    expect(choiceType(), 'skill');
+    await tester.ensureVisible(
+        find.byKey(const Key('homebrew-choice-step-0-0-add-option')));
+    await tester.tap(find.byKey(const Key('homebrew-choice-step-0-0-add-option')));
+    await tester.pumpAndSettle();
+    expect(choiceType(), 'skill');
+    await tester.enterText(
+      find.byKey(const Key('homebrew-choice-step-0-0-option-0-id')), '察觉',
+    );
+    expect(choiceType(), 'skill');
+    await tester.ensureVisible(find.byKey(const Key('homebrew-entry-save')));
+    await tester.tap(find.byKey(const Key('homebrew-entry-save')));
+    await tester.pumpAndSettle();
+    expect(find.text('编辑自制条目'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('homebrew-export-dndpack-button')));
+    await tester.pumpAndSettle();
+    final target = MemoryContentRepository();
+    final importer = ContentPackageImporter(target);
+    final report = await importer.previewDndPack(exportedBytes!);
+    expect(report.valid, isTrue, reason: '${report.errors}');
+    await importer.importReport(report);
+    final entry = (await target.getByKey(created.id))!;
+    expect(entry.rules!.progression.single.choices.single.id, 'skill-pick');
+    expect(entry.rules!.progression.single.choices.single.optionType, 'skill');
+    expect(entry.rules!.progression.single.choices.single.options.map((option) => option.id),
+        ['察觉']);
+    final draft = RulesDrivenCharacterBuilder(entries: {entry.id: entry}).build(
+      name: '莱娅',
+      build: CharacterBuild(
+        level: 1,
+        selections: {'class': entry.id},
+        choices: {'${entry.id}#skill-pick': ['察觉']},
+      ),
+      abilities: const {
+        'str': 12, 'dex': 14, 'con': 12,
+        'int': 10, 'wis': 15, 'cha': 8,
+      },
+    );
+    expect(draft.skills['察觉'], isTrue,
+        reason: 'choices=${draft.data['choices']}, build=${draft.data['build']}');
   });
 
   testWidgets('基于现有条目创建覆盖：对齐键钉在来源条目上（S4）', (tester) async {
@@ -452,7 +658,10 @@ void main() {
 
     // 覆盖模式：标题点明来源、对齐键提示在位、类型锁定、来源 classRules 预填。
     expect(find.text('创建覆盖：战士'), findsOneWidget);
-    expect(find.byKey(const Key('homebrew-entry-override-hint')), findsOneWidget);
+    expect(
+      find.byKey(const Key('homebrew-entry-override-hint')),
+      findsOneWidget,
+    );
     expect(
       tester
           .widget<DropdownButtonFormField<String>>(

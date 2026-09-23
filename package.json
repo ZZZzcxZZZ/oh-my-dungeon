@@ -10,8 +10,8 @@
     "dev:server": "npm --prefix apps/server_nest run start:dev",
     "dev:client": "cd apps/client_flutter && flutter run",
     "preview:client": "pwsh -NoLogo -NoProfile -File scripts/preview-client.ps1 -Port 5173 -ReplaceExisting",
-    "test:phb-tools": "python -m unittest scripts/test_phb_2024_v2_tools.py -v",
-    "validate:phb-private": "python scripts/validate_phb_2024_v2.py && cd apps/client_flutter && flutter test test/tooling/private_content_package_validation_test.dart --dart-define=CONTENT_PACKAGE_PATH=../../private-imports/phb-2024-v2-bundle.json",
+    "test:phb-tools": "node scripts/run-python.cjs -m unittest scripts/test_phb_2024_v2_tools.py -v",
+    "validate:phb-private": "node scripts/run-python.cjs scripts/validate_phb_2024_v2.py && cd apps/client_flutter && flutter test test/tooling/private_content_package_validation_test.dart --dart-define=CONTENT_PACKAGE_PATH=../../private-imports/phb-2024-v2-bundle.json",
     "test:server": "npm --prefix apps/server_nest test",
     "lint:server": "npm --prefix apps/server_nest run lint",
     "test:client": "cd apps/client_flutter && flutter test",
@@ -25,8 +25,8 @@
     "docker:down": "pwsh -NoLogo -NoProfile -File scripts/docker-compose.ps1 down",
     "docker:logs": "pwsh -NoLogo -NoProfile -File scripts/docker-compose.ps1 logs -f",
     "lint:design": "designmd lint DESIGN.md",
-    "check:drift-worker": "python3 scripts/check_drift_worker.py",
-    "test:scripts": "npm run check:drift-worker && python -m unittest scripts/test_phb_2024_v2_tools.py scripts/test_private_rulebook_extractors.py scripts/test_release_packaging.py scripts/test_static_preview_server.py -v"
+    "check:drift-worker": "node scripts/run-python.cjs scripts/check_drift_worker.py",
+    "test:scripts": "npm run check:drift-worker && node scripts/run-python.cjs -m unittest scripts/test_phb_2024_v2_tools.py scripts/test_private_rulebook_extractors.py scripts/test_release_packaging.py scripts/test_static_preview_server.py -v"
   },
   "engines": {
     "node": ">=22 <25",

@@ -63,7 +63,7 @@ void main() {
       existing: created,
       name: '银钥匙',
       summary: '现在会发光。',
-      structured: const {'category': '奇物'},
+      structured: const {'category': '奇物', 'homebrewEffect': '微光'},
     );
 
     expect(updated.id, created.id);
@@ -71,6 +71,67 @@ void main() {
     expect(updated.structured['homebrewEffect'], '微光');
     expect((await repository.getByKey(created.id))?.summary, '现在会发光。');
   });
+
+  test(
+    'editing full structured JSON removes deleted keys without losing hidden tags',
+    () async {
+      final repository = MemoryContentRepository();
+      final service = LocalHomebrewContentService(repository: repository);
+      final created = await service.create(
+        type: 'item',
+        name: '银钥匙',
+        structured: const {'category': '奇物', 'homebrewEffect': '微光'},
+        tags: const ['任务道具'],
+      );
+
+      final updated = await service.update(
+        existing: created,
+        name: created.name,
+        structured: const {'category': '奇物'},
+      );
+
+      expect(updated.structured, {'category': '奇物'});
+      expect(updated.tags, ['任务道具']);
+      expect((await repository.getByKey(created.id))?.structured, {
+        'category': '奇物',
+      });
+    },
+  );
+
+  test(
+    'partial update preserves omitted metadata while explicit empty values clear it',
+    () async {
+      final repository = MemoryContentRepository();
+      final service = LocalHomebrewContentService(repository: repository);
+      final created = await service.create(
+        type: 'item',
+        name: '银钥匙',
+        summary: '旧摘要',
+        description: '旧描述',
+        structured: const {'category': '奇物'},
+        tags: const ['任务道具'],
+      );
+
+      final renamed = await service.update(existing: created, name: '新银钥匙');
+      expect(renamed.summary, '旧摘要');
+      expect((renamed.body.single as ParagraphBlock).text, '旧描述');
+      expect(renamed.structured, {'category': '奇物'});
+      expect(renamed.tags, ['任务道具']);
+
+      final cleared = await service.update(
+        existing: renamed,
+        name: renamed.name,
+        summary: '',
+        description: '',
+        structured: const {},
+        tags: const [],
+      );
+      expect(cleared.summary, isEmpty);
+      expect(cleared.body, isEmpty);
+      expect(cleared.structured, isEmpty);
+      expect(cleared.tags, isEmpty);
+    },
+  );
 
   test('rejects invalid structured data and deletes only the target', () async {
     final repository = MemoryContentRepository();
@@ -133,7 +194,10 @@ void main() {
         name: '坏规则职业',
         rules: const {
           'progression': [
-            {'levels': ['一'], 'grants': []},
+            {
+              'levels': ['一'],
+              'grants': [],
+            },
           ],
         },
       ),
@@ -259,9 +323,7 @@ void main() {
       service.create(
         type: 'class',
         name: '空覆盖',
-        structured: const {
-          'classRules': <String, Object?>{},
-        },
+        structured: const {'classRules': <String, Object?>{}},
         overrideOf: wizard,
       ),
       throwsA(

@@ -8,7 +8,6 @@ class AppPreferences {
     required this.compactLists,
     required this.confirmBeforeRoll,
     required this.showCharacterSources,
-    required this.showEncumbrance,
     required this.defaultCharacterTab,
     required this.highContrastTheme,
     required this.dynamicSchemeVariant,
@@ -29,7 +28,6 @@ class AppPreferences {
     compactLists: false,
     confirmBeforeRoll: false,
     showCharacterSources: true,
-    showEncumbrance: false,
     defaultCharacterTab: 'overview',
     highContrastTheme: false,
     dynamicSchemeVariant: 'tonalSpot',
@@ -49,7 +47,6 @@ class AppPreferences {
   final bool compactLists;
   final bool confirmBeforeRoll;
   final bool showCharacterSources;
-  final bool showEncumbrance;
   final String defaultCharacterTab;
   final bool highContrastTheme;
   final String dynamicSchemeVariant;
@@ -82,7 +79,6 @@ class AppPreferences {
     'compactLists': compactLists,
     'confirmBeforeRoll': confirmBeforeRoll,
     'showCharacterSources': showCharacterSources,
-    'showEncumbrance': showEncumbrance,
     'defaultCharacterTab': defaultCharacterTab,
     'highContrastTheme': highContrastTheme,
     'dynamicSchemeVariant': dynamicSchemeVariant,
@@ -103,7 +99,6 @@ class AppPreferences {
     bool? compactLists,
     bool? confirmBeforeRoll,
     bool? showCharacterSources,
-    bool? showEncumbrance,
     String? defaultCharacterTab,
     bool? highContrastTheme,
     String? dynamicSchemeVariant,
@@ -123,7 +118,6 @@ class AppPreferences {
       compactLists: compactLists ?? this.compactLists,
       confirmBeforeRoll: confirmBeforeRoll ?? this.confirmBeforeRoll,
       showCharacterSources: showCharacterSources ?? this.showCharacterSources,
-      showEncumbrance: showEncumbrance ?? this.showEncumbrance,
       defaultCharacterTab: defaultCharacterTab ?? this.defaultCharacterTab,
       highContrastTheme: highContrastTheme ?? this.highContrastTheme,
       dynamicSchemeVariant: dynamicSchemeVariant ?? this.dynamicSchemeVariant,

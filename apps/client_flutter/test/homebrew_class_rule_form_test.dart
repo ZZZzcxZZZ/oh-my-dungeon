@@ -80,6 +80,28 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('未知数量池显示原值而不是假装未设置', (tester) async {
+    await pumpForm(
+      tester,
+      structured: {'classRules': <String, Object?>{}},
+      rules: {
+        'choices': [
+          {
+            'id': 'legacy-choice',
+            'label': '旧选择',
+            'optionType': 'value',
+            'countsToward': 'legacyPool',
+          },
+        ],
+      },
+    );
+
+    final dropdown = tester.widget<DropdownButton<String>>(
+      find.byKey(const Key('homebrew-choice-root-0-counts-toward')),
+    );
+    expect(dropdown.value, 'legacyPool');
+  });
+
   testWidgets('现有 classRules / progression 渲染成控件（不是"空白表单"）', (tester) async {
     await pumpForm(
       tester,
@@ -334,6 +356,193 @@ void main() {
       isEmpty,
       reason: '${diagnostics.map((item) => item.message)}',
     );
+  });
+
+  testWidgets('顶层选择与等级选择可视化编辑，包含内联选项和属性前置', (tester) async {
+    final host = await pumpForm(tester, structured: const {}, rules: const {});
+    await tapKey(tester, const Key('homebrew-choice-root-add'));
+    await tester.enterText(
+      find.byKey(const Key('homebrew-choice-root-0-id')),
+      'class-skills',
+    );
+    await tester.enterText(
+      find.byKey(const Key('homebrew-choice-root-0-label')),
+      '选择技能',
+    );
+    await tester.enterText(
+      find.byKey(const Key('homebrew-choice-root-0-type')),
+      'skill',
+    );
+    await tester.enterText(
+      find.byKey(const Key('homebrew-choice-root-0-group')),
+      '职业选择',
+    );
+    await tapKey(tester, const Key('homebrew-choice-root-0-add-option'));
+    await tester.enterText(
+      find.byKey(const Key('homebrew-choice-root-0-option-0-id')),
+      '察觉',
+    );
+    await tapKey(tester, const Key('homebrew-choice-root-0-add-requires'));
+
+    final choice = (_decode(host.rules.text)['choices']! as List).single
+        as Map<String, Object?>;
+    expect(choice['id'], 'class-skills');
+    expect(choice['optionType'], 'skill');
+    expect(choice['options'], ['察觉']);
+    expect(choice['requires'], [
+      {'ability': 'str', 'minimum': 13},
+    ]);
+    expect(RuleChoiceDefinition.fromJson(choice).group, '职业选择');
+
+    await tapKey(tester, const Key('homebrew-form-add-step'));
+    await tapKey(tester, const Key('homebrew-choice-step-0-add'));
+    final step = (_decode(host.rules.text)['progression']! as List).single
+        as Map<String, Object?>;
+    expect((step['choices'] as List), hasLength(1));
+    expect(step['levels'], [1]);
+  });
+
+  testWidgets('编辑对象选项不丢失已有 data/grants/requires，删除选择只删目标', (tester) async {
+    final host = await pumpForm(
+      tester,
+      structured: const {},
+      rules: {
+        'choices': [
+          {
+            'id': 'talent',
+            'label': '天赋',
+            'optionType': 'value',
+            'options': [
+              {
+                'id': 'swift',
+                'label': '迅捷',
+                'data': {'custom': true},
+                'grants': [
+                  {'id': 'speed', 'kind': 'speed', 'value': 5},
+                ],
+                'requires': [
+                  {'choice': 'origin', 'option': 'human'},
+                ],
+              },
+            ],
+          },
+          {'id': 'other', 'label': '其他', 'optionType': 'value'},
+        ],
+      },
+    );
+    await tester.enterText(
+      find.byKey(const Key('homebrew-choice-root-0-option-0-label')),
+      '迅捷步伐',
+    );
+    final first = (_decode(host.rules.text)['choices']! as List).first
+        as Map<String, Object?>;
+    final option = (first['options'] as List).single as Map<String, Object?>;
+    expect(option['label'], '迅捷步伐');
+    expect(option['data'], {'custom': true});
+    expect((option['grants'] as List).single, {
+      'id': 'speed', 'kind': 'speed', 'value': 5,
+    });
+    expect(option['requires'], [
+      {'choice': 'origin', 'option': 'human'},
+    ]);
+
+    await tapKey(tester, const Key('homebrew-choice-root-0-remove'));
+    final remaining = (_decode(host.rules.text)['choices']! as List).single
+        as Map<String, Object?>;
+    expect(remaining['id'], 'other');
+  });
+
+  testWidgets('条目白名单和标签可逐项添加、编辑、删除', (tester) async {
+    final host = await pumpForm(tester, structured: const {}, rules: const {});
+    await tapKey(tester, const Key('homebrew-choice-root-add'));
+    await tapKey(tester, const Key('homebrew-choice-root-0-entry-ids-add'));
+    await tester.enterText(
+      find.byKey(const Key('homebrew-choice-root-0-entry-ids-0')),
+      'homebrew:subclass/alpha',
+    );
+    await tapKey(tester, const Key('homebrew-choice-root-0-entry-ids-add'));
+    await tester.enterText(
+      find.byKey(const Key('homebrew-choice-root-0-entry-ids-1')),
+      'homebrew:subclass/beta',
+    );
+    await tapKey(tester, const Key('homebrew-choice-root-0-tags-add'));
+    await tester.enterText(
+      find.byKey(const Key('homebrew-choice-root-0-tags-0')),
+      'origin',
+    );
+    final choice = (_decode(host.rules.text)['choices'] as List).single as Map;
+    expect(choice['optionEntryIds'], [
+      'homebrew:subclass/alpha',
+      'homebrew:subclass/beta',
+    ]);
+    expect(choice['optionTags'], ['origin']);
+    await tapKey(tester, const Key('homebrew-choice-root-0-entry-ids-0-remove'));
+    expect(((_decode(host.rules.text)['choices'] as List).single as Map)
+        ['optionEntryIds'], ['homebrew:subclass/beta']);
+  });
+
+  testWidgets('内联对象选项可编辑授予和依赖其他选择的前置条件', (tester) async {
+    final host = await pumpForm(tester, structured: const {}, rules: const {});
+    await tapKey(tester, const Key('homebrew-choice-root-add'));
+    await tapKey(tester, const Key('homebrew-choice-root-0-add-option'));
+    await tapKey(tester, const Key('homebrew-choice-root-0-option-0-details'));
+    await tester.enterText(
+      find.byKey(const Key('homebrew-choice-root-0-option-0-label')),
+      '迅捷步伐',
+    );
+    await tapKey(tester, const Key('homebrew-choice-root-0-option-0-add-requires'));
+    await tapKey(tester, const Key('homebrew-choice-root-0-option-0-requires-0-kind'));
+    await tester.tap(find.text('choice').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('homebrew-choice-root-0-option-0-requires-0-choice')),
+      'origin',
+    );
+    await tapKey(tester, const Key('homebrew-choice-root-0-option-0-add-grant'));
+    await tester.enterText(
+      find.byKey(const Key('homebrew-choice-root-0-option-0-grant-0-target')),
+      'skill:察觉',
+    );
+
+    final choice = (_decode(host.rules.text)['choices'] as List).single
+        as Map<String, Object?>;
+    final option = (choice['options'] as List).single as Map<String, Object?>;
+    expect(option['label'], '迅捷步伐');
+    expect(option['requires'], [
+      {'choice': 'origin'},
+    ]);
+    expect((option['grants'] as List).single, {
+      'id': 'grant-1', 'kind': 'feature', 'target': 'skill:察觉',
+    });
+    expect(RuleChoiceDefinition.fromJson(choice).options.single.label,
+        '迅捷步伐');
+  });
+
+  testWidgets('选择表单在手机宽度下不发生布局溢出', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_Host(
+      structured: '{}',
+      rules: jsonEncode({
+        'choices': [
+          {
+            'id': 'many-options',
+            'label': '非常长的职业选择名称用于验证手机宽度下的布局',
+            'optionType': 'subclass',
+            'optionEntryIds': ['package:subclass/a', 'package:subclass/b'],
+            'requires': [
+              {'ability': 'str', 'minimum': 13},
+            ],
+          },
+        ],
+      }),
+    ));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.ensureVisible(find.byKey(const Key('homebrew-choice-root-0-entry-ids-add')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('删除中间资源后，剩下的行不会显示上一行的值', (tester) async {

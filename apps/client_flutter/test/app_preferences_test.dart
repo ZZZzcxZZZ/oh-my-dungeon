@@ -17,7 +17,10 @@ void main() {
     expect(controller.preferences.compactLists, isFalse);
     expect(controller.preferences.confirmBeforeRoll, isFalse);
     expect(controller.preferences.showCharacterSources, isTrue);
-    expect(controller.preferences.showEncumbrance, isFalse);
+    expect(
+      controller.preferences.toJson(),
+      isNot(contains('showEncumbrance')),
+    );
     expect(controller.preferences.defaultCharacterTab, 'overview');
     expect(controller.preferences.highContrastTheme, isFalse);
     expect(controller.preferences.dynamicSchemeVariant, 'tonalSpot');
@@ -44,7 +47,6 @@ void main() {
     await controller.setCompactLists(true);
     await controller.setConfirmBeforeRoll(true);
     await controller.setShowCharacterSources(false);
-    await controller.setShowEncumbrance(true);
     await controller.setDefaultCharacterTab('equipment');
     await controller.setHighContrastTheme(true);
     await controller.setDynamicSchemeVariant('fidelity');
@@ -61,13 +63,12 @@ void main() {
     final reloaded = AppPreferencesController(store: store);
     await reloaded.initialize();
 
-    expect(notifications, 17);
+    expect(notifications, 16);
     expect(reloaded.preferences.themeMode, ThemeMode.dark);
     expect(reloaded.preferences.defaultDice, '2d20kh1');
     expect(reloaded.preferences.compactLists, isTrue);
     expect(reloaded.preferences.confirmBeforeRoll, isTrue);
     expect(reloaded.preferences.showCharacterSources, isFalse);
-    expect(reloaded.preferences.showEncumbrance, isTrue);
     expect(reloaded.preferences.defaultCharacterTab, 'equipment');
     expect(reloaded.preferences.highContrastTheme, isTrue);
     expect(reloaded.preferences.dynamicSchemeVariant, 'fidelity');
@@ -164,7 +165,6 @@ void main() {
       await first.setCompactLists(true);
       await first.setConfirmBeforeRoll(true);
       await first.setShowCharacterSources(false);
-      await first.setShowEncumbrance(true);
       await first.setDefaultCharacterTab('equipment');
       await first.setHighContrastTheme(true);
       await first.setDynamicSchemeVariant('vibrant');
@@ -190,7 +190,6 @@ void main() {
       expect(reloaded.preferences.compactLists, isTrue);
       expect(reloaded.preferences.confirmBeforeRoll, isTrue);
       expect(reloaded.preferences.showCharacterSources, isFalse);
-      expect(reloaded.preferences.showEncumbrance, isTrue);
       expect(reloaded.preferences.defaultCharacterTab, 'equipment');
       expect(reloaded.preferences.highContrastTheme, isTrue);
       expect(reloaded.preferences.dynamicSchemeVariant, 'vibrant');

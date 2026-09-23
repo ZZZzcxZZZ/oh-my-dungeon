@@ -51,10 +51,6 @@ class AppPreferencesController extends ChangeNotifier {
     return _save(_preferences.copyWith(showCharacterSources: value));
   }
 
-  Future<void> setShowEncumbrance(bool value) {
-    return _save(_preferences.copyWith(showEncumbrance: value));
-  }
-
   Future<void> setDefaultCharacterTab(String value) {
     return _save(_preferences.copyWith(defaultCharacterTab: value));
   }

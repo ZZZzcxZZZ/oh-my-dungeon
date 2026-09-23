@@ -26,6 +26,7 @@ class LocalHomebrewContentService {
   }) : _repository = repository;
 
   static const packageId = 'local-homebrew';
+
   /// 本地自制内容包的清单行。**`formatVersion` 必须是 3**：契约只有一个包格式版本，
   /// 导出 `.dndpack` 时直接把它写进 `manifest.json`，写 1 会产出自己都导不回的包。
   static const packageManifest = ContentPackageManifest(
@@ -49,9 +50,11 @@ class LocalHomebrewContentService {
     String description = '',
     Map<String, Object?> structured = const {},
     List<String> tags = const [],
+
     /// 条目自己的 `rules`（`progression` / `choices` / `grants`，契约 §3.2）。
     /// 传 `null` = 不声明；传 `{}` = 显式声明为空（清空）。
     Map<String, Object?>? rules,
+
     /// 基于某条既有条目创建**覆盖**（S4）：新条目的对齐键（id 末段，契约 D3）钉在
     /// 来源条目上，类型也随之取来源条目的类型。**不再**按名称生成 slug——否则作者
     /// 改个名字就对不上来源，覆盖链永远不生效。
@@ -115,10 +118,19 @@ class LocalHomebrewContentService {
   Future<ContentEntry> update({
     required ContentEntry existing,
     required String name,
-    String summary = '',
-    String description = '',
-    Map<String, Object?> structured = const {},
-    List<String> tags = const [],
+
+    /// `null` = 保留原值；空串 = 清空。
+    String? summary,
+
+    /// `null` = 原样保留全部正文块；空串 = 仅清空段落。
+    String? description,
+
+    /// `null` = 保留原值；传入 JSON 对象时按编辑器显示的完整内容替换。
+    Map<String, Object?>? structured,
+
+    /// 编辑器尚未展示标签，省略时必须保留；`[]` 才表示清空。
+    List<String>? tags,
+
     /// `null` = 保留既有 `rules`；`{}` = 清空；其余按 JSON 解析（形状非法即报错）。
     Map<String, Object?>? rules,
   }) async {
@@ -126,7 +138,7 @@ class LocalHomebrewContentService {
     final validated = _validate(
       type: existing.type,
       name: name,
-      structured: {...existing.structured, ...structured},
+      structured: structured ?? existing.structured,
     );
     final entry = _buildEntry(
       id: existing.id,
@@ -136,7 +148,7 @@ class LocalHomebrewContentService {
       summary: summary,
       description: description,
       structured: validated.normalizedStructured,
-      tags: tags,
+      tags: tags ?? existing.tags,
       rules: rules == null ? existing.rules : _parseRules(rules),
       revision: existing.revision + 1,
       existing: existing,
@@ -188,8 +200,8 @@ class LocalHomebrewContentService {
     required String type,
     required String slug,
     required String name,
-    required String summary,
-    required String description,
+    required String? summary,
+    required String? description,
     required Map<String, Object?> structured,
     required List<String> tags,
     required int revision,
@@ -202,8 +214,10 @@ class LocalHomebrewContentService {
       slug: slug,
       name: name.trim(),
       aliases: existing?.aliases ?? const [],
-      summary: summary.trim(),
-      body: _mergedBody(existing: existing, description: description.trim()),
+      summary: (summary ?? existing?.summary ?? '').trim(),
+      body: description == null
+          ? existing?.body ?? const <ContentBlock>[]
+          : _mergedBody(existing: existing, description: description.trim()),
       structured: structured,
       tags: tags
           .map((tag) => tag.trim())

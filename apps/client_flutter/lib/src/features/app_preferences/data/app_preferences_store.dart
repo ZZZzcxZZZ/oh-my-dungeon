@@ -28,7 +28,6 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
   static const _confirmBeforeRollKey = 'app_preferences.confirm_before_roll';
   static const _showCharacterSourcesKey =
       'app_preferences.show_character_sources';
-  static const _showEncumbranceKey = 'app_preferences.show_encumbrance';
   static const _defaultCharacterTabKey =
       'app_preferences.default_character_tab';
   static const _highContrastThemeKey = 'app_preferences.high_contrast_theme';
@@ -65,9 +64,6 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
       showCharacterSources:
           _preferences.getBool(_showCharacterSourcesKey) ??
           AppPreferences.defaults.showCharacterSources,
-      showEncumbrance:
-          _preferences.getBool(_showEncumbranceKey) ??
-          AppPreferences.defaults.showEncumbrance,
       defaultCharacterTab:
           _preferences.getString(_defaultCharacterTabKey) ??
           AppPreferences.defaults.defaultCharacterTab,
@@ -117,10 +113,6 @@ class SharedPreferencesAppPreferencesStore implements AppPreferencesStore {
     await _preferences.setBool(
       _showCharacterSourcesKey,
       preferences.showCharacterSources,
-    );
-    await _preferences.setBool(
-      _showEncumbranceKey,
-      preferences.showEncumbrance,
     );
     await _preferences.setString(
       _defaultCharacterTabKey,

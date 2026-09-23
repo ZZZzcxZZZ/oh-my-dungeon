@@ -1,9 +1,9 @@
 # 规则契约与规则档案（S1+S2）设计规格
 
-- 状态：待用户审查（审查通过后进入实现计划）
-- 范围：子项目 S1（规则核心数据化）+ S2（契约扩展与导入校验）
+- 状态：历史设计规格，S1/S2 已实施；后续 S3/S4 的落地与取舍见 §11，当前项目状态以 `docs/README.md` §16 为准
+- 原定范围：子项目 S1（规则核心数据化）+ S2（契约扩展与导入校验）
 - 验收场景：A（2024 补充包）、B（全新自制职业）、D（覆盖与勘误，仅打地基）
-- 明确不做：C（自定义技能/属性、自定义 AC 公式、自定义休息语义）、S3（patch/replace 声明与冲突 UI）、S4（作者 GUI 与 `.dndpack` 导出）
+- 原定本阶段不做：C（自定义技能/属性、自定义 AC 公式、自定义休息语义）、S3（patch/replace 声明与冲突 UI）、S4（作者 GUI 与 `.dndpack` 导出）。S3/S4 后来已实施，C 仍不在范围，见 §11
 
 > 本文是实现规格。面向使用者的契约说明在实现完成后写入 `docs/README.md` §9.2「规则与内容契约」；
 > 本文不替代 `docs/README.md` 作为项目唯一事实来源的地位。
@@ -1037,16 +1037,15 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | 专精（Expertise） | 不建模 | 技能加值缺少"熟练等级"维度（无 / 熟练 / 专精），现在只有布尔熟练 | 需要技能 ×2 加值时（要先把布尔升级成枚举） |
 | 多职业 | 不建模 | 涉及等级分配、法术位合并表、熟练叠加规则，属**产品级**立项 | 产品需要多职业角色时 |
 | XP 与升级 | 不建模 | 等级由用户维护（产品选择）；XP 表是可选功能 | 产品需要 XP 时 |
-| 负重 | 未完成管线：`showEncumbrance` 偏好存在但**无消费方** | 物品条目还没有 `weight` 字段（内容侧未提取），先补内容字段再谈 UI | 内容包开始声明重量时 |
+| 负重 | 物品条目没有 `weight` 字段；无消费方的 `showEncumbrance` 偏好已移除 | 先补内容字段，再设计计算与 UI | 内容包开始声明重量时 |
 | 武器精通（Mastery）与 versatile 变化伤害骰 | 不建模 | Mastery 是逐武器的属性词，需要 `properties` 的语义解析；versatile 需要"双手持用"状态 | 需要按属性词结算时 |
 
 > 以上都是**主动取舍**，不是缺陷。改任何一项前先更新本节与 `docs/README.md` §7.7 的已知限制。
 
 ### 11.3 明确不在范围
 
-- **S4 的剩余部分（见 §11.4）**：`rules.choices` 的可视化编辑。
-  新建 / 编辑 / 删除 UI、`classRules` + `progression` 可视化表单、基于已有条目创建覆盖、
-  `.dndpack` 导出**已完成**（不再列为"不在范围"）。
+- **S4 已完成（见 §11.4）**：自制条目编辑、规则表单、选择表单与 `.dndpack` 导出均已接线。
+  任意形状的内联 `data` 与复杂 `Table` / `MaxSpec` 仍由原始 JSON 编辑，不另建一套 DSL。
 - **C 场景（永久排除）**：自定义技能 / 属性清单、自定义 AC 公式（护甲敏捷上限、无甲防御）、自定义休息与恢复语义。
 - **已建模，不要再重复建模**：12 职业的资源池**计数与恢复语义**（含随等级变化的恢复）、法术位与准备上限、HP / AC / 速度 / 属性加值。
 
@@ -1057,9 +1056,9 @@ A–D 全部收敛到**同一套声明**，写在 `rules.choices` / `rules.progr
 | 导入侧（`.json` / `.dndpack` 预览、批量导入、诊断报告） | 完整 |
 | 领域服务（`LocalHomebrewContentService.create/update/delete` + `ContentSchemaRegistry.validateForCreation`） | 有实现与单测，**UI 已接线**（新建 / 编辑 / 删除条目对话框）；编辑时保留描述框之外的块（`_mergedBody`：标题、列表等不被"改个名字再保存"静默删掉）。占用检测走 `getByKey`（规范键与 `local:` 键各问一次）：既不能只问无前缀键（组合仓库恒返回 null → 重名静默覆盖），也不能走 `search`（它按 `packages.enabled` 过滤 → 停用自制包后同样静默覆盖）。**写方向也剥传输前缀**（`CampaignAwareContentRepository._stripOrigin` 对 id、`relations[].targetId`、`rules` 引用统一用 `canonicalContentEntryId` + `mapRuleEntryReferences`）：编辑保存后本地库仍是规范 id，否则再读一层前缀会让该包永远导不出去 |
 | `.dndpack` **导出** | 已实现（`DndPackExporter.build` 组 manifest + entries + 既有资产，再经 `previewDndPack` 自校验；落盘由资料包设置页的 `FilePicker.saveFile` 完成。往返用例见 `dndpack_exporter_test.dart`）。导出前把组合仓库加的**传输前缀**从条目 id、`relations[].targetId` 与 `rules` 里的条目引用（含 `optionEntryIds` / `recommendedEntryIds`）上剥掉——否则真实导入器会判 `entry ID … must start with "<packageId>:"` / 引用不存在，导出必然失败 |
-| **可视化规则表单** | 已实现（`HomebrewClassRuleForm`：`classRules` 的 `hitDie` / `savingThrowAbilities` / `mode` / `spellcasting.ability` / `resources[]`，`rules.progression[]` 的等级集合与 `grants[]`）。表单**不持有状态**：两段 JSON 仍是唯一事实来源，JSON 非法时表单拒绝渲染并提示切回 JSON；`Table` / `MaxSpec` 形态与 `rules.choices` 不伪造字段类型，仍写 JSON（表形态的 `recovery` 只读展示，不提供可一键替换成常量的下拉）。"添加资源"只声明 `id`（缺省 `name` = patch 未声明，**形状层**合法，而 `name: ""` 是 `invalidMaxSpec` error）——但它是**待补齐补丁**：档案里没有同 id 资源时必须补上 `name` + `maximum` 才能导出，否则导入期报 `incompleteResourcePatch`。自由文本不 trim、令牌字段 trim |
+| **可视化规则表单** | 已实现（`HomebrewClassRuleForm`：`classRules` 的 `hitDie` / `savingThrowAbilities` / `mode` / `spellcasting.ability` / `resources[]`，`rules.progression[]` 的等级集合、`grants[]` 与 `choices[]`）。表单**不持有状态**：两段 JSON 仍是唯一事实来源，JSON 非法时表单拒绝渲染并提示切回 JSON；`Table` / `MaxSpec` 形态仍写 JSON（表形态的 `recovery` 只读展示，不提供可一键替换成常量的下拉）。"添加资源"只声明 `id`（缺省 `name` = patch 未声明，**形状层**合法，而 `name: ""` 是 `invalidMaxSpec` error）——但它是**待补齐补丁**：档案里没有同 id 资源时必须补上 `name` + `maximum` 才能导出，否则导入期报 `incompleteResourcePatch`。自由文本不 trim、令牌字段 trim |
 | **基于已有条目创建覆盖** | 已实现（资料包设置页「基于现有条目创建覆盖」→ 选来源 → 编辑器预填并把**对齐键**（id 末段，`contentEntryAlignmentKey`）钉在来源上；`create(overrideOf:)` 拒绝同键重复与类型不符，要求结果声明非空 `classRules`）。候选 = 参与合并链的 `class` 条目（有 `classRules`、非本包、键未被占用），**不预填来源 `rules`**（跨包引用会让本地包不可导出）。**边界**：列级合并链只消费 `classRules`；覆盖条目自己的 `rules`（progression / choices / grants）只在角色**直接指向该条目**时才生效 |
-| `rules.choices` 的可视化编辑 | **未做**：选择 / 选项 / `requires` / `group` 仍以 JSON 编辑器 + 即时校验承担（§9.2.3 的形状是嵌套的，做成表单等于再造一层选择 DSL） |
+| `rules.choices` 的可视化编辑 | **已实现**：`HomebrewChoiceForm` 在职业条目顶层和等级步骤复用，非职业条目也可编辑顶层选择；支持选项类型、数量、内联选项、白名单/标签、推荐、`requires`、`group` / `help`、重复选择、数量池及选项授予。直接读写原 `rules` JSON；未显示的内联 `data` 原样保留，任意自定义 `data` 的编辑仍走 JSON 标签。设置页编辑 → 导出 → 真实导入器 → 建卡的回归已覆盖。 |
 
 ## 12. 建议实现阶段（**历史记录**，P0–P6 已全部执行）
 

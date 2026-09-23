@@ -1,9 +1,30 @@
+<p align="center"><img src="apps/client_flutter/assets/branding/ohmydungeon_icon.png" width="112" alt="OhMyDungeon 图标"></p>
+
 # OhMyDungeon
 
-离线优先的 D&D 跑团工具。手机、桌面、浏览器都能用；**不连服务器也能管理角色、资料库和
-设置**，连上服务器后可以和队友共享战役、聊天和掷骰。
+一个离线优先的 D&D 2024 跑团助手。用 Flutter 管理角色卡、规则资料与掷骰；需要和朋友开团时，连接自托管服务器进入持续存在的战役聊天室。
 
-> 当前版本 `0.1`（开发线）· 不含战斗系统与 AI Agent 运行时 · 设计规范见 [`DESIGN.md`](DESIGN.md)
+**角色和导入的资料留在本机；战役聊天、成员协作与可选的 Vault 同步才需要服务器。**
+
+[下载 0.1 预览版](https://github.com/ZZZzcxZZZ/oh-my-dungeon/releases/tag/v0.1.0-preview.1) · [部署自己的服务器](#31-部署服务器) · [技术与数据契约](docs/README.md)
+
+> 这是测试版本，不含战斗系统或 AI Agent 运行时。公开安装包**不内置商业规则书正文**：完整的职业、法术等资料需要用户自行导入合法取得的内容包。
+
+## 界面预览
+
+以下截图来自**未导入私有资料**的公开 Web 构建。
+
+| 桌面：角色创建向导 | 手机：Material 3 设置 |
+|---|---|
+| <img src="docs/images/character-builder-public.png" width="690" alt="桌面端角色创建向导"> | <img src="docs/images/settings-mobile-public.png" width="260" alt="手机端设置页面"> |
+
+创建向导可先填写角色和数值；完整的等级特性与可选内容由导入的资料包提供。资料库公开版默认空白，导入后即可离线检索：
+
+<img src="docs/images/library-empty-public.png" width="690" alt="公开版资料库未导入内容包时的状态">
+
+**目前能做什么**：离线创建与编辑角色、导入和检索内容包、Markdown 角色卡导入导出、组合掷骰；连上服务器后可创建战役、聊天、共享档案与角色，并使用 DM 快捷操作。
+
+设计规范见 [`DESIGN.md`](DESIGN.md)，当前实现与限制见 [`docs/README.md`](docs/README.md)。
 
 ---
 
@@ -35,7 +56,7 @@
 
 | 平台 | 做法 |
 |---|---|
-| Android | 自己构建 APK（见 [6. 自己构建安装包](#6-自己构建安装包)） |
+| Android | 从 [预览版 Release](https://github.com/ZZZzcxZZZ/oh-my-dungeon/releases/tag/v0.1.0-preview.1) 下载公开 APK，或自行构建（见 [6. 自己构建安装包](#6-自己构建安装包)） |
 | Windows / Linux / macOS | `cd apps/client_flutter && flutter run -d windows`（或 `linux` / `macos`） |
 | 浏览器 | `npm run preview:client`（本地 Web 预览，含后端代理） |
 

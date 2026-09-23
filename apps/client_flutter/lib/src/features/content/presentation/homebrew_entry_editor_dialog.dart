@@ -7,6 +7,7 @@ import '../domain/content_block.dart';
 import '../domain/content_entry.dart';
 import '../domain/content_entry_id.dart';
 import 'homebrew_class_rule_form.dart';
+import 'homebrew_choice_form.dart';
 
 /// 作者 GUI 的一次提交（S4）：`structured` 与 `rules` 都按作者写的 JSON 传出去，
 /// 由 [LocalHomebrewContentService] 负责解析、校验与落库。
@@ -331,12 +332,36 @@ class _HomebrewEntryEditorDialogState extends State<HomebrewEntryEditorDialog> {
                 TextField(
                   key: const Key('homebrew-entry-rules'),
                   controller: _rules,
+                  onChanged: (_) => setState(() {}),
                   minLines: 6,
                   maxLines: 12,
                   style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                   decoration:
                       const InputDecoration(border: OutlineInputBorder()),
                 ),
+                const SizedBox(height: 16),
+                Text('条目选择', style: theme.textTheme.titleSmall),
+                Builder(builder: (context) {
+                  final rules = _parseJson(_rules, 'rules', <String>[]);
+                  if (rules == null) {
+                    return const Text('JSON 当前不是合法对象：修正后才能使用选择表单。');
+                  }
+                  return HomebrewChoiceForm(
+                    scope: 'root',
+                    readRaw: () => _parseJson(_rules, 'rules', <String>[])?['choices'],
+                    onChanged: (choices) {
+                      final next = _parseJson(_rules, 'rules', <String>[]);
+                      if (next == null) return;
+                      if (choices.isEmpty) {
+                        next.remove('choices');
+                      } else {
+                        next['choices'] = choices;
+                      }
+                      setState(() => _rules.text =
+                          const JsonEncoder.withIndent('  ').convert(next));
+                    },
+                  );
+                }),
               ],
               if (_errors.isNotEmpty) ...[
                 const SizedBox(height: 12),

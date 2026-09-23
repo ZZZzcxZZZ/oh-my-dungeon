@@ -5,12 +5,64 @@ import 'package:dnd_table_client/src/features/content/data/local/content_reposit
 import 'package:dnd_table_client/src/features/content/data/local/local_homebrew_content_service.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_entry.dart';
 import 'package:dnd_table_client/src/features/content/domain/content_package_manifest.dart';
+import 'package:dnd_table_client/src/features/characters/domain/rules_driven_character_builder.dart';
+import 'package:dnd_table_client/src/features/rules/domain/character_build.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/campaign_test_support.dart';
 import 'support/content_test_support.dart';
 
 void main() {
+  test('编辑职业规则后导出再导入，建卡只使用最终声明', () async {
+    final source = MemoryContentRepository();
+    final service = LocalHomebrewContentService(repository: source);
+    final original = await service.create(
+      type: 'class',
+      name: '星骑士',
+      structured: const {
+        'classRules': {
+          'hitDie': 10,
+          'savingThrowAbilities': ['str', 'con'],
+        },
+      },
+    );
+    await service.update(
+      existing: original,
+      name: original.name,
+      structured: const {
+        'classRules': {'hitDie': 8},
+      },
+    );
+
+    final export = await DndPackExporter(
+      repository: source,
+    ).build(packageId: LocalHomebrewContentService.packageId);
+    final target = MemoryContentRepository();
+    final importer = ContentPackageImporter(target);
+    final report = await importer.previewDndPack(export.bytes);
+    expect(report.valid, isTrue, reason: '${report.errors}');
+    await importer.importReport(report);
+    final imported = (await target.getByKey(original.id))!;
+    expect(imported.structured['classRules'], {'hitDie': 8});
+
+    final draft = RulesDrivenCharacterBuilder(entries: {imported.id: imported})
+        .build(
+          name: '莱娅',
+          build: CharacterBuild(level: 1, selections: {'class': imported.id}),
+          abilities: const {
+            'str': 15,
+            'dex': 13,
+            'con': 14,
+            'int': 10,
+            'wis': 12,
+            'cha': 8,
+          },
+        );
+    expect(draft.data['hitDie'], 8);
+    expect(draft.saves['str'], isFalse);
+    expect(draft.saves['con'], isFalse);
+  });
+
   test('导出 → 导入往返：条目与 rules 逐项不变，manifest 为 formatVersion 3', () async {
     final repository = MemoryContentRepository();
     final service = LocalHomebrewContentService(repository: repository);

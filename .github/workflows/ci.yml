@@ -87,6 +87,14 @@ jobs:
       # 与生成平台确定性一致）。如 CI 出现像素差异，用
       # `--update-goldens` 重新生成并提交。
       - run: flutter test --tags golden --dart-define=GOLDEN_TESTS=true test/golden
+      - name: Capture rendered golden images on failure
+        if: failure()
+        run: flutter test --tags golden --dart-define=GOLDEN_TESTS=true --update-goldens test/golden
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: rendered-goldens
+          path: apps/client_flutter/test/golden/goldens/*.png
 
   docker:
     runs-on: ubuntu-latest

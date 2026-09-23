@@ -11,11 +11,12 @@
 - 从 `.env.example` 创建 `.env`
 - 生成随机 `JWT_SECRET` 与 `POSTGRES_PASSWORD`
 - 探测本机 IP 并写入 `PUBLIC_BASE_URL`
-- 构建服务器镜像
+- 若包内带 `server-image.tar.gz`，直接加载预构建镜像；否则在本机构建服务器镜像
 - 执行 Prisma 迁移与数据库 seed
 - 等待 `/health` 通过后宣告就绪
 
 之后再次启动只需 `./start.sh`，会复用已有的 `.env` 与数据卷。
+预构建镜像包适合内存较小的主机；首次加载镜像仍需要足够的磁盘空间。
 
 ## 常用命令
 
@@ -42,6 +43,7 @@ docker compose down -v           # ⚠️ 停止并删除所有数据（数据�
 | `DEFAULT_LOCALE` | 默认语言 | zh-CN |
 | `MAX_UPLOAD_SIZE_MB` | 上传文件大小上限（MB） | 20 |
 | `NPM_REGISTRY` | 构建镜像时使用的 npm registry（国内建议 `https://registry.npmmirror.com`） | `https://registry.npmjs.org` |
+| `SERVER_IMAGE` | 服务器镜像名称；预构建包启动时自动设置 | `ohmydungeon-server:local` |
 
 > 改完 `.env` 后需重新运行 `./start.sh` 使其生效。
 

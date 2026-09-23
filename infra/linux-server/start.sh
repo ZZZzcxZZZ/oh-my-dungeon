@@ -103,7 +103,25 @@ fi
 
 warn_public_base_url
 
-docker compose up -d --build
+if [ -f server-image.tar.gz ]; then
+  if [ ! -f server-image.ref ]; then
+    echo "server-image.ref is missing from the prebuilt package." >&2
+    exit 1
+  fi
+  image_ref=$(tr -d '\r\n' < server-image.ref)
+  case "$image_ref" in
+    ''|*[!a-zA-Z0-9._:/-]*)
+      echo "Invalid server image reference in server-image.ref." >&2
+      exit 1
+      ;;
+  esac
+  docker load -i server-image.tar.gz
+  docker image inspect "$image_ref" >/dev/null
+  set_env_value SERVER_IMAGE "$image_ref"
+  docker compose up -d --no-build
+else
+  docker compose up -d --build
+fi
 
 attempt=1
 while [ "$attempt" -le 30 ]; do

@@ -1925,7 +1925,7 @@ Material 3 设计系统契约（`DESIGN.md` 与契约测试/golden）；自托�
 `HomebrewChoiceForm` 现可编辑条目顶层与职业等级步骤的选择、内联选项、前置条件、
 分组、额度与授予；非职业自制条目也可编辑顶层选择。任意自定义 `data` 与复杂数值表仍由 JSON 处理。
 本轮客户端 `flutter analyze` 0 问题、`flutter test` **1642 通过 / 6 跳过**；
-服务端 lint 与 24 套件 / 355 测试、脚本 44 测试及设计 lint 也已复验通过。
+服务端 lint 与 24 套件 / 355 测试、脚本 45 测试及设计 lint 也已复验通过。
 **S4 作者 GUI 已收束**，具体边界见规格 §11.4。
 
 ### 实测基线（2026-09-13）
@@ -1935,7 +1935,7 @@ Material 3 设计系统契约（`DESIGN.md` 与契约测试/golden）；自托�
 | `flutter analyze` | 0 问题 |
 | `flutter test` | **1629 通过 / 6 跳过**（3 条 golden 默认跳过 + 3 条依赖 `--dart-define` 私有包路径的用例；跳过点与上一基线同一组） |
 | 服务端 `npm run lint` + `npm test` | 24 套件 / 355 测试通过，0 跳过 |
-| `npm run test:scripts` | **44 通过**（4 个脚本测试套件 + drift worker 产物清单校验；本地有 `private-imports/` 时 0 跳过，公开 CI 上 9 条提取类用例自行 skip） |
+| `npm run test:scripts` | **45 通过**（4 个脚本测试套件 + drift worker 产物清单校验；本地有 `private-imports/` 时 0 跳过，公开 CI 上 9 条提取类用例自行 skip） |
 | `npm run lint:design` | 0 error / 0 warning（1 条 token 统计 info） |
 | `npm run validate:phb-private` | 通过（校验器 + 真实导入器 3 个用例） |
 | CI | 6 个 job：`server` / `client` / `design` / `golden` / `docker` / `scripts` |

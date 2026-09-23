@@ -166,6 +166,18 @@ class ReleasePackagingTest(unittest.TestCase):
         self.assertIn("/health", script)
         self.assertIn('ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)', script)
 
+    def test_linux_start_script_accepts_a_prebuilt_image(self):
+        script = (ROOT / "infra" / "linux-server" / "start.sh").read_text(
+            encoding="utf-8"
+        )
+        compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+
+        self.assertIn("server-image.tar.gz", script)
+        self.assertIn("server-image.ref", script)
+        self.assertIn("docker load -i", script)
+        self.assertIn("docker compose up -d --no-build", script)
+        self.assertIn("image: ${SERVER_IMAGE:-", compose)
+
     def test_linux_package_builder_creates_a_tarball(self):
         script = (ROOT / "scripts" / "build-linux-server-package.ps1").read_text(
             encoding="utf-8"
@@ -177,6 +189,9 @@ class ReleasePackagingTest(unittest.TestCase):
         self.assertIn('"src"', script)
         self.assertIn('"prisma"', script)
         self.assertIn('"*.spec.ts"', script)
+        self.assertIn("$ImageArchive", script)
+        self.assertIn("$ImageRef", script)
+        self.assertIn("server-image.ref", script)
 
     def test_docker_compose_wrapper_preserves_detached_mode(self):
         script = (ROOT / "scripts" / "docker-compose.ps1").read_text(

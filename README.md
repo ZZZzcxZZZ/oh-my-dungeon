@@ -141,20 +141,21 @@
 
 ### 3.1 部署服务器
 
-需要一台装了 Docker Engine + Compose v2 的 Linux 主机。
+需要一台装了 Docker Engine + Compose v2 的 Linux 主机。优先下载
+[预览版 Linux 部署包](https://github.com/ZZZzcxZZZ/oh-my-dungeon/releases/tag/v0.1.0-preview.1)，
+包内带预构建镜像，低内存主机无需现场编译。
 
 ```bash
-# 在本地仓库生成部署包（需要 apps/server_nest/engines/，见第 7 节）
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-linux-server-package.ps1
-# 上传 dist/ohmydungeon-server-linux-0.1.0.tar.gz 到服务器后：
-tar xzf ohmydungeon-server-linux-0.1.0.tar.gz
-cd ohmydungeon-server-linux-0.1.0
+# 上传下载的部署包到服务器后：
+tar xzf ohmydungeon-server-linux-0.1.0-preview.1.tar.gz
+cd ohmydungeon-server-linux-0.1.0-preview.1
 chmod +x start.sh stop.sh
 ./start.sh
 ```
 
 `start.sh` 会自动：生成 `.env` 与随机密钥 → 探测公网地址写入 `PUBLIC_BASE_URL` →
-构建镜像 → 执行 Prisma 迁移与 seed → 等待 `/health` 通过。
+加载预构建镜像 → 执行 Prisma 迁移与 seed → 等待 `/health` 通过。
+源码自行打包仍可运行 `scripts/build-linux-server-package.ps1`，不附带镜像时会在服务器上构建。
 
 常用运维命令（在部署目录内）：
 
@@ -162,8 +163,9 @@ chmod +x start.sh stop.sh
 docker compose ps                 # 容器状态
 docker compose logs -f server     # 服务端日志
 ./stop.sh                         # 停止（数据卷保留）
-docker compose down -v            # ⚠️ 连数据一起删除
 ```
+
+升级前请备份数据库和 `.env`；不要使用 `docker compose down -v`，它会删除数据卷。
 
 ### 3.2 客户端连接
 

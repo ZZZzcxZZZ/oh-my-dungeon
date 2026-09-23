@@ -1,7 +1,9 @@
 ﻿[CmdletBinding()]
 param(
   [string]$Version = "0.1.0",
-  [string]$OutputDirectory
+  [string]$OutputDirectory,
+  [string]$ImageArchive,
+  [string]$ImageRef
 )
 
 $ErrorActionPreference = "Stop"
@@ -43,6 +45,21 @@ Copy-Item -LiteralPath (Join-Path $root ".dockerignore") -Destination $staging
 Copy-Item -LiteralPath (Join-Path $root "infra\linux-server\start.sh") -Destination $staging
 Copy-Item -LiteralPath (Join-Path $root "infra\linux-server\stop.sh") -Destination $staging
 Copy-Item -LiteralPath (Join-Path $root "infra\linux-server\README.md") -Destination $staging
+
+if ($ImageArchive) {
+  if (-not $ImageRef) {
+    throw "ImageRef is required when ImageArchive is provided."
+  }
+  if (-not (Test-Path -LiteralPath $ImageArchive -PathType Leaf)) {
+    throw "ImageArchive does not exist: $ImageArchive"
+  }
+  Copy-Item -LiteralPath $ImageArchive -Destination (Join-Path $staging "server-image.tar.gz")
+  [IO.File]::WriteAllText(
+    (Join-Path $staging "server-image.ref"),
+    "$ImageRef`n",
+    (New-Object System.Text.UTF8Encoding $false)
+  )
+}
 
 $serverSource = Join-Path $root "apps\server_nest"
 $serverDestination = Join-Path $staging "apps\server_nest"
